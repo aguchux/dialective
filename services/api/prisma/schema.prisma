@@ -1,0 +1,104 @@
+// api is the sole owner of this schema and all Postgres access in this repo
+// (AGENTS.md "Database access" / "Authentication"). No other service touches
+// Postgres directly, and no other service — including frontend/NextAuth
+// — holds its own adapter or schema.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  runtime      = "nodejs"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  TRAINER
+  ADMIN
+}
+
+enum AuthProvider {
+  CREDENTIALS
+  GOOGLE
+  EMAIL
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String? // null for OAuth/magic-link-only accounts
+  role          Role     @default(TRAINER)
+  emailVerified DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  accounts       LinkedAccount[]
+  refreshTokens  RefreshToken[]
+  passwordResets PasswordResetToken[]
+  emailVerifications EmailVerificationToken[]
+
+  @@map("users")
+}
+
+/// One row per external identity provider linked to a user (Google, email/magic-link).
+/// Credentials accounts don't get a row here -- passwordHash on User is enough.
+model LinkedAccount {
+  id                String       @id @default(uuid())
+  userId            String
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          AuthProvider
+  providerAccountId String // Google sub, or the email address for magic-link
+  createdAt         DateTime     @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("linked_accounts")
+}
+
+/// Opaque, rotated on every refresh (rotation-on-use) so a stolen refresh
+/// token can only be replayed once before detection. Revoked rows are kept
+/// (not deleted) so reuse-of-a-revoked-token can be detected and treated as
+/// a signal to revoke the whole family. See AGENTS.md "Authentication".
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  familyId    String // shared across a rotation chain; revoking one revokes the family
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  replacedBy  String? // tokenHash of the token that replaced this one, if rotated
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}

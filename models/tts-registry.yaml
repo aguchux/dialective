@@ -1,0 +1,12 @@
+# Maps dialect_tag/language_tag -> MMS-TTS checkpoint id. prompt-audio-service
+# resolves checkpoints through this file only -- never hardcode a checkpoint
+# id in worker logic (AGENTS.md "Language / dialect model mapping").
+# Checkpoints are pretrained (Meta MMS via Hugging Face `transformers`,
+# facebook/mms-tts-<lang>) -- no fine-tuning, per "MMS-TTS boundary".
+#
+# If a dialect_tag has no entry here, prompt-audio generation for that
+# prompt must be marked unsupported_dialect -- never substitute a
+# mismatched-language checkpoint.
+
+en-us:
+  checkpoint: facebook/mms-tts-eng

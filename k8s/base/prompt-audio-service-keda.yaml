@@ -1,0 +1,18 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: prompt-audio-service-scaler
+spec:
+  scaleTargetRef:
+    name: prompt-audio-service
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  cooldownPeriod: 120
+  pollingInterval: 15
+  triggers:
+    - type: redis-streams
+      metadata:
+        address: redis.dai.svc.cluster.local:6379
+        stream: prompt-audio-jobs
+        consumerGroup: prompt-audio-workers
+        pendingEntriesCount: "5"

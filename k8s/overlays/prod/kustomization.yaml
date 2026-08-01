@@ -1,0 +1,47 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: dai
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+# Copy each secrets/*.env.example to secrets/*.env and each
+# configs/*.env.example to configs/*.env, then fill in real values — the
+# real files are gitignored, only the .example files are committed. Names/
+# keys here must match what k8s/base/*.yaml's secretKeyRef/configMapKeyRef
+# entries expect.
+secretGenerator:
+  - name: postgres-creds
+    envs:
+      - secrets/postgres.env
+  - name: spaces-creds
+    envs:
+      - secrets/spaces.env
+  - name: pgadmin-creds
+    envs:
+      - secrets/pgadmin.env
+  - name: auth-creds
+    envs:
+      - secrets/auth.env
+
+configMapGenerator:
+  - name: api-config
+    envs:
+      - configs/api.env
+  - name: vosk-worker-config
+    envs:
+      - configs/vosk-worker.env
+  - name: prompt-audio-service-config
+    envs:
+      - configs/prompt-audio-service.env
+  - name: consensus-scorer-config
+    envs:
+      - configs/consensus-scorer.env
+  - name: postgres-config
+    envs:
+      - configs/postgres.env
+  - name: pgadmin-config
+    envs:
+      - configs/pgadmin.env

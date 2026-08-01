@@ -1,0 +1,94 @@
+name: Prisma build and migrate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/api/prisma/**"
+      - "services/api/src/**"
+      - "services/api/package.json"
+      - ".github/workflows/prisma-migrate.yml"
+  pull_request:
+    paths:
+      - "services/api/prisma/**"
+      - "services/api/src/**"
+      - "services/api/package.json"
+      - ".github/workflows/prisma-migrate.yml"
+  workflow_dispatch:
+
+jobs:
+  prisma:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: services/api
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dialective
+          POSTGRES_PASSWORD: dialective
+          POSTGRES_DB: dialective
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dialective -d dialective"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://dialective:dialective@localhost:5432/dialective
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: services/api/package.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Check for existing migrations
+        id: migration-check
+        run: |
+          if [ -z "$(ls -A prisma/migrations 2>/dev/null)" ]; then
+            echo "has_migrations=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_migrations=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # One-time bootstrap: only runs while prisma/migrations/ is empty.
+      # Generates the baseline migration against this job's Postgres service
+      # and commits it back to the triggering branch so it's captured in
+      # version control from then on -- afterwards this step is a no-op.
+      - name: Create baseline migration (first run only)
+        if: steps.migration-check.outputs.has_migrations == 'false' && github.event_name != 'pull_request'
+        run: npx prisma migrate dev --name init --create-only
+
+      - name: Commit baseline migration (first run only)
+        if: steps.migration-check.outputs.has_migrations == 'false' && github.event_name != 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prisma/migrations
+          git commit -m "chore(api): add baseline prisma migration [ci skip]"
+          git push
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Verify schema is in sync with migrations
+        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --exit-code
+
+      - name: Build
+        run: npm run build

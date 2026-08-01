@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vosk-worker
+  labels:
+    app: vosk-worker
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: vosk-worker
+  template:
+    metadata:
+      labels:
+        app: vosk-worker
+    spec:
+      containers:
+        - name: vosk-worker
+          image: your-registry/vosk-worker:latest
+          env:
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: redis_host
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: redis_port
+            - name: ASR_STREAM
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: asr_stream
+            - name: CONSENSUS_STREAM
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: consensus_stream
+            - name: CONSUMER_GROUP
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: consumer_group
+            - name: SPACES_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: spaces_region
+            - name: SPACES_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: endpoint
+            - name: SPACES_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: access_key
+            - name: SPACES_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: secret_key
+          volumeMounts:
+            - name: model-repo
+              mountPath: /models
+              readOnly: true
+      volumes:
+        - name: model-repo
+          persistentVolumeClaim:
+            claimName: asr-model-repo-pvc

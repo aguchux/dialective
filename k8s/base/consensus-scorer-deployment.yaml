@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consensus-scorer
+  labels:
+    app: consensus-scorer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consensus-scorer
+  template:
+    metadata:
+      labels:
+        app: consensus-scorer
+    spec:
+      containers:
+        - name: consensus-scorer
+          image: your-registry/consensus-scorer:latest
+          env:
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: consensus-scorer-config
+                  key: redis_host
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: consensus-scorer-config
+                  key: redis_port
+            - name: CONSENSUS_STREAM
+              valueFrom:
+                configMapKeyRef:
+                  name: consensus-scorer-config
+                  key: consensus_stream
+            - name: CONSUMER_GROUP
+              valueFrom:
+                configMapKeyRef:
+                  name: consensus-scorer-config
+                  key: consumer_group
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: connection_string

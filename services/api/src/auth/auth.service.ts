@@ -1,0 +1,301 @@
+import { ConflictException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
+import { AuthProvider, Role, User } from '../generated/prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
+import { generateOpaqueToken, hashToken } from './token.util';
+import { signAccessToken } from './jwt.util';
+
+const BCRYPT_ROUNDS = 12;
+const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const MAGIC_LINK_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface AuthResult extends AuthTokens {
+  user: PublicUser;
+}
+
+export interface PublicUser {
+  id: string;
+  email: string;
+  role: Role;
+  emailVerified: boolean;
+}
+
+function toPublicUser(user: User): PublicUser {
+  return { id: user.id, email: user.email, role: user.role, emailVerified: user.emailVerified !== null };
+}
+
+@Injectable()
+export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+  ) {}
+
+  // --- Registration / credentials login ---------------------------------
+
+  async register(email: string, password: string): Promise<AuthResult> {
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException('An account with this email already exists');
+    }
+
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const user = await this.prisma.user.create({ data: { email, passwordHash } });
+
+    await this.issueEmailVerification(user);
+
+    return this.issueAuthResult(user);
+  }
+
+  async login(email: string, password: string): Promise<AuthResult> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user?.passwordHash) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    return this.issueAuthResult(user);
+  }
+
+  // --- OAuth / magic-link, persisted after NextAuth verifies the identity ---
+
+  /**
+   * Called by frontend's NextAuth signIn callback once NextAuth has
+   * already completed the Google OAuth handshake. api never talks to
+   * Google directly (AGENTS.md "Authentication").
+   */
+  async handleOAuthCallback(email: string, provider: AuthProvider, providerAccountId: string): Promise<AuthResult> {
+    let account = await this.prisma.linkedAccount.findUnique({
+      where: { provider_providerAccountId: { provider, providerAccountId } },
+      include: { user: true },
+    });
+
+    if (!account) {
+      const user = await this.prisma.user.upsert({
+        where: { email },
+        update: {},
+        create: { email, emailVerified: new Date() }, // OAuth-verified email is trusted
+      });
+      account = await this.prisma.linkedAccount.create({
+        data: { userId: user.id, provider, providerAccountId },
+        include: { user: true },
+      });
+    }
+
+    return this.issueAuthResult(account.user);
+  }
+
+  async requestMagicLink(email: string): Promise<void> {
+    const { token, hash } = generateOpaqueToken();
+    // Magic-link tokens reuse the email-verification token table's shape
+    // but are issued/consumed via their own endpoints; a user need not
+    // exist yet -- first successful consume creates the account.
+    const user = await this.prisma.user.upsert({
+      where: { email },
+      update: {},
+      create: { email },
+    });
+
+    await this.prisma.emailVerificationToken.create({
+      data: { userId: user.id, tokenHash: hash, expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS) },
+    });
+
+    await this.mail.sendMagicLinkEmail(email, token);
+  }
+
+  async consumeMagicLink(token: string): Promise<AuthResult> {
+    const hash = hashToken(token);
+    const record = await this.prisma.emailVerificationToken.findUnique({ where: { tokenHash: hash } });
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired magic link');
+    }
+
+    const [user] = await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { emailVerified: new Date() },
+      }),
+      this.prisma.emailVerificationToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    let account = await this.prisma.linkedAccount.findUnique({
+      where: { provider_providerAccountId: { provider: AuthProvider.EMAIL, providerAccountId: user.email } },
+    });
+    if (!account) {
+      account = await this.prisma.linkedAccount.create({
+        data: { userId: user.id, provider: AuthProvider.EMAIL, providerAccountId: user.email },
+      });
+    }
+
+    return this.issueAuthResult(user);
+  }
+
+  // --- Refresh / logout ---------------------------------------------------
+
+  /**
+   * Rotation-on-use: every refresh call issues a new refresh token and
+   * revokes the one presented, chained via familyId. If a revoked token is
+   * presented again (a stolen/replayed token), the whole family is revoked
+   * -- this is the standard mitigation for refresh-token theft.
+   */
+  async refresh(presentedToken: string): Promise<AuthTokens> {
+    const hash = hashToken(presentedToken);
+    const record = await this.prisma.refreshToken.findUnique({ where: { tokenHash: hash } });
+
+    if (!record) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (record.revokedAt) {
+      this.logger.warn(`Refresh token reuse detected for family=${record.familyId}; revoking family`);
+      await this.prisma.refreshToken.updateMany({
+        where: { familyId: record.familyId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException('Refresh token has been revoked');
+    }
+
+    if (record.expiresAt < new Date()) {
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: record.userId } });
+    if (!user) {
+      throw new UnauthorizedException('User no longer exists');
+    }
+
+    const { token: nextToken, hash: nextHash } = generateOpaqueToken();
+
+    await this.prisma.$transaction([
+      this.prisma.refreshToken.update({
+        where: { id: record.id },
+        data: { revokedAt: new Date(), replacedBy: nextHash },
+      }),
+      this.prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: nextHash,
+          familyId: record.familyId,
+          expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+        },
+      }),
+    ]);
+
+    return {
+      accessToken: signAccessToken({ sub: user.id, email: user.email, role: user.role }),
+      refreshToken: nextToken,
+    };
+  }
+
+  async logout(presentedToken: string): Promise<void> {
+    const hash = hashToken(presentedToken);
+    const record = await this.prisma.refreshToken.findUnique({ where: { tokenHash: hash } });
+    if (!record || record.revokedAt) {
+      return; // already logged out; logout is idempotent
+    }
+    await this.prisma.refreshToken.updateMany({
+      where: { familyId: record.familyId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  // --- Password reset -----------------------------------------------------
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      // Don't reveal whether the email exists.
+      return;
+    }
+
+    const { token, hash } = generateOpaqueToken();
+    await this.prisma.passwordResetToken.create({
+      data: { userId: user.id, tokenHash: hash, expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS) },
+    });
+
+    await this.mail.sendPasswordResetEmail(email, token);
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const hash = hashToken(token);
+    const record = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash: hash } });
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired reset token');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
+      this.prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+      // Resetting the password invalidates all existing sessions.
+      this.prisma.refreshToken.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+  }
+
+  // --- Email verification --------------------------------------------------
+
+  private async issueEmailVerification(user: User): Promise<void> {
+    const { token, hash } = generateOpaqueToken();
+    await this.prisma.emailVerificationToken.create({
+      data: { userId: user.id, tokenHash: hash, expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS) },
+    });
+    await this.mail.sendEmailVerificationEmail(user.email, token);
+  }
+
+  async verifyEmail(token: string): Promise<void> {
+    const hash = hashToken(token);
+    const record = await this.prisma.emailVerificationToken.findUnique({ where: { tokenHash: hash } });
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired verification token');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: record.userId }, data: { emailVerified: new Date() } }),
+      this.prisma.emailVerificationToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+    ]);
+  }
+
+  // --- Shared token issuance ------------------------------------------------
+
+  private async issueAuthResult(user: User): Promise<AuthResult> {
+    const { token: refreshToken, hash } = generateOpaqueToken();
+    const familyId = randomUUID();
+
+    await this.prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hash,
+        familyId,
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+      },
+    });
+
+    return {
+      accessToken: signAccessToken({ sub: user.id, email: user.email, role: user.role }),
+      refreshToken,
+      user: toPublicUser(user),
+    };
+  }
+}

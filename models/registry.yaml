@@ -1,0 +1,13 @@
+# Maps dialect_tag -> Vosk model info. vosk-worker resolves models through
+# this file only -- never hardcode a model path in worker logic (AGENTS.md
+# "Language / dialect model mapping"). Model weights are NOT committed to
+# this repo; `path` is where the worker expects them mounted (the
+# asr-model-repo-pvc, see k8s/base/model-pvc.yaml), `url` is the download
+# source for the image build / model-fetch init step.
+#
+# If a dialect_tag has no entry here, the job must be marked
+# unsupported_dialect -- never fall back to a different language's model.
+
+en-us:
+  path: /models/vosk-model-small-en-us-0.15
+  url: https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
