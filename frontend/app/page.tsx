@@ -66,7 +66,15 @@ export default function HomePage() {
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
     recorder.onstop = () => {
+      // MediaRecorder.stop() is async -- the final ondataavailable (which
+      // flushes the last chunk) fires after stop() returns, so the blob must
+      // be built here, not right after calling stop(), or it can be built
+      // from an incomplete chunk list (empty/truncated blob, which the
+      // browser then can't satisfy an audio-element byte-range request
+      // against -- ERR_REQUEST_RANGE_NOT_SATISFIABLE).
       stream.getTracks().forEach((track) => track.stop());
+      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      setAudioUrl(URL.createObjectURL(blob));
     };
 
     mediaRecorderRef.current = recorder;
@@ -77,8 +85,6 @@ export default function HomePage() {
   function stopRecording() {
     mediaRecorderRef.current?.stop();
     setStage('idle');
-    const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-    setAudioUrl(URL.createObjectURL(blob));
   }
 
   async function submitRecording() {
