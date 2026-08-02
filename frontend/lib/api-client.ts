@@ -5,11 +5,11 @@
  * that api's responses populate (AGENTS.md "Authentication").
  *
  * frontend is deployed to Vercel, separately from api's Kubernetes cluster,
- * so API_BASE_URL must be api's public URL (https://api.dialective.com) —
+ * so API_BASE_URL must be api's public URL (https://api.nmseprep.com) —
  * there's no in-cluster Service DNS to fall back to from Vercel.
  */
 
-const API_BASE_URL = process.env.API_BASE_URL ?? 'https://api.dialective.com';
+const API_BASE_URL = process.env.API_BASE_URL ?? 'https://api.nmseprep.com';
 
 export interface PublicUser {
   id: string;

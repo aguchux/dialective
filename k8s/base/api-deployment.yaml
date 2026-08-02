@@ -64,6 +64,11 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: spaces_submissions_bucket
+            - name: ASR_STREAM
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: asr_stream
             - name: SPACES_ENDPOINT
               valueFrom:
                 secretKeyRef:

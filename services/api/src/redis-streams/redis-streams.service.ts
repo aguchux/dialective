@@ -42,6 +42,16 @@ export class RedisStreamsService implements OnModuleDestroy {
     return this.redis.xadd(stream, '*', ...fields);
   }
 
+  /**
+   * Plain key read/write, used for the test-only submission-result scratch
+   * store (`result:<submissionId>`, written by vosk-worker) until a real
+   * Postgres submissions table exists (Project Plan step 2). Not part of the
+   * Streams reliability contract -- just a disposable lookup.
+   */
+  async get(key: string): Promise<string | null> {
+    return this.redis.get(key);
+  }
+
   async ensureGroup(stream: string, group: string): Promise<void> {
     try {
       await this.redis.xgroup('CREATE', stream, group, '0', 'MKSTREAM');

@@ -55,10 +55,16 @@ def transcribe(audio_path: str, model: Model, sr: int = 16000) -> tuple[str, lis
     return result.get("text", ""), result.get("result", [])
 
 
-def write_result(submission_id: str, **fields) -> None:
+RESULT_TTL_S = 24 * 60 * 60
+
+
+def write_result(redis_client: redis.Redis, submission_id: str, **fields) -> None:
     # TODO: write to Postgres submissions.transcript / asr_confidence, once
-    # the Postgres schema (Project Plan step 2) exists.
+    # the Postgres schema (Project Plan step 2) exists. Until then, also SET
+    # a short-lived Redis key so api's GET /submissions/:id/result (the
+    # no-auth end-to-end test flow) has somewhere to read the outcome from.
     logger.info("write_result submission=%s fields=%s", submission_id, fields)
+    redis_client.set(f"result:{submission_id}", json.dumps(fields), ex=RESULT_TTL_S)
 
 
 def make_handler(s3, redis_client: redis.Redis):
@@ -73,17 +79,17 @@ def make_handler(s3, redis_client: redis.Redis):
 
             ok, reason = prefilter_ok(local_path)
             if not ok:
-                write_result(submission_id, status="rejected", reason=reason)
+                write_result(redis_client, submission_id, status="rejected", reason=reason)
                 return
 
             try:
                 model = get_model(dialect_tag)
             except UnsupportedDialectError:
-                write_result(submission_id, status="unsupported_dialect", dialect_tag=dialect_tag)
+                write_result(redis_client, submission_id, status="unsupported_dialect", dialect_tag=dialect_tag)
                 return
 
             text, word_conf = transcribe(local_path, model)
-            write_result(submission_id, transcript=text, word_confidences=word_conf)
+            write_result(redis_client, submission_id, status="ok", transcript=text, word_confidences=word_conf)
 
             publish(
                 redis_client,

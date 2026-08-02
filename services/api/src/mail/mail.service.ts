@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Resend } from 'resend';
 
-const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'noreply@dialective.com';
+const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'noreply@nmseprep.com';
 
 function frontendUrl(): string {
-  return process.env.FRONTEND_URL ?? 'https://app.dialective.com';
+  return process.env.FRONTEND_URL ?? 'https://app.nmseprep.com';
 }
 
 /**

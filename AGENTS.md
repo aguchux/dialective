@@ -26,9 +26,9 @@ This repo contains the **ASR scoring pipeline**: the subsystem that ingests audi
 | Database | **PostgreSQL** | Source of truth for submissions, scores, wallet/token ledger, task history. Accessed from NestJS services via an ORM (TypeORM or Prisma — pick one and use it consistently across services). |
 | Job queue | **Redis Streams** | Sole job/event broker between services (`asr-jobs`, `consensus-jobs`), using consumer groups. This matches the original design doc. RabbitMQ was considered and deliberately deferred — see "Why Redis Streams, not RabbitMQ" below. Redis also serves as the KEDA autoscaling signal (pending-entries-count) and general cache/rate-limiting store — one Redis instance, multiple uses. |
 | Container orchestration | **Kubernetes** | See `k8s/` layout below. |
-| DB admin | **pgAdmin** | Deployed in-cluster (`k8s/base/pgadmin.yaml`), exposed via Ingress at `pgadmin.dialective.com` for direct Postgres inspection/admin. Not part of the application data path — purely an ops/admin tool. |
+| DB admin | **pgAdmin** | Deployed in-cluster (`k8s/base/pgadmin.yaml`), exposed via Ingress at `pgadmin.nmseprep.com` for direct Postgres inspection/admin. Not part of the application data path — purely an ops/admin tool. |
 | Object storage | **DigitalOcean Spaces** (S3-compatible) | Two buckets: `dialectiva-submissions` (trainer-uploaded audio, private, presigned-PUT-only) and `dialectiva-prompt-audio` (MMS-TTS output, public-read). `api` uses `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`; `vosk-worker`/`prompt-audio-service` use `boto3` — both point at the Spaces endpoint via `SPACES_ENDPOINT`, no separate Spaces SDK needed since Spaces speaks the S3 API. See "Object storage / signed uploads" below. |
-| Email | **Resend** | `api`'s `MailService` (`services/api/src/mail/`) sends password-reset, email-verification, and magic-link emails from `noreply@dialective.com`. Falls back to logging the link if `RESEND_API_KEY` is unset (local dev without a Resend account). See "Authentication" below. |
+| Email | **Resend** | `api`'s `MailService` (`services/api/src/mail/`) sends password-reset, email-verification, and magic-link emails from `noreply@nmseprep.com`. Falls back to logging the link if `RESEND_API_KEY` is unset (local dev without a Resend account). See "Authentication" below. |
 
 ### Why Redis Streams, not RabbitMQ (for now)
 
@@ -99,7 +99,8 @@ Rough build order for turning this from docs into a working pilot. Treat phases 
 │   │       ├── mail/                      # MailService — Resend sender for reset/verify/magic-link emails
 │   │       ├── common/                    # global filter, middleware — CORS/prefix/pipes set in main.ts
 │   │       ├── storage/                   # StorageService — DO Spaces client + presign
-│   │       ├── submissions/               # POST /api/v1/submissions/upload-url
+│   │       ├── submissions/               # POST /api/v1/submissions/{upload-url,create}, GET /api/v1/submissions/:id/result
+│   │       ├── prompts/                   # GET /api/v1/prompts/random — fixed text bank, test flow only (no Postgres prompts table yet)
 │   │       └── redis-streams/             # shared Redis Streams produce/consume + retry/DLQ
 │   ├── vosk-worker/                   # Python — ASR transcription worker (Redis Streams consumer)
 │   │   ├── Dockerfile
@@ -118,10 +119,10 @@ Rough build order for turning this from docs into a working pilot. Treat phases 
 │   │   ├── postgres.yaml
 │   │   ├── redis.yaml
 │   │   ├── pgadmin.yaml                # pgAdmin Deployment + Service + PVC
-│   │   ├── pgadmin-ingress.yaml         # Ingress (nginx + cert-manager) for pgadmin.dialective.com
+│   │   ├── pgadmin-ingress.yaml         # Ingress (nginx + cert-manager) for pgadmin.nmseprep.com
 │   │   ├── api-deployment.yaml         # api Deployment + Service
 │   │   ├── api-hpa.yaml
-│   │   ├── api-ingress.yaml            # Ingress (nginx + cert-manager) for api.dialective.com
+│   │   ├── api-ingress.yaml            # Ingress (nginx + cert-manager) for api.nmseprep.com
 │   │   ├── vosk-worker-deployment.yaml
 │   │   ├── vosk-worker-keda.yaml       # scales on Redis Streams pending-entries-count
 │   │   ├── prompt-audio-service-deployment.yaml
@@ -154,12 +155,18 @@ Rough build order for turning this from docs into a working pilot. Treat phases 
 - Inter-service communication goes through Redis Streams (`ioredis` client, consumer groups), not direct HTTP calls between services — see "Queue-driven, not request/response" below. There's no first-party NestJS transport for Redis Streams, so wrap stream produce/consume in a small shared module/service rather than hand-rolling it per-service.
 
 ### API surface / frontend readiness
-- `api` is the only service with a public HTTP surface (behind `api.dialective.com`). Every route it exposes is versioned under a global `api/v1` prefix (`app.setGlobalPrefix`, set in `main.ts`) except `/health`, which stays unprefixed so k8s probes and uptime checks don't need to know about API versioning. New endpoints land under `/api/v1/...` automatically — don't bypass the prefix or hardcode `/api/v1` inside route decorators.
+- `api` is the only service with a public HTTP surface (behind `api.nmseprep.com`). Every route it exposes is versioned under a global `api/v1` prefix (`app.setGlobalPrefix`, set in `main.ts`) except `/health`, which stays unprefixed so k8s probes and uptime checks don't need to know about API versioning. New endpoints land under `/api/v1/...` automatically — don't bypass the prefix or hardcode `/api/v1` inside route decorators.
 - **CORS** is allowlist-based via `CORS_ALLOWED_ORIGINS` (comma-separated, set in `k8s/base/api-deployment.yaml`), not wide-open (`*`) — this is a pilot with a small number of known frontend origins, not a public API. Update the env var when a new frontend origin needs access; don't hardcode origins in `main.ts`.
 - **Validation**: every request body goes through a global `ValidationPipe` (`whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`) against `class-validator` DTOs (see `submissions/dto/create-upload-url.dto.ts` for the pattern). Don't hand-roll manual `if (!body.x) throw ...` checks in a controller — add validator decorators to the DTO instead, so the global pipe catches it and the error shape stays consistent.
 - **Error shape**: every error response (validation failures, 404s, unhandled exceptions) is normalized by the global `HttpExceptionFilter` (`common/filters/`) to `{statusCode, message, error, path, timestamp}`. Don't let a controller return an ad-hoc error shape or swallow an exception without going through this filter — a frontend integrating against this API should be able to handle errors generically.
 - **Security headers**: `helmet()` is applied globally in `main.ts`. Don't remove it or hand-roll individual headers instead.
 - **Request logging**: `RequestLoggerMiddleware` (`common/middleware/`) logs method/path/status/duration for every request, applied globally via `AppModule.configure`. Keep new services following the same pattern if/when they gain an HTTP surface, rather than inventing a different logging approach per service.
+
+### No-auth pipeline test flow (`frontend/app/page.tsx`, `prompts/`, `submissions/create` + `:id/result`)
+The landing page (`/`, no login) exercises the real ASR pipeline end-to-end without touching auth: `GET /api/v1/prompts/random` returns a prompt from a fixed in-memory text bank (no TTS, no Postgres) → browser records via `MediaRecorder` → `POST /submissions/upload-url` + direct PUT to Spaces (existing flow) → `POST /submissions/create` publishes an `asr-jobs` message → `vosk-worker` transcribes and, in addition to its `write_result` log line, `SET`s `result:<submissionId>` in Redis (24h TTL) → frontend polls `GET /submissions/:id/result` until it resolves.
+- **This is scaffolding, not the real submissions system.** Both the prompt bank and the Redis result key are explicit stand-ins for the not-yet-built Postgres `prompts`/`submissions` tables (Project Plan step 2) — once that schema exists, `prompts/` becomes a real DB-backed picker and the Redis result key goes away in favor of a submissions row `vosk-worker` writes to directly.
+- Don't add auth to these three routes as a "fix" — the whole point is a reachable-without-login pipeline smoke test. If/when this flow needs to go away, delete `prompts/`, the `create`/`:id/result` routes, and revert the landing page rather than gating them behind auth.
+- `write_result` in `vosk-worker/worker.py` now takes `redis_client` as its first argument specifically to also write this scratch key — if you touch that function, keep both the log line and the `SET` in sync with whatever `submissions.controller.ts`'s `getResult` expects to parse.
 
 ### Authentication
 
@@ -182,7 +189,7 @@ Rough build order for turning this from docs into a working pilot. Treat phases 
 
 **Password reset / email verification:** fully implemented (opaque hashed tokens, expiry, single-use `usedAt` marking) with real email delivery via **Resend** (`MailService`, `services/api/src/mail/`). `frontend` has dedicated pages (`app/reset-password/`, `app/verify-email/`) that consume the token by POSTing directly to `api`'s public confirm/verify endpoints (no `OAUTH_CALLBACK_SECRET` needed for these two — they're not server-to-server, the emailed link is the credential). If `RESEND_API_KEY` isn't set, `MailService` falls back to logging the link instead of failing, so local dev works without a Resend account.
 
-**Email templates/sending are entirely `MailService`'s concern** — every link in every email (`reset-password`, `verify-email`, `magic-link`) is built from `FRONTEND_URL` (default `https://app.dialective.com`) plus the frontend route that consumes it, so `frontend`'s page routes and `MailService`'s link construction have to stay in sync. Sender address is `RESEND_FROM_ADDRESS` (default `noreply@dialective.com`) — requires that domain to be verified in Resend.
+**Email templates/sending are entirely `MailService`'s concern** — every link in every email (`reset-password`, `verify-email`, `magic-link`) is built from `FRONTEND_URL` (default `https://app.nmseprep.com`) plus the frontend route that consumes it, so `frontend`'s page routes and `MailService`'s link construction have to stay in sync. Sender address is `RESEND_FROM_ADDRESS` (default `noreply@nmseprep.com`) — requires that domain to be verified in Resend.
 
 **Don't:**
 - Add a NextAuth database adapter or any Prisma/TypeORM usage inside `frontend`.
@@ -264,14 +271,14 @@ Redis Streams doesn't provide dead-lettering out of the box, so every consumer g
 
 ### Ingress / external access
 - Only expose a service via Ingress when there's a concrete reason a human or external system needs to reach it directly. Internal-only services (`postgres`, `redis`) stay ClusterIP/headless with no Ingress — nothing in this repo should assume they're reachable from outside the cluster.
-- `pgadmin` (`pgadmin.dialective.com`) and `api` (`api.dialective.com`) are Ingress-exposed via this repo's k8s. `frontend` is **not** — it's deployed to Vercel, not this cluster, so it has no `k8s/base/web-*.yaml` (see "Frontend deployment (Vercel)"). `pgadmin` is guarded by its own login only (no additional IP allowlist for this pilot phase — revisit if access needs tightening); `api` is JWT-guarded per-route (`JwtAuthGuard`/`RolesGuard`, see "Authentication" above) — CORS restricts *which origins* can call it, auth restricts *who*. Ingress manifests target **nginx** (`ingressClassName: nginx`) with **cert-manager** (`cert-manager.io/cluster-issuer: letsencrypt-prod`) for automatic TLS — both are assumed to already exist in the cluster; this repo doesn't install the ingress controller or cert-manager itself.
-- `CORS_ALLOWED_ORIGINS` on `api` should include `frontend`'s public origin (`https://app.dialective.com`, or whatever custom domain is pointed at the Vercel deployment) so browser-side calls from `frontend` (e.g. the register page's direct fetch) aren't blocked — server-side calls (NextAuth's provider callbacks) aren't subject to CORS since they never go through a browser.
+- `pgadmin` (`pgadmin.nmseprep.com`) and `api` (`api.nmseprep.com`) are Ingress-exposed via this repo's k8s. `frontend` is **not** — it's deployed to Vercel, not this cluster, so it has no `k8s/base/web-*.yaml` (see "Frontend deployment (Vercel)"). `pgadmin` is guarded by its own login only (no additional IP allowlist for this pilot phase — revisit if access needs tightening); `api` is JWT-guarded per-route (`JwtAuthGuard`/`RolesGuard`, see "Authentication" above) — CORS restricts *which origins* can call it, auth restricts *who*. Ingress manifests target **nginx** (`ingressClassName: nginx`) with **cert-manager** (`cert-manager.io/cluster-issuer: letsencrypt-prod`) for automatic TLS — both are assumed to already exist in the cluster; this repo doesn't install the ingress controller or cert-manager itself.
+- `CORS_ALLOWED_ORIGINS` on `api` should include `frontend`'s public origin (`https://app.nmseprep.com`, or whatever custom domain is pointed at the Vercel deployment) so browser-side calls from `frontend` (e.g. the register page's direct fetch) aren't blocked — server-side calls (NextAuth's provider callbacks) aren't subject to CORS since they never go through a browser.
 
 ### Frontend deployment (Vercel)
 - `frontend/` is deployed to **Vercel**, independently of this repo's `kubectl apply -k k8s/overlays/prod/` flow. It has no Dockerfile and no `k8s/base/web-*.yaml` — don't add either back without discussing the deployment target change first.
 - `next.config.js` has no `output: 'standalone'` (that was for the now-removed Docker build) — Vercel's own build pipeline handles output.
-- Required env vars on Vercel (project settings, not `.env`/`secretGenerator` — those only feed this repo's k8s Secrets): `NEXTAUTH_URL` (the Vercel deployment's public URL), `NEXTAUTH_SECRET`, `API_BASE_URL` (public `https://api.dialective.com`, since Vercel can't reach the cluster's internal `http://api` Service DNS — unlike when `web` ran in-cluster), `NEXT_PUBLIC_API_BASE_URL`, `OAUTH_CALLBACK_SECRET` (must match `api`'s `auth-creds` value exactly), `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`.
-- Whatever domain Vercel serves `frontend` on must be added to `api`'s `CORS_ALLOWED_ORIGINS` and to the Google OAuth app's authorized redirect URI (`https://<domain>/api/auth/callback/google`) — both currently assume `app.dialective.com`; update them together if the Vercel domain differs.
+- Required env vars on Vercel (project settings, not `.env`/`secretGenerator` — those only feed this repo's k8s Secrets): `NEXTAUTH_URL` (the Vercel deployment's public URL), `NEXTAUTH_SECRET`, `API_BASE_URL` (public `https://api.nmseprep.com`, since Vercel can't reach the cluster's internal `http://api` Service DNS — unlike when `web` ran in-cluster), `NEXT_PUBLIC_API_BASE_URL`, `OAUTH_CALLBACK_SECRET` (must match `api`'s `auth-creds` value exactly), `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`.
+- Whatever domain Vercel serves `frontend` on must be added to `api`'s `CORS_ALLOWED_ORIGINS` and to the Google OAuth app's authorized redirect URI (`https://<domain>/api/auth/callback/google`) — both currently assume `app.nmseprep.com`; update them together if the Vercel domain differs.
 
 ---
 
@@ -309,6 +316,14 @@ curl -X POST localhost:3000/api/v1/auth/magic-link/request \
 curl -X POST localhost:3000/api/v1/submissions/upload-url \
   -H 'Content-Type: application/json' \
   -d '{"promptId":"p1","dialectTag":"en-us","contentType":"audio/wav"}'
+
+# No-auth pipeline test flow (see "No-auth pipeline test flow" above)
+curl localhost:3000/api/v1/prompts/random?dialectTag=en-us
+# ... PUT audio to uploadUrl from upload-url, then:
+curl -X POST localhost:3000/api/v1/submissions/create \
+  -H 'Content-Type: application/json' \
+  -d '{"submissionId":"...","promptId":"p1","dialectTag":"en-us","bucket":"...","audioKey":"..."}'
+curl localhost:3000/api/v1/submissions/<submissionId>/result
 
 # Health check stays unprefixed (k8s probes hit this)
 curl localhost:3000/health

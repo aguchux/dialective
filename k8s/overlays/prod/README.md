@@ -49,23 +49,38 @@ Two buckets, created out-of-band (these manifests don't provision them):
 - `dialectiva-submissions` — trainer-uploaded audio. Private; `api` issues presigned PUT URLs (`POST /submissions/upload-url`) so trainer clients upload directly without routing bytes through `api`. `vosk-worker` reads via its `spaces-creds` credentials, not a public URL.
 - `dialectiva-prompt-audio` — MMS-TTS-generated prompt audio, written by `prompt-audio-service`. Objects are written `public-read` since trainer clients play this audio directly; front it with Spaces CDN if bandwidth costs matter later.
 
+**CORS on the submissions bucket (manual, DO console — not managed by these manifests):** since the presigned PUT is issued to a *browser*, not curl/a server, the bucket itself needs a CORS policy or the PUT fails client-side with a CORS error before it ever reaches Spaces — this is bucket-level config, independent of `api`'s own `CORS_ALLOWED_ORIGINS`. Set it under Spaces → the bucket → Settings → CORS Configurations (or `s3api put-bucket-cors` against the Spaces endpoint):
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://nmseprep.com", "https://app.nmseprep.com"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["*"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+
+Add `http://localhost:3000` too if testing the frontend locally against the real bucket.
+
 ## Ingress / DNS
 
-`pgadmin.dialective.com` and `api.dialective.com` must point (A/CNAME) at the ingress controller's external IP. TLS is issued automatically via cert-manager (`letsencrypt-prod` ClusterIssuer) — that ClusterIssuer must already exist in the cluster; it's not created by these manifests. Requires an nginx ingress controller (`ingressClassName: nginx`).
+`pgadmin.nmseprep.com` and `api.nmseprep.com` must point (A/CNAME) at the ingress controller's external IP. TLS is issued automatically via cert-manager (`letsencrypt-prod` ClusterIssuer) — that ClusterIssuer must already exist in the cluster; it's not created by these manifests. Requires an nginx ingress controller (`ingressClassName: nginx`).
 
-`app.dialective.com` (the frontend) is **not** in this cluster — it's a Vercel deployment (`/frontend`). Point it at Vercel's DNS target per the Vercel project's domain settings, not at the ingress controller.
+`app.nmseprep.com` (the frontend) is **not** in this cluster — it's a Vercel deployment (`/frontend`). Point it at Vercel's DNS target per the Vercel project's domain settings, not at the ingress controller.
 
 ## Google OAuth app setup
 
-Create an OAuth 2.0 Client ID in the Google Cloud Console (APIs & Services → Credentials) with an authorized redirect URI of `https://app.dialective.com/api/auth/callback/google` (or whatever domain the Vercel deployment actually uses). Put the resulting client id/secret into `secrets/auth.env`'s `google_client_id`/`google_client_secret` (for `api`'s copy) **and** into the Vercel project's env vars as `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (for `frontend`'s copy) — both sides need the same values.
+Create an OAuth 2.0 Client ID in the Google Cloud Console (APIs & Services → Credentials) with an authorized redirect URI of `https://app.nmseprep.com/api/auth/callback/google` (or whatever domain the Vercel deployment actually uses). Put the resulting client id/secret into `secrets/auth.env`'s `google_client_id`/`google_client_secret` (for `api`'s copy) **and** into the Vercel project's env vars as `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (for `frontend`'s copy) — both sides need the same values.
 
 ## Frontend (Vercel) env vars
 
 Set these in the Vercel project settings, not in this repo's secrets (which only feed this repo's k8s Secrets):
 
-- `NEXTAUTH_URL` — the Vercel deployment's public URL (e.g. `https://app.dialective.com`)
+- `NEXTAUTH_URL` — the Vercel deployment's public URL (e.g. `https://app.nmseprep.com`)
 - `NEXTAUTH_SECRET` — same value as `secrets/auth.env`'s `nextauth_secret`
-- `API_BASE_URL` — `https://api.dialective.com` (Vercel can't reach the cluster's internal `http://api` Service DNS)
+- `API_BASE_URL` — `https://api.nmseprep.com` (Vercel can't reach the cluster's internal `http://api` Service DNS)
 - `NEXT_PUBLIC_API_BASE_URL` — same as above, exposed client-side
 - `OAUTH_CALLBACK_SECRET` — must match `secrets/auth.env`'s `oauth_callback_secret` / `api`'s `auth-creds` value exactly
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — same values as `secrets/auth.env`'s `google_client_id`/`google_client_secret`

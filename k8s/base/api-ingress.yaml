@@ -9,10 +9,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - api.dialective.com
+        - api.nmseprep.com
       secretName: api-tls
   rules:
-    - host: api.dialective.com
+    - host: api.nmseprep.com
       http:
         paths:
           - path: /
