@@ -15,4 +15,5 @@ spec:
         address: redis.dai.svc.cluster.local:6379
         stream: asr-jobs
         consumerGroup: asr-workers
-        pendingEntriesCount: "5"
+        lagCount: "1"
+        activationLagCount: "0"

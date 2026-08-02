@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import subprocess
 
 import redis
 import soundfile as sf
@@ -33,6 +34,21 @@ def get_model(dialect_tag: str) -> Model:
         path = resolve_model_path(dialect_tag, _registry)
         _model_cache[dialect_tag] = Model(path)
     return _model_cache[dialect_tag]
+
+
+def transcode_to_wav(src_path: str, dst_path: str, sr: int = 16000) -> None:
+    """
+    Trainer clients upload whatever MediaRecorder gives them (webm/opus,
+    ogg, etc, browser-dependent) -- soundfile/libsndfile can't decode most
+    of those directly, so normalize to 16kHz mono PCM WAV via the ffmpeg
+    binary already baked into this image (see Dockerfile) before anything
+    downstream touches the file.
+    """
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", src_path, "-ar", str(sr), "-ac", "1", "-f", "wav", dst_path],
+        check=True,
+        capture_output=True,
+    )
 
 
 def prefilter_ok(audio_path: str) -> tuple[bool, str | None]:
@@ -72,12 +88,19 @@ def make_handler(s3, redis_client: redis.Redis):
         job = fields if not fields.get("data") else json.loads(fields["data"])
         submission_id = job["submission_id"]
         dialect_tag = job["dialect_tag"]
-        local_path = f"/tmp/{submission_id}.wav"
+        raw_path = f"/tmp/{submission_id}.raw"
+        wav_path = f"/tmp/{submission_id}.wav"
 
         try:
-            s3.download_file(job["bucket"], job["audio_key"], local_path)
+            s3.download_file(job["bucket"], job["audio_key"], raw_path)
 
-            ok, reason = prefilter_ok(local_path)
+            try:
+                transcode_to_wav(raw_path, wav_path)
+            except subprocess.CalledProcessError:
+                write_result(redis_client, submission_id, status="rejected", reason="unreadable_audio")
+                return
+
+            ok, reason = prefilter_ok(wav_path)
             if not ok:
                 write_result(redis_client, submission_id, status="rejected", reason=reason)
                 return
@@ -88,7 +111,7 @@ def make_handler(s3, redis_client: redis.Redis):
                 write_result(redis_client, submission_id, status="unsupported_dialect", dialect_tag=dialect_tag)
                 return
 
-            text, word_conf = transcribe(local_path, model)
+            text, word_conf = transcribe(wav_path, model)
             write_result(redis_client, submission_id, status="ok", transcript=text, word_confidences=word_conf)
 
             publish(
@@ -101,8 +124,9 @@ def make_handler(s3, redis_client: redis.Redis):
                 },
             )
         finally:
-            if os.path.exists(local_path):
-                os.remove(local_path)
+            for path in (raw_path, wav_path):
+                if os.path.exists(path):
+                    os.remove(path)
 
     return handle
 
