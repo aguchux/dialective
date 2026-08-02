@@ -17,13 +17,22 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        service:
-          - api
-          - consensus-scorer
-          - prompt-audio-service
-          - settlement-job
-          - vosk-worker
+        include:
+          # api/consensus-scorer/settlement-job Dockerfiles COPY relative to
+          # their own service dir; vosk-worker/prompt-audio-service also COPY
+          # ../../models/*.yaml, so they need repo-root context instead.
+          - service: api
+            context: services/api
+          - service: consensus-scorer
+            context: services/consensus-scorer
+          - service: settlement-job
+            context: services/settlement-job
+          - service: prompt-audio-service
+            context: .
+          - service: vosk-worker
+            context: .
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +49,7 @@ jobs:
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ${{ matrix.context }}
           file: services/${{ matrix.service }}/Dockerfile
           push: true
           tags: |

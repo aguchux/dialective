@@ -28,6 +28,12 @@ spec:
       labels:
         app: pgadmin
     spec:
+      # dpage/pgadmin4 runs as uid 5050 / gid 0 (root group) -- without fsGroup
+      # the mounted PVC is owned by root:root with no group-write, so pgadmin
+      # can't create /var/lib/pgadmin/sessions. fsGroup must match the
+      # container's actual gid (0), confirmed via `kubectl run ... -- id`.
+      securityContext:
+        fsGroup: 0
       containers:
         - name: pgadmin
           image: dpage/pgadmin4:latest
