@@ -44,6 +44,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://dialective:dialective@localhost:5432/dialective
+      SHADOW_DATABASE_URL: postgresql://dialective:dialective@localhost:5432/dialective_shadow
 
     steps:
       - name: Checkout
@@ -92,6 +93,9 @@ jobs:
             echo "push attempt $i failed, retrying..." >&2
             sleep $((i * 5))
           done
+
+      - name: Create shadow database
+        run: PGPASSWORD=dialective psql -h localhost -U dialective -d dialective -c "CREATE DATABASE dialective_shadow;"
 
       - name: Apply migrations
         run: npx prisma migrate deploy
