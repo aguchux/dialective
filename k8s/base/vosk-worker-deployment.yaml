@@ -14,6 +14,31 @@ spec:
       labels:
         app: vosk-worker
     spec:
+      # Populates asr-model-repo-pvc with the Vosk model on first mount --
+      # idempotent (skips the download if the model dir already exists), so
+      # this is cheap on every subsequent pod start including scale-from-zero.
+      # Model weights are NOT baked into the vosk-worker image (see its
+      # Dockerfile) specifically so every replica shares this one PVC-backed
+      # copy instead of re-downloading per image build.
+      initContainers:
+        - name: fetch-model
+          image: python:3.11-slim
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              if [ -d /models/vosk-model-small-en-us-0.15 ]; then
+                echo "model already present, skipping download"
+                exit 0
+              fi
+              apt-get update && apt-get install -y wget unzip
+              wget -O /tmp/model.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+              unzip /tmp/model.zip -d /models
+              rm /tmp/model.zip
+          volumeMounts:
+            - name: model-repo
+              mountPath: /models
       containers:
         - name: vosk-worker
           image: golojan/dialect-vosk-worker:latest

@@ -129,8 +129,8 @@ Rough build order for turning this from docs into a working pilot. Treat phases 
 │   │   ├── prompt-audio-service-keda.yaml   # scales on Redis Streams consumer-group lag
 │   │   ├── consensus-scorer-deployment.yaml
 │   │   ├── consensus-scorer-hpa.yaml
-│   │   ├── model-pvc.yaml              # Vosk models (ReadOnlyMany)
-│   │   ├── tts-model-pvc.yaml          # MMS-TTS checkpoints (ReadOnlyMany)
+│   │   ├── model-pvc.yaml              # Vosk models (ReadWriteOnce -- DO block storage doesn't support ReadOnlyMany), populated by vosk-worker's initContainer
+│   │   ├── tts-model-pvc.yaml          # MMS-TTS checkpoints (ReadWriteOnce), populated lazily at runtime by prompt-audio-service (HF from_pretrained cache_dir)
 │   │   ├── settlement-cronjob.yaml
 │   │   └── kustomization.yaml
 │   └── overlays/
@@ -203,6 +203,7 @@ The landing page (`/`, no login) exercises the real ASR pipeline end-to-end with
 - Every Vosk model in use must be registered in `models/registry.yaml` (dialect_tag → model path/URL). **Never hardcode a model path inside worker logic** — always resolve it through the registry so dialect coverage can be extended without code changes.
 - Do not silently fall back to a different language's model for an unmatched dialect. If no model exists for a dialect, the job must be marked `unsupported_dialect`, not force-transcribed with a mismatched model — this would corrupt the consensus scoring signal (see design doc §7).
 - Same rule for TTS: every MMS-TTS checkpoint in use must be registered in `models/tts-registry.yaml` (dialect_tag/language_tag → MMS checkpoint id, e.g. `facebook/mms-tts-eng`). Never hardcode a checkpoint id inside `prompt-audio-service` logic. If no MMS checkpoint exists for a dialect/language, mark prompt-audio generation `unsupported_dialect` for that prompt rather than substituting a mismatched checkpoint — a wrong-language TTS voice for a prompt is actively misleading to the trainer, not just lower quality.
+- **Vosk model files live only on `asr-model-repo-pvc`, never baked into the `vosk-worker` image.** An earlier version of `vosk-worker`'s Dockerfile downloaded the model into the image at `/models` during build — but the Deployment also mounts `asr-model-repo-pvc` at that same `/models` path, which silently shadows the baked-in files with an empty volume at container start (`Model()` then fails with "does not contain model files", not an obviously-mount-related error). The fix: `vosk-worker-deployment.yaml`'s `fetch-model` `initContainer` downloads the model into the PVC on first mount (idempotent — skips if already present), and the Dockerfile no longer touches `/models` at all. If you add a second Vosk model (new dialect_tag), extend the init container's script, don't bring the `wget`/`unzip` bake-step back into the Dockerfile.
 
 ### MMS-TTS boundary
 - `prompt-audio-service` uses **pretrained MMS-TTS checkpoints only** (Meta's Massively Multilingual Speech project, via Hugging Face `transformers`). No fine-tuning, no training pipeline — this is explicitly what makes it usable with zero training required. Don't add a training/fine-tuning path for TTS in this phase (see Non-Goals).
