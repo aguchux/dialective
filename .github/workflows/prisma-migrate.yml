@@ -16,6 +16,10 @@ on:
       - ".github/workflows/prisma-migrate.yml"
   workflow_dispatch:
 
+concurrency:
+  group: prisma-migrate-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prisma:
     runs-on: ubuntu-latest
@@ -82,7 +86,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add prisma/migrations
           git commit -m "chore(api): add baseline prisma migration [ci skip]"
-          git push
+          for i in 1 2 3 4 5; do
+            git fetch origin "${GITHUB_REF_NAME}"
+            git rebase "origin/${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && break
+            echo "push attempt $i failed, retrying..." >&2
+            sleep $((i * 5))
+          done
 
       - name: Apply migrations
         run: npx prisma migrate deploy
