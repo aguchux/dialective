@@ -3,8 +3,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: asr-model-repo-pvc
 spec:
-  accessModes: ["ReadOnlyMany"]
+  accessModes: ["ReadWriteOnce"]
   resources:
     requests:
       storage: 5Gi
-  storageClassName: standard
+  storageClassName: do-block-storage
