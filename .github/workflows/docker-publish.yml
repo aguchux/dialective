@@ -9,6 +9,7 @@ on:
       - "services/prompt-audio-service/**"
       - "services/settlement-job/**"
       - "services/vosk-worker/**"
+      - "services/whisper-worker/**"
       - "models/**"
       - ".github/workflows/docker-publish.yml"
   workflow_dispatch:
@@ -20,11 +21,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # api/consensus-scorer/settlement-job Dockerfiles COPY relative to
-          # their own service dir; vosk-worker/prompt-audio-service also COPY
-          # ../../models/*.yaml, so they need repo-root context instead.
+          # consensus-scorer/settlement-job Dockerfiles COPY relative to their
+          # own service dir; api/vosk-worker/prompt-audio-service/whisper-worker
+          # also COPY models/*.yaml, so they need repo-root context instead.
           - service: api
-            context: services/api
+            context: .
           - service: consensus-scorer
             context: services/consensus-scorer
           - service: settlement-job
@@ -32,6 +33,8 @@ jobs:
           - service: prompt-audio-service
             context: .
           - service: vosk-worker
+            context: .
+          - service: whisper-worker
             context: .
     steps:
       - name: Checkout

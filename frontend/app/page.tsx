@@ -12,9 +12,18 @@ import { useRef, useState } from 'react';
  */
 
 const API_BASE_URL = `${process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.nmseprep.com'}/api/v1`;
-const DIALECT_TAG = 'en-us';
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 60000;
+
+// Must match models/asr-registry.yaml -- these are the only dialect_tags
+// with both a prompt bank (api's PromptsController) and an ASR engine
+// registered to transcribe them.
+const DIALECT_OPTIONS = [
+  { value: 'en-us', label: 'English (US)' },
+  { value: 'ig', label: 'Igbo' },
+  { value: 'yo', label: 'Yoruba' },
+  { value: 'ha', label: 'Hausa' },
+];
 
 interface Prompt {
   promptId: string;
@@ -32,6 +41,7 @@ interface Result {
 }
 
 export default function HomePage() {
+  const [dialectTag, setDialectTag] = useState(DIALECT_OPTIONS[0].value);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [stage, setStage] = useState<Stage>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +56,7 @@ export default function HomePage() {
     setResult(null);
     setAudioUrl(null);
     setStage('idle');
-    const res = await fetch(`${API_BASE_URL}/prompts/random?dialectTag=${DIALECT_TAG}`);
+    const res = await fetch(`${API_BASE_URL}/prompts/random?dialectTag=${dialectTag}`);
     if (!res.ok) {
       setError('Failed to load a prompt.');
       return;
@@ -152,16 +162,30 @@ export default function HomePage() {
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     }
 
-    setError('Timed out waiting for a transcript. vosk-worker may still be starting up (scale-to-zero).');
+    setError('Timed out waiting for a transcript. The ASR worker may still be starting up (scale-to-zero).');
     setStage('error');
   }
 
   return (
     <main style={{ maxWidth: 640, margin: '2rem auto', fontFamily: 'sans-serif' }}>
       <h1>Dialectiva — pipeline test</h1>
-      <p>No login required. This exercises the real upload → asr-jobs → vosk-worker → transcript pipeline.</p>
+      <p>No login required. This exercises the real upload → ASR worker → transcript pipeline.</p>
 
-      {!prompt && <button onClick={loadPrompt}>Get a prompt</button>}
+      {!prompt && (
+        <div>
+          <label htmlFor="dialect-select">Language</label>{' '}
+          <select id="dialect-select" value={dialectTag} onChange={(e) => setDialectTag(e.target.value)}>
+            {DIALECT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <div>
+            <button onClick={loadPrompt}>Get a prompt</button>
+          </div>
+        </div>
+      )}
 
       {prompt && (
         <section>
@@ -193,7 +217,10 @@ export default function HomePage() {
             <section>
               <h3>Result</h3>
               <p>status: {result.status}</p>
-              {result.transcript && <p>transcript: “{result.transcript}”</p>}
+              {result.status === 'ok' && result.transcript && <p>transcript: “{result.transcript}”</p>}
+              {result.status === 'unsupported_dialect' && (
+                <p role="alert">No ASR model is registered for this dialect yet.</p>
+              )}
               {result.reason && <p>reason: {result.reason}</p>}
             </section>
           )}

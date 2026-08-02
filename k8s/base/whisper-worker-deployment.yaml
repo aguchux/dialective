@@ -1,53 +1,53 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: prompt-audio-service
+  name: whisper-worker
   labels:
-    app: prompt-audio-service
+    app: whisper-worker
 spec:
   replicas: 0
   selector:
     matchLabels:
-      app: prompt-audio-service
+      app: whisper-worker
   template:
     metadata:
       labels:
-        app: prompt-audio-service
+        app: whisper-worker
     spec:
       containers:
-        - name: prompt-audio-service
-          image: golojan/dialect-prompt-audio-service:latest
+        - name: whisper-worker
+          image: golojan/dialect-whisper-worker:latest
           env:
             - name: REDIS_HOST
               valueFrom:
                 configMapKeyRef:
-                  name: prompt-audio-service-config
+                  name: whisper-worker-config
                   key: redis_host
             - name: REDIS_PORT
               valueFrom:
                 configMapKeyRef:
-                  name: prompt-audio-service-config
+                  name: whisper-worker-config
                   key: redis_port
-            - name: PROMPT_AUDIO_STREAM
+            - name: ASR_STREAM
               valueFrom:
                 configMapKeyRef:
-                  name: prompt-audio-service-config
-                  key: prompt_audio_stream
+                  name: whisper-worker-config
+                  key: asr_stream
+            - name: CONSENSUS_STREAM
+              valueFrom:
+                configMapKeyRef:
+                  name: whisper-worker-config
+                  key: consensus_stream
             - name: CONSUMER_GROUP
               valueFrom:
                 configMapKeyRef:
-                  name: prompt-audio-service-config
+                  name: whisper-worker-config
                   key: consumer_group
             - name: SPACES_REGION
               valueFrom:
                 configMapKeyRef:
-                  name: prompt-audio-service-config
+                  name: whisper-worker-config
                   key: spaces_region
-            - name: SPACES_PROMPT_AUDIO_BUCKET
-              valueFrom:
-                configMapKeyRef:
-                  name: prompt-audio-service-config
-                  key: spaces_prompt_audio_bucket
             - name: SPACES_ENDPOINT
               valueFrom:
                 secretKeyRef:
@@ -64,10 +64,10 @@ spec:
                   name: spaces-creds
                   key: secret_key
           volumeMounts:
-            - name: tts-model-repo
+            - name: whisper-model-repo
               mountPath: /models
               readOnly: false
       volumes:
-        - name: tts-model-repo
+        - name: whisper-model-repo
           persistentVolumeClaim:
-            claimName: tts-model-repo-pvc
+            claimName: whisper-model-repo-pvc

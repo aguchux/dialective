@@ -1,9 +1,13 @@
-# Maps dialect_tag -> Vosk model info. vosk-worker resolves models through
-# this file only -- never hardcode a model path in worker logic (AGENTS.md
-# "Language / dialect model mapping"). Model weights are NOT committed to
-# this repo; `path` is where the worker expects them mounted (the
-# asr-model-repo-pvc, see k8s/base/model-pvc.yaml), `url` is the download
-# source for the image build / model-fetch init step.
+# Vosk-engine-specific model info (local mount path + download URL), read
+# only by vosk-worker. This is NOT the dialect_tag -> engine routing table --
+# see models/asr-registry.yaml for that (read by api and both ASR workers).
+# Every dialect_tag in here must also exist in asr-registry.yaml with
+# engine: vosk, or api will never route a job here in the first place.
+#
+# Model weights are NOT committed to this repo; `path` is where the worker
+# expects them mounted (the asr-model-repo-pvc, see k8s/base/model-pvc.yaml),
+# `url` is the download source for the initContainer's model-fetch step (see
+# k8s/base/vosk-worker-deployment.yaml).
 #
 # If a dialect_tag has no entry here, the job must be marked
 # unsupported_dialect -- never fall back to a different language's model.

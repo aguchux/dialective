@@ -5,21 +5,25 @@ WORKDIR /app
 # connect to a database, but prisma.config.ts's env() throws if the var is
 # unset at all.
 ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
-COPY package.json ./
+# Build context must be repo root so models/asr-registry.yaml resolves, e.g.:
+#   docker build -f services/api/Dockerfile -t api .
+COPY services/api/package.json ./
 RUN npm install
-COPY prisma.config.ts ./
-COPY prisma ./prisma
-COPY tsconfig.json ./
-COPY src ./src
+COPY services/api/prisma.config.ts ./
+COPY services/api/prisma ./prisma
+COPY services/api/tsconfig.json ./
+COPY services/api/src ./src
+COPY models/asr-registry.yaml ./models/asr-registry.yaml
 RUN npm run build
 
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
-COPY package.json ./
+COPY services/api/package.json ./
 RUN npm install --omit=dev
-COPY prisma.config.ts ./
-COPY prisma ./prisma
+COPY services/api/prisma.config.ts ./
+COPY services/api/prisma ./prisma
 COPY --from=build /app/dist ./dist
+COPY models/asr-registry.yaml ./dist/models/asr-registry.yaml
 EXPOSE 3000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

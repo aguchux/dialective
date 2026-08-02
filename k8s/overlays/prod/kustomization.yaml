@@ -33,6 +33,9 @@ configMapGenerator:
   - name: vosk-worker-config
     envs:
       - configs/vosk-worker.env
+  - name: whisper-worker-config
+    envs:
+      - configs/whisper-worker.env
   - name: prompt-audio-service-config
     envs:
       - configs/prompt-audio-service.env

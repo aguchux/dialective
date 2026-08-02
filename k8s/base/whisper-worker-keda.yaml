@@ -1,19 +1,19 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: vosk-worker-scaler
+  name: whisper-worker-scaler
 spec:
   scaleTargetRef:
-    name: vosk-worker
+    name: whisper-worker
   minReplicaCount: 0
-  maxReplicaCount: 15
+  maxReplicaCount: 5
   cooldownPeriod: 120
   pollingInterval: 15
   triggers:
     - type: redis-streams
       metadata:
         address: redis.dai.svc.cluster.local:6379
-        stream: asr-jobs-vosk
-        consumerGroup: asr-workers-vosk
+        stream: asr-jobs-whisper
+        consumerGroup: asr-workers-whisper
         lagCount: "1"
         activationLagCount: "0"

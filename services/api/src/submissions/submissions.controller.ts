@@ -1,12 +1,12 @@
-import { Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Post, UnprocessableEntityException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { StorageService } from '../storage/storage.service';
 import { RedisStreamsService } from '../redis-streams/redis-streams.service';
+import { AsrRegistryService } from '../asr-registry/asr-registry.service';
 import { CreateUploadUrlDto } from './dto/create-upload-url.dto';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 
 const SUBMISSIONS_BUCKET = process.env.SPACES_SUBMISSIONS_BUCKET ?? 'dialectiva-submissions';
-const ASR_STREAM = process.env.ASR_STREAM ?? 'asr-jobs';
 
 const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   'audio/wav': 'wav',
@@ -20,6 +20,7 @@ export class SubmissionsController {
   constructor(
     private readonly storage: StorageService,
     private readonly streams: RedisStreamsService,
+    private readonly asrRegistry: AsrRegistryService,
   ) {}
 
   /**
@@ -44,15 +45,25 @@ export class SubmissionsController {
   }
 
   /**
-   * Enqueues the asr-jobs message once the trainer's client has finished
-   * PUTting audio to the presigned URL from `upload-url`. vosk-worker picks
-   * this up, transcribes, and writes the result to the `result:<id>` Redis
-   * key that `result` below reads back -- a test-only scratch store standing
-   * in for the not-yet-built Postgres submissions table (Project Plan step 2).
+   * Enqueues an asr-jobs-<engine> message once the trainer's client has
+   * finished PUTting audio to the presigned URL from `upload-url`. Which
+   * stream depends on dialect_tag -> engine routing in
+   * models/asr-registry.yaml (see AGENTS.md "ASR engine routing") --
+   * rejected up front here, before ever reaching a worker, if the dialect
+   * has no registered engine. The owning worker (vosk-worker or
+   * whisper-worker) transcribes and writes the result to the `result:<id>`
+   * Redis key that `result` below reads back -- a test-only scratch store
+   * standing in for the not-yet-built Postgres submissions table (Project
+   * Plan step 2).
    */
   @Post('create')
   async create(@Body() body: CreateSubmissionDto) {
-    await this.streams.publish(ASR_STREAM, {
+    const route = this.asrRegistry.resolve(body.dialectTag);
+    if (!route) {
+      throw new UnprocessableEntityException(`Unsupported dialect: ${body.dialectTag}`);
+    }
+
+    await this.streams.publish(route.stream, {
       submission_id: body.submissionId,
       prompt_id: body.promptId,
       dialect_tag: body.dialectTag,

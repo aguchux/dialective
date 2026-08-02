@@ -1,0 +1,31 @@
+# Maps dialect_tag -> which ASR engine/stream handles it. Read by api
+# (routes asr-jobs at publish time -- see submissions.controller.ts) and by
+# both ASR workers at startup (each only ever consumes the stream matching
+# its own engine, so this file is the single source of truth both sides
+# must agree on -- never hardcode a dialect_tag -> engine mapping anywhere
+# else).
+#
+# `engine` must be "vosk" or "whisper". `stream` is the asr-jobs-<engine>
+# stream api publishes to and that engine's worker consumes.
+#
+# If a dialect_tag has no entry here, the submission must be rejected as
+# unsupported_dialect before ever reaching a worker -- never guess an engine.
+
+en-us:
+  engine: vosk
+  stream: asr-jobs-vosk
+
+ig:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: NCAIR1/Igbo-ASR
+
+yo:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: NCAIR1/Yoruba-ASR
+
+ha:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: NCAIR1/Hausa-ASR

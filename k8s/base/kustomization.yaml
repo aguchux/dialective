@@ -8,11 +8,14 @@ resources:
   - pgadmin-ingress.yaml
   - model-pvc.yaml
   - tts-model-pvc.yaml
+  - whisper-model-pvc.yaml
   - api-deployment.yaml
   - api-hpa.yaml
   - api-ingress.yaml
   - vosk-worker-deployment.yaml
   - vosk-worker-keda.yaml
+  - whisper-worker-deployment.yaml
+  - whisper-worker-keda.yaml
   - prompt-audio-service-deployment.yaml
   - prompt-audio-service-keda.yaml
   - consensus-scorer-deployment.yaml

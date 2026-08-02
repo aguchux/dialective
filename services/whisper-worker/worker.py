@@ -4,71 +4,59 @@ import os
 import subprocess
 
 import redis
-import soundfile as sf
-from vosk import KaldiRecognizer, Model
+from transformers import pipeline
 
-from model_registry import UnsupportedDialectError, load_registry, resolve_model_path
+from model_registry import UnsupportedDialectError, load_registry, resolve_checkpoint
 from spaces import build_spaces_client
 from streams import StreamConsumer, publish
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("vosk-worker")
+logger = logging.getLogger("whisper-worker")
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
-ASR_STREAM = os.environ.get("ASR_STREAM", "asr-jobs-vosk")
+ASR_STREAM = os.environ.get("ASR_STREAM", "asr-jobs-whisper")
 CONSENSUS_STREAM = os.environ.get("CONSENSUS_STREAM", "consensus-jobs")
-CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "asr-workers-vosk")
-CONSUMER_NAME = os.environ.get("HOSTNAME", "vosk-worker-1")
+CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "asr-workers-whisper")
+CONSUMER_NAME = os.environ.get("HOSTNAME", "whisper-worker-1")
 
-MIN_DURATION_S = 0.5
-MAX_DURATION_S = 15.0
-MAX_SILENCE_RATIO = 0.9
+# CPU-only inference, matching the rest of this repo's GPU boundary
+# (AGENTS.md "MMS-TTS boundary" applies the same reasoning here) -- plain HF
+# transformers pipeline, not faster-whisper/CTranslate2, since the
+# NCAIR1 Igbo/Yoruba/Hausa checkpoints are transformers-format and these are
+# short prompt-length clips (MIN/MAX_DURATION_S 0.5-15s), not a workload
+# where the conversion step would pay for itself.
+_DEVICE = "cpu"
+_MODEL_CACHE_DIR = "/models"
 
 _registry = load_registry()
-_model_cache: dict[str, Model] = {}
+_pipeline_cache: dict[str, "pipeline"] = {}
 
 
-def get_model(dialect_tag: str) -> Model:
-    if dialect_tag not in _model_cache:
-        path = resolve_model_path(dialect_tag, _registry)
-        _model_cache[dialect_tag] = Model(path)
-    return _model_cache[dialect_tag]
+def get_pipeline(dialect_tag: str):
+    if dialect_tag not in _pipeline_cache:
+        checkpoint = resolve_checkpoint(dialect_tag, _registry)
+        _pipeline_cache[dialect_tag] = pipeline(
+            task="automatic-speech-recognition",
+            model=checkpoint,
+            device=_DEVICE,
+            model_kwargs={"cache_dir": _MODEL_CACHE_DIR},
+        )
+    return _pipeline_cache[dialect_tag]
 
 
 def transcode_to_wav(src_path: str, dst_path: str, sr: int = 16000) -> None:
     """
-    Trainer clients upload whatever MediaRecorder gives them (webm/opus,
-    ogg, etc, browser-dependent) -- soundfile/libsndfile can't decode most
-    of those directly, so normalize to 16kHz mono PCM WAV via the ffmpeg
-    binary already baked into this image (see Dockerfile) before anything
-    downstream touches the file.
+    Same normalization vosk-worker does -- trainer clients upload whatever
+    MediaRecorder produces (webm/opus, browser-dependent); the HF pipeline
+    is happiest given a clean 16kHz mono WAV rather than relying on its own
+    format sniffing for every possible browser output.
     """
     subprocess.run(
         ["ffmpeg", "-y", "-i", src_path, "-ar", str(sr), "-ac", "1", "-f", "wav", dst_path],
         check=True,
         capture_output=True,
     )
-
-
-def prefilter_ok(audio_path: str) -> tuple[bool, str | None]:
-    """Duration/silence check before spending ASR time (design doc §5.1)."""
-    data, sr = sf.read(audio_path)
-    duration = len(data) / sr
-    if duration < MIN_DURATION_S or duration > MAX_DURATION_S:
-        return False, "duration_out_of_range"
-    silence_ratio = (abs(data) < 0.01).mean()
-    if silence_ratio > MAX_SILENCE_RATIO:
-        return False, "mostly_silence"
-    return True, None
-
-
-def transcribe(audio_path: str, model: Model, sr: int = 16000) -> tuple[str, list]:
-    rec = KaldiRecognizer(model, sr)
-    data, _ = sf.read(audio_path, dtype="int16")
-    rec.AcceptWaveform(data.tobytes())
-    result = json.loads(rec.FinalResult())
-    return result.get("text", ""), result.get("result", [])
 
 
 RESULT_TTL_S = 24 * 60 * 60
@@ -79,6 +67,8 @@ def write_result(redis_client: redis.Redis, submission_id: str, **fields) -> Non
     # the Postgres schema (Project Plan step 2) exists. Until then, also SET
     # a short-lived Redis key so api's GET /submissions/:id/result (the
     # no-auth end-to-end test flow) has somewhere to read the outcome from.
+    # Mirrors vosk-worker's write_result -- keep both in sync with whatever
+    # submissions.controller.ts's getResult expects to parse.
     logger.info("write_result submission=%s fields=%s", submission_id, fields)
     redis_client.set(f"result:{submission_id}", json.dumps(fields), ex=RESULT_TTL_S)
 
@@ -100,19 +90,15 @@ def make_handler(s3, redis_client: redis.Redis):
                 write_result(redis_client, submission_id, status="rejected", reason="unreadable_audio")
                 return
 
-            ok, reason = prefilter_ok(wav_path)
-            if not ok:
-                write_result(redis_client, submission_id, status="rejected", reason=reason)
-                return
-
             try:
-                model = get_model(dialect_tag)
+                asr = get_pipeline(dialect_tag)
             except UnsupportedDialectError:
                 write_result(redis_client, submission_id, status="unsupported_dialect", dialect_tag=dialect_tag)
                 return
 
-            text, word_conf = transcribe(wav_path, model)
-            write_result(redis_client, submission_id, status="ok", transcript=text, word_confidences=word_conf)
+            result = asr(wav_path)
+            text = result.get("text", "").strip()
+            write_result(redis_client, submission_id, status="ok", transcript=text, word_confidences=[])
 
             publish(
                 redis_client,
@@ -136,7 +122,7 @@ def main() -> None:
     s3 = build_spaces_client()
 
     consumer = StreamConsumer(redis_client, ASR_STREAM, CONSUMER_GROUP, CONSUMER_NAME)
-    logger.info("vosk-worker consuming stream=%s group=%s", ASR_STREAM, CONSUMER_GROUP)
+    logger.info("whisper-worker consuming stream=%s group=%s", ASR_STREAM, CONSUMER_GROUP)
     consumer.run(make_handler(s3, redis_client))
 
 
