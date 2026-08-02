@@ -63,6 +63,11 @@ spec:
                 secretKeyRef:
                   name: spaces-creds
                   key: secret_key
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-creds
+                  key: hf_token
           volumeMounts:
             - name: whisper-model-repo
               mountPath: /models

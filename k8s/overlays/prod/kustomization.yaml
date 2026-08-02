@@ -25,6 +25,9 @@ secretGenerator:
   - name: auth-creds
     envs:
       - secrets/auth.env
+  - name: hf-creds
+    envs:
+      - secrets/hf.env
 
 configMapGenerator:
   - name: api-config
