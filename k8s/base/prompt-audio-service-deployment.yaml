@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: prompt-audio-service
-          image: your-registry/prompt-audio-service:latest
+          image: golojan/dialect-prompt-audio-service:latest
           env:
             - name: REDIS_HOST
               valueFrom:

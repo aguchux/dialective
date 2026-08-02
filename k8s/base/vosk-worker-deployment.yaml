@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: vosk-worker
-          image: your-registry/vosk-worker:latest
+          image: golojan/dialect-vosk-worker:latest
           env:
             - name: REDIS_HOST
               valueFrom:

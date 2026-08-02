@@ -15,7 +15,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: settlement-job
-              image: your-registry/settlement-job:latest
+              image: golojan/dialect-settlement-job:latest
               env:
                 - name: DATABASE_URL
                   valueFrom:

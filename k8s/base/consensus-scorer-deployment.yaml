@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: consensus-scorer
-          image: your-registry/consensus-scorer:latest
+          image: golojan/dialect-consensus-scorer:latest
           env:
             - name: REDIS_HOST
               valueFrom:
