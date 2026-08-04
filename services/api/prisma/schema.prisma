@@ -102,3 +102,36 @@ model EmailVerificationToken {
   @@index([userId])
   @@map("email_verification_tokens")
 }
+
+/// A single English word from the fixed seed word bank (services/api/prisma/seed.ts).
+/// Not user-editable -- adding a word means adding it to the seed list and
+/// re-running the seed, same as any other reference data in this repo.
+model Word {
+  id        String   @id @default(uuid())
+  text      String   @unique
+  createdAt DateTime @default(now())
+
+  recordings WordRecording[]
+
+  @@map("words")
+}
+
+/// One word translated + pronounced in one dialect by one (anonymous, no-auth)
+/// submission. `translationText` is exactly what the trainer typed -- not
+/// validated against any dictionary or ASR transcript (see AGENTS.md "Word
+/// library" -- this flow deliberately skips the ASR pipeline entirely,
+/// unlike the sentence-prompt flow's vosk/whisper round trip).
+model WordRecording {
+  id              String   @id @default(uuid())
+  wordId          String
+  word            Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  dialectTag      String
+  translationText String
+  audioBucket     String
+  audioKey        String
+  createdAt       DateTime @default(now())
+
+  @@index([wordId])
+  @@index([dialectTag])
+  @@map("word_recordings")
+}

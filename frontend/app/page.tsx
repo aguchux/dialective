@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import WordLibraryFlow from './WordLibraryFlow';
 
 /**
  * No-auth, end-to-end test harness for the ASR pipeline: fetch a text
@@ -40,7 +41,10 @@ interface Result {
   dialect_tag?: string;
 }
 
+type Mode = 'sentence' | 'word';
+
 export default function HomePage() {
+  const [mode, setMode] = useState<Mode>('sentence');
   const [dialectTag, setDialectTag] = useState(DIALECT_OPTIONS[0].value);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [stage, setStage] = useState<Stage>('idle');
@@ -166,10 +170,24 @@ export default function HomePage() {
     setStage('error');
   }
 
+  if (mode === 'word') {
+    return (
+      <>
+        <div style={{ maxWidth: 640, margin: '2rem auto 0', fontFamily: 'sans-serif' }}>
+          <button onClick={() => setMode('sentence')}>← Back to sentence pipeline test</button>
+        </div>
+        <WordLibraryFlow />
+      </>
+    );
+  }
+
   return (
     <main style={{ maxWidth: 640, margin: '2rem auto', fontFamily: 'sans-serif' }}>
       <h1>Dialectiva — pipeline test</h1>
       <p>No login required. This exercises the real upload → ASR worker → transcript pipeline.</p>
+      <p>
+        <button onClick={() => setMode('word')}>Switch to word library →</button>
+      </p>
 
       {!prompt && (
         <div>

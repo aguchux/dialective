@@ -6,5 +6,7 @@ k8s/overlays/prod/configs/*
 node_modules/
 dist/
 services/api/src/generated/
+services/api/prisma/seed.js
+services/api/prisma/seed.js.map
 __pycache__/
 *.pyc

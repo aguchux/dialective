@@ -9,6 +9,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "prisma:seed": "ts-node --transpile-only prisma/seed.ts",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },

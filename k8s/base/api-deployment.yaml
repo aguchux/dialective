@@ -64,6 +64,11 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: spaces_submissions_bucket
+            - name: SPACES_WORD_RECORDINGS_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_word_recordings_bucket
             - name: SPACES_ENDPOINT
               valueFrom:
                 secretKeyRef:

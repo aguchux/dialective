@@ -4,12 +4,13 @@ import { RedisStreamsModule } from "./redis-streams/redis-streams.module";
 import { AsrRegistryModule } from "./asr-registry/asr-registry.module";
 import { SubmissionsModule } from "./submissions/submissions.module";
 import { PromptsModule } from "./prompts/prompts.module";
+import { WordsModule } from "./words/words.module";
 import { RequestLoggerMiddleware } from "./common/middleware/request-logger.middleware";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 
 @Module({
-  imports: [PrismaModule, RedisStreamsModule, AsrRegistryModule, SubmissionsModule, PromptsModule, AuthModule],
+  imports: [PrismaModule, RedisStreamsModule, AsrRegistryModule, SubmissionsModule, PromptsModule, WordsModule, AuthModule],
   controllers: [HealthController],
 })
 export class AppModule implements NestModule {
