@@ -1,14 +1,3 @@
-/**
- * Every server-side identity operation goes through api — this file is the
- * only place frontend talks to it. No database adapter, no Prisma, no
- * user/password/token storage in this app; NextAuth only holds the session
- * that api's responses populate (AGENTS.md "Authentication").
- *
- * frontend is deployed to Vercel, separately from api's Kubernetes cluster,
- * so API_BASE_URL must be api's public URL (https://api.nmseprep.com) —
- * there's no in-cluster Service DNS to fall back to from Vercel.
- */
-
 const API_BASE_URL = process.env.API_BASE_URL ?? 'https://api.nmseprep.com';
 
 export interface PublicUser {
@@ -68,12 +57,6 @@ export const apiClient = {
   requestMagicLink: (email: string) =>
     apiFetch<void>('/auth/magic-link/request', { method: 'POST', body: JSON.stringify({ email }) }),
 
-  /**
-   * Called after NextAuth's Email provider itself verifies the magic-link
-   * token (NextAuth's own signed callback URL) -- api needs to know only
-   * the verified email, not re-verify a token here. See NEXTAUTH config's
-   * Email provider for how this fits the request/callback split.
-   */
   consumeMagicLink: (token: string) =>
     apiFetch<AuthResult>('/auth/magic-link/callback', {
       method: 'POST',

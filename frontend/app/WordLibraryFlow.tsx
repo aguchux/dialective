@@ -1,18 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-
-/**
- * No-auth word-library flow: fetch a random English word -> trainer types
- * the translation in their chosen dialect -> records themselves saying the
- * translation -> both are stored as a WordRecording row. Unlike the
- * sentence-prompt flow in page.tsx, this never touches the ASR pipeline
- * (asr-jobs-vosk/whisper) -- no transcript, no consensus scoring, just a
- * direct word/voice capture straight to Postgres. See AGENTS.md
- * "Word library".
- */
-
-const API_BASE_URL = `${process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.nmseprep.com'}/api/v1`;
+import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 
 const DIALECT_OPTIONS = [
   { value: 'en-us', label: 'English (US)' },
@@ -44,7 +33,7 @@ export default function WordLibraryFlow() {
     setAudioUrl(null);
     setTranslation('');
     setStage('idle');
-    const res = await fetch(`${API_BASE_URL}/words/random`);
+    const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/words/random`);
     if (!res.ok) {
       setError('Failed to load a word.');
       return;
@@ -63,8 +52,6 @@ export default function WordLibraryFlow() {
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
     recorder.onstop = () => {
-      // See page.tsx's identical comment -- stop() is async, blob must be
-      // built here, not right after calling stop().
       stream.getTracks().forEach((track) => track.stop());
       const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
       setAudioUrl(URL.createObjectURL(blob));
@@ -96,7 +83,7 @@ export default function WordLibraryFlow() {
     setError(null);
 
     try {
-      const uploadUrlRes = await fetch(`${API_BASE_URL}/words/recordings/upload-url`, {
+      const uploadUrlRes = await fetch(`${PUBLIC_API_V1_BASE_URL}/words/recordings/upload-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -115,7 +102,7 @@ export default function WordLibraryFlow() {
       });
       if (!putRes.ok) throw new Error('Failed to upload audio.');
 
-      const createRes = await fetch(`${API_BASE_URL}/words/recordings`, {
+      const createRes = await fetch(`${PUBLIC_API_V1_BASE_URL}/words/recordings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -136,13 +123,15 @@ export default function WordLibraryFlow() {
   }
 
   return (
-    <main style={{ maxWidth: 640, margin: '2rem auto', fontFamily: 'sans-serif' }}>
-      <h1>Dialectiva — word library</h1>
-      <p>No login required. Translate an English word into your dialect, then record yourself saying it.</p>
+    <main className="page-shell">
+      <section className="section">
+        <h1>Word library</h1>
+        <p className="lede">No login required. Translate an English word into your dialect, then record yourself saying it.</p>
+      </section>
 
       {!word && (
-        <div>
-          <label htmlFor="word-dialect-select">Language</label>{' '}
+        <section className="section">
+          <label htmlFor="word-dialect-select">Language</label>
           <select id="word-dialect-select" value={dialectTag} onChange={(e) => setDialectTag(e.target.value)}>
             {DIALECT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -150,29 +139,24 @@ export default function WordLibraryFlow() {
               </option>
             ))}
           </select>
-          <div>
-            <button onClick={loadWord}>Get a word</button>
-          </div>
-        </div>
+          <button onClick={loadWord}>Get a word</button>
+        </section>
       )}
 
       {word && (
-        <section>
-          <h2>Translate this word:</h2>
-          <blockquote style={{ fontSize: '1.5rem' }}>{word.text}</blockquote>
+        <section className="section">
+          <h2>Translate this word</h2>
+          <blockquote className="prompt-preview">{word.text}</blockquote>
 
-          <div>
+          <div className="auth-form">
             <label htmlFor="translation-input">Your translation</label>
-            <div>
-              <input
-                id="translation-input"
-                type="text"
-                value={translation}
-                onChange={(e) => setTranslation(e.target.value)}
-                disabled={stage === 'uploading' || stage === 'done'}
-                style={{ fontSize: '1.1rem', padding: '0.25rem' }}
-              />
-            </div>
+            <input
+              id="translation-input"
+              type="text"
+              value={translation}
+              onChange={(e) => setTranslation(e.target.value)}
+              disabled={stage === 'uploading' || stage === 'done'}
+            />
           </div>
 
           {stage !== 'recording' && stage !== 'done' && (
@@ -183,24 +167,26 @@ export default function WordLibraryFlow() {
           {stage === 'recording' && <button onClick={stopRecording}>Stop recording</button>}
 
           {audioUrl && stage !== 'done' && (
-            <div>
+            <div className="section">
               <audio controls src={audioUrl} />
-              <div>
-                <button onClick={submitRecording} disabled={stage === 'uploading'}>
-                  Submit
-                </button>
-              </div>
+              <button onClick={submitRecording} disabled={stage === 'uploading'}>
+                Submit
+              </button>
             </div>
           )}
 
-          {stage === 'uploading' && <p>Saving…</p>}
+          {stage === 'uploading' && <p>Saving...</p>}
           {stage === 'done' && <p>Saved. Thank you!</p>}
 
-          {error && <p role="alert">{error}</p>}
+          {error && (
+            <p className="alert" role="alert">
+              {error}
+            </p>
+          )}
 
-          <div>
-            <button onClick={loadWord}>New word</button>
-          </div>
+          <button className="secondary" onClick={loadWord}>
+            New word
+          </button>
         </section>
       )}
     </main>

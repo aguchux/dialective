@@ -1,13 +1,15 @@
 'use client';
 
+import Link from 'next/link';
 import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const [password, setPassword] = useState('');
-  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'success'>('idle');
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -19,7 +21,7 @@ function ResetPasswordContent() {
       return;
     }
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1/auth/password-reset/confirm`, {
+    const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/auth/password-reset/confirm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, newPassword: password }),
@@ -36,36 +38,50 @@ function ResetPasswordContent() {
 
   if (status === 'success') {
     return (
-      <main>
-        <h1>Password reset</h1>
-        <p>Your password has been reset. All existing sessions have been signed out — log in again below.</p>
-        <a href="/login">Go to login</a>
+      <main className="auth-page">
+        <section className="auth-panel">
+          <p className="eyebrow">Dialectiva</p>
+          <h1>Password reset</h1>
+          <p className="notice">Your password has been reset. All existing sessions have been signed out.</p>
+          <Link className="button" href="/login">
+            Go to login
+          </Link>
+        </section>
       </main>
     );
   }
 
   return (
-    <main>
-      <h1>Reset your password</h1>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="password"
-          placeholder="New password (min 8 characters)"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          minLength={8}
-          required
-        />
-        <button type="submit">Reset password</button>
-      </form>
-      {error && <p role="alert">{error}</p>}
+    <main className="auth-page">
+      <section className="auth-panel">
+        <div>
+          <p className="eyebrow">Dialectiva</p>
+          <h1>Reset your password</h1>
+        </div>
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <input
+            type="password"
+            placeholder="New password (min 8 characters)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={8}
+            required
+          />
+          <button type="submit">Reset password</button>
+        </form>
+        {error && (
+          <p className="alert" role="alert">
+            {error}
+          </p>
+        )}
+      </section>
     </main>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<main>Loading…</main>}>
+    <Suspense fallback={<main className="auth-page">Loading...</main>}>
       <ResetPasswordContent />
     </Suspense>
   );

@@ -3,26 +3,6 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
 import { apiClient, AuthResult } from './api-client';
 
-/**
- * NextAuth has NO database adapter here on purpose -- api is the sole owner
- * of users/credentials/tokens/sessions in Postgres (AGENTS.md
- * "Authentication"). Every provider below either calls api directly
- * (Credentials) or, once NextAuth itself has finished verifying the
- * identity (Google's OAuth handshake), hands the verified result to api via
- * a server-to-server call authenticated with OAUTH_CALLBACK_SECRET. api
- * mints the actual access/refresh tokens; the `jwt` callback below is what
- * carries them into the NextAuth session.
- *
- * There is deliberately NO NextAuth EmailProvider here. Magic-link is
- * entirely api-owned: api generates/hashes/verifies its own opaque token
- * (POST /auth/magic-link/request, POST /auth/magic-link/callback) and
- * Resend sends the email (api's MailService) -- see app/magic-link/page.tsx
- * and app/api/auth/magic-link-consume/route.ts for how a clicked link
- * becomes a NextAuth session via the Credentials provider below, using the
- * `__apiAuthResult` passthrough. Don't add NextAuth's built-in Email
- * provider back; it would create a second, api-unaware magic-link token
- * system.
- */
 export const authOptions: NextAuthOptions = {
   session: { strategy: 'jwt' },
   providers: [
@@ -41,21 +21,15 @@ export const authOptions: NextAuthOptions = {
       },
     }),
 
-    /**
-     * Not user-facing as a "provider button" -- used internally by
-     * app/api/auth/magic-link-consume/route.ts, which has already called
-     * api's POST /auth/magic-link/callback and just needs to turn the
-     * resulting AuthResult into a NextAuth session via signIn('magic-link', ...).
-     */
     CredentialsProvider({
       id: 'magic-link',
       name: 'Magic Link',
-      credentials: { authResult: { label: 'authResult', type: 'text' } },
+      credentials: { token: { label: 'token', type: 'text' } },
       async authorize(credentials) {
-        if (!credentials?.authResult) {
+        if (!credentials?.token) {
           return null;
         }
-        const result = JSON.parse(credentials.authResult) as AuthResult;
+        const result = await apiClient.consumeMagicLink(credentials.token);
         return authResultToNextAuthUser(result);
       },
     }),
@@ -67,12 +41,6 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    /**
-     * For Google: NextAuth has already exchanged the OAuth code and
-     * verified the identity by this point. Hand the verified email +
-     * provider account id to api so api can create/link the user row --
-     * api never talks to Google directly.
-     */
     async signIn({ user, account }) {
       if (account?.provider === 'google' && user.email) {
         const result = await apiClient.oauthCallback(user.email, 'GOOGLE', account.providerAccountId);

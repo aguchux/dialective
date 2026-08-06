@@ -1,64 +1,75 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
+import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   async function handleCredentialsSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    setMessage(null);
     const result = await signIn('credentials', { email, password, redirect: false });
     if (result?.error) {
-      setError('Invalid email or password');
+      setMessage('Invalid email or password.');
     } else {
       window.location.href = '/';
     }
   }
 
-  async function handleMagicLinkSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    // api owns magic-link issuance end-to-end (AGENTS.md "Authentication") --
-    // no NextAuth provider involved until the emailed link is clicked.
-    await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1/auth/magic-link/request`, {
+  async function handleMagicLinkSubmit() {
+    setMessage(null);
+    await fetch(`${PUBLIC_API_V1_BASE_URL}/auth/magic-link/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     });
-    setError('Check your email for a magic link.');
+    setMessage('Check your email for a magic link.');
   }
 
   return (
-    <main>
-      <h1>Log in</h1>
+    <main className="auth-page">
+      <section className="auth-panel">
+        <div>
+          <p className="eyebrow">Dialectiva</p>
+          <h1>Log in</h1>
+        </div>
 
-      <form onSubmit={handleCredentialsSubmit}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <button type="submit">Log in</button>
-      </form>
+        <form className="auth-form" onSubmit={handleCredentialsSubmit}>
+          <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          <button type="submit">Log in</button>
+        </form>
 
-      <button onClick={handleMagicLinkSubmit}>Email me a magic link instead</button>
+        <div className="auth-actions">
+          <button className="secondary" onClick={handleMagicLinkSubmit} disabled={!email}>
+            Email me a magic link
+          </button>
+          <button className="secondary" onClick={() => signIn('google')}>
+            Continue with Google
+          </button>
+        </div>
 
-      <button onClick={() => signIn('google')}>Continue with Google</button>
+        <p className="notice">
+          New to Dialectiva? <Link href="/register">Create an account</Link>
+        </p>
 
-      {error && <p role="alert">{error}</p>}
+        {message && (
+          <p className="alert" role="alert">
+            {message}
+          </p>
+        )}
+      </section>
     </main>
   );
 }

@@ -1,0 +1,15 @@
+
+> @dialectiva/web@0.1.0 dev
+> next dev -p 3000
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 3.9s
+ ○ Compiling /pipeline-test ...
+ ✓ Compiled /pipeline-test in 9.9s (594 modules)
+ GET / 200 in 10260ms
+ GET /register 200 in 10266ms
+ GET /pipeline-test 200 in 10258ms
+ GET /login 200 in 10298ms

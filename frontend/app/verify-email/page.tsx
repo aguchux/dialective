@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
@@ -14,7 +15,7 @@ function VerifyEmailContent() {
       return;
     }
 
-    fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1/auth/verify-email`, {
+    fetch(`${PUBLIC_API_V1_BASE_URL}/auth/verify-email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
@@ -24,18 +25,25 @@ function VerifyEmailContent() {
   }, [token]);
 
   return (
-    <main>
-      <h1>Verify email</h1>
-      {status === 'pending' && <p>Verifying…</p>}
-      {status === 'success' && <p>Your email has been verified. You can close this page.</p>}
-      {status === 'error' && <p role="alert">This verification link is invalid or has expired.</p>}
+    <main className="auth-page">
+      <section className="auth-panel">
+        <p className="eyebrow">Dialectiva</p>
+        <h1>Verify email</h1>
+        {status === 'pending' && <p className="notice">Verifying...</p>}
+        {status === 'success' && <p className="notice">Your email has been verified. You can close this page.</p>}
+        {status === 'error' && (
+          <p className="alert" role="alert">
+            This verification link is invalid or has expired.
+          </p>
+        )}
+      </section>
     </main>
   );
 }
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={<main>Loading…</main>}>
+    <Suspense fallback={<main className="auth-page">Loading...</main>}>
       <VerifyEmailContent />
     </Suspense>
   );

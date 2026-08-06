@@ -16,20 +16,8 @@ function MagicLinkContent() {
     }
 
     (async () => {
-      const res = await fetch('/api/auth/magic-link-consume', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-
-      if (!res.ok) {
-        setStatus('error');
-        return;
-      }
-
-      const authResult = await res.json();
       const signInResult = await signIn('magic-link', {
-        authResult: JSON.stringify(authResult),
+        token,
         redirect: false,
       });
 
@@ -42,16 +30,23 @@ function MagicLinkContent() {
   }, [token]);
 
   return (
-    <main>
-      <h1>Signing you in…</h1>
-      {status === 'error' && <p role="alert">This sign-in link is invalid or has expired.</p>}
+    <main className="auth-page">
+      <section className="auth-panel">
+        <p className="eyebrow">Dialectiva</p>
+        <h1>Signing you in...</h1>
+        {status === 'error' && (
+          <p className="alert" role="alert">
+            This sign-in link is invalid or has expired.
+          </p>
+        )}
+      </section>
     </main>
   );
 }
 
 export default function MagicLinkPage() {
   return (
-    <Suspense fallback={<main>Loading…</main>}>
+    <Suspense fallback={<main className="auth-page">Loading...</main>}>
       <MagicLinkContent />
     </Suspense>
   );
