@@ -104,10 +104,9 @@ export default function LandingPage() {
           <p>Voice and word collection for underrepresented dialects. Pilot phase.</p>
         </div>
         <nav aria-label="Footer">
-          <Link href="/about">About Us</Link>
-          <Link href="/blog">Blog</Link>
-          <Link href="/faq">FAQ</Link>
-          <Link href="/login">Login</Link>
+          <Link href="/terms">Terms of Use</Link>
+          <Link href="/privacy">Privacy Policy</Link>
+          <Link href="/cookies">Cookie Policy</Link>
         </nav>
       </footer>
     </main>

@@ -307,13 +307,30 @@ h2 {
 }
 
 .landing-page {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0) 0 55%, #fff 55% 100%),
-    linear-gradient(105deg, #f3b6bd 0%, #f8d4d5 34%, #c8ecf6 64%, #afe6f2 100%);
+  background: #fff;
   color: #050505;
+  isolation: isolate;
   min-height: 100vh;
   overflow: hidden;
   padding: 1rem 1rem 0;
+  position: relative;
+}
+
+.landing-page::before {
+  background: #c9eff7
+    url("data:image/svg+xml,%3Csvg width='1600' height='720' viewBox='0 0 1600 720' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='1600' height='720' fill='%23c9eff7'/%3E%3Cpath d='M0 135 C190 75 345 220 520 150 C705 76 830 56 1012 132 C1190 207 1366 184 1600 92' fill='none' stroke='%23050505' stroke-opacity='.10' stroke-width='2'/%3E%3Cpath d='M0 250 C235 190 392 330 610 246 C838 158 970 180 1155 262 C1322 336 1468 300 1600 244' fill='none' stroke='%23050505' stroke-opacity='.08' stroke-width='2'/%3E%3Cpath d='M0 388 C174 340 360 440 548 374 C722 314 898 308 1078 386 C1266 468 1416 432 1600 354' fill='none' stroke='%23050505' stroke-opacity='.07' stroke-width='2'/%3E%3Cg fill='%23ffffff' fill-opacity='.38'%3E%3Crect x='126' y='318' width='108' height='42' rx='21'/%3E%3Crect x='1130' y='98' width='154' height='42' rx='21'/%3E%3Crect x='1002' y='422' width='132' height='42' rx='21'/%3E%3C/g%3E%3Cg fill='%23ff7a34' fill-opacity='.24'%3E%3Crect x='310' y='94' width='142' height='42' rx='21'/%3E%3Crect x='1328' y='390' width='116' height='42' rx='21'/%3E%3C/g%3E%3Cg fill='%23050505' fill-opacity='.10' font-family='Arial, sans-serif' font-size='18' font-weight='700'%3E%3Ctext x='152' y='346'%3EIgbo%3C/text%3E%3Ctext x='338' y='122'%3EYoruba%3C/text%3E%3Ctext x='1160' y='126'%3EHausa%3C/text%3E%3Ctext x='1030' y='450'%3EEnglish%3C/text%3E%3C/g%3E%3C/svg%3E")
+    center top / cover fixed no-repeat;
+  content: "";
+  height: min(650px, 66vh);
+  inset: 0 0 auto;
+  pointer-events: none;
+  position: fixed;
+  z-index: 0;
+}
+
+.landing-page > * {
+  position: relative;
+  z-index: 1;
 }
 
 .landing-header {
