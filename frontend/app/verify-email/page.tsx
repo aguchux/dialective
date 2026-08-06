@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useVerifyEmailMutation } from '@/store/api';
+import { Alert, AuthPage, AuthPanel, Eyebrow, Notice } from '@/components/AuthShell';
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
@@ -23,25 +24,21 @@ function VerifyEmailContent() {
   }, [token, verifyEmail]);
 
   return (
-    <main className="auth-page">
-      <section className="auth-panel">
-        <p className="eyebrow">Dialectiva</p>
-        <h1>Verify email</h1>
-        {status === 'pending' && <p className="notice">Verifying...</p>}
-        {status === 'success' && <p className="notice">Your email has been verified. You can close this page.</p>}
-        {status === 'error' && (
-          <p className="alert" role="alert">
-            This verification link is invalid or has expired.
-          </p>
-        )}
-      </section>
-    </main>
+    <AuthPage>
+      <AuthPanel>
+        <Eyebrow>Dialectiva</Eyebrow>
+        <h1 className="text-[1.75rem] leading-tight">Verify email</h1>
+        {status === 'pending' && <Notice>Verifying...</Notice>}
+        {status === 'success' && <Notice>Your email has been verified. You can close this page.</Notice>}
+        {status === 'error' && <Alert>This verification link is invalid or has expired.</Alert>}
+      </AuthPanel>
+    </AuthPage>
   );
 }
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={<main className="auth-page">Loading...</main>}>
+    <Suspense fallback={<AuthPage>Loading...</AuthPage>}>
       <VerifyEmailContent />
     </Suspense>
   );

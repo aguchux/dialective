@@ -4,6 +4,11 @@ import Link from 'next/link';
 import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { normalizeErrorMessage, useResetPasswordMutation } from '@/store/api';
+import { Alert, AuthPage, AuthPanel, Eyebrow, Notice } from '@/components/AuthShell';
+
+const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const primaryButtonClass =
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
@@ -34,28 +39,29 @@ function ResetPasswordContent() {
 
   if (status === 'success') {
     return (
-      <main className="auth-page">
-        <section className="auth-panel">
-          <p className="eyebrow">Dialectiva</p>
-          <h1>Password reset</h1>
-          <p className="notice">Your password has been reset. All existing sessions have been signed out.</p>
-          <Link className="button" href="/login">
+      <AuthPage>
+        <AuthPanel>
+          <Eyebrow>Dialectiva</Eyebrow>
+          <h1 className="text-[1.75rem] leading-tight">Password reset</h1>
+          <Notice>Your password has been reset. All existing sessions have been signed out.</Notice>
+          <Link className={primaryButtonClass} href="/login">
             Go to login
           </Link>
-        </section>
-      </main>
+        </AuthPanel>
+      </AuthPage>
     );
   }
 
   return (
-    <main className="auth-page">
-      <section className="auth-panel">
+    <AuthPage>
+      <AuthPanel>
         <div>
-          <p className="eyebrow">Dialectiva</p>
-          <h1>Reset your password</h1>
+          <Eyebrow>Dialectiva</Eyebrow>
+          <h1 className="text-[1.75rem] leading-tight">Reset your password</h1>
         </div>
-        <form className="auth-form" onSubmit={handleSubmit}>
+        <form className="grid gap-2.5" onSubmit={handleSubmit}>
           <input
+            className={inputClass}
             type="password"
             placeholder="New password (min 8 characters)"
             value={password}
@@ -63,23 +69,19 @@ function ResetPasswordContent() {
             minLength={8}
             required
           />
-          <button type="submit" disabled={isLoading}>
+          <button className={primaryButtonClass} type="submit" disabled={isLoading}>
             Reset password
           </button>
         </form>
-        {error && (
-          <p className="alert" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
-    </main>
+        {error && <Alert>{error}</Alert>}
+      </AuthPanel>
+    </AuthPage>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<main className="auth-page">Loading...</main>}>
+    <Suspense fallback={<AuthPage>Loading...</AuthPage>}>
       <ResetPasswordContent />
     </Suspense>
   );

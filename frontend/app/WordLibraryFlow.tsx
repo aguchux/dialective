@@ -2,6 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
+import { Button } from '@/components/Button';
+import { PageShell, Section } from '@/components/PageShell';
 
 const DIALECT_OPTIONS = [
   { value: 'en-us', label: 'English (US)' },
@@ -16,6 +18,9 @@ interface Word {
 }
 
 type Stage = 'idle' | 'recording' | 'uploading' | 'done' | 'error';
+
+const selectClass = 'min-h-10 rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
+const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 
 export default function WordLibraryFlow() {
   const [dialectTag, setDialectTag] = useState(DIALECT_OPTIONS[1].value);
@@ -123,34 +128,44 @@ export default function WordLibraryFlow() {
   }
 
   return (
-    <main className="page-shell">
-      <section className="section">
-        <h1>Word library</h1>
-        <p className="lede">No login required. Translate an English word into your dialect, then record yourself saying it.</p>
-      </section>
+    <PageShell>
+      <Section>
+        <h1 className="text-4xl leading-tight md:text-5xl">Word library</h1>
+        <p className="text-lg leading-relaxed text-muted">
+          No login required. Translate an English word into your dialect, then record yourself saying it.
+        </p>
+      </Section>
 
       {!word && (
-        <section className="section">
+        <Section>
           <label htmlFor="word-dialect-select">Language</label>
-          <select id="word-dialect-select" value={dialectTag} onChange={(e) => setDialectTag(e.target.value)}>
+          <select
+            className={selectClass}
+            id="word-dialect-select"
+            value={dialectTag}
+            onChange={(e) => setDialectTag(e.target.value)}
+          >
             {DIALECT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
             ))}
           </select>
-          <button onClick={loadWord}>Get a word</button>
-        </section>
+          <div>
+            <Button onClick={loadWord}>Get a word</Button>
+          </div>
+        </Section>
       )}
 
       {word && (
-        <section className="section">
-          <h2>Translate this word</h2>
-          <blockquote className="prompt-preview">{word.text}</blockquote>
+        <Section>
+          <h2 className="text-2xl leading-snug">Translate this word</h2>
+          <blockquote className="rounded-lg bg-surface-muted p-4 text-2xl">{word.text}</blockquote>
 
-          <div className="auth-form">
+          <div className="grid gap-2.5">
             <label htmlFor="translation-input">Your translation</label>
             <input
+              className={inputClass}
               id="translation-input"
               type="text"
               value={translation}
@@ -160,35 +175,45 @@ export default function WordLibraryFlow() {
           </div>
 
           {stage !== 'recording' && stage !== 'done' && (
-            <button onClick={startRecording} disabled={stage === 'uploading'}>
-              Start recording
-            </button>
+            <div>
+              <Button onClick={startRecording} disabled={stage === 'uploading'}>
+                Start recording
+              </Button>
+            </div>
           )}
-          {stage === 'recording' && <button onClick={stopRecording}>Stop recording</button>}
+          {stage === 'recording' && (
+            <div>
+              <Button onClick={stopRecording}>Stop recording</Button>
+            </div>
+          )}
 
           {audioUrl && stage !== 'done' && (
-            <div className="section">
+            <Section>
               <audio controls src={audioUrl} />
-              <button onClick={submitRecording} disabled={stage === 'uploading'}>
-                Submit
-              </button>
-            </div>
+              <div>
+                <Button onClick={submitRecording} disabled={stage === 'uploading'}>
+                  Submit
+                </Button>
+              </div>
+            </Section>
           )}
 
           {stage === 'uploading' && <p>Saving...</p>}
           {stage === 'done' && <p>Saved. Thank you!</p>}
 
           {error && (
-            <p className="alert" role="alert">
+            <p className="leading-relaxed text-danger" role="alert">
               {error}
             </p>
           )}
 
-          <button className="secondary" onClick={loadWord}>
-            New word
-          </button>
-        </section>
+          <div>
+            <Button variant="secondary" onClick={loadWord}>
+              New word
+            </Button>
+          </div>
+        </Section>
       )}
-    </main>
+    </PageShell>
   );
 }

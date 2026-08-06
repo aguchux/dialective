@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
+import { Alert, AuthPage, AuthPanel, Eyebrow } from '@/components/AuthShell';
 
 function MagicLinkContent() {
   const searchParams = useSearchParams();
@@ -30,23 +31,19 @@ function MagicLinkContent() {
   }, [token]);
 
   return (
-    <main className="auth-page">
-      <section className="auth-panel">
-        <p className="eyebrow">Dialectiva</p>
-        <h1>Signing you in...</h1>
-        {status === 'error' && (
-          <p className="alert" role="alert">
-            This sign-in link is invalid or has expired.
-          </p>
-        )}
-      </section>
-    </main>
+    <AuthPage>
+      <AuthPanel>
+        <Eyebrow>Dialectiva</Eyebrow>
+        <h1 className="text-[1.75rem] leading-tight">Signing you in...</h1>
+        {status === 'error' && <Alert>This sign-in link is invalid or has expired.</Alert>}
+      </AuthPanel>
+    </AuthPage>
   );
 }
 
 export default function MagicLinkPage() {
   return (
-    <Suspense fallback={<main className="auth-page">Loading...</main>}>
+    <Suspense fallback={<AuthPage>Loading...</AuthPage>}>
       <MagicLinkContent />
     </Suspense>
   );

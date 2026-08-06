@@ -1,0 +1,21 @@
+<svg width="1600" height="720" viewBox="0 0 1600 720" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="720" fill="#c9eff7"/>
+  <path d="M0 135 C190 75 345 220 520 150 C705 76 830 56 1012 132 C1190 207 1366 184 1600 92" fill="none" stroke="#050505" stroke-opacity=".10" stroke-width="2"/>
+  <path d="M0 250 C235 190 392 330 610 246 C838 158 970 180 1155 262 C1322 336 1468 300 1600 244" fill="none" stroke="#050505" stroke-opacity=".08" stroke-width="2"/>
+  <path d="M0 388 C174 340 360 440 548 374 C722 314 898 308 1078 386 C1266 468 1416 432 1600 354" fill="none" stroke="#050505" stroke-opacity=".07" stroke-width="2"/>
+  <g fill="#ffffff" fill-opacity=".38">
+    <rect x="126" y="318" width="108" height="42" rx="21"/>
+    <rect x="1130" y="98" width="154" height="42" rx="21"/>
+    <rect x="1002" y="422" width="132" height="42" rx="21"/>
+  </g>
+  <g fill="#ff7a34" fill-opacity=".24">
+    <rect x="310" y="94" width="142" height="42" rx="21"/>
+    <rect x="1328" y="390" width="116" height="42" rx="21"/>
+  </g>
+  <g fill="#050505" fill-opacity=".10" font-family="Arial, sans-serif" font-size="18" font-weight="700">
+    <text x="152" y="346">Igbo</text>
+    <text x="338" y="122">Yoruba</text>
+    <text x="1160" y="126">Hausa</text>
+    <text x="1030" y="450">English</text>
+  </g>
+</svg>

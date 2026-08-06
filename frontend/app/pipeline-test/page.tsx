@@ -2,6 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
+import { Button } from '@/components/Button';
+import { PageShell, PromptPreview, Section } from '@/components/PageShell';
 import WordLibraryFlow from '../WordLibraryFlow';
 
 const POLL_INTERVAL_MS = 2000;
@@ -30,6 +32,8 @@ interface Result {
 }
 
 type Mode = 'sentence' | 'word';
+
+const selectClass = 'min-h-10 rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
 
 export default function PipelineTestPage() {
   const [mode, setMode] = useState<Mode>('sentence');
@@ -155,89 +159,108 @@ export default function PipelineTestPage() {
   if (mode === 'word') {
     return (
       <>
-        <div className="page-shell">
-          <button className="secondary" onClick={() => setMode('sentence')}>
+        <PageShell>
+          <Button variant="secondary" onClick={() => setMode('sentence')}>
             Back to sentence pipeline test
-          </button>
-        </div>
+          </Button>
+        </PageShell>
         <WordLibraryFlow />
       </>
     );
   }
 
   return (
-    <main className="page-shell">
-      <section className="section">
-        <h1>Pipeline test</h1>
-        <p className="lede">No login required. This exercises upload, ASR worker processing, and transcript polling.</p>
-        <div className="cta-row">
-          <button className="secondary" onClick={() => setMode('word')}>
+    <PageShell>
+      <Section>
+        <h1 className="text-4xl leading-tight md:text-5xl">Pipeline test</h1>
+        <p className="text-lg leading-relaxed text-muted">
+          No login required. This exercises upload, ASR worker processing, and transcript polling.
+        </p>
+        <div>
+          <Button variant="secondary" onClick={() => setMode('word')}>
             Switch to word library
-          </button>
+          </Button>
         </div>
-      </section>
+      </Section>
 
       {!prompt && (
-        <section className="section">
+        <Section>
           <label htmlFor="dialect-select">Language</label>
-          <select id="dialect-select" value={dialectTag} onChange={(e) => setDialectTag(e.target.value)}>
+          <select
+            className={selectClass}
+            id="dialect-select"
+            value={dialectTag}
+            onChange={(e) => setDialectTag(e.target.value)}
+          >
             {DIALECT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
             ))}
           </select>
-          <button onClick={loadPrompt}>Get a prompt</button>
-        </section>
+          <div>
+            <Button onClick={loadPrompt}>Get a prompt</Button>
+          </div>
+        </Section>
       )}
 
       {prompt && (
-        <section className="section">
-          <h2>Read this aloud</h2>
-          <blockquote className="prompt-preview">{prompt.text}</blockquote>
+        <Section>
+          <h2 className="text-2xl leading-snug">Read this aloud</h2>
+          <PromptPreview>{prompt.text}</PromptPreview>
 
           {stage !== 'recording' && (
-            <button onClick={startRecording} disabled={stage === 'uploading' || stage === 'processing'}>
-              Start recording
-            </button>
+            <div>
+              <Button onClick={startRecording} disabled={stage === 'uploading' || stage === 'processing'}>
+                Start recording
+              </Button>
+            </div>
           )}
-          {stage === 'recording' && <button onClick={stopRecording}>Stop recording</button>}
+          {stage === 'recording' && (
+            <div>
+              <Button onClick={stopRecording}>Stop recording</Button>
+            </div>
+          )}
 
           {audioUrl && (
-            <div className="section">
+            <Section>
               <audio controls src={audioUrl} />
-              <button onClick={submitRecording} disabled={stage === 'uploading' || stage === 'processing'}>
-                Submit
-              </button>
-            </div>
+              <div>
+                <Button onClick={submitRecording} disabled={stage === 'uploading' || stage === 'processing'}>
+                  Submit
+                </Button>
+              </div>
+            </Section>
           )}
 
           {stage === 'uploading' && <p>Uploading...</p>}
           {stage === 'processing' && <p>Transcribing... waiting on worker</p>}
 
           {result && (
-            <section className="section">
-              <h3>Result</h3>
+            <Section>
+              <h3 className="text-xl leading-snug">Result</h3>
               <p>status: {result.status}</p>
-              {result.status === 'ok' && result.transcript && <p>transcript: "{result.transcript}"</p>}
+              {result.status === 'ok' && result.transcript && <p>transcript: &quot;{result.transcript}&quot;</p>}
               {result.status === 'unsupported_dialect' && (
                 <p role="alert">No ASR model is registered for this dialect yet.</p>
               )}
               {result.reason && <p>reason: {result.reason}</p>}
-            </section>
+            </Section>
           )}
 
           {error && (
-            <p className="alert" role="alert">
+            <p className="leading-relaxed text-danger" role="alert">
               {error}
             </p>
           )}
 
-          <button className="secondary" onClick={loadPrompt}>
-            New prompt
-          </button>
-        </section>
+          <div>
+            <Button variant="secondary" onClick={loadPrompt}>
+              New prompt
+            </Button>
+          </div>
+        </Section>
       )}
-    </main>
+    </PageShell>
   );
 }

@@ -4,6 +4,13 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { normalizeErrorMessage, useRequestMagicLinkMutation } from '@/store/api';
+import { Alert, AuthPage, AuthPanel, Eyebrow, Notice } from '@/components/AuthShell';
+
+const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const primaryButtonClass =
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
+const secondaryButtonClass =
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-3.5 py-2.5 font-bold text-ink hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -33,44 +40,54 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="auth-page">
-      <section className="auth-panel">
+    <AuthPage>
+      <AuthPanel>
         <div>
-          <p className="eyebrow">Dialectiva</p>
-          <h1>Log in</h1>
+          <Eyebrow>Dialectiva</Eyebrow>
+          <h1 className="text-[1.75rem] leading-tight">Log in</h1>
         </div>
 
-        <form className="auth-form" onSubmit={handleCredentialsSubmit}>
-          <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <form className="grid gap-2.5" onSubmit={handleCredentialsSubmit}>
           <input
+            className={inputClass}
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <input
+            className={inputClass}
             type="password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-          <button type="submit">Log in</button>
+          <button className={primaryButtonClass} type="submit">
+            Log in
+          </button>
         </form>
 
-        <div className="auth-actions">
-          <button className="secondary" onClick={handleMagicLinkSubmit} disabled={!email || isRequestingMagicLink}>
+        <div className="grid gap-2">
+          <button
+            className={secondaryButtonClass}
+            onClick={handleMagicLinkSubmit}
+            disabled={!email || isRequestingMagicLink}
+          >
             Email me a magic link
           </button>
-          <button className="secondary" onClick={() => signIn('google')}>
+          <button className={secondaryButtonClass} onClick={() => signIn('google')}>
             Continue with Google
           </button>
         </div>
 
-        <p className="notice">
+        <Notice>
           New to Dialectiva? <Link href="/register">Create an account</Link>
-        </p>
+        </Notice>
 
-        {message && (
-          <p className="alert" role="alert">
-            {message}
-          </p>
-        )}
-      </section>
-    </main>
+        {message && <Alert>{message}</Alert>}
+      </AuthPanel>
+    </AuthPage>
   );
 }

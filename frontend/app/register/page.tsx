@@ -4,6 +4,11 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { normalizeErrorMessage, useRegisterMutation } from '@/store/api';
+import { Alert, AuthPage, AuthPanel, Eyebrow, Notice } from '@/components/AuthShell';
+
+const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const primaryButtonClass =
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
@@ -31,16 +36,24 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="auth-page">
-      <section className="auth-panel">
+    <AuthPage>
+      <AuthPanel>
         <div>
-          <p className="eyebrow">Dialectiva</p>
-          <h1>Create an account</h1>
+          <Eyebrow>Dialectiva</Eyebrow>
+          <h1 className="text-[1.75rem] leading-tight">Create an account</h1>
         </div>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <form className="grid gap-2.5" onSubmit={handleSubmit}>
           <input
+            className={inputClass}
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <input
+            className={inputClass}
             type="password"
             placeholder="Password (min 8 characters)"
             value={password}
@@ -48,21 +61,17 @@ export default function RegisterPage() {
             minLength={8}
             required
           />
-          <button type="submit" disabled={isLoading}>
+          <button className={primaryButtonClass} type="submit" disabled={isLoading}>
             Register
           </button>
         </form>
 
-        <p className="notice">
+        <Notice>
           Already have an account? <Link href="/login">Log in</Link>
-        </p>
+        </Notice>
 
-        {error && (
-          <p className="alert" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
-    </main>
+        {error && <Alert>{error}</Alert>}
+      </AuthPanel>
+    </AuthPage>
   );
 }
