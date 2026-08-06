@@ -18,6 +18,15 @@ export class GeoController {
     });
   }
 
+  @Get('stats')
+  async getStats() {
+    const [countryCount, dialectCount] = await Promise.all([
+      this.prisma.country.count(),
+      this.prisma.dialect.count(),
+    ]);
+    return { countryCount, dialectCount };
+  }
+
   @Get('countries/:id/dialects')
   async getDialects(@Param('id') id: string) {
     const country = await this.prisma.country.findUnique({ where: { id } });

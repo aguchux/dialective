@@ -1,9 +1,17 @@
 import { landingStats } from './data';
 
-export function LandingStats() {
+interface LandingStatsProps {
+  dialectCount: number | null;
+}
+
+export function LandingStats({ dialectCount }: LandingStatsProps) {
+  const stats = landingStats.map((stat) =>
+    stat.label === 'Dialects' && dialectCount !== null ? { ...stat, value: String(dialectCount) } : stat,
+  );
+
   return (
     <section className="mx-auto grid max-w-[820px] gap-3 py-4 md:grid-cols-3" aria-label="Dialect Library pilot metrics">
-      {landingStats.map((stat) => (
+      {stats.map((stat) => (
         <div
           className="rounded-lg border border-[rgba(5,5,5,0.1)] bg-white/75 p-4 text-center shadow-[0_14px_30px_rgba(12,20,20,0.08)] backdrop-blur-sm"
           key={stat.label}
