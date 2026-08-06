@@ -231,6 +231,9 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     { tag: 'ha', name: 'Hausa' },
     { tag: 'pcm', name: 'Nigerian Pidgin' },
     { tag: 'ibb', name: 'Ibibio' },
+    { tag: 'ff-ng', name: 'Fulfulde' },
+    { tag: 'igb', name: 'Igala' },
+    { tag: 'kan', name: 'Kanuri' },
   ] },
   { code: 'RW', name: 'Rwanda', dialects: [
     { tag: 'rw', name: 'Kinyarwanda' },
