@@ -59,7 +59,7 @@ export default function LandingPage() {
     <main className="relative isolate min-h-screen overflow-hidden bg-white px-4 pt-4 text-[#050505] md:px-[3.4rem]">
       <div
         className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[min(650px,66vh)] bg-[#c9eff7] bg-cover bg-top bg-fixed bg-no-repeat"
-        style={{ backgroundImage: "url('/landing-hero-green.png')" }}
+        style={{ backgroundImage: "url('/landing-hero.png')" }}
       />
 
       <div className="relative z-10">
