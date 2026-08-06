@@ -1,95 +1,97 @@
 import Link from 'next/link';
 
-const steps = [
+const contributorCards = [
   {
-    title: 'Pick your language',
-    body: 'Choose the language or dialect you can speak naturally.',
+    name: 'Amara O.',
+    role: 'Igbo speaker, Enugu',
+    tone: 'green',
+    initials: 'AO',
   },
   {
-    title: 'Record short tasks',
-    body: 'Contribute sentence recordings or word translations from your phone.',
+    name: 'Tara',
+    role: 'Yoruba contributor',
+    tone: 'teal',
+    initials: 'TA',
   },
   {
-    title: 'Reviewed for rewards',
-    body: 'Submissions are checked before they count toward pilot rewards.',
+    name: 'Andrew',
+    role: 'English prompt reviewer',
+    tone: 'purple',
+    initials: 'AN',
+  },
+  {
+    name: 'Mads D.',
+    role: 'Hausa language helper',
+    tone: 'blue',
+    initials: 'MD',
+  },
+  {
+    name: '4 languages',
+    role: 'Pilot coverage',
+    tone: 'stat-blue',
+    initials: '',
+  },
+  {
+    name: 'Cuong N.',
+    role: 'Word library contributor',
+    tone: 'magenta',
+    initials: 'CN',
+  },
+  {
+    name: 'Max N.',
+    role: 'Dialect recording lead',
+    tone: 'forest',
+    initials: 'MN',
+  },
+  {
+    name: '700+',
+    role: 'Seed words ready',
+    tone: 'stat-red',
+    initials: '',
   },
 ];
 
-const languages = ['English', 'Igbo', 'Yoruba', 'Hausa'];
-
 export default function LandingPage() {
   return (
-    <main className="page-shell">
-      <header className="site-header">
-        <div className="brand">Dialectiva</div>
-        <nav className="nav-actions" aria-label="Primary">
-          <Link className="button secondary" href="/login">
-            Log in
+    <main className="landing-page">
+      <header className="landing-header">
+        <Link className="landing-brand" href="/">
+          Dialectiva
+        </Link>
+        <div className="landing-actions">
+          <Link className="landing-login" href="/login">
+            Login
           </Link>
-        </nav>
+          <Link className="landing-primary" href="/register">
+            Start contributing
+          </Link>
+        </div>
       </header>
 
-      <section className="hero">
-        <div className="hero-copy">
-          <p className="eyebrow">Pilot voice collection</p>
-          <h1>Dialectiva</h1>
-          <p className="lede">Contribute voice and word recordings for your language and dialect.</p>
-          <div className="cta-row">
-            <Link className="button" href="/register">
-              Create account
-            </Link>
-            <Link className="button secondary" href="/login">
-              Log in
-            </Link>
-          </div>
-        </div>
-
-        <aside className="hero-panel" aria-label="Contribution preview">
-          <p className="eyebrow">Today&apos;s task</p>
-          <div className="prompt-preview">
-            <strong>Record a prompt</strong>
-            <span>Read one short sentence in your natural speaking voice.</span>
-          </div>
-          <div className="meter" aria-hidden="true">
-            <span />
-          </div>
-          <p className="notice">Built for quick mobile contributions during the pilot.</p>
-        </aside>
+      <section className="landing-hero" aria-labelledby="landing-title">
+        <h1 id="landing-title">Become the voice that AI learns from</h1>
+        <p>
+          Contribute short recordings and word translations in your language or dialect. Work from your phone, wherever
+          you are. No AI experience needed.
+        </p>
+        <Link className="landing-primary landing-hero-cta" href="/register">
+          Start contributing
+        </Link>
       </section>
 
-      <section className="section" aria-labelledby="how-it-works">
-        <h2 id="how-it-works">How it works</h2>
-        <div className="steps">
-          {steps.map((step, index) => (
-            <article className="step" key={step.title}>
-              <span className="step-number">{index + 1}</span>
-              <h3>{step.title}</h3>
-              <p className="notice">{step.body}</p>
+      <section className="contributor-rail" aria-label="Dialectiva contributor preview">
+        <div className="rail-track">
+          {contributorCards.map((card) => (
+            <article className={`contributor-card ${card.tone}`} key={`${card.name}-${card.role}`}>
+              {card.initials && <div className="portrait-mark">{card.initials}</div>}
+              <div className="card-copy">
+                <strong>{card.name}</strong>
+                <span>{card.role}</span>
+              </div>
             </article>
           ))}
         </div>
       </section>
-
-      <section className="section" aria-labelledby="supported-languages">
-        <h2 id="supported-languages">Supported languages</h2>
-        <div className="language-grid">
-          {languages.map((language) => (
-            <div className="language-pill" key={language}>
-              {language}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="section">
-        <p className="pilot-note">Dialectiva is currently in pilot. Account access and contribution tasks may change as validation and reward flows mature.</p>
-      </section>
-
-      <footer className="site-footer">
-        <Link href="/login">Log in</Link>
-        <Link href="/register">Create account</Link>
-        <Link href="/pipeline-test">Pipeline test</Link>
-      </footer>
     </main>
   );
 }
