@@ -59,11 +59,16 @@ export default function LandingPage() {
           Dialectiva
         </Link>
         <div className="landing-actions">
+          <nav className="landing-menu" aria-label="Primary">
+            <Link href="/about">About Us</Link>
+            <Link href="/blog">Blog</Link>
+            <Link href="/faq">FAQ</Link>
+          </nav>
           <Link className="landing-login" href="/login">
             Login
           </Link>
           <Link className="landing-primary" href="/register">
-            Start contributing
+            Start Earning
           </Link>
         </div>
       </header>
