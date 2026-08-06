@@ -59,16 +59,16 @@ export default function LandingPage() {
     <main className="relative isolate min-h-screen overflow-hidden bg-white px-4 pt-4 text-[#050505] md:px-[3.4rem]">
       <div
         className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[min(650px,66vh)] bg-[#c9eff7] bg-cover bg-top bg-fixed bg-no-repeat"
-        style={{ backgroundImage: "url('/landing-hero.png')" }}
+        style={{ backgroundImage: "url('/landing-hero-green.png')" }}
       />
 
       <div className="relative z-10">
         <header className="mx-auto flex max-w-[1480px] items-center justify-between gap-4 py-[0.2rem] pb-9 md:pt-0">
-          <Link className="text-2xl font-black no-underline" href="/">
-            Dialectiva
-          </Link>
-          <div className="flex items-center gap-3">
-            <nav className="hidden items-center gap-6 md:mr-3 md:flex" aria-label="Primary">
+          <div className="flex items-center gap-6">
+            <Link className="text-2xl font-black no-underline" href="/">
+              Dialectiva
+            </Link>
+            <nav className="hidden items-center gap-6 md:flex" aria-label="Primary">
               <Link className="whitespace-nowrap font-bold text-[rgba(5,5,5,0.74)] no-underline" href="/about">
                 About Us
               </Link>
@@ -79,6 +79,8 @@ export default function LandingPage() {
                 FAQ
               </Link>
             </nav>
+          </div>
+          <div className="flex items-center gap-3">
             <ThemeToggle />
             <Link
               className="inline-flex min-h-[42px] items-center justify-center whitespace-nowrap rounded-full border-[1.5px] border-[#050505] bg-[rgba(255,255,255,0.1)] px-[1.15rem] py-[0.7rem] font-extrabold no-underline"
