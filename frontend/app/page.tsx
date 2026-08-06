@@ -69,19 +69,19 @@ export default function LandingPage() {
               Dialectiva
             </Link>
             <nav className="hidden items-center gap-6 md:flex" aria-label="Primary">
-              <Link className="whitespace-nowrap font-bold text-[rgba(5,5,5,0.74)] no-underline" href="/about">
+              <Link className="whitespace-nowrap font-medium text-[rgba(5,5,5,0.74)] no-underline" href="/about">
                 About Us
               </Link>
-              <Link className="whitespace-nowrap font-bold text-[rgba(5,5,5,0.74)] no-underline" href="/blog">
+              <Link className="whitespace-nowrap font-medium text-[rgba(5,5,5,0.74)] no-underline" href="/blog">
                 Blog
               </Link>
-              <Link className="whitespace-nowrap font-bold text-[rgba(5,5,5,0.74)] no-underline" href="/faq">
+              <Link className="whitespace-nowrap font-medium text-[rgba(5,5,5,0.74)] no-underline" href="/faq">
                 FAQ
               </Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">
-            <ThemeToggle />
+            {/* <ThemeToggle /> */}
             <Link
               className="inline-flex min-h-[42px] items-center justify-center whitespace-nowrap rounded-full border-[1.5px] border-[#050505] bg-[rgba(255,255,255,0.1)] px-[1.15rem] py-[0.7rem] font-extrabold no-underline"
               href="/login"
