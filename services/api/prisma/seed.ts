@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
+import { AFRICA_COUNTRIES, CountrySeed } from './africa-countries-dialects';
 
 // Fixed word bank for the word-library flow (AGENTS.md "Word library").
 // Adding a word means adding it here and re-running `npm run prisma:seed` --
@@ -91,15 +92,13 @@ const WORDS = [
   'slow',
 ];
 
-// Onboarding country/dialect list. `tag` matches the free-text dialectTag
-// values already used by PromptsController and WordRecording -- this is a
-// straight lift of those 4 existing tags into real rows, not new dialects.
-const COUNTRIES = [
-  { code: 'NG', name: 'Nigeria', dialects: [
-    { tag: 'ig', name: 'Igbo' },
-    { tag: 'yo', name: 'Yoruba' },
-    { tag: 'ha', name: 'Hausa' },
-  ] },
+// Onboarding country/dialect list: all African Union member countries
+// (africa-countries-dialects.ts) plus the United States, kept for the
+// `en-us` tag already referenced by PROMPTS_BY_DIALECT. Nigeria's ig/yo/ha
+// tags here match the 3 existing tags used by PromptsController and
+// WordRecording -- not new dialects, just the same values as real rows.
+const COUNTRIES: CountrySeed[] = [
+  ...AFRICA_COUNTRIES,
   { code: 'US', name: 'United States', dialects: [
     { tag: 'en-us', name: 'English (US)' },
   ] },

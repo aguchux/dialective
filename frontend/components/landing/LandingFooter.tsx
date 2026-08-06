@@ -19,7 +19,7 @@ export function LandingFooter() {
         <nav className="flex flex-wrap gap-x-4 gap-y-3" aria-label="Footer">
           {footerLinks.map((link) => (
             <Link
-              className="font-bold text-[rgba(5,5,5,0.72)] no-underline transition-colors hover:text-[#050505]"
+              className="text-[rgba(5,5,5,0.72)] no-underline transition-colors hover:text-[#050505]"
               href={link.href}
               key={link.href}
             >
