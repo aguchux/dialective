@@ -1,88 +1,96 @@
-import { createApi, fetchBaseQuery, type BaseQueryFn } from "@reduxjs/toolkit/query/react";
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 
-// All API routes respond with { ok: true, data } or { ok: false, error: { message, code } }
-// (see lib/api.ts). This base query unwraps that envelope so endpoint definitions
-// can work with plain data/error shapes.
-type ApiEnvelope<T> =
-  { ok: true; data: T } | { ok: false; error: { message: string; code?: string; details?: Record<string, unknown> } };
+export interface PublicUser {
+  id: string;
+  email: string;
+  role: 'TRAINER' | 'ADMIN';
+  emailVerified: boolean;
+}
 
-const rawBaseQuery = fetchBaseQuery({ baseUrl: "/api" });
+export interface AuthResult {
+  accessToken: string;
+  refreshToken: string;
+  user: PublicUser;
+}
 
-const unwrappingBaseQuery: BaseQueryFn<
-  Parameters<typeof rawBaseQuery>[0],
-  unknown,
-  { message: string; code?: string; status?: number; details?: Record<string, unknown> }
-> = async (args, api, extraOptions) => {
-  const result = await rawBaseQuery(args, api, extraOptions);
-  if (result.error) {
-    const data = result.error.data as ApiEnvelope<unknown> | undefined;
-    const message = data && !data.ok ? data.error?.message : undefined;
-    const code = data && !data.ok ? data.error?.code : undefined;
-    const details = data && !data.ok ? data.error?.details : undefined;
-    const status = typeof result.error.status === "number" ? result.error.status : undefined;
-    return {
-      error: {
-        message: message ?? (status ? `Request failed (${status})` : "Request failed"),
-        code,
-        details,
-        status,
-      },
-    };
+export interface ApiErrorShape {
+  statusCode?: number;
+  message?: string | string[];
+  error?: string;
+  path?: string;
+  timestamp?: string;
+}
+
+function normalizeErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === 'object' && error && 'data' in error) {
+    const data = (error as { data?: ApiErrorShape }).data;
+    if (Array.isArray(data?.message)) {
+      return data.message.join(' ');
+    }
+    if (data?.message) {
+      return data.message;
+    }
   }
-  const body = result.data as ApiEnvelope<unknown> | undefined;
-  if (!body || !body.ok) {
-    const message = body && !body.ok ? body.error?.message : undefined;
-    return {
-      error: {
-        message: message ?? "Unexpected response from server",
-        code: body && !body.ok ? body.error?.code : undefined,
-      },
-    };
-  }
-  return { data: body.data };
-};
+  return fallback;
+}
 
-export const api = createApi({
-  reducerPath: "api",
-  baseQuery: unwrappingBaseQuery,
-  tagTypes: [
-    "Organisation",
-    "OrganisationList",
-    "Profile",
-    "AiSetting",
-    "Educator",
-    "Exam",
-    "Question",
-    "Licence",
-    "Attempt",
-    "Result",
-    "Certificate",
-    "Candidate",
-    "Category",
-    "Brand",
-    "AdminSetting",
-    "AdminOverview",
-    "AdminOrganisation",
-    "AdminUser",
-    "AdminExam",
-    "AdminAttempt",
-    "AdminLog",
-    "AdminReport",
-    "DashboardOverview",
-    "DashboardReport",
-    "PublicExam",
-    "Payment",
-    "PublicExamOrder",
-    "MediaAsset",
-    "QuestionReview",
-    "CandidateReport",
-    "AttemptComment",
-    "AttemptViolation",
-    "RevisionChat",
-    "PendingReviewCount",
-    "Notification",
-    "NotificationCount",
-    "ExamRegistry",
-  ],
-  endpoints: () => ({}),
+export const dialectivaApi = createApi({
+  reducerPath: 'dialectivaApi',
+  baseQuery: fetchBaseQuery({
+    baseUrl: PUBLIC_API_V1_BASE_URL,
+    prepareHeaders: (headers) => {
+      headers.set('Content-Type', 'application/json');
+      return headers;
+    },
+  }),
+  tagTypes: ['Auth'],
+  endpoints: (builder) => ({
+    register: builder.mutation<AuthResult, { email: string; password: string }>({
+      query: (body) => ({
+        url: '/auth/register',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['Auth'],
+    }),
+    requestMagicLink: builder.mutation<void, { email: string }>({
+      query: (body) => ({
+        url: '/auth/magic-link/request',
+        method: 'POST',
+        body,
+      }),
+    }),
+    requestPasswordReset: builder.mutation<void, { email: string }>({
+      query: (body) => ({
+        url: '/auth/password-reset/request',
+        method: 'POST',
+        body,
+      }),
+    }),
+    resetPassword: builder.mutation<void, { token: string; newPassword: string }>({
+      query: (body) => ({
+        url: '/auth/password-reset/confirm',
+        method: 'POST',
+        body,
+      }),
+    }),
+    verifyEmail: builder.mutation<void, { token: string }>({
+      query: (body) => ({
+        url: '/auth/verify-email',
+        method: 'POST',
+        body,
+      }),
+    }),
+  }),
 });
+
+export const {
+  useRegisterMutation,
+  useRequestMagicLinkMutation,
+  useRequestPasswordResetMutation,
+  useResetPasswordMutation,
+  useVerifyEmailMutation,
+} = dialectivaApi;
+
+export { normalizeErrorMessage };

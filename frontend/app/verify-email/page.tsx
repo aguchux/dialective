@@ -2,12 +2,13 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
+import { useVerifyEmailMutation } from '@/store/api';
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const [status, setStatus] = useState<'pending' | 'success' | 'error'>('pending');
+  const [verifyEmail] = useVerifyEmailMutation();
 
   useEffect(() => {
     if (!token) {
@@ -15,14 +16,11 @@ function VerifyEmailContent() {
       return;
     }
 
-    fetch(`${PUBLIC_API_V1_BASE_URL}/auth/verify-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    })
-      .then((res) => setStatus(res.ok ? 'success' : 'error'))
+    verifyEmail({ token })
+      .unwrap()
+      .then(() => setStatus('success'))
       .catch(() => setStatus('error'));
-  }, [token]);
+  }, [token, verifyEmail]);
 
   return (
     <main className="auth-page">

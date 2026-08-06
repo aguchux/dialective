@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
-import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
+import { normalizeErrorMessage, useRequestMagicLinkMutation } from '@/store/api';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [requestMagicLink, { isLoading: isRequestingMagicLink }] = useRequestMagicLinkMutation();
 
   async function handleCredentialsSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,12 +24,12 @@ export default function LoginPage() {
 
   async function handleMagicLinkSubmit() {
     setMessage(null);
-    await fetch(`${PUBLIC_API_V1_BASE_URL}/auth/magic-link/request`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    setMessage('Check your email for a magic link.');
+    try {
+      await requestMagicLink({ email }).unwrap();
+      setMessage('Check your email for a magic link.');
+    } catch (err) {
+      setMessage(normalizeErrorMessage(err, 'Unable to send a magic link.'));
+    }
   }
 
   return (
@@ -52,7 +53,7 @@ export default function LoginPage() {
         </form>
 
         <div className="auth-actions">
-          <button className="secondary" onClick={handleMagicLinkSubmit} disabled={!email}>
+          <button className="secondary" onClick={handleMagicLinkSubmit} disabled={!email || isRequestingMagicLink}>
             Email me a magic link
           </button>
           <button className="secondary" onClick={() => signIn('google')}>

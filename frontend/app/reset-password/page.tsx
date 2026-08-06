@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
+import { normalizeErrorMessage, useResetPasswordMutation } from '@/store/api';
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
@@ -11,6 +11,7 @@ function ResetPasswordContent() {
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<'idle' | 'success'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [resetPassword, { isLoading }] = useResetPasswordMutation();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -21,15 +22,10 @@ function ResetPasswordContent() {
       return;
     }
 
-    const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/auth/password-reset/confirm`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, newPassword: password }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ message: 'Reset failed' }));
-      setError(body.message ?? 'This reset link is invalid or has expired.');
+    try {
+      await resetPassword({ token, newPassword: password }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'This reset link is invalid or has expired.'));
       return;
     }
 
@@ -67,7 +63,9 @@ function ResetPasswordContent() {
             minLength={8}
             required
           />
-          <button type="submit">Reset password</button>
+          <button type="submit" disabled={isLoading}>
+            Reset password
+          </button>
         </form>
         {error && (
           <p className="alert" role="alert">
