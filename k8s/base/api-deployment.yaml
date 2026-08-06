@@ -119,6 +119,26 @@ spec:
                 secretKeyRef:
                   name: auth-creds
                   key: resend_api_key
+            - name: TOKEN_USD_RATE
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: token_usd_rate
+            - name: MIN_WITHDRAWAL_TOKENS
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: min_withdrawal_tokens
+            - name: COINBASE_COMMERCE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: coinbase-creds
+                  key: coinbase_commerce_api_key
+            - name: COINBASE_COMMERCE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: coinbase-creds
+                  key: coinbase_commerce_webhook_secret
           readinessProbe:
             httpGet:
               path: /health

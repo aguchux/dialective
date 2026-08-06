@@ -38,6 +38,7 @@ model User {
   refreshTokens  RefreshToken[]
   passwordResets PasswordResetToken[]
   emailVerifications EmailVerificationToken[]
+  wallet         Wallet?
 
   @@map("users")
 }
@@ -134,4 +135,98 @@ model WordRecording {
   @@index([wordId])
   @@index([dialectTag])
   @@map("word_recordings")
+}
+
+enum LedgerEntryType {
+  DEPOSIT
+  WITHDRAWAL
+  WITHDRAWAL_REVERSED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  PAID
+  REJECTED
+}
+
+/// One row per user, holds the current token balance. Balance is
+/// denormalized (sum of LedgerEntry.amount) for fast reads, but every
+/// change MUST go through a LedgerEntry in the same transaction -- the
+/// ledger is the source of truth, balance is a cache of it. See
+/// AGENTS.md "Wallet / token pool" and docs/Dialectiva_Business_Plan.md §5
+/// (Utility Token Pool, distinct from the enterprise-funded Reward Pool).
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance   Decimal  @default(0) @db.Decimal(20, 8)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries     LedgerEntry[]
+  deposits    Deposit[]
+  withdrawals WithdrawalRequest[]
+
+  @@map("wallets")
+}
+
+/// Append-only audit trail. Every balance-changing event -- a completed
+/// deposit, a withdrawal debit, a withdrawal reversal -- gets exactly one
+/// row here. Never update or delete a row; corrections are new rows.
+model LedgerEntry {
+  id        String          @id @default(uuid())
+  walletId  String
+  wallet    Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type      LedgerEntryType
+  amount    Decimal         @db.Decimal(20, 8) // positive=credit, negative=debit, tokens
+  reference String          // Deposit.id or WithdrawalRequest.id this entry backs
+  createdAt DateTime        @default(now())
+
+  @@index([walletId])
+  @@map("ledger_entries")
+}
+
+/// One row per Coinbase Commerce charge. Created `pending` when the checkout
+/// is issued, moved to `confirmed` (and a LedgerEntry + balance credit
+/// written) only by the webhook handler on `charge:confirmed` -- never trust
+/// the client-side redirect alone to credit funds.
+model Deposit {
+  id               String    @id @default(uuid())
+  walletId         String
+  wallet           Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  provider         String    @default("coinbase_commerce")
+  providerChargeId String    @unique
+  currency         String // USDC | USDT
+  usdAmount        Decimal   @db.Decimal(20, 8)
+  tokenAmount      Decimal   @db.Decimal(20, 8)
+  status           String    @default("pending") // pending | confirmed | expired | failed
+  createdAt        DateTime  @default(now())
+  confirmedAt      DateTime?
+
+  @@index([walletId])
+  @@map("deposits")
+}
+
+/// One row per user-initiated cash-out request. Tokens are debited (via a
+/// LedgerEntry) at request time, not at admin fulfillment time -- this
+/// reserves the funds immediately so a user can't spend tokens on tasks AND
+/// request a withdrawal against the same balance. If an admin rejects the
+/// request, a WITHDRAWAL_REVERSED LedgerEntry credits the tokens back.
+/// Payout itself is manual (admin sends USDT by hand, then calls the
+/// resolve endpoint) -- no payout-provider API integration in this phase.
+model WithdrawalRequest {
+  id                  String           @id @default(uuid())
+  walletId            String
+  wallet              Wallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  tokenAmount         Decimal          @db.Decimal(20, 8)
+  usdtAmount          Decimal          @db.Decimal(20, 8)
+  destinationAddress  String
+  status              WithdrawalStatus @default(PENDING)
+  adminNote           String?
+  createdAt           DateTime         @default(now())
+  resolvedAt          DateTime?
+
+  @@index([walletId])
+  @@index([status])
+  @@map("withdrawal_requests")
 }
