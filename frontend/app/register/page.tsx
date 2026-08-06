@@ -5,10 +5,11 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { normalizeErrorMessage, useRegisterMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Eyebrow, Notice } from '@/components/AuthShell';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
-  'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
@@ -31,15 +32,16 @@ export default function RegisterPage() {
     if (result?.error) {
       setError('Account created, but automatic sign-in failed. Try logging in.');
     } else {
-      window.location.href = '/';
+      window.location.href = '/dashboard';
     }
   }
 
   return (
     <AuthPage>
       <AuthPanel>
+        <Breadcrumbs items={[{ label: 'Register' }]} />
         <div>
-          <Eyebrow>Dialectiva</Eyebrow>
+          <Eyebrow>Dialect Library</Eyebrow>
           <h1 className="text-[1.75rem] leading-tight">Create an account</h1>
         </div>
 

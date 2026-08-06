@@ -1,7 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { Button } from '@/components/Button';
 import { PageShell, PromptPreview, Section } from '@/components/PageShell';
 import WordLibraryFlow from '../WordLibraryFlow';
@@ -36,8 +38,19 @@ type Mode = 'sentence' | 'word';
 const selectClass = 'min-h-10 rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
 
 export default function PipelineTestPage() {
+  const { data: session } = useSession();
   const [mode, setMode] = useState<Mode>('sentence');
   const [dialectTag, setDialectTag] = useState(DIALECT_OPTIONS[0].value);
+
+  // Pre-select the signed-in trainer's onboarding dialect once it's known,
+  // without overriding a choice they've already made in this session.
+  useEffect(() => {
+    const tag = session?.user?.dialectTag;
+    if (tag && DIALECT_OPTIONS.some((opt) => opt.value === tag)) {
+      setDialectTag(tag);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.dialectTag]);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [stage, setStage] = useState<Stage>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +173,7 @@ export default function PipelineTestPage() {
     return (
       <>
         <PageShell>
+          <Breadcrumbs items={[{ href: '/pipeline-test', label: 'Pipeline test' }, { label: 'Word library' }]} />
           <Button variant="secondary" onClick={() => setMode('sentence')}>
             Back to sentence pipeline test
           </Button>
@@ -171,6 +185,7 @@ export default function PipelineTestPage() {
 
   return (
     <PageShell>
+      <Breadcrumbs items={[{ label: 'Pipeline test' }]} />
       <Section>
         <h1 className="text-4xl leading-tight md:text-5xl">Pipeline test</h1>
         <p className="text-lg leading-relaxed text-muted">

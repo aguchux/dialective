@@ -91,6 +91,20 @@ const WORDS = [
   'slow',
 ];
 
+// Onboarding country/dialect list. `tag` matches the free-text dialectTag
+// values already used by PromptsController and WordRecording -- this is a
+// straight lift of those 4 existing tags into real rows, not new dialects.
+const COUNTRIES = [
+  { code: 'NG', name: 'Nigeria', dialects: [
+    { tag: 'ig', name: 'Igbo' },
+    { tag: 'yo', name: 'Yoruba' },
+    { tag: 'ha', name: 'Hausa' },
+  ] },
+  { code: 'US', name: 'United States', dialects: [
+    { tag: 'en-us', name: 'English (US)' },
+  ] },
+];
+
 async function main() {
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
   try {
@@ -102,6 +116,22 @@ async function main() {
       });
     }
     console.log(`Seeded ${WORDS.length} words.`);
+
+    for (const country of COUNTRIES) {
+      const countryRow = await prisma.country.upsert({
+        where: { code: country.code },
+        create: { code: country.code, name: country.name },
+        update: { name: country.name },
+      });
+      for (const dialect of country.dialects) {
+        await prisma.dialect.upsert({
+          where: { tag: dialect.tag },
+          create: { tag: dialect.tag, name: dialect.name, countryId: countryRow.id },
+          update: { name: dialect.name, countryId: countryRow.id },
+        });
+      }
+    }
+    console.log(`Seeded ${COUNTRIES.length} countries and their dialects.`);
   } finally {
     await prisma.$disconnect();
   }

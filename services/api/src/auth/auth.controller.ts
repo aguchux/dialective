@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthProvider } from '../generated/prisma/client';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -10,6 +10,7 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 import { RequestMagicLinkDto } from './dto/request-magic-link.dto';
 import { ConsumeMagicLinkDto } from './dto/consume-magic-link.dto';
 import { OAuthCallbackDto } from './dto/oauth-callback.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { OAuthCallbackGuard } from './guards/oauth-callback.guard';
 import { JwtAuthGuard } from './strategies/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -87,6 +88,12 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: AccessTokenClaims) {
-    return user;
+    return this.auth.getProfile(user.sub);
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  updateMe(@CurrentUser() user: AccessTokenClaims, @Body() dto: UpdateProfileDto) {
+    return this.auth.updateProfile(user.sub, dto.countryId, dto.dialectId);
   }
 }

@@ -8,6 +8,8 @@ declare module 'next-auth' {
     user: {
       id: string;
       role: 'TRAINER' | 'ADMIN';
+      onboardingComplete: boolean;
+      dialectTag: string | null;
     } & DefaultSession['user'];
   }
 }
@@ -18,5 +20,7 @@ declare module 'next-auth/jwt' {
     refreshToken?: string;
     role?: 'TRAINER' | 'ADMIN';
     userId?: string;
+    onboardingComplete?: boolean;
+    dialectTag?: string | null;
   }
 }

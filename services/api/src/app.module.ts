@@ -6,12 +6,13 @@ import { SubmissionsModule } from "./submissions/submissions.module";
 import { PromptsModule } from "./prompts/prompts.module";
 import { WordsModule } from "./words/words.module";
 import { WalletModule } from "./wallet/wallet.module";
+import { GeoModule } from "./geo/geo.module";
 import { RequestLoggerMiddleware } from "./common/middleware/request-logger.middleware";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 
 @Module({
-  imports: [PrismaModule, RedisStreamsModule, AsrRegistryModule, SubmissionsModule, PromptsModule, WordsModule, WalletModule, AuthModule],
+  imports: [PrismaModule, RedisStreamsModule, AsrRegistryModule, SubmissionsModule, PromptsModule, WordsModule, WalletModule, GeoModule, AuthModule],
   controllers: [HealthController],
 })
 export class AppModule implements NestModule {

@@ -5,6 +5,10 @@ export interface PublicUser {
   email: string;
   role: 'TRAINER' | 'ADMIN';
   emailVerified: boolean;
+  countryId: string | null;
+  dialectId: string | null;
+  dialectTag: string | null;
+  onboardingComplete: boolean;
 }
 
 export interface AuthResult {

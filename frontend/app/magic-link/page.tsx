@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { Alert, AuthPage, AuthPanel, Eyebrow } from '@/components/AuthShell';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 function MagicLinkContent() {
   const searchParams = useSearchParams();
@@ -25,7 +26,7 @@ function MagicLinkContent() {
       if (signInResult?.error) {
         setStatus('error');
       } else {
-        window.location.href = '/';
+        window.location.href = '/dashboard';
       }
     })();
   }, [token]);
@@ -33,7 +34,8 @@ function MagicLinkContent() {
   return (
     <AuthPage>
       <AuthPanel>
-        <Eyebrow>Dialectiva</Eyebrow>
+        <Breadcrumbs items={[{ href: '/login', label: 'Login' }, { label: 'Magic link' }]} />
+        <Eyebrow>Dialect Library</Eyebrow>
         <h1 className="text-[1.75rem] leading-tight">Signing you in...</h1>
         {status === 'error' && <Alert>This sign-in link is invalid or has expired.</Alert>}
       </AuthPanel>

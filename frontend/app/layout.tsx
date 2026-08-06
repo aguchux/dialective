@@ -5,7 +5,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata = {
-  title: 'Dialectiva',
+  title: 'Dialect Library',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

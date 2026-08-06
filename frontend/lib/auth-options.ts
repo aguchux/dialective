@@ -49,13 +49,21 @@ export const authOptions: NextAuthOptions = {
       return true;
     },
 
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       const apiResult = (user as unknown as { __apiAuthResult?: AuthResult } | undefined)?.__apiAuthResult;
       if (apiResult) {
         token.accessToken = apiResult.accessToken;
         token.refreshToken = apiResult.refreshToken;
         token.role = apiResult.user.role;
         token.userId = apiResult.user.id;
+        token.onboardingComplete = apiResult.user.onboardingComplete;
+        token.dialectTag = apiResult.user.dialectTag;
+      }
+      // Triggered by useSession().update() after onboarding is completed
+      // mid-session, since the JWT otherwise only refreshes this on sign-in.
+      if (trigger === 'update' && session) {
+        token.onboardingComplete = session.onboardingComplete;
+        token.dialectTag = session.dialectTag;
       }
       return token;
     },
@@ -64,6 +72,8 @@ export const authOptions: NextAuthOptions = {
       session.accessToken = token.accessToken as string;
       session.user.id = token.userId as string;
       session.user.role = token.role as 'TRAINER' | 'ADMIN';
+      session.user.onboardingComplete = token.onboardingComplete ?? false;
+      session.user.dialectTag = token.dialectTag ?? null;
       return session;
     },
   },

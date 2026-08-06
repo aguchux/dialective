@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 import { Button } from '@/components/Button';
 import { PageShell, Section } from '@/components/PageShell';
@@ -23,7 +24,18 @@ const selectClass = 'min-h-10 rounded-lg border border-line bg-white px-3 py-2 t
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 
 export default function WordLibraryFlow() {
+  const { data: session } = useSession();
   const [dialectTag, setDialectTag] = useState(DIALECT_OPTIONS[1].value);
+
+  // Pre-select the signed-in trainer's onboarding dialect once it's known,
+  // without overriding a choice they've already made in this session.
+  useEffect(() => {
+    const tag = session?.user?.dialectTag;
+    if (tag && DIALECT_OPTIONS.some((opt) => opt.value === tag)) {
+      setDialectTag(tag);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.dialectTag]);
   const [word, setWord] = useState<Word | null>(null);
   const [translation, setTranslation] = useState('');
   const [stage, setStage] = useState<Stage>('idle');

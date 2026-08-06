@@ -1,4 +1,11 @@
-import { ConflictException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { AuthProvider, Role, User } from '../generated/prisma/client';
@@ -27,10 +34,25 @@ export interface PublicUser {
   email: string;
   role: Role;
   emailVerified: boolean;
+  countryId: string | null;
+  dialectId: string | null;
+  dialectTag: string | null;
+  onboardingComplete: boolean;
 }
 
-function toPublicUser(user: User): PublicUser {
-  return { id: user.id, email: user.email, role: user.role, emailVerified: user.emailVerified !== null };
+type UserWithDialect = User & { dialect?: { tag: string } | null };
+
+function toPublicUser(user: UserWithDialect): PublicUser {
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    emailVerified: user.emailVerified !== null,
+    countryId: user.countryId,
+    dialectId: user.dialectId,
+    dialectTag: user.dialect?.tag ?? null,
+    onboardingComplete: user.countryId !== null && user.dialectId !== null,
+  };
 }
 
 @Injectable()
@@ -275,6 +297,31 @@ export class AuthService {
       this.prisma.user.update({ where: { id: record.userId }, data: { emailVerified: new Date() } }),
       this.prisma.emailVerificationToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
     ]);
+  }
+
+  // --- Profile / onboarding -------------------------------------------------
+
+  async getProfile(userId: string): Promise<PublicUser> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { dialect: true } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return toPublicUser(user);
+  }
+
+  async updateProfile(userId: string, countryId: string, dialectId: string): Promise<PublicUser> {
+    const dialect = await this.prisma.dialect.findUnique({ where: { id: dialectId } });
+    if (!dialect || dialect.countryId !== countryId) {
+      throw new UnprocessableEntityException('Dialect does not belong to the given country');
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { countryId, dialectId },
+      include: { dialect: true },
+    });
+
+    return toPublicUser(user);
   }
 
   // --- Shared token issuance ------------------------------------------------

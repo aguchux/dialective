@@ -1,0 +1,18 @@
+import { landingStats } from './data';
+
+export function LandingStats() {
+  return (
+    <section className="mx-auto grid max-w-[820px] gap-3 py-4 md:grid-cols-3" aria-label="Dialect Library pilot metrics">
+      {landingStats.map((stat) => (
+        <div
+          className="rounded-lg border border-[rgba(5,5,5,0.1)] bg-white/75 p-4 text-center shadow-[0_14px_30px_rgba(12,20,20,0.08)] backdrop-blur-sm"
+          key={stat.label}
+        >
+          <p className="text-2xl font-black leading-none md:text-3xl">{stat.value}</p>
+          <p className="mt-1 font-extrabold">{stat.label}</p>
+          <p className="mt-1 text-sm font-medium text-[rgba(5,5,5,0.62)]">{stat.detail}</p>
+        </div>
+      ))}
+    </section>
+  );
+}

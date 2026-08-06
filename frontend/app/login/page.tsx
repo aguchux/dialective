@@ -5,12 +5,13 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { normalizeErrorMessage, useRequestMagicLinkMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Eyebrow, Notice } from '@/components/AuthShell';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
-  'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const secondaryButtonClass =
-  'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-3.5 py-2.5 font-bold text-ink hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-3.5 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -25,7 +26,7 @@ export default function LoginPage() {
     if (result?.error) {
       setMessage('Invalid email or password.');
     } else {
-      window.location.href = '/';
+      window.location.href = '/dashboard';
     }
   }
 
@@ -42,8 +43,9 @@ export default function LoginPage() {
   return (
     <AuthPage>
       <AuthPanel>
+        <Breadcrumbs items={[{ label: 'Login' }]} />
         <div>
-          <Eyebrow>Dialectiva</Eyebrow>
+          <Eyebrow>Dialect Library</Eyebrow>
           <h1 className="text-[1.75rem] leading-tight">Log in</h1>
         </div>
 
@@ -83,7 +85,7 @@ export default function LoginPage() {
         </div>
 
         <Notice>
-          New to Dialectiva? <Link href="/register">Create an account</Link>
+          New to Dialect Library? <Link href="/register">Create an account</Link>
         </Notice>
 
         {message && <Alert>{message}</Alert>}

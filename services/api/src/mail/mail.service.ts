@@ -30,12 +30,12 @@ export class MailService {
 
   async sendPasswordResetEmail(email: string, token: string): Promise<void> {
     const url = `${frontendUrl()}/reset-password?token=${token}`;
-    await this.send(email, 'Reset your Dialectiva password', passwordResetHtml(url), `Reset your password: ${url}`);
+    await this.send(email, 'Reset your Dialect Library password', passwordResetHtml(url), `Reset your password: ${url}`);
   }
 
   async sendEmailVerificationEmail(email: string, token: string): Promise<void> {
     const url = `${frontendUrl()}/verify-email?token=${token}`;
-    await this.send(email, 'Verify your Dialectiva email', verifyEmailHtml(url), `Verify your email: ${url}`);
+    await this.send(email, 'Verify your Dialect Library email', verifyEmailHtml(url), `Verify your email: ${url}`);
   }
 
   async sendMagicLinkEmail(email: string, token: string): Promise<void> {
@@ -45,7 +45,7 @@ export class MailService {
     // frontend page exchanges the token via its own server-side route and
     // then establishes the NextAuth session. See AGENTS.md "Authentication".
     const url = `${frontendUrl()}/magic-link?token=${token}`;
-    await this.send(email, 'Your Dialectiva sign-in link', magicLinkHtml(url), `Sign in: ${url}`);
+    await this.send(email, 'Your Dialect Library sign-in link', magicLinkHtml(url), `Sign in: ${url}`);
   }
 
   private async send(to: string, subject: string, html: string, text: string): Promise<void> {
@@ -63,13 +63,13 @@ export class MailService {
 }
 
 function passwordResetHtml(url: string): string {
-  return `<p>Click below to reset your Dialectiva password. This link expires in 1 hour.</p><p><a href="${url}">${url}</a></p>`;
+  return `<p>Click below to reset your Dialect Library password. This link expires in 1 hour.</p><p><a href="${url}">${url}</a></p>`;
 }
 
 function verifyEmailHtml(url: string): string {
-  return `<p>Click below to verify your Dialectiva email address. This link expires in 24 hours.</p><p><a href="${url}">${url}</a></p>`;
+  return `<p>Click below to verify your Dialect Library email address. This link expires in 24 hours.</p><p><a href="${url}">${url}</a></p>`;
 }
 
 function magicLinkHtml(url: string): string {
-  return `<p>Click below to sign in to Dialectiva. This link expires in 15 minutes.</p><p><a href="${url}">${url}</a></p>`;
+  return `<p>Click below to sign in to Dialect Library. This link expires in 15 minutes.</p><p><a href="${url}">${url}</a></p>`;
 }

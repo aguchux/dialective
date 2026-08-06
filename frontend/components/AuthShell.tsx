@@ -1,5 +1,12 @@
+import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
+
 export function AuthPage({ children }: { children: React.ReactNode }) {
-  return <main className="mx-auto grid min-h-screen max-w-95 place-content-center gap-4 px-4 py-5">{children}</main>;
+  return (
+    <main className="relative isolate grid min-h-screen place-content-center overflow-hidden bg-bg px-4 py-5">
+      <ParallaxTopBackground />
+      <div className="relative z-10 mx-auto grid w-full max-w-95 gap-4">{children}</div>
+    </main>
+  );
 }
 
 export function AuthPanel({ children }: { children: React.ReactNode }) {

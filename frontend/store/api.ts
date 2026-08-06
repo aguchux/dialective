@@ -1,4 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { getSession } from 'next-auth/react';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 
 export interface PublicUser {
@@ -6,12 +7,28 @@ export interface PublicUser {
   email: string;
   role: 'TRAINER' | 'ADMIN';
   emailVerified: boolean;
+  countryId: string | null;
+  dialectId: string | null;
+  dialectTag: string | null;
+  onboardingComplete: boolean;
 }
 
 export interface AuthResult {
   accessToken: string;
   refreshToken: string;
   user: PublicUser;
+}
+
+export interface Country {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface Dialect {
+  id: string;
+  tag: string;
+  name: string;
 }
 
 export interface ApiErrorShape {
@@ -39,8 +56,12 @@ export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
   baseQuery: fetchBaseQuery({
     baseUrl: PUBLIC_API_V1_BASE_URL,
-    prepareHeaders: (headers) => {
+    prepareHeaders: async (headers) => {
       headers.set('Content-Type', 'application/json');
+      const session = await getSession();
+      if (session?.accessToken) {
+        headers.set('Authorization', `Bearer ${session.accessToken}`);
+      }
       return headers;
     },
   }),
@@ -53,6 +74,19 @@ export const dialectivaApi = createApi({
         body,
       }),
       invalidatesTags: ['Auth'],
+    }),
+    getCountries: builder.query<Country[], void>({
+      query: () => '/geo/countries',
+    }),
+    getDialects: builder.query<Dialect[], string>({
+      query: (countryId) => `/geo/countries/${countryId}/dialects`,
+    }),
+    updateProfile: builder.mutation<PublicUser, { countryId: string; dialectId: string }>({
+      query: (body) => ({
+        url: '/auth/me',
+        method: 'PATCH',
+        body,
+      }),
     }),
     requestMagicLink: builder.mutation<void, { email: string }>({
       query: (body) => ({
@@ -91,6 +125,9 @@ export const {
   useRequestPasswordResetMutation,
   useResetPasswordMutation,
   useVerifyEmailMutation,
+  useGetCountriesQuery,
+  useGetDialectsQuery,
+  useUpdateProfileMutation,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

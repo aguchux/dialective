@@ -31,6 +31,10 @@ model User {
   passwordHash  String? // null for OAuth/magic-link-only accounts
   role          Role     @default(TRAINER)
   emailVerified DateTime?
+  countryId     String?
+  country       Country? @relation(fields: [countryId], references: [id])
+  dialectId     String?
+  dialect       Dialect? @relation(fields: [dialectId], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -41,6 +45,35 @@ model User {
   wallet         Wallet?
 
   @@map("users")
+}
+
+/// Onboarding country choice. A user's dialect (see Dialect) must belong to
+/// their chosen country -- enforced in AuthService.updateProfile, not at the
+/// schema level, since Prisma has no cross-FK check constraint.
+model Country {
+  id       String    @id @default(uuid())
+  code     String    @unique // ISO 3166-1 alpha-2, e.g. "NG", "US"
+  name     String
+  dialects Dialect[]
+  users    User[]
+
+  @@map("countries")
+}
+
+/// Onboarding dialect choice. `tag` matches the free-text dialectTag values
+/// already used by PromptsController and WordRecording (en-us, ig, yo, ha)
+/// -- this table is the source of truth for that list going forward, not a
+/// parallel/competing enum.
+model Dialect {
+  id        String  @id @default(uuid())
+  tag       String  @unique
+  name      String
+  countryId String
+  country   Country @relation(fields: [countryId], references: [id])
+  users     User[]
+
+  @@index([countryId])
+  @@map("dialects")
 }
 
 /// One row per external identity provider linked to a user (Google, email/magic-link).

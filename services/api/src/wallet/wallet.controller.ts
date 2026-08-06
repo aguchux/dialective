@@ -86,7 +86,7 @@ export class WalletController {
         usdAmount: body.usdAmount,
         payCurrency: body.currency,
         orderId: deposit.id,
-        orderDescription: `Dialectiva token top-up: ${body.usdAmount} USD -> ${tokenAmount.toFixed(2)} tokens`,
+        orderDescription: `Dialect Library token top-up: ${body.usdAmount} USD -> ${tokenAmount.toFixed(2)} tokens`,
         ipnCallbackUrl: `${apiBaseUrl}/api/v1/wallet/webhooks/nowpayments`,
       });
     } catch (err) {

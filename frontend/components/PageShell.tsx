@@ -1,5 +1,12 @@
+import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
+
 export function PageShell({ children }: { children: React.ReactNode }) {
-  return <main className="mx-auto max-w-[1120px] p-5 md:p-8">{children}</main>;
+  return (
+    <main className="relative isolate min-h-screen overflow-hidden bg-bg">
+      <ParallaxTopBackground />
+      <div className="relative z-10 mx-auto max-w-[1120px] p-5 md:p-8">{children}</div>
+    </main>
+  );
 }
 
 export function Section({ children }: { children: React.ReactNode }) {
