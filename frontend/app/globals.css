@@ -535,6 +535,39 @@ h2 {
   background: linear-gradient(160deg, #e18686 0%, #bd4348 100%);
 }
 
+.landing-footer {
+  align-items: start;
+  background: #fff;
+  border-top: 1px solid rgba(5, 5, 5, 0.1);
+  display: grid;
+  gap: 1rem;
+  margin: 0 -1rem;
+  padding: 1.25rem 1rem;
+}
+
+.landing-footer strong {
+  display: block;
+  font-size: 1.05rem;
+  margin-bottom: 0.25rem;
+}
+
+.landing-footer p {
+  color: rgba(5, 5, 5, 0.62);
+  line-height: 1.45;
+}
+
+.landing-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+
+.landing-footer a {
+  color: rgba(5, 5, 5, 0.72);
+  font-weight: 700;
+  text-decoration: none;
+}
+
 @media (min-width: 720px) {
   .page-shell {
     padding: 2rem;
@@ -570,6 +603,13 @@ h2 {
   .contributor-rail {
     margin: 0 -3.4rem;
     padding: 1.5rem 0 2.8rem;
+  }
+
+  .landing-footer {
+    align-items: center;
+    grid-template-columns: minmax(0, 1fr) auto;
+    margin: 0 -3.4rem;
+    padding: 1.4rem 3.4rem;
   }
 
   .rail-track {

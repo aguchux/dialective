@@ -97,6 +97,19 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
+
+      <footer className="landing-footer">
+        <div>
+          <strong>Dialectiva</strong>
+          <p>Voice and word collection for underrepresented dialects. Pilot phase.</p>
+        </div>
+        <nav aria-label="Footer">
+          <Link href="/about">About Us</Link>
+          <Link href="/blog">Blog</Link>
+          <Link href="/faq">FAQ</Link>
+          <Link href="/login">Login</Link>
+        </nav>
+      </footer>
     </main>
   );
 }
