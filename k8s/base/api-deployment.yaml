@@ -129,16 +129,21 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: min_withdrawal_tokens
-            - name: COINBASE_COMMERCE_API_KEY
+            - name: API_PUBLIC_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: api_public_base_url
+            - name: NOWPAYMENTS_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: coinbase-creds
-                  key: coinbase_commerce_api_key
-            - name: COINBASE_COMMERCE_WEBHOOK_SECRET
+                  name: nowpayments-creds
+                  key: nowpayments_api_key
+            - name: NOWPAYMENTS_IPN_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: coinbase-creds
-                  key: coinbase_commerce_webhook_secret
+                  name: nowpayments-creds
+                  key: nowpayments_ipn_secret
           readinessProbe:
             httpGet:
               path: /health

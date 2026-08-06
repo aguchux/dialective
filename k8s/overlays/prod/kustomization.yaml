@@ -28,9 +28,9 @@ secretGenerator:
   - name: hf-creds
     envs:
       - secrets/hf.env
-  - name: coinbase-creds
+  - name: nowpayments-creds
     envs:
-      - secrets/coinbase.env
+      - secrets/nowpayments.env
 
 configMapGenerator:
   - name: api-config

@@ -15,14 +15,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { Request } from 'express';
 import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role, WithdrawalStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CoinbaseCommerceService } from './coinbase-commerce.service';
+import { NowPaymentsService } from './nowpayments.service';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { ResolveWithdrawalDto } from './dto/resolve-withdrawal.dto';
@@ -30,11 +29,11 @@ import { getMinWithdrawalTokens, getTokenUsdRate, tokensToUsdt, usdToTokens } fr
 
 /**
  * Wallet / Utility Token Pool: users fund their token balance with
- * USDC/USDT via Coinbase Commerce, spend tokens on tasks (elsewhere in the
- * app), and request cash-out back to USDT. See AGENTS.md "Wallet / token
- * pool" and docs/Dialectiva_Business_Plan.md §5 -- this is the Utility Pool
- * only, funded by users; the separate Reward/Bonus Pool (enterprise-funded
- * accuracy bonuses) is out of scope here.
+ * USDC/USDT via NOWPayments hosted invoices, spend tokens on tasks
+ * (elsewhere in the app), and request cash-out back to USDT. See AGENTS.md
+ * "Wallet / token pool" and docs/Dialectiva_Business_Plan.md §5 -- this is
+ * the Utility Pool only, funded by users; the separate Reward/Bonus Pool
+ * (enterprise-funded accuracy bonuses) is out of scope here.
  *
  * Every balance mutation happens inside a Prisma $transaction alongside its
  * LedgerEntry -- the ledger is the source of truth, Wallet.balance is a
@@ -44,7 +43,7 @@ import { getMinWithdrawalTokens, getTokenUsdRate, tokensToUsdt, usdToTokens } fr
 export class WalletController {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly coinbase: CoinbaseCommerceService,
+    private readonly nowPayments: NowPaymentsService,
   ) {}
 
   private async getOrCreateWallet(userId: string) {
@@ -72,7 +71,7 @@ export class WalletController {
     const deposit = await this.prisma.deposit.create({
       data: {
         walletId: wallet.id,
-        providerChargeId: `pending-${randomUUID()}`, // replaced once Coinbase returns a real charge id
+        providerChargeId: `pending-${randomUUID()}`, // replaced once NOWPayments returns a real invoice id
         currency: body.currency,
         usdAmount: body.usdAmount,
         tokenAmount,
@@ -80,13 +79,15 @@ export class WalletController {
       },
     });
 
-    let charge;
+    const apiBaseUrl = process.env.API_PUBLIC_BASE_URL ?? 'https://api.nmseprep.com';
+    let invoice;
     try {
-      charge = await this.coinbase.createCharge({
-        name: 'Dialectiva token top-up',
-        description: `${body.usdAmount} USD via ${body.currency} -> ${tokenAmount.toFixed(2)} tokens`,
+      invoice = await this.nowPayments.createInvoice({
         usdAmount: body.usdAmount,
-        metadata: { depositId: deposit.id, userId: req.user.sub },
+        payCurrency: body.currency,
+        orderId: deposit.id,
+        orderDescription: `Dialectiva token top-up: ${body.usdAmount} USD -> ${tokenAmount.toFixed(2)} tokens`,
+        ipnCallbackUrl: `${apiBaseUrl}/api/v1/wallet/webhooks/nowpayments`,
       });
     } catch (err) {
       await this.prisma.deposit.update({ where: { id: deposit.id }, data: { status: 'failed' } });
@@ -95,38 +96,40 @@ export class WalletController {
 
     await this.prisma.deposit.update({
       where: { id: deposit.id },
-      data: { providerChargeId: charge.chargeId },
+      data: { providerChargeId: invoice.invoiceId },
     });
 
-    return { depositId: deposit.id, hostedCheckoutUrl: charge.hostedUrl };
+    return { depositId: deposit.id, hostedCheckoutUrl: invoice.invoiceUrl };
   }
 
   /**
-   * Coinbase can't send a JWT, so this route carries no JwtAuthGuard --
-   * trust is instead established by verifying the HMAC signature over the
-   * raw body (see CoinbaseCommerceService.verifyWebhookSignature and
-   * main.ts's raw-body wiring for this exact path).
+   * NOWPayments can't send a JWT, so this route carries no JwtAuthGuard --
+   * trust is instead established by verifying the HMAC-SHA512 signature
+   * over the alphabetically-key-sorted JSON body (see
+   * NowPaymentsService.verifyIpnSignature). Unlike Coinbase Commerce's
+   * raw-byte HMAC, this verifies against the already-parsed body, so no
+   * raw-body middleware is needed here -- Nest's default body parser is
+   * fine. `order_id` is the Deposit.id we set when creating the invoice,
+   * which is how this correlates back to a specific deposit (NOWPayments
+   * has no equivalent of Coinbase's arbitrary `metadata` field, so
+   * order_id is deliberately set to deposit.id, not a separate order
+   * number).
    */
-  @Post('wallet/webhooks/coinbase')
+  @Post('wallet/webhooks/nowpayments')
   @HttpCode(HttpStatus.OK)
-  async handleCoinbaseWebhook(
-    @Req() req: Request & { rawBody?: Buffer },
-    @Headers('x-cc-webhook-signature') signature?: string,
-  ) {
-    const rawBody = req.rawBody;
-    if (!rawBody || !this.coinbase.verifyWebhookSignature(rawBody, signature)) {
+  async handleNowPaymentsWebhook(@Body() body: Record<string, unknown>, @Headers('x-nowpayments-sig') signature?: string) {
+    if (!this.nowPayments.verifyIpnSignature(body, signature)) {
       throw new BadRequestException('Invalid webhook signature');
     }
 
-    const event = JSON.parse(rawBody.toString('utf8'));
-    const eventType = event?.event?.type;
-    const chargeId = event?.event?.data?.id;
+    const paymentStatus = body.payment_status as string | undefined;
+    const depositId = body.order_id as string | undefined;
 
-    if (eventType !== 'charge:confirmed' || !chargeId) {
+    if (paymentStatus !== 'finished' || !depositId) {
       return { received: true };
     }
 
-    const deposit = await this.prisma.deposit.findUnique({ where: { providerChargeId: chargeId } });
+    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
     if (!deposit || deposit.status === 'confirmed') {
       return { received: true };
     }

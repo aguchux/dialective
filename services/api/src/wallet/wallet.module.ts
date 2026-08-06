@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { CoinbaseCommerceService } from './coinbase-commerce.service';
+import { NowPaymentsService } from './nowpayments.service';
 import { WalletController } from './wallet.controller';
 
 @Module({
   controllers: [WalletController],
-  providers: [CoinbaseCommerceService],
+  providers: [NowPaymentsService],
 })
 export class WalletModule {}
