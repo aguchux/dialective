@@ -1,0 +1,74 @@
+name: Deploy Prisma migrations + seed to production
+
+# Manual-only: this touches the production database, so it must never run
+# on a plain push. Run from the Actions tab after docker-publish.yml has
+# built the image you want to migrate/seed against.
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "golojan/dialect-api tag to run migrate+seed with (defaults to latest)"
+        required: false
+        default: "latest"
+
+concurrency:
+  group: prisma-deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  migrate-and-seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
+
+      # One-off Job in the same namespace/network as the real api Deployment,
+      # reusing the same postgres-creds secret it already gets DATABASE_URL
+      # from (k8s/base/api-deployment.yaml) -- Postgres is a headless
+      # ClusterIP service (k8s/base/postgres.yaml), unreachable from the
+      # GitHub-hosted runner directly, so migrate+seed have to run from
+      # inside the cluster network instead.
+      #
+      # The production image is built with `npm install --omit=dev`
+      # (services/api/Dockerfile), so the prisma CLI/ts-node/typescript
+      # devDependencies this needs aren't in it -- `npm install` (not
+      # --omit=dev) re-adds them at container start before running.
+      # migrate deploy also already runs as part of the image's own CMD on
+      # every pod start, but running it again here is harmless/idempotent
+      # and keeps this step self-contained if that ever changes.
+      - name: Run migrate deploy + seed as a k8s Job
+        run: |
+          JOB_NAME="prisma-deploy-$(date +%s)"
+          kubectl run "$JOB_NAME" \
+            --namespace dai \
+            --image "golojan/dialect-api:${{ inputs.image_tag }}" \
+            --restart Never \
+            --overrides='
+            {
+              "spec": {
+                "containers": [{
+                  "name": "prisma-deploy",
+                  "image": "golojan/dialect-api:'"${{ inputs.image_tag }}"'",
+                  "command": ["sh", "-c", "npm install && npx prisma migrate deploy && npm run prisma:seed"],
+                  "workingDir": "/app",
+                  "env": [{
+                    "name": "DATABASE_URL",
+                    "valueFrom": { "secretKeyRef": { "name": "postgres-creds", "key": "connection_string" } }
+                  }]
+                }]
+              }
+            }'
+          echo "Waiting for $JOB_NAME to complete..."
+          kubectl wait --namespace dai --for=condition=Ready --timeout=120s "pod/$JOB_NAME" || true
+          kubectl logs --namespace dai "$JOB_NAME" --follow || true
+          STATUS=$(kubectl get pod "$JOB_NAME" --namespace dai -o jsonpath='{.status.phase}')
+          kubectl delete pod "$JOB_NAME" --namespace dai --ignore-not-found
+          if [ "$STATUS" != "Succeeded" ]; then
+            echo "Pod finished with phase=$STATUS, treating as failure"
+            exit 1
+          fi
