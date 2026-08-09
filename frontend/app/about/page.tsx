@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { DialectTracksCard } from '@/components/about/DialectTracksCard';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { LandingFooter } from '@/components/landing/LandingFooter';
 import { LandingHeader } from '@/components/landing/LandingHeader';
@@ -24,8 +25,6 @@ const principles = [
     body: 'The platform is under active development. Totals, reward flows, and scoring views will keep evolving as more submissions and settlement data come in.',
   },
 ];
-
-const pilotTracks = ['English', 'Igbo', 'Yoruba', 'Hausa'];
 
 const howItWorks = [
   {
@@ -87,20 +86,7 @@ export default function AboutPage() {
             </div>
           </div>
 
-          <aside className="grid content-start gap-3 rounded-lg border border-[rgba(5,5,5,0.1)] bg-surface p-4">
-            <h2 className="text-xl font-black">Current dialect tracks</h2>
-            <div className="grid grid-cols-2 gap-2">
-              {pilotTracks.map((track) => (
-                <span className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold" key={track}>
-                  {track}
-                </span>
-              ))}
-            </div>
-            <p className="leading-relaxed text-muted">
-              Coverage expands through registered model and prompt support, not by silently substituting a different
-              language model.
-            </p>
-          </aside>
+          <DialectTracksCard />
         </section>
 
         <section className="grid gap-4" aria-label="How Dialect Library works">
