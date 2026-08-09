@@ -2,9 +2,8 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { Request } from 'express';
 
 /**
- * /auth/oauth-callback and /auth/magic-link/callback are called
- * server-to-server by frontend's NextAuth callbacks (after NextAuth has
- * already verified the identity with Google / consumed the magic-link
+ * /auth/magic-link/callback is called server-to-server by frontend's
+ * NextAuth callback (after NextAuth has already consumed the magic-link
  * token) -- never directly by a browser. A shared secret keeps this from
  * being an open "create/verify any user" endpoint, since it deliberately
  * has no user-supplied password to check.

@@ -21,7 +21,7 @@ kubectl apply -k k8s/overlays/prod/
 - `postgres-creds` — keys: `username`, `password`, `connection_string`
 - `spaces-creds` — keys: `endpoint`, `access_key`, `secret_key` (DigitalOcean Spaces, used by `api`, `vosk-worker`, `prompt-audio-service`). `endpoint` is the region endpoint, e.g. `https://nyc3.digitaloceanspaces.com`; access/secret key come from a DO Spaces access key pair.
 - `pgadmin-creds` — keys: `email`, `password` (pgAdmin's own login, used by the pgAdmin Deployment)
-- `auth-creds` — keys: `jwt_access_secret` (signs `api`'s access tokens), `oauth_callback_secret` (shared secret authenticating `frontend`→`api` server-to-server auth calls — **also set on Vercel**, see below), `nextauth_secret` (encrypts NextAuth's session JWT, Vercel-side only, not actually used by anything in this cluster), `google_client_id`/`google_client_secret` (Google OAuth app credentials). Generate random values for the first three (e.g. `openssl rand -base64 32`); the Google credentials come from the Google Cloud Console OAuth app.
+- `auth-creds` — keys: `jwt_access_secret` (signs `api`'s access tokens), `oauth_callback_secret` (shared secret authenticating `frontend`→`api` server-to-server auth calls, e.g. the magic-link callback — **also set on Vercel**, see below), `nextauth_secret` (encrypts NextAuth's session JWT, Vercel-side only, not actually used by anything in this cluster). Generate random values (e.g. `openssl rand -base64 32`).
 
 Note: kustomize's `secretGenerator` appends a content-hash suffix to each Secret's name (e.g. `postgres-creds-6f46hmbbt6`) and automatically rewrites every `secretKeyRef.name` in the built manifests to match — this is intentional, not a bug: it's what forces a rolling pod restart when a secret's value changes on the next `kubectl apply -k`. Don't try to pin the literal `postgres-creds` name or disable the hash.
 
@@ -70,10 +70,6 @@ Add `http://localhost:3000` too if testing the frontend locally against the real
 
 `app.nmseprep.com` (the frontend) is **not** in this cluster — it's a Vercel deployment (`/frontend`). Point it at Vercel's DNS target per the Vercel project's domain settings, not at the ingress controller.
 
-## Google OAuth app setup
-
-Create an OAuth 2.0 Client ID in the Google Cloud Console (APIs & Services → Credentials) with an authorized redirect URI of `https://app.nmseprep.com/api/auth/callback/google` (or whatever domain the Vercel deployment actually uses). Put the resulting client id/secret into `secrets/auth.env`'s `google_client_id`/`google_client_secret` (for `api`'s copy) **and** into the Vercel project's env vars as `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (for `frontend`'s copy) — both sides need the same values.
-
 ## Frontend (Vercel) env vars
 
 Set these in the Vercel project settings, not in this repo's secrets (which only feed this repo's k8s Secrets):
@@ -83,7 +79,6 @@ Set these in the Vercel project settings, not in this repo's secrets (which only
 - `API_BASE_URL` — `https://api.nmseprep.com` (Vercel can't reach the cluster's internal `http://api` Service DNS)
 - `NEXT_PUBLIC_API_BASE_URL` — same as above, exposed client-side
 - `OAUTH_CALLBACK_SECRET` — must match `secrets/auth.env`'s `oauth_callback_secret` / `api`'s `auth-creds` value exactly
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — same values as `secrets/auth.env`'s `google_client_id`/`google_client_secret`
 
 ## Apply
 

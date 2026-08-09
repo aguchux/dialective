@@ -21,7 +21,6 @@ enum Role {
 
 enum AuthProvider {
   CREDENTIALS
-  GOOGLE
   EMAIL
 }
 
@@ -262,4 +261,21 @@ model WithdrawalRequest {
   @@index([walletId])
   @@index([status])
   @@map("withdrawal_requests")
+}
+
+/// One row per "Subscribe to voice data" form submission from the landing
+/// page's data-buyer CTA (/data-access) -- enterprises/researchers wanting
+/// to license the collected voice/dialect dataset, not trainers. No
+/// self-serve subscription flow yet; this just captures interest for
+/// manual follow-up (MailService notifies an admin address on submit).
+model DataAccessLead {
+  id           String   @id @default(uuid())
+  name         String
+  email        String
+  organization String?
+  useCase      String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("data_access_leads")
 }

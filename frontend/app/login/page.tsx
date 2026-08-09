@@ -79,9 +79,6 @@ export default function LoginPage() {
           >
             Email me a magic link
           </button>
-          <button className={secondaryButtonClass} onClick={() => signIn('google')}>
-            Continue with Google
-          </button>
         </div>
 
         <Notice>

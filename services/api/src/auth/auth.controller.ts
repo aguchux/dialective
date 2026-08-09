@@ -1,5 +1,4 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, UseGuards } from '@nestjs/common';
-import { AuthProvider } from '../generated/prisma/client';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -9,7 +8,6 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { RequestMagicLinkDto } from './dto/request-magic-link.dto';
 import { ConsumeMagicLinkDto } from './dto/consume-magic-link.dto';
-import { OAuthCallbackDto } from './dto/oauth-callback.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { OAuthCallbackGuard } from './guards/oauth-callback.guard';
 import { JwtAuthGuard } from './strategies/jwt-auth.guard';
@@ -72,17 +70,6 @@ export class AuthController {
   @UseGuards(OAuthCallbackGuard)
   consumeMagicLink(@Body() dto: ConsumeMagicLinkDto) {
     return this.auth.consumeMagicLink(dto.token);
-  }
-
-  /**
-   * Called by frontend's NextAuth signIn callback, never by a browser
-   * directly -- see OAuthCallbackGuard and AGENTS.md "Authentication".
-   */
-  @Post('oauth-callback')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(OAuthCallbackGuard)
-  oauthCallback(@Body() dto: OAuthCallbackDto) {
-    return this.auth.handleOAuthCallback(dto.email, dto.provider as AuthProvider, dto.providerAccountId);
   }
 
   @Get('me')

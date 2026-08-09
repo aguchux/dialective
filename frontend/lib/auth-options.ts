@@ -1,6 +1,5 @@
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import GoogleProvider from 'next-auth/providers/google';
 import { apiClient, AuthResult } from './api-client';
 
 export const authOptions: NextAuthOptions = {
@@ -33,22 +32,9 @@ export const authOptions: NextAuthOptions = {
         return authResultToNextAuthUser(result);
       },
     }),
-
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-    }),
   ],
 
   callbacks: {
-    async signIn({ user, account }) {
-      if (account?.provider === 'google' && user.email) {
-        const result = await apiClient.oauthCallback(user.email, 'GOOGLE', account.providerAccountId);
-        (user as unknown as { __apiAuthResult: AuthResult }).__apiAuthResult = result;
-      }
-      return true;
-    },
-
     async jwt({ token, user, trigger, session }) {
       const apiResult = (user as unknown as { __apiAuthResult?: AuthResult } | undefined)?.__apiAuthResult;
       if (apiResult) {

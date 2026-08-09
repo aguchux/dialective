@@ -316,8 +316,8 @@ Redis Streams doesn't provide dead-lettering out of the box, so every consumer g
 ### Frontend deployment (Vercel)
 - `frontend/` is deployed to **Vercel**, independently of this repo's `kubectl apply -k k8s/overlays/prod/` flow. It has no Dockerfile and no `k8s/base/web-*.yaml` — don't add either back without discussing the deployment target change first.
 - `next.config.js` has no `output: 'standalone'` (that was for the now-removed Docker build) — Vercel's own build pipeline handles output.
-- Required env vars on Vercel (project settings, not `.env`/`secretGenerator` — those only feed this repo's k8s Secrets): `NEXTAUTH_URL` (the Vercel deployment's public URL), `NEXTAUTH_SECRET`, `API_BASE_URL` (public `https://api.nmseprep.com`, since Vercel can't reach the cluster's internal `http://api` Service DNS — unlike when `web` ran in-cluster), `NEXT_PUBLIC_API_BASE_URL`, `OAUTH_CALLBACK_SECRET` (must match `api`'s `auth-creds` value exactly), `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`.
-- Whatever domain Vercel serves `frontend` on must be added to `api`'s `CORS_ALLOWED_ORIGINS` and to the Google OAuth app's authorized redirect URI (`https://<domain>/api/auth/callback/google`) — both currently assume `app.nmseprep.com`; update them together if the Vercel domain differs.
+- Required env vars on Vercel (project settings, not `.env`/`secretGenerator` — those only feed this repo's k8s Secrets): `NEXTAUTH_URL` (the Vercel deployment's public URL), `NEXTAUTH_SECRET`, `API_BASE_URL` (public `https://api.nmseprep.com`, since Vercel can't reach the cluster's internal `http://api` Service DNS — unlike when `web` ran in-cluster), `NEXT_PUBLIC_API_BASE_URL`, `OAUTH_CALLBACK_SECRET` (must match `api`'s `auth-creds` value exactly — still needed for the magic-link callback even though Google sign-in is gone).
+- Whatever domain Vercel serves `frontend` on must be added to `api`'s `CORS_ALLOWED_ORIGINS` — currently assumes `app.nmseprep.com`; update if the Vercel domain differs.
 
 ---
 
@@ -368,7 +368,7 @@ curl localhost:3000/api/v1/submissions/<submissionId>/result
 curl localhost:3000/health
 
 # Install + run the Next.js frontend locally (requires NEXTAUTH_SECRET,
-# API_BASE_URL, OAUTH_CALLBACK_SECRET, GOOGLE_CLIENT_ID/SECRET set)
+# API_BASE_URL, OAUTH_CALLBACK_SECRET set)
 cd frontend && npm install && npm run dev
 
 # Deploy the frontend (Vercel, not docker/kubectl — see "Frontend deployment (Vercel)")

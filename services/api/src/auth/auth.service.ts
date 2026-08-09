@@ -94,33 +94,7 @@ export class AuthService {
     return this.issueAuthResult(user);
   }
 
-  // --- OAuth / magic-link, persisted after NextAuth verifies the identity ---
-
-  /**
-   * Called by frontend's NextAuth signIn callback once NextAuth has
-   * already completed the Google OAuth handshake. api never talks to
-   * Google directly (AGENTS.md "Authentication").
-   */
-  async handleOAuthCallback(email: string, provider: AuthProvider, providerAccountId: string): Promise<AuthResult> {
-    let account = await this.prisma.linkedAccount.findUnique({
-      where: { provider_providerAccountId: { provider, providerAccountId } },
-      include: { user: true },
-    });
-
-    if (!account) {
-      const user = await this.prisma.user.upsert({
-        where: { email },
-        update: {},
-        create: { email, emailVerified: new Date() }, // OAuth-verified email is trusted
-      });
-      account = await this.prisma.linkedAccount.create({
-        data: { userId: user.id, provider, providerAccountId },
-        include: { user: true },
-      });
-    }
-
-    return this.issueAuthResult(account.user);
-  }
+  // --- Magic-link, persisted after NextAuth verifies the identity ---
 
   async requestMagicLink(email: string): Promise<void> {
     const { token, hash } = generateOpaqueToken();

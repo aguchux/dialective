@@ -31,6 +31,13 @@ export interface Dialect {
   name: string;
 }
 
+export interface DataAccessLeadInput {
+  name: string;
+  email: string;
+  organization?: string;
+  useCase?: string;
+}
+
 export interface ApiErrorShape {
   statusCode?: number;
   message?: string | string[];
@@ -116,6 +123,13 @@ export const dialectivaApi = createApi({
         body,
       }),
     }),
+    createDataAccessLead: builder.mutation<{ id: string; status: string }, DataAccessLeadInput>({
+      query: (body) => ({
+        url: '/leads/data-access',
+        method: 'POST',
+        body,
+      }),
+    }),
   }),
 });
 
@@ -128,6 +142,7 @@ export const {
   useGetCountriesQuery,
   useGetDialectsQuery,
   useUpdateProfileMutation,
+  useCreateDataAccessLeadMutation,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

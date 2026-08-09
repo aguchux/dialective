@@ -2,6 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Resend } from 'resend';
 
 const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'noreply@nmseprep.com';
+const LEADS_NOTIFICATION_ADDRESS = process.env.LEADS_NOTIFICATION_ADDRESS ?? 'hello@nmseprep.com';
+
+interface DataAccessLeadNotification {
+  id: string;
+  name: string;
+  email: string;
+  organization: string | null;
+  useCase: string | null;
+}
 
 function frontendUrl(): string {
   return process.env.FRONTEND_URL ?? 'https://app.nmseprep.com';
@@ -48,6 +57,15 @@ export class MailService {
     await this.send(email, 'Your Dialect Library sign-in link', magicLinkHtml(url), `Sign in: ${url}`);
   }
 
+  async sendDataAccessLeadNotification(lead: DataAccessLeadNotification): Promise<void> {
+    await this.send(
+      LEADS_NOTIFICATION_ADDRESS,
+      `New voice data lead: ${lead.name}`,
+      dataAccessLeadHtml(lead),
+      dataAccessLeadText(lead),
+    );
+  }
+
   private async send(to: string, subject: string, html: string, text: string): Promise<void> {
     if (!this.resend) {
       this.logger.log(`[STUB] ${subject} for ${to}: ${text}`);
@@ -72,4 +90,31 @@ function verifyEmailHtml(url: string): string {
 
 function magicLinkHtml(url: string): string {
   return `<p>Click below to sign in to Dialect Library. This link expires in 15 minutes.</p><p><a href="${url}">${url}</a></p>`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function dataAccessLeadHtml(lead: DataAccessLeadNotification): string {
+  return `<p>New "Subscribe to voice data" lead:</p>
+<ul>
+  <li>Name: ${escapeHtml(lead.name)}</li>
+  <li>Email: ${escapeHtml(lead.email)}</li>
+  <li>Organization: ${lead.organization ? escapeHtml(lead.organization) : '(not provided)'}</li>
+  <li>Use case: ${lead.useCase ? escapeHtml(lead.useCase) : '(not provided)'}</li>
+</ul>`;
+}
+
+function dataAccessLeadText(lead: DataAccessLeadNotification): string {
+  return `New "Subscribe to voice data" lead:
+Name: ${lead.name}
+Email: ${lead.email}
+Organization: ${lead.organization ?? '(not provided)'}
+Use case: ${lead.useCase ?? '(not provided)'}`;
 }

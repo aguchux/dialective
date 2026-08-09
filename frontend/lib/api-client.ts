@@ -68,13 +68,6 @@ export const apiClient = {
       body: JSON.stringify({ token }),
     }),
 
-  oauthCallback: (email: string, provider: 'GOOGLE', providerAccountId: string) =>
-    apiFetch<AuthResult>('/auth/oauth-callback', {
-      method: 'POST',
-      headers: { 'x-oauth-callback-secret': requireOAuthCallbackSecret() },
-      body: JSON.stringify({ email, provider, providerAccountId }),
-    }),
-
   requestPasswordReset: (email: string) =>
     apiFetch<void>('/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ email }) }),
 
