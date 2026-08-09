@@ -33,6 +33,33 @@ export interface Dialect {
   name: string;
 }
 
+export interface AdminCountry {
+  id: string;
+  code: string;
+  name: string;
+  _count: { dialects: number; users: number };
+}
+
+export interface AdminDialect {
+  id: string;
+  tag: string;
+  name: string;
+  countryId: string;
+  country: { id: string; name: string; code: string };
+  _count: { users: number };
+}
+
+export interface CountryInput {
+  code: string;
+  name: string;
+}
+
+export interface DialectInput {
+  tag: string;
+  name: string;
+  countryId: string;
+}
+
 export interface DataAccessLeadInput {
   name: string;
   email: string;
@@ -64,6 +91,11 @@ export interface ReferralSummary {
   referredUsers: { id: string; email: string; createdAt: string }[];
   totalCommission: string;
   commissionCount: number;
+}
+
+export interface Wallet {
+  balance: string;
+  tokenUsdRate: number;
 }
 
 export interface AdminStats {
@@ -110,7 +142,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'ReferralPrograms', 'Users'],
+  tagTypes: ['Auth', 'ReferralPrograms', 'Users', 'AdminCountries', 'AdminDialects'],
   endpoints: (builder) => ({
     register: builder.mutation<AuthResult, { email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -125,6 +157,9 @@ export const dialectivaApi = createApi({
     }),
     getDialects: builder.query<Dialect[], string>({
       query: (countryId) => `/geo/countries/${countryId}/dialects`,
+    }),
+    getWallet: builder.query<Wallet, void>({
+      query: () => '/wallet',
     }),
     updateProfile: builder.mutation<PublicUser, { countryId: string; dialectId: string }>({
       query: (body) => ({
@@ -217,6 +252,38 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['Users'],
     }),
+    getAdminCountries: builder.query<AdminCountry[], void>({
+      query: () => '/geo/admin/countries',
+      providesTags: ['AdminCountries'],
+    }),
+    createCountry: builder.mutation<AdminCountry, CountryInput>({
+      query: (body) => ({ url: '/geo/admin/countries', method: 'POST', body }),
+      invalidatesTags: ['AdminCountries'],
+    }),
+    updateCountry: builder.mutation<AdminCountry, { id: string; body: Partial<CountryInput> }>({
+      query: ({ id, body }) => ({ url: `/geo/admin/countries/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['AdminCountries', 'AdminDialects'],
+    }),
+    deleteCountry: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/geo/admin/countries/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['AdminCountries'],
+    }),
+    getAdminDialects: builder.query<AdminDialect[], void>({
+      query: () => '/geo/admin/dialects',
+      providesTags: ['AdminDialects'],
+    }),
+    createDialect: builder.mutation<AdminDialect, DialectInput>({
+      query: (body) => ({ url: '/geo/admin/dialects', method: 'POST', body }),
+      invalidatesTags: ['AdminDialects', 'AdminCountries'],
+    }),
+    updateDialect: builder.mutation<AdminDialect, { id: string; body: Partial<DialectInput> }>({
+      query: ({ id, body }) => ({ url: `/geo/admin/dialects/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['AdminDialects', 'AdminCountries'],
+    }),
+    deleteDialect: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/geo/admin/dialects/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['AdminDialects', 'AdminCountries'],
+    }),
   }),
 });
 
@@ -228,6 +295,7 @@ export const {
   useVerifyEmailMutation,
   useGetCountriesQuery,
   useGetDialectsQuery,
+  useGetWalletQuery,
   useUpdateProfileMutation,
   useCreateDataAccessLeadMutation,
   useGetReferralProgramsQuery,
@@ -238,6 +306,14 @@ export const {
   useGetUsersQuery,
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,
+  useGetAdminCountriesQuery,
+  useCreateCountryMutation,
+  useUpdateCountryMutation,
+  useDeleteCountryMutation,
+  useGetAdminDialectsQuery,
+  useCreateDialectMutation,
+  useUpdateDialectMutation,
+  useDeleteDialectMutation,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

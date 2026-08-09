@@ -45,12 +45,14 @@ export const authOptions: NextAuthOptions = {
         token.onboardingComplete = apiResult.user.onboardingComplete;
         token.dialectTag = apiResult.user.dialectTag;
         token.referralCode = apiResult.user.referralCode;
+        token.countryId = apiResult.user.countryId;
       }
       // Triggered by useSession().update() after onboarding is completed
       // mid-session, since the JWT otherwise only refreshes this on sign-in.
       if (trigger === 'update' && session) {
         token.onboardingComplete = session.onboardingComplete;
         token.dialectTag = session.dialectTag;
+        token.countryId = session.countryId;
       }
       return token;
     },
@@ -62,6 +64,7 @@ export const authOptions: NextAuthOptions = {
       session.user.onboardingComplete = token.onboardingComplete ?? false;
       session.user.dialectTag = token.dialectTag ?? null;
       session.user.referralCode = token.referralCode ?? null;
+      session.user.countryId = token.countryId ?? null;
       return session;
     },
   },

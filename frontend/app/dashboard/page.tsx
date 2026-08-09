@@ -7,6 +7,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
+import { useGetDialectsQuery, useGetWalletQuery } from '@/store/api';
 
 function ReferralLinkCard({ referralCode }: { referralCode: string }) {
   const [copied, setCopied] = useState(false);
@@ -53,18 +54,20 @@ const taskCards = [
   },
 ];
 
-const stats = [
-  { label: 'Submitted', value: '0' },
-  { label: 'Pending review', value: '0' },
-  { label: 'Accepted', value: '0' },
-  { label: 'Rewards earned', value: '0' },
-];
-
-const languages = ['English', 'Igbo', 'Yoruba', 'Hausa'];
-
 export default function TrainerDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { data: wallet } = useGetWalletQuery(undefined, { skip: status !== 'authenticated' });
+  const { data: countryDialects } = useGetDialectsQuery(session?.user?.countryId ?? '', {
+    skip: !session?.user?.countryId,
+  });
+
+  const stats = [
+    { label: 'Wallet balance', value: wallet ? `${Number(wallet.balance).toLocaleString(undefined, { maximumFractionDigits: 2 })} tokens` : '...' },
+    { label: 'Submitted', value: 'Not tracked yet' },
+    { label: 'Pending review', value: 'Not tracked yet' },
+    { label: 'Accepted', value: 'Not tracked yet' },
+  ];
 
   useEffect(() => {
     if (status !== 'authenticated') {
@@ -164,7 +167,7 @@ export default function TrainerDashboardPage() {
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Training progress">
           {stats.map((stat) => (
             <div className="rounded-lg border border-line bg-surface p-4" key={stat.label}>
-              <p className="text-2xl font-black">{stat.value}</p>
+              <p className={stat.value.length > 10 ? 'text-lg font-black text-muted' : 'text-2xl font-black'}>{stat.value}</p>
               <p className="text-sm font-bold text-muted">{stat.label}</p>
             </div>
           ))}
@@ -199,20 +202,30 @@ export default function TrainerDashboardPage() {
             {session.user?.referralCode && <ReferralLinkCard referralCode={session.user.referralCode} />}
 
             <section className="grid gap-3 rounded-lg border border-line bg-surface p-4">
-              <h2 className="text-lg font-black">Available dialect tracks</h2>
-              <div className="grid grid-cols-2 gap-2">
-                {languages.map((language) => (
-                  <span className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold" key={language}>
-                    {language}
-                  </span>
-                ))}
-              </div>
+              <h2 className="text-lg font-black">Dialect tracks in your country</h2>
+              {!countryDialects && session.user?.countryId && <p className="text-muted">Loading...</p>}
+              {!session.user?.countryId && (
+                <p className="text-muted">Finish onboarding to see dialect tracks for your country.</p>
+              )}
+              {countryDialects && countryDialects.length === 0 && (
+                <p className="text-muted">No dialects listed for your country yet.</p>
+              )}
+              {countryDialects && countryDialects.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {countryDialects.map((dialect) => (
+                    <span className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold" key={dialect.id}>
+                      {dialect.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </section>
 
             <section className="grid gap-2 rounded-lg border border-[#efd6ad] bg-[#fff7e8] p-4 text-[#8a4b0f]">
               <h2 className="text-lg font-black">In progress</h2>
               <p className="leading-relaxed">
-                Dashboard totals are placeholders until the submissions, scoring, and reward endpoints are connected.
+                Wallet balance is live. Submission, review, and acceptance tracking are still being built, so those
+                totals aren&apos;t shown yet.
               </p>
             </section>
           </aside>

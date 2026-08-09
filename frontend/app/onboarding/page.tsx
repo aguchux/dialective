@@ -43,7 +43,7 @@ export default function OnboardingPage() {
     }
     try {
       const profile = await updateProfile({ countryId, dialectId }).unwrap();
-      await update({ onboardingComplete: profile.onboardingComplete, dialectTag: profile.dialectTag });
+      await update({ onboardingComplete: profile.onboardingComplete, dialectTag: profile.dialectTag, countryId: profile.countryId });
       window.location.href = '/dashboard';
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to save your selection.'));
