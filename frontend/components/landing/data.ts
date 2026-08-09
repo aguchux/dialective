@@ -25,7 +25,7 @@ export const contributorCards = [
   },
   {
     name: '4 languages',
-    role: 'Pilot coverage',
+    role: 'Live coverage',
     gradient: 'from-[#68a6dc] to-[#9dc2df]',
     initials: '',
     isStat: true,
@@ -70,12 +70,12 @@ export const landingStats = [
   {
     label: 'Dialects',
     value: '4',
-    detail: 'Pilot tracks',
+    detail: 'Active tracks',
   },
   {
     label: 'Pool Volume',
     value: '$0',
-    detail: 'Reward pool pending',
+    detail: 'Reward pool balance',
   },
   {
     label: 'Payout',

@@ -10,7 +10,7 @@ export function LandingStats({ dialectCount }: LandingStatsProps) {
   );
 
   return (
-    <section className="mx-auto grid max-w-[820px] gap-3 py-4 md:grid-cols-3" aria-label="Dialect Library pilot metrics">
+    <section className="mx-auto grid max-w-[820px] gap-3 py-4 md:grid-cols-3" aria-label="Dialect Library platform metrics">
       {stats.map((stat) => (
         <div
           className="rounded-lg border border-[rgba(5,5,5,0.1)] bg-white/75 p-4 text-center shadow-[0_14px_30px_rgba(12,20,20,0.08)] backdrop-blur-sm"

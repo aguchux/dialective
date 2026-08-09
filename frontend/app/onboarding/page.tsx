@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { AuthPage, AuthPanel, Eyebrow, Notice, Alert } from '@/components/AuthShell';
+import { AuthPage, AuthPanel, Notice, Alert } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { normalizeErrorMessage, useGetCountriesQuery, useGetDialectsQuery, useUpdateProfileMutation } from '@/store/api';
 
@@ -63,10 +63,7 @@ export default function OnboardingPage() {
     <AuthPage>
       <AuthPanel>
         <Breadcrumbs items={[{ label: 'Onboarding' }]} />
-        <div>
-          <Eyebrow>Dialect Library</Eyebrow>
-          <h1 className="text-[1.75rem] leading-tight">Set up your training profile</h1>
-        </div>
+        <h1 className="text-center text-[1.75rem] leading-tight">Set up your training profile</h1>
         <Notice>
           {session?.user?.email ? `Welcome, ${session.user.email}. ` : ''}
           Choose your country and the dialect you'd like to train first. You can change this later.

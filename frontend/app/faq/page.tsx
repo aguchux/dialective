@@ -6,7 +6,7 @@ import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 
 export const metadata = {
   title: 'FAQ',
-  description: 'Answers about contributing dialect recordings, word translations, review, privacy, and pilot rewards.',
+  description: 'Answers about contributing dialect recordings, word translations, review, privacy, and rewards.',
 };
 
 export default function FaqPage() {
@@ -22,7 +22,7 @@ export default function FaqPage() {
           <p className="text-sm font-extrabold uppercase text-accent">Support</p>
           <h1 className="text-4xl font-black leading-tight">Frequently Asked Questions</h1>
           <p className="max-w-2xl leading-relaxed text-muted">
-            Clear answers about trainer accounts, dialect tasks, review, and pilot payouts.
+            Clear answers about trainer accounts, dialect tasks, review, and payouts.
           </p>
         </section>
 

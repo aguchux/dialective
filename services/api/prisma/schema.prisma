@@ -34,6 +34,10 @@ model User {
   country       Country? @relation(fields: [countryId], references: [id])
   dialectId     String?
   dialect       Dialect? @relation(fields: [dialectId], references: [id])
+  referralCode  String   @unique // every user is a potential referrer; generated at registration
+  referredById  String?
+  referredBy    User?    @relation("Referrals", fields: [referredById], references: [id])
+  referrals     User[]   @relation("Referrals")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -173,6 +177,7 @@ enum LedgerEntryType {
   DEPOSIT
   WITHDRAWAL
   WITHDRAWAL_REVERSED
+  REFERRAL_COMMISSION
 }
 
 enum WithdrawalStatus {
@@ -261,6 +266,24 @@ model WithdrawalRequest {
   @@index([walletId])
   @@index([status])
   @@map("withdrawal_requests")
+}
+
+/// A time-boxed referral campaign. Commissions only accrue while a program
+/// is "active" -- isActive=true AND startsAt <= now() AND (endsAt IS NULL OR
+/// endsAt > now()), checked app-side in WalletController.getActiveReferralProgram
+/// (no DB constraint enforcing at-most-one-active-row; if an admin creates
+/// overlapping active campaigns, the most recently created one wins -- see
+/// that method).
+model ReferralProgram {
+  id             String    @id @default(uuid())
+  name           String
+  commissionRate Decimal   @default(0.10) @db.Decimal(5, 4) // e.g. 0.10 = 10%
+  startsAt       DateTime  @default(now())
+  endsAt         DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  @@map("referral_programs")
 }
 
 /// One row per "Subscribe to voice data" form submission from the landing

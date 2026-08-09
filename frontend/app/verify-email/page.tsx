@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useVerifyEmailMutation } from '@/store/api';
-import { Alert, AuthPage, AuthPanel, Eyebrow, Notice } from '@/components/AuthShell';
+import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 function VerifyEmailContent() {
@@ -28,8 +28,7 @@ function VerifyEmailContent() {
     <AuthPage>
       <AuthPanel>
         <Breadcrumbs items={[{ label: 'Verify email' }]} />
-        <Eyebrow>Dialect Library</Eyebrow>
-        <h1 className="text-[1.75rem] leading-tight">Verify email</h1>
+        <h1 className="text-center text-[1.75rem] leading-tight">Verify email</h1>
         {status === 'pending' && <Notice>Verifying...</Notice>}
         {status === 'success' && <Notice>Your email has been verified. You can close this page.</Notice>}
         {status === 'error' && <Alert>This verification link is invalid or has expired.</Alert>}

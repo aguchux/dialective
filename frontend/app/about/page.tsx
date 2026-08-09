@@ -20,8 +20,8 @@ const principles = [
     body: 'Submissions are designed to be cross-checked by other trainers in the same dialect cluster before they count toward reward calculations.',
   },
   {
-    title: 'Pilot transparency',
-    body: 'The platform is still in MVP pilot. Some totals, reward flows, and scoring views will evolve as the Postgres-backed submissions and settlement systems come online.',
+    title: 'Ongoing transparency',
+    body: 'The platform is under active development. Totals, reward flows, and scoring views will keep evolving as more submissions and settlement data come in.',
   },
 ];
 
@@ -59,7 +59,7 @@ export default function AboutPage() {
           </div>
 
           <aside className="grid content-start gap-3 rounded-lg border border-[rgba(5,5,5,0.1)] bg-surface p-4">
-            <h2 className="text-xl font-black">Current pilot tracks</h2>
+            <h2 className="text-xl font-black">Current dialect tracks</h2>
             <div className="grid grid-cols-2 gap-2">
               {pilotTracks.map((track) => (
                 <span className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold" key={track}>

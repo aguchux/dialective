@@ -44,6 +44,7 @@ export const authOptions: NextAuthOptions = {
         token.userId = apiResult.user.id;
         token.onboardingComplete = apiResult.user.onboardingComplete;
         token.dialectTag = apiResult.user.dialectTag;
+        token.referralCode = apiResult.user.referralCode;
       }
       // Triggered by useSession().update() after onboarding is completed
       // mid-session, since the JWT otherwise only refreshes this on sign-in.
@@ -60,6 +61,7 @@ export const authOptions: NextAuthOptions = {
       session.user.role = token.role as 'TRAINER' | 'ADMIN';
       session.user.onboardingComplete = token.onboardingComplete ?? false;
       session.user.dialectTag = token.dialectTag ?? null;
+      session.user.referralCode = token.referralCode ?? null;
       return session;
     },
   },

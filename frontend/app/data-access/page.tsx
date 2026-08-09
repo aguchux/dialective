@@ -69,7 +69,7 @@ export default function DataAccessPage() {
               License voice and dialect data collected by real speakers.
             </h1>
             <p className="max-w-2xl text-lg leading-relaxed text-[rgba(5,5,5,0.68)]">
-              Dialect Library&apos;s dataset is still growing during pilot. Tell us what you&apos;re building and
+              Dialect Library&apos;s dataset is growing every day. Tell us what you&apos;re building and
               we&apos;ll follow up about access, coverage, and licensing terms.
             </p>
           </div>
@@ -139,7 +139,7 @@ export default function DataAccessPage() {
         </section>
 
         <section className="grid gap-3 rounded-lg border border-[#efd6ad] bg-[#fff7e8] p-5 text-[#8a4b0f]">
-          <h2 className="text-2xl font-black">Pilot phase</h2>
+          <h2 className="text-2xl font-black">Manual review</h2>
           <p className="max-w-4xl leading-relaxed">
             There is no self-serve subscription yet — every request is reviewed manually while the dataset and
             licensing terms are still being defined.

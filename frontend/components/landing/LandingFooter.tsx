@@ -14,7 +14,7 @@ export function LandingFooter() {
         <div>
           <BrandLogo className="mb-2 text-lg text-[#050505]" size={34} />
           <p className="leading-snug text-[rgba(5,5,5,0.62)]">
-            Voice and word collection for underrepresented dialects. Pilot phase.
+            Voice and word collection for underrepresented dialects.
           </p>
         </div>
         <nav className="flex flex-wrap gap-x-4 gap-y-3" aria-label="Footer">

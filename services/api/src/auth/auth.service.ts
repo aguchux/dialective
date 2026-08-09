@@ -7,7 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { AuthProvider, Role, User } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
@@ -38,6 +38,7 @@ export interface PublicUser {
   dialectId: string | null;
   dialectTag: string | null;
   onboardingComplete: boolean;
+  referralCode: string;
 }
 
 type UserWithDialect = User & { dialect?: { tag: string } | null };
@@ -52,7 +53,20 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     dialectId: user.dialectId,
     dialectTag: user.dialect?.tag ?? null,
     onboardingComplete: user.countryId !== null && user.dialectId !== null,
+    referralCode: user.referralCode,
   };
+}
+
+// Short, URL-safe, not guessable-in-sequence -- good enough for a referral
+// link slug (not a security token, just needs to avoid collisions and look
+// clean in a URL). Collision odds at this length are negligible for this
+// user base; the DB unique constraint is the actual backstop.
+function generateReferralCode(): string {
+  return randomBytes(6).toString('base64url');
+}
+
+function emailDomain(email: string): string {
+  return email.split('@')[1]?.toLowerCase() ?? email.toLowerCase();
 }
 
 @Injectable()
@@ -66,18 +80,45 @@ export class AuthService {
 
   // --- Registration / credentials login ---------------------------------
 
-  async register(email: string, password: string): Promise<AuthResult> {
+  async register(email: string, password: string, referralCode?: string): Promise<AuthResult> {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException('An account with this email already exists');
     }
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    const user = await this.prisma.user.create({ data: { email, passwordHash } });
+    const referredById = await this.resolveReferrerId(referralCode, email);
+
+    const user = await this.prisma.user.create({
+      data: { email, passwordHash, referralCode: generateReferralCode(), referredById },
+    });
 
     await this.issueEmailVerification(user);
 
     return this.issueAuthResult(user);
+  }
+
+  /**
+   * A typo'd/stale referral code shouldn't block signup -- registration
+   * proceeds either way, just without attribution if the code doesn't
+   * resolve. Same-email-domain check is a minimal anti-abuse guard against
+   * the most obvious self-referral case (registering throwaway accounts on
+   * your own link to farm commissions); it doesn't stop a determined abuser
+   * with multiple real domains, but that's an explicit, accepted tradeoff
+   * for v1 -- see plan "Anti-abuse scope".
+   */
+  private async resolveReferrerId(referralCode: string | undefined, newUserEmail: string): Promise<string | undefined> {
+    if (!referralCode) {
+      return undefined;
+    }
+    const referrer = await this.prisma.user.findUnique({ where: { referralCode } });
+    if (!referrer) {
+      return undefined;
+    }
+    if (emailDomain(referrer.email) === emailDomain(newUserEmail)) {
+      return undefined;
+    }
+    return referrer.id;
   }
 
   async login(email: string, password: string): Promise<AuthResult> {
@@ -104,7 +145,7 @@ export class AuthService {
     const user = await this.prisma.user.upsert({
       where: { email },
       update: {},
-      create: { email },
+      create: { email, referralCode: generateReferralCode() },
     });
 
     await this.prisma.emailVerificationToken.create({

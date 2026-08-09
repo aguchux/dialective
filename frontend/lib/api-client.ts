@@ -9,6 +9,7 @@ export interface PublicUser {
   dialectId: string | null;
   dialectTag: string | null;
   onboardingComplete: boolean;
+  referralCode: string;
 }
 
 export interface AuthResult {

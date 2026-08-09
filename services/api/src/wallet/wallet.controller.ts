@@ -8,6 +8,7 @@ import {
   HttpStatus,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -25,6 +26,8 @@ import { NowPaymentsService } from './nowpayments.service';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { ResolveWithdrawalDto } from './dto/resolve-withdrawal.dto';
+import { CreateReferralProgramDto } from './dto/create-referral-program.dto';
+import { UpdateReferralProgramDto } from './dto/update-referral-program.dto';
 import { getMinWithdrawalTokens, getTokenUsdRate, tokensToUsdt, usdToTokens } from './token-rate.util';
 
 /**
@@ -52,6 +55,24 @@ export class WalletController {
       return existing;
     }
     return this.prisma.wallet.create({ data: { userId } });
+  }
+
+  /**
+   * "Active" = isActive AND startsAt <= now AND (endsAt IS NULL OR endsAt >
+   * now). No DB constraint enforces at-most-one-active-row (see
+   * schema.prisma "ReferralProgram") -- if an admin creates overlapping
+   * active campaigns, the most recently created one wins here.
+   */
+  private async getActiveReferralProgram() {
+    const now = new Date();
+    return this.prisma.referralProgram.findFirst({
+      where: {
+        isActive: true,
+        startsAt: { lte: now },
+        OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   @Get('wallet')
@@ -129,12 +150,15 @@ export class WalletController {
       return { received: true };
     }
 
-    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { id: depositId },
+      include: { wallet: { include: { user: true } } },
+    });
     if (!deposit || deposit.status === 'confirmed') {
       return { received: true };
     }
 
-    await this.prisma.$transaction([
+    const writes = [
       this.prisma.deposit.update({
         where: { id: deposit.id },
         data: { status: 'confirmed', confirmedAt: new Date() },
@@ -151,7 +175,37 @@ export class WalletController {
         where: { id: deposit.walletId },
         data: { balance: { increment: deposit.tokenAmount } },
       }),
-    ]);
+    ];
+
+    // Referral commission: 10% (or whatever the active program's rate is)
+    // of every confirmed deposit from a referred user, credited straight to
+    // the referrer's wallet in the same transaction as the deposit itself
+    // being confirmed -- same append-only-ledger-plus-cached-balance
+    // pattern as the DEPOSIT/WITHDRAWAL writes above.
+    const referredById = deposit.wallet.user.referredById;
+    if (referredById) {
+      const program = await this.getActiveReferralProgram();
+      if (program) {
+        const commission = deposit.tokenAmount.mul(program.commissionRate);
+        const referrerWallet = await this.getOrCreateWallet(referredById);
+        writes.push(
+          this.prisma.ledgerEntry.create({
+            data: {
+              walletId: referrerWallet.id,
+              type: 'REFERRAL_COMMISSION',
+              amount: commission,
+              reference: deposit.id,
+            },
+          }),
+          this.prisma.wallet.update({
+            where: { id: referrerWallet.id },
+            data: { balance: { increment: commission } },
+          }),
+        );
+      }
+    }
+
+    await this.prisma.$transaction(writes);
 
     return { received: true };
   }
@@ -276,5 +330,86 @@ export class WalletController {
     }
 
     return { withdrawalId: id, status: body.outcome === 'paid' ? 'paid' : 'rejected' };
+  }
+
+  // --- Referral program (admin) --------------------------------------------
+
+  @Post('admin/referral-programs')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async createReferralProgram(@Body() body: CreateReferralProgramDto) {
+    return this.prisma.referralProgram.create({
+      data: {
+        name: body.name,
+        commissionRate: body.commissionRate ?? 0.1,
+        startsAt: body.startsAt ? new Date(body.startsAt) : undefined,
+        endsAt: body.endsAt ? new Date(body.endsAt) : undefined,
+        isActive: body.isActive ?? true,
+      },
+    });
+  }
+
+  @Get('admin/referral-programs')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async listReferralPrograms() {
+    return this.prisma.referralProgram.findMany({ orderBy: { createdAt: 'desc' } });
+  }
+
+  @Patch('admin/referral-programs/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async updateReferralProgram(@Param('id') id: string, @Body() body: UpdateReferralProgramDto) {
+    const program = await this.prisma.referralProgram.findUnique({ where: { id } });
+    if (!program) {
+      throw new NotFoundException('Referral program not found');
+    }
+    return this.prisma.referralProgram.update({
+      where: { id },
+      data: {
+        name: body.name,
+        commissionRate: body.commissionRate,
+        startsAt: body.startsAt ? new Date(body.startsAt) : undefined,
+        endsAt: body.endsAt ? new Date(body.endsAt) : undefined,
+        isActive: body.isActive,
+      },
+    });
+  }
+
+  /**
+   * Referrers + how much they've earned so far, for admins to see who's
+   * actually bringing in real, funding contributors. groupBy on
+   * REFERRAL_COMMISSION ledger entries, joined back to the referrer's wallet
+   * (walletId on those entries is always the referrer's own wallet -- see
+   * handleNowPaymentsWebhook) for the referrer's email.
+   */
+  @Get('admin/referrals')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async listReferrals() {
+    const totals = await this.prisma.ledgerEntry.groupBy({
+      by: ['walletId'],
+      where: { type: 'REFERRAL_COMMISSION' },
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
+
+    const walletIds = totals.map((t) => t.walletId);
+    const wallets = await this.prisma.wallet.findMany({
+      where: { id: { in: walletIds } },
+      include: { user: { select: { email: true, referralCode: true, referrals: { select: { id: true, email: true, createdAt: true } } } } },
+    });
+    const walletById = new Map(wallets.map((w) => [w.id, w]));
+
+    return totals.map((t) => {
+      const wallet = walletById.get(t.walletId);
+      return {
+        referrerEmail: wallet?.user.email ?? null,
+        referralCode: wallet?.user.referralCode ?? null,
+        referredUsers: wallet?.user.referrals ?? [],
+        totalCommission: t._sum.amount?.toString() ?? '0',
+        commissionCount: t._count._all,
+      };
+    });
   }
 }

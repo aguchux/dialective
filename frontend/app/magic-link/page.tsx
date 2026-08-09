@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
-import { Alert, AuthPage, AuthPanel, Eyebrow } from '@/components/AuthShell';
+import { Alert, AuthPage, AuthPanel } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 function MagicLinkContent() {
@@ -35,8 +35,7 @@ function MagicLinkContent() {
     <AuthPage>
       <AuthPanel>
         <Breadcrumbs items={[{ href: '/login', label: 'Login' }, { label: 'Magic link' }]} />
-        <Eyebrow>Dialect Library</Eyebrow>
-        <h1 className="text-[1.75rem] leading-tight">Signing you in...</h1>
+        <h1 className="text-center text-[1.75rem] leading-tight">Signing you in...</h1>
         {status === 'error' && <Alert>This sign-in link is invalid or has expired.</Alert>}
       </AuthPanel>
     </AuthPage>

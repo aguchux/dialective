@@ -1,12 +1,42 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
+
+function ReferralLinkCard({ referralCode }: { referralCode: string }) {
+  const [copied, setCopied] = useState(false);
+  const referralLink = typeof window !== 'undefined' ? `${window.location.origin}/register?ref=${referralCode}` : '';
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(referralLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <section className="grid gap-2 rounded-lg border border-line bg-surface p-4">
+      <h2 className="text-lg font-black">Your referral link</h2>
+      <p className="leading-relaxed text-muted">
+        Earn a commission on every confirmed token purchase from people you refer, while a referral program is active.
+      </p>
+      <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2">
+        <span className="min-w-0 flex-1 truncate text-sm font-bold">{referralLink}</span>
+        <button
+          className="shrink-0 rounded-lg border border-accent bg-accent px-3 py-1.5 text-sm font-bold text-white transition-colors hover:bg-accent-dark"
+          onClick={handleCopy}
+          type="button"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+    </section>
+  );
+}
 
 const taskCards = [
   {
@@ -27,7 +57,7 @@ const stats = [
   { label: 'Submitted', value: '0' },
   { label: 'Pending review', value: '0' },
   { label: 'Accepted', value: '0' },
-  { label: 'Pilot rewards', value: '0' },
+  { label: 'Rewards earned', value: '0' },
 ];
 
 const languages = ['English', 'Igbo', 'Yoruba', 'Hausa'];
@@ -112,7 +142,7 @@ export default function TrainerDashboardPage() {
             <p className="text-sm font-extrabold uppercase text-accent">Trainer account</p>
             <h1 className="text-3xl font-black leading-tight md:text-4xl">Start training AI with dialects</h1>
             <p className="max-w-2xl leading-relaxed text-muted">
-              Record voice prompts, contribute word translations, and track your pilot progress from one place.
+              Record voice prompts, contribute word translations, and track your progress from one place.
             </p>
           </div>
           <div className="rounded-lg border border-line bg-surface-muted p-3 md:min-w-64">
@@ -158,6 +188,8 @@ export default function TrainerDashboardPage() {
           </div>
 
           <aside className="grid content-start gap-4">
+            {session.user?.referralCode && <ReferralLinkCard referralCode={session.user.referralCode} />}
+
             <section className="grid gap-3 rounded-lg border border-line bg-surface p-4">
               <h2 className="text-lg font-black">Available dialect tracks</h2>
               <div className="grid grid-cols-2 gap-2">
@@ -170,7 +202,7 @@ export default function TrainerDashboardPage() {
             </section>
 
             <section className="grid gap-2 rounded-lg border border-[#efd6ad] bg-[#fff7e8] p-4 text-[#8a4b0f]">
-              <h2 className="text-lg font-black">Pilot note</h2>
+              <h2 className="text-lg font-black">In progress</h2>
               <p className="leading-relaxed">
                 Dashboard totals are placeholders until the submissions, scoring, and reward endpoints are connected.
               </p>

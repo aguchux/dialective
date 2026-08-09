@@ -11,6 +11,7 @@ export interface PublicUser {
   dialectId: string | null;
   dialectTag: string | null;
   onboardingComplete: boolean;
+  referralCode: string;
 }
 
 export interface AuthResult {
@@ -36,6 +37,32 @@ export interface DataAccessLeadInput {
   email: string;
   organization?: string;
   useCase?: string;
+}
+
+export interface ReferralProgram {
+  id: string;
+  name: string;
+  commissionRate: string;
+  startsAt: string;
+  endsAt: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ReferralProgramInput {
+  name: string;
+  commissionRate?: number;
+  startsAt?: string;
+  endsAt?: string;
+  isActive?: boolean;
+}
+
+export interface ReferralSummary {
+  referrerEmail: string | null;
+  referralCode: string | null;
+  referredUsers: { id: string; email: string; createdAt: string }[];
+  totalCommission: string;
+  commissionCount: number;
 }
 
 export interface ApiErrorShape {
@@ -72,9 +99,9 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth'],
+  tagTypes: ['Auth', 'ReferralPrograms'],
   endpoints: (builder) => ({
-    register: builder.mutation<AuthResult, { email: string; password: string }>({
+    register: builder.mutation<AuthResult, { email: string; password: string; referralCode?: string }>({
       query: (body) => ({
         url: '/auth/register',
         method: 'POST',
@@ -130,6 +157,29 @@ export const dialectivaApi = createApi({
         body,
       }),
     }),
+    getReferralPrograms: builder.query<ReferralProgram[], void>({
+      query: () => '/admin/referral-programs',
+      providesTags: ['ReferralPrograms'],
+    }),
+    createReferralProgram: builder.mutation<ReferralProgram, ReferralProgramInput>({
+      query: (body) => ({
+        url: '/admin/referral-programs',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['ReferralPrograms'],
+    }),
+    updateReferralProgram: builder.mutation<ReferralProgram, { id: string; body: Partial<ReferralProgramInput> }>({
+      query: ({ id, body }) => ({
+        url: `/admin/referral-programs/${id}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['ReferralPrograms'],
+    }),
+    getReferrals: builder.query<ReferralSummary[], void>({
+      query: () => '/admin/referrals',
+    }),
   }),
 });
 
@@ -143,6 +193,10 @@ export const {
   useGetDialectsQuery,
   useUpdateProfileMutation,
   useCreateDataAccessLeadMutation,
+  useGetReferralProgramsQuery,
+  useCreateReferralProgramMutation,
+  useUpdateReferralProgramMutation,
+  useGetReferralsQuery,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

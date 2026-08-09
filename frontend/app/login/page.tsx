@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { normalizeErrorMessage, useRequestMagicLinkMutation } from '@/store/api';
-import { Alert, AuthPage, AuthPanel, Eyebrow, Notice } from '@/components/AuthShell';
+import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
@@ -44,10 +44,7 @@ export default function LoginPage() {
     <AuthPage>
       <AuthPanel>
         <Breadcrumbs items={[{ label: 'Login' }]} />
-        <div>
-          <Eyebrow>Dialect Library</Eyebrow>
-          <h1 className="text-[1.75rem] leading-tight">Log in</h1>
-        </div>
+        <h1 className="text-center text-[1.75rem] leading-tight">Log in</h1>
 
         <form className="grid gap-2.5" onSubmit={handleCredentialsSubmit}>
           <input

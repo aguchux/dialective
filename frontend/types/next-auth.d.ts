@@ -10,6 +10,7 @@ declare module 'next-auth' {
       role: 'TRAINER' | 'ADMIN';
       onboardingComplete: boolean;
       dialectTag: string | null;
+      referralCode: string | null;
     } & DefaultSession['user'];
   }
 }
@@ -22,5 +23,6 @@ declare module 'next-auth/jwt' {
     userId?: string;
     onboardingComplete?: boolean;
     dialectTag?: string | null;
+    referralCode?: string | null;
   }
 }

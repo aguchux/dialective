@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { normalizeErrorMessage, useResetPasswordMutation } from '@/store/api';
-import { Alert, AuthPage, AuthPanel, Eyebrow, Notice } from '@/components/AuthShell';
+import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
@@ -43,8 +43,7 @@ function ResetPasswordContent() {
       <AuthPage>
         <AuthPanel>
           <Breadcrumbs items={[{ href: '/login', label: 'Login' }, { label: 'Password reset' }]} />
-          <Eyebrow>Dialect Library</Eyebrow>
-          <h1 className="text-[1.75rem] leading-tight">Password reset</h1>
+          <h1 className="text-center text-[1.75rem] leading-tight">Password reset</h1>
           <Notice>Your password has been reset. All existing sessions have been signed out.</Notice>
           <Link className={primaryButtonClass} href="/login">
             Go to login
@@ -58,10 +57,7 @@ function ResetPasswordContent() {
     <AuthPage>
       <AuthPanel>
         <Breadcrumbs items={[{ href: '/login', label: 'Login' }, { label: 'Reset password' }]} />
-        <div>
-          <Eyebrow>Dialect Library</Eyebrow>
-          <h1 className="text-[1.75rem] leading-tight">Reset your password</h1>
-        </div>
+        <h1 className="text-center text-[1.75rem] leading-tight">Reset your password</h1>
         <form className="grid gap-2.5" onSubmit={handleSubmit}>
           <input
             className={inputClass}
