@@ -52,9 +52,9 @@ export async function LandingPage() {
         <div className="px-4 md:px-[3.4rem]">
           <LandingHero />
           <LandingStats dialectCount={dialectCount} />
-          <CountryFlagMarquee countries={countries} />
           <ContributorRail dialectCount={dialectCount} />
           <HowItWorks />
+          <CountryFlagMarquee countries={countries} />
         </div>
         <LandingFooter />
       </div>
