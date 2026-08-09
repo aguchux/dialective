@@ -28,7 +28,7 @@ export function CountryFlagMarquee({ countries }: { countries: MarqueeCountry[] 
             key={`${country.code}-${index}`}
             title={country.name}
           >
-            <span className="text-lg leading-none" aria-hidden="true">
+            <span className="text-lg leading-none bg-[rgba(5,5,5,0.05)] rounded-full p-1 flex items-center justify-center" aria-hidden="true">
               {flagEmoji(country.code)}
             </span>
             <span className="whitespace-nowrap text-[rgba(5,5,5,0.72)]">{country.name}</span>
