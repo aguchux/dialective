@@ -3,7 +3,7 @@ import type { MetadataRoute } from 'next';
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dialectlibrary.com';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const routes = ['/', '/about', '/faq', '/login', '/register', '/pipeline-test'];
+  const routes = ['/', '/about', '/blog', '/faq', '/login', '/register', '/pipeline-test'];
   const legalRoutes = ['/terms', '/privacy', '/cookies'];
 
   return [
