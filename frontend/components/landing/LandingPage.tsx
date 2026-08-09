@@ -1,4 +1,5 @@
 import { ContributorRail } from './ContributorRail';
+import { CountryFlagMarquee } from './CountryFlagMarquee';
 import { HowItWorks } from './HowItWorks';
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 import { LandingFooter } from './LandingFooter';
@@ -12,6 +13,12 @@ interface GeoStats {
   dialectCount: number;
 }
 
+interface Country {
+  id: string;
+  code: string;
+  name: string;
+}
+
 async function getDialectCount(): Promise<number | null> {
   try {
     const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/geo/stats`, { next: { revalidate: 300 } });
@@ -23,8 +30,18 @@ async function getDialectCount(): Promise<number | null> {
   }
 }
 
+async function getCountries(): Promise<Country[]> {
+  try {
+    const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/geo/countries`, { next: { revalidate: 300 } });
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
+}
+
 export async function LandingPage() {
-  const dialectCount = await getDialectCount();
+  const [dialectCount, countries] = await Promise.all([getDialectCount(), getCountries()]);
 
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-white text-[#050505]">
@@ -35,6 +52,7 @@ export async function LandingPage() {
         <div className="px-4 md:px-[3.4rem]">
           <LandingHero />
           <LandingStats dialectCount={dialectCount} />
+          <CountryFlagMarquee countries={countries} />
           <ContributorRail dialectCount={dialectCount} />
           <HowItWorks />
         </div>

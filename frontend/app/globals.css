@@ -79,6 +79,21 @@
   }
 }
 
+@keyframes flag-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[flag-marquee_38s_linear_infinite\] {
+    animation: none;
+  }
+}
+
 html,
 body {
   margin: 0;
