@@ -11,14 +11,14 @@ CREATE TABLE "referral_settings" (
     "fundingBonusEnabled" BOOLEAN NOT NULL DEFAULT true,
     "payoutBonusRate" DECIMAL(5,4) NOT NULL DEFAULT 0.00,
     "payoutBonusEnabled" BOOLEAN NOT NULL DEFAULT false,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "referral_settings_pkey" PRIMARY KEY ("id")
 );
 
-INSERT INTO "referral_settings" ("id", "fundingBonusRate", "fundingBonusEnabled", "payoutBonusRate", "payoutBonusEnabled")
-VALUES ('default', 0.10, true, 0.00, false)
+INSERT INTO "referral_settings" ("id", "fundingBonusRate", "fundingBonusEnabled", "payoutBonusRate", "payoutBonusEnabled", "updatedAt")
+VALUES ('default', 0.10, true, 0.00, false, CURRENT_TIMESTAMP)
 ON CONFLICT ("id") DO NOTHING;
 
 DROP TABLE IF EXISTS "referral_programs";
