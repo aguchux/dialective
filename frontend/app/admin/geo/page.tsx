@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
+import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
+import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import {
   AdminCountry,
   AdminDialect,
@@ -15,9 +17,10 @@ import {
 } from '@/store/api';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
-const selectClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
+const secondaryButtonClass =
+  'inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
 const dangerButtonClass =
   'inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-danger transition-colors hover:bg-[#fde8e8] disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -36,36 +39,16 @@ export default function AdminGeoPage() {
         </div>
 
         <CountriesSection countries={countries} isLoading={isLoadingCountries} />
-        <DialectsSection dialects={dialects} countries={countries} isLoading={isLoadingDialects} />
+        <DialectsSection dialects={dialects} isLoading={isLoadingDialects} />
       </div>
     </AdminShell>
   );
 }
 
-function CountriesSection({
-  countries,
-  isLoading,
-}: {
-  countries: AdminCountry[] | undefined;
-  isLoading: boolean;
-}) {
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [createCountry, { isLoading: isCreating }] = useCreateCountryMutation();
+function CountriesSection({ countries, isLoading }: { countries: AdminCountry[] | undefined; isLoading: boolean }) {
   const [deleteCountry] = useDeleteCountryMutation();
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    try {
-      await createCountry({ code: code.toUpperCase(), name }).unwrap();
-      setCode('');
-      setName('');
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to create country.'));
-    }
-  }
+  const [error, setError] = useState<string | null>(null);
+  const [addDialectFor, setAddDialectFor] = useState<AdminCountry | null>(null);
 
   async function handleDelete(id: string) {
     setError(null);
@@ -76,44 +59,57 @@ function CountriesSection({
     }
   }
 
-  return (
-    <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-      <h2 className="text-2xl leading-snug">Countries</h2>
+  const columns: DataTableColumn<AdminCountry>[] = [
+    {
+      key: 'name',
+      header: 'Country',
+      sortValue: (c) => c.name,
+      render: (c) => (
+        <p className="font-extrabold">
+          {c.name} <span className="text-muted">({c.code})</span>
+        </p>
+      ),
+    },
+    {
+      key: 'dialects',
+      header: 'Dialects',
+      sortValue: (c) => c._count.dialects,
+      render: (c) => c._count.dialects,
+    },
+    {
+      key: 'users',
+      header: 'Users',
+      sortValue: (c) => c._count.users,
+      render: (c) => c._count.users,
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (c) => (
+        <div className="flex flex-wrap gap-2">
+          <button className={secondaryButtonClass} onClick={() => setAddDialectFor(c)} type="button">
+            + Add dialect
+          </button>
+          <button
+            className={dangerButtonClass}
+            onClick={() => handleDelete(c.id)}
+            disabled={c._count.dialects > 0 || c._count.users > 0}
+            title={c._count.dialects > 0 || c._count.users > 0 ? 'Remove dialects and users first' : undefined}
+            type="button"
+          >
+            Delete
+          </button>
+        </div>
+      ),
+    },
+  ];
 
-      <form className="grid gap-2.5 sm:grid-cols-[100px_minmax(0,1fr)_auto] sm:items-end" onSubmit={handleCreate}>
-        <div className="grid gap-1">
-          <label className="text-xs font-bold uppercase text-muted" htmlFor="country-code">
-            ISO code
-          </label>
-          <input
-            className={inputClass}
-            id="country-code"
-            type="text"
-            maxLength={2}
-            placeholder="NG"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            required
-          />
-        </div>
-        <div className="grid gap-1">
-          <label className="text-xs font-bold uppercase text-muted" htmlFor="country-name">
-            Name
-          </label>
-          <input
-            className={inputClass}
-            id="country-name"
-            type="text"
-            placeholder="Nigeria"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-        </div>
-        <button className={primaryButtonClass} type="submit" disabled={isCreating}>
-          Add country
-        </button>
-      </form>
+  return (
+    <section className="grid gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-2xl leading-snug">Countries</h2>
+        <AddCountryDialog />
+      </div>
 
       {error && (
         <p className="leading-relaxed text-danger" role="alert">
@@ -121,76 +117,153 @@ function CountriesSection({
         </p>
       )}
 
-      {isLoading && <p className="text-muted">Loading...</p>}
-      {countries && countries.length === 0 && <p className="text-muted">No countries yet.</p>}
-      {countries && countries.length > 0 && (
-        <div className="grid gap-2">
-          {countries.map((country) => (
-            <div
-              className="grid gap-2 rounded-lg border border-line bg-surface p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-              key={country.id}
-            >
-              <div>
-                <p className="font-extrabold">
-                  {country.name} <span className="text-muted">({country.code})</span>
-                </p>
-                <p className="text-sm text-muted">
-                  {country._count.dialects} dialect{country._count.dialects === 1 ? '' : 's'} &middot; {country._count.users} user
-                  {country._count.users === 1 ? '' : 's'}
-                </p>
-              </div>
-              <button
-                className={dangerButtonClass}
-                onClick={() => handleDelete(country.id)}
-                disabled={country._count.dialects > 0 || country._count.users > 0}
-                title={
-                  country._count.dialects > 0 || country._count.users > 0
-                    ? 'Remove dialects and users first'
-                    : undefined
-                }
-                type="button"
-              >
-                Delete
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <DataTable columns={columns} rows={countries ?? []} rowKey={(c) => c.id} isLoading={isLoading} emptyMessage="No countries yet." />
+
+      {addDialectFor && <AddDialectDialog country={addDialectFor} onClose={() => setAddDialectFor(null)} />}
     </section>
   );
 }
 
-function DialectsSection({
-  dialects,
-  countries,
-  isLoading,
-}: {
-  dialects: AdminDialect[] | undefined;
-  countries: AdminCountry[] | undefined;
-  isLoading: boolean;
-}) {
-  const [tag, setTag] = useState('');
+function AddCountryDialog() {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [countryId, setCountryId] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [createDialect, { isLoading: isCreating }] = useCreateDialectMutation();
-  const [deleteDialect] = useDeleteDialectMutation();
+  const [createCountry, { isLoading }] = useCreateCountryMutation();
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!countryId) {
-      setError('Choose a country.');
-      return;
-    }
     try {
-      await createDialect({ tag, name, countryId }).unwrap();
-      setTag('');
+      await createCountry({ code: code.toUpperCase(), name }).unwrap();
+      setCode('');
       setName('');
+      setOpen(false);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to create country.'));
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger className={primaryButtonClass}>+ Add country</DialogTrigger>
+      <DialogContent title="Add country" description="Add a country to the onboarding country list.">
+        <form className="grid gap-3" onSubmit={handleCreate}>
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="new-country-code">
+              ISO code
+            </label>
+            <input
+              className={inputClass}
+              id="new-country-code"
+              type="text"
+              maxLength={2}
+              placeholder="NG"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="new-country-name">
+              Name
+            </label>
+            <input
+              className={inputClass}
+              id="new-country-name"
+              type="text"
+              placeholder="Nigeria"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          {error && (
+            <p className="leading-relaxed text-danger" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
+            <button className={primaryButtonClass} type="submit" disabled={isLoading}>
+              Add country
+            </button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AddDialectDialog({ country, onClose }: { country: AdminCountry; onClose: () => void }) {
+  const [tag, setTag] = useState('');
+  const [name, setName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [createDialect, { isLoading }] = useCreateDialectMutation();
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      await createDialect({ tag, name, countryId: country.id }).unwrap();
+      onClose();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to create dialect.'));
     }
   }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent title={`Add dialect to ${country.name}`} description="This dialect will be selectable during onboarding for trainers in this country.">
+        <form className="grid gap-3" onSubmit={handleCreate}>
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="new-dialect-tag">
+              Tag
+            </label>
+            <input
+              className={inputClass}
+              id="new-dialect-tag"
+              type="text"
+              placeholder="ig"
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="new-dialect-name">
+              Name
+            </label>
+            <input
+              className={inputClass}
+              id="new-dialect-name"
+              type="text"
+              placeholder="Igbo"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          {error && (
+            <p className="leading-relaxed text-danger" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
+            <button className={primaryButtonClass} type="submit" disabled={isLoading}>
+              Add dialect
+            </button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DialectsSection({ dialects, isLoading }: { dialects: AdminDialect[] | undefined; isLoading: boolean }) {
+  const [deleteDialect] = useDeleteDialectMutation();
+  const [error, setError] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
     setError(null);
@@ -201,59 +274,49 @@ function DialectsSection({
     }
   }
 
-  return (
-    <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-      <h2 className="text-2xl leading-snug">Dialects</h2>
-
-      <form
-        className="grid gap-2.5 sm:grid-cols-[140px_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"
-        onSubmit={handleCreate}
-      >
-        <div className="grid gap-1">
-          <label className="text-xs font-bold uppercase text-muted" htmlFor="dialect-tag">
-            Tag
-          </label>
-          <input
-            className={inputClass}
-            id="dialect-tag"
-            type="text"
-            placeholder="ig"
-            value={tag}
-            onChange={(e) => setTag(e.target.value)}
-            required
-          />
-        </div>
-        <div className="grid gap-1">
-          <label className="text-xs font-bold uppercase text-muted" htmlFor="dialect-name">
-            Name
-          </label>
-          <input
-            className={inputClass}
-            id="dialect-name"
-            type="text"
-            placeholder="Igbo"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-        </div>
-        <div className="grid gap-1">
-          <label className="text-xs font-bold uppercase text-muted" htmlFor="dialect-country">
-            Country
-          </label>
-          <select className={selectClass} id="dialect-country" value={countryId} onChange={(e) => setCountryId(e.target.value)} required>
-            <option value="">Choose...</option>
-            {countries?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button className={primaryButtonClass} type="submit" disabled={isCreating}>
-          Add dialect
+  const columns: DataTableColumn<AdminDialect>[] = [
+    {
+      key: 'name',
+      header: 'Dialect',
+      sortValue: (d) => d.name,
+      render: (d) => (
+        <p className="font-extrabold">
+          {d.name} <span className="text-muted">({d.tag})</span>
+        </p>
+      ),
+    },
+    {
+      key: 'country',
+      header: 'Country',
+      sortValue: (d) => d.country.name,
+      render: (d) => d.country.name,
+    },
+    {
+      key: 'users',
+      header: 'Users',
+      sortValue: (d) => d._count.users,
+      render: (d) => d._count.users,
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (d) => (
+        <button
+          className={dangerButtonClass}
+          onClick={() => handleDelete(d.id)}
+          disabled={d._count.users > 0}
+          title={d._count.users > 0 ? 'Reassign users first' : undefined}
+          type="button"
+        >
+          Delete
         </button>
-      </form>
+      ),
+    },
+  ];
+
+  return (
+    <section className="grid gap-4">
+      <h2 className="text-2xl leading-snug">Dialects</h2>
 
       {error && (
         <p className="leading-relaxed text-danger" role="alert">
@@ -261,36 +324,7 @@ function DialectsSection({
         </p>
       )}
 
-      {isLoading && <p className="text-muted">Loading...</p>}
-      {dialects && dialects.length === 0 && <p className="text-muted">No dialects yet.</p>}
-      {dialects && dialects.length > 0 && (
-        <div className="grid gap-2">
-          {dialects.map((dialect) => (
-            <div
-              className="grid gap-2 rounded-lg border border-line bg-surface p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-              key={dialect.id}
-            >
-              <div>
-                <p className="font-extrabold">
-                  {dialect.name} <span className="text-muted">({dialect.tag})</span>
-                </p>
-                <p className="text-sm text-muted">
-                  {dialect.country.name} &middot; {dialect._count.users} user{dialect._count.users === 1 ? '' : 's'}
-                </p>
-              </div>
-              <button
-                className={dangerButtonClass}
-                onClick={() => handleDelete(dialect.id)}
-                disabled={dialect._count.users > 0}
-                title={dialect._count.users > 0 ? 'Reassign users first' : undefined}
-                type="button"
-              >
-                Delete
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <DataTable columns={columns} rows={dialects ?? []} rowKey={(d) => d.id} isLoading={isLoading} emptyMessage="No dialects yet." />
     </section>
   );
 }
