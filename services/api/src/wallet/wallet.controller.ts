@@ -90,7 +90,7 @@ export class WalletController {
       },
     });
 
-    const apiBaseUrl = process.env.API_PUBLIC_BASE_URL ?? 'https://api.nmseprep.com';
+    const apiBaseUrl = process.env.API_PUBLIC_BASE_URL ?? 'https://api.dialectlibrary.com';
     let invoice;
     try {
       invoice = await this.nowPayments.createInvoice({

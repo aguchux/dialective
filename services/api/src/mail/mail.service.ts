@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Resend } from 'resend';
 
-const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'noreply@nmseprep.com';
-const LEADS_NOTIFICATION_ADDRESS = process.env.LEADS_NOTIFICATION_ADDRESS ?? 'hello@nmseprep.com';
+const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'noreply@dialectlibrary.com';
+const LEADS_NOTIFICATION_ADDRESS = process.env.LEADS_NOTIFICATION_ADDRESS ?? 'hello@dialectlibrary.com';
 
 interface DataAccessLeadNotification {
   id: string;
@@ -13,7 +13,7 @@ interface DataAccessLeadNotification {
 }
 
 function frontendUrl(): string {
-  return process.env.FRONTEND_URL ?? 'https://app.nmseprep.com';
+  return process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
 }
 
 /**

@@ -9,10 +9,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - pgadmin.nmseprep.com
+        - pgadmin.dialectlibrary.com
       secretName: pgadmin-tls
   rules:
-    - host: pgadmin.nmseprep.com
+    - host: pgadmin.dialectlibrary.com
       http:
         paths:
           - path: /

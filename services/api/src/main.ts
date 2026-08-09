@@ -10,7 +10,7 @@ const API_PREFIX = 'api/v1';
 function parseAllowedOrigins(): string[] {
   // Default matches the Vercel-hosted frontend's custom domain (see
   // /frontend, deployed separately from this repo's k8s manifests).
-  const raw = process.env.CORS_ALLOWED_ORIGINS ?? 'https://app.nmseprep.com';
+  const raw = process.env.CORS_ALLOWED_ORIGINS ?? 'https://dialectlibrary.com';
   return raw
     .split(',')
     .map((origin) => origin.trim())

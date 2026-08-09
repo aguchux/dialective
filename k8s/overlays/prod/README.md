@@ -54,7 +54,7 @@ Two buckets, created out-of-band (these manifests don't provision them):
 ```json
 [
   {
-    "AllowedOrigins": ["https://nmseprep.com", "https://app.nmseprep.com"],
+    "AllowedOrigins": ["https://dialectlibrary.com", "https://www.dialectlibrary.com"],
     "AllowedMethods": ["PUT"],
     "AllowedHeaders": ["*"],
     "MaxAgeSeconds": 3000
@@ -66,17 +66,17 @@ Add `http://localhost:3000` too if testing the frontend locally against the real
 
 ## Ingress / DNS
 
-`pgadmin.nmseprep.com` and `api.nmseprep.com` must point (A/CNAME) at the ingress controller's external IP. TLS is issued automatically via cert-manager (`letsencrypt-prod` ClusterIssuer) — that ClusterIssuer must already exist in the cluster; it's not created by these manifests. Requires an nginx ingress controller (`ingressClassName: nginx`).
+`pgadmin.dialectlibrary.com` and `api.dialectlibrary.com` must point (A/CNAME) at the ingress controller's external IP. TLS is issued automatically via cert-manager (`letsencrypt-prod` ClusterIssuer) — that ClusterIssuer must already exist in the cluster; it's not created by these manifests. Requires an nginx ingress controller (`ingressClassName: nginx`).
 
-`app.nmseprep.com` (the frontend) is **not** in this cluster — it's a Vercel deployment (`/frontend`). Point it at Vercel's DNS target per the Vercel project's domain settings, not at the ingress controller.
+`dialectlibrary.com` (the frontend, apex domain) is **not** in this cluster — it's a Vercel deployment (`/frontend`). Point it at Vercel's DNS target per the Vercel project's domain settings, not at the ingress controller.
 
 ## Frontend (Vercel) env vars
 
 Set these in the Vercel project settings, not in this repo's secrets (which only feed this repo's k8s Secrets):
 
-- `NEXTAUTH_URL` — the Vercel deployment's public URL (e.g. `https://app.nmseprep.com`)
+- `NEXTAUTH_URL` — the Vercel deployment's public URL (`https://dialectlibrary.com`)
 - `NEXTAUTH_SECRET` — same value as `secrets/auth.env`'s `nextauth_secret`
-- `API_BASE_URL` — `https://api.nmseprep.com` (Vercel can't reach the cluster's internal `http://api` Service DNS)
+- `API_BASE_URL` — `https://api.dialectlibrary.com` (Vercel can't reach the cluster's internal `http://api` Service DNS)
 - `NEXT_PUBLIC_API_BASE_URL` — same as above, exposed client-side
 - `OAUTH_CALLBACK_SECRET` — must match `secrets/auth.env`'s `oauth_callback_secret` / `api`'s `auth-creds` value exactly
 

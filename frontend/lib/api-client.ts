@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.API_BASE_URL ?? 'https://api.nmseprep.com';
+const API_BASE_URL = process.env.API_BASE_URL ?? 'https://api.dialectlibrary.com';
 
 export interface PublicUser {
   id: string;

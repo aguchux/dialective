@@ -5,7 +5,7 @@ import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.nmseprep.com';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dialectlibrary.com';
 const description =
   'Dialect Library is a contributor platform for voice recordings and word translations in underrepresented languages and dialects.';
 
