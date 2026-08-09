@@ -27,6 +27,29 @@ const principles = [
 
 const pilotTracks = ['English', 'Igbo', 'Yoruba', 'Hausa'];
 
+const howItWorks = [
+  {
+    step: '01',
+    title: 'Fund your account',
+    body: 'Trainers top up their wallet with tokens, which pay for the AI-assisted tools used to generate, transcribe, and analyze prompts during training.',
+  },
+  {
+    step: '02',
+    title: 'Translate and record',
+    body: 'You receive English words or prompts, translate them into your dialect, and record voice samples in languages like Igbo, Hausa, Yoruba, Tiv, and others.',
+  },
+  {
+    step: '03',
+    title: 'Get scored and paid',
+    body: 'Submissions are quality-scored and paid out from the pool funded by data subscribers, covering your token spend and putting you in profit.',
+  },
+  {
+    step: '04',
+    title: 'Refer, resell, or cash out',
+    body: 'Earn 10% of your referrals’ token funding for as long as a referral program is active, and sell tokens back to the pool or directly to other members in local currency through our escrow-guarded exchange.',
+  },
+];
+
 export default function AboutPage() {
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-white text-[#050505]">
@@ -72,6 +95,28 @@ export default function AboutPage() {
               language model.
             </p>
           </aside>
+        </section>
+
+        <section className="grid gap-4" aria-label="How Dialect Library works">
+          <div className="grid gap-2">
+            <h2 className="text-3xl font-black leading-tight md:text-4xl">How it works</h2>
+            <p className="max-w-2xl leading-relaxed text-muted">
+              From funding your account to getting paid, referring others, or cashing out — here is the full loop.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {howItWorks.map((item) => (
+              <article className="grid gap-2 rounded-lg border border-line bg-surface p-5" key={item.step}>
+                <p className="text-sm font-extrabold uppercase text-accent">{item.step}</p>
+                <h3 className="text-xl font-black">{item.title}</h3>
+                <p className="leading-relaxed text-muted">{item.body}</p>
+              </article>
+            ))}
+          </div>
+          <p className="leading-relaxed text-muted">
+            Payout scoring, the subscriber-funded reward pool, and member-to-member token resale are actively being built
+            out. Referral commissions and token funding are live today.
+          </p>
         </section>
 
         <section className="grid gap-4 md:grid-cols-3" aria-label="Dialect Library principles">

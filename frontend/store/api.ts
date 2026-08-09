@@ -65,6 +65,16 @@ export interface ReferralSummary {
   commissionCount: number;
 }
 
+export interface AdminStats {
+  totalTrainers: number;
+  activeReferralPrograms: number;
+  pendingWithdrawals: number;
+  dataAccessLeads: number;
+  totalDepositsUsd: string;
+  totalTokensFunded: string;
+  totalReferralCommissions: string;
+}
+
 export interface ApiErrorShape {
   statusCode?: number;
   message?: string | string[];
@@ -180,6 +190,9 @@ export const dialectivaApi = createApi({
     getReferrals: builder.query<ReferralSummary[], void>({
       query: () => '/admin/referrals',
     }),
+    getAdminStats: builder.query<AdminStats, void>({
+      query: () => '/admin/stats',
+    }),
   }),
 });
 
@@ -197,6 +210,7 @@ export const {
   useCreateReferralProgramMutation,
   useUpdateReferralProgramMutation,
   useGetReferralsQuery,
+  useGetAdminStatsQuery,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

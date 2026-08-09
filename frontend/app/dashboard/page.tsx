@@ -67,12 +67,20 @@ export default function TrainerDashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (status === 'authenticated' && session.user?.onboardingComplete === false) {
+    if (status !== 'authenticated') {
+      return;
+    }
+    if (session.user?.role === 'ADMIN') {
+      router.replace('/admin');
+    } else if (session.user?.onboardingComplete === false) {
       router.replace('/onboarding');
     }
   }, [status, session, router]);
 
-  if (status === 'loading' || (status === 'authenticated' && session.user?.onboardingComplete === false)) {
+  if (
+    status === 'loading' ||
+    (status === 'authenticated' && (session.user?.role === 'ADMIN' || session.user?.onboardingComplete === false))
+  ) {
     return (
       <main className="relative isolate min-h-screen overflow-hidden bg-bg px-4 py-6 text-ink">
         <ParallaxTopBackground />

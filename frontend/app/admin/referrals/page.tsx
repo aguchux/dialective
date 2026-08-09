@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { PageShell, Section } from '@/components/PageShell';
+import { AdminShell } from '@/components/admin/AdminShell';
 import {
   normalizeErrorMessage,
   useCreateReferralProgramMutation,
@@ -49,16 +48,16 @@ export default function AdminReferralsPage() {
   }
 
   return (
-    <PageShell>
-      <Section>
-        <Breadcrumbs items={[{ label: 'Admin' }, { label: 'Referrals' }]} />
-        <h1 className="text-4xl leading-tight md:text-5xl">Referral programs</h1>
-        <p className="text-lg leading-relaxed text-muted">
-          Manage referral campaign windows and see who is earning commissions.
-        </p>
-      </Section>
+    <AdminShell>
+      <div className="grid gap-6">
+        <div className="grid gap-2">
+          <h1 className="text-3xl font-black">Referral programs</h1>
+          <p className="leading-relaxed text-muted">
+            Manage referral campaign windows and see who is earning commissions.
+          </p>
+        </div>
 
-      <Section>
+      <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
         <h2 className="text-2xl leading-snug">New program</h2>
         <form className="grid gap-2.5 md:max-w-md" onSubmit={handleCreate}>
           <label htmlFor="program-name">Name</label>
@@ -101,9 +100,9 @@ export default function AdminReferralsPage() {
             {error}
           </p>
         )}
-      </Section>
+      </section>
 
-      <Section>
+      <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
         <h2 className="text-2xl leading-snug">Programs</h2>
         {isLoadingPrograms && <p className="text-muted">Loading...</p>}
         {programs && programs.length === 0 && <p className="text-muted">No referral programs yet.</p>}
@@ -142,9 +141,9 @@ export default function AdminReferralsPage() {
             ))}
           </div>
         )}
-      </Section>
+      </section>
 
-      <Section>
+      <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
         <h2 className="text-2xl leading-snug">Referrers</h2>
         {isLoadingReferrals && <p className="text-muted">Loading...</p>}
         {referrals && referrals.length === 0 && <p className="text-muted">No referral commissions yet.</p>}
@@ -161,7 +160,8 @@ export default function AdminReferralsPage() {
             ))}
           </div>
         )}
-      </Section>
-    </PageShell>
+      </section>
+      </div>
+    </AdminShell>
   );
 }

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
+import { getSession, signIn } from 'next-auth/react';
 import { Alert, AuthPage, AuthPanel } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 
@@ -26,7 +26,8 @@ function MagicLinkContent() {
       if (signInResult?.error) {
         setStatus('error');
       } else {
-        window.location.href = '/dashboard';
+        const session = await getSession();
+        window.location.href = session?.user?.role === 'ADMIN' ? '/admin' : '/dashboard';
       }
     })();
   }, [token]);

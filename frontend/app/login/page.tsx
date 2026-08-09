@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { getSession, signIn } from 'next-auth/react';
 import { normalizeErrorMessage, useRequestMagicLinkMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
@@ -26,7 +26,8 @@ export default function LoginPage() {
     if (result?.error) {
       setMessage('Invalid email or password.');
     } else {
-      window.location.href = '/dashboard';
+      const session = await getSession();
+      window.location.href = session?.user?.role === 'ADMIN' ? '/admin' : '/dashboard';
     }
   }
 

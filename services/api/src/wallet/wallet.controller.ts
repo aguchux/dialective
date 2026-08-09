@@ -332,6 +332,37 @@ export class WalletController {
     return { withdrawalId: id, status: body.outcome === 'paid' ? 'paid' : 'rejected' };
   }
 
+  /**
+   * Admin dashboard summary cards: counts/sums that have no other single
+   * endpoint. Deposit/referral-commission totals only include confirmed
+   * deposits so the dashboard can't overstate revenue from pending/expired
+   * invoices.
+   */
+  @Get('admin/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getAdminStats() {
+    const [totalTrainers, activeReferralPrograms, pendingWithdrawals, dataAccessLeads, depositAgg, commissionAgg] =
+      await Promise.all([
+        this.prisma.user.count({ where: { role: Role.TRAINER } }),
+        this.prisma.referralProgram.count({ where: { isActive: true } }),
+        this.prisma.withdrawalRequest.count({ where: { status: WithdrawalStatus.PENDING } }),
+        this.prisma.dataAccessLead.count(),
+        this.prisma.deposit.aggregate({ where: { status: 'confirmed' }, _sum: { usdAmount: true, tokenAmount: true } }),
+        this.prisma.ledgerEntry.aggregate({ where: { type: 'REFERRAL_COMMISSION' }, _sum: { amount: true } }),
+      ]);
+
+    return {
+      totalTrainers,
+      activeReferralPrograms,
+      pendingWithdrawals,
+      dataAccessLeads,
+      totalDepositsUsd: depositAgg._sum.usdAmount?.toString() ?? '0',
+      totalTokensFunded: depositAgg._sum.tokenAmount?.toString() ?? '0',
+      totalReferralCommissions: commissionAgg._sum.amount?.toString() ?? '0',
+    };
+  }
+
   // --- Referral program (admin) --------------------------------------------
 
   @Post('admin/referral-programs')

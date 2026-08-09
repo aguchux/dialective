@@ -25,8 +25,10 @@ export default function OnboardingPage() {
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.replace('/login');
+    } else if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
+      router.replace('/admin');
     }
-  }, [status, router]);
+  }, [status, session, router]);
 
   useEffect(() => {
     setDialectId('');
@@ -48,7 +50,7 @@ export default function OnboardingPage() {
     }
   }
 
-  if (status === 'loading' || status === 'unauthenticated') {
+  if (status === 'loading' || status === 'unauthenticated' || session?.user?.role === 'ADMIN') {
     return (
       <AuthPage>
         <AuthPanel>
