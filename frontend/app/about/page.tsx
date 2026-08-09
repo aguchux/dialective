@@ -71,7 +71,7 @@ export default function AboutPage() {
               Dialect Library is a crowdsourced voice and dialect data platform. Trainers record prompts, translate word
               tasks, and help create speech datasets that reflect how people actually speak in their communities.
             </p>
-            <div className="grid grid-flow-col gap-4">
+            <div className="grid grid-flow-col gap-1 justify-start md:gap-3">
               <Link
                 className="inline-flex min-h-11 items-center justify-center rounded-full border border-accent bg-accent px-5 py-3 font-extrabold text-white no-underline transition-colors hover:border-accent-dark hover:bg-accent-dark"
                 href="/register"
