@@ -1,0 +1,21 @@
+{
+  "name": "Dialect Library",
+  "short_name": "Dialect Library",
+  "description": "Voice and word collection for underrepresented dialects.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050c18",
+  "theme_color": "#14b3c2",
+  "icons": [
+    {
+      "src": "/logo-mark-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo-mark-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

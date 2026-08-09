@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BrandLogo } from '@/components/BrandLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 const menuLinks = [
@@ -12,9 +13,7 @@ export function LandingHeader() {
     <header className="w-full px-4 py-4 text-[#050505] md:px-8">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
         <div className="flex items-center gap-6">
-          <Link className="text-2xl font-black no-underline" href="/">
-            Dialect Library
-          </Link>
+          <BrandLogo className="text-2xl text-[#050505]" size={42} textClassName="hidden sm:inline" />
           <nav className="hidden items-center gap-6 md:flex" aria-label="Primary">
             {menuLinks.map((link) => (
               <Link

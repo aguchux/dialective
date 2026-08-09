@@ -1,4 +1,5 @@
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
+import { BrandLogo } from '@/components/BrandLogo';
 
 export function AuthPage({ children }: { children: React.ReactNode }) {
   return (
@@ -18,7 +19,15 @@ export function AuthPanel({ children }: { children: React.ReactNode }) {
 }
 
 export function Eyebrow({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm font-extrabold uppercase tracking-normal text-accent">{children}</p>;
+  return (
+    <div className="text-sm font-extrabold uppercase tracking-normal text-accent">
+      {children === 'Dialect Library' ? (
+        <BrandLogo href="" size={32} className="text-accent" textClassName="text-xs" />
+      ) : (
+        children
+      )}
+    </div>
+  );
 }
 
 export function Notice({ children }: { children: React.ReactNode }) {

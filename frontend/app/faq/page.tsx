@@ -5,7 +5,8 @@ import { LandingHeader } from '@/components/landing/LandingHeader';
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 
 export const metadata = {
-  title: 'FAQ | Dialect Library',
+  title: 'FAQ',
+  description: 'Answers about contributing dialect recordings, word translations, review, privacy, and pilot rewards.',
 };
 
 export default function FaqPage() {

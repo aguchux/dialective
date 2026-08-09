@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
+import { BrandLogo } from '@/components/BrandLogo';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 
@@ -59,7 +60,7 @@ export default function TrainerDashboardPage() {
         <ParallaxTopBackground />
         <section className="relative z-10 grid max-w-sm gap-4 rounded-lg border border-line bg-surface p-5 shadow-[0_12px_28px_rgba(27,31,27,0.07)]">
           <Breadcrumbs items={[{ label: 'Dashboard' }]} />
-          <p className="text-sm font-extrabold uppercase text-accent">Dialect Library</p>
+          <BrandLogo href="" size={34} className="text-accent" textClassName="text-sm uppercase" />
           <h1 className="text-2xl font-black">Trainer dashboard</h1>
           <p className="leading-relaxed text-muted">Log in to access your account and start training AI with dialect data.</p>
           <div className="grid gap-2">
@@ -86,9 +87,7 @@ export default function TrainerDashboardPage() {
       <ParallaxTopBackground />
       <div className="relative z-10 mx-auto grid max-w-6xl gap-5">
         <header className="flex flex-wrap items-center justify-between gap-3">
-          <Link className="text-xl font-black no-underline" href="/">
-            Dialect Library
-          </Link>
+          <BrandLogo className="text-xl text-ink" size={40} />
           <div className="flex items-center gap-2">
             <Link
               className="inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-3 py-2 font-bold text-ink no-underline hover:bg-surface-muted"

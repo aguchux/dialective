@@ -5,7 +5,9 @@ import { LandingHeader } from '@/components/landing/LandingHeader';
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 
 export const metadata = {
-  title: 'About Us | Dialect Library',
+  title: 'About Us',
+  description:
+    'Learn how Dialect Library collects local voice recordings and word translations for underrepresented dialects.',
 };
 
 const principles = [

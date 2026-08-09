@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BrandLogo } from '@/components/BrandLogo';
 
 const footerLinks = [
   { href: '/terms', label: 'Terms of Use' },
@@ -11,7 +12,7 @@ export function LandingFooter() {
     <footer className="w-full border-t border-[rgba(5,5,5,0.1)] bg-white px-4 py-5 text-[#050505] md:px-8 md:py-[1.4rem]">
       <div className="mx-auto grid max-w-7xl items-start gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
         <div>
-          <strong className="mb-1 block text-lg">Dialect Library</strong>
+          <BrandLogo className="mb-2 text-lg text-[#050505]" size={34} />
           <p className="leading-snug text-[rgba(5,5,5,0.62)]">
             Voice and word collection for underrepresented dialects. Pilot phase.
           </p>
