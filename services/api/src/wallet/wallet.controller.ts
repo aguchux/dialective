@@ -26,8 +26,8 @@ import { NowPaymentsService } from './nowpayments.service';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { ResolveWithdrawalDto } from './dto/resolve-withdrawal.dto';
-import { CreateReferralProgramDto } from './dto/create-referral-program.dto';
-import { UpdateReferralProgramDto } from './dto/update-referral-program.dto';
+import { UpdateReferralSettingsDto } from './dto/update-referral-settings.dto';
+import { CreateTrainingPayoutDto } from './dto/create-training-payout.dto';
 import { getMinWithdrawalTokens, getTokenUsdRate, tokensToUsdt, usdToTokens } from './token-rate.util';
 
 /**
@@ -57,21 +57,11 @@ export class WalletController {
     return this.prisma.wallet.create({ data: { userId } });
   }
 
-  /**
-   * "Active" = isActive AND startsAt <= now AND (endsAt IS NULL OR endsAt >
-   * now). No DB constraint enforces at-most-one-active-row (see
-   * schema.prisma "ReferralProgram") -- if an admin creates overlapping
-   * active campaigns, the most recently created one wins here.
-   */
-  private async getActiveReferralProgram() {
-    const now = new Date();
-    return this.prisma.referralProgram.findFirst({
-      where: {
-        isActive: true,
-        startsAt: { lte: now },
-        OR: [{ endsAt: null }, { endsAt: { gt: now } }],
-      },
-      orderBy: { createdAt: 'desc' },
+  private async getReferralSettings() {
+    return this.prisma.referralSettings.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
     });
   }
 
@@ -158,7 +148,14 @@ export class WalletController {
       return { received: true };
     }
 
-    const writes = [
+    const settings = await this.getReferralSettings();
+    const referrerWallet =
+      deposit.wallet.user.referredById && settings.fundingBonusEnabled && settings.fundingBonusRate.gt(0)
+        ? await this.getOrCreateWallet(deposit.wallet.user.referredById)
+        : null;
+    const fundingBonus = referrerWallet ? deposit.tokenAmount.mul(settings.fundingBonusRate) : null;
+
+    await this.prisma.$transaction([
       this.prisma.deposit.update({
         where: { id: deposit.id },
         data: { status: 'confirmed', confirmedAt: new Date() },
@@ -175,39 +172,88 @@ export class WalletController {
         where: { id: deposit.walletId },
         data: { balance: { increment: deposit.tokenAmount } },
       }),
-    ];
-
-    // Referral commission: 10% (or whatever the active program's rate is)
-    // of every confirmed deposit from a referred user, credited straight to
-    // the referrer's wallet in the same transaction as the deposit itself
-    // being confirmed -- same append-only-ledger-plus-cached-balance
-    // pattern as the DEPOSIT/WITHDRAWAL writes above.
-    const referredById = deposit.wallet.user.referredById;
-    if (referredById) {
-      const program = await this.getActiveReferralProgram();
-      if (program) {
-        const commission = deposit.tokenAmount.mul(program.commissionRate);
-        const referrerWallet = await this.getOrCreateWallet(referredById);
-        writes.push(
-          this.prisma.ledgerEntry.create({
-            data: {
-              walletId: referrerWallet.id,
-              type: 'REFERRAL_COMMISSION',
-              amount: commission,
-              reference: deposit.id,
-            },
-          }),
-          this.prisma.wallet.update({
-            where: { id: referrerWallet.id },
-            data: { balance: { increment: commission } },
-          }),
-        );
-      }
-    }
-
-    await this.prisma.$transaction(writes);
+      ...(referrerWallet && fundingBonus
+        ? [
+            this.prisma.ledgerEntry.create({
+              data: {
+                walletId: referrerWallet.id,
+                type: 'REFERRAL_FUNDING_BONUS' as const,
+                amount: fundingBonus,
+                reference: deposit.id,
+              },
+            }),
+            this.prisma.wallet.update({
+              where: { id: referrerWallet.id },
+              data: { balance: { increment: fundingBonus } },
+            }),
+          ]
+        : []),
+    ]);
 
     return { received: true };
+  }
+
+  /**
+   * Credits a scored training payout. If the user was referred and the
+   * payout referral bonus is enabled, the bonus is deducted from the user's
+   * gross payout and remitted to the referrer in the same transaction.
+   *
+   * This is intentionally a method on the wallet boundary so settlement or
+   * scoring code can reuse it instead of reimplementing referral math.
+   */
+  private async creditTrainingPayout(userId: string, tokenAmount: number, reference: string) {
+    const userWallet = await this.getOrCreateWallet(userId);
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const settings = await this.getReferralSettings();
+    const grossAmount = tokenAmount;
+    const hasPayoutBonus = user.referredById && settings.payoutBonusEnabled && settings.payoutBonusRate.gt(0);
+    const payoutBonus = hasPayoutBonus ? settings.payoutBonusRate.mul(grossAmount) : null;
+    const netAmount = payoutBonus ? payoutBonus.neg().add(grossAmount) : grossAmount;
+    const referrerWallet = user.referredById && payoutBonus ? await this.getOrCreateWallet(user.referredById) : null;
+
+    await this.prisma.$transaction([
+      this.prisma.ledgerEntry.create({
+        data: {
+          walletId: userWallet.id,
+          type: 'TRAINING_PAYOUT',
+          amount: netAmount,
+          reference,
+        },
+      }),
+      this.prisma.wallet.update({
+        where: { id: userWallet.id },
+        data: { balance: { increment: netAmount } },
+      }),
+      ...(referrerWallet && payoutBonus
+        ? [
+            this.prisma.ledgerEntry.create({
+              data: {
+                walletId: referrerWallet.id,
+                type: 'REFERRAL_PAYOUT_BONUS' as const,
+                amount: payoutBonus,
+                reference,
+              },
+            }),
+            this.prisma.wallet.update({
+              where: { id: referrerWallet.id },
+              data: { balance: { increment: payoutBonus } },
+            }),
+          ]
+        : []),
+    ]);
+
+    return {
+      userId,
+      reference,
+      grossAmount: grossAmount.toString(),
+      netAmount: netAmount.toString(),
+      referralPayoutBonus: payoutBonus?.toString() ?? '0',
+      referrerUserId: user.referredById,
+    };
   }
 
   @Post('wallet/withdrawals')
@@ -334,85 +380,103 @@ export class WalletController {
 
   /**
    * Admin dashboard summary cards: counts/sums that have no other single
-   * endpoint. Deposit/referral-commission totals only include confirmed
-   * deposits so the dashboard can't overstate revenue from pending/expired
-   * invoices.
+   * endpoint. Deposit/referral-bonus totals only include confirmed
+   * deposits and credited training payouts so the dashboard can't overstate
+   * revenue from pending/expired invoices.
    */
   @Get('admin/stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async getAdminStats() {
-    const [totalTrainers, activeReferralPrograms, pendingWithdrawals, dataAccessLeads, depositAgg, commissionAgg] =
+    const [totalTrainers, referralSettings, pendingWithdrawals, dataAccessLeads, depositAgg, referralBonusAgg] =
       await Promise.all([
         this.prisma.user.count({ where: { role: Role.TRAINER } }),
-        this.prisma.referralProgram.count({ where: { isActive: true } }),
+        this.getReferralSettings(),
         this.prisma.withdrawalRequest.count({ where: { status: WithdrawalStatus.PENDING } }),
         this.prisma.dataAccessLead.count(),
         this.prisma.deposit.aggregate({ where: { status: 'confirmed' }, _sum: { usdAmount: true, tokenAmount: true } }),
-        this.prisma.ledgerEntry.aggregate({ where: { type: 'REFERRAL_COMMISSION' }, _sum: { amount: true } }),
+        this.prisma.ledgerEntry.aggregate({
+          where: { type: { in: ['REFERRAL_COMMISSION', 'REFERRAL_FUNDING_BONUS', 'REFERRAL_PAYOUT_BONUS'] } },
+          _sum: { amount: true },
+        }),
       ]);
 
     return {
       totalTrainers,
-      activeReferralPrograms,
+      referralSettings: {
+        fundingBonusRate: referralSettings.fundingBonusRate.toString(),
+        fundingBonusEnabled: referralSettings.fundingBonusEnabled,
+        payoutBonusRate: referralSettings.payoutBonusRate.toString(),
+        payoutBonusEnabled: referralSettings.payoutBonusEnabled,
+      },
       pendingWithdrawals,
       dataAccessLeads,
       totalDepositsUsd: depositAgg._sum.usdAmount?.toString() ?? '0',
       totalTokensFunded: depositAgg._sum.tokenAmount?.toString() ?? '0',
-      totalReferralCommissions: commissionAgg._sum.amount?.toString() ?? '0',
+      totalReferralBonuses: referralBonusAgg._sum.amount?.toString() ?? '0',
     };
   }
 
-  // --- Referral program (admin) --------------------------------------------
+  // --- Referral settings / payouts (admin) ---------------------------------
 
-  @Post('admin/referral-programs')
+  @Get('admin/referral-settings')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  async createReferralProgram(@Body() body: CreateReferralProgramDto) {
-    return this.prisma.referralProgram.create({
-      data: {
-        name: body.name,
-        commissionRate: body.commissionRate ?? 0.1,
-        startsAt: body.startsAt ? new Date(body.startsAt) : undefined,
-        endsAt: body.endsAt ? new Date(body.endsAt) : undefined,
-        isActive: body.isActive ?? true,
-      },
-    });
+  async getReferralSettingsForAdmin() {
+    const settings = await this.getReferralSettings();
+    return {
+      id: settings.id,
+      fundingBonusRate: settings.fundingBonusRate.toString(),
+      fundingBonusEnabled: settings.fundingBonusEnabled,
+      payoutBonusRate: settings.payoutBonusRate.toString(),
+      payoutBonusEnabled: settings.payoutBonusEnabled,
+      updatedAt: settings.updatedAt,
+      createdAt: settings.createdAt,
+    };
   }
 
-  @Get('admin/referral-programs')
+  @Patch('admin/referral-settings')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  async listReferralPrograms() {
-    return this.prisma.referralProgram.findMany({ orderBy: { createdAt: 'desc' } });
-  }
-
-  @Patch('admin/referral-programs/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  async updateReferralProgram(@Param('id') id: string, @Body() body: UpdateReferralProgramDto) {
-    const program = await this.prisma.referralProgram.findUnique({ where: { id } });
-    if (!program) {
-      throw new NotFoundException('Referral program not found');
-    }
-    return this.prisma.referralProgram.update({
-      where: { id },
-      data: {
-        name: body.name,
-        commissionRate: body.commissionRate,
-        startsAt: body.startsAt ? new Date(body.startsAt) : undefined,
-        endsAt: body.endsAt ? new Date(body.endsAt) : undefined,
-        isActive: body.isActive,
+  async updateReferralSettings(@Body() body: UpdateReferralSettingsDto) {
+    const settings = await this.prisma.referralSettings.upsert({
+      where: { id: 'default' },
+      create: {
+        id: 'default',
+        fundingBonusRate: body.fundingBonusRate,
+        fundingBonusEnabled: body.fundingBonusEnabled,
+        payoutBonusRate: body.payoutBonusRate,
+        payoutBonusEnabled: body.payoutBonusEnabled,
+      },
+      update: {
+        fundingBonusRate: body.fundingBonusRate,
+        fundingBonusEnabled: body.fundingBonusEnabled,
+        payoutBonusRate: body.payoutBonusRate,
+        payoutBonusEnabled: body.payoutBonusEnabled,
       },
     });
+    return {
+      id: settings.id,
+      fundingBonusRate: settings.fundingBonusRate.toString(),
+      fundingBonusEnabled: settings.fundingBonusEnabled,
+      payoutBonusRate: settings.payoutBonusRate.toString(),
+      payoutBonusEnabled: settings.payoutBonusEnabled,
+      updatedAt: settings.updatedAt,
+      createdAt: settings.createdAt,
+    };
+  }
+
+  @Post('admin/training-payouts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async createTrainingPayout(@Body() body: CreateTrainingPayoutDto) {
+    return this.creditTrainingPayout(body.userId, body.tokenAmount, body.reference);
   }
 
   /**
    * Referrers + how much they've earned so far, for admins to see who's
-   * actually bringing in real, funding contributors. groupBy on
-   * REFERRAL_COMMISSION ledger entries, joined back to the referrer's wallet
-   * (walletId on those entries is always the referrer's own wallet -- see
-   * handleNowPaymentsWebhook) for the referrer's email.
+   * actually bringing in real contributors. groupBy on referral bonus ledger
+   * entries, joined back to the referrer's wallet for the referrer's email.
    */
   @Get('admin/referrals')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -420,7 +484,7 @@ export class WalletController {
   async listReferrals() {
     const totals = await this.prisma.ledgerEntry.groupBy({
       by: ['walletId'],
-      where: { type: 'REFERRAL_COMMISSION' },
+      where: { type: { in: ['REFERRAL_COMMISSION', 'REFERRAL_FUNDING_BONUS', 'REFERRAL_PAYOUT_BONUS'] } },
       _sum: { amount: true },
       _count: { _all: true },
     });
@@ -439,7 +503,7 @@ export class WalletController {
         referralCode: wallet?.user.referralCode ?? null,
         referredUsers: wallet?.user.referrals ?? [],
         totalCommission: t._sum.amount?.toString() ?? '0',
-        commissionCount: t._count._all,
+        bonusEventCount: t._count._all,
       };
     });
   }

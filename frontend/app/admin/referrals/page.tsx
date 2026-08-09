@@ -1,166 +1,158 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import {
   normalizeErrorMessage,
-  useCreateReferralProgramMutation,
-  useGetReferralProgramsQuery,
+  useGetReferralSettingsQuery,
   useGetReferralsQuery,
-  useUpdateReferralProgramMutation,
+  useUpdateReferralSettingsMutation,
 } from '@/store/api';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
-const secondaryButtonClass =
-  'inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
 
 export default function AdminReferralsPage() {
-  const [name, setName] = useState('');
-  const [commissionRate, setCommissionRate] = useState('0.10');
-  const [endsAt, setEndsAt] = useState('');
+  const [fundingBonusRate, setFundingBonusRate] = useState('0.10');
+  const [fundingBonusEnabled, setFundingBonusEnabled] = useState(true);
+  const [payoutBonusRate, setPayoutBonusRate] = useState('0.00');
+  const [payoutBonusEnabled, setPayoutBonusEnabled] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const { data: programs, isLoading: isLoadingPrograms } = useGetReferralProgramsQuery();
+  const { data: settings, isLoading: isLoadingSettings } = useGetReferralSettingsQuery();
   const { data: referrals, isLoading: isLoadingReferrals } = useGetReferralsQuery();
-  const [createProgram, { isLoading: isCreating }] = useCreateReferralProgramMutation();
-  const [updateProgram] = useUpdateReferralProgramMutation();
+  const [updateSettings, { isLoading: isSaving }] = useUpdateReferralSettingsMutation();
 
-  async function handleCreate(e: React.FormEvent) {
+  useEffect(() => {
+    if (!settings) return;
+    setFundingBonusRate(settings.fundingBonusRate);
+    setFundingBonusEnabled(settings.fundingBonusEnabled);
+    setPayoutBonusRate(settings.payoutBonusRate);
+    setPayoutBonusEnabled(settings.payoutBonusEnabled);
+  }, [settings]);
+
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    setMessage(null);
     setError(null);
-    try {
-      await createProgram({
-        name,
-        commissionRate: Number(commissionRate),
-        endsAt: endsAt ? new Date(endsAt).toISOString() : undefined,
-      }).unwrap();
-      setName('');
-      setEndsAt('');
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to create referral program.'));
-    }
-  }
 
-  async function toggleActive(id: string, isActive: boolean) {
-    await updateProgram({ id, body: { isActive: !isActive } });
+    try {
+      await updateSettings({
+        fundingBonusRate: Number(fundingBonusRate),
+        fundingBonusEnabled,
+        payoutBonusRate: Number(payoutBonusRate),
+        payoutBonusEnabled,
+      }).unwrap();
+      setMessage('Referral bonus settings saved.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to save referral settings.'));
+    }
   }
 
   return (
     <AdminShell>
       <div className="grid gap-6">
         <div className="grid gap-2">
-          <h1 className="text-3xl font-black">Referral programs</h1>
+          <h1 className="text-3xl font-black">Referral bonuses</h1>
           <p className="leading-relaxed text-muted">
-            Manage referral campaign windows and see who is earning commissions.
+            Set the fixed platform referral bonuses. A rate of 0 or a disabled toggle prevents that bonus from being applied.
           </p>
         </div>
 
-      <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-        <h2 className="text-2xl leading-snug">New program</h2>
-        <form className="grid gap-2.5 md:max-w-md" onSubmit={handleCreate}>
-          <label htmlFor="program-name">Name</label>
-          <input
-            className={inputClass}
-            id="program-name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-          <label htmlFor="program-rate">Commission rate (0-1, e.g. 0.10 = 10%)</label>
-          <input
-            className={inputClass}
-            id="program-rate"
-            type="number"
-            step="0.01"
-            min="0"
-            max="1"
-            value={commissionRate}
-            onChange={(e) => setCommissionRate(e.target.value)}
-            required
-          />
-          <label htmlFor="program-ends">Ends at (optional)</label>
-          <input
-            className={inputClass}
-            id="program-ends"
-            type="datetime-local"
-            value={endsAt}
-            onChange={(e) => setEndsAt(e.target.value)}
-          />
-          <div>
-            <button className={primaryButtonClass} type="submit" disabled={isCreating}>
-              Create program
-            </button>
-          </div>
-        </form>
-        {error && (
-          <p className="leading-relaxed text-danger" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
+        <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+          <h2 className="text-2xl leading-snug">Bonus settings</h2>
+          {isLoadingSettings && <p className="text-muted">Loading...</p>}
+          {!isLoadingSettings && (
+            <form className="grid gap-4 md:max-w-xl" onSubmit={handleSave}>
+              <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
+                <label className="flex items-center gap-2 font-bold" htmlFor="funding-enabled">
+                  <input
+                    id="funding-enabled"
+                    type="checkbox"
+                    checked={fundingBonusEnabled}
+                    onChange={(e) => setFundingBonusEnabled(e.target.checked)}
+                  />
+                  Token funding referral bonus
+                </label>
+                <p className="leading-relaxed text-muted">
+                  Paid to the referrer when an invited user&apos;s token funding payment is confirmed.
+                </p>
+                <label htmlFor="funding-rate">Fractional rate, e.g. 0.10 = 10%</label>
+                <input
+                  className={inputClass}
+                  id="funding-rate"
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  max="1"
+                  value={fundingBonusRate}
+                  onChange={(e) => setFundingBonusRate(e.target.value)}
+                  required
+                />
+              </div>
 
-      <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-        <h2 className="text-2xl leading-snug">Programs</h2>
-        {isLoadingPrograms && <p className="text-muted">Loading...</p>}
-        {programs && programs.length === 0 && <p className="text-muted">No referral programs yet.</p>}
-        {programs && programs.length > 0 && (
-          <div className="grid gap-2">
-            {programs.map((program) => (
-              <div
-                className="grid gap-2 rounded-lg border border-line bg-surface p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-                key={program.id}
-              >
-                <div className="grid gap-1">
-                  <p className="font-extrabold">{program.name}</p>
+              <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
+                <label className="flex items-center gap-2 font-bold" htmlFor="payout-enabled">
+                  <input
+                    id="payout-enabled"
+                    type="checkbox"
+                    checked={payoutBonusEnabled}
+                    onChange={(e) => setPayoutBonusEnabled(e.target.checked)}
+                  />
+                  Training payout referral bonus
+                </label>
+                <p className="leading-relaxed text-muted">
+                  Deducted from an invited user&apos;s scored training payout and remitted to the referrer.
+                </p>
+                <label htmlFor="payout-rate">Fractional rate, e.g. 0.05 = 5%</label>
+                <input
+                  className={inputClass}
+                  id="payout-rate"
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  max="1"
+                  value={payoutBonusRate}
+                  onChange={(e) => setPayoutBonusRate(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <button className={primaryButtonClass} type="submit" disabled={isSaving}>
+                  Save settings
+                </button>
+              </div>
+            </form>
+          )}
+          {message && <p className="leading-relaxed text-accent-dark">{message}</p>}
+          {error && (
+            <p className="leading-relaxed text-danger" role="alert">
+              {error}
+            </p>
+          )}
+        </section>
+
+        <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+          <h2 className="text-2xl leading-snug">Referrers</h2>
+          {isLoadingReferrals && <p className="text-muted">Loading...</p>}
+          {referrals && referrals.length === 0 && <p className="text-muted">No referral bonuses yet.</p>}
+          {referrals && referrals.length > 0 && (
+            <div className="grid gap-2">
+              {referrals.map((r) => (
+                <div className="grid gap-1 rounded-lg border border-line bg-surface p-4" key={r.referralCode}>
+                  <p className="font-extrabold">{r.referrerEmail}</p>
                   <p className="text-sm text-muted">
-                    {(Number(program.commissionRate) * 100).toFixed(0)}% commission &middot; starts{' '}
-                    {new Date(program.startsAt).toLocaleString()}
-                    {program.endsAt ? ` &middot; ends ${new Date(program.endsAt).toLocaleString()}` : ''}
+                    {r.referredUsers.length} referred &middot; {r.bonusEventCount} bonus events &middot; earned{' '}
+                    {r.totalCommission} tokens
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded-lg px-3 py-1.5 text-sm font-bold ${
-                      program.isActive ? 'bg-accent-soft text-accent-dark' : 'bg-surface-muted text-muted'
-                    }`}
-                  >
-                    {program.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                  <button
-                    className={secondaryButtonClass}
-                    onClick={() => toggleActive(program.id, program.isActive)}
-                    type="button"
-                  >
-                    {program.isActive ? 'Deactivate' : 'Activate'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-        <h2 className="text-2xl leading-snug">Referrers</h2>
-        {isLoadingReferrals && <p className="text-muted">Loading...</p>}
-        {referrals && referrals.length === 0 && <p className="text-muted">No referral commissions yet.</p>}
-        {referrals && referrals.length > 0 && (
-          <div className="grid gap-2">
-            {referrals.map((r) => (
-              <div className="grid gap-1 rounded-lg border border-line bg-surface p-4" key={r.referralCode}>
-                <p className="font-extrabold">{r.referrerEmail}</p>
-                <p className="text-sm text-muted">
-                  {r.referredUsers.length} referred &middot; {r.commissionCount} confirmed purchases &middot; earned{' '}
-                  {r.totalCommission} tokens
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </AdminShell>
   );

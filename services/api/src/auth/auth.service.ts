@@ -105,7 +105,7 @@ export class AuthService {
    * proceeds either way, just without attribution if the code doesn't
    * resolve. Same-email-domain check is a minimal anti-abuse guard against
    * the most obvious self-referral case (registering throwaway accounts on
-   * your own link to farm commissions); it doesn't stop a determined abuser
+   * your own link to farm bonuses); it doesn't stop a determined abuser
    * with multiple real domains, but that's an explicit, accepted tradeoff
    * for v1 -- see plan "Anti-abuse scope".
    */

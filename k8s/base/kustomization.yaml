@@ -2,6 +2,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  # k8s/jobs/prisma-release-job.yaml is intentionally excluded. The manual
+  # production release workflow creates it once per image instead of running
+  # database migrations during every kustomize apply or API pod restart.
   - redis.yaml
   - postgres.yaml
   - pgadmin.yaml

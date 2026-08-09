@@ -23,7 +23,7 @@ function ReferralLinkCard({ referralCode }: { referralCode: string }) {
     <section className="grid gap-2 rounded-lg border border-line bg-surface p-4">
       <h2 className="text-lg font-black">Your referral link</h2>
       <p className="leading-relaxed text-muted">
-        Earn a commission on every confirmed token purchase from people you refer, while a referral program is active.
+        Earn referral bonuses from confirmed token funding and eligible scored training payouts when those bonuses are enabled.
       </p>
       <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2">
         <span className="min-w-0 flex-1 truncate text-sm font-bold">{referralLink}</span>

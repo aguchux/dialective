@@ -1,14 +1,13 @@
 name: Deploy Prisma migrations + seed to production
 
-# Manual-only: this touches the production database, so it must never run
-# on a plain push. Run from the Actions tab after docker-publish.yml has
-# built the image you want to migrate/seed against.
+# Manual-only: build docker-publish.yml first, then release the matching
+# immutable image tag against the production database.
 on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "golojan/dialect-api tag to run migrate+seed with (defaults to latest)"
-        required: false
+        description: "dialect-api-prisma image tag (prefer a commit SHA)"
+        required: true
         default: "latest"
 
 concurrency:
@@ -18,7 +17,11 @@ concurrency:
 jobs:
   migrate-and-seed:
     runs-on: ubuntu-latest
+    environment: production
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
 
@@ -27,48 +30,51 @@ jobs:
           mkdir -p "$HOME/.kube"
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
 
-      # One-off Job in the same namespace/network as the real api Deployment,
-      # reusing the same postgres-creds secret it already gets DATABASE_URL
-      # from (k8s/base/api-deployment.yaml) -- Postgres is a headless
-      # ClusterIP service (k8s/base/postgres.yaml), unreachable from the
-      # GitHub-hosted runner directly, so migrate+seed have to run from
-      # inside the cluster network instead.
-      #
-      # The production image is built with `npm install --omit=dev`
-      # (services/api/Dockerfile), so the prisma CLI/ts-node/typescript
-      # devDependencies this needs aren't in it -- `npm install` (not
-      # --omit=dev) re-adds them at container start before running.
-      # migrate deploy also already runs as part of the image's own CMD on
-      # every pod start, but running it again here is harmless/idempotent
-      # and keeps this step self-contained if that ever changes.
-      - name: Run migrate deploy + seed as a k8s Job
+      - name: Run Prisma release Job
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          JOB_NAME="prisma-deploy-$(date +%s)"
-          kubectl run "$JOB_NAME" \
-            --namespace dai \
-            --image "golojan/dialect-api:${{ inputs.image_tag }}" \
-            --restart Never \
-            --overrides='
-            {
-              "spec": {
-                "containers": [{
-                  "name": "prisma-deploy",
-                  "image": "golojan/dialect-api:'"${{ inputs.image_tag }}"'",
-                  "command": ["sh", "-c", "npm install && npx prisma migrate deploy && npm run prisma:seed"],
-                  "workingDir": "/app",
-                  "env": [{
-                    "name": "DATABASE_URL",
-                    "valueFrom": { "secretKeyRef": { "name": "postgres-creds", "key": "connection_string" } }
-                  }]
-                }]
-              }
-            }'
-          echo "Waiting for $JOB_NAME to complete..."
-          kubectl wait --namespace dai --for=condition=Ready --timeout=120s "pod/$JOB_NAME" || true
-          kubectl logs --namespace dai "$JOB_NAME" --follow || true
-          STATUS=$(kubectl get pod "$JOB_NAME" --namespace dai -o jsonpath='{.status.phase}')
-          kubectl delete pod "$JOB_NAME" --namespace dai --ignore-not-found
-          if [ "$STATUS" != "Succeeded" ]; then
-            echo "Pod finished with phase=$STATUS, treating as failure"
+          if ! printf '%s' "$IMAGE_TAG" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'; then
+            echo "Invalid image tag: $IMAGE_TAG" >&2
             exit 1
           fi
+
+          POSTGRES_SECRET=$(kubectl get deployment api --namespace dai \
+            -o jsonpath='{.spec.template.spec.containers[?(@.name=="api")].env[?(@.name=="DATABASE_URL")].valueFrom.secretKeyRef.name}')
+          if ! printf '%s' "$POSTGRES_SECRET" | grep -Eq '^postgres-creds-[a-z0-9]+$'; then
+            echo "Could not resolve the Kustomize-generated Postgres Secret from deployment/api" >&2
+            exit 1
+          fi
+
+          JOB_NAME=$(
+            sed \
+              -e "s|golojan/dialect-api-prisma:latest|golojan/dialect-api-prisma:${IMAGE_TAG}|" \
+              -e "s|name: postgres-creds$|name: ${POSTGRES_SECRET}|" \
+              k8s/jobs/prisma-release-job.yaml \
+              | kubectl create --namespace dai -f - -o jsonpath='{.metadata.name}'
+          )
+          echo "Created $JOB_NAME with image tag $IMAGE_TAG"
+
+          RELEASE_STATUS=""
+          for _ in $(seq 1 120); do
+            SUCCEEDED=$(kubectl get job "$JOB_NAME" --namespace dai -o jsonpath='{.status.succeeded}')
+            FAILED=$(kubectl get job "$JOB_NAME" --namespace dai -o jsonpath='{.status.failed}')
+            if [ "$SUCCEEDED" = "1" ]; then
+              RELEASE_STATUS="succeeded"
+              break
+            fi
+            if [ -n "$FAILED" ] && [ "$FAILED" -gt 2 ]; then
+              RELEASE_STATUS="failed"
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "$RELEASE_STATUS" != "succeeded" ]; then
+            kubectl describe job "$JOB_NAME" --namespace dai
+            kubectl logs "job/$JOB_NAME" --namespace dai --all-containers=true --prefix=true || true
+            echo "Prisma release ${RELEASE_STATUS:-timed out}" >&2
+            exit 1
+          fi
+
+          kubectl logs "job/$JOB_NAME" --namespace dai --all-containers=true --prefix=true

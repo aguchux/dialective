@@ -67,22 +67,21 @@ export interface DataAccessLeadInput {
   useCase?: string;
 }
 
-export interface ReferralProgram {
+export interface ReferralSettings {
   id: string;
-  name: string;
-  commissionRate: string;
-  startsAt: string;
-  endsAt: string | null;
-  isActive: boolean;
+  fundingBonusRate: string;
+  fundingBonusEnabled: boolean;
+  payoutBonusRate: string;
+  payoutBonusEnabled: boolean;
+  updatedAt: string;
   createdAt: string;
 }
 
-export interface ReferralProgramInput {
-  name: string;
-  commissionRate?: number;
-  startsAt?: string;
-  endsAt?: string;
-  isActive?: boolean;
+export interface ReferralSettingsInput {
+  fundingBonusRate?: number;
+  fundingBonusEnabled?: boolean;
+  payoutBonusRate?: number;
+  payoutBonusEnabled?: boolean;
 }
 
 export interface ReferralSummary {
@@ -90,7 +89,7 @@ export interface ReferralSummary {
   referralCode: string | null;
   referredUsers: { id: string; email: string; createdAt: string }[];
   totalCommission: string;
-  commissionCount: number;
+  bonusEventCount: number;
 }
 
 export interface Wallet {
@@ -100,12 +99,17 @@ export interface Wallet {
 
 export interface AdminStats {
   totalTrainers: number;
-  activeReferralPrograms: number;
+  referralSettings: {
+    fundingBonusRate: string;
+    fundingBonusEnabled: boolean;
+    payoutBonusRate: string;
+    payoutBonusEnabled: boolean;
+  };
   pendingWithdrawals: number;
   dataAccessLeads: number;
   totalDepositsUsd: string;
   totalTokensFunded: string;
-  totalReferralCommissions: string;
+  totalReferralBonuses: string;
 }
 
 export interface ApiErrorShape {
@@ -142,7 +146,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'ReferralPrograms', 'Users', 'AdminCountries', 'AdminDialects'],
+  tagTypes: ['Auth', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects'],
   endpoints: (builder) => ({
     register: builder.mutation<AuthResult, { email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -203,25 +207,17 @@ export const dialectivaApi = createApi({
         body,
       }),
     }),
-    getReferralPrograms: builder.query<ReferralProgram[], void>({
-      query: () => '/admin/referral-programs',
-      providesTags: ['ReferralPrograms'],
+    getReferralSettings: builder.query<ReferralSettings, void>({
+      query: () => '/admin/referral-settings',
+      providesTags: ['ReferralSettings'],
     }),
-    createReferralProgram: builder.mutation<ReferralProgram, ReferralProgramInput>({
+    updateReferralSettings: builder.mutation<ReferralSettings, ReferralSettingsInput>({
       query: (body) => ({
-        url: '/admin/referral-programs',
-        method: 'POST',
-        body,
-      }),
-      invalidatesTags: ['ReferralPrograms'],
-    }),
-    updateReferralProgram: builder.mutation<ReferralProgram, { id: string; body: Partial<ReferralProgramInput> }>({
-      query: ({ id, body }) => ({
-        url: `/admin/referral-programs/${id}`,
+        url: '/admin/referral-settings',
         method: 'PATCH',
         body,
       }),
-      invalidatesTags: ['ReferralPrograms'],
+      invalidatesTags: ['ReferralSettings'],
     }),
     getReferrals: builder.query<ReferralSummary[], void>({
       query: () => '/admin/referrals',
@@ -298,9 +294,8 @@ export const {
   useGetWalletQuery,
   useUpdateProfileMutation,
   useCreateDataAccessLeadMutation,
-  useGetReferralProgramsQuery,
-  useCreateReferralProgramMutation,
-  useUpdateReferralProgramMutation,
+  useGetReferralSettingsQuery,
+  useUpdateReferralSettingsMutation,
   useGetReferralsQuery,
   useGetAdminStatsQuery,
   useGetUsersQuery,

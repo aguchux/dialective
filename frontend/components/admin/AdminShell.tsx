@@ -1,9 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { BrandLogo } from '@/components/BrandLogo';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/DropdownMenu';
 
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: HomeIcon },
@@ -14,7 +22,10 @@ const navItems = [
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { data: session } = useSession();
+  const email = session?.user?.email ?? '';
+  const initial = email ? email[0].toUpperCase() : '?';
 
   return (
     <div className="grid min-h-screen bg-surface-muted text-ink md:grid-cols-[240px_1fr]">
@@ -39,6 +50,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+
+        <button
+          className="mt-auto flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+          onClick={() => signOut({ callbackUrl: '/' })}
+          type="button"
+        >
+          <SignOutIcon />
+          Sign out
+        </button>
       </aside>
 
       <div className="flex min-h-screen flex-col">
@@ -48,14 +68,34 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
           <span className="hidden text-lg font-black md:inline">Admin Panel</span>
           <div className="flex items-center gap-3">
-            <span className="hidden text-sm font-bold text-muted sm:inline">{session?.user?.email}</span>
             <button
-              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted"
-              onClick={() => signOut({ callbackUrl: '/' })}
+              className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink transition-colors hover:bg-surface-muted"
               type="button"
+              aria-label="Notifications"
             >
-              Sign out
+              <BellIcon />
             </button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pl-1 pr-2.5 transition-colors hover:bg-surface-muted">
+                <span className="grid size-7 place-items-center rounded-full bg-accent text-sm font-black text-white">{initial}</span>
+                <span className="hidden max-w-40 truncate text-sm font-bold sm:inline">{email}</span>
+                <ChevronIcon />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuLabel>{email}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => router.push('/')}>
+                  <HomeIcon />
+                  Back to site
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>
+                  <SignOutIcon />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 
@@ -107,6 +147,32 @@ function GeoIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx="12" cy="9.5" r="2.25" />
+    </svg>
+  );
+}
+
+function SignOutIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

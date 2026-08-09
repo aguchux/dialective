@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "prisma generate && nest build",
+    "build": "npm run prisma:generate && npm run build:app",
+    "build:app": "nest build",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "ts-node --transpile-only prisma/seed.ts",
+    "prisma:release": "npm run prisma:deploy && npm run prisma:seed",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },

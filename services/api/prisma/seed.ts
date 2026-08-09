@@ -107,30 +107,38 @@ const COUNTRIES: CountrySeed[] = [
 async function main() {
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
   try {
-    for (const text of WORDS) {
-      await prisma.word.upsert({
-        where: { text },
-        create: { text },
-        update: {},
-      });
-    }
-    console.log(`Seeded ${WORDS.length} words.`);
+    const wordResult = await prisma.word.createMany({
+      data: WORDS.map((text) => ({ text })),
+      skipDuplicates: true,
+    });
 
-    for (const country of COUNTRIES) {
-      const countryRow = await prisma.country.upsert({
-        where: { code: country.code },
-        create: { code: country.code, name: country.name },
-        update: { name: country.name },
-      });
-      for (const dialect of country.dialects) {
-        await prisma.dialect.upsert({
+    const countryRows = await Promise.all(
+      COUNTRIES.map((country) =>
+        prisma.country.upsert({
+          where: { code: country.code },
+          create: { code: country.code, name: country.name },
+          update: { name: country.name },
+        }),
+      ),
+    );
+    const countryIds = new Map(countryRows.map((country) => [country.code, country.id]));
+    const dialects = COUNTRIES.flatMap((country) => country.dialects.map((dialect) => ({
+      ...dialect,
+      countryId: countryIds.get(country.code)!,
+    })));
+
+    await Promise.all(
+      dialects.map((dialect) =>
+        prisma.dialect.upsert({
           where: { tag: dialect.tag },
-          create: { tag: dialect.tag, name: dialect.name, countryId: countryRow.id },
-          update: { name: dialect.name, countryId: countryRow.id },
-        });
-      }
-    }
-    console.log(`Seeded ${COUNTRIES.length} countries and their dialects.`);
+          create: { tag: dialect.tag, name: dialect.name, countryId: dialect.countryId },
+          update: { name: dialect.name, countryId: dialect.countryId },
+        }),
+      ),
+    );
+    console.log(
+      `Seeded ${COUNTRIES.length} countries, ${dialects.length} dialects, and added ${wordResult.count} new words.`,
+    );
   } finally {
     await prisma.$disconnect();
   }

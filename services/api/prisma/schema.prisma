@@ -183,9 +183,12 @@ model WordRecording {
 
 enum LedgerEntryType {
   DEPOSIT
+  TRAINING_PAYOUT
   WITHDRAWAL
   WITHDRAWAL_REVERSED
-  REFERRAL_COMMISSION
+  REFERRAL_COMMISSION // legacy: old single-rate funding commission entries
+  REFERRAL_FUNDING_BONUS
+  REFERRAL_PAYOUT_BONUS
 }
 
 enum WithdrawalStatus {
@@ -228,6 +231,7 @@ model LedgerEntry {
   createdAt DateTime        @default(now())
 
   @@index([walletId])
+  @@unique([walletId, type, reference])
   @@map("ledger_entries")
 }
 
@@ -276,22 +280,21 @@ model WithdrawalRequest {
   @@map("withdrawal_requests")
 }
 
-/// A time-boxed referral campaign. Commissions only accrue while a program
-/// is "active" -- isActive=true AND startsAt <= now() AND (endsAt IS NULL OR
-/// endsAt > now()), checked app-side in WalletController.getActiveReferralProgram
-/// (no DB constraint enforcing at-most-one-active-row; if an admin creates
-/// overlapping active campaigns, the most recently created one wins -- see
-/// that method).
-model ReferralProgram {
-  id             String    @id @default(uuid())
-  name           String
-  commissionRate Decimal   @default(0.10) @db.Decimal(5, 4) // e.g. 0.10 = 10%
-  startsAt       DateTime  @default(now())
-  endsAt         DateTime?
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
+/// Fixed platform referral settings. Admins don't create referral campaigns;
+/// they only tune these two fractional rates/toggles:
+/// - funding bonus: credited to the referrer when a referred user funds tokens
+/// - payout bonus: deducted from a referred user's scored training payout and
+///   remitted to the referrer when that payout is credited
+model ReferralSettings {
+  id                  String   @id @default("default")
+  fundingBonusRate    Decimal  @default(0.10) @db.Decimal(5, 4)
+  fundingBonusEnabled Boolean  @default(true)
+  payoutBonusRate     Decimal  @default(0.00) @db.Decimal(5, 4)
+  payoutBonusEnabled  Boolean  @default(false)
+  updatedAt           DateTime @updatedAt
+  createdAt           DateTime @default(now())
 
-  @@map("referral_programs")
+  @@map("referral_settings")
 }
 
 /// One row per "Subscribe to voice data" form submission from the landing

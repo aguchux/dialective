@@ -26,16 +26,27 @@ jobs:
           # also COPY models/*.yaml, so they need repo-root context instead.
           - service: api
             context: .
+            image: api
+            target: runtime
+          - service: api
+            context: .
+            image: api-prisma
+            target: prisma-release
           - service: consensus-scorer
             context: services/consensus-scorer
+            image: consensus-scorer
           - service: settlement-job
             context: services/settlement-job
+            image: settlement-job
           - service: prompt-audio-service
             context: .
+            image: prompt-audio-service
           - service: vosk-worker
             context: .
+            image: vosk-worker
           - service: whisper-worker
             context: .
+            image: whisper-worker
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,14 +60,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push ${{ matrix.service }}
+      - name: Build and push ${{ matrix.image }}
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
           file: services/${{ matrix.service }}/Dockerfile
+          target: ${{ matrix.target }}
           push: true
           tags: |
-            golojan/dialect-${{ matrix.service }}:latest
-            golojan/dialect-${{ matrix.service }}:${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+            golojan/dialect-${{ matrix.image }}:latest
+            golojan/dialect-${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

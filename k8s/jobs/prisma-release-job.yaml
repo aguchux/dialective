@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: prisma-release-
+  labels:
+    app: prisma-release
+    app.kubernetes.io/component: database-release
+    app.kubernetes.io/part-of: dialectiva
+spec:
+  activeDeadlineSeconds: 600
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: prisma-release
+        app.kubernetes.io/component: database-release
+        app.kubernetes.io/part-of: dialectiva
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: prisma-release
+          image: golojan/dialect-api-prisma:latest
+          imagePullPolicy: Always
+          command: ["npm", "run", "prisma:release"]
+          workingDir: /app
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: connection_string
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

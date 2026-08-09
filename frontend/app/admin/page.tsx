@@ -5,9 +5,9 @@ import { useGetAdminStatsQuery, useGetReferralsQuery } from '@/store/api';
 
 const statIconBg: Record<string, string> = {
   trainers: 'bg-[#e8f0fe] text-[#3B6DF0]',
-  programs: 'bg-[#efe8fe] text-[#7B3BF0]',
+  bonuses: 'bg-[#efe8fe] text-[#7B3BF0]',
   deposits: 'bg-[#e6f7ef] text-[#1AAE5C]',
-  commissions: 'bg-[#fff3e0] text-[#D98A0D]',
+  bonusesPaid: 'bg-[#fff3e0] text-[#D98A0D]',
 };
 
 export default function AdminDashboardPage() {
@@ -22,9 +22,13 @@ export default function AdminDashboardPage() {
       icon: TrainerIcon,
     },
     {
-      key: 'programs',
-      label: 'Active Referral Programs',
-      value: stats ? stats.activeReferralPrograms.toLocaleString() : '-',
+      key: 'bonuses',
+      label: 'Funding Referral Bonus',
+      value: stats
+        ? stats.referralSettings.fundingBonusEnabled
+          ? `${(Number(stats.referralSettings.fundingBonusRate) * 100).toFixed(2)}%`
+          : 'Off'
+        : '-',
       icon: ProgramIcon,
     },
     {
@@ -34,9 +38,9 @@ export default function AdminDashboardPage() {
       icon: DepositIcon,
     },
     {
-      key: 'commissions',
-      label: 'Referral Commissions Paid',
-      value: stats ? `${Number(stats.totalReferralCommissions).toLocaleString(undefined, { maximumFractionDigits: 2 })} tokens` : '-',
+      key: 'bonusesPaid',
+      label: 'Referral Bonuses Paid',
+      value: stats ? `${Number(stats.totalReferralBonuses).toLocaleString(undefined, { maximumFractionDigits: 2 })} tokens` : '-',
       icon: CommissionIcon,
     },
   ];
@@ -70,7 +74,7 @@ export default function AdminDashboardPage() {
           <div className="grid content-start gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
             <h2 className="text-lg font-black">Recent referrers</h2>
             {!referrals && <p className="text-muted">Loading...</p>}
-            {referrals && referrals.length === 0 && <p className="text-muted">No referral commissions yet.</p>}
+            {referrals && referrals.length === 0 && <p className="text-muted">No referral bonuses yet.</p>}
             <div className="grid gap-3">
               {referrals?.slice(0, 5).map((r) => (
                 <div className="flex items-start justify-between gap-3 border-b border-line pb-3 last:border-0 last:pb-0" key={r.referralCode}>

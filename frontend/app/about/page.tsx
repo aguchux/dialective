@@ -46,7 +46,7 @@ const howItWorks = [
   {
     step: '04',
     title: 'Refer, resell, or cash out',
-    body: 'Earn 10% of your referrals’ token funding for as long as a referral program is active, and sell tokens back to the pool or directly to other members in local currency through our escrow-guarded exchange.',
+    body: 'Earn admin-configured referral bonuses from confirmed token funding and eligible scored training payouts from people you invite.',
   },
 ];
 
@@ -115,7 +115,7 @@ export default function AboutPage() {
           </div>
           <p className="leading-relaxed text-muted">
             Payout scoring, the subscriber-funded reward pool, and member-to-member token resale are actively being built
-            out. Referral commissions and token funding are live today.
+            out. Token funding is live today, and referral bonuses are controlled from the admin dashboard.
           </p>
         </section>
 
