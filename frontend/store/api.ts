@@ -227,14 +227,14 @@ export const dialectivaApi = createApi({
     }),
     getUsers: builder.query<PublicUser[], { role?: string; status?: string; search?: string } | void>({
       query: (params) => ({
-        url: '/admin/users',
+        url: '/auth/admin/users',
         params: params ?? undefined,
       }),
       providesTags: ['Users'],
     }),
     updateUserRole: builder.mutation<PublicUser, { id: string; role: string }>({
       query: ({ id, role }) => ({
-        url: `/admin/users/${id}/role`,
+        url: `/auth/admin/users/${id}/role`,
         method: 'PATCH',
         body: { role },
       }),
@@ -242,7 +242,7 @@ export const dialectivaApi = createApi({
     }),
     updateUserStatus: builder.mutation<PublicUser, { id: string; status: string }>({
       query: ({ id, status }) => ({
-        url: `/admin/users/${id}/status`,
+        url: `/auth/admin/users/${id}/status`,
         method: 'PATCH',
         body: { status },
       }),
