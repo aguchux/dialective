@@ -17,6 +17,13 @@ datasource db {
 enum Role {
   TRAINER
   ADMIN
+  PARTNER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
 }
 
 enum AuthProvider {
@@ -29,6 +36,7 @@ model User {
   email         String   @unique
   passwordHash  String? // null for OAuth/magic-link-only accounts
   role          Role     @default(TRAINER)
+  status        UserStatus @default(ACTIVE)
   emailVerified DateTime?
   countryId     String?
   country       Country? @relation(fields: [countryId], references: [id])

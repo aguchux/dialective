@@ -5,7 +5,8 @@ import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 export interface PublicUser {
   id: string;
   email: string;
-  role: 'TRAINER' | 'ADMIN';
+  role: 'TRAINER' | 'ADMIN' | 'PARTNER';
+  status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
   emailVerified: boolean;
   countryId: string | null;
   dialectId: string | null;
@@ -109,7 +110,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'ReferralPrograms'],
+  tagTypes: ['Auth', 'ReferralPrograms', 'Users'],
   endpoints: (builder) => ({
     register: builder.mutation<AuthResult, { email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -193,6 +194,29 @@ export const dialectivaApi = createApi({
     getAdminStats: builder.query<AdminStats, void>({
       query: () => '/admin/stats',
     }),
+    getUsers: builder.query<PublicUser[], { role?: string; status?: string; search?: string } | void>({
+      query: (params) => ({
+        url: '/admin/users',
+        params: params ?? undefined,
+      }),
+      providesTags: ['Users'],
+    }),
+    updateUserRole: builder.mutation<PublicUser, { id: string; role: string }>({
+      query: ({ id, role }) => ({
+        url: `/admin/users/${id}/role`,
+        method: 'PATCH',
+        body: { role },
+      }),
+      invalidatesTags: ['Users'],
+    }),
+    updateUserStatus: builder.mutation<PublicUser, { id: string; status: string }>({
+      query: ({ id, status }) => ({
+        url: `/admin/users/${id}/status`,
+        method: 'PATCH',
+        body: { status },
+      }),
+      invalidatesTags: ['Users'],
+    }),
   }),
 });
 
@@ -211,6 +235,9 @@ export const {
   useUpdateReferralProgramMutation,
   useGetReferralsQuery,
   useGetAdminStatsQuery,
+  useGetUsersQuery,
+  useUpdateUserRoleMutation,
+  useUpdateUserStatusMutation,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

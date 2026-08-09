@@ -3,7 +3,8 @@ const API_BASE_URL = process.env.API_BASE_URL ?? 'https://api.nmseprep.com';
 export interface PublicUser {
   id: string;
   email: string;
-  role: 'TRAINER' | 'ADMIN';
+  role: 'TRAINER' | 'ADMIN' | 'PARTNER';
+  status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
   emailVerified: boolean;
   countryId: string | null;
   dialectId: string | null;

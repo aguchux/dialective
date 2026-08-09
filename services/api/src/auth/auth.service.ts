@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, randomUUID } from 'crypto';
-import { AuthProvider, Role, User } from '../generated/prisma/client';
+import { AuthProvider, Role, User, UserStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { generateOpaqueToken, hashToken } from './token.util';
@@ -33,6 +33,7 @@ export interface PublicUser {
   id: string;
   email: string;
   role: Role;
+  status: UserStatus;
   emailVerified: boolean;
   countryId: string | null;
   dialectId: string | null;
@@ -48,6 +49,7 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     id: user.id,
     email: user.email,
     role: user.role,
+    status: user.status,
     emailVerified: user.emailVerified !== null,
     countryId: user.countryId,
     dialectId: user.dialectId,
@@ -132,7 +134,23 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    this.assertActive(user);
+
     return this.issueAuthResult(user);
+  }
+
+  /**
+   * Suspended/blocked accounts can't log in, refresh, or consume a magic
+   * link -- their existing access token (short-lived, no per-request DB
+   * check, see JwtAuthGuard) still works for its remaining ~15min, an
+   * accepted tradeoff for not adding a DB hit to every authenticated
+   * request. suspendOrBlockUser revokes all refresh tokens on disable so
+   * re-auth is blocked immediately even if the access token hasn't expired.
+   */
+  private assertActive(user: User): void {
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('This account has been ' + (user.status === UserStatus.BLOCKED ? 'blocked' : 'suspended'));
+    }
   }
 
   // --- Magic-link, persisted after NextAuth verifies the identity ---
@@ -172,6 +190,8 @@ export class AuthService {
         data: { usedAt: new Date() },
       }),
     ]);
+
+    this.assertActive(user);
 
     let account = await this.prisma.linkedAccount.findUnique({
       where: { provider_providerAccountId: { provider: AuthProvider.EMAIL, providerAccountId: user.email } },
@@ -218,6 +238,7 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('User no longer exists');
     }
+    this.assertActive(user);
 
     const { token: nextToken, hash: nextHash } = generateOpaqueToken();
 
@@ -335,6 +356,45 @@ export class AuthService {
       data: { countryId, dialectId },
       include: { dialect: true },
     });
+
+    return toPublicUser(user);
+  }
+
+  // --- Admin: user management ------------------------------------------------
+
+  async listUsers(filters: { role?: Role; status?: UserStatus; search?: string }): Promise<PublicUser[]> {
+    const users = await this.prisma.user.findMany({
+      where: {
+        role: filters.role,
+        status: filters.status,
+        email: filters.search ? { contains: filters.search, mode: 'insensitive' } : undefined,
+      },
+      include: { dialect: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return users.map(toPublicUser);
+  }
+
+  async updateUserRole(userId: string, role: Role): Promise<PublicUser> {
+    const user = await this.prisma.user.update({ where: { id: userId }, data: { role }, include: { dialect: true } });
+    return toPublicUser(user);
+  }
+
+  /**
+   * Disabling (SUSPENDED/BLOCKED) revokes every refresh token so the user
+   * can't silently mint a new access token -- see assertActive. Re-enabling
+   * (back to ACTIVE) does not restore old sessions; the user just logs in
+   * again.
+   */
+  async updateUserStatus(userId: string, status: UserStatus): Promise<PublicUser> {
+    const user = await this.prisma.user.update({ where: { id: userId }, data: { status }, include: { dialect: true } });
+
+    if (status !== UserStatus.ACTIVE) {
+      await this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
 
     return toPublicUser(user);
   }

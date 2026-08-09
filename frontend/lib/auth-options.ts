@@ -58,7 +58,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       session.accessToken = token.accessToken as string;
       session.user.id = token.userId as string;
-      session.user.role = token.role as 'TRAINER' | 'ADMIN';
+      session.user.role = token.role as 'TRAINER' | 'ADMIN' | 'PARTNER';
       session.user.onboardingComplete = token.onboardingComplete ?? false;
       session.user.dialectTag = token.dialectTag ?? null;
       session.user.referralCode = token.referralCode ?? null;

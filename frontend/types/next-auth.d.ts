@@ -7,7 +7,7 @@ declare module 'next-auth' {
     accessToken: string;
     user: {
       id: string;
-      role: 'TRAINER' | 'ADMIN';
+      role: 'TRAINER' | 'ADMIN' | 'PARTNER';
       onboardingComplete: boolean;
       dialectTag: string | null;
       referralCode: string | null;
@@ -19,7 +19,7 @@ declare module 'next-auth/jwt' {
   interface JWT {
     accessToken?: string;
     refreshToken?: string;
-    role?: 'TRAINER' | 'ADMIN';
+    role?: 'TRAINER' | 'ADMIN' | 'PARTNER';
     userId?: string;
     onboardingComplete?: boolean;
     dialectTag?: string | null;
