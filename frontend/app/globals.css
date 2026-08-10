@@ -133,6 +133,34 @@ button:not(:disabled):active,
   transform: scale(0.97);
 }
 
+/* Global cursor-pointer for every clickable control: links, buttons, and
+   anything acting as one (role="button", label wrapping a checkbox/file
+   input, etc). Disabled controls keep the default not-allowed cursor. */
+a,
+button,
+label,
+select,
+summary,
+[role="button"],
+[role="link"],
+[role="tab"],
+[role="menuitem"],
+[role="option"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+input[type="checkbox"],
+input[type="radio"] {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 .action-button[aria-busy="true"] {
   cursor: progress;
 }
