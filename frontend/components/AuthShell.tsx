@@ -6,7 +6,7 @@ export function AuthPage({ children }: { children: React.ReactNode }) {
   return (
     <main className="relative isolate grid min-h-screen place-content-center overflow-hidden bg-bg px-4 py-5">
       <ParallaxTopBackground />
-      <div className="relative z-10 mx-auto grid w-full max-w-95 gap-4">
+      <div className="relative z-10 mx-auto grid w-full min-w-[320px] max-w-95 gap-4">
         <Link
           className="inline-flex items-center gap-1.5 justify-self-start text-sm font-bold text-muted no-underline transition-colors hover:text-ink"
           href="/"

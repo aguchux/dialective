@@ -2,6 +2,8 @@ const API_BASE_URL = process.env.API_BASE_URL ?? 'https://api.dialectlibrary.com
 
 export interface PublicUser {
   id: string;
+  firstName: string | null;
+  lastName: string | null;
   email: string;
   role: 'TRAINER' | 'ADMIN' | 'PARTNER';
   status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
@@ -54,8 +56,8 @@ export const apiClient = {
   login: (email: string, password: string) =>
     apiFetch<AuthResult>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
-  register: (email: string, password: string) =>
-    apiFetch<AuthResult>('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  register: (firstName: string, lastName: string, email: string, password: string) =>
+    apiFetch<AuthResult>('/auth/register', { method: 'POST', body: JSON.stringify({ firstName, lastName, email, password }) }),
 
   refresh: (refreshToken: string) =>
     apiFetch<AuthTokens>('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken }) }),

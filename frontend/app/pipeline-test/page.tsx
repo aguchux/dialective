@@ -45,6 +45,12 @@ export default function PipelineTestPage() {
   // Pre-select the signed-in trainer's onboarding dialect once it's known,
   // without overriding a choice they've already made in this session.
   useEffect(() => {
+    if (window.location.hash === '#word-library') {
+      setMode('word');
+    }
+  }, []);
+
+  useEffect(() => {
     const tag = session?.user?.dialectTag;
     if (tag && DIALECT_OPTIONS.some((opt) => opt.value === tag)) {
       setDialectTag(tag);

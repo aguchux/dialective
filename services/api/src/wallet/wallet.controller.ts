@@ -74,6 +74,97 @@ export class WalletController {
     return { balance: wallet.balance.toString(), tokenUsdRate: await this.platformSettings.getTokenUsdRate() };
   }
 
+  @Get('wallet/dashboard')
+  @UseGuards(JwtAuthGuard)
+  async getTrainerDashboard(@Req() req: AuthenticatedRequest) {
+    const wallet = await this.getOrCreateWallet(req.user.sub);
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setUTCMonth(sixMonthsAgo.getUTCMonth() - 5, 1);
+    sixMonthsAgo.setUTCHours(0, 0, 0, 0);
+
+    const [user, settings, ledgerTotals, recentActivity, earningsHistory, withdrawalTotals] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({
+        where: { id: req.user.sub },
+        select: {
+          referralCode: true,
+          referrals: {
+            orderBy: { createdAt: 'desc' },
+            take: 8,
+            select: { id: true, email: true, createdAt: true },
+          },
+          _count: { select: { referrals: true } },
+        },
+      }),
+      this.getReferralSettings(),
+      this.prisma.ledgerEntry.groupBy({
+        by: ['type'],
+        where: { walletId: wallet.id },
+        _sum: { amount: true },
+      }),
+      this.prisma.ledgerEntry.findMany({
+        where: { walletId: wallet.id },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: { id: true, type: true, amount: true, reference: true, createdAt: true },
+      }),
+      this.prisma.ledgerEntry.findMany({
+        where: {
+          walletId: wallet.id,
+          type: { in: ['TRAINING_PAYOUT', 'REFERRAL_COMMISSION', 'REFERRAL_FUNDING_BONUS', 'REFERRAL_PAYOUT_BONUS'] },
+          createdAt: { gte: sixMonthsAgo },
+        },
+        select: { amount: true, createdAt: true },
+      }),
+      this.prisma.withdrawalRequest.groupBy({
+        by: ['status'],
+        where: { walletId: wallet.id },
+        _sum: { tokenAmount: true },
+      }),
+    ]);
+
+    const ledgerAmount = (types: string[]) =>
+      ledgerTotals
+        .filter((entry) => types.includes(entry.type))
+        .reduce((total, entry) => total + Number(entry._sum.amount ?? 0), 0);
+    const withdrawalAmount = (status: WithdrawalStatus) =>
+      Number(withdrawalTotals.find((entry) => entry.status === status)?._sum.tokenAmount ?? 0);
+
+    const monthTotals = new Map<string, number>();
+    for (let offset = 0; offset < 6; offset += 1) {
+      const month = new Date(Date.UTC(sixMonthsAgo.getUTCFullYear(), sixMonthsAgo.getUTCMonth() + offset, 1));
+      monthTotals.set(month.toISOString().slice(0, 7), 0);
+    }
+    for (const entry of earningsHistory) {
+      const key = entry.createdAt.toISOString().slice(0, 7);
+      monthTotals.set(key, (monthTotals.get(key) ?? 0) + Number(entry.amount));
+    }
+
+    return {
+      balance: wallet.balance.toString(),
+      tokenUsdRate: await this.platformSettings.getTokenUsdRate(),
+      fundedTokens: ledgerAmount(['DEPOSIT']).toString(),
+      trainingEarningsTokens: ledgerAmount(['TRAINING_PAYOUT']).toString(),
+      referralEarningsTokens: ledgerAmount([
+        'REFERRAL_COMMISSION',
+        'REFERRAL_FUNDING_BONUS',
+        'REFERRAL_PAYOUT_BONUS',
+      ]).toString(),
+      paidOutTokens: withdrawalAmount(WithdrawalStatus.PAID).toString(),
+      pendingPayoutTokens: withdrawalAmount(WithdrawalStatus.PENDING).toString(),
+      recentActivity: recentActivity.map((entry) => ({ ...entry, amount: entry.amount.toString() })),
+      monthlyEarnings: Array.from(monthTotals, ([month, amount]) => ({ month, amount: amount.toString() })),
+      referrals: {
+        code: user.referralCode,
+        invitedCount: user._count.referrals,
+        recentInvites: user.referrals,
+        fundingBonusRate: settings.fundingBonusRate.toString(),
+        fundingBonusEnabled: settings.fundingBonusEnabled,
+        payoutBonusRate: settings.payoutBonusRate.toString(),
+        payoutBonusEnabled: settings.payoutBonusEnabled,
+      },
+    };
+  }
+
   @Post('wallet/deposits')
   @UseGuards(JwtAuthGuard)
   async createDeposit(@Req() req: AuthenticatedRequest, @Body() body: CreateDepositDto) {

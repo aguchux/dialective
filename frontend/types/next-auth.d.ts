@@ -8,6 +8,8 @@ declare module 'next-auth' {
     authError?: 'RefreshAccessTokenError' | 'RefreshTokenInvalid';
     user: {
       id: string;
+      firstName: string | null;
+      lastName: string | null;
       role: 'TRAINER' | 'ADMIN' | 'PARTNER';
       onboardingComplete: boolean;
       dialectTag: string | null;
@@ -26,6 +28,8 @@ declare module 'next-auth/jwt' {
     authError?: 'RefreshAccessTokenError' | 'RefreshTokenInvalid';
     role?: 'TRAINER' | 'ADMIN' | 'PARTNER';
     userId?: string;
+    firstName?: string | null;
+    lastName?: string | null;
     onboardingComplete?: boolean;
     dialectTag?: string | null;
     referralCode?: string | null;

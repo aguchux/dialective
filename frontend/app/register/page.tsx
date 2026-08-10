@@ -10,7 +10,7 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { roleHomePath } from '@/lib/role-home';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass = 'min-h-10 min-w-0 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -19,6 +19,8 @@ function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const referralCode = searchParams.get('ref') ?? undefined;
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ function RegisterContent() {
     setIsSubmitting(true);
 
     try {
-      await register({ email, password, referralCode }).unwrap();
+      await register({ firstName, lastName, email, password, referralCode }).unwrap();
       const result = await signIn('credentials', { email, password, redirect: false });
       if (result?.error) {
         setError('Account created, but automatic sign-in failed. Try logging in.');
@@ -70,7 +72,32 @@ function RegisterContent() {
         <h1 className="text-center text-[1.75rem] leading-tight">Create an account</h1>
 
         <form className="grid gap-2.5" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-2 gap-2.5">
+            <input
+              aria-label="First name"
+              autoComplete="given-name"
+              className={inputClass}
+              maxLength={80}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="First name"
+              required
+              type="text"
+              value={firstName}
+            />
+            <input
+              aria-label="Last name"
+              autoComplete="family-name"
+              className={inputClass}
+              maxLength={80}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Last name"
+              required
+              type="text"
+              value={lastName}
+            />
+          </div>
           <input
+            autoComplete="email"
             className={inputClass}
             type="email"
             placeholder="Email"
@@ -79,6 +106,7 @@ function RegisterContent() {
             required
           />
           <input
+            autoComplete="new-password"
             className={inputClass}
             type="password"
             placeholder="Password (min 8 characters)"

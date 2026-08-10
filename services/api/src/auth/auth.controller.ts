@@ -25,7 +25,7 @@ export class AuthController {
 
   @Post('register')
   register(@Body() dto: RegisterDto) {
-    return this.auth.register(dto.email, dto.password, dto.referralCode);
+    return this.auth.register(dto.email, dto.password, dto.firstName, dto.lastName, dto.referralCode);
   }
 
   @Post('login')

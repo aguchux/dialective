@@ -4,6 +4,8 @@ import { getCurrentSession } from '@/lib/client-session';
 
 export interface PublicUser {
   id: string;
+  firstName: string | null;
+  lastName: string | null;
   email: string;
   role: 'TRAINER' | 'ADMIN' | 'PARTNER';
   status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
@@ -95,6 +97,42 @@ export interface ReferralSummary {
 export interface Wallet {
   balance: string;
   tokenUsdRate: number;
+}
+
+export type LedgerEntryType =
+  | 'DEPOSIT'
+  | 'TRAINING_PAYOUT'
+  | 'WITHDRAWAL'
+  | 'WITHDRAWAL_REVERSED'
+  | 'REFERRAL_COMMISSION'
+  | 'REFERRAL_FUNDING_BONUS'
+  | 'REFERRAL_PAYOUT_BONUS';
+
+export interface TrainerDashboardSummary {
+  balance: string;
+  tokenUsdRate: number;
+  fundedTokens: string;
+  trainingEarningsTokens: string;
+  referralEarningsTokens: string;
+  paidOutTokens: string;
+  pendingPayoutTokens: string;
+  recentActivity: {
+    id: string;
+    type: LedgerEntryType;
+    amount: string;
+    reference: string;
+    createdAt: string;
+  }[];
+  monthlyEarnings: { month: string; amount: string }[];
+  referrals: {
+    code: string;
+    invitedCount: number;
+    recentInvites: { id: string; email: string; createdAt: string }[];
+    fundingBonusRate: string;
+    fundingBonusEnabled: boolean;
+    payoutBonusRate: string;
+    payoutBonusEnabled: boolean;
+  };
 }
 
 export interface AdminStats {
@@ -213,9 +251,9 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts'],
   endpoints: (builder) => ({
-    register: builder.mutation<AuthResult, { email: string; password: string; referralCode?: string }>({
+    register: builder.mutation<AuthResult, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
         url: '/auth/register',
         method: 'POST',
@@ -231,6 +269,14 @@ export const dialectivaApi = createApi({
     }),
     getWallet: builder.query<Wallet, void>({
       query: () => '/wallet',
+      providesTags: ['Wallet'],
+    }),
+    getTrainerDashboard: builder.query<TrainerDashboardSummary, void>({
+      query: () => '/wallet/dashboard',
+      providesTags: ['Wallet'],
+    }),
+    createTokenDeposit: builder.mutation<{ depositId: string; hostedCheckoutUrl: string }, { usdAmount: number; currency: 'USDC' | 'USDT' }>({
+      query: (body) => ({ url: '/wallet/deposits', method: 'POST', body }),
     }),
     updateProfile: builder.mutation<PublicUser, { countryId: string; dialectId: string }>({
       query: (body) => ({
@@ -398,6 +444,8 @@ export const {
   useGetCountriesQuery,
   useGetDialectsQuery,
   useGetWalletQuery,
+  useGetTrainerDashboardQuery,
+  useCreateTokenDepositMutation,
   useUpdateProfileMutation,
   useCreateDataAccessLeadMutation,
   useGetReferralSettingsQuery,

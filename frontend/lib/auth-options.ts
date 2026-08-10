@@ -53,6 +53,8 @@ export const authOptions: NextAuthOptions = {
         applyTokens(token, apiResult);
         token.role = apiResult.user.role;
         token.userId = apiResult.user.id;
+        token.firstName = apiResult.user.firstName;
+        token.lastName = apiResult.user.lastName;
         token.onboardingComplete = apiResult.user.onboardingComplete;
         token.dialectTag = apiResult.user.dialectTag;
         token.referralCode = apiResult.user.referralCode;
@@ -111,6 +113,8 @@ export const authOptions: NextAuthOptions = {
       session.authError = token.authError;
       session.user.id = token.userId as string;
       session.user.role = token.role as 'TRAINER' | 'ADMIN' | 'PARTNER';
+      session.user.firstName = token.firstName ?? null;
+      session.user.lastName = token.lastName ?? null;
       session.user.onboardingComplete = token.onboardingComplete ?? false;
       session.user.dialectTag = token.dialectTag ?? null;
       session.user.referralCode = token.referralCode ?? null;
@@ -172,9 +176,11 @@ function refreshAccessToken(refreshToken: string): Promise<AuthTokens> {
 }
 
 function authResultToNextAuthUser(result: AuthResult) {
+  const name = [result.user.firstName, result.user.lastName].filter(Boolean).join(' ') || undefined;
   return {
     id: result.user.id,
     email: result.user.email,
+    name,
     __apiAuthResult: result,
   };
 }

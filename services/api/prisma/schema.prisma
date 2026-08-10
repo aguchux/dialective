@@ -38,6 +38,8 @@ enum BlogPostStatus {
 
 model User {
   id            String   @id @default(uuid())
+  firstName     String?
+  lastName      String?
   email         String   @unique
   passwordHash  String? // null for OAuth/magic-link-only accounts
   role          Role     @default(TRAINER)

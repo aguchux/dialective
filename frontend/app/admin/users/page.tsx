@@ -64,11 +64,12 @@ export default function AdminUsersPage() {
   const columns: DataTableColumn<PublicUser>[] = [
     {
       key: 'email',
-      header: 'Email',
-      sortValue: (u) => u.email,
+      header: 'User',
+      sortValue: (u) => `${u.firstName ?? ''} ${u.lastName ?? ''} ${u.email}`,
       render: (u) => (
         <>
-          <p className="font-extrabold">{u.email}</p>
+          <p className="font-extrabold">{[u.firstName, u.lastName].filter(Boolean).join(' ') || 'Name not provided'}</p>
+          <p className="text-sm text-muted">{u.email}</p>
           {u.id === selfId && <p className="text-xs text-muted">This is you</p>}
         </>
       ),
@@ -109,13 +110,13 @@ export default function AdminUsersPage() {
         <section className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-white p-4 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
           <div className="grid gap-1">
             <label className="text-xs font-bold uppercase text-muted" htmlFor="search">
-              Search email
+              Search name or email
             </label>
             <input
               className={inputClass}
               id="search"
               type="text"
-              placeholder="jane@example.com"
+              placeholder="Jane or jane@example.com"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

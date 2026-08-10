@@ -7,7 +7,10 @@ function formatDate(iso: string | null) {
 }
 
 export async function LandingBlog() {
-  const posts = (await getPublishedBlogPosts().catch(() => [])).slice(0, 4);
+  const posts = (await getPublishedBlogPosts().catch(() => []))
+    .slice()
+    .sort((a, b) => (a.publishedAt ?? a.createdAt) < (b.publishedAt ?? b.createdAt) ? 1 : -1)
+    .slice(0, 4);
   if (posts.length === 0) return null;
   return (
     <section className="mx-auto grid max-w-280 gap-6 py-8 pb-9" aria-labelledby="landing-blog-title">

@@ -31,6 +31,8 @@ export interface AuthResult extends AuthTokens {
 
 export interface PublicUser {
   id: string;
+  firstName: string | null;
+  lastName: string | null;
   email: string;
   role: Role;
   status: UserStatus;
@@ -47,6 +49,8 @@ type UserWithDialect = User & { dialect?: { tag: string } | null };
 function toPublicUser(user: UserWithDialect): PublicUser {
   return {
     id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
     email: user.email,
     role: user.role,
     status: user.status,
@@ -82,7 +86,13 @@ export class AuthService {
 
   // --- Registration / credentials login ---------------------------------
 
-  async register(email: string, password: string, referralCode?: string): Promise<AuthResult> {
+  async register(
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+    referralCode?: string,
+  ): Promise<AuthResult> {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException('An account with this email already exists');
@@ -92,7 +102,7 @@ export class AuthService {
     const referredById = await this.resolveReferrerId(referralCode, email);
 
     const user = await this.prisma.user.create({
-      data: { email, passwordHash, referralCode: generateReferralCode(), referredById },
+      data: { email, passwordHash, firstName, lastName, referralCode: generateReferralCode(), referredById },
     });
 
     await this.issueEmailVerification(user);
@@ -363,11 +373,20 @@ export class AuthService {
   // --- Admin: user management ------------------------------------------------
 
   async listUsers(filters: { role?: Role; status?: UserStatus; search?: string }): Promise<PublicUser[]> {
+    const search = filters.search?.trim();
     const users = await this.prisma.user.findMany({
       where: {
         role: filters.role,
         status: filters.status,
-        email: filters.search ? { contains: filters.search, mode: 'insensitive' } : undefined,
+        ...(search
+          ? {
+              OR: [
+                { email: { contains: search, mode: 'insensitive' as const } },
+                { firstName: { contains: search, mode: 'insensitive' as const } },
+                { lastName: { contains: search, mode: 'insensitive' as const } },
+              ],
+            }
+          : {}),
       },
       include: { dialect: true },
       orderBy: { createdAt: 'desc' },
