@@ -32,7 +32,11 @@ RUN npm prune --omit=dev --workspace=@dialectiva/db --workspace=@dialectiva/sett
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+COPY --from=build /app/packages/db/package.json ./packages/db/package.json
 COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=production-dependencies /app/node_modules ./node_modules
-COPY --from=build /app/services/settlement-job/dist ./dist
+COPY --from=production-dependencies /app/services/settlement-job/node_modules ./services/settlement-job/node_modules
+COPY --from=build /app/services/settlement-job/dist ./services/settlement-job/dist
+WORKDIR /app/services/settlement-job
+RUN node -e "require('reflect-metadata'); require('@dialectiva/db')"
 CMD ["node", "dist/main.js"]

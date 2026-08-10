@@ -40,10 +40,14 @@ RUN npm prune --omit=dev --workspace=@dialectiva/db --workspace=@dialectiva/api 
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+COPY --from=build /app/packages/db/package.json ./packages/db/package.json
 COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=production-dependencies /app/node_modules ./node_modules
-COPY --from=build /app/services/api/dist ./dist
-COPY models/asr-registry.yaml ./dist/models/asr-registry.yaml
+COPY --from=production-dependencies /app/services/api/node_modules ./services/api/node_modules
+COPY --from=build /app/services/api/dist ./services/api/dist
+COPY models/asr-registry.yaml ./services/api/dist/models/asr-registry.yaml
+WORKDIR /app/services/api
+RUN node -e "require('reflect-metadata'); require('@dialectiva/db')"
 USER node
 EXPOSE 3000
 CMD ["node", "dist/main.js"]
