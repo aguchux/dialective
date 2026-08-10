@@ -1,9 +1,21 @@
 import type { NextAuthOptions } from 'next-auth';
+import type { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { apiClient, AuthResult } from './api-client';
+import { apiClient, ApiError, AuthResult, AuthTokens } from './api-client';
+
+const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
+const TRANSIENT_REFRESH_RETRY_MS = 15_000;
+const ROTATION_RESULT_CACHE_MS = 10_000;
+
+type RefreshCacheEntry = {
+  expiresAt: number;
+  promise: Promise<AuthTokens>;
+};
+
+const refreshCache = new Map<string, RefreshCacheEntry>();
 
 export const authOptions: NextAuthOptions = {
-  session: { strategy: 'jwt' },
+  session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -38,14 +50,14 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, trigger, session }) {
       const apiResult = (user as unknown as { __apiAuthResult?: AuthResult } | undefined)?.__apiAuthResult;
       if (apiResult) {
-        token.accessToken = apiResult.accessToken;
-        token.refreshToken = apiResult.refreshToken;
+        applyTokens(token, apiResult);
         token.role = apiResult.user.role;
         token.userId = apiResult.user.id;
         token.onboardingComplete = apiResult.user.onboardingComplete;
         token.dialectTag = apiResult.user.dialectTag;
         token.referralCode = apiResult.user.referralCode;
         token.countryId = apiResult.user.countryId;
+        return token;
       }
       // Triggered by useSession().update() after onboarding is completed
       // mid-session, since the JWT otherwise only refreshes this on sign-in.
@@ -54,11 +66,49 @@ export const authOptions: NextAuthOptions = {
         token.dialectTag = session.dialectTag;
         token.countryId = session.countryId;
       }
+
+      if (!token.accessToken || !token.refreshToken) {
+        return token;
+      }
+
+      const expiresAt = token.accessTokenExpires ?? getAccessTokenExpiration(token.accessToken);
+      token.accessTokenExpires = expiresAt;
+
+      if (Date.now() < expiresAt - ACCESS_TOKEN_REFRESH_SKEW_MS) {
+        token.authError = undefined;
+        token.refreshRetryAt = undefined;
+        return token;
+      }
+
+      if (token.refreshRetryAt && Date.now() < token.refreshRetryAt) {
+        return token;
+      }
+
+      try {
+        const refreshed = await refreshAccessToken(token.refreshToken);
+        applyTokens(token, refreshed);
+        return token;
+      } catch (error) {
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          token.accessToken = undefined;
+          token.refreshToken = undefined;
+          token.accessTokenExpires = undefined;
+          token.authError = 'RefreshTokenInvalid';
+          token.refreshRetryAt = undefined;
+          return token;
+        }
+
+        // Keep the refresh credential during temporary API/network failures so
+        // a brief outage does not destroy an otherwise valid browser session.
+        token.authError = 'RefreshAccessTokenError';
+        token.refreshRetryAt = Date.now() + TRANSIENT_REFRESH_RETRY_MS;
+      }
       return token;
     },
 
     async session({ session, token }) {
-      session.accessToken = token.accessToken as string;
+      session.accessToken = typeof token.accessToken === 'string' ? token.accessToken : '';
+      session.authError = token.authError;
       session.user.id = token.userId as string;
       session.user.role = token.role as 'TRAINER' | 'ADMIN' | 'PARTNER';
       session.user.onboardingComplete = token.onboardingComplete ?? false;
@@ -69,10 +119,57 @@ export const authOptions: NextAuthOptions = {
     },
   },
 
+  events: {
+    async signOut({ token }) {
+      if (token.refreshToken) {
+        await apiClient.logout(token.refreshToken).catch(() => undefined);
+      }
+    },
+  },
+
   pages: {
     signIn: '/login',
   },
 };
+
+function applyTokens(token: JWT, tokens: AuthTokens): void {
+  token.accessToken = tokens.accessToken;
+  token.refreshToken = tokens.refreshToken;
+  token.accessTokenExpires = getAccessTokenExpiration(tokens.accessToken);
+  token.authError = undefined;
+  token.refreshRetryAt = undefined;
+}
+
+function getAccessTokenExpiration(accessToken: string): number {
+  try {
+    const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64url').toString('utf8')) as { exp?: number };
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function refreshAccessToken(refreshToken: string): Promise<AuthTokens> {
+  const now = Date.now();
+
+  for (const [key, entry] of refreshCache) {
+    if (entry.expiresAt <= now) {
+      refreshCache.delete(key);
+    }
+  }
+
+  const cached = refreshCache.get(refreshToken);
+  if (cached) {
+    return cached.promise;
+  }
+
+  const promise = apiClient.refresh(refreshToken);
+  refreshCache.set(refreshToken, {
+    expiresAt: now + ROTATION_RESULT_CACHE_MS,
+    promise,
+  });
+  return promise;
+}
 
 function authResultToNextAuthUser(result: AuthResult) {
   return {

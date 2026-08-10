@@ -1,6 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import { getSession } from 'next-auth/react';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
+import { getCurrentSession } from '@/lib/client-session';
 
 export interface PublicUser {
   id: string;
@@ -206,7 +206,7 @@ export const dialectivaApi = createApi({
       // A session-lookup failure must never block a request -- most endpoints
       // (geo/countries, geo/stats, blog/posts, ...) are public and don't need
       // a token at all.
-      const session = await getSession().catch(() => null);
+      const session = await getCurrentSession().catch(() => null);
       if (session?.accessToken) {
         headers.set('Authorization', `Bearer ${session.accessToken}`);
       }

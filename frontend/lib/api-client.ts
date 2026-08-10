@@ -24,7 +24,7 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
@@ -59,6 +59,9 @@ export const apiClient = {
 
   refresh: (refreshToken: string) =>
     apiFetch<AuthTokens>('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken }) }),
+
+  logout: (refreshToken: string) =>
+    apiFetch<void>('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken }) }),
 
   requestMagicLink: (email: string) =>
     apiFetch<void>('/auth/magic-link/request', { method: 'POST', body: JSON.stringify({ email }) }),

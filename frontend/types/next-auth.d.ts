@@ -5,6 +5,7 @@ import 'next-auth/jwt';
 declare module 'next-auth' {
   interface Session {
     accessToken: string;
+    authError?: 'RefreshAccessTokenError' | 'RefreshTokenInvalid';
     user: {
       id: string;
       role: 'TRAINER' | 'ADMIN' | 'PARTNER';
@@ -19,7 +20,10 @@ declare module 'next-auth' {
 declare module 'next-auth/jwt' {
   interface JWT {
     accessToken?: string;
+    accessTokenExpires?: number;
     refreshToken?: string;
+    refreshRetryAt?: number;
+    authError?: 'RefreshAccessTokenError' | 'RefreshTokenInvalid';
     role?: 'TRAINER' | 'ADMIN' | 'PARTNER';
     userId?: string;
     onboardingComplete?: boolean;

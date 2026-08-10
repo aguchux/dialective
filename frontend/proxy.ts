@@ -22,7 +22,7 @@ export default async function proxy(request: NextRequest) {
   const token = await getToken({ req: request });
   const pathname = request.nextUrl.pathname;
 
-  if (!token) {
+  if (!token || token.authError === 'RefreshTokenInvalid') {
     return AUTH_PAGES.has(pathname) ? NextResponse.next() : redirect(request, '/login', true);
   }
 
