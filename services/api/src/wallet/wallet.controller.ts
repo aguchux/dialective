@@ -6,6 +6,7 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  Logger,
   NotFoundException,
   Param,
   Patch,
@@ -13,6 +14,7 @@ import {
   Query,
   Req,
   UnprocessableEntityException,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
@@ -20,7 +22,7 @@ import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { Role, WithdrawalStatus } from '../generated/prisma/client';
+import { Prisma, Role, WithdrawalStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { NowPaymentsService } from './nowpayments.service';
@@ -45,6 +47,8 @@ import { tokensToUsdt, usdToTokens } from './token-rate.util';
  */
 @Controller()
 export class WalletController {
+  private readonly logger = new Logger(WalletController.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly nowPayments: NowPaymentsService,
@@ -175,6 +179,7 @@ export class WalletController {
     const deposit = await this.prisma.deposit.create({
       data: {
         walletId: wallet.id,
+        provider: 'nowpayments',
         providerChargeId: `pending-${randomUUID()}`, // replaced once NOWPayments returns a real invoice id
         currency: body.currency,
         usdAmount: body.usdAmount,
@@ -184,6 +189,7 @@ export class WalletController {
     });
 
     const apiBaseUrl = process.env.API_PUBLIC_BASE_URL ?? 'https://api.dialectlibrary.com';
+    const ipnCallbackUrl = new URL('/api/v1/wallet/webhooks/nowpayments', apiBaseUrl).toString();
     let invoice;
     try {
       invoice = await this.nowPayments.createInvoice({
@@ -191,7 +197,7 @@ export class WalletController {
         payCurrency: body.currency,
         orderId: deposit.id,
         orderDescription: `Dialect Library token top-up: ${body.usdAmount} USD -> ${tokenAmount.toFixed(2)} tokens`,
-        ipnCallbackUrl: `${apiBaseUrl}/api/v1/wallet/webhooks/nowpayments`,
+        ipnCallbackUrl,
       });
     } catch (err) {
       await this.prisma.deposit.update({ where: { id: deposit.id }, data: { status: 'failed' } });
@@ -223,22 +229,75 @@ export class WalletController {
   @HttpCode(HttpStatus.OK)
   async handleNowPaymentsWebhook(@Body() body: Record<string, unknown>, @Headers('x-nowpayments-sig') signature?: string) {
     if (!this.nowPayments.verifyIpnSignature(body, signature)) {
-      throw new BadRequestException('Invalid webhook signature');
+      throw new UnauthorizedException('Invalid webhook signature');
     }
 
-    const paymentStatus = body.payment_status as string | undefined;
-    const depositId = body.order_id as string | undefined;
+    const paymentStatus = ipnString(body.payment_status)?.toLowerCase();
+    const depositId = ipnString(body.order_id);
+    const providerPaymentId = ipnString(body.payment_id);
+    const eventHash = this.nowPayments.getIpnEventHash(body);
+    const event = await this.prisma.nowPaymentsIpnEvent.upsert({
+      where: { eventHash },
+      update: {},
+      create: {
+        eventHash,
+        orderId: depositId,
+        providerPaymentId,
+        paymentStatus,
+        payload: body as Prisma.InputJsonValue,
+      },
+    });
 
-    if (paymentStatus !== 'finished' || !depositId) {
-      return { received: true };
+    if (event.processedAt) {
+      return { received: true, duplicate: true };
+    }
+
+    if (!paymentStatus || !depositId) {
+      await this.completeIpnEvent(event.id, 'Missing payment_status or order_id');
+      return { received: true, matched: false };
     }
 
     const deposit = await this.prisma.deposit.findUnique({
       where: { id: depositId },
       include: { wallet: { include: { user: true } } },
     });
-    if (!deposit || deposit.status === 'confirmed') {
-      return { received: true };
+    if (!deposit) {
+      this.logger.warn(`NOWPayments IPN did not match a deposit: order_id=${depositId}`);
+      await this.completeIpnEvent(event.id, 'Deposit not found');
+      return { received: true, matched: false };
+    }
+
+    const validationError = validateFinishedPayment(body, deposit.providerChargeId, deposit.usdAmount.toString());
+    if (paymentStatus === 'finished' && validationError) {
+      this.logger.error(`Rejected finished NOWPayments IPN for deposit=${deposit.id}: ${validationError}`);
+      await this.completeIpnEvent(event.id, validationError, deposit.id);
+      return { received: true, credited: false };
+    }
+
+    const now = new Date();
+    const actuallyPaid = ipnNumber(body.actually_paid);
+    const depositMetadata: Prisma.DepositUpdateManyMutationInput = {
+      providerPaymentId,
+      providerStatus: paymentStatus,
+      lastIpnAt: now,
+      payCurrency: ipnString(body.pay_currency),
+      ...(actuallyPaid !== undefined ? { actuallyPaid } : {}),
+    };
+
+    if (paymentStatus !== 'finished') {
+      const nextStatus = localDepositStatus(paymentStatus);
+      await this.prisma.$transaction([
+        this.prisma.deposit.updateMany({
+          where: { id: deposit.id, status: { not: 'confirmed' } },
+          data: { ...depositMetadata, ...(nextStatus ? { status: nextStatus } : {}) },
+        }),
+        this.prisma.nowPaymentsIpnEvent.update({
+          where: { id: event.id },
+          data: { depositId: deposit.id, processedAt: now },
+        }),
+      ]);
+      this.logger.log(`NOWPayments IPN status=${paymentStatus} deposit=${deposit.id} credited=false`);
+      return { received: true, credited: false, status: paymentStatus };
     }
 
     const settings = await this.getReferralSettings();
@@ -248,42 +307,53 @@ export class WalletController {
         : null;
     const fundingBonus = referrerWallet ? deposit.tokenAmount.mul(settings.fundingBonusRate) : null;
 
-    await this.prisma.$transaction([
-      this.prisma.deposit.update({
-        where: { id: deposit.id },
-        data: { status: 'confirmed', confirmedAt: new Date() },
-      }),
-      this.prisma.ledgerEntry.create({
-        data: {
-          walletId: deposit.walletId,
-          type: 'DEPOSIT',
-          amount: deposit.tokenAmount,
-          reference: deposit.id,
-        },
-      }),
-      this.prisma.wallet.update({
+    const credited = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.deposit.updateMany({
+        where: { id: deposit.id, status: { not: 'confirmed' } },
+        data: { ...depositMetadata, status: 'confirmed', confirmedAt: now },
+      });
+
+      if (claimed.count === 0) {
+        await tx.nowPaymentsIpnEvent.update({ where: { id: event.id }, data: { depositId: deposit.id, processedAt: now } });
+        return false;
+      }
+
+      await tx.ledgerEntry.create({
+        data: { walletId: deposit.walletId, type: 'DEPOSIT', amount: deposit.tokenAmount, reference: deposit.id },
+      });
+      await tx.wallet.update({
         where: { id: deposit.walletId },
         data: { balance: { increment: deposit.tokenAmount } },
-      }),
-      ...(referrerWallet && fundingBonus
-        ? [
-            this.prisma.ledgerEntry.create({
-              data: {
-                walletId: referrerWallet.id,
-                type: 'REFERRAL_FUNDING_BONUS' as const,
-                amount: fundingBonus,
-                reference: deposit.id,
-              },
-            }),
-            this.prisma.wallet.update({
-              where: { id: referrerWallet.id },
-              data: { balance: { increment: fundingBonus } },
-            }),
-          ]
-        : []),
-    ]);
+      });
 
-    return { received: true };
+      if (referrerWallet && fundingBonus) {
+        await tx.ledgerEntry.create({
+          data: {
+            walletId: referrerWallet.id,
+            type: 'REFERRAL_FUNDING_BONUS',
+            amount: fundingBonus,
+            reference: deposit.id,
+          },
+        });
+        await tx.wallet.update({
+          where: { id: referrerWallet.id },
+          data: { balance: { increment: fundingBonus } },
+        });
+      }
+
+      await tx.nowPaymentsIpnEvent.update({ where: { id: event.id }, data: { depositId: deposit.id, processedAt: now } });
+      return true;
+    });
+
+    this.logger.log(`NOWPayments IPN status=${paymentStatus} deposit=${deposit.id} credited=${credited}`);
+    return { received: true, credited, status: paymentStatus };
+  }
+
+  private async completeIpnEvent(eventId: string, processingError: string, depositId?: string) {
+    await this.prisma.nowPaymentsIpnEvent.update({
+      where: { id: eventId },
+      data: { depositId, processedAt: new Date(), processingError },
+    });
   }
 
   /**
@@ -600,4 +670,61 @@ export class WalletController {
       };
     });
   }
+}
+
+function ipnString(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
+}
+
+function ipnNumber(value: unknown): number | undefined {
+  if ((typeof value !== 'number' && typeof value !== 'string') || value === '') {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function localDepositStatus(paymentStatus: string): string | undefined {
+  if (['waiting', 'confirming', 'confirmed', 'sending'].includes(paymentStatus)) {
+    return 'pending';
+  }
+  if (paymentStatus === 'partially_paid') {
+    return 'partially_paid';
+  }
+  if (['failed', 'expired', 'refunded'].includes(paymentStatus)) {
+    return paymentStatus;
+  }
+  return undefined;
+}
+
+function validateFinishedPayment(
+  body: Record<string, unknown>,
+  expectedInvoiceId: string,
+  expectedUsdAmount: string,
+): string | undefined {
+  if (!ipnString(body.payment_id)) {
+    return 'Missing payment_id';
+  }
+
+  const invoiceId = ipnString(body.invoice_id);
+  if (invoiceId && invoiceId !== expectedInvoiceId) {
+    return 'Invoice ID does not match deposit';
+  }
+
+  if (ipnString(body.price_currency)?.toLowerCase() !== 'usd') {
+    return 'Payment price currency is not USD';
+  }
+
+  const priceAmount = ipnNumber(body.price_amount);
+  if (priceAmount === undefined || Math.abs(priceAmount - Number(expectedUsdAmount)) > 0.00000001) {
+    return 'Payment price amount does not match deposit';
+  }
+
+  return undefined;
 }

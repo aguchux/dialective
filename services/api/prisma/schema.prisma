@@ -243,25 +243,51 @@ model LedgerEntry {
   @@map("ledger_entries")
 }
 
-/// One row per Coinbase Commerce charge. Created `pending` when the checkout
-/// is issued, moved to `confirmed` (and a LedgerEntry + balance credit
-/// written) only by the webhook handler on `charge:confirmed` -- never trust
-/// the client-side redirect alone to credit funds.
+/// One row per NOWPayments invoice. Created `pending` when checkout is
+/// issued, and credited only after a signature-verified `finished` IPN.
 model Deposit {
   id               String    @id @default(uuid())
   walletId         String
   wallet           Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  provider         String    @default("coinbase_commerce")
+  provider         String    @default("nowpayments")
   providerChargeId String    @unique
+  providerPaymentId String?
+  providerStatus   String?
   currency         String // USDC | USDT
   usdAmount        Decimal   @db.Decimal(20, 8)
   tokenAmount      Decimal   @db.Decimal(20, 8)
-  status           String    @default("pending") // pending | confirmed | expired | failed
+  actuallyPaid     Decimal?  @db.Decimal(20, 8)
+  payCurrency      String?
+  status           String    @default("pending") // pending | partially_paid | confirmed | expired | failed | refunded
   createdAt        DateTime  @default(now())
   confirmedAt      DateTime?
+  lastIpnAt        DateTime?
+
+  ipnEvents NowPaymentsIpnEvent[]
 
   @@index([walletId])
   @@map("deposits")
+}
+
+/// Every distinct, signature-verified NOWPayments IPN payload. Keeping the
+/// complete notification history makes non-final status changes observable
+/// and lets support reconcile a payment without relying on application logs.
+model NowPaymentsIpnEvent {
+  id                String   @id @default(uuid())
+  eventHash         String   @unique
+  orderId           String?
+  depositId         String?
+  deposit           Deposit? @relation(fields: [depositId], references: [id], onDelete: SetNull)
+  providerPaymentId String?
+  paymentStatus     String?
+  payload           Json
+  processingError   String?
+  receivedAt        DateTime @default(now())
+  processedAt       DateTime?
+
+  @@index([depositId])
+  @@index([providerPaymentId])
+  @@map("nowpayments_ipn_events")
 }
 
 /// One row per user-initiated cash-out request. Tokens are debited (via a

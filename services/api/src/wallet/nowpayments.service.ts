@@ -1,7 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 
 const NOWPAYMENTS_API_BASE = 'https://api.nowpayments.io/v1';
+const NOWPAYMENTS_PAY_CURRENCIES = {
+  USDC: 'usdc',
+  USDT: 'usdttrc20',
+} as const;
 
 export interface CreateInvoiceParams {
   usdAmount: number;
@@ -48,6 +52,10 @@ export class NowPaymentsService {
   }
 
   async createInvoice(params: CreateInvoiceParams): Promise<CreateInvoiceResult> {
+    // Do not create a payable invoice unless its eventual callback can be
+    // authenticated. Reading the secret here deliberately fails fast.
+    void this.ipnSecret;
+
     const res = await fetch(`${NOWPAYMENTS_API_BASE}/invoice`, {
       method: 'POST',
       headers: {
@@ -57,7 +65,10 @@ export class NowPaymentsService {
       body: JSON.stringify({
         price_amount: params.usdAmount,
         price_currency: 'usd',
-        pay_currency: params.payCurrency.toLowerCase(),
+        // NOWPayments exposes USDT per network rather than as a generic
+        // merchant currency. TRC20 is enabled for this merchant and keeps
+        // the trainer-facing choice as the simpler "USDT" label.
+        pay_currency: NOWPAYMENTS_PAY_CURRENCIES[params.payCurrency],
         order_id: params.orderId,
         order_description: params.orderDescription,
         ipn_callback_url: params.ipnCallbackUrl,
@@ -67,7 +78,7 @@ export class NowPaymentsService {
     if (!res.ok) {
       const body = await res.text();
       this.logger.error(`NOWPayments createInvoice failed: ${res.status} ${body}`);
-      throw new Error('Failed to create NOWPayments invoice');
+      throw new BadGatewayException('The payment provider could not start checkout. Please try again.');
     }
 
     const json = (await res.json()) as { id: string; invoice_url: string };
@@ -96,6 +107,10 @@ export class NowPaymentsService {
       return false;
     }
     return timingSafeEqual(expectedBuf, actualBuf);
+  }
+
+  getIpnEventHash(parsedBody: unknown): string {
+    return createHash('sha256').update(JSON.stringify(sortKeysDeep(parsedBody))).digest('hex');
   }
 }
 

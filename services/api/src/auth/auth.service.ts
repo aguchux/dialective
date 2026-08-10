@@ -355,15 +355,29 @@ export class AuthService {
     return toPublicUser(user);
   }
 
-  async updateProfile(userId: string, countryId: string, dialectId: string): Promise<PublicUser> {
-    const dialect = await this.prisma.dialect.findUnique({ where: { id: dialectId } });
-    if (!dialect || dialect.countryId !== countryId) {
-      throw new UnprocessableEntityException('Dialect does not belong to the given country');
+  async updateProfile(
+    userId: string,
+    fields: { countryId?: string; dialectId?: string; firstName?: string; lastName?: string },
+  ): Promise<PublicUser> {
+    const { countryId, dialectId, firstName, lastName } = fields;
+
+    if (countryId || dialectId) {
+      if (!countryId || !dialectId) {
+        throw new UnprocessableEntityException('countryId and dialectId must be set together');
+      }
+      const dialect = await this.prisma.dialect.findUnique({ where: { id: dialectId } });
+      if (!dialect || dialect.countryId !== countryId) {
+        throw new UnprocessableEntityException('Dialect does not belong to the given country');
+      }
     }
 
     const user = await this.prisma.user.update({
       where: { id: userId },
-      data: { countryId, dialectId },
+      data: {
+        ...(countryId && dialectId ? { countryId, dialectId } : {}),
+        ...(firstName !== undefined ? { firstName: firstName.trim() } : {}),
+        ...(lastName !== undefined ? { lastName: lastName.trim() } : {}),
+      },
       include: { dialect: true },
     });
 

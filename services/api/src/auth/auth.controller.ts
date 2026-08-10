@@ -86,7 +86,7 @@ export class AuthController {
   @Patch('me')
   @UseGuards(JwtAuthGuard)
   updateMe(@CurrentUser() user: AccessTokenClaims, @Body() dto: UpdateProfileDto) {
-    return this.auth.updateProfile(user.sub, dto.countryId, dto.dialectId);
+    return this.auth.updateProfile(user.sub, dto);
   }
 
   // --- Admin: user management ------------------------------------------------
