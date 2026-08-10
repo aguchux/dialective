@@ -1,0 +1,103 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+
+const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const primaryButtonClass =
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
+
+export function GeneralSettingsPanel() {
+  const { data: settings, isLoading } = useGetPlatformSettingsQuery();
+  const [updateSettings, { isLoading: isSaving }] = useUpdatePlatformSettingsMutation();
+
+  const [tokenUsdRate, setTokenUsdRate] = useState('');
+  const [minWithdrawalTokens, setMinWithdrawalTokens] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!settings) return;
+    setTokenUsdRate(settings.tokenUsdRate ?? '');
+    setMinWithdrawalTokens(settings.minWithdrawalTokens ?? '');
+  }, [settings]);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    setError(null);
+
+    try {
+      await updateSettings({
+        ...(tokenUsdRate !== '' ? { tokenUsdRate: Number(tokenUsdRate) } : {}),
+        ...(minWithdrawalTokens !== '' ? { minWithdrawalTokens: Number(minWithdrawalTokens) } : {}),
+      }).unwrap();
+      setMessage('General settings saved.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to save general settings.'));
+    }
+  }
+
+  return (
+    <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+      <div className="grid gap-1">
+        <h2 className="text-2xl leading-snug">General</h2>
+        <p className="leading-relaxed text-muted">
+          Token economics for the platform wallet. Leave a field blank to use the deployment default.
+        </p>
+      </div>
+
+      {isLoading && <p className="text-muted">Loading...</p>}
+      {!isLoading && (
+        <form className="grid gap-4 md:max-w-md" onSubmit={handleSave}>
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="token-usd-rate">
+              Token/USD rate
+            </label>
+            <p className="text-sm leading-relaxed text-muted">USD value of one platform token, e.g. 0.10 = 10 cents.</p>
+            <input
+              className={inputClass}
+              id="token-usd-rate"
+              type="number"
+              step="0.000001"
+              min="0"
+              placeholder="Default"
+              value={tokenUsdRate}
+              onChange={(e) => setTokenUsdRate(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="min-withdrawal">
+              Minimum withdrawal (tokens)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">Smallest token amount a trainer can withdraw at once.</p>
+            <input
+              className={inputClass}
+              id="min-withdrawal"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Default"
+              value={minWithdrawalTokens}
+              onChange={(e) => setMinWithdrawalTokens(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <button className={primaryButtonClass} type="submit" disabled={isSaving}>
+              Save general settings
+            </button>
+          </div>
+        </form>
+      )}
+
+      {message && <p className="leading-relaxed text-accent-dark">{message}</p>}
+      {error && (
+        <p className="leading-relaxed text-danger" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}

@@ -22,13 +22,14 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role, WithdrawalStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { NowPaymentsService } from './nowpayments.service';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { ResolveWithdrawalDto } from './dto/resolve-withdrawal.dto';
 import { UpdateReferralSettingsDto } from './dto/update-referral-settings.dto';
 import { CreateTrainingPayoutDto } from './dto/create-training-payout.dto';
-import { getMinWithdrawalTokens, getTokenUsdRate, tokensToUsdt, usdToTokens } from './token-rate.util';
+import { tokensToUsdt, usdToTokens } from './token-rate.util';
 
 /**
  * Wallet / Utility Token Pool: users fund their token balance with
@@ -47,6 +48,7 @@ export class WalletController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly nowPayments: NowPaymentsService,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   private async getOrCreateWallet(userId: string) {
@@ -69,14 +71,14 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async getWallet(@Req() req: AuthenticatedRequest) {
     const wallet = await this.getOrCreateWallet(req.user.sub);
-    return { balance: wallet.balance.toString(), tokenUsdRate: getTokenUsdRate() };
+    return { balance: wallet.balance.toString(), tokenUsdRate: await this.platformSettings.getTokenUsdRate() };
   }
 
   @Post('wallet/deposits')
   @UseGuards(JwtAuthGuard)
   async createDeposit(@Req() req: AuthenticatedRequest, @Body() body: CreateDepositDto) {
     const wallet = await this.getOrCreateWallet(req.user.sub);
-    const rate = getTokenUsdRate();
+    const rate = await this.platformSettings.getTokenUsdRate();
     const tokenAmount = usdToTokens(body.usdAmount, rate);
 
     const deposit = await this.prisma.deposit.create({
@@ -260,13 +262,13 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async createWithdrawal(@Req() req: AuthenticatedRequest, @Body() body: CreateWithdrawalDto) {
     const wallet = await this.getOrCreateWallet(req.user.sub);
-    const minTokens = getMinWithdrawalTokens();
+    const minTokens = await this.platformSettings.getMinWithdrawalTokens();
 
     if (body.tokenAmount < minTokens) {
       throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
     }
 
-    const rate = getTokenUsdRate();
+    const rate = await this.platformSettings.getTokenUsdRate();
     const usdtAmount = tokensToUsdt(body.tokenAmount, rate);
     const withdrawalId = randomUUID();
 

@@ -297,6 +297,24 @@ model ReferralSettings {
   @@map("referral_settings")
 }
 
+/// Admin-editable platform settings that previously only existed as env-var
+/// defaults (see token-rate.util.ts, mail.service.ts). Each field is
+/// nullable -- null means "fall back to the env var default", so this table
+/// can ship with zero rows and every existing deployment keeps working
+/// unchanged until an admin explicitly overrides a value from the Settings
+/// UI. Same id:'default' singleton-row pattern as ReferralSettings.
+model PlatformSettings {
+  id                       String   @id @default("default")
+  tokenUsdRate             Decimal? @db.Decimal(10, 6) // overrides TOKEN_USD_RATE when set
+  minWithdrawalTokens      Decimal? @db.Decimal(20, 8) // overrides MIN_WITHDRAWAL_TOKENS when set
+  resendFromAddress        String? // overrides RESEND_FROM_ADDRESS when set
+  leadsNotificationAddress String? // overrides LEADS_NOTIFICATION_ADDRESS when set
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
+
+  @@map("platform_settings")
+}
+
 /// One row per "Subscribe to voice data" form submission from the landing
 /// page's data-buyer CTA (/data-access) -- enterprises/researchers wanting
 /// to license the collected voice/dialect dataset, not trainers. No

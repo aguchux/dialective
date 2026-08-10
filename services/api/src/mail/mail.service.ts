@@ -1,8 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Resend } from 'resend';
-
-const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'noreply@dialectlibrary.com';
-const LEADS_NOTIFICATION_ADDRESS = process.env.LEADS_NOTIFICATION_ADDRESS ?? 'hello@dialectlibrary.com';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 
 interface DataAccessLeadNotification {
   id: string;
@@ -29,7 +27,7 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   private readonly resend: Resend | null;
 
-  constructor() {
+  constructor(private readonly settings: PlatformSettingsService) {
     const apiKey = process.env.RESEND_API_KEY;
     this.resend = apiKey ? new Resend(apiKey) : null;
     if (!this.resend) {
@@ -58,12 +56,8 @@ export class MailService {
   }
 
   async sendDataAccessLeadNotification(lead: DataAccessLeadNotification): Promise<void> {
-    await this.send(
-      LEADS_NOTIFICATION_ADDRESS,
-      `New voice data lead: ${lead.name}`,
-      dataAccessLeadHtml(lead),
-      dataAccessLeadText(lead),
-    );
+    const to = await this.settings.getLeadsNotificationAddress();
+    await this.send(to, `New voice data lead: ${lead.name}`, dataAccessLeadHtml(lead), dataAccessLeadText(lead));
   }
 
   private async send(to: string, subject: string, html: string, text: string): Promise<void> {
@@ -72,7 +66,8 @@ export class MailService {
       return;
     }
 
-    const { error } = await this.resend.emails.send({ from: FROM_ADDRESS, to, subject, html, text });
+    const from = await this.settings.getResendFromAddress();
+    const { error } = await this.resend.emails.send({ from, to, subject, html, text });
     if (error) {
       this.logger.error(`Resend send failed for ${to}: ${error.message}`);
       throw new Error(`Failed to send email: ${error.message}`);

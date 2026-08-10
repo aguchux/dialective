@@ -112,6 +112,22 @@ export interface AdminStats {
   totalReferralBonuses: string;
 }
 
+export interface PlatformSettings {
+  tokenUsdRate: string | null;
+  minWithdrawalTokens: string | null;
+  resendFromAddress: string | null;
+  leadsNotificationAddress: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface PlatformSettingsInput {
+  tokenUsdRate?: number | null;
+  minWithdrawalTokens?: number | null;
+  resendFromAddress?: string | null;
+  leadsNotificationAddress?: string | null;
+}
+
 export interface ApiErrorShape {
   statusCode?: number;
   message?: string | string[];
@@ -146,7 +162,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects'],
+  tagTypes: ['Auth', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings'],
   endpoints: (builder) => ({
     register: builder.mutation<AuthResult, { email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -280,6 +296,18 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/geo/admin/dialects/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminDialects', 'AdminCountries'],
     }),
+    getPlatformSettings: builder.query<PlatformSettings, void>({
+      query: () => '/admin/platform-settings',
+      providesTags: ['PlatformSettings'],
+    }),
+    updatePlatformSettings: builder.mutation<PlatformSettings, PlatformSettingsInput>({
+      query: (body) => ({
+        url: '/admin/platform-settings',
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['PlatformSettings'],
+    }),
   }),
 });
 
@@ -309,6 +337,8 @@ export const {
   useCreateDialectMutation,
   useUpdateDialectMutation,
   useDeleteDialectMutation,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };
