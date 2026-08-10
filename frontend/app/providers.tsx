@@ -9,7 +9,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus>
       <InvalidSessionHandler />
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="dark"
+        enableColorScheme={false}
+        enableSystem={false}
+        storageKey="trainer-dashboard-theme"
+      >
         <StoreProvider>{children}</StoreProvider>
       </ThemeProvider>
     </SessionProvider>
