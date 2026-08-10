@@ -6,7 +6,12 @@ import { useGetCountriesQuery, useGetDialectsQuery } from '@/store/api';
 const selectClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
 
 export function DialectTracksCard() {
-  const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
+  const {
+    data: countries,
+    isLoading: isLoadingCountries,
+    isError: isCountriesError,
+    refetch: refetchCountries,
+  } = useGetCountriesQuery();
   const [countryId, setCountryId] = useState('');
 
   useEffect(() => {
@@ -27,6 +32,13 @@ export function DialectTracksCard() {
         </label>
         {isLoadingCountries ? (
           <p className="text-muted">Loading countries...</p>
+        ) : isCountriesError ? (
+          <p className="text-muted">
+            Couldn&apos;t load countries.{' '}
+            <button className="font-bold text-accent underline" onClick={() => refetchCountries()} type="button">
+              Try again
+            </button>
+          </p>
         ) : (
           <select
             className={selectClass}

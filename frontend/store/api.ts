@@ -203,7 +203,10 @@ export const dialectivaApi = createApi({
     baseUrl: PUBLIC_API_V1_BASE_URL,
     prepareHeaders: async (headers) => {
       headers.set('Content-Type', 'application/json');
-      const session = await getSession();
+      // A session-lookup failure must never block a request -- most endpoints
+      // (geo/countries, geo/stats, blog/posts, ...) are public and don't need
+      // a token at all.
+      const session = await getSession().catch(() => null);
       if (session?.accessToken) {
         headers.set('Authorization', `Bearer ${session.accessToken}`);
       }
