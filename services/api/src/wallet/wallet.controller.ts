@@ -32,6 +32,7 @@ import { ResolveWithdrawalDto } from './dto/resolve-withdrawal.dto';
 import { UpdateReferralSettingsDto } from './dto/update-referral-settings.dto';
 import { CreateTrainingPayoutDto } from './dto/create-training-payout.dto';
 import { ListEarningsDto } from './dto/list-earnings.dto';
+import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { tokensToUsdt, usdToTokens } from './token-rate.util';
 
 const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
@@ -174,6 +175,61 @@ export class WalletController {
         payoutBonusRate: settings.payoutBonusRate.toString(),
         payoutBonusEnabled: settings.payoutBonusEnabled,
       },
+    };
+  }
+
+  /**
+   * Earnings bucketed for the dashboard chart: week -> 7 daily buckets,
+   * month -> 30 daily buckets, year -> 12 monthly buckets. Same earning
+   * ledger types as wallet/dashboard's monthlyEarnings, just re-bucketed on
+   * demand instead of fixed to a trailing 6 months.
+   */
+  @Get('wallet/earnings-chart')
+  @UseGuards(JwtAuthGuard)
+  async getEarningsChart(@Req() req: AuthenticatedRequest, @Query() query: GetEarningsChartDto) {
+    const wallet = await this.getOrCreateWallet(req.user.sub);
+    const now = new Date();
+    const isYear = query.range === 'year';
+    const dayCount = query.range === 'week' ? 7 : query.range === 'month' ? 30 : 0;
+
+    const since = isYear
+      ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1))
+      : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (dayCount - 1)));
+    since.setUTCHours(0, 0, 0, 0);
+
+    const entries = await this.prisma.ledgerEntry.findMany({
+      where: {
+        walletId: wallet.id,
+        type: { in: EARNING_ENTRY_TYPES },
+        createdAt: { gte: since },
+      },
+      select: { amount: true, createdAt: true },
+    });
+
+    const buckets = new Map<string, number>();
+    if (isYear) {
+      for (let offset = 0; offset < 12; offset += 1) {
+        const month = new Date(Date.UTC(since.getUTCFullYear(), since.getUTCMonth() + offset, 1));
+        buckets.set(month.toISOString().slice(0, 7), 0);
+      }
+      for (const entry of entries) {
+        const key = entry.createdAt.toISOString().slice(0, 7);
+        buckets.set(key, (buckets.get(key) ?? 0) + Number(entry.amount));
+      }
+    } else {
+      for (let offset = 0; offset < dayCount; offset += 1) {
+        const day = new Date(Date.UTC(since.getUTCFullYear(), since.getUTCMonth(), since.getUTCDate() + offset));
+        buckets.set(day.toISOString().slice(0, 10), 0);
+      }
+      for (const entry of entries) {
+        const key = entry.createdAt.toISOString().slice(0, 10);
+        buckets.set(key, (buckets.get(key) ?? 0) + Number(entry.amount));
+      }
+    }
+
+    return {
+      range: query.range,
+      buckets: Array.from(buckets, ([label, amount]) => ({ label, amount: amount.toString() })),
     };
   }
 

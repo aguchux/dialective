@@ -135,6 +135,13 @@ export interface TrainerDashboardSummary {
   };
 }
 
+export type EarningsChartRange = 'week' | 'month' | 'year';
+
+export interface EarningsChart {
+  range: EarningsChartRange;
+  buckets: { label: string; amount: string }[];
+}
+
 export interface EarningHistoryPage {
   items: {
     id: string;
@@ -388,6 +395,10 @@ export const dialectivaApi = createApi({
       query: ({ page, pageSize }) => ({ url: '/wallet/earnings', params: { page, pageSize } }),
       providesTags: ['Wallet'],
     }),
+    getEarningsChart: builder.query<EarningsChart, { range: EarningsChartRange }>({
+      query: ({ range }) => ({ url: '/wallet/earnings-chart', params: { range } }),
+      providesTags: ['Wallet'],
+    }),
     getMySubmissions: builder.query<SubmissionsPage, { page: number; pageSize: number; status?: TrainerSubmissionSummary['status'][] }>({
       query: ({ page, pageSize, status }) => ({
         url: '/submissions/mine',
@@ -625,6 +636,7 @@ export const {
   useGetWalletQuery,
   useGetTrainerDashboardQuery,
   useGetEarningHistoryQuery,
+  useGetEarningsChartQuery,
   useGetMySubmissionsQuery,
   useStartWordTrainingSessionMutation,
   useLazyGetNextWordTrainingAssignmentQuery,

@@ -47,12 +47,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu';
 import {
+  EarningsChartRange,
   LedgerEntryType,
   TrainerDashboardSummary,
   TrainerSubmissionSummary,
   normalizeErrorMessage,
   useCreateTokenDepositMutation,
   useGetEarningHistoryQuery,
+  useGetEarningsChartQuery,
   useGetMySubmissionsQuery,
   useGetTrainerDashboardQuery,
   useUpdateProfileMutation,
@@ -345,8 +347,7 @@ function EarningsView({ data, refreshing }: { data: TrainerDashboardSummary; ref
         <MetricCard icon={ArrowUpRight} label="Paid out" value={formatCompactTokensValue(data.paidOutTokens)} tone="blue" />
       </section>
       <section className="mt-8">
-        <SectionTitle title="Six-month earnings" subtitle="Tokens credited by month." />
-        <EarningsChart months={data.monthlyEarnings} />
+        <EarningsChartSection />
       </section>
       <EarningHistoryTable tokenUsdRate={data.tokenUsdRate} />
     </div>
@@ -1125,25 +1126,79 @@ function ActivityList({ entries, compact = false }: { entries: TrainerDashboardS
   );
 }
 
-function EarningsChart({ months }: { months: TrainerDashboardSummary['monthlyEarnings'] }) {
-  const max = Math.max(...months.map((month) => Number(month.amount)), 1);
+const earningsChartRangeLabels: Record<EarningsChartRange, string> = {
+  week: 'This week',
+  month: 'This month',
+  year: 'This year',
+};
+
+const earningsChartRangeSubtitles: Record<EarningsChartRange, string> = {
+  week: 'Tokens credited by day, last 7 days.',
+  month: 'Tokens credited by day, last 30 days.',
+  year: 'Tokens credited by month, last 12 months.',
+};
+
+function EarningsChartSection() {
+  const [range, setRange] = useState<EarningsChartRange>('month');
+  const { data, isFetching } = useGetEarningsChartQuery({ range });
+
   return (
-    <div className={`${cardClass} flex h-64 items-end gap-3 p-4 pt-8 sm:gap-5 md:p-5 md:pt-8`}>
-      {months.map((month) => {
-        const value = Number(month.amount);
+    <div>
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <SectionTitle title={earningsChartRangeLabels[range]} subtitle={earningsChartRangeSubtitles[range]} />
+        <div className="inline-flex rounded-lg border border-line bg-surface p-1" role="tablist" aria-label="Earnings chart range">
+          {(Object.keys(earningsChartRangeLabels) as EarningsChartRange[]).map((option) => (
+            <button
+              aria-selected={range === option}
+              className={`min-h-9 rounded-md px-3.5 text-sm font-extrabold transition-colors ${range === option ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}
+              key={option}
+              onClick={() => setRange(option)}
+              role="tab"
+              type="button"
+            >
+              {earningsChartRangeLabels[option]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <EarningsChart buckets={data?.buckets ?? []} loading={isFetching && !data} range={range} />
+    </div>
+  );
+}
+
+function EarningsChart({ buckets, range, loading }: { buckets: EarningsChart_Bucket[]; range: EarningsChartRange; loading: boolean }) {
+  const max = Math.max(...buckets.map((bucket) => Number(bucket.amount)), 1);
+  const dense = range !== 'year' && buckets.length > 14;
+
+  if (loading) {
+    return <div className={`${cardClass} grid h-64 place-items-center`}><RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" /></div>;
+  }
+
+  return (
+    <div className={`${cardClass} flex h-64 items-end gap-1.5 overflow-x-auto p-4 pt-8 sm:gap-3 md:p-5 md:pt-8`}>
+      {buckets.map((bucket) => {
+        const value = Number(bucket.amount);
         const height = value > 0 ? Math.max((value / max) * 100, 8) : 2;
         return (
-          <div className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2" key={month.month}>
-            <span className="text-xs font-bold text-muted">{value ? formatTokens(value) : ''}</span>
-            <div className="flex h-[150px] w-full max-w-10 items-end rounded-md bg-surface-muted">
+          <div className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2" key={bucket.label}>
+            {!dense && <span className="text-xs font-bold text-muted">{value ? formatTokens(value) : ''}</span>}
+            <div className="flex h-[150px] w-full max-w-10 items-end rounded-md bg-surface-muted" title={`${formatTokens(value)} tokens`}>
               <div className="w-full rounded-md bg-accent" style={{ height: `${height}%` }} />
             </div>
-            <span className="text-xs font-extrabold text-muted">{formatMonth(month.month)}</span>
+            {!dense && <span className="text-xs font-extrabold text-muted">{formatBucketLabel(bucket.label, range)}</span>}
           </div>
         );
       })}
     </div>
   );
+}
+
+type EarningsChart_Bucket = { label: string; amount: string };
+
+function formatBucketLabel(label: string, range: EarningsChartRange) {
+  if (range === 'year') return formatMonth(label);
+  const date = new Date(`${label}T00:00:00Z`);
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(date);
 }
 
 function RateRow({ label, rate, enabled }: { label: string; rate: string; enabled: boolean }) {
