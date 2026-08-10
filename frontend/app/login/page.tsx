@@ -7,13 +7,18 @@ import { getSession, signIn, useSession } from 'next-auth/react';
 import { normalizeErrorMessage, useRequestMagicLinkMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { roleHomePath } from '@/lib/role-home';
+import { postAuthPath } from '@/lib/role-home';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const secondaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-3.5 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
+
+function authDestination(role: string | undefined, onboardingComplete: boolean | undefined) {
+  const callbackUrl = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('callbackUrl');
+  return postAuthPath(role, onboardingComplete, callbackUrl);
+}
 
 export default function LoginPage() {
   const { data: session, status } = useSession();
@@ -25,7 +30,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      router.replace(roleHomePath(session.user?.role));
+      router.replace(authDestination(session.user?.role, session.user?.onboardingComplete));
     }
   }, [status, session, router]);
 
@@ -37,7 +42,7 @@ export default function LoginPage() {
       setMessage('Invalid email or password.');
     } else {
       const freshSession = await getSession();
-      window.location.href = roleHomePath(freshSession?.user?.role);
+      window.location.href = authDestination(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
     }
   }
 

@@ -24,7 +24,7 @@ export function LandingHeader() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const isAuthenticated = status === 'authenticated';
-  const homePath = roleHomePath(session?.user?.role);
+  const homePath = roleHomePath(session?.user?.role, session?.user?.onboardingComplete);
   const email = session?.user?.email ?? '';
   const initial = email ? email[0].toUpperCase() : '?';
 

@@ -28,7 +28,7 @@ function MagicLinkContent() {
         setStatus('error');
       } else {
         const session = await getSession();
-        window.location.href = roleHomePath(session?.user?.role);
+        window.location.href = roleHomePath(session?.user?.role, session?.user?.onboardingComplete);
       }
     })();
   }, [token]);

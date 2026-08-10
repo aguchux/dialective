@@ -25,7 +25,7 @@ function RegisterContent() {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      router.replace(roleHomePath(session.user?.role));
+      router.replace(roleHomePath(session.user?.role, session.user?.onboardingComplete));
     }
   }, [status, session, router]);
 
@@ -45,7 +45,7 @@ function RegisterContent() {
       setError('Account created, but automatic sign-in failed. Try logging in.');
     } else {
       const freshSession = await getSession();
-      window.location.href = roleHomePath(freshSession?.user?.role);
+      window.location.href = roleHomePath(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
     }
   }
 
