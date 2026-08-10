@@ -1,9 +1,10 @@
 import { Body, ConflictException, Controller, Delete, Get, NotFoundException, Param, Patch, Post, UnprocessableEntityException, UseGuards } from '@nestjs/common';
-import { Prisma, Role } from '@dialectiva/db';
+import { Prisma, Role, SubscriptionPoolStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
 import { CreateDialectDto } from './dto/create-dialect.dto';
@@ -16,13 +17,16 @@ const PRISMA_NOT_FOUND = 'P2025';
 /**
  * Read-only country/dialect list backing onboarding (country + default
  * dialect selection) and, potentially, the anonymous word-library/
- * pipeline-test dialect pickers. No auth -- needed before a session exists.
+ * onboarding dialect pickers. No auth -- needed before a session exists.
  * Admin CRUD below is separate: guarded, and this is the only place
  * countries/dialects are ever written outside the seed script.
  */
 @Controller('geo')
 export class GeoController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly platformSettings: PlatformSettingsService,
+  ) {}
 
   @Get('countries')
   getCountries() {
@@ -32,13 +36,32 @@ export class GeoController {
     });
   }
 
+  /**
+   * Public landing-page metrics. poolVolumeUsd/totalPayoutUsd mirror the
+   * same aggregate reads as PoolsController.summary (admin-only, in tokens)
+   * -- here converted to USD and rounded to whole dollars, since this is a
+   * public marketing figure, not an operational admin balance.
+   */
   @Get('stats')
   async getStats() {
-    const [countryCount, dialectCount] = await Promise.all([
+    const [countryCount, dialectCount, activeAgg, settledAgg, rate] = await Promise.all([
       this.prisma.country.count(),
       this.prisma.dialect.count(),
+      this.prisma.subscriptionPool.aggregate({
+        where: { status: SubscriptionPoolStatus.ACTIVE },
+        _sum: { usdAmount: true },
+      }),
+      this.prisma.submission.aggregate({
+        where: { settledAt: { not: null } },
+        _sum: { payoutTokenAmount: true },
+      }),
+      this.platformSettings.getTokenUsdRate(),
     ]);
-    return { countryCount, dialectCount };
+
+    const poolVolumeUsd = Number(activeAgg._sum.usdAmount ?? 0);
+    const totalPayoutUsd = Number(settledAgg._sum.payoutTokenAmount ?? 0) * rate;
+
+    return { countryCount, dialectCount, poolVolumeUsd, totalPayoutUsd };
   }
 
   @Get('countries/:id/dialects')

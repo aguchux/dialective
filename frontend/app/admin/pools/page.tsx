@@ -5,6 +5,7 @@ import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
+import { formatCompactNumber, formatCompactUsd } from '@/lib/format';
 import {
   SubscriptionPool,
   normalizeErrorMessage,
@@ -48,13 +49,13 @@ export default function AdminPoolsPage() {
     {
       key: 'available',
       label: 'Reward Pool Available',
-      value: availableTokens !== null ? `${availableTokens.toLocaleString(undefined, { maximumFractionDigits: 2 })} tokens` : '-',
+      value: availableTokens !== null ? `${formatCompactNumber(availableTokens)} tokens` : '-',
       negative: availableTokens !== null && availableTokens < 0,
     },
     {
       key: 'availableUsd',
       label: 'Total Subscriber Funding',
-      value: summary ? `$${Number(summary.totalAvailableUsd).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '-',
+      value: summary ? formatCompactUsd(summary.totalAvailableUsd) : '-',
     },
     {
       key: 'activePools',
@@ -64,7 +65,7 @@ export default function AdminPoolsPage() {
     {
       key: 'settled',
       label: 'Total Settled Payouts',
-      value: summary ? `${Number(summary.totalSettledTokens).toLocaleString(undefined, { maximumFractionDigits: 2 })} tokens` : '-',
+      value: summary ? `${formatCompactNumber(summary.totalSettledTokens)} tokens` : '-',
     },
   ];
 

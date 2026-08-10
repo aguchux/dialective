@@ -12,7 +12,6 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Banknote,
-  BookOpenCheck,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -37,6 +36,8 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
+import { formatCompactNumber, formatCompactUsd } from '@/lib/format';
+import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,6 +91,7 @@ export function TrainerDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);
+  const [trainingOpen, setTrainingOpen] = useState(false);
   const requestedView = searchParams.get('view');
   const displayName = [session?.user.firstName, session?.user.lastName].filter(Boolean).join(' ');
   const activeView = allViewIds.includes(requestedView as DashboardView) ? (requestedView as DashboardView) : 'tokens';
@@ -135,7 +137,7 @@ export function TrainerDashboard() {
         />
 
         <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
-          <section className="mb-7 flex items-center gap-3 border-b border-line pb-6 md:gap-4">
+          <section className="mb-7 flex flex-wrap items-center gap-3 border-b border-line pb-6 md:gap-4">
             <Avatar email={session.user.email ?? 'Trainer'} image={session.user.image} large />
             <div className="min-w-0">
               <p className="text-sm font-bold text-muted">Welcome back</p>
@@ -145,6 +147,13 @@ export function TrainerDashboard() {
                 <span>{session.user.dialectTag ? `${session.user.dialectTag.toUpperCase()} trainer` : 'Dialect trainer'}</span>
               </div>
             </div>
+            <button
+              className="ml-auto inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+              onClick={() => setTrainingOpen(true)}
+              type="button"
+            >
+              Start task <ArrowRight className="size-4" aria-hidden="true" />
+            </button>
           </section>
 
           {activeView === 'profile' ? (
@@ -160,11 +169,13 @@ export function TrainerDashboard() {
               dialectTag={session.user.dialectTag}
               email={session.user.email ?? ''}
               refreshing={isFetching}
+              onStartTask={() => setTrainingOpen(true)}
             />
           )}
         </main>
 
         <MobileNavigation activeView={activeView} />
+        <WordTrainingDialog onOpenChange={setTrainingOpen} open={trainingOpen} />
       </PortalContainerProvider>
     </div>
   );
@@ -273,15 +284,17 @@ function DashboardViewContent({
   dialectTag,
   email,
   refreshing,
+  onStartTask,
 }: {
   activeView: DashboardView;
   data: TrainerDashboardSummary;
   dialectTag: string | null;
   email: string;
   refreshing: boolean;
+  onStartTask: () => void;
 }) {
   if (activeView === 'earnings') return <EarningsView data={data} refreshing={refreshing} />;
-  if (activeView === 'training') return <TrainingView dialectTag={dialectTag} />;
+  if (activeView === 'training') return <TrainingView dialectTag={dialectTag} onStartTask={onStartTask} />;
   if (activeView === 'referrals') return <ReferralsView data={data} email={email} />;
   if (activeView === 'scores') return <ScoresView />;
   return <TokensView data={data} refreshing={refreshing} />;
@@ -308,8 +321,8 @@ function TokensView({ data, refreshing }: { data: TrainerDashboardSummary; refre
         <FundTokensDialog />
       </div>
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Token balance">
-        <MetricCard icon={WalletCards} label="Available tokens" value={formatTokens(data.balance)} tone="purple" />
-        <MetricCard icon={Banknote} label="Estimated value" value={formatUsd(usdValue)} tone="green" />
+        <MetricCard icon={WalletCards} label="Available tokens" value={formatCompactTokensValue(data.balance)} tone="purple" />
+        <MetricCard icon={Banknote} label="Estimated value" value={formatCompactUsd(usdValue)} tone="green" />
         <MetricCard icon={CircleDollarSign} label="Current rate" value={`${formatUsd(data.tokenUsdRate)} / token`} tone="amber" compact />
       </section>
       <section className="mt-8">
@@ -326,10 +339,10 @@ function EarningsView({ data, refreshing }: { data: TrainerDashboardSummary; ref
     <div>
       <ViewHeading title="Earnings" subtitle="Training payouts and referral bonuses credited to your wallet." refreshing={refreshing} />
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Earnings summary">
-        <MetricCard icon={Sparkles} label="Total earned" value={`${formatTokens(total)} tokens`} tone="purple" compact />
-        <MetricCard icon={Mic2} label="Training" value={formatTokens(data.trainingEarningsTokens)} tone="green" />
-        <MetricCard icon={Users} label="Referrals" value={formatTokens(data.referralEarningsTokens)} tone="amber" />
-        <MetricCard icon={ArrowUpRight} label="Paid out" value={formatTokens(data.paidOutTokens)} tone="blue" />
+        <MetricCard icon={Sparkles} label="Total earned" value={formatCompactTokensLabel(total)} tone="purple" compact />
+        <MetricCard icon={Mic2} label="Training" value={formatCompactTokensValue(data.trainingEarningsTokens)} tone="green" />
+        <MetricCard icon={Users} label="Referrals" value={formatCompactTokensValue(data.referralEarningsTokens)} tone="amber" />
+        <MetricCard icon={ArrowUpRight} label="Paid out" value={formatCompactTokensValue(data.paidOutTokens)} tone="blue" />
       </section>
       <section className="mt-8">
         <SectionTitle title="Six-month earnings" subtitle="Tokens credited by month." />
@@ -452,55 +465,31 @@ function EarningTypeLabel({ type }: { type: LedgerEntryType }) {
   );
 }
 
-function TrainingView({ dialectTag }: { dialectTag: string | null }) {
-  const tasks = [
-    {
-      title: 'Sentence Recording',
-      description: 'Record prompted sentences for speech recognition evaluation.',
-      icon: Mic2,
-      href: '/pipeline-test',
-      task: 'Voice recording',
-    },
-    {
-      title: 'Word Translation',
-      description: 'Translate common English words and record their local pronunciation.',
-      icon: BookOpenCheck,
-      href: '/pipeline-test#word-library',
-      task: 'Translation + voice',
-    },
-  ];
-
+function TrainingView({ dialectTag, onStartTask }: { dialectTag: string | null; onStartTask: () => void }) {
   return (
     <div>
-      <ViewHeading title="Training" subtitle="Pick a task type to start contributing." />
-      <div className="grid gap-4 md:grid-cols-2">
-        {tasks.map((item) => {
-          const Icon = item.icon;
-          return (
-            <article className={`${cardClass} grid min-h-64 content-between gap-6 p-5 md:p-6`} key={item.title}>
-              <div>
-                <div className="mb-5 flex items-start justify-between gap-3">
-                  <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent"><Icon className="size-5" aria-hidden="true" /></span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                    <span className="size-1.5 rounded-full bg-emerald-500" /> Available
-                  </span>
-                </div>
-                <h3 className="text-xl font-black">{item.title}</h3>
-                <p className="mt-2 leading-relaxed text-muted">{item.description}</p>
-              </div>
-              <div>
-                <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
-                  <span className="rounded-md bg-surface-muted px-2 py-1">{item.task}</span>
-                  <span className="rounded-md bg-surface-muted px-2 py-1">{dialectTag?.toUpperCase() ?? 'Your dialect'}</span>
-                </div>
-                <Link className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" href={item.href}>
-                  Start task <ArrowRight className="size-4" aria-hidden="true" />
-                </Link>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+      <ViewHeading title="Training" subtitle="Translate and pronounce words in your dialect." />
+      <article className={`${cardClass} grid min-h-64 max-w-2xl content-between gap-6 p-5 md:p-6`}>
+        <div>
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent"><Mic2 className="size-5" aria-hidden="true" /></span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              <span className="size-1.5 rounded-full bg-emerald-500" /> Available
+            </span>
+          </div>
+          <h3 className="text-xl font-black">Word training</h3>
+          <p className="mt-2 leading-relaxed text-muted">Translate individual words, record their pronunciation, and validate dialect submissions.</p>
+        </div>
+        <div>
+          <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
+            <span className="rounded-md bg-surface-muted px-2 py-1">Translation + voice</span>
+            <span className="rounded-md bg-surface-muted px-2 py-1">{dialectTag?.toUpperCase() ?? 'Your dialect'}</span>
+          </div>
+          <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" onClick={onStartTask} type="button">
+            Start task <ArrowRight className="size-4" aria-hidden="true" />
+          </button>
+        </div>
+      </article>
     </div>
   );
 }
@@ -522,7 +511,7 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
       <ViewHeading title="Referrals" subtitle="Your invitations and credited lifetime referral bonuses." />
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Referral summary">
         <MetricCard icon={Users} label="People invited" value={data.referrals.invitedCount.toLocaleString()} tone="purple" />
-        <MetricCard icon={CircleDollarSign} label="Bonus earned" value={`${formatTokens(data.referralEarningsTokens)} tokens`} tone="green" compact />
+        <MetricCard icon={CircleDollarSign} label="Bonus earned" value={formatCompactTokensLabel(data.referralEarningsTokens)} tone="green" compact />
         <MetricCard icon={BadgeCheck} label="Referral code" value={data.referrals.code} tone="blue" compact />
       </section>
       <section className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
@@ -958,6 +947,14 @@ function DashboardError({ retry }: { retry: () => void }) {
 
 function formatTokens(value: string | number) {
   return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function formatCompactTokensValue(value: string | number) {
+  return formatCompactNumber(value);
+}
+
+function formatCompactTokensLabel(value: string | number) {
+  return `${formatCompactNumber(value)} tokens`;
 }
 
 function formatUsd(value: number) {

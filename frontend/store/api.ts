@@ -174,6 +174,7 @@ export interface PlatformSettings {
   leadsNotificationAddress: string | null;
   trainingPayoutBonusCapMultiple: string | null;
   taskTokenCost: string | null;
+  reverseWordTrainingEnabled: boolean;
   updatedAt: string;
   createdAt: string;
 }
@@ -185,6 +186,33 @@ export interface PlatformSettingsInput {
   leadsNotificationAddress?: string | null;
   trainingPayoutBonusCapMultiple?: number | null;
   taskTokenCost?: number | null;
+  reverseWordTrainingEnabled?: boolean;
+}
+
+export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';
+export type RecordingNoiseRating = 'NOISY' | 'FAIR' | 'QUIET';
+
+export interface WordTrainingSession {
+  sessionId: string;
+  dialectTag: string;
+  dialectName: string;
+  reverseTrainingEnabled: boolean;
+  termsVersion: string;
+}
+
+export interface WordTrainingAssignment {
+  assignmentId: string;
+  direction: WordTrainingDirection;
+  promptText: string;
+  sourceLanguage: string;
+  responseLanguage: string;
+}
+
+export interface WordRecordingUpload {
+  uploadUrl: string;
+  key: string;
+  bucket: string;
+  expiresInSeconds: number;
 }
 
 export interface SubscriptionPool {
@@ -362,6 +390,31 @@ export const dialectivaApi = createApi({
     getMySubmissions: builder.query<SubmissionsPage, { page: number; pageSize: number }>({
       query: ({ page, pageSize }) => ({ url: '/submissions/mine', params: { page, pageSize } }),
     }),
+    startWordTrainingSession: builder.mutation<WordTrainingSession, { acceptedVoiceTerms: true }>({
+      query: (body) => ({ url: '/words/sessions', method: 'POST', body }),
+    }),
+    getNextWordTrainingAssignment: builder.query<WordTrainingAssignment, string>({
+      query: (sessionId) => `/words/sessions/${sessionId}/next`,
+    }),
+    endWordTrainingSession: builder.mutation<{ ended: boolean }, string>({
+      query: (sessionId) => ({ url: `/words/sessions/${sessionId}/end`, method: 'POST' }),
+    }),
+    createWordRecordingUpload: builder.mutation<WordRecordingUpload, { assignmentId: string; contentType: string }>({
+      query: (body) => ({ url: '/words/recordings/upload-url', method: 'POST', body }),
+    }),
+    submitWordRecording: builder.mutation<
+      { recordingId: string; status: string; direction: WordTrainingDirection; validationScore: number | null },
+      {
+        assignmentId: string;
+        responseText: string;
+        bucket: string;
+        audioKey: string;
+        durationMs: number;
+        noiseRating: RecordingNoiseRating;
+      }
+    >({
+      query: (body) => ({ url: '/words/recordings', method: 'POST', body }),
+    }),
     createTokenDeposit: builder.mutation<{ depositId: string; hostedCheckoutUrl: string }, { usdAmount: number; currency: 'USDC' | 'USDT' }>({
       query: (body) => ({ url: '/wallet/deposits', method: 'POST', body }),
     }),
@@ -475,6 +528,14 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['Users'],
     }),
+    createTrainingPayout: builder.mutation<{ userId: string; netAmount: string }, { userId: string; tokenAmount: number; reference: string }>({
+      query: (body) => ({
+        url: '/admin/training-payouts',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['Wallet'],
+    }),
     getAdminCountries: builder.query<AdminCountry[], void>({
       query: () => '/geo/admin/countries',
       providesTags: ['AdminCountries'],
@@ -561,6 +622,11 @@ export const {
   useGetTrainerDashboardQuery,
   useGetEarningHistoryQuery,
   useGetMySubmissionsQuery,
+  useStartWordTrainingSessionMutation,
+  useLazyGetNextWordTrainingAssignmentQuery,
+  useEndWordTrainingSessionMutation,
+  useCreateWordRecordingUploadMutation,
+  useSubmitWordRecordingMutation,
   useCreateTokenDepositMutation,
   useUpdateProfileMutation,
   useCreateDataAccessLeadMutation,
@@ -577,6 +643,7 @@ export const {
   useGetUsersQuery,
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,
+  useCreateTrainingPayoutMutation,
   useGetAdminCountriesQuery,
   useCreateCountryMutation,
   useUpdateCountryMutation,

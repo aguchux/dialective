@@ -1,17 +1,13 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsString, Max, Min } from 'class-validator';
 
 export class CreateWordRecordingDto {
   @IsString()
   @IsNotEmpty()
-  wordId!: string;
+  assignmentId!: string;
 
   @IsString()
   @IsNotEmpty()
-  dialectTag!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  translationText!: string;
+  responseText!: string;
 
   @IsString()
   @IsNotEmpty()
@@ -20,4 +16,12 @@ export class CreateWordRecordingDto {
   @IsString()
   @IsNotEmpty()
   audioKey!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(60000)
+  durationMs!: number;
+
+  @IsIn(['NOISY', 'FAIR', 'QUIET'])
+  noiseRating!: 'NOISY' | 'FAIR' | 'QUIET';
 }

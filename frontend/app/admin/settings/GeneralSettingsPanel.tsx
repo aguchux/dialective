@@ -16,6 +16,7 @@ export function GeneralSettingsPanel() {
   const [minWithdrawalTokens, setMinWithdrawalTokens] = useState('');
   const [taskTokenCost, setTaskTokenCost] = useState('');
   const [trainingPayoutBonusCapMultiple, setTrainingPayoutBonusCapMultiple] = useState('');
+  const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,6 +26,7 @@ export function GeneralSettingsPanel() {
     setMinWithdrawalTokens(settings.minWithdrawalTokens ?? '');
     setTaskTokenCost(settings.taskTokenCost ?? '');
     setTrainingPayoutBonusCapMultiple(settings.trainingPayoutBonusCapMultiple ?? '');
+    setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -40,6 +42,7 @@ export function GeneralSettingsPanel() {
         ...(trainingPayoutBonusCapMultiple !== ''
           ? { trainingPayoutBonusCapMultiple: Number(trainingPayoutBonusCapMultiple) }
           : {}),
+        reverseWordTrainingEnabled,
       }).unwrap();
       setMessage('General settings saved.');
     } catch (err) {
@@ -128,6 +131,24 @@ export function GeneralSettingsPanel() {
               value={trainingPayoutBonusCapMultiple}
               onChange={(e) => setTrainingPayoutBonusCapMultiple(e.target.value)}
             />
+          </div>
+
+          <div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="reverse-word-training">
+              <input
+                checked={reverseWordTrainingEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="reverse-word-training"
+                onChange={(event) => setReverseWordTrainingEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Dialect-to-English validation</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Mix translations submitted by other trainers into word sessions for reverse validation and scoring.
+                </span>
+              </span>
+            </label>
           </div>
 
           <div>

@@ -81,7 +81,7 @@ export class SubmissionsController {
    *
    * Requires auth (added alongside the token debit -- there is no
    * anonymous submission path once submitting costs tokens; see
-   * frontend/app/pipeline-test/page.tsx's login guard).
+   * authenticated clients only).
    */
   @Post('create')
   @UseGuards(JwtAuthGuard)

@@ -1,17 +1,26 @@
 import { landingStats } from './data';
+import { formatCompactUsd } from '@/lib/format';
 
 interface LandingStatsProps {
   dialectCount: number | null;
   countryCount: number | null;
+  poolVolumeUsd: number | null;
+  totalPayoutUsd: number | null;
 }
 
-export function LandingStats({ dialectCount, countryCount }: LandingStatsProps) {
+export function LandingStats({ dialectCount, countryCount, poolVolumeUsd, totalPayoutUsd }: LandingStatsProps) {
   const stats = landingStats.map((stat) => {
     if (stat.label === 'Dialects' && dialectCount !== null) {
       return { ...stat, value: String(dialectCount) };
     }
     if (stat.label === 'Countries' && countryCount !== null) {
       return { ...stat, value: String(countryCount) };
+    }
+    if (stat.label === 'Pool Volume' && poolVolumeUsd !== null) {
+      return { ...stat, value: formatCompactUsd(poolVolumeUsd) };
+    }
+    if (stat.label === 'Payout' && totalPayoutUsd !== null) {
+      return { ...stat, value: formatCompactUsd(totalPayoutUsd) };
     }
     return stat;
   });

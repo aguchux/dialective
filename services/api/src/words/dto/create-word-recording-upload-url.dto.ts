@@ -6,11 +6,7 @@ export type AllowedContentType = (typeof ALLOWED_CONTENT_TYPES)[number];
 export class CreateWordRecordingUploadUrlDto {
   @IsString()
   @IsNotEmpty()
-  wordId!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  dialectTag!: string;
+  assignmentId!: string;
 
   @IsIn(ALLOWED_CONTENT_TYPES)
   contentType!: AllowedContentType;

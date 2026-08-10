@@ -67,6 +67,8 @@ model User {
   wallet         Wallet?
   blogPosts      BlogPost[]
   submissions    Submission[]
+  trainingSessions TrainingSession[]
+  wordRecordings WordRecording[]
   subscriptionPoolsOpened SubscriptionPool[] @relation("SubscriptionPoolOpenedBy")
 
   @@map("users")
@@ -273,26 +275,84 @@ model Word {
   createdAt DateTime @default(now())
 
   recordings WordRecording[]
+  trainingAssignments WordTrainingAssignment[]
 
   @@map("words")
 }
 
-/// One word translated + pronounced in one dialect by one (anonymous, no-auth)
-/// submission. `translationText` is exactly what the trainer typed -- not
-/// validated against any dictionary or ASR transcript (see AGENTS.md "Word
-/// library" -- this flow deliberately skips the ASR pipeline entirely,
-/// unlike the sentence-prompt flow's vosk/whisper round trip).
+enum WordTrainingDirection {
+  ENGLISH_TO_DIALECT
+  DIALECT_TO_ENGLISH
+}
+
+enum RecordingNoiseRating {
+  NOISY
+  FAIR
+  QUIET
+}
+
+model TrainingSession {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  termsVersion   String
+  consentedAt    DateTime
+  startedAt      DateTime @default(now())
+  endedAt        DateTime?
+
+  assignments WordTrainingAssignment[]
+  recordings  WordRecording[]
+
+  @@index([userId, startedAt])
+  @@map("training_sessions")
+}
+
+/// A server-issued prompt prevents the client from choosing a source word,
+/// direction, or reverse-validation target after the session has started.
+model WordTrainingAssignment {
+  id                String                @id @default(uuid())
+  sessionId         String
+  session           TrainingSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  wordId            String
+  word              Word                  @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  direction         WordTrainingDirection
+  sourceRecordingId String?
+  uploadBucket      String?
+  uploadKey         String?
+  createdAt         DateTime              @default(now())
+  consumedAt        DateTime?
+  recording         WordRecording?
+
+  @@index([sessionId, createdAt])
+  @@index([sourceRecordingId])
+  @@map("word_training_assignments")
+}
+
+/// Historical rows may have no user/session/assignment. All new dashboard
+/// submissions are authenticated and linked to a consented training session.
 model WordRecording {
   id              String   @id @default(uuid())
   wordId          String
   word            Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId       String?
+  session         TrainingSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  assignmentId    String?  @unique
+  assignment      WordTrainingAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  direction       WordTrainingDirection @default(ENGLISH_TO_DIALECT)
   dialectTag      String
   translationText String
   audioBucket     String
   audioKey        String
+  durationMs      Int?
+  noiseRating     RecordingNoiseRating?
+  validationScore Decimal? @db.Decimal(5, 4)
   createdAt       DateTime @default(now())
 
   @@index([wordId])
+  @@index([userId, createdAt])
+  @@index([sessionId])
   @@index([dialectTag])
   @@map("word_recordings")
 }
@@ -454,6 +514,7 @@ model PlatformSettings {
   leadsNotificationAddress String? // overrides LEADS_NOTIFICATION_ADDRESS when set
   trainingPayoutBonusCapMultiple Decimal? @db.Decimal(5, 2) // overrides TRAINING_PAYOUT_BONUS_CAP_MULTIPLE when set; caps the score-scaled bonus at this multiple of tokensSpent (see computeTrainingPayout)
   taskTokenCost            Decimal? @db.Decimal(20, 8) // overrides TASK_TOKEN_COST when set; tokens debited from a trainer's wallet per submission
+  reverseWordTrainingEnabled Boolean @default(false)
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 

@@ -73,6 +73,11 @@ export class PlatformSettingsService {
     return cost;
   }
 
+  async isReverseWordTrainingEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.reverseWordTrainingEnabled;
+  }
+
   async getResendFromAddress(): Promise<string> {
     const row = await this.getRow();
     return row.resendFromAddress ?? process.env.RESEND_FROM_ADDRESS ?? 'noreply@dialectlibrary.com';
@@ -92,6 +97,7 @@ export class PlatformSettingsService {
       leadsNotificationAddress: row.leadsNotificationAddress,
       trainingPayoutBonusCapMultiple: row.trainingPayoutBonusCapMultiple?.toString() ?? null,
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
+      reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -104,6 +110,7 @@ export class PlatformSettingsService {
     leadsNotificationAddress?: string | null;
     trainingPayoutBonusCapMultiple?: number | null;
     taskTokenCost?: number | null;
+    reverseWordTrainingEnabled?: boolean;
   }) {
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
@@ -117,6 +124,7 @@ export class PlatformSettingsService {
       leadsNotificationAddress: row.leadsNotificationAddress,
       trainingPayoutBonusCapMultiple: row.trainingPayoutBonusCapMultiple?.toString() ?? null,
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
+      reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

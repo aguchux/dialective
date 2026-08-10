@@ -11,6 +11,8 @@ import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 interface GeoStats {
   countryCount: number;
   dialectCount: number;
+  poolVolumeUsd: number;
+  totalPayoutUsd: number;
 }
 
 interface Country {
@@ -44,6 +46,8 @@ export async function LandingPage() {
   const [geoStats, countries] = await Promise.all([getGeoStats(), getCountries()]);
   const dialectCount = geoStats?.dialectCount ?? null;
   const countryCount = geoStats?.countryCount ?? null;
+  const poolVolumeUsd = geoStats?.poolVolumeUsd ?? null;
+  const totalPayoutUsd = geoStats?.totalPayoutUsd ?? null;
 
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-white text-[#050505]">
@@ -56,7 +60,12 @@ export async function LandingPage() {
         <LandingHeader />
         <div className="px-4 md:px-[3.4rem]">
           <LandingHero />
-          <LandingStats dialectCount={dialectCount} countryCount={countryCount} />
+          <LandingStats
+            dialectCount={dialectCount}
+            countryCount={countryCount}
+            poolVolumeUsd={poolVolumeUsd}
+            totalPayoutUsd={totalPayoutUsd}
+          />
         </div>
       </div>
       <div className="px-4 md:px-[3.4rem]">

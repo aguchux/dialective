@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsPositive } from 'class-validator';
+import { IsBoolean, IsEmail, IsOptional, IsPositive } from 'class-validator';
 
 export class UpdatePlatformSettingsDto {
   @IsOptional()
@@ -24,4 +24,8 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsPositive()
   taskTokenCost?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  reverseWordTrainingEnabled?: boolean;
 }

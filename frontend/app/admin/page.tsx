@@ -1,6 +1,7 @@
 'use client';
 
 import { AdminShell } from '@/components/admin/AdminShell';
+import { formatCompactTokens, formatCompactUsd } from '@/lib/format';
 import { useGetAdminStatsQuery, useGetReferralsQuery } from '@/store/api';
 
 const statIconBg: Record<string, string> = {
@@ -34,13 +35,13 @@ export default function AdminDashboardPage() {
     {
       key: 'deposits',
       label: 'Total Deposits',
-      value: stats ? `$${Number(stats.totalDepositsUsd).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '-',
+      value: stats ? formatCompactUsd(stats.totalDepositsUsd) : '-',
       icon: DepositIcon,
     },
     {
       key: 'bonusesPaid',
       label: 'Referral Bonuses Paid',
-      value: stats ? `${Number(stats.totalReferralBonuses).toLocaleString(undefined, { maximumFractionDigits: 2 })} tokens` : '-',
+      value: stats ? formatCompactTokens(stats.totalReferralBonuses) : '-',
       icon: CommissionIcon,
     },
   ];
