@@ -1196,8 +1196,10 @@ function EarningsChart({ buckets, range, loading }: { buckets: EarningsChart_Buc
 type EarningsChart_Bucket = { label: string; amount: string };
 
 function formatBucketLabel(label: string, range: EarningsChartRange) {
+  if (!label) return '';
   if (range === 'year') return formatMonth(label);
   const date = new Date(`${label}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return '';
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(date);
 }
 
@@ -1281,7 +1283,9 @@ function formatDateTime(value: string) {
 }
 
 function formatMonth(value: string) {
-  return new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(new Date(`${value}-01T00:00:00Z`));
+  const date = new Date(`${value}-01T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(date);
 }
 
 function emailName(email?: string | null) {
