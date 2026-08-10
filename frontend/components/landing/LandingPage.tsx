@@ -2,7 +2,6 @@ import { ContributorRail } from './ContributorRail';
 import { CountryFlagMarquee } from './CountryFlagMarquee';
 import { HowItWorks } from './HowItWorks';
 import { LandingBlog } from './LandingBlog';
-import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 import { LandingFooter } from './LandingFooter';
 import { LandingHeader } from './LandingHeader';
 import { LandingHero } from './LandingHero';
@@ -47,21 +46,26 @@ export async function LandingPage() {
   const countryCount = geoStats?.countryCount ?? null;
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-white text-[#050505]">
-      <ParallaxTopBackground className="min-h-166.75" />
-
-      <div className="relative z-10">
-        <LandingHeader />
+    <main className="relative min-h-screen overflow-x-hidden bg-white text-[#050505]">
+      <LandingHeader />
+      <div className="relative isolate overflow-hidden">
+        <div
+          className="pointer-events-none absolute inset-0 -z-10 bg-[#c9eff7] bg-cover bg-top bg-no-repeat"
+          style={{ backgroundImage: "url('/landing-hero.png')" }}
+          aria-hidden="true"
+        />
         <div className="px-4 md:px-[3.4rem]">
           <LandingHero />
           <LandingStats dialectCount={dialectCount} countryCount={countryCount} />
-          <ContributorRail dialectCount={dialectCount} />
-          <HowItWorks />
-          <CountryFlagMarquee countries={countries} />
-          <LandingBlog />
         </div>
-        <LandingFooter />
       </div>
+      <div className="px-4 md:px-[3.4rem]">
+        <ContributorRail dialectCount={dialectCount} />
+        <HowItWorks />
+        <CountryFlagMarquee countries={countries} />
+        <LandingBlog />
+      </div>
+      <LandingFooter />
     </main>
   );
 }
