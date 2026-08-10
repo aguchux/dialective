@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import EditorJS, { type OutputData, type ToolConstructable } from '@editorjs/editorjs';
 import Header from '@editorjs/header';
 import EditorList from '@editorjs/list';
@@ -23,19 +23,13 @@ interface BlogEditorProps {
   data: EditorDocument;
   uploadMedia: (file: File, kind: 'IMAGE' | 'VIDEO') => Promise<string>;
   onChange?: (data: EditorDocument) => void;
+  onReady: (handle: BlogEditorHandle | null) => void;
 }
 
-export const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(function BlogEditor(
-  { data, uploadMedia, onChange },
-  ref,
-) {
+export function BlogEditor({ data, uploadMedia, onChange, onReady }: BlogEditorProps) {
   const holderId = useRef(`blog-editor-${Math.random().toString(36).slice(2)}`);
   const editorRef = useRef<EditorJS | null>(null);
   const changeTimer = useRef<ReturnType<typeof setTimeout>>();
-
-  useImperativeHandle(ref, () => ({
-    save: async () => (await editorRef.current?.save()) as EditorDocument,
-  }), []);
 
   useEffect(() => {
     if (editorRef.current) return;
@@ -68,7 +62,10 @@ export const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(function
         raw: RawTool as unknown as ToolConstructable,
         button: ButtonBlock as unknown as ToolConstructable,
       },
-      onReady: () => new DragDrop(editor),
+      onReady: () => {
+        new DragDrop(editor);
+        onReady({ save: async () => (await editor.save()) as EditorDocument });
+      },
       onChange: () => {
         if (!onChange) return;
         clearTimeout(changeTimer.current);
@@ -79,13 +76,14 @@ export const BlogEditor = forwardRef<BlogEditorHandle, BlogEditorProps>(function
     editorRef.current = editor;
     return () => {
       clearTimeout(changeTimer.current);
+      onReady(null);
       editorRef.current = null;
       void editor.isReady.then(() => editor.destroy()).catch(() => undefined);
     };
-  }, [data, onChange, uploadMedia]);
+  }, [data, onChange, onReady, uploadMedia]);
 
   return <div className="blog-editor min-h-105 rounded-lg border border-line bg-white px-2 py-5" id={holderId.current} />;
-});
+}
 
 class ButtonBlock {
   private data: { text?: string; url?: string; variant?: string };

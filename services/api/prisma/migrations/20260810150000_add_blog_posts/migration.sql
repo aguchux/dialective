@@ -1,7 +1,7 @@
 CREATE TYPE "BlogPostStatus" AS ENUM ('DRAFT', 'PUBLISHED');
 
 CREATE TABLE "blog_posts" (
-    "id" UUID NOT NULL,
+    "id" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "content" JSONB NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE "blog_posts" (
     "coverImageAlt" TEXT,
     "status" "BlogPostStatus" NOT NULL DEFAULT 'DRAFT',
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
-    "authorId" UUID NOT NULL,
+    "authorId" TEXT NOT NULL,
     "publishedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,

@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { BlogEditorHandle } from './BlogEditor';
 import { ActionButton, ActionSpinner } from '@/components/ui/ActionButton';
 import {
@@ -26,7 +26,7 @@ const fieldClass = 'min-h-11 w-full rounded-lg border border-line bg-white px-3 
 
 export function BlogEditorForm({ post }: { post?: BlogPost }) {
   const router = useRouter();
-  const editorRef = useRef<BlogEditorHandle>(null);
+  const [editorHandle, setEditorHandle] = useState<BlogEditorHandle | null>(null);
   const [title, setTitle] = useState(post?.title ?? '');
   const [slugPreview, setSlugPreview] = useState(post?.slug ?? '');
   const [status, setStatus] = useState<BlogPostStatus>(post?.status ?? 'DRAFT');
@@ -46,7 +46,12 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
     const maxBytes = kind === 'VIDEO' ? 250 * 1024 * 1024 : 10 * 1024 * 1024;
     if (file.size > maxBytes) throw new Error(kind === 'VIDEO' ? 'Videos must be 250 MB or smaller' : 'Images must be 10 MB or smaller');
     const signed = await createUpload({ fileName: file.name, contentType: file.type, kind }).unwrap();
-    const response = await fetch(signed.url, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    let response: Response;
+    try {
+      response = await fetch(signed.url, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    } catch {
+      throw new Error('Could not reach media storage. Please retry.');
+    }
     if (!response.ok) throw new Error('Media upload failed');
     return signed.publicUrl;
   }, [createUpload]);
@@ -74,11 +79,12 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
   const updateSeoPreview = useCallback((document: EditorDocument) => {
     setSeoExcerpt(excerptFrom(document));
   }, []);
+  const handleEditorReady = useCallback((handle: BlogEditorHandle | null) => setEditorHandle(handle), []);
 
   const save = async () => {
     setError('');
     if (!title.trim()) return setError('Title is required');
-    const content = await editorRef.current?.save();
+    const content = await editorHandle?.save();
     if (!content) return setError('The editor is still loading');
     setIsSaving(true);
     try {
@@ -111,7 +117,7 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
         </div>
         <div className="flex items-center gap-2">
           {post?.status === 'PUBLISHED' && <Link className="rounded-lg border border-line bg-white px-4 py-2 font-bold text-ink no-underline hover:bg-surface-muted" href={`/blog/${post.slug}`} target="_blank">View</Link>}
-          <ActionButton className="min-h-10 rounded-lg bg-accent px-5 py-2 font-extrabold text-white disabled:opacity-60" disabled={isUploadingCover} onClick={save} pending={isSaving} pendingLabel="Saving post" type="button">
+          <ActionButton className="min-h-10 rounded-lg bg-accent px-5 py-2 font-extrabold text-white disabled:opacity-60" disabled={isUploadingCover || !editorHandle} onClick={save} pending={isSaving} pendingLabel="Saving post" type="button">
             Save post
           </ActionButton>
         </div>
@@ -129,7 +135,7 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
             </p>
           </section>
 
-          <BlogEditor ref={editorRef} data={initialData} onChange={updateSeoPreview} uploadMedia={uploadMedia} />
+          <BlogEditor data={initialData} onChange={updateSeoPreview} onReady={handleEditorReady} uploadMedia={uploadMedia} />
         </div>
 
         <aside className="grid content-start gap-5">
