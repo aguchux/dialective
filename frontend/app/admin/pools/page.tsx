@@ -32,7 +32,7 @@ const dangerButtonClass =
   'inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-danger transition-colors hover:bg-[#fde8e8] disabled:cursor-not-allowed disabled:opacity-60';
 
 export default function AdminPoolsPage() {
-  const { data: summary, isLoading: isLoadingSummary } = useGetPoolsSummaryQuery();
+  const { data: summary, isLoading: isLoadingSummary, isError: isSummaryError, error: summaryError } = useGetPoolsSummaryQuery();
   const { data: pools, isLoading: isLoadingPools } = useListSubscriptionPoolsQuery();
   const [closePool, { isLoading: isClosing }] = useCloseSubscriptionPoolMutation();
   const [deletePool] = useDeleteSubscriptionPoolMutation();
@@ -174,6 +174,12 @@ export default function AdminPoolsPage() {
             trainers directly.
           </p>
         </div>
+
+        {isSummaryError && (
+          <p className="leading-relaxed text-danger" role="alert">
+            {normalizeErrorMessage(summaryError, 'Unable to load reward pool metrics.')}
+          </p>
+        )}
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Reward pool stats">
           {cards.map((card) => (
