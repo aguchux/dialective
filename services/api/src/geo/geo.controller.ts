@@ -27,7 +27,7 @@ export class GeoController {
   @Get('countries')
   getCountries() {
     return this.prisma.country.findMany({
-      select: { id: true, code: true, name: true },
+      select: { id: true, code: true, name: true, _count: { select: { dialects: true } } },
       orderBy: { name: 'asc' },
     });
   }

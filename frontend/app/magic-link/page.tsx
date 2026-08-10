@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { getSession, signIn } from 'next-auth/react';
 import { Alert, AuthPage, AuthPanel } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { roleHomePath } from '@/lib/role-home';
 
 function MagicLinkContent() {
   const searchParams = useSearchParams();
@@ -27,7 +28,7 @@ function MagicLinkContent() {
         setStatus('error');
       } else {
         const session = await getSession();
-        window.location.href = session?.user?.role === 'ADMIN' ? '/admin' : '/dashboard';
+        window.location.href = roleHomePath(session?.user?.role);
       }
     })();
   }, [token]);

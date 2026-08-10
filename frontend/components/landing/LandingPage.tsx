@@ -17,6 +17,7 @@ interface Country {
   id: string;
   code: string;
   name: string;
+  _count: { dialects: number };
 }
 
 async function getDialectCount(): Promise<number | null> {

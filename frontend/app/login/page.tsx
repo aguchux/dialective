@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { getSession, signIn } from 'next-auth/react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { getSession, signIn, useSession } from 'next-auth/react';
 import { normalizeErrorMessage, useRequestMagicLinkMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { roleHomePath } from '@/lib/role-home';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
@@ -14,10 +16,18 @@ const secondaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-3.5 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
 
 export default function LoginPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [requestMagicLink, { isLoading: isRequestingMagicLink }] = useRequestMagicLinkMutation();
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.replace(roleHomePath(session.user?.role));
+    }
+  }, [status, session, router]);
 
   async function handleCredentialsSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,8 +36,8 @@ export default function LoginPage() {
     if (result?.error) {
       setMessage('Invalid email or password.');
     } else {
-      const session = await getSession();
-      window.location.href = session?.user?.role === 'ADMIN' ? '/admin' : '/dashboard';
+      const freshSession = await getSession();
+      window.location.href = roleHomePath(freshSession?.user?.role);
     }
   }
 
@@ -39,6 +49,17 @@ export default function LoginPage() {
     } catch (err) {
       setMessage(normalizeErrorMessage(err, 'Unable to send a magic link.'));
     }
+  }
+
+  if (status === 'loading' || status === 'authenticated') {
+    return (
+      <AuthPage>
+        <AuthPanel>
+          <Breadcrumbs items={[{ label: 'Login' }]} />
+          <p className="text-center text-muted">Loading...</p>
+        </AuthPanel>
+      </AuthPage>
+    );
   }
 
   return (
