@@ -15,6 +15,8 @@ import {
   BookOpenCheck,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleDollarSign,
   Clock3,
   Copy,
@@ -49,6 +51,7 @@ import {
   TrainerDashboardSummary,
   normalizeErrorMessage,
   useCreateTokenDepositMutation,
+  useGetEarningHistoryQuery,
   useGetTrainerDashboardQuery,
   useUpdateProfileMutation,
 } from '@/store/api';
@@ -68,13 +71,6 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
 
 // Reachable only from the account dropdown, not the main tab bar/mobile nav.
 const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'profile'];
-
-const earningTypes: LedgerEntryType[] = [
-  'TRAINING_PAYOUT',
-  'REFERRAL_COMMISSION',
-  'REFERRAL_FUNDING_BONUS',
-  'REFERRAL_PAYOUT_BONUS',
-];
 
 const activityLabels: Record<LedgerEntryType, string> = {
   DEPOSIT: 'Token funding',
@@ -325,7 +321,6 @@ function TokensView({ data, refreshing }: { data: TrainerDashboardSummary; refre
 
 function EarningsView({ data, refreshing }: { data: TrainerDashboardSummary; refreshing: boolean }) {
   const total = Number(data.trainingEarningsTokens) + Number(data.referralEarningsTokens);
-  const earnings = data.recentActivity.filter((entry) => earningTypes.includes(entry.type));
   return (
     <div>
       <ViewHeading title="Earnings" subtitle="Training payouts and referral bonuses credited to your wallet." refreshing={refreshing} />
@@ -335,17 +330,124 @@ function EarningsView({ data, refreshing }: { data: TrainerDashboardSummary; ref
         <MetricCard icon={Users} label="Referrals" value={formatTokens(data.referralEarningsTokens)} tone="amber" />
         <MetricCard icon={ArrowUpRight} label="Paid out" value={formatTokens(data.paidOutTokens)} tone="blue" />
       </section>
-      <section className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
-        <div>
-          <SectionTitle title="Six-month earnings" subtitle="Tokens credited by month." />
-          <EarningsChart months={data.monthlyEarnings} />
-        </div>
-        <div>
-          <SectionTitle title="Earning history" subtitle="Most recent credited entries." />
-          <ActivityList compact entries={earnings} />
-        </div>
+      <section className="mt-8">
+        <SectionTitle title="Six-month earnings" subtitle="Tokens credited by month." />
+        <EarningsChart months={data.monthlyEarnings} />
       </section>
+      <EarningHistoryTable tokenUsdRate={data.tokenUsdRate} />
     </div>
+  );
+}
+
+function EarningHistoryTable({ tokenUsdRate }: { tokenUsdRate: number }) {
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const { data, isLoading, isFetching, isError, refetch } = useGetEarningHistoryQuery({ page, pageSize });
+  const totalPages = data?.totalPages ?? 1;
+  const firstRow = data?.total ? (data.page - 1) * data.pageSize + 1 : 0;
+  const lastRow = data?.total ? Math.min(data.page * data.pageSize, data.total) : 0;
+
+  return (
+    <section className="mt-8" aria-labelledby="earning-history-title">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-black md:text-xl" id="earning-history-title">Earning history</h2>
+          <p className="mt-0.5 text-sm text-muted">Every training payout and referral bonus credited to your wallet.</p>
+        </div>
+        {data && data.total > 0 ? (
+          <p className="text-sm font-bold text-muted">Showing {firstRow}-{lastRow} of {data.total.toLocaleString()}</p>
+        ) : null}
+      </div>
+
+      <div className={`${cardClass} overflow-hidden`}>
+        {isLoading ? (
+          <div className="grid min-h-52 place-items-center" role="status">
+            <RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" />
+            <span className="sr-only">Loading earning history</span>
+          </div>
+        ) : isError ? (
+          <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
+            <p className="font-extrabold">Could not load earning history.</p>
+            <button className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted" onClick={() => void refetch()} type="button">
+              Try again
+            </button>
+          </div>
+        ) : data?.items.length ? (
+          <>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                <caption className="sr-only">Complete earning history</caption>
+                <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
+                  <tr>
+                    <th className="px-5 py-3.5" scope="col">Date</th>
+                    <th className="px-5 py-3.5" scope="col">Source</th>
+                    <th className="px-5 py-3.5" scope="col">Reference</th>
+                    <th className="px-5 py-3.5 text-right" scope="col">Value</th>
+                    <th className="px-5 py-3.5 text-right" scope="col">Tokens</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {data.items.map((entry) => (
+                    <tr className="hover:bg-surface-muted/60" key={entry.id}>
+                      <td className="whitespace-nowrap px-5 py-4 font-bold">{formatDateTime(entry.createdAt)}</td>
+                      <td className="px-5 py-4"><EarningTypeLabel type={entry.type} /></td>
+                      <td className="max-w-52 truncate px-5 py-4 font-mono text-xs text-muted" title={entry.reference}>{entry.reference}</td>
+                      <td className="whitespace-nowrap px-5 py-4 text-right font-bold text-muted">{formatUsd(Number(entry.amount) * tokenUsdRate)}</td>
+                      <td className="whitespace-nowrap px-5 py-4 text-right font-black text-emerald-700 dark:text-emerald-300">+{formatTokens(entry.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="divide-y divide-line md:hidden">
+              {data.items.map((entry) => (
+                <article className="grid gap-3 p-4" key={entry.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <EarningTypeLabel type={entry.type} />
+                    <span className="whitespace-nowrap font-black text-emerald-700 dark:text-emerald-300">+{formatTokens(entry.amount)}</span>
+                  </div>
+                  <div className="flex items-end justify-between gap-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-bold">{formatDateTime(entry.createdAt)}</p>
+                      <p className="truncate font-mono text-xs text-muted">{entry.reference}</p>
+                    </div>
+                    <span className="shrink-0 font-bold text-muted">{formatUsd(Number(entry.amount) * tokenUsdRate)}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : (
+          <EmptyPanel icon={Clock3} title="No earnings credited yet" unframed />
+        )}
+
+        {data && data.total > 0 ? (
+          <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-muted px-4 py-3 md:px-5">
+            <p className="text-sm font-bold text-muted">Page {data.page} of {totalPages}</p>
+            <div className="flex items-center gap-2">
+              <button aria-label="Previous earnings page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page <= 1 || isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button">
+                <ChevronLeft className="size-4" aria-hidden="true" />
+              </button>
+              <button aria-label="Next earnings page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page >= totalPages || isFetching} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} type="button">
+                <ChevronRight className="size-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function EarningTypeLabel({ type }: { type: LedgerEntryType }) {
+  return (
+    <span className="inline-flex items-center gap-2 font-extrabold">
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+        {type === 'TRAINING_PAYOUT' ? <Mic2 className="size-4" aria-hidden="true" /> : <Users className="size-4" aria-hidden="true" />}
+      </span>
+      {activityLabels[type]}
+    </span>
   );
 }
 
@@ -753,6 +855,16 @@ function formatUsd(value: number) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value));
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
 }
 
 function formatMonth(value: string) {

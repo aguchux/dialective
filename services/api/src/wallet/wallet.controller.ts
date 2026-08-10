@@ -22,7 +22,7 @@ import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { Prisma, Role, WithdrawalStatus } from '../generated/prisma/client';
+import { LedgerEntryType, Prisma, Role, WithdrawalStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { NowPaymentsService } from './nowpayments.service';
@@ -31,7 +31,15 @@ import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { ResolveWithdrawalDto } from './dto/resolve-withdrawal.dto';
 import { UpdateReferralSettingsDto } from './dto/update-referral-settings.dto';
 import { CreateTrainingPayoutDto } from './dto/create-training-payout.dto';
+import { ListEarningsDto } from './dto/list-earnings.dto';
 import { tokensToUsdt, usdToTokens } from './token-rate.util';
+
+const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
+  LedgerEntryType.TRAINING_PAYOUT,
+  LedgerEntryType.REFERRAL_COMMISSION,
+  LedgerEntryType.REFERRAL_FUNDING_BONUS,
+  LedgerEntryType.REFERRAL_PAYOUT_BONUS,
+];
 
 /**
  * Wallet / Utility Token Pool: users fund their token balance with
@@ -166,6 +174,35 @@ export class WalletController {
         payoutBonusRate: settings.payoutBonusRate.toString(),
         payoutBonusEnabled: settings.payoutBonusEnabled,
       },
+    };
+  }
+
+  @Get('wallet/earnings')
+  @UseGuards(JwtAuthGuard)
+  async listEarnings(@Req() req: AuthenticatedRequest, @Query() query: ListEarningsDto) {
+    const wallet = await this.getOrCreateWallet(req.user.sub);
+    const where: Prisma.LedgerEntryWhereInput = {
+      walletId: wallet.id,
+      type: { in: EARNING_ENTRY_TYPES },
+    };
+    const skip = (query.page - 1) * query.pageSize;
+    const [entries, total] = await Promise.all([
+      this.prisma.ledgerEntry.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: query.pageSize,
+        select: { id: true, type: true, amount: true, reference: true, createdAt: true },
+      }),
+      this.prisma.ledgerEntry.count({ where }),
+    ]);
+
+    return {
+      items: entries.map((entry) => ({ ...entry, amount: entry.amount.toString() })),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
     };
   }
 

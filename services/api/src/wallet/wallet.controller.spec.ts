@@ -112,3 +112,41 @@ describe('WalletController NOWPayments IPN', () => {
     expect(tx.ledgerEntry.create).not.toHaveBeenCalled();
   });
 });
+
+describe('WalletController earning history', () => {
+  it('returns one wallet earning page in reverse chronological order', async () => {
+    const entries = [
+      {
+        id: 'earning-1',
+        type: 'TRAINING_PAYOUT',
+        amount: { toString: () => '25.5' },
+        reference: 'training-1',
+        createdAt: new Date('2026-08-10T12:00:00Z'),
+      },
+    ];
+    const prisma = {
+      wallet: { findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }) },
+      ledgerEntry: {
+        findMany: jest.fn().mockResolvedValue(entries),
+        count: jest.fn().mockResolvedValue(11),
+      },
+    };
+    const controller = new WalletController(prisma as never, {} as never, {} as never);
+
+    await expect(
+      controller.listEarnings(
+        { user: { sub: 'user-1' } } as never,
+        { page: 2, pageSize: 10 },
+      ),
+    ).resolves.toEqual({
+      items: [{ ...entries[0], amount: '25.5' }],
+      page: 2,
+      pageSize: 10,
+      total: 11,
+      totalPages: 2,
+    });
+    expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 10, take: 10, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+    );
+  });
+});

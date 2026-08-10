@@ -135,6 +135,23 @@ export interface TrainerDashboardSummary {
   };
 }
 
+export interface EarningHistoryPage {
+  items: {
+    id: string;
+    type: Extract<
+      LedgerEntryType,
+      'TRAINING_PAYOUT' | 'REFERRAL_COMMISSION' | 'REFERRAL_FUNDING_BONUS' | 'REFERRAL_PAYOUT_BONUS'
+    >;
+    amount: string;
+    reference: string;
+    createdAt: string;
+  }[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface AdminStats {
   totalTrainers: number;
   referralSettings: {
@@ -273,6 +290,10 @@ export const dialectivaApi = createApi({
     }),
     getTrainerDashboard: builder.query<TrainerDashboardSummary, void>({
       query: () => '/wallet/dashboard',
+      providesTags: ['Wallet'],
+    }),
+    getEarningHistory: builder.query<EarningHistoryPage, { page: number; pageSize: number }>({
+      query: ({ page, pageSize }) => ({ url: '/wallet/earnings', params: { page, pageSize } }),
       providesTags: ['Wallet'],
     }),
     createTokenDeposit: builder.mutation<{ depositId: string; hostedCheckoutUrl: string }, { usdAmount: number; currency: 'USDC' | 'USDT' }>({
@@ -448,6 +469,7 @@ export const {
   useGetDialectsQuery,
   useGetWalletQuery,
   useGetTrainerDashboardQuery,
+  useGetEarningHistoryQuery,
   useCreateTokenDepositMutation,
   useUpdateProfileMutation,
   useCreateDataAccessLeadMutation,
