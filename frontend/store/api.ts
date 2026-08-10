@@ -258,6 +258,7 @@ export interface TrainerSubmissionSummary {
   promptText: string;
   dialectTag: string;
   status: 'PENDING' | 'TRANSCRIBED' | 'REJECTED' | 'SCORED' | 'SETTLED';
+  tokensSpent: string;
   score: string | null;
   payoutTokenAmount: string | null;
   rejectionReason: string | null;
@@ -387,8 +388,11 @@ export const dialectivaApi = createApi({
       query: ({ page, pageSize }) => ({ url: '/wallet/earnings', params: { page, pageSize } }),
       providesTags: ['Wallet'],
     }),
-    getMySubmissions: builder.query<SubmissionsPage, { page: number; pageSize: number }>({
-      query: ({ page, pageSize }) => ({ url: '/submissions/mine', params: { page, pageSize } }),
+    getMySubmissions: builder.query<SubmissionsPage, { page: number; pageSize: number; status?: TrainerSubmissionSummary['status'][] }>({
+      query: ({ page, pageSize, status }) => ({
+        url: '/submissions/mine',
+        params: { page, pageSize, status: status?.join(',') },
+      }),
     }),
     startWordTrainingSession: builder.mutation<WordTrainingSession, { acceptedVoiceTerms: true }>({
       query: (body) => ({ url: '/words/sessions', method: 'POST', body }),

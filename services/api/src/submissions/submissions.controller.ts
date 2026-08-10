@@ -20,7 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { CreateUploadUrlDto } from './dto/create-upload-url.dto';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
-import { ListEarningsDto } from '../wallet/dto/list-earnings.dto';
+import { ListSubmissionsDto } from './dto/list-submissions.dto';
 
 const SUBMISSIONS_BUCKET = process.env.SPACES_SUBMISSIONS_BUCKET ?? 'dialectiva-submissions';
 
@@ -180,8 +180,8 @@ export class SubmissionsController {
    */
   @Get('mine')
   @UseGuards(JwtAuthGuard)
-  async listMine(@Req() req: AuthenticatedRequest, @Query() query: ListEarningsDto) {
-    const where = { userId: req.user.sub };
+  async listMine(@Req() req: AuthenticatedRequest, @Query() query: ListSubmissionsDto) {
+    const where = { userId: req.user.sub, ...(query.status ? { status: { in: query.status } } : {}) };
     const skip = (query.page - 1) * query.pageSize;
     const [items, total] = await Promise.all([
       this.prisma.submission.findMany({
@@ -200,6 +200,7 @@ export class SubmissionsController {
         promptText: submission.prompt.text,
         dialectTag: submission.dialectTag,
         status: submission.status,
+        tokensSpent: submission.tokensSpent.toString(),
         score: submission.score?.toString() ?? null,
         payoutTokenAmount: submission.payoutTokenAmount?.toString() ?? null,
         rejectionReason: submission.rejectionReason,

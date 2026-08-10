@@ -465,32 +465,272 @@ function EarningTypeLabel({ type }: { type: LedgerEntryType }) {
   );
 }
 
+const SCORING_SLA_HOURS = 24;
+const SCORING_SLA_MS = SCORING_SLA_HOURS * 60 * 60 * 1000;
+
+type TrainingTab = 'training' | 'tasks';
+
 function TrainingView({ dialectTag, onStartTask }: { dialectTag: string | null; onStartTask: () => void }) {
+  const [tab, setTab] = useState<TrainingTab>('training');
+
   return (
     <div>
       <ViewHeading title="Training" subtitle="Translate and pronounce words in your dialect." />
-      <article className={`${cardClass} grid min-h-64 max-w-2xl content-between gap-6 p-5 md:p-6`}>
-        <div>
-          <div className="mb-5 flex items-start justify-between gap-3">
-            <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent"><Mic2 className="size-5" aria-hidden="true" /></span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-              <span className="size-1.5 rounded-full bg-emerald-500" /> Available
-            </span>
+
+      <div className="mb-6 inline-flex rounded-lg border border-line bg-surface p-1" role="tablist" aria-label="Training sections">
+        <button
+          aria-selected={tab === 'training'}
+          className={`min-h-9 rounded-md px-4 text-sm font-extrabold transition-colors ${tab === 'training' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}
+          onClick={() => setTab('training')}
+          role="tab"
+          type="button"
+        >
+          Training
+        </button>
+        <button
+          aria-selected={tab === 'tasks'}
+          className={`min-h-9 rounded-md px-4 text-sm font-extrabold transition-colors ${tab === 'tasks' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}
+          onClick={() => setTab('tasks')}
+          role="tab"
+          type="button"
+        >
+          My Tasks
+        </button>
+      </div>
+
+      {tab === 'training' ? (
+        <article className={`${cardClass} grid min-h-64 max-w-2xl content-between gap-6 p-5 md:p-6`}>
+          <div>
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent"><Mic2 className="size-5" aria-hidden="true" /></span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                <span className="size-1.5 rounded-full bg-emerald-500" /> Available
+              </span>
+            </div>
+            <h3 className="text-xl font-black">Word training</h3>
+            <p className="mt-2 leading-relaxed text-muted">Translate individual words, record their pronunciation, and validate dialect submissions.</p>
           </div>
-          <h3 className="text-xl font-black">Word training</h3>
-          <p className="mt-2 leading-relaxed text-muted">Translate individual words, record their pronunciation, and validate dialect submissions.</p>
+          <div>
+            <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
+              <span className="rounded-md bg-surface-muted px-2 py-1">Translation + voice</span>
+              <span className="rounded-md bg-surface-muted px-2 py-1">{dialectTag?.toUpperCase() ?? 'Your dialect'}</span>
+            </div>
+            <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" onClick={onStartTask} type="button">
+              Start task <ArrowRight className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+        </article>
+      ) : (
+        <MyTasksView />
+      )}
+    </div>
+  );
+}
+
+type TaskDisplayStatus = 'PENDING' | 'TRANSCRIBED' | 'SCORED' | 'SETTLED' | 'REJECTED' | 'FAILED';
+
+const taskStatusLabels: Record<TaskDisplayStatus, string> = {
+  PENDING: 'Awaiting transcription',
+  TRANSCRIBED: 'Awaiting scoring',
+  SCORED: 'Scored',
+  SETTLED: 'Scored',
+  REJECTED: 'Rejected',
+  FAILED: 'Failed to score',
+};
+
+const taskStatusTones: Record<TaskDisplayStatus, string> = {
+  PENDING: 'bg-surface-muted text-muted',
+  TRANSCRIBED: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  SCORED: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+  SETTLED: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+  REJECTED: 'bg-red-50 text-danger dark:bg-red-950',
+  FAILED: 'bg-red-50 text-danger dark:bg-red-950',
+};
+
+/** Live countdown from createdAt to createdAt+SCORING_SLA_MS, ticking every second. */
+function useCountdown(deadline: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return Math.max(0, deadline - now);
+}
+
+function formatCountdown(ms: number) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+/**
+ * Scoring is quorum-triggered (no fixed schedule) and settlement runs every
+ * 12h, so there's no real backend "scoring deadline" to poll. This is a
+ * display-only SLA countdown anchored to createdAt: if a submission is still
+ * PENDING/TRANSCRIBED once it elapses, the row shows as "Failed to score"
+ * client-side only -- nothing is written back. If the real job scores it
+ * later, the next refetch's live status corrects the display immediately.
+ */
+function deriveTaskStatus(submission: TrainerSubmissionSummary, nowMs: number): TaskDisplayStatus {
+  if (submission.status === 'REJECTED') return 'REJECTED';
+  if (submission.status === 'SCORED' || submission.status === 'SETTLED') return submission.status;
+  const deadline = new Date(submission.createdAt).getTime() + SCORING_SLA_MS;
+  if (nowMs >= deadline) return 'FAILED';
+  return submission.status;
+}
+
+function estimatedReward(tokensSpent: string) {
+  const spent = Number(tokensSpent);
+  return `${formatTokens(spent)} – ${formatTokens(spent * 2)} tokens`;
+}
+
+/** tokensSpent + tokensSpent*(score/100)*1.0 -- mirrors the backend's default no-loss payout formula (bonusCapMultiple=1.0). Settlement may use an admin-tuned cap, so this is an estimate until SETTLED. */
+function estimatedScoredPayout(tokensSpent: string, score: string) {
+  const spent = Number(tokensSpent);
+  const scoreFraction = Math.max(0, Math.min(100, Number(score))) / 100;
+  return spent + spent * scoreFraction;
+}
+
+function MyTasksView() {
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const { data, isLoading, isFetching, isError, refetch } = useGetMySubmissionsQuery(
+    { page, pageSize, status: ['PENDING', 'TRANSCRIBED'] },
+    { pollingInterval: 30000 },
+  );
+  const totalPages = data?.totalPages ?? 1;
+  const now = Date.now();
+
+  return (
+    <section className={`${cardClass} overflow-hidden`}>
+      <div className="flex items-center gap-3 border-b border-line bg-surface-muted px-5 py-4">
+        <span className="grid size-9 place-items-center rounded-lg bg-[#e8f0fe] text-[#3B6DF0]"><Clock3 className="size-5" aria-hidden="true" /></span>
+        <div>
+          <h3 className="font-black">Submitted tasks</h3>
+          <p className="text-sm text-muted">Consensus scoring completes once enough trainers submit the same prompt, typically within {SCORING_SLA_HOURS}h.</p>
         </div>
-        <div>
-          <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
-            <span className="rounded-md bg-surface-muted px-2 py-1">Translation + voice</span>
-            <span className="rounded-md bg-surface-muted px-2 py-1">{dialectTag?.toUpperCase() ?? 'Your dialect'}</span>
-          </div>
-          <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" onClick={onStartTask} type="button">
-            Start task <ArrowRight className="size-4" aria-hidden="true" />
+      </div>
+
+      {isLoading ? (
+        <div className="grid min-h-52 place-items-center" role="status">
+          <RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" />
+          <span className="sr-only">Loading tasks</span>
+        </div>
+      ) : isError ? (
+        <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
+          <p className="font-extrabold">Could not load your tasks.</p>
+          <button className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted" onClick={() => void refetch()} type="button">
+            Try again
           </button>
         </div>
-      </article>
-    </div>
+      ) : data?.items.length ? (
+        <>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[820px] border-collapse text-left text-sm">
+              <caption className="sr-only">Your submitted tasks</caption>
+              <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
+                <tr>
+                  <th className="px-5 py-3.5" scope="col">Prompt</th>
+                  <th className="px-5 py-3.5" scope="col">Dialect</th>
+                  <th className="px-5 py-3.5" scope="col">Status</th>
+                  <th className="px-5 py-3.5" scope="col">Time to scoring</th>
+                  <th className="px-5 py-3.5 text-right" scope="col">Est. reward</th>
+                  <th className="px-5 py-3.5" scope="col">Submitted</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {data.items.map((submission) => (
+                  <TaskRow key={submission.id} now={now} submission={submission} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="divide-y divide-line md:hidden">
+            {data.items.map((submission) => (
+              <TaskCard key={submission.id} now={now} submission={submission} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <EmptyPanel actionHref="/dashboard?view=training" actionLabel="Start training" icon={Headphones} title="No tasks submitted yet" unframed />
+      )}
+
+      {data && data.total > 0 ? (
+        <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-muted px-4 py-3 md:px-5">
+          <p className="text-sm font-bold text-muted">Page {data.page} of {totalPages}</p>
+          <div className="flex items-center gap-2">
+            <button aria-label="Previous page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page <= 1 || isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button">
+              <ChevronLeft className="size-4" aria-hidden="true" />
+            </button>
+            <button aria-label="Next page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page >= totalPages || isFetching} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} type="button">
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function TaskCountdownCell({ submission }: { submission: TrainerSubmissionSummary }) {
+  const deadline = new Date(submission.createdAt).getTime() + SCORING_SLA_MS;
+  const remaining = useCountdown(deadline);
+  const finalized = submission.status === 'SCORED' || submission.status === 'SETTLED' || submission.status === 'REJECTED';
+  if (finalized) return <span className="text-muted">—</span>;
+  if (remaining <= 0) return <span className="font-bold text-danger">Expired</span>;
+  return <span className="font-mono font-bold">{formatCountdown(remaining)}</span>;
+}
+
+function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; now: number }) {
+  const displayStatus = deriveTaskStatus(submission, now);
+  return (
+    <tr className="hover:bg-surface-muted/60">
+      <td className="max-w-64 truncate px-5 py-4 font-bold" title={submission.promptText}>{submission.promptText}</td>
+      <td className="px-5 py-4 text-muted">{submission.dialectTag.toUpperCase()}</td>
+      <td className="px-5 py-4">
+        <span className={`w-fit rounded-md px-2.5 py-1 text-xs font-extrabold ${taskStatusTones[displayStatus]}`}>
+          {taskStatusLabels[displayStatus]}
+        </span>
+      </td>
+      <td className="whitespace-nowrap px-5 py-4">
+        <TaskCountdownCell submission={submission} />
+      </td>
+      <td className="whitespace-nowrap px-5 py-4 text-right font-bold text-muted">
+        {submission.payoutTokenAmount !== null ? `+${formatTokens(submission.payoutTokenAmount)} tokens` : estimatedReward(submission.tokensSpent)}
+      </td>
+      <td className="whitespace-nowrap px-5 py-4 text-muted">{formatDateTime(submission.createdAt)}</td>
+    </tr>
+  );
+}
+
+function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; now: number }) {
+  const displayStatus = deriveTaskStatus(submission, now);
+  const finalized = submission.status === 'SCORED' || submission.status === 'SETTLED' || submission.status === 'REJECTED';
+  return (
+    <article className="grid gap-3 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 truncate font-bold" title={submission.promptText}>{submission.promptText}</p>
+        <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-extrabold ${taskStatusTones[displayStatus]}`}>
+          {taskStatusLabels[displayStatus]}
+        </span>
+      </div>
+      <div className="flex items-end justify-between gap-3 text-sm">
+        <div className="min-w-0">
+          <p className="text-muted">{submission.dialectTag.toUpperCase()} &middot; {formatDateTime(submission.createdAt)}</p>
+          {!finalized && (
+            <p className="font-bold">
+              Time to scoring: <TaskCountdownCell submission={submission} />
+            </p>
+          )}
+        </div>
+        <span className="shrink-0 font-black text-muted">
+          {submission.payoutTokenAmount !== null ? `+${formatTokens(submission.payoutTokenAmount)}` : estimatedReward(submission.tokensSpent)}
+        </span>
+      </div>
+    </article>
   );
 }
 
@@ -670,7 +910,11 @@ const submissionStatusTones: Record<TrainerSubmissionSummary['status'], string> 
 function ScoresView() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const { data, isLoading, isFetching, isError, refetch } = useGetMySubmissionsQuery({ page, pageSize });
+  const { data, isLoading, isFetching, isError, refetch } = useGetMySubmissionsQuery({
+    page,
+    pageSize,
+    status: ['SCORED', 'SETTLED', 'REJECTED'],
+  });
   const totalPages = data?.totalPages ?? 1;
 
   return (
@@ -708,7 +952,7 @@ function ScoresView() {
                     <th className="px-5 py-3.5" scope="col">Dialect</th>
                     <th className="px-5 py-3.5" scope="col">Status</th>
                     <th className="px-5 py-3.5 text-right" scope="col">Score</th>
-                    <th className="px-5 py-3.5 text-right" scope="col">Payout</th>
+                    <th className="px-5 py-3.5 text-right" scope="col">Payout (est.)</th>
                     <th className="px-5 py-3.5" scope="col">Submitted</th>
                   </tr>
                 </thead>
@@ -726,7 +970,11 @@ function ScoresView() {
                         {submission.score !== null ? `${Number(submission.score).toFixed(1)}%` : '—'}
                       </td>
                       <td className="whitespace-nowrap px-5 py-4 text-right font-black text-emerald-700 dark:text-emerald-300">
-                        {submission.payoutTokenAmount !== null ? `+${formatTokens(submission.payoutTokenAmount)}` : '—'}
+                        {submission.payoutTokenAmount !== null
+                          ? `+${formatTokens(submission.payoutTokenAmount)}`
+                          : submission.score !== null
+                            ? `~${formatTokens(estimatedScoredPayout(submission.tokensSpent, submission.score))}`
+                            : '—'}
                       </td>
                       <td className="whitespace-nowrap px-5 py-4 text-muted">{formatDateTime(submission.createdAt)}</td>
                     </tr>
@@ -749,9 +997,11 @@ function ScoresView() {
                       <p className="text-muted">{submission.dialectTag.toUpperCase()} &middot; {formatDateTime(submission.createdAt)}</p>
                       {submission.score !== null && <p className="font-bold">Score: {Number(submission.score).toFixed(1)}%</p>}
                     </div>
-                    {submission.payoutTokenAmount !== null && (
+                    {submission.payoutTokenAmount !== null ? (
                       <span className="shrink-0 font-black text-emerald-700 dark:text-emerald-300">+{formatTokens(submission.payoutTokenAmount)}</span>
-                    )}
+                    ) : submission.score !== null ? (
+                      <span className="shrink-0 font-black text-emerald-700 dark:text-emerald-300">~{formatTokens(estimatedScoredPayout(submission.tokensSpent, submission.score))}</span>
+                    ) : null}
                   </div>
                 </article>
               ))}
