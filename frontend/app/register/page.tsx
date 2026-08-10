@@ -8,6 +8,7 @@ import { normalizeErrorMessage, useRegisterMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { roleHomePath } from '@/lib/role-home';
+import { ActionButton } from '@/components/ui/ActionButton';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
@@ -21,7 +22,8 @@ function RegisterContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [register, { isLoading }] = useRegisterMutation();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [register] = useRegisterMutation();
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -32,20 +34,21 @@ function RegisterContent() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setIsSubmitting(true);
 
     try {
       await register({ email, password, referralCode }).unwrap();
+      const result = await signIn('credentials', { email, password, redirect: false });
+      if (result?.error) {
+        setError('Account created, but automatic sign-in failed. Try logging in.');
+      } else {
+        const freshSession = await getSession();
+        window.location.href = roleHomePath(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
+      }
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Registration failed'));
-      return;
-    }
-
-    const result = await signIn('credentials', { email, password, redirect: false });
-    if (result?.error) {
-      setError('Account created, but automatic sign-in failed. Try logging in.');
-    } else {
-      const freshSession = await getSession();
-      window.location.href = roleHomePath(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -84,9 +87,9 @@ function RegisterContent() {
             minLength={8}
             required
           />
-          <button className={primaryButtonClass} type="submit" disabled={isLoading}>
+          <ActionButton className={primaryButtonClass} type="submit" pending={isSubmitting} pendingLabel="Creating account">
             Register
-          </button>
+          </ActionButton>
         </form>
 
         <Notice>

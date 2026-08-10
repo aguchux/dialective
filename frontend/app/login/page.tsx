@@ -8,6 +8,7 @@ import { normalizeErrorMessage, useRequestMagicLinkMutation } from '@/store/api'
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { postAuthPath } from '@/lib/role-home';
+import { ActionButton } from '@/components/ui/ActionButton';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
@@ -26,6 +27,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [requestMagicLink, { isLoading: isRequestingMagicLink }] = useRequestMagicLinkMutation();
 
   useEffect(() => {
@@ -37,12 +39,17 @@ export default function LoginPage() {
   async function handleCredentialsSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    const result = await signIn('credentials', { email, password, redirect: false });
-    if (result?.error) {
-      setMessage('Invalid email or password.');
-    } else {
-      const freshSession = await getSession();
-      window.location.href = authDestination(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
+    setIsLoggingIn(true);
+    try {
+      const result = await signIn('credentials', { email, password, redirect: false });
+      if (result?.error) {
+        setMessage('Invalid email or password.');
+      } else {
+        const freshSession = await getSession();
+        window.location.href = authDestination(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
+      }
+    } finally {
+      setIsLoggingIn(false);
     }
   }
 
@@ -90,19 +97,21 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-          <button className={primaryButtonClass} type="submit">
+          <ActionButton className={primaryButtonClass} type="submit" pending={isLoggingIn} pendingLabel="Logging in">
             Log in
-          </button>
+          </ActionButton>
         </form>
 
         <div className="grid gap-2">
-          <button
+          <ActionButton
             className={secondaryButtonClass}
             onClick={handleMagicLinkSubmit}
             disabled={!email || isRequestingMagicLink}
+            pending={isRequestingMagicLink}
+            pendingLabel="Sending link"
           >
             Email me a magic link
-          </button>
+          </ActionButton>
         </div>
 
         <Notice>

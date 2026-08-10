@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { AuthPage, AuthPanel, Notice, Alert } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { normalizeErrorMessage, useGetCountriesQuery, useGetDialectsQuery, useUpdateProfileMutation } from '@/store/api';
+import { ActionButton } from '@/components/ui/ActionButton';
 
 const selectClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
@@ -108,9 +109,9 @@ export default function OnboardingPage() {
             ))}
           </select>
 
-          <button className={primaryButtonClass} type="submit" disabled={isSubmitting}>
+          <ActionButton className={primaryButtonClass} type="submit" pending={isSubmitting} pendingLabel="Saving profile">
             Continue
-          </button>
+          </ActionButton>
         </form>
 
         {error && <Alert>{error}</Alert>}

@@ -122,6 +122,42 @@ textarea {
   font: inherit;
 }
 
+button,
+[role="button"] {
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-duration: 150ms;
+}
+
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active {
+  transform: scale(0.97);
+}
+
+.action-button[aria-busy="true"] {
+  cursor: progress;
+}
+
+.action-spinner {
+  animation: action-spin 700ms linear infinite;
+}
+
+@keyframes action-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  [role="button"] {
+    transition-duration: 0ms;
+  }
+
+  .action-spinner {
+    animation-duration: 1400ms;
+  }
+}
+
 .blog-editor .ce-block__content,
 .blog-editor .ce-toolbar__content {
   max-width: 820px;

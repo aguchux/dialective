@@ -241,7 +241,7 @@ export default function PipelineTestPage() {
             <Section>
               <audio controls src={audioUrl} />
               <div>
-                <Button onClick={submitRecording} disabled={stage === 'uploading' || stage === 'processing'}>
+                <Button onClick={submitRecording} pending={stage === 'uploading' || stage === 'processing'} pendingLabel={stage === 'processing' ? 'Processing' : 'Uploading'}>
                   Submit
                 </Button>
               </div>
@@ -270,7 +270,7 @@ export default function PipelineTestPage() {
           )}
 
           <div>
-            <Button variant="secondary" onClick={loadPrompt}>
+            <Button variant="secondary" onClick={loadPrompt} disabled={stage === 'uploading' || stage === 'processing'}>
               New prompt
             </Button>
           </div>

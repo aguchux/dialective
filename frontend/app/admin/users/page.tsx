@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
-import { PublicUser, useGetUsersQuery, useUpdateUserRoleMutation, useUpdateUserStatusMutation } from '@/store/api';
+import { ActionSpinner } from '@/components/ui/ActionButton';
+import { normalizeErrorMessage, PublicUser, useGetUsersQuery, useUpdateUserRoleMutation, useUpdateUserStatusMutation } from '@/store/api';
 
 const selectClass = 'min-h-9 rounded-lg border border-line bg-white px-2.5 py-1.5 text-sm font-bold text-ink dark:bg-surface-muted';
 const inputClass = 'min-h-9 w-full max-w-xs rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink dark:bg-surface-muted';
@@ -23,6 +24,8 @@ export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [pendingField, setPendingField] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const { data: users, isLoading } = useGetUsersQuery({
     role: roleFilter || undefined,
@@ -33,6 +36,30 @@ export default function AdminUsersPage() {
   const [updateStatus] = useUpdateUserStatusMutation();
 
   const selfId = session?.user?.id;
+
+  async function changeRole(id: string, role: string) {
+    setError(null);
+    setPendingField(`role:${id}`);
+    try {
+      await updateRole({ id, role }).unwrap();
+    } catch (mutationError) {
+      setError(normalizeErrorMessage(mutationError, 'Unable to update the user role.'));
+    } finally {
+      setPendingField(null);
+    }
+  }
+
+  async function changeStatus(id: string, status: string) {
+    setError(null);
+    setPendingField(`status:${id}`);
+    try {
+      await updateStatus({ id, status }).unwrap();
+    } catch (mutationError) {
+      setError(normalizeErrorMessage(mutationError, 'Unable to update the user status.'));
+    } finally {
+      setPendingField(null);
+    }
+  }
 
   const columns: DataTableColumn<PublicUser>[] = [
     {
@@ -50,20 +77,10 @@ export default function AdminUsersPage() {
       key: 'role',
       header: 'Role',
       sortValue: (u) => u.role,
-      render: (u) => (
-        <select
-          className={selectClass}
-          value={u.role}
-          disabled={u.id === selfId}
-          onChange={(e) => updateRole({ id: u.id, role: e.target.value })}
-        >
-          {roleOptions.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
-      ),
+      render: (u) => {
+        const pending = pendingField === `role:${u.id}`;
+        return <div className="flex items-center gap-2"><select aria-busy={pending} className={selectClass} value={u.role} disabled={u.id === selfId || pending} onChange={(e) => changeRole(u.id, e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}</select>{pending && <ActionSpinner className="text-accent" />}</div>;
+      },
     },
     {
       key: 'status',
@@ -74,20 +91,10 @@ export default function AdminUsersPage() {
     {
       key: 'actions',
       header: 'Actions',
-      render: (u) => (
-        <select
-          className={selectClass}
-          value={u.status}
-          disabled={u.id === selfId}
-          onChange={(e) => updateStatus({ id: u.id, status: e.target.value })}
-        >
-          {statusOptions.map((s) => (
-            <option key={s} value={s}>
-              {s === 'ACTIVE' ? 'Set active' : s === 'SUSPENDED' ? 'Suspend' : 'Block'}
-            </option>
-          ))}
-        </select>
-      ),
+      render: (u) => {
+        const pending = pendingField === `status:${u.id}`;
+        return <div className="flex items-center gap-2"><select aria-busy={pending} className={selectClass} value={u.status} disabled={u.id === selfId || pending} onChange={(e) => changeStatus(u.id, e.target.value)}>{statusOptions.map((s) => <option key={s} value={s}>{s === 'ACTIVE' ? 'Set active' : s === 'SUSPENDED' ? 'Suspend' : 'Block'}</option>)}</select>{pending && <ActionSpinner className="text-accent" />}</div>;
+      },
     },
   ];
 
@@ -140,6 +147,8 @@ export default function AdminUsersPage() {
             </select>
           </div>
         </section>
+
+        {error && <p className="leading-relaxed text-danger" role="alert">{error}</p>}
 
         <DataTable
           columns={columns}

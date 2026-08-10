@@ -6,8 +6,10 @@ import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } f
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { AdminShell } from '@/components/admin/AdminShell';
+import { ActionButton } from '@/components/ui/ActionButton';
 import {
   type BlogPost,
+  normalizeErrorMessage,
   useDeleteBlogPostMutation,
   useGetAdminBlogPostsQuery,
   useReorderBlogPostsMutation,
@@ -18,6 +20,7 @@ export default function AdminBlogPage() {
   const { data, isLoading } = useGetAdminBlogPostsQuery();
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [filter, setFilter] = useState<'ALL' | 'DRAFT' | 'PUBLISHED'>('ALL');
+  const [error, setError] = useState<string | null>(null);
   const [deletePost] = useDeleteBlogPostMutation();
   const [updatePost] = useUpdateBlogPostMutation();
   const [reorder] = useReorderBlogPostsMutation();
@@ -34,8 +37,9 @@ export default function AdminBlogPage() {
     setPosts(next);
     try {
       await reorder({ items: next.map((post, sortOrder) => ({ id: post.id, sortOrder })) }).unwrap();
-    } catch {
+    } catch (mutationError) {
       setPosts(posts);
+      setError(normalizeErrorMessage(mutationError, 'Unable to reorder blog posts.'));
     }
   };
 
@@ -50,6 +54,8 @@ export default function AdminBlogPage() {
         <div className="flex w-fit rounded-lg border border-line bg-white p-1" role="group" aria-label="Filter posts">
           {(['ALL', 'DRAFT', 'PUBLISHED'] as const).map((option) => <button className={`rounded-md px-3 py-1.5 text-sm font-bold ${filter === option ? 'bg-surface-muted text-accent' : 'text-muted'}`} key={option} onClick={() => setFilter(option)} type="button">{option === 'ALL' ? 'All' : option === 'DRAFT' ? 'Drafts' : 'Published'}</button>)}
         </div>
+
+        {error && <p className="leading-relaxed text-danger" role="alert">{error}</p>}
 
         <section className="overflow-hidden rounded-lg border border-line bg-white" aria-label="Blog posts">
           <div className="hidden grid-cols-[40px_minmax(0,1fr)_130px_150px_180px] gap-3 border-b border-line bg-surface-muted px-4 py-3 text-xs font-extrabold uppercase text-muted md:grid">
@@ -66,10 +72,20 @@ export default function AdminBlogPage() {
                   dragDisabled={filter !== 'ALL'}
                   onDelete={async () => {
                     if (!window.confirm(`Delete "${post.title}"?`)) return;
-                    await deletePost(post.id).unwrap();
+                    setError(null);
+                    try {
+                      await deletePost(post.id).unwrap();
+                    } catch (mutationError) {
+                      setError(normalizeErrorMessage(mutationError, 'Unable to delete this post.'));
+                    }
                   }}
                   onToggle={async () => {
-                    await updatePost({ id: post.id, body: { status: post.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED' } }).unwrap();
+                    setError(null);
+                    try {
+                      await updatePost({ id: post.id, body: { status: post.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED' } }).unwrap();
+                    } catch (mutationError) {
+                      setError(normalizeErrorMessage(mutationError, 'Unable to update this post.'));
+                    }
                   }}
                 />
               ))}
@@ -81,8 +97,18 @@ export default function AdminBlogPage() {
   );
 }
 
-function SortablePostRow({ post, dragDisabled, onDelete, onToggle }: { post: BlogPost; dragDisabled: boolean; onDelete: () => void; onToggle: () => void }) {
+function SortablePostRow({ post, dragDisabled, onDelete, onToggle }: { post: BlogPost; dragDisabled: boolean; onDelete: () => Promise<void>; onToggle: () => Promise<void> }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: post.id, disabled: dragDisabled });
+  const [pendingAction, setPendingAction] = useState<'toggle' | 'delete' | null>(null);
+
+  const runAction = async (action: 'toggle' | 'delete', callback: () => Promise<void>) => {
+    setPendingAction(action);
+    try {
+      await callback();
+    } finally {
+      setPendingAction(null);
+    }
+  };
   return (
     <article ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={`grid gap-3 border-b border-line px-4 py-4 last:border-0 md:grid-cols-[40px_minmax(0,1fr)_130px_150px_180px] md:items-center ${isDragging ? 'relative z-10 bg-white shadow-lg' : ''}`}>
       <button className="hidden size-8 cursor-grab place-items-center rounded-md text-muted hover:bg-surface-muted disabled:cursor-default disabled:opacity-30 md:grid" disabled={dragDisabled} type="button" title="Drag to reorder" {...attributes} {...listeners}><DragIcon /></button>
@@ -91,8 +117,8 @@ function SortablePostRow({ post, dragDisabled, onDelete, onToggle }: { post: Blo
       <time className="text-sm text-muted" dateTime={post.updatedAt}>{new Date(post.updatedAt).toLocaleDateString()}</time>
       <div className="flex items-center gap-2">
         <Link className="rounded-md border border-line px-3 py-1.5 text-sm font-bold text-ink no-underline hover:bg-surface-muted" href={`/admin/blog/${post.id}`}>Edit</Link>
-        <button className="rounded-md border border-line px-3 py-1.5 text-sm font-bold hover:bg-surface-muted" onClick={onToggle} type="button">{post.status === 'PUBLISHED' ? 'Unpublish' : 'Publish'}</button>
-        <button aria-label={`Delete ${post.title}`} className="grid size-8 place-items-center rounded-md text-[#a3242f] hover:bg-[#fff1f2]" onClick={onDelete} title="Delete" type="button"><TrashIcon /></button>
+        <ActionButton className="rounded-md border border-line px-3 py-1.5 text-sm font-bold hover:bg-surface-muted" disabled={pendingAction !== null} onClick={() => runAction('toggle', onToggle)} pending={pendingAction === 'toggle'} pendingLabel={post.status === 'PUBLISHED' ? 'Unpublishing' : 'Publishing'} type="button">{post.status === 'PUBLISHED' ? 'Unpublish' : 'Publish'}</ActionButton>
+        <ActionButton aria-label={`Delete ${post.title}`} className="grid size-8 place-items-center rounded-md text-[#a3242f] hover:bg-[#fff1f2]" disabled={pendingAction !== null} onClick={() => runAction('delete', onDelete)} pending={pendingAction === 'delete'} pendingLabel={<span className="sr-only">Deleting</span>} title="Delete" type="button"><TrashIcon /></ActionButton>
       </div>
     </article>
   );

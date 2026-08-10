@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
+import { ActionButton } from '@/components/ui/ActionButton';
 import {
   AdminCountry,
   AdminDialect,
@@ -49,13 +50,17 @@ function CountriesSection({ countries, isLoading }: { countries: AdminCountry[] 
   const [deleteCountry] = useDeleteCountryMutation();
   const [error, setError] = useState<string | null>(null);
   const [addDialectFor, setAddDialectFor] = useState<AdminCountry | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
     setError(null);
+    setDeletingId(id);
     try {
       await deleteCountry(id).unwrap();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to delete country.'));
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -90,15 +95,17 @@ function CountriesSection({ countries, isLoading }: { countries: AdminCountry[] 
           <button className={secondaryButtonClass} onClick={() => setAddDialectFor(c)} type="button">
             + Add dialect
           </button>
-          <button
+          <ActionButton
             className={dangerButtonClass}
             onClick={() => handleDelete(c.id)}
             disabled={c._count.dialects > 0 || c._count.users > 0}
+            pending={deletingId === c.id}
+            pendingLabel="Deleting"
             title={c._count.dialects > 0 || c._count.users > 0 ? 'Remove dialects and users first' : undefined}
             type="button"
           >
             Delete
-          </button>
+          </ActionButton>
         </div>
       ),
     },
@@ -185,9 +192,9 @@ function AddCountryDialog() {
           )}
           <div className="flex justify-end gap-2">
             <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
-            <button className={primaryButtonClass} type="submit" disabled={isLoading}>
+            <ActionButton className={primaryButtonClass} type="submit" pending={isLoading} pendingLabel="Adding">
               Add country
-            </button>
+            </ActionButton>
           </div>
         </form>
       </DialogContent>
@@ -251,9 +258,9 @@ function AddDialectDialog({ country, onClose }: { country: AdminCountry; onClose
           )}
           <div className="flex justify-end gap-2">
             <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
-            <button className={primaryButtonClass} type="submit" disabled={isLoading}>
+            <ActionButton className={primaryButtonClass} type="submit" pending={isLoading} pendingLabel="Adding">
               Add dialect
-            </button>
+            </ActionButton>
           </div>
         </form>
       </DialogContent>
@@ -264,13 +271,17 @@ function AddDialectDialog({ country, onClose }: { country: AdminCountry; onClose
 function DialectsSection({ dialects, isLoading }: { dialects: AdminDialect[] | undefined; isLoading: boolean }) {
   const [deleteDialect] = useDeleteDialectMutation();
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
     setError(null);
+    setDeletingId(id);
     try {
       await deleteDialect(id).unwrap();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to delete dialect.'));
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -301,15 +312,17 @@ function DialectsSection({ dialects, isLoading }: { dialects: AdminDialect[] | u
       key: 'actions',
       header: 'Actions',
       render: (d) => (
-        <button
+        <ActionButton
           className={dangerButtonClass}
           onClick={() => handleDelete(d.id)}
           disabled={d._count.users > 0}
+          pending={deletingId === d.id}
+          pendingLabel="Deleting"
           title={d._count.users > 0 ? 'Reassign users first' : undefined}
           type="button"
         >
           Delete
-        </button>
+        </ActionButton>
       ),
     },
   ];

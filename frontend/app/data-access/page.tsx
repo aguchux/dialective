@@ -6,6 +6,7 @@ import { LandingFooter } from '@/components/landing/LandingFooter';
 import { LandingHeader } from '@/components/landing/LandingHeader';
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 import { normalizeErrorMessage, useCreateDataAccessLeadMutation } from '@/store/api';
+import { ActionButton } from '@/components/ui/ActionButton';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const textareaClass = `${inputClass} min-h-24 resize-y py-2`;
@@ -115,9 +116,9 @@ export default function DataAccessPage() {
                     value={useCase}
                     onChange={(e) => setUseCase(e.target.value)}
                   />
-                  <button className={primaryButtonClass} type="submit" disabled={isLoading}>
+                  <ActionButton className={primaryButtonClass} type="submit" pending={isLoading} pendingLabel="Submitting request">
                     Subscribe to voice data
-                  </button>
+                  </ActionButton>
                 </form>
                 {error && (
                   <p className="leading-relaxed text-danger" role="alert">

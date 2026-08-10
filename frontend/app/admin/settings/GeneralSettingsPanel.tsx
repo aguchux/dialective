@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+import { ActionButton } from '@/components/ui/ActionButton';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
@@ -85,9 +86,9 @@ export function GeneralSettingsPanel() {
           </div>
 
           <div>
-            <button className={primaryButtonClass} type="submit" disabled={isSaving}>
+            <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
               Save general settings
-            </button>
+            </ActionButton>
           </div>
         </form>
       )}

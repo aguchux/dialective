@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { BlogEditorHandle } from './BlogEditor';
+import { ActionButton, ActionSpinner } from '@/components/ui/ActionButton';
 import {
   type BlogPost,
   type BlogPostStatus,
@@ -110,9 +111,9 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
         </div>
         <div className="flex items-center gap-2">
           {post?.status === 'PUBLISHED' && <Link className="rounded-lg border border-line bg-white px-4 py-2 font-bold text-ink no-underline hover:bg-surface-muted" href={`/blog/${post.slug}`} target="_blank">View</Link>}
-          <button className="min-h-10 rounded-lg bg-accent px-5 py-2 font-extrabold text-white disabled:opacity-60" disabled={isSaving || isUploadingCover} onClick={save} type="button">
-            {isSaving ? 'Saving...' : 'Save post'}
-          </button>
+          <ActionButton className="min-h-10 rounded-lg bg-accent px-5 py-2 font-extrabold text-white disabled:opacity-60" disabled={isUploadingCover} onClick={save} pending={isSaving} pendingLabel="Saving post" type="button">
+            Save post
+          </ActionButton>
         </div>
       </header>
 
@@ -143,7 +144,7 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
             <h2 className="text-base font-black">Cover image</h2>
             {coverImageUrl && <img alt={coverImageAlt || ''} className="aspect-video w-full rounded-lg border border-line object-cover" src={coverImageUrl} />}
             <label className="grid min-h-24 cursor-pointer place-items-center rounded-lg border border-dashed border-line bg-surface-muted px-3 text-center text-sm font-bold text-muted hover:border-accent">
-              {isUploadingCover ? 'Uploading...' : coverImageUrl ? 'Replace image' : 'Choose image'}
+              {isUploadingCover ? <span className="inline-flex items-center gap-2"><ActionSpinner />Uploading</span> : coverImageUrl ? 'Replace image' : 'Choose image'}
               <input className="sr-only" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" disabled={isUploadingCover} onChange={(event) => handleCover(event.target.files?.[0])} type="file" />
             </label>
             <label className="grid gap-1.5 text-sm font-bold">Alt text<input className={fieldClass} maxLength={180} onChange={(event) => setCoverImageAlt(event.target.value)} value={coverImageAlt} /></label>

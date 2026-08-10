@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { normalizeErrorMessage, useResetPasswordMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { ActionButton } from '@/components/ui/ActionButton';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
@@ -68,9 +69,9 @@ function ResetPasswordContent() {
             minLength={8}
             required
           />
-          <button className={primaryButtonClass} type="submit" disabled={isLoading}>
+          <ActionButton className={primaryButtonClass} type="submit" pending={isLoading} pendingLabel="Resetting">
             Reset password
-          </button>
+          </ActionButton>
         </form>
         {error && <Alert>{error}</Alert>}
       </AuthPanel>

@@ -203,7 +203,7 @@ export default function WordLibraryFlow() {
             <Section>
               <audio controls src={audioUrl} />
               <div>
-                <Button onClick={submitRecording} disabled={stage === 'uploading'}>
+                <Button onClick={submitRecording} pending={stage === 'uploading'} pendingLabel="Saving">
                   Submit
                 </Button>
               </div>
@@ -220,7 +220,7 @@ export default function WordLibraryFlow() {
           )}
 
           <div>
-            <Button variant="secondary" onClick={loadWord}>
+            <Button variant="secondary" onClick={loadWord} disabled={stage === 'uploading'}>
               New word
             </Button>
           </div>
