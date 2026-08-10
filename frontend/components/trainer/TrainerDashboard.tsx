@@ -471,22 +471,13 @@ const SCORING_SLA_MS = SCORING_SLA_HOURS * 60 * 60 * 1000;
 type TrainingTab = 'training' | 'tasks';
 
 function TrainingView({ dialectTag, onStartTask }: { dialectTag: string | null; onStartTask: () => void }) {
-  const [tab, setTab] = useState<TrainingTab>('training');
+  const [tab, setTab] = useState<TrainingTab>('tasks');
 
   return (
     <div>
       <ViewHeading title="Training" subtitle="Translate and pronounce words in your dialect." />
 
       <div className="mb-6 inline-flex rounded-lg border border-line bg-surface p-1" role="tablist" aria-label="Training sections">
-        <button
-          aria-selected={tab === 'training'}
-          className={`min-h-9 rounded-md px-4 text-sm font-extrabold transition-colors ${tab === 'training' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}
-          onClick={() => setTab('training')}
-          role="tab"
-          type="button"
-        >
-          Training
-        </button>
         <button
           aria-selected={tab === 'tasks'}
           className={`min-h-9 rounded-md px-4 text-sm font-extrabold transition-colors ${tab === 'tasks' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}
@@ -495,6 +486,15 @@ function TrainingView({ dialectTag, onStartTask }: { dialectTag: string | null; 
           type="button"
         >
           My Tasks
+        </button>
+        <button
+          aria-selected={tab === 'training'}
+          className={`min-h-9 rounded-md px-4 text-sm font-extrabold transition-colors ${tab === 'training' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}
+          onClick={() => setTab('training')}
+          role="tab"
+          type="button"
+        >
+          Training
         </button>
       </div>
 
