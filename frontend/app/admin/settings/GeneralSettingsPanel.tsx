@@ -14,6 +14,8 @@ export function GeneralSettingsPanel() {
 
   const [tokenUsdRate, setTokenUsdRate] = useState('');
   const [minWithdrawalTokens, setMinWithdrawalTokens] = useState('');
+  const [taskTokenCost, setTaskTokenCost] = useState('');
+  const [trainingPayoutBonusCapMultiple, setTrainingPayoutBonusCapMultiple] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,6 +23,8 @@ export function GeneralSettingsPanel() {
     if (!settings) return;
     setTokenUsdRate(settings.tokenUsdRate ?? '');
     setMinWithdrawalTokens(settings.minWithdrawalTokens ?? '');
+    setTaskTokenCost(settings.taskTokenCost ?? '');
+    setTrainingPayoutBonusCapMultiple(settings.trainingPayoutBonusCapMultiple ?? '');
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -32,6 +36,10 @@ export function GeneralSettingsPanel() {
       await updateSettings({
         ...(tokenUsdRate !== '' ? { tokenUsdRate: Number(tokenUsdRate) } : {}),
         ...(minWithdrawalTokens !== '' ? { minWithdrawalTokens: Number(minWithdrawalTokens) } : {}),
+        ...(taskTokenCost !== '' ? { taskTokenCost: Number(taskTokenCost) } : {}),
+        ...(trainingPayoutBonusCapMultiple !== ''
+          ? { trainingPayoutBonusCapMultiple: Number(trainingPayoutBonusCapMultiple) }
+          : {}),
       }).unwrap();
       setMessage('General settings saved.');
     } catch (err) {
@@ -82,6 +90,43 @@ export function GeneralSettingsPanel() {
               placeholder="Default"
               value={minWithdrawalTokens}
               onChange={(e) => setMinWithdrawalTokens(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="task-token-cost">
+              Task cost (tokens)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">Tokens debited from a trainer's wallet per submission.</p>
+            <input
+              className={inputClass}
+              id="task-token-cost"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Default"
+              value={taskTokenCost}
+              onChange={(e) => setTaskTokenCost(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="bonus-cap-multiple">
+              Training payout bonus cap (multiple of stake)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              Caps the score-scaled Reward Pool bonus at this multiple of tokens spent, e.g. 1.0 = up to 1x stake as
+              bonus at a perfect score. The trainer always gets tokens spent back regardless of score.
+            </p>
+            <input
+              className={inputClass}
+              id="bonus-cap-multiple"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Default"
+              value={trainingPayoutBonusCapMultiple}
+              onChange={(e) => setTrainingPayoutBonusCapMultiple(e.target.value)}
             />
           </div>
 

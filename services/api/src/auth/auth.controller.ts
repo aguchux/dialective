@@ -17,7 +17,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { AccessTokenClaims } from './jwt.util';
-import { Role, UserStatus } from '../generated/prisma/client';
+import { Role, UserStatus } from '@dialectiva/db';
 
 @Controller('auth')
 export class AuthController {

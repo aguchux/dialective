@@ -1,5 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaClient } from '@dialectiva/db';
 import { AFRICA_COUNTRIES, CountrySeed } from './africa-countries-dialects';
 
 // Fixed word bank for the word-library flow (AGENTS.md "Word library").
@@ -92,6 +92,23 @@ const WORDS = [
   'slow',
 ];
 
+// Sentence-prompt bank for the dictation flow, migrated verbatim from
+// PromptsController's old in-memory PROMPTS_BY_DIALECT (see that file's
+// comment for sourcing notes -- non-English sentences are from beginner-phrase
+// references, not invented). Every dialectTag here must have a matching
+// entry in models/asr-registry.yaml.
+const PROMPTS_BY_DIALECT: Record<string, string[]> = {
+  'en-us': [
+    'The quick brown fox jumps over the lazy dog.',
+    'Please call Stella and ask her to bring these things.',
+    'The rainbow is a division of white light into many beautiful colors.',
+    'A pot of tea helps to pass the evening.',
+  ],
+  ig: ['Kedu ka ị mere?', 'Aha m bụ Alex.', 'Obi dị m ụtọ.', 'Daalụ nke ukwuu.'],
+  yo: ['Bawo ni o se wa?', 'Mo wa dada, ese.', 'Ese gan.', 'Ko ye mi.'],
+  ha: ['Yaya lafiya?', 'Sannu abokina.', 'Ina kwana?', 'Na gode sosai.'],
+};
+
 // Onboarding country/dialect list: all African Union member countries
 // (africa-countries-dialects.ts) plus the United States, kept for the
 // `en-us` tag already referenced by PROMPTS_BY_DIALECT. Nigeria's ig/yo/ha
@@ -136,8 +153,23 @@ async function main() {
         }),
       ),
     );
+    const promptRows = Object.entries(PROMPTS_BY_DIALECT).flatMap(([dialectTag, texts]) =>
+      texts.map((text) => ({ dialectTag, text })),
+    );
+    let promptsSeeded = 0;
+    for (const prompt of promptRows) {
+      const existing = await prisma.prompt.findFirst({
+        where: { dialectTag: prompt.dialectTag, text: prompt.text },
+        select: { id: true },
+      });
+      if (!existing) {
+        await prisma.prompt.create({ data: prompt });
+        promptsSeeded += 1;
+      }
+    }
+
     console.log(
-      `Seeded ${COUNTRIES.length} countries, ${dialects.length} dialects, and added ${wordResult.count} new words.`,
+      `Seeded ${COUNTRIES.length} countries, ${dialects.length} dialects, added ${wordResult.count} new words, and added ${promptsSeeded} new prompts.`,
     );
   } finally {
     await prisma.$disconnect();

@@ -27,7 +27,7 @@ spec:
           image: golojan/dialect-api-prisma:latest
           imagePullPolicy: Always
           command: ["npm", "run", "prisma:release"]
-          workingDir: /app
+          workingDir: /app/services/api
           env:
             - name: DATABASE_URL
               valueFrom:

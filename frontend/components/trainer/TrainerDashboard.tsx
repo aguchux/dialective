@@ -20,7 +20,6 @@ import {
   CircleDollarSign,
   Clock3,
   Copy,
-  Database,
   FileText as FileTextIcon,
   Headphones,
   LogOut,
@@ -49,9 +48,11 @@ import {
 import {
   LedgerEntryType,
   TrainerDashboardSummary,
+  TrainerSubmissionSummary,
   normalizeErrorMessage,
   useCreateTokenDepositMutation,
   useGetEarningHistoryQuery,
+  useGetMySubmissionsQuery,
   useGetTrainerDashboardQuery,
   useUpdateProfileMutation,
 } from '@/store/api';
@@ -59,12 +60,12 @@ import type { Session } from 'next-auth';
 
 type SessionUpdateFn = (data?: Record<string, unknown>) => Promise<Session | null>;
 
-type DashboardView = 'tokens' | 'earnings' | 'pools' | 'referrals' | 'scores' | 'profile';
+type DashboardView = 'tokens' | 'earnings' | 'training' | 'referrals' | 'scores' | 'profile';
 
 const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = [
   { id: 'tokens', label: 'Tokens', icon: WalletCards },
   { id: 'earnings', label: 'Earnings', icon: CircleDollarSign },
-  { id: 'pools', label: 'Pools', icon: Database },
+  { id: 'training', label: 'Training', icon: Mic2 },
   { id: 'referrals', label: 'Referrals', icon: Users },
   { id: 'scores', label: 'My Scores', icon: Star },
 ];
@@ -280,7 +281,7 @@ function DashboardViewContent({
   refreshing: boolean;
 }) {
   if (activeView === 'earnings') return <EarningsView data={data} refreshing={refreshing} />;
-  if (activeView === 'pools') return <PoolsView dialectTag={dialectTag} />;
+  if (activeView === 'training') return <TrainingView dialectTag={dialectTag} />;
   if (activeView === 'referrals') return <ReferralsView data={data} email={email} />;
   if (activeView === 'scores') return <ScoresView />;
   return <TokensView data={data} refreshing={refreshing} />;
@@ -451,17 +452,17 @@ function EarningTypeLabel({ type }: { type: LedgerEntryType }) {
   );
 }
 
-function PoolsView({ dialectTag }: { dialectTag: string | null }) {
-  const pools = [
+function TrainingView({ dialectTag }: { dialectTag: string | null }) {
+  const tasks = [
     {
-      title: 'Sentence Voice Pool',
+      title: 'Sentence Recording',
       description: 'Record prompted sentences for speech recognition evaluation.',
       icon: Mic2,
       href: '/pipeline-test',
       task: 'Voice recording',
     },
     {
-      title: 'Word Translation Pool',
+      title: 'Word Translation',
       description: 'Translate common English words and record their local pronunciation.',
       icon: BookOpenCheck,
       href: '/pipeline-test#word-library',
@@ -471,12 +472,12 @@ function PoolsView({ dialectTag }: { dialectTag: string | null }) {
 
   return (
     <div>
-      <ViewHeading title="Available Pools" subtitle="Open contribution pools matched to your trainer account." />
+      <ViewHeading title="Training" subtitle="Pick a task type to start contributing." />
       <div className="grid gap-4 md:grid-cols-2">
-        {pools.map((pool) => {
-          const Icon = pool.icon;
+        {tasks.map((item) => {
+          const Icon = item.icon;
           return (
-            <article className={`${cardClass} grid min-h-64 content-between gap-6 p-5 md:p-6`} key={pool.title}>
+            <article className={`${cardClass} grid min-h-64 content-between gap-6 p-5 md:p-6`} key={item.title}>
               <div>
                 <div className="mb-5 flex items-start justify-between gap-3">
                   <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent"><Icon className="size-5" aria-hidden="true" /></span>
@@ -484,16 +485,16 @@ function PoolsView({ dialectTag }: { dialectTag: string | null }) {
                     <span className="size-1.5 rounded-full bg-emerald-500" /> Available
                   </span>
                 </div>
-                <h3 className="text-xl font-black">{pool.title}</h3>
-                <p className="mt-2 leading-relaxed text-muted">{pool.description}</p>
+                <h3 className="text-xl font-black">{item.title}</h3>
+                <p className="mt-2 leading-relaxed text-muted">{item.description}</p>
               </div>
               <div>
                 <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
-                  <span className="rounded-md bg-surface-muted px-2 py-1">{pool.task}</span>
+                  <span className="rounded-md bg-surface-muted px-2 py-1">{item.task}</span>
                   <span className="rounded-md bg-surface-muted px-2 py-1">{dialectTag?.toUpperCase() ?? 'Your dialect'}</span>
                 </div>
-                <Link className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" href={pool.href}>
-                  Open pool <ArrowRight className="size-4" aria-hidden="true" />
+                <Link className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" href={item.href}>
+                  Start task <ArrowRight className="size-4" aria-hidden="true" />
                 </Link>
               </div>
             </article>
@@ -661,7 +662,28 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   );
 }
 
+const submissionStatusLabels: Record<TrainerSubmissionSummary['status'], string> = {
+  PENDING: 'Pending',
+  TRANSCRIBED: 'Transcribed',
+  REJECTED: 'Rejected',
+  SCORED: 'Scored',
+  SETTLED: 'Settled',
+};
+
+const submissionStatusTones: Record<TrainerSubmissionSummary['status'], string> = {
+  PENDING: 'bg-surface-muted text-muted',
+  TRANSCRIBED: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  REJECTED: 'bg-red-50 text-danger dark:bg-red-950',
+  SCORED: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+  SETTLED: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+};
+
 function ScoresView() {
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const { data, isLoading, isFetching, isError, refetch } = useGetMySubmissionsQuery({ page, pageSize });
+  const totalPages = data?.totalPages ?? 1;
+
   return (
     <div>
       <ViewHeading title="My Scores" subtitle="Consensus results from eligible voice training submissions." />
@@ -673,7 +695,96 @@ function ScoresView() {
             <p className="text-sm text-muted">Accuracy and review outcomes</p>
           </div>
         </div>
-        <EmptyPanel actionHref="/dashboard?view=pools" actionLabel="Browse pools" icon={Headphones} title="No scored submissions yet" unframed />
+
+        {isLoading ? (
+          <div className="grid min-h-52 place-items-center" role="status">
+            <RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" />
+            <span className="sr-only">Loading score history</span>
+          </div>
+        ) : isError ? (
+          <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
+            <p className="font-extrabold">Could not load your submissions.</p>
+            <button className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted" onClick={() => void refetch()} type="button">
+              Try again
+            </button>
+          </div>
+        ) : data?.items.length ? (
+          <>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                <caption className="sr-only">Your submission history</caption>
+                <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
+                  <tr>
+                    <th className="px-5 py-3.5" scope="col">Prompt</th>
+                    <th className="px-5 py-3.5" scope="col">Dialect</th>
+                    <th className="px-5 py-3.5" scope="col">Status</th>
+                    <th className="px-5 py-3.5 text-right" scope="col">Score</th>
+                    <th className="px-5 py-3.5 text-right" scope="col">Payout</th>
+                    <th className="px-5 py-3.5" scope="col">Submitted</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {data.items.map((submission) => (
+                    <tr className="hover:bg-surface-muted/60" key={submission.id}>
+                      <td className="max-w-64 truncate px-5 py-4 font-bold" title={submission.promptText}>{submission.promptText}</td>
+                      <td className="px-5 py-4 text-muted">{submission.dialectTag.toUpperCase()}</td>
+                      <td className="px-5 py-4">
+                        <span className={`w-fit rounded-md px-2.5 py-1 text-xs font-extrabold ${submissionStatusTones[submission.status]}`}>
+                          {submissionStatusLabels[submission.status]}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-4 text-right font-bold">
+                        {submission.score !== null ? `${Number(submission.score).toFixed(1)}%` : '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-4 text-right font-black text-emerald-700 dark:text-emerald-300">
+                        {submission.payoutTokenAmount !== null ? `+${formatTokens(submission.payoutTokenAmount)}` : '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-4 text-muted">{formatDateTime(submission.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="divide-y divide-line md:hidden">
+              {data.items.map((submission) => (
+                <article className="grid gap-3 p-4" key={submission.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="min-w-0 truncate font-bold" title={submission.promptText}>{submission.promptText}</p>
+                    <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-extrabold ${submissionStatusTones[submission.status]}`}>
+                      {submissionStatusLabels[submission.status]}
+                    </span>
+                  </div>
+                  <div className="flex items-end justify-between gap-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="text-muted">{submission.dialectTag.toUpperCase()} &middot; {formatDateTime(submission.createdAt)}</p>
+                      {submission.score !== null && <p className="font-bold">Score: {Number(submission.score).toFixed(1)}%</p>}
+                    </div>
+                    {submission.payoutTokenAmount !== null && (
+                      <span className="shrink-0 font-black text-emerald-700 dark:text-emerald-300">+{formatTokens(submission.payoutTokenAmount)}</span>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : (
+          <EmptyPanel actionHref="/dashboard?view=training" actionLabel="Start training" icon={Headphones} title="No scored submissions yet" unframed />
+        )}
+
+        {data && data.total > 0 ? (
+          <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-muted px-4 py-3 md:px-5">
+            <p className="text-sm font-bold text-muted">Page {data.page} of {totalPages}</p>
+            <div className="flex items-center gap-2">
+              <button aria-label="Previous page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page <= 1 || isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button">
+                <ChevronLeft className="size-4" aria-hidden="true" />
+              </button>
+              <button aria-label="Next page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page >= totalPages || isFetching} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} type="button">
+                <ChevronRight className="size-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );

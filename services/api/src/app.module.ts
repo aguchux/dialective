@@ -13,9 +13,10 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { SettingsModule } from "./settings/settings.module";
 import { BlogModule } from "./blog/blog.module";
+import { PoolsModule } from "./pools/pools.module";
 
 @Module({
-  imports: [PrismaModule, RedisStreamsModule, AsrRegistryModule, SubmissionsModule, PromptsModule, WordsModule, WalletModule, GeoModule, LeadsModule, AuthModule, SettingsModule, BlogModule],
+  imports: [PrismaModule, RedisStreamsModule, AsrRegistryModule, SubmissionsModule, PromptsModule, WordsModule, WalletModule, GeoModule, LeadsModule, AuthModule, SettingsModule, BlogModule, PoolsModule],
   controllers: [HealthController],
 })
 export class AppModule implements NestModule {

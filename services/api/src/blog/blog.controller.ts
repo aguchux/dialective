@@ -5,7 +5,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AccessTokenClaims } from '../auth/jwt.util';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
-import { Role } from '../generated/prisma/client';
+import { Role } from '@dialectiva/db';
 import { StorageService } from '../storage/storage.service';
 import { BlogService } from './blog.service';
 import { CreateBlogPostDto } from './dto/create-blog-post.dto';

@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # baked into this image -- transformers' from_pretrained(cache_dir=...)
 # downloads them lazily on first use into whisper-model-repo-pvc, mounted at
 # /models, same pattern as prompt-audio-service's MMS-TTS checkpoints.
-COPY services/whisper-worker/model_registry.py services/whisper-worker/streams.py services/whisper-worker/spaces.py services/whisper-worker/worker.py ./
+COPY services/whisper-worker/model_registry.py services/whisper-worker/streams.py services/whisper-worker/spaces.py services/whisper-worker/db.py services/whisper-worker/worker.py ./
 COPY models/asr-registry.yaml ./models/asr-registry.yaml
 
 CMD ["python3", "worker.py"]

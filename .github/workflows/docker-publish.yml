@@ -10,6 +10,9 @@ on:
       - "services/settlement-job/**"
       - "services/vosk-worker/**"
       - "services/whisper-worker/**"
+      - "packages/db/**"
+      - "package.json"
+      - "package-lock.json"
       - "models/**"
       - ".github/workflows/docker-publish.yml"
   workflow_dispatch:
@@ -21,9 +24,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # consensus-scorer/settlement-job Dockerfiles COPY relative to their
-          # own service dir; api/vosk-worker/prompt-audio-service/whisper-worker
-          # also COPY models/*.yaml, so they need repo-root context instead.
+          # All Node services (api, consensus-scorer, settlement-job) build
+          # from repo-root context: they depend on the @dialectiva/db
+          # workspace package (packages/db), whose generated Prisma client
+          # is produced from services/api's schema during each image's own
+          # build stage -- see each Dockerfile's comment. The Python workers
+          # and prompt-audio-service also need repo-root context to reach
+          # models/*.yaml.
           - service: api
             context: .
             image: api
@@ -33,10 +40,10 @@ jobs:
             image: api-prisma
             target: prisma-release
           - service: consensus-scorer
-            context: services/consensus-scorer
+            context: .
             image: consensus-scorer
           - service: settlement-job
-            context: services/settlement-job
+            context: .
             image: settlement-job
           - service: prompt-audio-service
             context: .

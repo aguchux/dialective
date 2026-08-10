@@ -1,0 +1,10 @@
+{
+  "name": "dialectiva",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "services/api",
+    "services/consensus-scorer",
+    "services/settlement-job"
+  ]
+}

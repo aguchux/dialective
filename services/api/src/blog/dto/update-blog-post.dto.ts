@@ -1,5 +1,5 @@
 import { IsEnum, IsObject, IsOptional, IsString, IsUrl, Length, MaxLength } from 'class-validator';
-import { BlogPostStatus } from '../../generated/prisma/client';
+import { BlogPostStatus } from '@dialectiva/db';
 
 export class UpdateBlogPostDto {
   @IsOptional()

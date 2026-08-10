@@ -68,6 +68,11 @@ spec:
                 secretKeyRef:
                   name: hf-creds
                   key: hf_token
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: connection_string
           volumeMounts:
             - name: whisper-model-repo
               mountPath: /models

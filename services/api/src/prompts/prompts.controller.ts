@@ -1,43 +1,34 @@
 import { Controller, Get, Query, UnprocessableEntityException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { PrismaService } from '../prisma/prisma.service';
 
 /**
- * Fixed text-only prompt bank for the no-auth end-to-end test flow. Not a
- * replacement for the real prompts schema (Project Plan step 2) -- once that
- * exists, this becomes a Postgres-backed prompt picker instead. No TTS here;
- * see AGENTS.md "MMS-TTS boundary" for why prompt-audio synthesis stays a
- * separate, queue-driven concern.
- *
- * Every dialect_tag here must also have an entry in
- * models/asr-registry.yaml -- a prompt with nowhere for its transcript to
- * be scored would be pointless to hand out. Non-English sentences sourced
- * from beginner-phrase references (Omniglot, learnentry.com), not invented,
- * since a wrong prompt would actively mislead a trainer learning the
- * language.
+ * Real, Postgres-backed prompt picker (services/api/prisma/schema.prisma's
+ * Prompt model, seeded from services/api/prisma/seed.ts). Replaces the old
+ * in-memory PROMPTS_BY_DIALECT bank, which minted a fresh random promptId on
+ * every call -- meaning a prompt/dialect cluster could never reach quorum,
+ * since no two submissions ever shared the same promptId. Returning a
+ * stable, real prompt row is what lets consensus-scorer group submissions
+ * into clusters at all.
  */
-const PROMPTS_BY_DIALECT: Record<string, string[]> = {
-  'en-us': [
-    'The quick brown fox jumps over the lazy dog.',
-    'Please call Stella and ask her to bring these things.',
-    'The rainbow is a division of white light into many beautiful colors.',
-    'A pot of tea helps to pass the evening.',
-  ],
-  ig: ['Kedu ka ị mere?', 'Aha m bụ Alex.', 'Obi dị m ụtọ.', 'Daalụ nke ukwuu.'],
-  yo: ['Bawo ni o se wa?', 'Mo wa dada, ese.', 'Ese gan.', 'Ko ye mi.'],
-  ha: ['Yaya lafiya?', 'Sannu abokina.', 'Ina kwana?', 'Na gode sosai.'],
-};
-
 @Controller('prompts')
 export class PromptsController {
+  constructor(private readonly prisma: PrismaService) {}
+
   @Get('random')
-  getRandom(@Query('dialectTag') dialectTagRaw?: string) {
+  async getRandom(@Query('dialectTag') dialectTagRaw?: string) {
     const dialectTag = dialectTagRaw ?? 'en-us';
-    const bank = PROMPTS_BY_DIALECT[dialectTag];
-    if (!bank) {
+    const count = await this.prisma.prompt.count({ where: { dialectTag, active: true } });
+    if (count === 0) {
       throw new UnprocessableEntityException(`Unsupported dialect: ${dialectTag}`);
     }
-    const text = bank[Math.floor(Math.random() * bank.length)];
 
-    return { promptId: randomUUID(), dialectTag, text };
+    const skip = Math.floor(Math.random() * count);
+    const [prompt] = await this.prisma.prompt.findMany({
+      where: { dialectTag, active: true },
+      skip,
+      take: 1,
+    });
+
+    return { promptId: prompt.id, dialectTag, text: prompt.text };
   }
 }

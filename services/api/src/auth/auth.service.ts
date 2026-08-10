@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, randomUUID } from 'crypto';
-import { AuthProvider, Role, User, UserStatus } from '../generated/prisma/client';
+import { AuthProvider, Role, User, UserStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { generateOpaqueToken, hashToken } from './token.util';

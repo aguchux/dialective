@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
@@ -38,9 +39,19 @@ type Mode = 'sentence' | 'word';
 const selectClass = 'min-h-10 rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
 
 export default function PipelineTestPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [mode, setMode] = useState<Mode>('sentence');
   const [dialectTag, setDialectTag] = useState(DIALECT_OPTIONS[0].value);
+
+  // Submitting now debits tokens from the trainer's wallet, so this page
+  // requires a session -- redirect anonymous visitors to log in rather than
+  // building a separate free/anonymous submission path.
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace('/login?callbackUrl=%2Fpipeline-test');
+    }
+  }, [status, router]);
 
   // Pre-select the signed-in trainer's onboarding dialect once it's known,
   // without overriding a choice they've already made in this session.
@@ -117,10 +128,17 @@ export default function PipelineTestPage() {
     setStage('uploading');
     setError(null);
 
+    if (!session?.accessToken) {
+      setError('You must be logged in to submit.');
+      setStage('error');
+      return;
+    }
+    const authHeaders = { Authorization: `Bearer ${session.accessToken}` };
+
     try {
       const uploadUrlRes = await fetch(`${PUBLIC_API_V1_BASE_URL}/submissions/upload-url`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           promptId: prompt.promptId,
           dialectTag: prompt.dialectTag,
@@ -139,7 +157,7 @@ export default function PipelineTestPage() {
 
       const createRes = await fetch(`${PUBLIC_API_V1_BASE_URL}/submissions/create`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           submissionId,
           promptId: prompt.promptId,
@@ -148,21 +166,26 @@ export default function PipelineTestPage() {
           audioKey: key,
         }),
       });
-      if (!createRes.ok) throw new Error('Failed to queue the submission.');
+      if (!createRes.ok) {
+        const body = await createRes.json().catch(() => null);
+        throw new Error(body?.message ?? 'Failed to queue the submission.');
+      }
 
       setStage('processing');
-      await pollForResult(submissionId);
+      await pollForResult(submissionId, authHeaders);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
       setStage('error');
     }
   }
 
-  async function pollForResult(submissionId: string) {
+  async function pollForResult(submissionId: string, authHeaders: Record<string, string>) {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
 
     while (Date.now() < deadline) {
-      const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/submissions/${submissionId}/result`);
+      const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/submissions/${submissionId}/result`, {
+        headers: authHeaders,
+      });
       if (res.ok) {
         setResult(await res.json());
         setStage('done');
@@ -173,6 +196,16 @@ export default function PipelineTestPage() {
 
     setError('Timed out waiting for a transcript. The ASR worker may still be starting up.');
     setStage('error');
+  }
+
+  if (status === 'loading' || status === 'unauthenticated') {
+    return (
+      <PageShell>
+        <Section>
+          <p className="text-lg leading-relaxed text-muted">Loading...</p>
+        </Section>
+      </PageShell>
+    );
   }
 
   if (mode === 'word') {
@@ -195,7 +228,8 @@ export default function PipelineTestPage() {
       <Section>
         <h1 className="text-4xl leading-tight md:text-5xl">Pipeline test</h1>
         <p className="text-lg leading-relaxed text-muted">
-          No login required. This exercises upload, ASR worker processing, and transcript polling.
+          This exercises upload, ASR worker processing, and transcript polling. Submitting a recording spends
+          tokens from your wallet.
         </p>
         <div>
           <Button variant="secondary" onClick={() => setMode('word')}>

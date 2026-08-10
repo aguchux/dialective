@@ -22,7 +22,7 @@ import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { LedgerEntryType, Prisma, Role, WithdrawalStatus } from '../generated/prisma/client';
+import { LedgerEntryType, Prisma, Role, WithdrawalStatus, creditTrainingPayout } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { NowPaymentsService } from './nowpayments.service';
@@ -393,68 +393,6 @@ export class WalletController {
     });
   }
 
-  /**
-   * Credits a scored training payout. If the user was referred and the
-   * payout referral bonus is enabled, the bonus is deducted from the user's
-   * gross payout and remitted to the referrer in the same transaction.
-   *
-   * This is intentionally a method on the wallet boundary so settlement or
-   * scoring code can reuse it instead of reimplementing referral math.
-   */
-  private async creditTrainingPayout(userId: string, tokenAmount: number, reference: string) {
-    const userWallet = await this.getOrCreateWallet(userId);
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const settings = await this.getReferralSettings();
-    const grossAmount = tokenAmount;
-    const hasPayoutBonus = user.referredById && settings.payoutBonusEnabled && settings.payoutBonusRate.gt(0);
-    const payoutBonus = hasPayoutBonus ? settings.payoutBonusRate.mul(grossAmount) : null;
-    const netAmount = payoutBonus ? payoutBonus.neg().add(grossAmount) : grossAmount;
-    const referrerWallet = user.referredById && payoutBonus ? await this.getOrCreateWallet(user.referredById) : null;
-
-    await this.prisma.$transaction([
-      this.prisma.ledgerEntry.create({
-        data: {
-          walletId: userWallet.id,
-          type: 'TRAINING_PAYOUT',
-          amount: netAmount,
-          reference,
-        },
-      }),
-      this.prisma.wallet.update({
-        where: { id: userWallet.id },
-        data: { balance: { increment: netAmount } },
-      }),
-      ...(referrerWallet && payoutBonus
-        ? [
-            this.prisma.ledgerEntry.create({
-              data: {
-                walletId: referrerWallet.id,
-                type: 'REFERRAL_PAYOUT_BONUS' as const,
-                amount: payoutBonus,
-                reference,
-              },
-            }),
-            this.prisma.wallet.update({
-              where: { id: referrerWallet.id },
-              data: { balance: { increment: payoutBonus } },
-            }),
-          ]
-        : []),
-    ]);
-
-    return {
-      userId,
-      reference,
-      grossAmount: grossAmount.toString(),
-      netAmount: netAmount.toString(),
-      referralPayoutBonus: payoutBonus?.toString() ?? '0',
-      referrerUserId: user.referredById,
-    };
-  }
 
   @Post('wallet/withdrawals')
   @UseGuards(JwtAuthGuard)
@@ -670,7 +608,7 @@ export class WalletController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async createTrainingPayout(@Body() body: CreateTrainingPayoutDto) {
-    return this.creditTrainingPayout(body.userId, body.tokenAmount, body.reference);
+    return creditTrainingPayout(this.prisma, body.userId, body.tokenAmount, body.reference);
   }
 
   /**

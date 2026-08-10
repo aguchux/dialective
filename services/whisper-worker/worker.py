@@ -6,6 +6,7 @@ import subprocess
 import redis
 from transformers import pipeline
 
+from db import build_db_connection, update_submission_result
 from model_registry import UnsupportedDialectError, load_registry, resolve_checkpoint
 from spaces import build_spaces_client
 from streams import StreamConsumer, publish
@@ -63,17 +64,33 @@ RESULT_TTL_S = 24 * 60 * 60
 
 
 def write_result(redis_client: redis.Redis, submission_id: str, **fields) -> None:
-    # TODO: write to Postgres submissions.transcript / asr_confidence, once
-    # the Postgres schema (Project Plan step 2) exists. Until then, also SET
-    # a short-lived Redis key so api's GET /submissions/:id/result (the
-    # no-auth end-to-end test flow) has somewhere to read the outcome from.
-    # Mirrors vosk-worker's write_result -- keep both in sync with whatever
+    # Redis scratch key stays -- it's the fast client-poll mechanism for "is
+    # my ASR done yet" (api's GET /submissions/:id/result), separate from
+    # the Submission row's longer-lived consensus/settlement lifecycle
+    # written by update_submission_result below. Mirrors vosk-worker's
+    # write_result -- keep both in sync with whatever
     # submissions.controller.ts's getResult expects to parse.
     logger.info("write_result submission=%s fields=%s", submission_id, fields)
     redis_client.set(f"result:{submission_id}", json.dumps(fields), ex=RESULT_TTL_S)
 
 
-def make_handler(s3, redis_client: redis.Redis):
+def write_submission_row(db_conn, submission_id: str, status: str, **fields) -> None:
+    status_map = {"rejected": "REJECTED", "unsupported_dialect": "REJECTED", "ok": "TRANSCRIBED"}
+    # Whisper's HF pipeline never returns per-word confidence -- asr_confidence
+    # stays None (not 0) to distinguish "no confidence data" from "zero
+    # confidence", matching vosk-worker's mean_confidence(None) behavior.
+    update_submission_result(
+        db_conn,
+        submission_id,
+        status=status_map[status],
+        transcript=fields.get("transcript"),
+        asr_confidence=None,
+        asr_engine="whisper" if status != "unsupported_dialect" else None,
+        rejection_reason=fields.get("reason") or ("unsupported_dialect" if status == "unsupported_dialect" else None),
+    )
+
+
+def make_handler(s3, redis_client: redis.Redis, db_conn):
     def handle(_msg_id: str, fields: dict) -> None:
         job = fields if not fields.get("data") else json.loads(fields["data"])
         submission_id = job["submission_id"]
@@ -88,17 +105,20 @@ def make_handler(s3, redis_client: redis.Redis):
                 transcode_to_wav(raw_path, wav_path)
             except subprocess.CalledProcessError:
                 write_result(redis_client, submission_id, status="rejected", reason="unreadable_audio")
+                write_submission_row(db_conn, submission_id, "rejected", reason="unreadable_audio")
                 return
 
             try:
                 asr = get_pipeline(dialect_tag)
             except UnsupportedDialectError:
                 write_result(redis_client, submission_id, status="unsupported_dialect", dialect_tag=dialect_tag)
+                write_submission_row(db_conn, submission_id, "unsupported_dialect")
                 return
 
             result = asr(wav_path)
             text = result.get("text", "").strip()
             write_result(redis_client, submission_id, status="ok", transcript=text, word_confidences=[])
+            write_submission_row(db_conn, submission_id, "ok", transcript=text)
 
             publish(
                 redis_client,
@@ -120,10 +140,11 @@ def make_handler(s3, redis_client: redis.Redis):
 def main() -> None:
     redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     s3 = build_spaces_client()
+    db_conn = build_db_connection()
 
     consumer = StreamConsumer(redis_client, ASR_STREAM, CONSUMER_GROUP, CONSUMER_NAME)
     logger.info("whisper-worker consuming stream=%s group=%s", ASR_STREAM, CONSUMER_GROUP)
-    consumer.run(make_handler(s3, redis_client))
+    consumer.run(make_handler(s3, redis_client, db_conn))
 
 
 if __name__ == "__main__":

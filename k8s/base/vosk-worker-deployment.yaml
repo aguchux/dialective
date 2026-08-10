@@ -88,6 +88,11 @@ spec:
                 secretKeyRef:
                   name: spaces-creds
                   key: secret_key
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: connection_string
           volumeMounts:
             - name: model-repo
               mountPath: /models

@@ -1,5 +1,5 @@
 import { Body, ConflictException, Controller, Delete, Get, NotFoundException, Param, Patch, Post, UnprocessableEntityException, UseGuards } from '@nestjs/common';
-import { Prisma, Role } from '../generated/prisma/client';
+import { Prisma, Role } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';

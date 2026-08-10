@@ -5,7 +5,7 @@ k8s/overlays/prod/configs/*
 !k8s/overlays/prod/configs/*.example
 node_modules/
 dist/
-services/api/src/generated/
+packages/db/src/generated/
 services/api/prisma/seed.js
 services/api/prisma/seed.js.map
 __pycache__/

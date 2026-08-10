@@ -1,5 +1,5 @@
 import { IsEnum } from 'class-validator';
-import { Role } from '../../generated/prisma/client';
+import { Role } from '@dialectiva/db';
 
 export class UpdateUserRoleDto {
   @IsEnum(Role)

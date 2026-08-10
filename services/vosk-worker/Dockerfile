@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # asr-model-repo-pvc, mounted at /models and populated by an initContainer
 # (see k8s/base/vosk-worker-deployment.yaml) so every replica shares one
 # download instead of each image rebuild re-fetching it.
-COPY services/vosk-worker/model_registry.py services/vosk-worker/streams.py services/vosk-worker/spaces.py services/vosk-worker/worker.py ./
+COPY services/vosk-worker/model_registry.py services/vosk-worker/streams.py services/vosk-worker/spaces.py services/vosk-worker/db.py services/vosk-worker/worker.py ./
 COPY models/registry.yaml ./models/registry.yaml
 
 CMD ["python3", "worker.py"]

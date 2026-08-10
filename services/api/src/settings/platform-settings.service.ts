@@ -47,6 +47,32 @@ export class PlatformSettingsService {
     return min;
   }
 
+  async getTrainingPayoutBonusCapMultiple(): Promise<number> {
+    const row = await this.getRow();
+    if (row.trainingPayoutBonusCapMultiple) {
+      return row.trainingPayoutBonusCapMultiple.toNumber();
+    }
+    const raw = process.env.TRAINING_PAYOUT_BONUS_CAP_MULTIPLE ?? '1.0';
+    const cap = Number(raw);
+    if (!Number.isFinite(cap) || cap < 0) {
+      throw new Error(`Invalid TRAINING_PAYOUT_BONUS_CAP_MULTIPLE: ${raw}`);
+    }
+    return cap;
+  }
+
+  async getTaskTokenCost(): Promise<number> {
+    const row = await this.getRow();
+    if (row.taskTokenCost) {
+      return row.taskTokenCost.toNumber();
+    }
+    const raw = process.env.TASK_TOKEN_COST ?? '1.0';
+    const cost = Number(raw);
+    if (!Number.isFinite(cost) || cost <= 0) {
+      throw new Error(`Invalid TASK_TOKEN_COST: ${raw}`);
+    }
+    return cost;
+  }
+
   async getResendFromAddress(): Promise<string> {
     const row = await this.getRow();
     return row.resendFromAddress ?? process.env.RESEND_FROM_ADDRESS ?? 'noreply@dialectlibrary.com';
@@ -64,6 +90,8 @@ export class PlatformSettingsService {
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
       resendFromAddress: row.resendFromAddress,
       leadsNotificationAddress: row.leadsNotificationAddress,
+      trainingPayoutBonusCapMultiple: row.trainingPayoutBonusCapMultiple?.toString() ?? null,
+      taskTokenCost: row.taskTokenCost?.toString() ?? null,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -74,6 +102,8 @@ export class PlatformSettingsService {
     minWithdrawalTokens?: number | null;
     resendFromAddress?: string | null;
     leadsNotificationAddress?: string | null;
+    trainingPayoutBonusCapMultiple?: number | null;
+    taskTokenCost?: number | null;
   }) {
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
@@ -85,6 +115,8 @@ export class PlatformSettingsService {
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
       resendFromAddress: row.resendFromAddress,
       leadsNotificationAddress: row.leadsNotificationAddress,
+      trainingPayoutBonusCapMultiple: row.trainingPayoutBonusCapMultiple?.toString() ?? null,
+      taskTokenCost: row.taskTokenCost?.toString() ?? null,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

@@ -172,6 +172,8 @@ export interface PlatformSettings {
   minWithdrawalTokens: string | null;
   resendFromAddress: string | null;
   leadsNotificationAddress: string | null;
+  trainingPayoutBonusCapMultiple: string | null;
+  taskTokenCost: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -181,6 +183,67 @@ export interface PlatformSettingsInput {
   minWithdrawalTokens?: number | null;
   resendFromAddress?: string | null;
   leadsNotificationAddress?: string | null;
+  trainingPayoutBonusCapMultiple?: number | null;
+  taskTokenCost?: number | null;
+}
+
+export interface SubscriptionPool {
+  id: string;
+  subscriberName: string;
+  subscriberEmail: string;
+  organization: string | null;
+  usdAmount: string;
+  status: 'ACTIVE' | 'CLOSED';
+  note: string | null;
+  dataAccessLeadId: string | null;
+  openedByUserId: string;
+  createdAt: string;
+  closedAt: string | null;
+}
+
+export interface SubscriptionPoolsPage {
+  items: SubscriptionPool[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface SubscriptionPoolInput {
+  subscriberName: string;
+  subscriberEmail: string;
+  organization?: string;
+  usdAmount: number;
+  note?: string;
+  dataAccessLeadId?: string;
+}
+
+export interface PoolsSummary {
+  totalAvailableTokens: string;
+  totalAvailableUsd: string;
+  activePoolCount: number;
+  totalSettledTokens: string;
+}
+
+export interface TrainerSubmissionSummary {
+  id: string;
+  promptText: string;
+  dialectTag: string;
+  status: 'PENDING' | 'TRANSCRIBED' | 'REJECTED' | 'SCORED' | 'SETTLED';
+  score: string | null;
+  payoutTokenAmount: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+  scoredAt: string | null;
+  settledAt: string | null;
+}
+
+export interface SubmissionsPage {
+  items: TrainerSubmissionSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 }
 
 export type BlogPostStatus = 'DRAFT' | 'PUBLISHED';
@@ -268,7 +331,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools'],
   endpoints: (builder) => ({
     register: builder.mutation<AuthResult, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -295,6 +358,9 @@ export const dialectivaApi = createApi({
     getEarningHistory: builder.query<EarningHistoryPage, { page: number; pageSize: number }>({
       query: ({ page, pageSize }) => ({ url: '/wallet/earnings', params: { page, pageSize } }),
       providesTags: ['Wallet'],
+    }),
+    getMySubmissions: builder.query<SubmissionsPage, { page: number; pageSize: number }>({
+      query: ({ page, pageSize }) => ({ url: '/submissions/mine', params: { page, pageSize } }),
     }),
     createTokenDeposit: builder.mutation<{ depositId: string; hostedCheckoutUrl: string }, { usdAmount: number; currency: 'USDC' | 'USDT' }>({
       query: (body) => ({ url: '/wallet/deposits', method: 'POST', body }),
@@ -358,6 +424,22 @@ export const dialectivaApi = createApi({
     }),
     getReferrals: builder.query<ReferralSummary[], void>({
       query: () => '/admin/referrals',
+    }),
+    getPoolsSummary: builder.query<PoolsSummary, void>({
+      query: () => '/admin/pools/summary',
+      providesTags: ['Pools'],
+    }),
+    listSubscriptionPools: builder.query<SubscriptionPoolsPage, { page?: number; pageSize?: number; status?: 'ACTIVE' | 'CLOSED' } | void>({
+      query: (params) => ({ url: '/admin/pools', params: params ?? undefined }),
+      providesTags: ['Pools'],
+    }),
+    createSubscriptionPool: builder.mutation<SubscriptionPool, SubscriptionPoolInput>({
+      query: (body) => ({ url: '/admin/pools', method: 'POST', body }),
+      invalidatesTags: ['Pools'],
+    }),
+    closeSubscriptionPool: builder.mutation<SubscriptionPool, string>({
+      query: (id) => ({ url: `/admin/pools/${id}/close`, method: 'PATCH' }),
+      invalidatesTags: ['Pools'],
     }),
     getAdminStats: builder.query<AdminStats, void>({
       query: () => '/admin/stats',
@@ -470,12 +552,17 @@ export const {
   useGetWalletQuery,
   useGetTrainerDashboardQuery,
   useGetEarningHistoryQuery,
+  useGetMySubmissionsQuery,
   useCreateTokenDepositMutation,
   useUpdateProfileMutation,
   useCreateDataAccessLeadMutation,
   useGetReferralSettingsQuery,
   useUpdateReferralSettingsMutation,
   useGetReferralsQuery,
+  useGetPoolsSummaryQuery,
+  useListSubscriptionPoolsQuery,
+  useCreateSubscriptionPoolMutation,
+  useCloseSubscriptionPoolMutation,
   useGetAdminStatsQuery,
   useGetUsersQuery,
   useUpdateUserRoleMutation,

@@ -2,7 +2,7 @@ import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { Role } from '../generated/prisma/client';
+import { Role } from '@dialectiva/db';
 import { PlatformSettingsService } from './platform-settings.service';
 import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto';
 

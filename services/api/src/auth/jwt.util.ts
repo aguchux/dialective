@@ -1,5 +1,5 @@
 import * as jwt from 'jsonwebtoken';
-import { Role } from '../generated/prisma/client';
+import { Role } from '@dialectiva/db';
 
 export interface AccessTokenClaims {
   sub: string; // user id

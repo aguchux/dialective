@@ -3,9 +3,13 @@
 // Postgres directly, and no other service — including frontend/NextAuth
 // — holds its own adapter or schema.
 
+// Generated client output is redirected into packages/db so it's importable
+// as @dialectiva/db by consensus-scorer and settlement-job without either
+// service owning its own schema/migrations -- see AGENTS.md "Database
+// access" and packages/db/README (if present) for why.
 generator client {
   provider     = "prisma-client"
-  output       = "../src/generated/prisma"
+  output       = "../../../packages/db/src/generated/prisma"
   runtime      = "nodejs"
   moduleFormat = "cjs"
 }
@@ -62,6 +66,8 @@ model User {
   emailVerifications EmailVerificationToken[]
   wallet         Wallet?
   blogPosts      BlogPost[]
+  submissions    Submission[]
+  subscriptionPoolsOpened SubscriptionPool[] @relation("SubscriptionPoolOpenedBy")
 
   @@map("users")
 }
@@ -156,6 +162,108 @@ model EmailVerificationToken {
   @@map("email_verification_tokens")
 }
 
+enum SubmissionStatus {
+  PENDING     // ASR not yet completed
+  TRANSCRIBED // ASR ok, awaiting quorum/scoring
+  REJECTED    // ASR prefilter/unreadable/unsupported-dialect rejection
+  SCORED      // consensus-scorer wrote a score
+  SETTLED     // settlement-job paid it out
+}
+
+/// Seeded (services/api/prisma/seed.ts), stable sentence prompts for the
+/// dictation flow -- replaces PromptsController's old in-memory bank, which
+/// minted a fresh promptId on every call and meant a prompt/dialect cluster
+/// could never reach quorum. `active` lets admin retire a bad prompt without
+/// deleting the Submission history that references it.
+model Prompt {
+  id         String   @id @default(uuid())
+  dialectTag String
+  text       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  submissions Submission[]
+
+  @@index([dialectTag, active])
+  @@map("prompts")
+}
+
+/// One sentence-prompt dictation submission. Row is inserted by
+/// SubmissionsController.create once audio is uploaded (not at
+/// upload-url time, which would risk orphaned rows on client abandonment),
+/// using the client-supplied submissionId as the row id so it matches the
+/// Spaces object key and the asr-jobs-* Streams message. ASR workers
+/// (vosk-worker/whisper-worker) update transcript/status directly against
+/// this table after transcription; consensus-scorer reads/writes
+/// score/isOutlier once the (promptId, dialectTag) cluster reaches quorum;
+/// settlement-job reads score+tokensSpent to compute and pay out
+/// payoutTokenAmount. See AGENTS.md "Database access" -- api owns this
+/// schema; other services access it only via the generated Prisma client
+/// (packages/db), never their own migrations.
+model Submission {
+  id                String           @id @default(uuid())
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  promptId          String
+  prompt            Prompt           @relation(fields: [promptId], references: [id], onDelete: Restrict)
+  dialectTag        String
+  audioBucket       String
+  audioKey          String
+  status            SubmissionStatus @default(PENDING)
+  transcript        String?
+  asrConfidence     Decimal?         @db.Decimal(5, 4) // mean per-word confidence, 0-1; null when the engine has none (Whisper)
+  asrEngine         String?          // "vosk" | "whisper"
+  rejectionReason   String?          // duration_out_of_range | mostly_silence | unreadable_audio | unsupported_dialect
+  tokensSpent       Decimal          @default(0) @db.Decimal(20, 8) // task cost debited from the trainer's wallet at submit time
+  score             Decimal?         @db.Decimal(5, 2) // 0.00-100.00 consensus agreement score, null until SCORED
+  isOutlier         Boolean          @default(false) // flagged for human QA review, never auto-rejected -- see AGENTS.md "Consensus scoring"
+  payoutTokenAmount Decimal?         @db.Decimal(20, 8) // computed at settlement, null until SETTLED
+  scoredAt          DateTime?
+  settledAt         DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([promptId, dialectTag])
+  @@index([status])
+  @@index([userId])
+  @@map("submissions")
+}
+
+enum SubscriptionPoolStatus {
+  ACTIVE
+  CLOSED
+}
+
+/// One row per admin-opened data-subscriber funding pool -- ledger-style,
+/// never mutated after creation (closing sets status/closedAt, not the
+/// amount, so historical contribution stays auditable, matching how Deposit
+/// rows are never mutated after confirmed). This is the *only* real reward
+/// pool in the platform: it funds trainer training-payout bonuses (see
+/// computeTrainingPayout in packages/db), and is never shown to trainers.
+/// "Total pool available" is a computed read (SUM(usdAmount) WHERE
+/// status='ACTIVE', converted to tokens via PlatformSettingsService's
+/// getTokenUsdRate, minus SUM(Submission.payoutTokenAmount) already
+/// settled) -- not a stored/cached column, since this is an admin-only,
+/// low-QPS read, unlike Wallet.balance's high-QPS denormalization.
+model SubscriptionPool {
+  id               String                 @id @default(uuid())
+  subscriberName   String
+  subscriberEmail  String
+  organization     String?
+  dataAccessLeadId String?
+  dataAccessLead   DataAccessLead?        @relation(fields: [dataAccessLeadId], references: [id], onDelete: SetNull)
+  usdAmount        Decimal                @db.Decimal(20, 8)
+  status           SubscriptionPoolStatus @default(ACTIVE)
+  note             String?
+  openedByUserId   String
+  openedByUser     User                   @relation("SubscriptionPoolOpenedBy", fields: [openedByUserId], references: [id], onDelete: Restrict)
+  createdAt        DateTime               @default(now())
+  closedAt         DateTime?
+
+  @@index([status])
+  @@map("subscription_pools")
+}
+
 /// A single English word from the fixed seed word bank (services/api/prisma/seed.ts).
 /// Not user-editable -- adding a word means adding it to the seed list and
 /// re-running the seed, same as any other reference data in this repo.
@@ -192,6 +300,7 @@ model WordRecording {
 enum LedgerEntryType {
   DEPOSIT
   TRAINING_PAYOUT
+  TASK_SPEND // debited when a trainer submits a task (see Submission.tokensSpent); always negative
   WITHDRAWAL
   WITHDRAWAL_REVERSED
   REFERRAL_COMMISSION // legacy: old single-rate funding commission entries
@@ -343,6 +452,8 @@ model PlatformSettings {
   minWithdrawalTokens      Decimal? @db.Decimal(20, 8) // overrides MIN_WITHDRAWAL_TOKENS when set
   resendFromAddress        String? // overrides RESEND_FROM_ADDRESS when set
   leadsNotificationAddress String? // overrides LEADS_NOTIFICATION_ADDRESS when set
+  trainingPayoutBonusCapMultiple Decimal? @db.Decimal(5, 2) // overrides TRAINING_PAYOUT_BONUS_CAP_MULTIPLE when set; caps the score-scaled bonus at this multiple of tokensSpent (see computeTrainingPayout)
+  taskTokenCost            Decimal? @db.Decimal(20, 8) // overrides TASK_TOKEN_COST when set; tokens debited from a trainer's wallet per submission
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 
@@ -361,6 +472,8 @@ model DataAccessLead {
   organization String?
   useCase      String?
   createdAt    DateTime @default(now())
+
+  subscriptionPools SubscriptionPool[]
 
   @@index([createdAt])
   @@map("data_access_leads")

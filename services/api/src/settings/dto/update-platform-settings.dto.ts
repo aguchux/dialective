@@ -16,4 +16,12 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsEmail()
   leadsNotificationAddress?: string;
+
+  @IsOptional()
+  @IsPositive()
+  trainingPayoutBonusCapMultiple?: number;
+
+  @IsOptional()
+  @IsPositive()
+  taskTokenCost?: number;
 }
