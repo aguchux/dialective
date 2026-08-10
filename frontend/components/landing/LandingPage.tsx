@@ -1,6 +1,7 @@
 import { ContributorRail } from './ContributorRail';
 import { CountryFlagMarquee } from './CountryFlagMarquee';
 import { HowItWorks } from './HowItWorks';
+import { LandingBlog } from './LandingBlog';
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 import { LandingFooter } from './LandingFooter';
 import { LandingHeader } from './LandingHeader';
@@ -57,6 +58,7 @@ export async function LandingPage() {
           <ContributorRail dialectCount={dialectCount} />
           <HowItWorks />
           <CountryFlagMarquee countries={countries} />
+          <LandingBlog />
         </div>
         <LandingFooter />
       </div>
