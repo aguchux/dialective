@@ -1,13 +1,15 @@
 'use client';
 
 import * as RadixDropdown from '@radix-ui/react-dropdown-menu';
+import { usePortalContainer } from './PortalContainer';
 
 export const DropdownMenu = RadixDropdown.Root;
 export const DropdownMenuTrigger = RadixDropdown.Trigger;
 
 export function DropdownMenuContent({ children, align = 'end' }: { children: React.ReactNode; align?: 'start' | 'end' | 'center' }) {
+  const container = usePortalContainer();
   return (
-    <RadixDropdown.Portal>
+    <RadixDropdown.Portal container={container}>
       <RadixDropdown.Content
         align={align}
         sideOffset={8}
@@ -40,8 +42,12 @@ export function DropdownMenuItem({
   );
 }
 
-export function DropdownMenuLabel({ children }: { children: React.ReactNode }) {
-  return <RadixDropdown.Label className="px-2.5 py-1.5 text-xs font-bold uppercase text-muted">{children}</RadixDropdown.Label>;
+export function DropdownMenuLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <RadixDropdown.Label className={className ?? 'px-2.5 py-1.5 text-xs font-bold uppercase text-muted'}>
+      {children}
+    </RadixDropdown.Label>
+  );
 }
 
 export function DropdownMenuSeparator() {

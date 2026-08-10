@@ -61,12 +61,15 @@ export const authOptions: NextAuthOptions = {
         token.countryId = apiResult.user.countryId;
         return token;
       }
-      // Triggered by useSession().update() after onboarding is completed
-      // mid-session, since the JWT otherwise only refreshes this on sign-in.
+      // Triggered by useSession().update() after onboarding completes or the
+      // profile is edited mid-session, since the JWT otherwise only
+      // refreshes these fields on sign-in.
       if (trigger === 'update' && session) {
-        token.onboardingComplete = session.onboardingComplete;
-        token.dialectTag = session.dialectTag;
-        token.countryId = session.countryId;
+        if (session.onboardingComplete !== undefined) token.onboardingComplete = session.onboardingComplete;
+        if (session.dialectTag !== undefined) token.dialectTag = session.dialectTag;
+        if (session.countryId !== undefined) token.countryId = session.countryId;
+        if (session.firstName !== undefined) token.firstName = session.firstName;
+        if (session.lastName !== undefined) token.lastName = session.lastName;
       }
 
       if (!token.accessToken || !token.refreshToken) {

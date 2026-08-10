@@ -1,6 +1,7 @@
 'use client';
 
 import * as RadixDialog from '@radix-ui/react-dialog';
+import { usePortalContainer } from './PortalContainer';
 
 export const Dialog = RadixDialog.Root;
 export const DialogTrigger = RadixDialog.Trigger;
@@ -14,8 +15,9 @@ export function DialogContent({
   description?: string;
   children: React.ReactNode;
 }) {
+  const container = usePortalContainer();
   return (
-    <RadixDialog.Portal>
+    <RadixDialog.Portal container={container}>
       <RadixDialog.Overlay className="fixed inset-0 z-40 bg-black/50 data-[state=open]:animate-[fadeIn_150ms_ease-out]" />
       <RadixDialog.Content
         className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,480px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_20px_50px_rgba(27,31,27,0.25)] focus:outline-none data-[state=open]:animate-[scaleIn_150ms_ease-out] dark:bg-surface"

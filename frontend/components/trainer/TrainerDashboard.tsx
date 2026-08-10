@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { PortalContainerProvider } from '@/components/ui/PortalContainer';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -18,13 +19,16 @@ import {
   Clock3,
   Copy,
   Database,
+  FileText as FileTextIcon,
   Headphones,
   LogOut,
   Mic2,
   Plus,
   RefreshCw,
+  Shield as ShieldIcon,
   Sparkles,
   Star,
+  User as UserIcon,
   Users,
   WalletCards,
 } from 'lucide-react';
@@ -46,9 +50,13 @@ import {
   normalizeErrorMessage,
   useCreateTokenDepositMutation,
   useGetTrainerDashboardQuery,
+  useUpdateProfileMutation,
 } from '@/store/api';
+import type { Session } from 'next-auth';
 
-type DashboardView = 'tokens' | 'earnings' | 'pools' | 'referrals' | 'scores';
+type SessionUpdateFn = (data?: Record<string, unknown>) => Promise<Session | null>;
+
+type DashboardView = 'tokens' | 'earnings' | 'pools' | 'referrals' | 'scores' | 'profile';
 
 const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = [
   { id: 'tokens', label: 'Tokens', icon: WalletCards },
@@ -57,6 +65,9 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
   { id: 'referrals', label: 'Referrals', icon: Users },
   { id: 'scores', label: 'My Scores', icon: Star },
 ];
+
+// Reachable only from the account dropdown, not the main tab bar/mobile nav.
+const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'profile'];
 
 const earningTypes: LedgerEntryType[] = [
   'TRAINING_PAYOUT',
@@ -78,12 +89,13 @@ const activityLabels: Record<LedgerEntryType, string> = {
 const cardClass = 'min-w-0 rounded-lg border border-line bg-surface shadow-[0_8px_24px_rgba(31,25,41,0.04)]';
 
 export function TrainerDashboard() {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);
   const requestedView = searchParams.get('view');
   const displayName = [session?.user.firstName, session?.user.lastName].filter(Boolean).join(' ');
-  const activeView = views.some((view) => view.id === requestedView) ? (requestedView as DashboardView) : 'tokens';
+  const activeView = allViewIds.includes(requestedView as DashboardView) ? (requestedView as DashboardView) : 'tokens';
   const { data, isLoading, isFetching, error, refetch } = useGetTrainerDashboardQuery(undefined, {
     skip: status !== 'authenticated' || session?.user.role === 'ADMIN',
   });
@@ -103,7 +115,7 @@ export function TrainerDashboard() {
 
   if (!session) {
     return (
-      <main className="grid min-h-screen place-items-center bg-bg p-5 text-ink">
+      <main className="dashboard-theme grid min-h-screen place-items-center bg-bg p-5 text-ink">
         <section className={`${cardClass} grid w-full max-w-sm gap-4 p-5`}>
           <BrandLogo size={36} />
           <h1 className="text-2xl font-black">Trainer dashboard</h1>
@@ -116,47 +128,67 @@ export function TrainerDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-bg text-ink">
-      <DashboardHeader activeView={activeView} email={session.user.email ?? 'Trainer'} image={session.user.image} />
+    <div className="dashboard-theme min-h-screen bg-bg text-ink" ref={setThemeRoot}>
+      <PortalContainerProvider container={themeRoot}>
+        <DashboardHeader
+          activeView={activeView}
+          displayName={displayName || emailName(session.user.email)}
+          email={session.user.email ?? 'Trainer'}
+          image={session.user.image}
+        />
 
-      <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
-        <section className="mb-7 flex items-center gap-3 border-b border-line pb-6 md:gap-4">
-          <Avatar email={session.user.email ?? 'Trainer'} image={session.user.image} large />
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-muted">Welcome back</p>
-            <h1 className="truncate text-2xl font-black md:text-3xl">{displayName || emailName(session.user.email)}</h1>
-            <div className="mt-1 flex items-center gap-2 text-sm text-muted">
-              <BadgeCheck className="size-4 text-emerald-600" aria-hidden="true" />
-              <span>{session.user.dialectTag ? `${session.user.dialectTag.toUpperCase()} trainer` : 'Dialect trainer'}</span>
+        <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
+          <section className="mb-7 flex items-center gap-3 border-b border-line pb-6 md:gap-4">
+            <Avatar email={session.user.email ?? 'Trainer'} image={session.user.image} large />
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-muted">Welcome back</p>
+              <h1 className="truncate text-2xl font-black md:text-3xl">{displayName || emailName(session.user.email)}</h1>
+              <div className="mt-1 flex items-center gap-2 text-sm text-muted">
+                <BadgeCheck className="size-4 text-emerald-600" aria-hidden="true" />
+                <span>{session.user.dialectTag ? `${session.user.dialectTag.toUpperCase()} trainer` : 'Dialect trainer'}</span>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {error ? (
-          <DashboardError retry={() => void refetch()} />
-        ) : isLoading || !data ? (
-          <ViewLoading />
-        ) : (
-          <DashboardViewContent
-            activeView={activeView}
-            data={data}
-            dialectTag={session.user.dialectTag}
-            email={session.user.email ?? ''}
-            refreshing={isFetching}
-          />
-        )}
-      </main>
+          {activeView === 'profile' ? (
+            <ProfileView session={session} update={update} />
+          ) : error ? (
+            <DashboardError retry={() => void refetch()} />
+          ) : isLoading || !data ? (
+            <ViewLoading />
+          ) : (
+            <DashboardViewContent
+              activeView={activeView}
+              data={data}
+              dialectTag={session.user.dialectTag}
+              email={session.user.email ?? ''}
+              refreshing={isFetching}
+            />
+          )}
+        </main>
 
-      <MobileNavigation activeView={activeView} />
+        <MobileNavigation activeView={activeView} />
+      </PortalContainerProvider>
     </div>
   );
 }
 
-function DashboardHeader({ activeView, email, image }: { activeView: DashboardView; email: string; image?: string | null }) {
+function DashboardHeader({
+  activeView,
+  displayName,
+  email,
+  image,
+}: {
+  activeView: DashboardView;
+  displayName: string;
+  email: string;
+  image?: string | null;
+}) {
+  const router = useRouter();
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
-        <BrandLogo size={34} className="text-base" textClassName="hidden font-black sm:inline" />
+        <BrandLogo href='/dashboard' size={34} className="text-base" textClassName="hidden font-black sm:inline" />
         <nav className="hidden h-full items-stretch lg:flex" aria-label="Trainer dashboard">
           {views.map((view) => (
             <DashboardNavLink active={activeView === view.id} key={view.id} view={view} />
@@ -173,10 +205,23 @@ function DashboardHeader({ activeView, email, image }: { activeView: DashboardVi
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuLabel>{email}</DropdownMenuLabel>
+              <DropdownMenuLabel className="px-2.5 py-1.5">
+                <p className="truncate text-sm font-extrabold text-ink">{displayName}</p>
+                <p className="truncate text-xs font-medium text-muted">{email}</p>
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => router.push('/dashboard?view=profile')}>
+                <UserIcon className="size-4" aria-hidden="true" /> Profile
+              </DropdownMenuItem>
               <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>
-                <LogOut className="size-4" aria-hidden="true" /> Sign out
+                <LogOut className="size-4" aria-hidden="true" /> Logout
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => router.push('/privacy')}>
+                <ShieldIcon className="size-4" aria-hidden="true" /> Privacy Policy
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/terms')}>
+                <FileTextIcon className="size-4" aria-hidden="true" /> Terms of Use
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -417,6 +462,103 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
   );
 }
 
+function ProfileView({ session, update }: { session: Session; update: SessionUpdateFn }) {
+  const [firstName, setFirstName] = useState(session.user.firstName ?? '');
+  const [lastName, setLastName] = useState(session.user.lastName ?? '');
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [updateProfile, { isLoading }] = useUpdateProfileMutation();
+
+  const dirty = firstName.trim() !== (session.user.firstName ?? '') || lastName.trim() !== (session.user.lastName ?? '');
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setMessage(null);
+    setError(null);
+    try {
+      const profile = await updateProfile({ firstName: firstName.trim(), lastName: lastName.trim() }).unwrap();
+      await update({ firstName: profile.firstName, lastName: profile.lastName });
+      setMessage('Profile updated.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not save your profile.'));
+    }
+  }
+
+  return (
+    <div>
+      <ViewHeading title="Profile" subtitle="Your account details." />
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
+        <form className={`${cardClass} grid gap-4 p-5`} onSubmit={submit}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-1.5 text-sm font-bold">
+              First name
+              <input
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                maxLength={80}
+                onChange={(event) => setFirstName(event.target.value)}
+                required
+                value={firstName}
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-bold">
+              Last name
+              <input
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                maxLength={80}
+                onChange={(event) => setLastName(event.target.value)}
+                required
+                value={lastName}
+              />
+            </label>
+          </div>
+          <label className="grid gap-1.5 text-sm font-bold">
+            Email
+            <input
+              className="min-h-11 rounded-lg border border-line bg-surface-muted px-3 text-muted"
+              disabled
+              value={session.user.email ?? ''}
+            />
+            <span className="text-xs font-medium text-muted">Email can&apos;t be changed here.</span>
+          </label>
+          {message && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{message}</p>}
+          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{error}</p>}
+          <div>
+            <ActionButton
+              className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!dirty}
+              pending={isLoading}
+              pendingLabel="Saving"
+              type="submit"
+            >
+              Save changes
+            </ActionButton>
+          </div>
+        </form>
+
+        <div className={`${cardClass} grid gap-4 p-5`}>
+          <div className="flex items-center gap-3">
+            <Avatar email={session.user.email ?? 'Trainer'} image={session.user.image} large />
+            <div className="min-w-0">
+              <p className="truncate font-black">{[firstName, lastName].filter(Boolean).join(' ') || emailName(session.user.email)}</p>
+              <p className="truncate text-sm text-muted">{session.user.dialectTag ? `${session.user.dialectTag.toUpperCase()} trainer` : 'Dialect trainer'}</p>
+            </div>
+          </div>
+          <div className="grid gap-2 border-t border-line pt-4 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted">Referral code</span>
+              <span className="font-extrabold">{session.user.referralCode ?? '—'}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted">Role</span>
+              <span className="font-extrabold">Trainer</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ScoresView() {
   return (
     <div>
@@ -590,7 +732,7 @@ function Avatar({ email, image, large = false }: { email: string; image?: string
 }
 
 function DashboardLoading() {
-  return <div className="min-h-screen animate-pulse bg-bg"><div className="h-16 border-b border-line bg-surface" /><div className="mx-auto max-w-6xl space-y-6 px-4 py-8"><div className="h-16 w-72 rounded-lg bg-surface-muted" /><div className="grid gap-3 sm:grid-cols-3"><div className="h-32 rounded-lg bg-surface" /><div className="h-32 rounded-lg bg-surface" /><div className="h-32 rounded-lg bg-surface" /></div></div></div>;
+  return <div className="dashboard-theme min-h-screen animate-pulse bg-bg"><div className="h-16 border-b border-line bg-surface" /><div className="mx-auto max-w-6xl space-y-6 px-4 py-8"><div className="h-16 w-72 rounded-lg bg-surface-muted" /><div className="grid gap-3 sm:grid-cols-3"><div className="h-32 rounded-lg bg-surface" /><div className="h-32 rounded-lg bg-surface" /><div className="h-32 rounded-lg bg-surface" /></div></div></div>;
 }
 
 function ViewLoading() {

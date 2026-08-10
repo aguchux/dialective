@@ -278,7 +278,10 @@ export const dialectivaApi = createApi({
     createTokenDeposit: builder.mutation<{ depositId: string; hostedCheckoutUrl: string }, { usdAmount: number; currency: 'USDC' | 'USDT' }>({
       query: (body) => ({ url: '/wallet/deposits', method: 'POST', body }),
     }),
-    updateProfile: builder.mutation<PublicUser, { countryId: string; dialectId: string }>({
+    updateProfile: builder.mutation<
+      PublicUser,
+      { countryId?: string; dialectId?: string; firstName?: string; lastName?: string }
+    >({
       query: (body) => ({
         url: '/auth/me',
         method: 'PATCH',

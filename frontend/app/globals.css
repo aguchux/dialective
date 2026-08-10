@@ -1,10 +1,13 @@
 @import "tailwindcss";
 
 /* Tailwind v4 class-based dark mode -- next-themes toggles `.dark` on
-   <html> (attribute="class" in ThemeProvider, see app/providers.tsx), this
-   makes `dark:` variants activate off that class instead of only
-   prefers-color-scheme. */
-@custom-variant dark (&:where(.dark, .dark *));
+   <html> (attribute="class" in ThemeProvider, see app/providers.tsx), but
+   dark mode must only ever be visible inside the trainer dashboard (never
+   admin or the public landing pages), even when the stored preference is
+   "dark". So `dark:` variants -- and the `.dark` custom-property overrides
+   below -- only take effect under `.dashboard-theme` (see
+   TrainerDashboard.tsx's root element), not from `.dark` on <html> alone. */
+@custom-variant dark (&:where(.dashboard-theme.dark, .dashboard-theme.dark *));
 
 /* Custom breakpoint matching the original hand-rolled CSS's single
    @media (min-width: 720px) block, instead of Tailwind's default md
@@ -40,7 +43,7 @@
   --danger: #a12a2a;
 }
 
-.dark {
+.dashboard-theme.dark {
   color-scheme: dark;
   --bg: #15111c;
   --surface: #1f1929;
