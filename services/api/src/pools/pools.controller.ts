@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
@@ -7,7 +7,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role, SubscriptionPoolStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
-import { CreateSubscriptionPoolDto } from './dto/create-subscription-pool.dto';
+import { CreateSubscriptionPoolDto, UpdateSubscriptionPoolDto } from './dto/create-subscription-pool.dto';
 import { ListSubscriptionPoolsDto } from './dto/list-subscription-pools.dto';
 
 /**
@@ -117,5 +117,36 @@ export class PoolsController {
       data: { status: SubscriptionPoolStatus.CLOSED, closedAt: new Date() },
     });
     return { ...closed, usdAmount: closed.usdAmount.toString() };
+  }
+
+  @Patch(':id')
+  async update(@Param('id') id: string, @Body() body: UpdateSubscriptionPoolDto) {
+    const pool = await this.prisma.subscriptionPool.findUnique({ where: { id } });
+    if (!pool) {
+      throw new NotFoundException('Subscription pool not found');
+    }
+
+    const updated = await this.prisma.subscriptionPool.update({
+      where: { id },
+      data: {
+        subscriberName: body.subscriberName,
+        subscriberEmail: body.subscriberEmail,
+        organization: body.organization,
+        usdAmount: body.usdAmount,
+        note: body.note,
+        dataAccessLeadId: body.dataAccessLeadId,
+      },
+    });
+    return { ...updated, usdAmount: updated.usdAmount.toString() };
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    const pool = await this.prisma.subscriptionPool.findUnique({ where: { id } });
+    if (!pool) {
+      throw new NotFoundException('Subscription pool not found');
+    }
+    await this.prisma.subscriptionPool.delete({ where: { id } });
+    return { id };
   }
 }

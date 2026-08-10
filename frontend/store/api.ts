@@ -441,6 +441,14 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/admin/pools/${id}/close`, method: 'PATCH' }),
       invalidatesTags: ['Pools'],
     }),
+    updateSubscriptionPool: builder.mutation<SubscriptionPool, { id: string; body: Partial<SubscriptionPoolInput> }>({
+      query: ({ id, body }) => ({ url: `/admin/pools/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Pools'],
+    }),
+    deleteSubscriptionPool: builder.mutation<{ id: string }, string>({
+      query: (id) => ({ url: `/admin/pools/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Pools'],
+    }),
     getAdminStats: builder.query<AdminStats, void>({
       query: () => '/admin/stats',
     }),
@@ -563,6 +571,8 @@ export const {
   useListSubscriptionPoolsQuery,
   useCreateSubscriptionPoolMutation,
   useCloseSubscriptionPoolMutation,
+  useUpdateSubscriptionPoolMutation,
+  useDeleteSubscriptionPoolMutation,
   useGetAdminStatsQuery,
   useGetUsersQuery,
   useUpdateUserRoleMutation,
