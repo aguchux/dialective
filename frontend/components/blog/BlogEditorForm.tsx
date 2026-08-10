@@ -27,9 +27,7 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
   const router = useRouter();
   const editorRef = useRef<BlogEditorHandle>(null);
   const [title, setTitle] = useState(post?.title ?? '');
-  const [slug, setSlug] = useState(post?.slug ?? '');
-  const [slugTouched, setSlugTouched] = useState(Boolean(post?.slug));
-  const [tag, setTag] = useState(post?.tag ?? '');
+  const [slugPreview, setSlugPreview] = useState(post?.slug ?? '');
   const [status, setStatus] = useState<BlogPostStatus>(post?.status ?? 'DRAFT');
   const [coverImageUrl, setCoverImageUrl] = useState(post?.coverImageUrl ?? '');
   const [coverImageKey, setCoverImageKey] = useState(post?.coverImageKey ?? '');
@@ -69,7 +67,7 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
 
   const handleTitle = (value: string) => {
     setTitle(value);
-    if (!slugTouched) setSlug(toSlug(value));
+    if (!post) setSlugPreview(toSlug(value));
   };
 
   const updateSeoPreview = useCallback((document: EditorDocument) => {
@@ -84,12 +82,13 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
     setIsSaving(true);
     try {
       const body = {
-        title: title.trim(), slug: slug || undefined, tag: tag || undefined, content,
+        title: title.trim(), content,
         coverImageUrl: coverImageUrl || undefined, coverImageKey: coverImageKey || undefined,
         coverImageAlt: coverImageAlt || undefined, status,
       };
       if (post) {
-        await updatePost({ id: post.id, body }).unwrap();
+        const saved = await updatePost({ id: post.id, body }).unwrap();
+        setSlugPreview(saved.slug);
       } else {
         await createPost(body).unwrap();
       }
@@ -123,10 +122,10 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
         <div className="grid content-start gap-5">
           <section className="grid gap-4 rounded-lg border border-line bg-white p-5">
             <label className="grid gap-1.5 font-bold">Title<input className={`${fieldClass} text-xl font-extrabold`} maxLength={180} onChange={(event) => handleTitle(event.target.value)} value={title} /></label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-1.5 font-bold">Slug<input className={fieldClass} maxLength={190} onChange={(event) => { setSlugTouched(true); setSlug(toSlug(event.target.value)); }} value={slug} /></label>
-              <label className="grid gap-1.5 font-bold">Category<input className={fieldClass} maxLength={80} onChange={(event) => setTag(event.target.value)} value={tag} /></label>
-            </div>
+            <p className="text-sm text-muted">
+              Slug: <span className="font-mono">{post ? `${slugPreview || 'post'}` : `${toSlug(title) || 'post'}-<id>`}</span>
+              {' '}&mdash; generated automatically from the title, updates whenever the title changes.
+            </p>
           </section>
 
           <BlogEditor ref={editorRef} data={initialData} onChange={updateSeoPreview} uploadMedia={uploadMedia} />
@@ -152,7 +151,7 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
 
           <section className="grid gap-2 rounded-lg border border-line bg-white p-4">
             <h2 className="text-base font-black">Search preview</h2>
-            <p className="truncate text-sm text-[#2463c5]">dialectlibrary.com/blog/{slug || 'post'}</p>
+            <p className="truncate text-sm text-[#2463c5]">dialectlibrary.com/blog/{post ? slugPreview || 'post' : `${toSlug(title) || 'post'}-...`}</p>
             <p className="font-extrabold leading-snug">{title || 'Post title'}</p>
             <p className="text-sm leading-relaxed text-muted">{seoExcerpt || 'The first paragraph becomes the search description.'}</p>
           </section>

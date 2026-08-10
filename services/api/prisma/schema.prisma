@@ -342,9 +342,8 @@ model DataAccessLead {
 /// from the first non-empty paragraph and is the canonical SEO description.
 model BlogPost {
   id              String         @id @default(uuid())
-  slug            String         @unique
+  slug            String         @unique // always `${slugified title}-${id}`; regenerated on title change
   title           String
-  tag             String?
   content         Json
   excerpt         String
   coverImageUrl   String?

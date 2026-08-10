@@ -18,7 +18,7 @@ export async function LandingBlog() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {posts.map((post) => <article className="group grid content-start gap-3 overflow-hidden rounded-lg border border-[rgba(5,5,5,0.1)] bg-white/80" key={post.slug}>
           {post.coverImageUrl && <Link className="relative block aspect-video overflow-hidden" href={`/blog/${post.slug}`}><Image alt={post.coverImageAlt || ''} className="object-cover transition-transform duration-300 group-hover:scale-[1.03]" fill sizes="(max-width: 768px) 100vw, 280px" src={post.coverImageUrl} /></Link>}
-          <div className="grid gap-2 p-4">{post.tag && <span className="text-xs font-bold uppercase text-accent">{post.tag}</span>}<h3 className="text-lg font-extrabold leading-snug"><Link className="text-[#050505] no-underline hover:text-accent" href={`/blog/${post.slug}`}>{post.title}</Link></h3><p className="line-clamp-3 leading-snug text-[rgba(5,5,5,0.68)]">{post.excerpt}</p><time className="text-xs text-muted" dateTime={post.publishedAt ?? undefined}>{formatDate(post.publishedAt)}</time></div>
+          <div className="grid gap-2 p-4"><h3 className="text-lg font-extrabold leading-snug"><Link className="text-[#050505] no-underline hover:text-accent" href={`/blog/${post.slug}`}>{post.title}</Link></h3><p className="line-clamp-3 leading-snug text-[rgba(5,5,5,0.68)]">{post.excerpt}</p><time className="text-xs text-muted" dateTime={post.publishedAt ?? undefined}>{formatDate(post.publishedAt)}</time></div>
         </article>)}
       </div>
     </section>

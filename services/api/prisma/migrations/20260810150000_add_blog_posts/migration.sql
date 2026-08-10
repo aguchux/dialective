@@ -4,7 +4,6 @@ CREATE TABLE "blog_posts" (
     "id" UUID NOT NULL,
     "slug" TEXT NOT NULL,
     "title" TEXT NOT NULL,
-    "tag" TEXT,
     "content" JSONB NOT NULL,
     "excerpt" TEXT NOT NULL,
     "coverImageUrl" TEXT,

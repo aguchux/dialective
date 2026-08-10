@@ -146,7 +146,6 @@ export interface BlogPost {
   id: string;
   slug: string;
   title: string;
-  tag: string | null;
   content: EditorDocument;
   excerpt: string;
   coverImageUrl: string | null;
@@ -162,8 +161,6 @@ export interface BlogPost {
 
 export interface BlogPostInput {
   title: string;
-  slug?: string;
-  tag?: string;
   content: EditorDocument;
   coverImageUrl?: string;
   coverImageKey?: string;

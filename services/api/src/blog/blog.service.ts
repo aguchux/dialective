@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { BlogPostStatus, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBlogPostDto } from './dto/create-blog-post.dto';
@@ -7,6 +8,14 @@ import { ReorderBlogPostsDto } from './dto/reorder-blog-posts.dto';
 import { calculateReadMinutes, deriveExcerpt, EditorDocument, validateEditorDocument } from './blog-content.util';
 
 const authorSelect = { email: true } as const;
+
+// Slugs are never client-supplied: always `${slugified title}-${id}`, so
+// uniqueness comes for free from the id and the URL stays stable-ish while
+// still reflecting title edits (see BlogService.update).
+function slugFor(title: string, id: string): string {
+  const base = title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 150);
+  return `${base || 'post'}-${id}`;
+}
 
 @Injectable()
 export class BlogService {
@@ -17,7 +26,7 @@ export class BlogService {
       where: { status: BlogPostStatus.PUBLISHED },
       orderBy: [{ sortOrder: 'asc' }, { publishedAt: 'desc' }],
       select: {
-        id: true, slug: true, title: true, tag: true, excerpt: true, content: true,
+        id: true, slug: true, title: true, excerpt: true, content: true,
         coverImageUrl: true, coverImageAlt: true, publishedAt: true,
         createdAt: true, updatedAt: true,
       },
@@ -32,7 +41,7 @@ export class BlogService {
     const post = await this.prisma.blogPost.findFirst({
       where: { slug, status: BlogPostStatus.PUBLISHED },
       select: {
-        id: true, slug: true, title: true, tag: true, content: true, excerpt: true,
+        id: true, slug: true, title: true, content: true, excerpt: true,
         coverImageUrl: true, coverImageAlt: true, publishedAt: true,
         createdAt: true, updatedAt: true,
       },
@@ -59,8 +68,8 @@ export class BlogService {
 
   async create(authorId: string, dto: CreateBlogPostDto) {
     const document = validateEditorDocument(dto.content);
-    const slug = dto.slug ?? slugify(dto.title);
-    await this.assertSlugAvailable(slug);
+    const id = randomUUID();
+    const title = dto.title.trim();
     const lastPost = await this.prisma.blogPost.findFirst({ orderBy: { sortOrder: 'desc' }, select: { sortOrder: true } });
     const status = dto.status ?? BlogPostStatus.DRAFT;
     const excerpt = deriveExcerpt(document);
@@ -70,9 +79,9 @@ export class BlogService {
 
     return this.prisma.blogPost.create({
       data: {
-        title: dto.title.trim(),
-        slug,
-        tag: cleanOptional(dto.tag),
+        id,
+        title,
+        slug: slugFor(title, id),
         content: document as unknown as Prisma.InputJsonValue,
         excerpt,
         coverImageUrl: cleanOptional(dto.coverImageUrl),
@@ -89,7 +98,7 @@ export class BlogService {
 
   async update(id: string, dto: UpdateBlogPostDto) {
     const current = await this.getAdmin(id);
-    if (dto.slug && dto.slug !== current.slug) await this.assertSlugAvailable(dto.slug, id);
+    const title = dto.title !== undefined ? dto.title.trim() : undefined;
     const document = dto.content ? validateEditorDocument(dto.content) : undefined;
     const nextStatus = dto.status ?? current.status;
     const excerpt = document ? deriveExcerpt(document) : current.excerpt;
@@ -100,9 +109,7 @@ export class BlogService {
     return this.prisma.blogPost.update({
       where: { id },
       data: {
-        ...(dto.title !== undefined && { title: dto.title.trim() }),
-        ...(dto.slug !== undefined && { slug: dto.slug }),
-        ...(dto.tag !== undefined && { tag: cleanOptional(dto.tag) }),
+        ...(title !== undefined && { title, slug: slugFor(title, id) }),
         ...(document && {
           content: document as unknown as Prisma.InputJsonValue,
           excerpt,
@@ -137,18 +144,6 @@ export class BlogService {
     return { id, deleted: true };
   }
 
-  private async assertSlugAvailable(slug: string, excludingId?: string) {
-    const existing = await this.prisma.blogPost.findFirst({
-      where: { slug, ...(excludingId && { id: { not: excludingId } }) },
-      select: { id: true },
-    });
-    if (existing) throw new ConflictException('A blog post already uses this slug');
-  }
-}
-
-function slugify(value: string): string {
-  const slug = value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 190);
-  return slug || `post-${Date.now()}`;
 }
 
 function cleanOptional(value?: string): string | null {

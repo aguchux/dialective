@@ -10,7 +10,6 @@ export interface PublicBlogPost {
   id: string;
   slug: string;
   title: string;
-  tag: string | null;
   excerpt: string;
   coverImageUrl: string | null;
   coverImageAlt: string | null;

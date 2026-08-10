@@ -36,7 +36,6 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       <article>
         <header className="mx-auto grid max-w-4xl gap-5 px-4 pb-8 pt-6 md:px-8">
           <Breadcrumbs items={[{ href: '/blog', label: 'Blog' }, { label: post.title }]} />
-          {post.tag && <span className="w-fit text-sm font-extrabold uppercase text-accent">{post.tag}</span>}
           <h1 className="max-w-3xl text-4xl font-black leading-tight md:text-6xl">{post.title}</h1>
           <p className="max-w-3xl text-xl leading-relaxed text-muted">{post.excerpt}</p>
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted"><span>Dialect Library</span><span aria-hidden="true">&middot;</span><time dateTime={post.publishedAt ?? undefined}>{formatDate(post.publishedAt)}</time><span aria-hidden="true">&middot;</span><span>{estimateReadMinutes(post)} min read</span></div>
