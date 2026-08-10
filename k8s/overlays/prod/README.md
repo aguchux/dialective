@@ -48,6 +48,7 @@ Two buckets, created out-of-band (these manifests don't provision them):
 
 - `dialectiva-submissions` — trainer-uploaded audio. Private; `api` issues presigned PUT URLs (`POST /submissions/upload-url`) so trainer clients upload directly without routing bytes through `api`. `vosk-worker` reads via its `spaces-creds` credentials, not a public URL.
 - `dialectiva-prompt-audio` — MMS-TTS-generated prompt audio, written by `prompt-audio-service`. Objects are written `public-read` since trainer clients play this audio directly; front it with Spaces CDN if bandwidth costs matter later.
+- `dialectiva-blog-media` — admin-uploaded blog images and videos. The API signs `public-read` PUTs because published pages embed these objects directly.
 
 **CORS on the submissions bucket (manual, DO console — not managed by these manifests):** since the presigned PUT is issued to a *browser*, not curl/a server, the bucket itself needs a CORS policy or the PUT fails client-side with a CORS error before it ever reaches Spaces — this is bucket-level config, independent of `api`'s own `CORS_ALLOWED_ORIGINS`. Set it under Spaces → the bucket → Settings → CORS Configurations (or `s3api put-bucket-cors` against the Spaces endpoint):
 

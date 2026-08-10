@@ -128,6 +128,57 @@ export interface PlatformSettingsInput {
   leadsNotificationAddress?: string | null;
 }
 
+export type BlogPostStatus = 'DRAFT' | 'PUBLISHED';
+
+export interface EditorBlock {
+  id?: string;
+  type: string;
+  data: Record<string, unknown>;
+}
+
+export interface EditorDocument {
+  time?: number;
+  version?: string;
+  blocks: EditorBlock[];
+}
+
+export interface BlogPost {
+  id: string;
+  slug: string;
+  title: string;
+  tag: string | null;
+  content: EditorDocument;
+  excerpt: string;
+  coverImageUrl: string | null;
+  coverImageKey: string | null;
+  coverImageAlt: string | null;
+  status: BlogPostStatus;
+  sortOrder: number;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  author: { email: string };
+}
+
+export interface BlogPostInput {
+  title: string;
+  slug?: string;
+  tag?: string;
+  content: EditorDocument;
+  coverImageUrl?: string;
+  coverImageKey?: string;
+  coverImageAlt?: string;
+  status?: BlogPostStatus;
+}
+
+export interface BlogMediaUpload {
+  url: string;
+  key: string;
+  bucket: string;
+  publicUrl: string;
+  expiresInSeconds: number;
+}
+
 export interface ApiErrorShape {
   statusCode?: number;
   message?: string | string[];
@@ -162,7 +213,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings'],
+  tagTypes: ['Auth', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts'],
   endpoints: (builder) => ({
     register: builder.mutation<AuthResult, { email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -308,6 +359,33 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['PlatformSettings'],
     }),
+    getAdminBlogPosts: builder.query<BlogPost[], void>({
+      query: () => '/blog/admin/posts',
+      providesTags: ['BlogPosts'],
+    }),
+    getAdminBlogPost: builder.query<BlogPost, string>({
+      query: (id) => `/blog/admin/posts/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'BlogPosts', id }],
+    }),
+    createBlogPost: builder.mutation<BlogPost, BlogPostInput>({
+      query: (body) => ({ url: '/blog/admin/posts', method: 'POST', body }),
+      invalidatesTags: ['BlogPosts'],
+    }),
+    updateBlogPost: builder.mutation<BlogPost, { id: string; body: Partial<BlogPostInput> }>({
+      query: ({ id, body }) => ({ url: `/blog/admin/posts/${id}`, method: 'PATCH', body }),
+      invalidatesTags: (_result, _error, { id }) => ['BlogPosts', { type: 'BlogPosts', id }],
+    }),
+    deleteBlogPost: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/blog/admin/posts/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['BlogPosts'],
+    }),
+    reorderBlogPosts: builder.mutation<{ reordered: number }, { items: { id: string; sortOrder: number }[] }>({
+      query: (body) => ({ url: '/blog/admin/posts/reorder', method: 'PATCH', body }),
+      invalidatesTags: ['BlogPosts'],
+    }),
+    createBlogMediaUpload: builder.mutation<BlogMediaUpload, { fileName: string; contentType: string; kind: 'IMAGE' | 'VIDEO' }>({
+      query: (body) => ({ url: '/blog/admin/media/upload-url', method: 'POST', body }),
+    }),
   }),
 });
 
@@ -339,6 +417,13 @@ export const {
   useDeleteDialectMutation,
   useGetPlatformSettingsQuery,
   useUpdatePlatformSettingsMutation,
+  useGetAdminBlogPostsQuery,
+  useGetAdminBlogPostQuery,
+  useCreateBlogPostMutation,
+  useUpdateBlogPostMutation,
+  useDeleteBlogPostMutation,
+  useReorderBlogPostsMutation,
+  useCreateBlogMediaUploadMutation,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

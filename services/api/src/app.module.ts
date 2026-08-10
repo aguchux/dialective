@@ -12,9 +12,10 @@ import { RequestLoggerMiddleware } from "./common/middleware/request-logger.midd
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { SettingsModule } from "./settings/settings.module";
+import { BlogModule } from "./blog/blog.module";
 
 @Module({
-  imports: [PrismaModule, RedisStreamsModule, AsrRegistryModule, SubmissionsModule, PromptsModule, WordsModule, WalletModule, GeoModule, LeadsModule, AuthModule, SettingsModule],
+  imports: [PrismaModule, RedisStreamsModule, AsrRegistryModule, SubmissionsModule, PromptsModule, WordsModule, WalletModule, GeoModule, LeadsModule, AuthModule, SettingsModule, BlogModule],
   controllers: [HealthController],
 })
 export class AppModule implements NestModule {

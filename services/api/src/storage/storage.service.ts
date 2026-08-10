@@ -37,13 +37,26 @@ export class StorageService {
     bucket: string,
     key: string,
     contentType: string,
+    publicRead = false,
   ): Promise<{ url: string; key: string; expiresInSeconds: number }> {
     const command = new PutObjectCommand({
       Bucket: bucket,
       Key: key,
       ContentType: contentType,
+      ...(publicRead && { ACL: 'public-read' }),
     });
     const url = await getSignedUrl(this.client, command, { expiresIn: PRESIGN_EXPIRY_SECONDS });
     return { url, key, expiresInSeconds: PRESIGN_EXPIRY_SECONDS };
+  }
+
+  getPublicObjectUrl(bucket: string, key: string): string {
+    const endpoint = process.env.SPACES_ENDPOINT;
+    if (!endpoint) {
+      throw new Error('SPACES_ENDPOINT is not set');
+    }
+
+    const host = new URL(endpoint).host;
+    const encodedKey = key.split('/').map(encodeURIComponent).join('/');
+    return `https://${bucket}.${host}/${encodedKey}`;
   }
 }
