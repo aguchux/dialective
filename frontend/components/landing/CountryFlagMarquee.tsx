@@ -3,7 +3,7 @@
 interface MarqueeCountry {
   code: string;
   name: string;
-  _count: { dialects: number };
+  _count?: { dialects: number };
 }
 
 function flagEmoji(code: string): string {
@@ -30,11 +30,12 @@ export function CountryFlagMarquee({ countries }: { countries: MarqueeCountry[] 
               key={`${country.code}-${index}`}
               title={country.name}
             >
-              <span className="text-lg leading-none bg-[rgba(5,5,5,0.05)] rounded-full p-1 flex items-center justify-center" aria-hidden="true">
+              <span className="text-base leading-none bg-[rgba(5,5,5,0.05)] rounded-full p-2 flex items-center justify-center" aria-hidden="true">
                 {flagEmoji(country.code)}
               </span>
               <span className="whitespace-nowrap text-[rgba(5,5,5,0.72)]">
-                {country.name} ({country._count.dialects})
+                {country.name}
+                {country._count ? ` (${country._count.dialects})` : ''}
               </span>
             </div>
           );

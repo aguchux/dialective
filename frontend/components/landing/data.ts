@@ -68,6 +68,11 @@ export const howItWorksSteps = [
 
 export const landingStats = [
   {
+    label: 'Countries',
+    value: '0',
+    detail: 'Active countries',
+  },
+  {
     label: 'Dialects',
     value: '4',
     detail: 'Active tracks',

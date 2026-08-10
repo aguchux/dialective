@@ -17,15 +17,14 @@ interface Country {
   id: string;
   code: string;
   name: string;
-  _count: { dialects: number };
+  _count?: { dialects: number };
 }
 
-async function getDialectCount(): Promise<number | null> {
+async function getGeoStats(): Promise<GeoStats | null> {
   try {
     const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/geo/stats`, { next: { revalidate: 300 } });
     if (!res.ok) return null;
-    const stats: GeoStats = await res.json();
-    return stats.dialectCount;
+    return res.json();
   } catch {
     return null;
   }
@@ -42,7 +41,9 @@ async function getCountries(): Promise<Country[]> {
 }
 
 export async function LandingPage() {
-  const [dialectCount, countries] = await Promise.all([getDialectCount(), getCountries()]);
+  const [geoStats, countries] = await Promise.all([getGeoStats(), getCountries()]);
+  const dialectCount = geoStats?.dialectCount ?? null;
+  const countryCount = geoStats?.countryCount ?? null;
 
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-white text-[#050505]">
@@ -52,7 +53,7 @@ export async function LandingPage() {
         <LandingHeader />
         <div className="px-4 md:px-[3.4rem]">
           <LandingHero />
-          <LandingStats dialectCount={dialectCount} />
+          <LandingStats dialectCount={dialectCount} countryCount={countryCount} />
           <ContributorRail dialectCount={dialectCount} />
           <HowItWorks />
           <CountryFlagMarquee countries={countries} />

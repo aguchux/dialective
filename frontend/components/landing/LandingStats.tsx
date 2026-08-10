@@ -2,12 +2,19 @@ import { landingStats } from './data';
 
 interface LandingStatsProps {
   dialectCount: number | null;
+  countryCount: number | null;
 }
 
-export function LandingStats({ dialectCount }: LandingStatsProps) {
-  const stats = landingStats.map((stat) =>
-    stat.label === 'Dialects' && dialectCount !== null ? { ...stat, value: String(dialectCount) } : stat,
-  );
+export function LandingStats({ dialectCount, countryCount }: LandingStatsProps) {
+  const stats = landingStats.map((stat) => {
+    if (stat.label === 'Dialects' && dialectCount !== null) {
+      return { ...stat, value: String(dialectCount) };
+    }
+    if (stat.label === 'Countries' && countryCount !== null) {
+      return { ...stat, value: String(countryCount) };
+    }
+    return stat;
+  });
 
   return (
     <section className="mx-auto grid max-w-[820px] gap-3 py-4 md:grid-cols-3" aria-label="Dialect Library platform metrics">
