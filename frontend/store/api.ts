@@ -102,12 +102,16 @@ export interface ReferralSummary {
 
 export interface Wallet {
   balance: string;
+  lockedBalance: string;
   tokenUsdRate: number;
+  taskTokenCost: string;
 }
 
 export type LedgerEntryType =
   | 'DEPOSIT'
   | 'TRAINING_PAYOUT'
+  | 'TASK_LOCK'
+  | 'TASK_REFUND'
   | 'WITHDRAWAL'
   | 'WITHDRAWAL_REVERSED'
   | 'REFERRAL_COMMISSION'
@@ -116,7 +120,9 @@ export type LedgerEntryType =
 
 export interface TrainerDashboardSummary {
   balance: string;
+  lockedBalance: string;
   tokenUsdRate: number;
+  taskTokenCost: string;
   fundedTokens: string;
   trainingEarningsTokens: string;
   referralEarningsTokens: string;
@@ -189,6 +195,7 @@ export interface PlatformSettings {
   taskTokenCost: string | null;
   reverseWordTrainingEnabled: boolean;
   adminPayoutOtpEnabled: boolean;
+  wordStuckTimeoutHours: number;
   updatedAt: string;
   createdAt: string;
 }
@@ -202,6 +209,7 @@ export interface PlatformSettingsInput {
   taskTokenCost?: number | null;
   reverseWordTrainingEnabled?: boolean;
   adminPayoutOtpEnabled?: boolean;
+  wordStuckTimeoutHours?: number;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';

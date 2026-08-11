@@ -26,10 +26,16 @@ export class SettlementService {
 
     const submissionResult = await this.settleSubmissions(bonusCapMultiple);
     const wordRecordingResult = await this.settleWordRecordings(bonusCapMultiple);
+    const rejectedRefundCount = await this.refundRejectedSubmissions();
+    const stuckRefundCount = await this.refundStuckWordRecordings();
 
     const settledCount = submissionResult.settledCount + wordRecordingResult.settledCount;
     const eligibleCount = submissionResult.eligibleCount + wordRecordingResult.eligibleCount;
     const totalPayout = submissionResult.totalPayout + wordRecordingResult.totalPayout;
+
+    if (rejectedRefundCount > 0 || stuckRefundCount > 0) {
+      this.logger.log(`Refunded locked tokens: rejected=${rejectedRefundCount} stuckWordRecordings=${stuckRefundCount}`);
+    }
 
     if (eligibleCount === 0) {
       this.logger.log('Settlement run complete: nothing to settle');
@@ -62,7 +68,15 @@ export class SettlementService {
         const payout = computeTrainingPayout(submission.tokensSpent, submission.score, bonusCapMultiple);
         const { ops } = await creditTrainingPayoutOps(this.prisma, submission.userId, payout, submission.id);
 
+        // Release the lock taken at submit time in the same transaction as
+        // the payout credit -- no window where tokensSpent is neither
+        // locked nor spendable. The lock is replaced, not "returned then
+        // re-spent": the payout (stake + bonus) lands fresh in balance.
         await this.prisma.$transaction([
+          this.prisma.wallet.updateMany({
+            where: { userId: submission.userId },
+            data: { lockedBalance: { decrement: submission.tokensSpent } },
+          }),
           ...ops,
           this.prisma.submission.update({
             where: { id: submission.id },
@@ -107,7 +121,12 @@ export class SettlementService {
         const payout = computeTrainingPayout(recording.tokensSpent, recording.score, bonusCapMultiple);
         const { ops } = await creditTrainingPayoutOps(this.prisma, recording.userId, payout, recording.id);
 
+        // Same lock-release-alongside-payout pattern as settleSubmissions.
         await this.prisma.$transaction([
+          this.prisma.wallet.updateMany({
+            where: { userId: recording.userId },
+            data: { lockedBalance: { decrement: recording.tokensSpent } },
+          }),
           ...ops,
           this.prisma.wordRecording.update({
             where: { id: recording.id },
@@ -125,6 +144,136 @@ export class SettlementService {
     }
 
     return { settledCount, eligibleCount: recordings.length, totalPayout };
+  }
+
+  /**
+   * REJECTED submissions never reach SCORED, so settleSubmissions never
+   * sees them and their locked stake would otherwise sit in lockedBalance
+   * forever. vosk-worker/whisper-worker set REJECTED via a direct SQL
+   * UPDATE (see AGENTS.md "Database access" -- other services touch this
+   * schema only through the generated Prisma client, api owns it), so the
+   * refund itself happens here instead, in the one place already scheduled
+   * to reconcile locked tokens against final outcomes. refundedAt makes
+   * this idempotent/resumable the same way settledAt does for payouts --
+   * a row left REJECTED with refundedAt: null is naturally retried next run.
+   */
+  private async refundRejectedSubmissions(): Promise<number> {
+    const submissions = await this.prisma.submission.findMany({
+      where: { status: 'REJECTED', refundedAt: null },
+      select: { id: true, userId: true, tokensSpent: true },
+    });
+
+    let refundedCount = 0;
+    for (const submission of submissions) {
+      try {
+        await this.prisma.$transaction([
+          this.prisma.wallet.updateMany({
+            where: { userId: submission.userId },
+            data: { lockedBalance: { decrement: submission.tokensSpent }, balance: { increment: submission.tokensSpent } },
+          }),
+          this.prisma.ledgerEntry.create({
+            data: {
+              walletId: (await this.getOrCreateWallet(submission.userId)).id,
+              type: 'TASK_REFUND',
+              amount: submission.tokensSpent,
+              reference: submission.id,
+            },
+          }),
+          this.prisma.submission.update({
+            where: { id: submission.id },
+            data: { refundedAt: new Date() },
+          }),
+        ]);
+        refundedCount += 1;
+      } catch (err) {
+        this.logger.error(
+          `Failed to refund rejected submission=${submission.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    return refundedCount;
+  }
+
+  /**
+   * An ENGLISH_TO_DIALECT WordRecording only scores once a peer's
+   * DIALECT_TO_ENGLISH reverse-validation lands (see WordsService.
+   * scoreReverseValidatedSource) -- if that never happens it stays PENDING
+   * forever by design (avoids punishing a correct translation for someone
+   * else's bad transcription), so its lock needs its own release path
+   * rather than waiting on a SCORED transition that may never come.
+   */
+  private async refundStuckWordRecordings(): Promise<number> {
+    const timeoutHours = await this.getWordStuckTimeoutHours();
+    const cutoff = new Date(Date.now() - timeoutHours * 60 * 60 * 1000);
+
+    const recordings = await this.prisma.wordRecording.findMany({
+      where: {
+        status: 'PENDING',
+        direction: 'ENGLISH_TO_DIALECT',
+        refundedAt: null,
+        userId: { not: null },
+        createdAt: { lt: cutoff },
+      },
+      select: { id: true, userId: true, tokensSpent: true },
+    });
+
+    let refundedCount = 0;
+    for (const recording of recordings) {
+      if (recording.userId === null) continue;
+      try {
+        await this.prisma.$transaction([
+          this.prisma.wallet.updateMany({
+            where: { userId: recording.userId },
+            data: { lockedBalance: { decrement: recording.tokensSpent }, balance: { increment: recording.tokensSpent } },
+          }),
+          this.prisma.ledgerEntry.create({
+            data: {
+              walletId: (await this.getOrCreateWallet(recording.userId)).id,
+              type: 'TASK_REFUND',
+              amount: recording.tokensSpent,
+              reference: recording.id,
+            },
+          }),
+          this.prisma.wordRecording.update({
+            where: { id: recording.id },
+            data: { refundedAt: new Date() },
+          }),
+        ]);
+        refundedCount += 1;
+      } catch (err) {
+        this.logger.error(
+          `Failed to refund stuck wordRecording=${recording.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    return refundedCount;
+  }
+
+  private async getOrCreateWallet(userId: string) {
+    const existing = await this.prisma.wallet.findUnique({ where: { userId } });
+    if (existing) return existing;
+    return this.prisma.wallet.create({ data: { userId } });
+  }
+
+  /**
+   * Mirrors PlatformSettingsService.getWordStuckTimeoutHours's
+   * DB-override/env-fallback logic -- see getTrainingPayoutBonusCapMultiple
+   * above for why this is a duplicated read, not duplicated business logic.
+   */
+  private async getWordStuckTimeoutHours(): Promise<number> {
+    const row = await this.prisma.platformSettings.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    });
+    if (row.wordStuckTimeoutHours) {
+      return row.wordStuckTimeoutHours;
+    }
+    const raw = process.env.WORD_STUCK_TIMEOUT_HOURS ?? '24';
+    const hours = Number(raw);
+    return Number.isFinite(hours) && hours > 0 ? hours : 24;
   }
 
   /**

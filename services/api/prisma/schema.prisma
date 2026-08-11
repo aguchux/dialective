@@ -254,12 +254,13 @@ model Submission {
   asrConfidence     Decimal?         @db.Decimal(5, 4) // mean per-word confidence, 0-1; null when the engine has none (Whisper)
   asrEngine         String?          // "vosk" | "whisper"
   rejectionReason   String?          // duration_out_of_range | mostly_silence | unreadable_audio | unsupported_dialect
-  tokensSpent       Decimal          @default(0) @db.Decimal(20, 8) // task cost debited from the trainer's wallet at submit time
+  tokensSpent       Decimal          @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
   score             Decimal?         @db.Decimal(5, 2) // 0.00-100.00 consensus agreement score, null until SCORED
   isOutlier         Boolean          @default(false) // flagged for human QA review, never auto-rejected -- see AGENTS.md "Consensus scoring"
   payoutTokenAmount Decimal?         @db.Decimal(20, 8) // computed at settlement, null until SETTLED
   scoredAt          DateTime?
   settledAt         DateTime?
+  refundedAt        DateTime?        // set once settlement-job has released a REJECTED submission's lock back to balance
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
@@ -400,11 +401,12 @@ model WordRecording {
   noiseRating       RecordingNoiseRating?
   validationScore   Decimal? @db.Decimal(5, 4) // 0-1 exact-match score, DIALECT_TO_ENGLISH only
   status            SubmissionStatus @default(PENDING) // PENDING|SCORED|SETTLED only -- no ASR step, TRANSCRIBED/REJECTED unused here
-  tokensSpent       Decimal  @default(0) @db.Decimal(20, 8) // task cost debited from the trainer's wallet at submit time
+  tokensSpent       Decimal  @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
   score             Decimal? @db.Decimal(5, 2) // 0.00-100.00, same scale as Submission.score; null until SCORED
   payoutTokenAmount Decimal? @db.Decimal(20, 8) // computed at settlement, null until SETTLED
   scoredAt          DateTime?
   settledAt         DateTime?
+  refundedAt        DateTime? // set once settlement-job releases a stuck-timeout ENGLISH_TO_DIALECT recording's lock back to balance
   createdAt         DateTime @default(now())
 
   @@index([wordId])
@@ -418,7 +420,9 @@ model WordRecording {
 enum LedgerEntryType {
   DEPOSIT
   TRAINING_PAYOUT
-  TASK_SPEND // debited when a trainer submits a task (see Submission.tokensSpent); always negative
+  TASK_SPEND // legacy: pre-lock-model immediate debit, no longer written by submit flows; kept for historical rows
+  TASK_LOCK // submit time: balance -> lockedBalance, always negative (see Wallet.lockedBalance)
+  TASK_REFUND // reject/stuck-timeout: lockedBalance -> balance, always positive, no net loss
   WITHDRAWAL
   WITHDRAWAL_REVERSED
   REFERRAL_COMMISSION // legacy: old single-rate funding commission entries
@@ -439,12 +443,13 @@ enum WithdrawalStatus {
 /// AGENTS.md "Wallet / token pool" and docs/Dialectiva_Business_Plan.md §5
 /// (Utility Token Pool, distinct from the enterprise-funded Reward Pool).
 model Wallet {
-  id        String   @id @default(uuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  balance   Decimal  @default(0) @db.Decimal(20, 8)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance       Decimal  @default(0) @db.Decimal(20, 8) // spendable
+  lockedBalance Decimal  @default(0) @db.Decimal(20, 8) // held pending a submission/recording's outcome -- see TASK_LOCK/TASK_REFUND
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   entries     LedgerEntry[]
   deposits    Deposit[]
@@ -574,6 +579,7 @@ model PlatformSettings {
   taskTokenCost            Decimal? @db.Decimal(20, 8) // overrides TASK_TOKEN_COST when set; tokens debited from a trainer's wallet per submission
   reverseWordTrainingEnabled Boolean @default(false)
   adminPayoutOtpEnabled    Boolean @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
+  wordStuckTimeoutHours    Int      @default(24) // hours an ENGLISH_TO_DIALECT WordRecording can stay PENDING (unmatched by reverse-validation) before settlement-job auto-refunds its locked tokens
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 

@@ -50,7 +50,7 @@ export default function LoginPage() {
       const pending = await apiClient.login(email, password);
       setTicket(pending.ticket);
     } catch (err) {
-      setMessage(err instanceof ApiError && err.status === 401 ? 'Invalid email or password.' : normalizeErrorMessage(err, 'Unable to log in.'));
+      setMessage(err instanceof ApiError ? (err.status === 401 ? 'Invalid email or password.' : err.message) : normalizeErrorMessage(err, 'Unable to log in.'));
     } finally {
       setIsLoggingIn(false);
     }

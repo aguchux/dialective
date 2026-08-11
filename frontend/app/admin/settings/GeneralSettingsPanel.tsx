@@ -18,6 +18,7 @@ export function GeneralSettingsPanel() {
   const [trainingPayoutBonusCapMultiple, setTrainingPayoutBonusCapMultiple] = useState('');
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
   const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
+  const [wordStuckTimeoutHours, setWordStuckTimeoutHours] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +30,7 @@ export function GeneralSettingsPanel() {
     setTrainingPayoutBonusCapMultiple(settings.trainingPayoutBonusCapMultiple ?? '');
     setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
     setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
+    setWordStuckTimeoutHours(String(settings.wordStuckTimeoutHours));
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -46,6 +48,7 @@ export function GeneralSettingsPanel() {
           : {}),
         reverseWordTrainingEnabled,
         adminPayoutOtpEnabled,
+        ...(wordStuckTimeoutHours !== '' ? { wordStuckTimeoutHours: Number(wordStuckTimeoutHours) } : {}),
       }).unwrap();
       setMessage('General settings saved.');
     } catch (err) {
@@ -133,6 +136,25 @@ export function GeneralSettingsPanel() {
               placeholder="Default"
               value={trainingPayoutBonusCapMultiple}
               onChange={(e) => setTrainingPayoutBonusCapMultiple(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="word-stuck-timeout-hours">
+              Unmatched word recording timeout (hours)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              How long a dialect-to-English word recording can wait for peer reverse-validation before its held
+              tokens are automatically returned to the trainer's balance.
+            </p>
+            <input
+              className={inputClass}
+              id="word-stuck-timeout-hours"
+              type="number"
+              step="1"
+              min="1"
+              value={wordStuckTimeoutHours}
+              onChange={(e) => setWordStuckTimeoutHours(e.target.value)}
             />
           </div>
 

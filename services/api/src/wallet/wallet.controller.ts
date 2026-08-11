@@ -91,7 +91,12 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async getWallet(@Req() req: AuthenticatedRequest) {
     const wallet = await this.getOrCreateWallet(req.user.sub);
-    return { balance: wallet.balance.toString(), tokenUsdRate: await this.platformSettings.getTokenUsdRate() };
+    return {
+      balance: wallet.balance.toString(),
+      lockedBalance: wallet.lockedBalance.toString(),
+      tokenUsdRate: await this.platformSettings.getTokenUsdRate(),
+      taskTokenCost: (await this.platformSettings.getTaskTokenCost()).toString(),
+    };
   }
 
   @Get('wallet/dashboard')
@@ -161,7 +166,9 @@ export class WalletController {
 
     return {
       balance: wallet.balance.toString(),
+      lockedBalance: wallet.lockedBalance.toString(),
       tokenUsdRate: await this.platformSettings.getTokenUsdRate(),
+      taskTokenCost: (await this.platformSettings.getTaskTokenCost()).toString(),
       fundedTokens: ledgerAmount(['DEPOSIT']).toString(),
       trainingEarningsTokens: ledgerAmount(['TRAINING_PAYOUT']).toString(),
       referralEarningsTokens: ledgerAmount([

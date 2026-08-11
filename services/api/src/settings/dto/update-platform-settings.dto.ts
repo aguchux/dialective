@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsOptional, IsPositive } from 'class-validator';
+import { IsBoolean, IsEmail, IsInt, IsOptional, IsPositive, Min } from 'class-validator';
 
 export class UpdatePlatformSettingsDto {
   @IsOptional()
@@ -32,4 +32,9 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsBoolean()
   adminPayoutOtpEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  wordStuckTimeoutHours?: number;
 }

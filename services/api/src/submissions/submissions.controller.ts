@@ -106,29 +106,33 @@ export class SubmissionsController {
       create: { userId: req.user.sub },
     });
 
-    // updateMany's WHERE (not a read-then-compare) makes the debit safe
+    // updateMany's WHERE (not a read-then-compare) makes the lock safe
     // under concurrent requests -- same atomic-guard pattern as
     // WalletController.createWithdrawal. Both writes are one $transaction,
     // so if updateMany matches 0 rows, the LedgerEntry create still ran
     // (updateMany matching 0 rows isn't a thrown error) -- delete it
-    // explicitly below rather than assume an implicit rollback.
-    const [debit] = await this.prisma.$transaction([
+    // explicitly below rather than assume an implicit rollback. This moves
+    // taskTokenCost from spendable balance into lockedBalance rather than
+    // debiting it outright -- see Wallet.lockedBalance; the lock releases
+    // back to balance on REJECTED (settlement-job's refund sweep) or is
+    // replaced by the full no-loss payout on SCORED (settlement).
+    const [lock] = await this.prisma.$transaction([
       this.prisma.wallet.updateMany({
         where: { id: wallet.id, balance: { gte: taskTokenCost } },
-        data: { balance: { decrement: taskTokenCost } },
+        data: { balance: { decrement: taskTokenCost }, lockedBalance: { increment: taskTokenCost } },
       }),
       this.prisma.ledgerEntry.create({
         data: {
           walletId: wallet.id,
-          type: 'TASK_SPEND',
+          type: 'TASK_LOCK',
           amount: -taskTokenCost,
           reference: body.submissionId,
         },
       }),
     ]);
 
-    if (debit.count === 0) {
-      await this.prisma.ledgerEntry.deleteMany({ where: { reference: body.submissionId, type: 'TASK_SPEND' } });
+    if (lock.count === 0) {
+      await this.prisma.ledgerEntry.deleteMany({ where: { reference: body.submissionId, type: 'TASK_LOCK' } });
       throw new UnprocessableEntityException(`Insufficient balance: this task costs ${taskTokenCost} tokens`);
     }
 

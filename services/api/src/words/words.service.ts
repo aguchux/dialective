@@ -161,13 +161,16 @@ export class WordsService {
       });
       if (consumed.count === 0) throw new ConflictException('This word has already been submitted');
 
-      // Same atomic-guard debit pattern as SubmissionsController.create --
-      // updateMany's WHERE makes it safe under concurrent requests.
-      const debit = await tx.wallet.updateMany({
+      // Same atomic-guard lock pattern as SubmissionsController.create --
+      // updateMany's WHERE makes it safe under concurrent requests. Moves
+      // taskTokenCost from spendable balance into lockedBalance rather than
+      // debiting outright; released back to balance on a stuck-timeout
+      // refund or replaced by the no-loss payout once SCORED.
+      const lock = await tx.wallet.updateMany({
         where: { id: wallet.id, balance: { gte: taskTokenCost } },
-        data: { balance: { decrement: taskTokenCost } },
+        data: { balance: { decrement: taskTokenCost }, lockedBalance: { increment: taskTokenCost } },
       });
-      if (debit.count === 0) {
+      if (lock.count === 0) {
         throw new UnprocessableEntityException(`Insufficient balance: this task costs ${taskTokenCost} tokens`);
       }
 
@@ -195,7 +198,7 @@ export class WordsService {
       await tx.ledgerEntry.create({
         data: {
           walletId: wallet.id,
-          type: 'TASK_SPEND',
+          type: 'TASK_LOCK',
           amount: -taskTokenCost,
           reference: created.id,
         },

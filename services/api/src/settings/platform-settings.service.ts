@@ -83,6 +83,11 @@ export class PlatformSettingsService {
     return row.adminPayoutOtpEnabled;
   }
 
+  async getWordStuckTimeoutHours(): Promise<number> {
+    const row = await this.getRow();
+    return row.wordStuckTimeoutHours;
+  }
+
   async getResendFromAddress(): Promise<string> {
     const row = await this.getRow();
     return row.resendFromAddress ?? process.env.RESEND_FROM_ADDRESS ?? 'noreply@dialectlibrary.com';
@@ -104,6 +109,7 @@ export class PlatformSettingsService {
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
+      wordStuckTimeoutHours: row.wordStuckTimeoutHours,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -118,6 +124,7 @@ export class PlatformSettingsService {
     taskTokenCost?: number | null;
     reverseWordTrainingEnabled?: boolean;
     adminPayoutOtpEnabled?: boolean;
+    wordStuckTimeoutHours?: number;
   }) {
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
@@ -133,6 +140,7 @@ export class PlatformSettingsService {
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
+      wordStuckTimeoutHours: row.wordStuckTimeoutHours,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

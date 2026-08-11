@@ -85,6 +85,8 @@ const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'profile']
 const activityLabels: Record<LedgerEntryType, string> = {
   DEPOSIT: 'Token funding',
   TRAINING_PAYOUT: 'Training payout',
+  TASK_LOCK: 'Tokens held for task',
+  TASK_REFUND: 'Held tokens returned',
   WITHDRAWAL: 'Payout request',
   WITHDRAWAL_REVERSED: 'Payout returned',
   REFERRAL_COMMISSION: 'Referral bonus',
@@ -100,12 +102,26 @@ export function TrainerDashboard() {
   const searchParams = useSearchParams();
   const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);
   const [trainingOpen, setTrainingOpen] = useState(false);
+  const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
   const requestedView = searchParams.get('view');
   const displayName = [session?.user.firstName, session?.user.lastName].filter(Boolean).join(' ');
   const activeView = allViewIds.includes(requestedView as DashboardView) ? (requestedView as DashboardView) : 'tokens';
   const { data, isLoading, isFetching, error, refetch } = useGetTrainerDashboardQuery(undefined, {
     skip: status !== 'authenticated' || session?.user.role === 'ADMIN',
   });
+
+  // Pre-check affordability client-side so a trainer sees an actionable
+  // "fund your account" prompt instead of only discovering insufficient
+  // balance after WordTrainingDialog's submissions.controller.ts/
+  // words.service.ts 422 -- that server-side guard stays the authoritative
+  // backstop, this just moves the failure earlier.
+  function handleStartTask() {
+    if (data && Number(data.balance) < Number(data.taskTokenCost)) {
+      setLowBalanceOpen(true);
+      return;
+    }
+    setTrainingOpen(true);
+  }
 
   useEffect(() => {
     if (status !== 'authenticated') return;
@@ -157,7 +173,7 @@ export function TrainerDashboard() {
             </div>
             <button
               className="ml-auto inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
-              onClick={() => setTrainingOpen(true)}
+              onClick={handleStartTask}
               type="button"
             >
               Start task <ArrowRight className="size-4" aria-hidden="true" />
@@ -177,15 +193,41 @@ export function TrainerDashboard() {
               dialectTag={session.user.dialectTag}
               email={session.user.email ?? ''}
               refreshing={isFetching}
-              onStartTask={() => setTrainingOpen(true)}
+              onStartTask={handleStartTask}
             />
           )}
         </main>
 
         <MobileNavigation activeView={activeView} />
         <WordTrainingDialog onOpenChange={setTrainingOpen} open={trainingOpen} />
+        <LowBalanceDialog
+          onOpenChange={setLowBalanceOpen}
+          open={lowBalanceOpen}
+          taskTokenCost={data?.taskTokenCost ?? '0'}
+        />
       </PortalContainerProvider>
     </div>
+  );
+}
+
+function LowBalanceDialog({
+  open,
+  onOpenChange,
+  taskTokenCost,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  taskTokenCost: string;
+}) {
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent
+        title="Fund your account to continue"
+        description={`Starting a task holds ${formatTokens(taskTokenCost)} tokens from your balance until it's scored. You don't have enough available tokens to cover that right now.`}
+      >
+        <FundTokensDialog />
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -331,8 +373,9 @@ function TokensView({ data, refreshing }: { data: TrainerDashboardSummary; refre
           <FundTokensDialog />
         </div>
       </div>
-      <section className="grid gap-3 sm:grid-cols-3" aria-label="Token balance">
+      <section className="grid gap-3 sm:grid-cols-4" aria-label="Token balance">
         <MetricCard icon={WalletCards} label="Available tokens" value={formatCompactTokensValue(data.balance)} tone="purple" />
+        <MetricCard icon={Clock3} label="Held in review" value={formatCompactTokensValue(data.lockedBalance)} tone="blue" compact />
         <MetricCard icon={Banknote} label="Estimated value" value={formatCompactUsd(usdValue)} tone="green" />
         <MetricCard icon={CircleDollarSign} label="Current rate" value={`${formatUsd(data.tokenUsdRate)} / token`} tone="amber" compact />
       </section>
