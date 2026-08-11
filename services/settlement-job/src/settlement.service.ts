@@ -85,11 +85,17 @@ export class SettlementService {
         // the payout credit -- no window where tokensSpent is neither
         // locked nor spendable. The lock is replaced, not "returned then
         // re-spent": the payout (stake + bonus) lands fresh in balance.
+        // Legacy (pre-locking) rows never locked anything, so skip that decrement for them.
+        const lockOps = (await this.wasLocked(submission.id))
+          ? [
+              this.prisma.wallet.updateMany({
+                where: { userId: submission.userId },
+                data: { lockedBalance: { decrement: submission.tokensSpent } },
+              }),
+            ]
+          : [];
         await this.prisma.$transaction([
-          this.prisma.wallet.updateMany({
-            where: { userId: submission.userId },
-            data: { lockedBalance: { decrement: submission.tokensSpent } },
-          }),
+          ...lockOps,
           ...ops,
           this.prisma.submission.update({
             where: { id: submission.id },
@@ -134,12 +140,18 @@ export class SettlementService {
         const payout = computeTrainingPayout(recording.tokensSpent, recording.score, bonusCapMultiple);
         const { ops } = await creditTrainingPayoutOps(this.prisma, recording.userId, payout, recording.id);
 
-        // Same lock-release-alongside-payout pattern as settleSubmissions.
+        // Same lock-release-alongside-payout pattern as settleSubmissions,
+        // same legacy-row guard.
+        const lockOps = (await this.wasLocked(recording.id))
+          ? [
+              this.prisma.wallet.updateMany({
+                where: { userId: recording.userId },
+                data: { lockedBalance: { decrement: recording.tokensSpent } },
+              }),
+            ]
+          : [];
         await this.prisma.$transaction([
-          this.prisma.wallet.updateMany({
-            where: { userId: recording.userId },
-            data: { lockedBalance: { decrement: recording.tokensSpent } },
-          }),
+          ...lockOps,
           ...ops,
           this.prisma.wordRecording.update({
             where: { id: recording.id },
@@ -179,24 +191,15 @@ export class SettlementService {
     let refundedCount = 0;
     for (const submission of submissions) {
       try {
-        await this.prisma.$transaction([
-          this.prisma.wallet.updateMany({
-            where: { userId: submission.userId },
-            data: { lockedBalance: { decrement: submission.tokensSpent }, balance: { increment: submission.tokensSpent } },
-          }),
-          this.prisma.ledgerEntry.create({
-            data: {
-              walletId: (await this.getOrCreateWallet(submission.userId)).id,
-              type: 'TASK_REFUND',
-              amount: submission.tokensSpent,
-              reference: submission.id,
-            },
-          }),
-          this.prisma.submission.update({
-            where: { id: submission.id },
-            data: { refundedAt: new Date() },
-          }),
-        ]);
+        // Legacy (pre-locking) rows spent balance directly and never locked
+        // anything -- nothing to refund, just mark them resolved.
+        if (await this.wasLocked(submission.id)) {
+          await this.refundTokens(submission.userId, submission.tokensSpent, submission.id);
+        }
+        await this.prisma.submission.update({
+          where: { id: submission.id },
+          data: { refundedAt: new Date() },
+        });
         refundedCount += 1;
       } catch (err) {
         this.logger.error(
@@ -235,24 +238,15 @@ export class SettlementService {
     for (const recording of recordings) {
       if (recording.userId === null) continue;
       try {
-        await this.prisma.$transaction([
-          this.prisma.wallet.updateMany({
-            where: { userId: recording.userId },
-            data: { lockedBalance: { decrement: recording.tokensSpent }, balance: { increment: recording.tokensSpent } },
-          }),
-          this.prisma.ledgerEntry.create({
-            data: {
-              walletId: (await this.getOrCreateWallet(recording.userId)).id,
-              type: 'TASK_REFUND',
-              amount: recording.tokensSpent,
-              reference: recording.id,
-            },
-          }),
-          this.prisma.wordRecording.update({
-            where: { id: recording.id },
-            data: { refundedAt: new Date() },
-          }),
-        ]);
+        // Legacy (pre-locking) rows spent balance directly and never locked
+        // anything -- nothing to refund, just mark them resolved.
+        if (await this.wasLocked(recording.id)) {
+          await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
+        }
+        await this.prisma.wordRecording.update({
+          where: { id: recording.id },
+          data: { refundedAt: new Date() },
+        });
         refundedCount += 1;
       } catch (err) {
         this.logger.error(
@@ -379,20 +373,26 @@ export class SettlementService {
             data: { score, status: 'SETTLED', scoredAt: new Date(), payoutTokenAmount: payout, settledAt: new Date() },
           });
 
-    await this.prisma.$transaction([
-      this.prisma.wallet.updateMany({ where: { userId }, data: { lockedBalance: { decrement: tokensSpent } } }),
-      ...ops,
-      modelUpdate,
-    ]);
+    // Legacy (pre-locking) rows never locked anything -- skip that decrement for them.
+    const lockOps = (await this.wasLocked(id))
+      ? [this.prisma.wallet.updateMany({ where: { userId }, data: { lockedBalance: { decrement: tokensSpent } } })]
+      : [];
+    await this.prisma.$transaction([...lockOps, ...ops, modelUpdate]);
 
     return payout.toNumber();
   }
 
   private async refundTokens(userId: string, tokensSpent: Prisma.Decimal, reference: string): Promise<void> {
+    // Legacy (pre-locking) rows spent balance directly and never locked
+    // anything -- decrementing lockedBalance for them would drive it
+    // negative, so only touch it for rows that actually have a lock.
+    const locked = await this.wasLocked(reference);
     await this.prisma.$transaction([
       this.prisma.wallet.updateMany({
         where: { userId },
-        data: { lockedBalance: { decrement: tokensSpent }, balance: { increment: tokensSpent } },
+        data: locked
+          ? { lockedBalance: { decrement: tokensSpent }, balance: { increment: tokensSpent } }
+          : { balance: { increment: tokensSpent } },
       }),
       this.prisma.ledgerEntry.create({
         data: {
@@ -442,6 +442,22 @@ export class SettlementService {
     const existing = await this.prisma.wallet.findUnique({ where: { userId } });
     if (existing) return existing;
     return this.prisma.wallet.create({ data: { userId } });
+  }
+
+  /**
+   * Rows created before the token-locking feature shipped were debited via
+   * the old TASK_SPEND path (balance only, lockedBalance never touched) --
+   * releasing a lock for those would decrement lockedBalance for money that
+   * was never put there, driving it negative. Every release site checks
+   * this first and only moves lockedBalance for rows that actually have a
+   * matching TASK_LOCK ledger entry.
+   */
+  private async wasLocked(reference: string): Promise<boolean> {
+    const lock = await this.prisma.ledgerEntry.findFirst({
+      where: { reference, type: 'TASK_LOCK' },
+      select: { id: true },
+    });
+    return lock !== null;
   }
 
   /**
