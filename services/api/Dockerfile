@@ -51,8 +51,27 @@ COPY --from=production-dependencies /app/services/api/node_modules ./services/ap
 # resolves at root -- Node's require() only walks up from @nestjs/core's own
 # location, never sideways into services/api/node_modules, so anything
 # nested there is invisible to it. Mirror services/api's local packages into
-# root so root-resolving requires can still find them.
-RUN cp -rn ./services/api/node_modules/. ./node_modules/ 2>/dev/null || true
+# root so root-resolving requires can still find them. A plain `cp -rn`
+# won't do this: busybox cp treats an existing destination directory (e.g.
+# the @nestjs scope folder, already at root) as a full skip rather than
+# merging into it, so scoped packages nested one level under an existing
+# root dir never get copied. Copy each leaf package directory individually
+# instead (via Node, since busybox sh lacks the string/array handling this
+# needs).
+RUN node -e " \
+  const fs = require('fs'), path = require('path'); \
+  const src = './services/api/node_modules', dest = './node_modules'; \
+  function leaves(dir) { \
+    return fs.readdirSync(dir).flatMap((name) => { \
+      if (name.startsWith('@')) return fs.readdirSync(path.join(dir, name)).map((sub) => path.join(name, sub)); \
+      return [name]; \
+    }); \
+  } \
+  for (const rel of leaves(src)) { \
+    const from = path.join(src, rel), to = path.join(dest, rel); \
+    if (!fs.existsSync(to)) { fs.mkdirSync(path.dirname(to), { recursive: true }); fs.cpSync(from, to, { recursive: true }); } \
+  } \
+"
 COPY --from=build /app/services/api/dist ./services/api/dist
 COPY models/asr-registry.yaml ./services/api/dist/models/asr-registry.yaml
 WORKDIR /app/services/api
