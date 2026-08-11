@@ -17,6 +17,7 @@ export function GeneralSettingsPanel() {
   const [taskTokenCost, setTaskTokenCost] = useState('');
   const [trainingPayoutBonusCapMultiple, setTrainingPayoutBonusCapMultiple] = useState('');
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
+  const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +28,7 @@ export function GeneralSettingsPanel() {
     setTaskTokenCost(settings.taskTokenCost ?? '');
     setTrainingPayoutBonusCapMultiple(settings.trainingPayoutBonusCapMultiple ?? '');
     setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
+    setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -43,6 +45,7 @@ export function GeneralSettingsPanel() {
           ? { trainingPayoutBonusCapMultiple: Number(trainingPayoutBonusCapMultiple) }
           : {}),
         reverseWordTrainingEnabled,
+        adminPayoutOtpEnabled,
       }).unwrap();
       setMessage('General settings saved.');
     } catch (err) {
@@ -146,6 +149,25 @@ export function GeneralSettingsPanel() {
                 <span className="block font-bold">Dialect-to-English validation</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   Mix translations submitted by other trainers into word sessions for reverse validation and scoring.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="admin-payout-otp">
+              <input
+                checked={adminPayoutOtpEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="admin-payout-otp"
+                onChange={(event) => setAdminPayoutOtpEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Require OTP for admin payouts</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  When on, issuing a training payout or marking a withdrawal paid requires the acting admin to verify
+                  an emailed one-time code first.
                 </span>
               </span>
             </label>

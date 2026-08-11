@@ -1,0 +1,29 @@
+import { createHash, randomInt } from 'crypto';
+
+/**
+ * Short, human-typeable codes -- unlike token.util.ts's generateOpaqueToken
+ * (a long base64url string meant for a URL, never typed), OTP needs a
+ * 6-digit code. crypto.randomInt is a CSPRNG (unlike Math.random), uniform
+ * over [0, 1_000_000).
+ */
+export function generateOtpCode(): { code: string; hash: string } {
+  const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+  return { code, hash: hashOtpCode(code) };
+}
+
+export function hashOtpCode(code: string): string {
+  return createHash('sha256').update(code).digest('hex');
+}
+
+/**
+ * Deterministic hash of a transaction's identifying details, binding an OTP
+ * code to the exact context it was issued for. Verification re-derives this
+ * from the submitted request body and rejects on mismatch -- stops a valid
+ * {otpRequestId, code} pair from being replayed against a modified
+ * amount/destination/recipient. Key order must stay fixed (JSON.stringify on
+ * an object literal preserves insertion order for string keys), so callers
+ * must build the input object with the same key order every time.
+ */
+export function hashContext(context: Record<string, string | number>): string {
+  return createHash('sha256').update(JSON.stringify(context)).digest('hex');
+}

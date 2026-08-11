@@ -1,4 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { HealthController } from "./health/health.controller";
 import { RedisStreamsModule } from "./redis-streams/redis-streams.module";
 import { AsrRegistryModule } from "./asr-registry/asr-registry.module";
@@ -16,8 +18,24 @@ import { BlogModule } from "./blog/blog.module";
 import { PoolsModule } from "./pools/pools.module";
 
 @Module({
-  imports: [PrismaModule, RedisStreamsModule, AsrRegistryModule, SubmissionsModule, PromptsModule, WordsModule, WalletModule, GeoModule, LeadsModule, AuthModule, SettingsModule, BlogModule, PoolsModule],
+  imports: [
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
+    PrismaModule,
+    RedisStreamsModule,
+    AsrRegistryModule,
+    SubmissionsModule,
+    PromptsModule,
+    WordsModule,
+    WalletModule,
+    GeoModule,
+    LeadsModule,
+    AuthModule,
+    SettingsModule,
+    BlogModule,
+    PoolsModule,
+  ],
   controllers: [HealthController],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSession, signIn, useSession } from 'next-auth/react';
+import { apiClient } from '@/lib/api-client';
 import { normalizeErrorMessage, useRegisterMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
@@ -13,6 +14,8 @@ import { ActionButton } from '@/components/ui/ActionButton';
 const inputClass = 'min-h-10 min-w-0 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
+const secondaryButtonClass =
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-3.5 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
 
 function RegisterContent() {
   const { data: session, status } = useSession();
@@ -27,6 +30,11 @@ function RegisterContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [register] = useRegisterMutation();
 
+  const [ticket, setTicket] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+
   useEffect(() => {
     if (status === 'authenticated') {
       router.replace(roleHomePath(session.user?.role, session.user?.onboardingComplete));
@@ -39,18 +47,44 @@ function RegisterContent() {
     setIsSubmitting(true);
 
     try {
-      await register({ firstName, lastName, email, password, referralCode }).unwrap();
-      const result = await signIn('credentials', { email, password, redirect: false });
-      if (result?.error) {
-        setError('Account created, but automatic sign-in failed. Try logging in.');
-      } else {
-        const freshSession = await getSession();
-        window.location.href = roleHomePath(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
-      }
+      const pending = await register({ firstName, lastName, email, password, referralCode }).unwrap();
+      setTicket(pending.ticket);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Registration failed'));
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleOtpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!ticket) return;
+    setError(null);
+    setIsVerifying(true);
+    try {
+      const result = await signIn('otp-verify', { ticket, code, redirect: false });
+      if (result?.error) {
+        setError('Invalid or expired code.');
+      } else {
+        const freshSession = await getSession();
+        window.location.href = roleHomePath(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
+      }
+    } finally {
+      setIsVerifying(false);
+    }
+  }
+
+  async function handleResend() {
+    if (!ticket) return;
+    setError(null);
+    setIsResending(true);
+    try {
+      await apiClient.resendOtp(ticket);
+      setError('A new code has been sent.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to resend the code.'));
+    } finally {
+      setIsResending(false);
     }
   }
 
@@ -60,6 +94,41 @@ function RegisterContent() {
         <AuthPanel>
           <Breadcrumbs items={[{ label: 'Register' }]} />
           <p className="text-center text-muted">Loading...</p>
+        </AuthPanel>
+      </AuthPage>
+    );
+  }
+
+  if (ticket) {
+    return (
+      <AuthPage>
+        <AuthPanel>
+          <Breadcrumbs items={[{ label: 'Register' }]} />
+          <h1 className="text-center text-[1.75rem] leading-tight">Verify your email</h1>
+          <p className="text-center text-sm text-muted">We sent a 6-digit code to {email}. It expires in 10 minutes.</p>
+
+          <form className="grid gap-2.5" onSubmit={handleOtpSubmit}>
+            <input
+              autoFocus
+              className={`${inputClass} text-center text-lg font-bold tracking-[0.3em]`}
+              inputMode="numeric"
+              maxLength={6}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              pattern="\d{6}"
+              placeholder="000000"
+              required
+              value={code}
+            />
+            <ActionButton className={primaryButtonClass} disabled={code.length !== 6} pending={isVerifying} pendingLabel="Verifying" type="submit">
+              Verify
+            </ActionButton>
+          </form>
+
+          <ActionButton className={secondaryButtonClass} onClick={handleResend} pending={isResending} pendingLabel="Sending">
+            Resend code
+          </ActionButton>
+
+          {error && <Alert>{error}</Alert>}
         </AuthPanel>
       </AuthPage>
     );

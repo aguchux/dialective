@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -24,9 +24,11 @@ import {
   LogOut,
   Mic2,
   Plus,
+  Play,
   RefreshCw,
   Shield as ShieldIcon,
   Sparkles,
+  Square,
   Star,
   User as UserIcon,
   Users,
@@ -52,7 +54,10 @@ import {
   TrainerDashboardSummary,
   TrainerSubmissionSummary,
   normalizeErrorMessage,
+  useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
+  useRequestWithdrawalOtpMutation,
+  useCreateWithdrawalMutation,
   useGetEarningHistoryQuery,
   useGetEarningsChartQuery,
   useGetMySubmissionsQuery,
@@ -321,7 +326,10 @@ function TokensView({ data, refreshing }: { data: TrainerDashboardSummary; refre
     <div>
       <div className="flex items-start justify-between gap-3">
         <ViewHeading title="Tokens" subtitle="Your available platform balance and account activity." refreshing={refreshing} />
-        <FundTokensDialog />
+        <div className="flex shrink-0 items-center gap-2">
+          <WithdrawTokensDialog balance={data.balance} />
+          <FundTokensDialog />
+        </div>
       </div>
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Token balance">
         <MetricCard icon={WalletCards} label="Available tokens" value={formatCompactTokensValue(data.balance)} tone="purple" />
@@ -720,11 +728,97 @@ function TaskCountdownCell({ submission }: { submission: TrainerSubmissionSummar
   return <span className="font-mono font-bold">{formatCountdown(remaining)}</span>;
 }
 
+let activeTaskAudio: HTMLAudioElement | null = null;
+
+function TaskAudioButton({ audioUrl, label }: { audioUrl: string | null; label: string }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      if (activeTaskAudio === audioRef.current) activeTaskAudio = null;
+    }
+  }, []);
+
+  function stopAudio() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+    setIsPlaying(false);
+    setIsLoading(false);
+    if (activeTaskAudio === audio) activeTaskAudio = null;
+  }
+
+  async function togglePlayback() {
+    if (!audioUrl) return;
+    if (isPlaying || isLoading) {
+      stopAudio();
+      return;
+    }
+
+    activeTaskAudio?.pause();
+    if (activeTaskAudio) activeTaskAudio.currentTime = 0;
+
+    const audio = audioRef.current ?? new Audio(audioUrl);
+    audioRef.current = audio;
+    audio.src = audioUrl;
+    audio.currentTime = 0;
+    audio.onended = () => {
+      setIsPlaying(false);
+      setIsLoading(false);
+      if (activeTaskAudio === audio) activeTaskAudio = null;
+    };
+    audio.onpause = () => {
+      setIsPlaying(false);
+      setIsLoading(false);
+    };
+    audio.onerror = () => {
+      setIsPlaying(false);
+      setIsLoading(false);
+      if (activeTaskAudio === audio) activeTaskAudio = null;
+    };
+
+    try {
+      setIsLoading(true);
+      activeTaskAudio = audio;
+      await audio.play();
+      setIsPlaying(true);
+    } catch {
+      if (activeTaskAudio === audio) activeTaskAudio = null;
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  const title = audioUrl ? `${isPlaying || isLoading ? 'Stop' : 'Play'} recording for ${label}` : 'Recording unavailable';
+
+  return (
+    <button
+      aria-label={title}
+      className="grid size-9 shrink-0 place-items-center rounded-full border border-line bg-surface text-accent shadow-sm transition hover:border-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40"
+      disabled={!audioUrl}
+      onClick={togglePlayback}
+      title={title}
+      type="button"
+    >
+      {isPlaying || isLoading ? <Square className="size-4 fill-current" aria-hidden="true" /> : <Play className="ml-0.5 size-4 fill-current" aria-hidden="true" />}
+    </button>
+  );
+}
+
 function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; now: number }) {
   const displayStatus = deriveTaskStatus(submission, now);
   return (
     <tr className="hover:bg-surface-muted/60">
-      <td className="max-w-64 truncate px-5 py-4 font-bold" title={submission.promptText}>{submission.promptText}</td>
+      <td className="max-w-64 px-5 py-4" title={submission.promptText}>
+        <div className="flex min-w-0 items-center gap-3">
+          <TaskAudioButton audioUrl={submission.audioUrl} label={submission.promptText} />
+          <span className="min-w-0 truncate font-bold">{submission.promptText}</span>
+        </div>
+      </td>
       <td className="px-5 py-4 text-muted">{submission.dialectTag.toUpperCase()}</td>
       <td className="px-5 py-4">
         <span className={`w-fit rounded-md px-2.5 py-1 text-xs font-extrabold ${taskStatusTones[displayStatus]}`}>
@@ -748,7 +842,10 @@ function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; n
   return (
     <article className="grid gap-3 p-4">
       <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 truncate font-bold" title={submission.promptText}>{submission.promptText}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <TaskAudioButton audioUrl={submission.audioUrl} label={submission.promptText} />
+          <p className="min-w-0 truncate font-bold" title={submission.promptText}>{submission.promptText}</p>
+        </div>
         <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-extrabold ${taskStatusTones[displayStatus]}`}>
           {taskStatusLabels[displayStatus]}
         </span>
@@ -1068,49 +1165,182 @@ function FundTokensDialog() {
   const [amount, setAmount] = useState('10');
   const [currency, setCurrency] = useState<'USDC' | 'USDT'>('USDT');
   const [message, setMessage] = useState<string | null>(null);
-  const [createDeposit, { isLoading }] = useCreateTokenDepositMutation();
+  const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [requestOtp, { isLoading: isRequestingOtp }] = useRequestDepositOtpMutation();
+  const [createDeposit, { isLoading: isCreating }] = useCreateTokenDepositMutation();
 
-  async function submit(event: FormEvent) {
+  async function submitAmount(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
     try {
-      const result = await createDeposit({ usdAmount: Number(amount), currency }).unwrap();
+      const usdAmount = Number(amount);
+      const result = await requestOtp({ usdAmount, currency }).unwrap();
+      setOtpRequestId(result.otpRequestId);
+    } catch (error) {
+      setMessage(normalizeErrorMessage(error, 'Could not send a confirmation code.'));
+    }
+  }
+
+  async function submitCode(event: FormEvent) {
+    event.preventDefault();
+    if (!otpRequestId) return;
+    setMessage(null);
+    try {
+      const result = await createDeposit({ usdAmount: Number(amount), currency, otpRequestId, code }).unwrap();
       window.location.assign(result.hostedCheckoutUrl);
     } catch (error) {
       setMessage(normalizeErrorMessage(error, 'Could not start token funding.'));
     }
   }
 
+  function reset() {
+    setOtpRequestId(null);
+    setCode('');
+    setMessage(null);
+  }
+
   return (
-    <Dialog>
+    <Dialog onOpenChange={(open) => !open && reset()}>
       <DialogTrigger asChild>
         <button className="mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-extrabold text-white hover:bg-accent-dark md:px-4" type="button">
           <Plus className="size-4" aria-hidden="true" /> <span className="hidden sm:inline">Fund tokens</span><span className="sm:hidden">Fund</span>
         </button>
       </DialogTrigger>
-      <DialogContent title="Fund tokens" description="Continue to secure USDC or USDT checkout.">
-        <form className="grid gap-4" onSubmit={submit}>
-          <label className="grid gap-1.5 text-sm font-bold">
-            Amount in USD
-            <input className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent" min="1" onChange={(event) => setAmount(event.target.value)} required step="0.01" type="number" value={amount} />
-          </label>
-          <fieldset className="grid gap-2">
-            <legend className="mb-1 text-sm font-bold">Payment currency</legend>
-            <div className="grid grid-cols-2 gap-2">
-              {(['USDT', 'USDC'] as const).map((option) => (
-                <label className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border font-extrabold ${currency === option ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`} key={option}>
-                  <input className="sr-only" checked={currency === option} name="currency" onChange={() => setCurrency(option)} type="radio" />
-                  {option}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          {message && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{message}</p>}
-          <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" pending={isLoading} pendingLabel="Opening checkout" type="submit">
-            Continue to checkout <ArrowUpRight className="size-4" aria-hidden="true" />
-          </ActionButton>
-        </form>
-      </DialogContent>
+      {otpRequestId ? (
+        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this purchase.">
+          <form className="grid gap-4" onSubmit={submitCode}>
+            <input
+              autoFocus
+              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-center text-lg font-bold tracking-[0.3em] text-ink outline-none focus:border-accent"
+              inputMode="numeric"
+              maxLength={6}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+              placeholder="000000"
+              required
+              value={code}
+            />
+            {message && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{message}</p>}
+            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" disabled={code.length !== 6} pending={isCreating} pendingLabel="Opening checkout" type="submit">
+              Continue to checkout <ArrowUpRight className="size-4" aria-hidden="true" />
+            </ActionButton>
+          </form>
+        </DialogContent>
+      ) : (
+        <DialogContent title="Fund tokens" description="Continue to secure USDC or USDT checkout.">
+          <form className="grid gap-4" onSubmit={submitAmount}>
+            <label className="grid gap-1.5 text-sm font-bold">
+              Amount in USD
+              <input className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent" min="1" onChange={(event) => setAmount(event.target.value)} required step="0.01" type="number" value={amount} />
+            </label>
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-bold">Payment currency</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {(['USDT', 'USDC'] as const).map((option) => (
+                  <label className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border font-extrabold ${currency === option ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`} key={option}>
+                    <input className="sr-only" checked={currency === option} name="currency" onChange={() => setCurrency(option)} type="radio" />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {message && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{message}</p>}
+            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" pending={isRequestingOtp} pendingLabel="Sending code" type="submit">
+              Send confirmation code
+            </ActionButton>
+          </form>
+        </DialogContent>
+      )}
+    </Dialog>
+  );
+}
+
+function WithdrawTokensDialog({ balance }: { balance: string }) {
+  const [amount, setAmount] = useState('');
+  const [destinationAddress, setDestinationAddress] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [requestOtp, { isLoading: isRequestingOtp }] = useRequestWithdrawalOtpMutation();
+  const [createWithdrawal, { isLoading: isSubmitting }] = useCreateWithdrawalMutation();
+
+  async function submitDetails(event: FormEvent) {
+    event.preventDefault();
+    setMessage(null);
+    try {
+      const result = await requestOtp({ tokenAmount: Number(amount), destinationAddress }).unwrap();
+      setOtpRequestId(result.otpRequestId);
+    } catch (error) {
+      setMessage(normalizeErrorMessage(error, 'Could not send a confirmation code.'));
+    }
+  }
+
+  async function submitCode(event: FormEvent) {
+    event.preventDefault();
+    if (!otpRequestId) return;
+    setMessage(null);
+    try {
+      await createWithdrawal({ tokenAmount: Number(amount), destinationAddress, otpRequestId, code }).unwrap();
+      setMessage(null);
+      setOtpRequestId(null);
+      setAmount('');
+      setDestinationAddress('');
+      setCode('');
+    } catch (error) {
+      setMessage(normalizeErrorMessage(error, 'Could not submit this withdrawal.'));
+    }
+  }
+
+  function reset() {
+    setOtpRequestId(null);
+    setCode('');
+    setMessage(null);
+  }
+
+  return (
+    <Dialog onOpenChange={(open) => !open && reset()}>
+      <DialogTrigger asChild>
+        <button className="mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-3 text-sm font-extrabold text-ink hover:bg-surface-muted md:px-4" type="button">
+          <ArrowUpRight className="size-4" aria-hidden="true" /> <span className="hidden sm:inline">Withdraw</span><span className="sm:hidden">Withdraw</span>
+        </button>
+      </DialogTrigger>
+      {otpRequestId ? (
+        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this withdrawal.">
+          <form className="grid gap-4" onSubmit={submitCode}>
+            <input
+              autoFocus
+              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-center text-lg font-bold tracking-[0.3em] text-ink outline-none focus:border-accent"
+              inputMode="numeric"
+              maxLength={6}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+              placeholder="000000"
+              required
+              value={code}
+            />
+            {message && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{message}</p>}
+            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" disabled={code.length !== 6} pending={isSubmitting} pendingLabel="Submitting" type="submit">
+              Confirm withdrawal
+            </ActionButton>
+          </form>
+        </DialogContent>
+      ) : (
+        <DialogContent title="Withdraw tokens" description={`Available balance: ${formatTokens(balance)} tokens.`}>
+          <form className="grid gap-4" onSubmit={submitDetails}>
+            <label className="grid gap-1.5 text-sm font-bold">
+              Amount in tokens
+              <input className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent" min="0.00000001" onChange={(event) => setAmount(event.target.value)} required step="any" type="number" value={amount} />
+            </label>
+            <label className="grid gap-1.5 text-sm font-bold">
+              USDT destination address
+              <input className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent" onChange={(event) => setDestinationAddress(event.target.value)} placeholder="T..." required type="text" value={destinationAddress} />
+            </label>
+            {message && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{message}</p>}
+            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" pending={isRequestingOtp} pendingLabel="Sending code" type="submit">
+              Send confirmation code
+            </ActionButton>
+          </form>
+        </DialogContent>
+      )}
     </Dialog>
   );
 }

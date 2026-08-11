@@ -18,22 +18,28 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { Throttle } from '@nestjs/throttler';
 import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { LedgerEntryType, Prisma, Role, WithdrawalStatus, creditTrainingPayout } from '@dialectiva/db';
+import { UserThrottlerGuard } from '../common/guards/user-throttler.guard';
+import { LedgerEntryType, OtpPurpose, Prisma, Role, WithdrawalStatus, creditTrainingPayout } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { OtpService } from '../otp/otp.service';
 import { NowPaymentsService } from './nowpayments.service';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
+import { RequestWithdrawalOtpDto } from './dto/request-withdrawal-otp.dto';
+import { RequestDepositOtpDto } from './dto/request-deposit-otp.dto';
 import { ResolveWithdrawalDto } from './dto/resolve-withdrawal.dto';
 import { UpdateReferralSettingsDto } from './dto/update-referral-settings.dto';
 import { CreateTrainingPayoutDto } from './dto/create-training-payout.dto';
 import { ListEarningsDto } from './dto/list-earnings.dto';
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { tokensToUsdt, usdToTokens } from './token-rate.util';
+import { withdrawalContextHash, depositContextHash, adminActionContextHash } from './otp-context.util';
 
 const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.TRAINING_PAYOUT,
@@ -62,6 +68,7 @@ export class WalletController {
     private readonly prisma: PrismaService,
     private readonly nowPayments: NowPaymentsService,
     private readonly platformSettings: PlatformSettingsService,
+    private readonly otp: OtpService,
   ) {}
 
   private async getOrCreateWallet(userId: string) {
@@ -262,9 +269,27 @@ export class WalletController {
     };
   }
 
+  @Post('wallet/deposits/otp')
+  @UseGuards(JwtAuthGuard, UserThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
+  async requestDepositOtp(@Req() req: AuthenticatedRequest, @Body() body: RequestDepositOtpDto) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    const contextHash = depositContextHash({ usdAmount: body.usdAmount, currency: body.currency });
+    return this.otp.issueForUser(req.user.sub, OtpPurpose.DEPOSIT, user.email, contextHash);
+  }
+
   @Post('wallet/deposits')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, UserThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60 * 60 * 1000 } })
   async createDeposit(@Req() req: AuthenticatedRequest, @Body() body: CreateDepositDto) {
+    await this.otp.verify({
+      otpRequestId: body.otpRequestId,
+      userId: req.user.sub,
+      purpose: OtpPurpose.DEPOSIT,
+      code: body.code,
+      contextHash: depositContextHash({ usdAmount: body.usdAmount, currency: body.currency }),
+    });
+
     const wallet = await this.getOrCreateWallet(req.user.sub);
     const rate = await this.platformSettings.getTokenUsdRate();
     const tokenAmount = usdToTokens(body.usdAmount, rate);
@@ -450,8 +475,26 @@ export class WalletController {
   }
 
 
+  @Post('wallet/withdrawals/otp')
+  @UseGuards(JwtAuthGuard, UserThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
+  async requestWithdrawalOtp(@Req() req: AuthenticatedRequest, @Body() body: RequestWithdrawalOtpDto) {
+    const minTokens = await this.platformSettings.getMinWithdrawalTokens();
+    if (body.tokenAmount < minTokens) {
+      throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
+    }
+
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    const contextHash = withdrawalContextHash({
+      tokenAmount: body.tokenAmount,
+      destinationAddress: body.destinationAddress,
+    });
+    return this.otp.issueForUser(req.user.sub, OtpPurpose.WITHDRAWAL, user.email, contextHash);
+  }
+
   @Post('wallet/withdrawals')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, UserThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
   async createWithdrawal(@Req() req: AuthenticatedRequest, @Body() body: CreateWithdrawalDto) {
     const wallet = await this.getOrCreateWallet(req.user.sub);
     const minTokens = await this.platformSettings.getMinWithdrawalTokens();
@@ -459,6 +502,20 @@ export class WalletController {
     if (body.tokenAmount < minTokens) {
       throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
     }
+
+    // Read-only validation here; the actual consume write joins the debit
+    // transaction below so a crash between "OTP consumed" and "debit
+    // applied" can't happen. contextHash re-derived from the submitted body
+    // (not trusted from the client) -- a mismatch means this code was
+    // issued for a different amount/destination than what's being submitted
+    // now, which is exactly the tamper/replay case this binding closes.
+    const otpRow = await this.otp.verifyWithoutConsuming({
+      otpRequestId: body.otpRequestId,
+      userId: req.user.sub,
+      purpose: OtpPurpose.WITHDRAWAL,
+      code: body.code,
+      contextHash: withdrawalContextHash({ tokenAmount: body.tokenAmount, destinationAddress: body.destinationAddress }),
+    });
 
     const rate = await this.platformSettings.getTokenUsdRate();
     const usdtAmount = tokensToUsdt(body.tokenAmount, rate);
@@ -493,13 +550,19 @@ export class WalletController {
           reference: withdrawalId,
         },
       }),
+      this.prisma.otpCode.update({ where: { id: otpRow.id }, data: { consumedAt: new Date() } }),
     ]);
 
     if (debit.count === 0) {
       // Nothing was decremented -- balance was insufficient. Prisma
       // transactions don't support conditional rollback mid-array, so the
-      // WithdrawalRequest/LedgerEntry writes above still happened; undo them
-      // explicitly rather than leaving a phantom pending request.
+      // WithdrawalRequest/LedgerEntry/OtpCode writes above still happened;
+      // undo the withdrawal/ledger rows explicitly rather than leaving a
+      // phantom pending request. The OTP stays consumed deliberately (not
+      // rolled back) -- a code is single-use regardless of whether the
+      // underlying withdrawal succeeded, so a failed attempt can't be
+      // retried with the same code (forces a fresh /otp request, which
+      // re-validates the minimum-withdrawal/context correctly for a retry).
       await this.prisma.$transaction([
         this.prisma.withdrawalRequest.delete({ where: { id: withdrawalId } }),
         this.prisma.ledgerEntry.deleteMany({ where: { reference: withdrawalId } }),
@@ -531,16 +594,41 @@ export class WalletController {
     });
   }
 
+  @Post('admin/withdrawals/:id/resolve/otp')
+  @UseGuards(JwtAuthGuard, RolesGuard, UserThrottlerGuard)
+  @Roles(Role.ADMIN)
+  @Throttle({ default: { limit: 20, ttl: 60 * 60 * 1000 } })
+  async requestResolveWithdrawalOtp(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    const contextHash = adminActionContextHash({ action: 'resolve-withdrawal', id });
+    return this.otp.issueForUser(req.user.sub, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+  }
+
   @Post('admin/withdrawals/:id/resolve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  async resolveWithdrawal(@Param('id') id: string, @Body() body: ResolveWithdrawalDto) {
+  async resolveWithdrawal(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: ResolveWithdrawalDto) {
     const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
     if (!withdrawal) {
       throw new NotFoundException('Withdrawal request not found');
     }
     if (withdrawal.status !== WithdrawalStatus.PENDING) {
       throw new UnprocessableEntityException('Withdrawal request already resolved');
+    }
+
+    // Only the money-moving outcome ("paid") is gated -- rejecting reverses
+    // nothing an admin hasn't already implicitly authorized by declining.
+    if (body.outcome === 'paid' && (await this.platformSettings.isAdminPayoutOtpEnabled())) {
+      if (!body.otpRequestId || !body.code) {
+        throw new UnprocessableEntityException('OTP verification is required to mark this withdrawal paid');
+      }
+      await this.otp.verify({
+        otpRequestId: body.otpRequestId,
+        userId: req.user.sub,
+        purpose: OtpPurpose.ADMIN_PAYOUT,
+        code: body.code,
+        contextHash: adminActionContextHash({ action: 'resolve-withdrawal', id }),
+      });
     }
 
     if (body.outcome === 'paid') {
@@ -660,10 +748,43 @@ export class WalletController {
     };
   }
 
+  @Post('admin/training-payouts/otp')
+  @UseGuards(JwtAuthGuard, RolesGuard, UserThrottlerGuard)
+  @Roles(Role.ADMIN)
+  @Throttle({ default: { limit: 20, ttl: 60 * 60 * 1000 } })
+  async requestTrainingPayoutOtp(@Req() req: AuthenticatedRequest, @Body() body: CreateTrainingPayoutDto) {
+    const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    const contextHash = adminActionContextHash({
+      action: 'training-payout',
+      userId: body.userId,
+      tokenAmount: body.tokenAmount,
+      reference: body.reference,
+    });
+    return this.otp.issueForUser(req.user.sub, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+  }
+
   @Post('admin/training-payouts')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  async createTrainingPayout(@Body() body: CreateTrainingPayoutDto) {
+  async createTrainingPayout(@Req() req: AuthenticatedRequest, @Body() body: CreateTrainingPayoutDto) {
+    if (await this.platformSettings.isAdminPayoutOtpEnabled()) {
+      if (!body.otpRequestId || !body.code) {
+        throw new UnprocessableEntityException('OTP verification is required to issue this payout');
+      }
+      await this.otp.verify({
+        otpRequestId: body.otpRequestId,
+        userId: req.user.sub,
+        purpose: OtpPurpose.ADMIN_PAYOUT,
+        code: body.code,
+        contextHash: adminActionContextHash({
+          action: 'training-payout',
+          userId: body.userId,
+          tokenAmount: body.tokenAmount,
+          reference: body.reference,
+        }),
+      });
+    }
+
     return creditTrainingPayout(this.prisma, body.userId, body.tokenAmount, body.reference);
   }
 

@@ -49,7 +49,7 @@ describe('WalletController NOWPayments IPN', () => {
       verifyIpnSignature: jest.fn().mockReturnValue(true),
       getIpnEventHash: jest.fn().mockReturnValue('event-hash'),
     };
-    const controller = new WalletController(prisma as never, nowPayments as never, {} as never);
+    const controller = new WalletController(prisma as never, nowPayments as never, {} as never, {} as never);
     return { controller, prisma, tx };
   }
 
@@ -131,7 +131,7 @@ describe('WalletController earning history', () => {
         count: jest.fn().mockResolvedValue(11),
       },
     };
-    const controller = new WalletController(prisma as never, {} as never, {} as never);
+    const controller = new WalletController(prisma as never, {} as never, {} as never, {} as never);
 
     await expect(
       controller.listEarnings(

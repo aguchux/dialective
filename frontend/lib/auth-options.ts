@@ -3,6 +3,20 @@ import type { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { apiClient, ApiError, AuthResult, AuthTokens } from './api-client';
 
+/**
+ * Both password login and registration now stop at an emailed OTP step
+ * (see AuthService.login/register on the API) instead of returning tokens
+ * synchronously -- apiClient.login/register return a PendingOtp, not
+ * AuthResult. The login/register pages call apiClient.login/register
+ * directly (not via signIn) to obtain the ticket and render the code-entry
+ * step, then call signIn('otp-verify', {ticket, code}) to finish. This
+ * provider is the only one that ever completes a sign-in for the
+ * password/OTP path; 'Credentials' below intentionally can no longer
+ * succeed synchronously (see its authorize, which now always throws) and is
+ * kept only so NextAuth's provider id space/back-compat callers don't 404 --
+ * it is not wired into any UI anymore.
+ */
+
 const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
 const TRANSIENT_REFRESH_RETRY_MS = 15_000;
 const ROTATION_RESULT_CACHE_MS = 10_000;
@@ -23,11 +37,27 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
+      async authorize() {
+        // Password login now requires an OTP step (see the module doc
+        // comment above) -- the login page calls apiClient.login directly
+        // to get a ticket, then signIn('otp-verify', ...) to finish. This
+        // provider is never invoked by the UI anymore; it can't succeed.
+        return null;
+      },
+    }),
+
+    CredentialsProvider({
+      id: 'otp-verify',
+      name: 'OTP',
+      credentials: {
+        ticket: { label: 'ticket', type: 'text' },
+        code: { label: 'code', type: 'text' },
+      },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        if (!credentials?.ticket || !credentials?.code) {
           return null;
         }
-        const result = await apiClient.login(credentials.email, credentials.password);
+        const result = await apiClient.verifyOtp(credentials.ticket, credentials.code);
         return authResultToNextAuthUser(result);
       },
     }),

@@ -239,7 +239,7 @@ export class WordsService {
     ]);
 
     return {
-      items: items.map((recording) => ({
+      items: await Promise.all(items.map(async (recording) => ({
         id: recording.id,
         promptText:
           recording.direction === 'ENGLISH_TO_DIALECT'
@@ -250,11 +250,12 @@ export class WordsService {
         tokensSpent: recording.tokensSpent.toString(),
         score: recording.score?.toString() ?? null,
         payoutTokenAmount: recording.payoutTokenAmount?.toString() ?? null,
+        audioUrl: (await this.storage.createPresignedDownloadUrl(recording.audioBucket, recording.audioKey)).url,
         rejectionReason: null as string | null,
         createdAt: recording.createdAt,
         scoredAt: recording.scoredAt,
         settledAt: recording.settledAt,
-      })),
+      }))),
       page: query.page,
       pageSize: query.pageSize,
       total,

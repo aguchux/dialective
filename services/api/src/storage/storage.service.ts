@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const PRESIGN_EXPIRY_SECONDS = 15 * 60;
@@ -47,6 +47,15 @@ export class StorageService {
     });
     const url = await getSignedUrl(this.client, command, { expiresIn: PRESIGN_EXPIRY_SECONDS });
     return { url, key, expiresInSeconds: PRESIGN_EXPIRY_SECONDS };
+  }
+
+  async createPresignedDownloadUrl(bucket: string, key: string): Promise<{ url: string; expiresInSeconds: number }> {
+    const command = new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    });
+    const url = await getSignedUrl(this.client, command, { expiresIn: PRESIGN_EXPIRY_SECONDS });
+    return { url, expiresInSeconds: PRESIGN_EXPIRY_SECONDS };
   }
 
   getPublicObjectUrl(bucket: string, key: string): string {

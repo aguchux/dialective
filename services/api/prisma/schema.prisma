@@ -64,6 +64,7 @@ model User {
   refreshTokens  RefreshToken[]
   passwordResets PasswordResetToken[]
   emailVerifications EmailVerificationToken[]
+  otpCodes       OtpCode[]
   wallet         Wallet?
   blogPosts      BlogPost[]
   submissions    Submission[]
@@ -162,6 +163,43 @@ model EmailVerificationToken {
 
   @@index([userId])
   @@map("email_verification_tokens")
+}
+
+enum OtpPurpose {
+  REGISTRATION
+  LOGIN
+  WITHDRAWAL
+  DEPOSIT
+  ADMIN_PAYOUT
+}
+
+/// One-time email codes gating registration/login (2FA) and wallet/admin-payout
+/// transactions. purpose discriminates all five flows in one table -- same
+/// shape/mechanics throughout (generate, hash, TTL, attempts, consume-once),
+/// matching LedgerEntryType's one-table-plus-enum precedent rather than a
+/// table per purpose. ticketHash is used only by REGISTRATION/LOGIN (an
+/// opaque pending-auth ticket minted post-password-check, see AuthService);
+/// contextHash is used only by WITHDRAWAL/DEPOSIT/ADMIN_PAYOUT (a hash of the
+/// canonicalized transaction details, binding a code to the exact
+/// amount/destination it was issued for -- see wallet/otp-context.util.ts --
+/// so a valid code can't be replayed against a modified transaction).
+model OtpCode {
+  id          String     @id @default(uuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose     OtpPurpose
+  codeHash    String
+  ticketHash  String?    @unique
+  contextHash String?
+  attempts    Int        @default(0)
+  maxAttempts Int        @default(5)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime   @default(now())
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+  @@map("otp_codes")
 }
 
 enum SubmissionStatus {
@@ -535,6 +573,7 @@ model PlatformSettings {
   trainingPayoutBonusCapMultiple Decimal? @db.Decimal(5, 2) // overrides TRAINING_PAYOUT_BONUS_CAP_MULTIPLE when set; caps the score-scaled bonus at this multiple of tokensSpent (see computeTrainingPayout)
   taskTokenCost            Decimal? @db.Decimal(20, 8) // overrides TASK_TOKEN_COST when set; tokens debited from a trainer's wallet per submission
   reverseWordTrainingEnabled Boolean @default(false)
+  adminPayoutOtpEnabled    Boolean @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 

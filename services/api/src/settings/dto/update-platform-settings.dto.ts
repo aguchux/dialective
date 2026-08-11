@@ -28,4 +28,8 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsBoolean()
   reverseWordTrainingEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  adminPayoutOtpEnabled?: boolean;
 }

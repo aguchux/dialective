@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSession, signIn, useSession } from 'next-auth/react';
+import { apiClient, ApiError } from '@/lib/api-client';
 import { normalizeErrorMessage, useRequestMagicLinkMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
@@ -30,6 +31,11 @@ export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [requestMagicLink, { isLoading: isRequestingMagicLink }] = useRequestMagicLinkMutation();
 
+  const [ticket, setTicket] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+
   useEffect(() => {
     if (status === 'authenticated') {
       router.replace(authDestination(session.user?.role, session.user?.onboardingComplete));
@@ -41,15 +47,44 @@ export default function LoginPage() {
     setMessage(null);
     setIsLoggingIn(true);
     try {
-      const result = await signIn('credentials', { email, password, redirect: false });
+      const pending = await apiClient.login(email, password);
+      setTicket(pending.ticket);
+    } catch (err) {
+      setMessage(err instanceof ApiError && err.status === 401 ? 'Invalid email or password.' : normalizeErrorMessage(err, 'Unable to log in.'));
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }
+
+  async function handleOtpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!ticket) return;
+    setMessage(null);
+    setIsVerifying(true);
+    try {
+      const result = await signIn('otp-verify', { ticket, code, redirect: false });
       if (result?.error) {
-        setMessage('Invalid email or password.');
+        setMessage('Invalid or expired code.');
       } else {
         const freshSession = await getSession();
         window.location.href = authDestination(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
       }
     } finally {
-      setIsLoggingIn(false);
+      setIsVerifying(false);
+    }
+  }
+
+  async function handleResend() {
+    if (!ticket) return;
+    setMessage(null);
+    setIsResending(true);
+    try {
+      await apiClient.resendOtp(ticket);
+      setMessage('A new code has been sent.');
+    } catch (err) {
+      setMessage(normalizeErrorMessage(err, 'Unable to resend the code.'));
+    } finally {
+      setIsResending(false);
     }
   }
 
@@ -69,6 +104,46 @@ export default function LoginPage() {
         <AuthPanel>
           <Breadcrumbs items={[{ label: 'Login' }]} />
           <p className="text-center text-muted">Loading...</p>
+        </AuthPanel>
+      </AuthPage>
+    );
+  }
+
+  if (ticket) {
+    return (
+      <AuthPage>
+        <AuthPanel>
+          <Breadcrumbs items={[{ label: 'Login' }]} />
+          <h1 className="text-center text-[1.75rem] leading-tight">Enter your code</h1>
+          <p className="text-center text-sm text-muted">We sent a 6-digit code to {email}. It expires in 10 minutes.</p>
+
+          <form className="grid gap-2.5" onSubmit={handleOtpSubmit}>
+            <input
+              autoFocus
+              className={`${inputClass} text-center text-lg font-bold tracking-[0.3em]`}
+              inputMode="numeric"
+              maxLength={6}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              pattern="\d{6}"
+              placeholder="000000"
+              required
+              value={code}
+            />
+            <ActionButton className={primaryButtonClass} disabled={code.length !== 6} pending={isVerifying} pendingLabel="Verifying" type="submit">
+              Verify
+            </ActionButton>
+          </form>
+
+          <div className="grid gap-2">
+            <ActionButton className={secondaryButtonClass} onClick={handleResend} pending={isResending} pendingLabel="Sending">
+              Resend code
+            </ActionButton>
+            <button className="text-sm font-bold text-muted underline" onClick={() => { setTicket(null); setCode(''); setMessage(null); }} type="button">
+              Use a different account
+            </button>
+          </div>
+
+          {message && <Alert>{message}</Alert>}
         </AuthPanel>
       </AuthPage>
     );

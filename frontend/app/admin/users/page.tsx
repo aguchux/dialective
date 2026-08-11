@@ -10,7 +10,9 @@ import {
   normalizeErrorMessage,
   PublicUser,
   useCreateTrainingPayoutMutation,
+  useGetPlatformSettingsQuery,
   useGetUsersQuery,
+  useRequestTrainingPayoutOtpMutation,
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,
 } from '@/store/api';
@@ -189,24 +191,82 @@ export default function AdminUsersPage() {
 }
 
 function AddTokensDialog({ user, onClose }: { user: PublicUser; onClose: () => void }) {
+  const { data: platformSettings } = useGetPlatformSettingsQuery();
+  const otpRequired = platformSettings?.adminPayoutOtpEnabled ?? false;
+
   const [tokenAmount, setTokenAmount] = useState('');
   const [reference, setReference] = useState('');
+  const [code, setCode] = useState('');
+  const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [createPayout, { isLoading }] = useCreateTrainingPayoutMutation();
+  const [requestOtp, { isLoading: isRequestingOtp }] = useRequestTrainingPayoutOtpMutation();
+  const [createPayout, { isLoading: isSubmitting }] = useCreateTrainingPayoutMutation();
+
+  const effectiveReference = reference || 'Manual credit by admin';
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     try {
+      if (otpRequired && !otpRequestId) {
+        const result = await requestOtp({
+          userId: user.id,
+          tokenAmount: Number(tokenAmount),
+          reference: effectiveReference,
+        }).unwrap();
+        setOtpRequestId(result.otpRequestId);
+        return;
+      }
       await createPayout({
         userId: user.id,
         tokenAmount: Number(tokenAmount),
-        reference: reference || `Manual credit by admin`,
+        reference: effectiveReference,
+        ...(otpRequestId ? { otpRequestId, code } : {}),
       }).unwrap();
       onClose();
     } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to add tokens to this trainer.'));
+      setError(normalizeErrorMessage(err, otpRequestId ? 'Unable to verify this code.' : 'Unable to add tokens to this trainer.'));
     }
+  }
+
+  if (otpRequestId) {
+    return (
+      <Dialog open onOpenChange={(open) => !open && onClose()}>
+        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this payout.">
+          <form className="grid gap-3" onSubmit={handleSubmit}>
+            <input
+              autoFocus
+              className={`${inputClass} text-center text-lg font-bold tracking-[0.3em]`}
+              inputMode="numeric"
+              maxLength={6}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              placeholder="000000"
+              required
+              value={code}
+            />
+            {error && (
+              <p className="leading-relaxed text-danger" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60">
+                Cancel
+              </DialogClose>
+              <ActionButton
+                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={code.length !== 6}
+                pending={isSubmitting}
+                pendingLabel="Confirming"
+                type="submit"
+              >
+                Confirm payout
+              </ActionButton>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    );
   }
 
   return (
@@ -255,11 +315,11 @@ function AddTokensDialog({ user, onClose }: { user: PublicUser; onClose: () => v
             </DialogClose>
             <ActionButton
               className="inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-              pending={isLoading}
-              pendingLabel="Adding"
+              pending={isRequestingOtp || isSubmitting}
+              pendingLabel={otpRequired ? 'Sending code' : 'Adding'}
               type="submit"
             >
-              Add tokens
+              {otpRequired ? 'Send confirmation code' : 'Add tokens'}
             </ActionButton>
           </div>
         </form>

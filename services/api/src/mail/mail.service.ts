@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Resend } from 'resend';
+import { OtpPurpose } from '@dialectiva/db';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 
 interface DataAccessLeadNotification {
@@ -55,6 +56,11 @@ export class MailService {
     await this.send(email, 'Your Dialect Library sign-in link', magicLinkHtml(url), `Sign in: ${url}`);
   }
 
+  async sendOtpEmail(email: string, code: string, purpose: OtpPurpose): Promise<void> {
+    const { subject, intro } = otpCopyForPurpose(purpose);
+    await this.send(email, subject, otpHtml(intro, code), `${intro} Your code: ${code} (expires in 10 minutes).`);
+  }
+
   async sendDataAccessLeadNotification(lead: DataAccessLeadNotification): Promise<void> {
     const to = await this.settings.getLeadsNotificationAddress();
     await this.send(to, `New voice data lead: ${lead.name}`, dataAccessLeadHtml(lead), dataAccessLeadText(lead));
@@ -85,6 +91,25 @@ function verifyEmailHtml(url: string): string {
 
 function magicLinkHtml(url: string): string {
   return `<p>Click below to sign in to Dialect Library. This link expires in 15 minutes.</p><p><a href="${url}">${url}</a></p>`;
+}
+
+function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: string } {
+  switch (purpose) {
+    case 'REGISTRATION':
+      return { subject: 'Verify your Dialect Library account', intro: 'Enter this code to verify your new account.' };
+    case 'LOGIN':
+      return { subject: 'Your Dialect Library login code', intro: 'Enter this code to finish signing in.' };
+    case 'WITHDRAWAL':
+      return { subject: 'Confirm your withdrawal', intro: 'Enter this code to confirm your withdrawal request.' };
+    case 'DEPOSIT':
+      return { subject: 'Confirm your deposit', intro: 'Enter this code to confirm your token purchase.' };
+    case 'ADMIN_PAYOUT':
+      return { subject: 'Confirm this payout', intro: 'Enter this code to confirm this admin payout action.' };
+  }
+}
+
+function otpHtml(intro: string, code: string): string {
+  return `<p>${intro}</p><p style="font-size:32px;font-weight:700;letter-spacing:6px;font-family:monospace;">${code}</p><p>This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>`;
 }
 
 function escapeHtml(value: string): string {

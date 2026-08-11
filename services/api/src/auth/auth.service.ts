@@ -8,9 +8,10 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, randomUUID } from 'crypto';
-import { AuthProvider, Role, User, UserStatus } from '@dialectiva/db';
+import { AuthProvider, OtpPurpose, Role, User, UserStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { OtpService } from '../otp/otp.service';
 import { generateOpaqueToken, hashToken } from './token.util';
 import { signAccessToken } from './jwt.util';
 
@@ -27,6 +28,12 @@ export interface AuthTokens {
 
 export interface AuthResult extends AuthTokens {
   user: PublicUser;
+}
+
+export interface PendingOtp {
+  otpRequired: true;
+  ticket: string;
+  expiresInSeconds: number;
 }
 
 export interface PublicUser {
@@ -82,17 +89,28 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly otp: OtpService,
   ) {}
 
   // --- Registration / credentials login ---------------------------------
 
+  /**
+   * Creates the account, then requires an emailed OTP before it's usable --
+   * this is the account's proof the email is reachable, replacing the old
+   * passive verify-link-as-the-only-gate model (tokens no longer issued
+   * synchronously here; see verifyOtp). issueEmailVerification (the
+   * link-based flow) is still called too, kept only as a fallback the user
+   * can fall back on later (e.g. a "resend verification" action) if they
+   * abandon the OTP step mid-registration -- it is no longer the primary
+   * gate.
+   */
   async register(
     email: string,
     password: string,
     firstName: string,
     lastName: string,
     referralCode?: string,
-  ): Promise<AuthResult> {
+  ): Promise<PendingOtp> {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException('An account with this email already exists');
@@ -107,7 +125,8 @@ export class AuthService {
 
     await this.issueEmailVerification(user);
 
-    return this.issueAuthResult(user);
+    const { ticket, expiresInSeconds } = await this.otp.issueWithTicket(user.id, OtpPurpose.REGISTRATION, user.email);
+    return { otpRequired: true, ticket, expiresInSeconds };
   }
 
   /**
@@ -133,7 +152,16 @@ export class AuthService {
     return referrer.id;
   }
 
-  async login(email: string, password: string): Promise<AuthResult> {
+  /**
+   * 2FA: password check only unlocks an OTP step, never tokens directly.
+   * The ticket returned here is minted (via OtpService.issueWithTicket)
+   * only after bcrypt.compare succeeds and the account is active -- it is
+   * never derived from client-supplied data, so a guessed/replayed ticket
+   * without the emailed code is useless, and a guessed code without a
+   * ticket bound to one still-pending OtpCode row is equally useless. See
+   * verifyOtp for the exchange step.
+   */
+  async login(email: string, password: string): Promise<PendingOtp> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user?.passwordHash) {
       throw new UnauthorizedException('Invalid email or password');
@@ -146,7 +174,51 @@ export class AuthService {
 
     this.assertActive(user);
 
+    const { ticket, expiresInSeconds } = await this.otp.issueWithTicket(user.id, OtpPurpose.LOGIN, user.email);
+    return { otpRequired: true, ticket, expiresInSeconds };
+  }
+
+  /**
+   * Shared exchange for both registration and login OTP -- a ticket is
+   * unique to exactly one OtpCode row, whose purpose says which flow is
+   * pending, so one method covers both rather than two near-identical ones.
+   * Registration additionally marks emailVerified (the OTP round trip
+   * itself is the proof of ownership); the separate link-based
+   * issueEmailVerification token isn't touched here, it stays valid
+   * independently as a fallback.
+   */
+  async verifyOtp(ticket: string, code: string): Promise<AuthResult> {
+    const purpose = await this.peekTicketPurpose(ticket);
+
+    if (purpose === OtpPurpose.REGISTRATION) {
+      const row = await this.otp.verifyWithoutConsuming({ ticket, purpose, code });
+      const [, user] = await this.prisma.$transaction([
+        this.prisma.otpCode.update({ where: { id: row.id }, data: { consumedAt: new Date() } }),
+        this.prisma.user.update({ where: { id: row.userId }, data: { emailVerified: new Date() } }),
+      ]);
+      return this.issueAuthResult(user);
+    }
+
+    const row = await this.otp.verify({ ticket, purpose: OtpPurpose.LOGIN, code });
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: row.userId } });
     return this.issueAuthResult(user);
+  }
+
+  /**
+   * Reads only which purpose a ticket belongs to, without validating
+   * expiry/attempts/code -- verifyOtp needs to know which branch to run
+   * before it can run the real validation; defaults to LOGIN when the
+   * ticket doesn't resolve at all, so the real validation (which does throw
+   * a proper UnauthorizedException) is what surfaces the "invalid" error,
+   * not this lookup.
+   */
+  private async peekTicketPurpose(ticket: string): Promise<OtpPurpose> {
+    const row = await this.prisma.otpCode.findUnique({ where: { ticketHash: hashToken(ticket) } });
+    return row?.purpose ?? OtpPurpose.LOGIN;
+  }
+
+  async resendOtp(ticket: string): Promise<void> {
+    await this.otp.resend(ticket, true);
   }
 
   /**

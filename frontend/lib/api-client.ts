@@ -26,6 +26,12 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
+export interface PendingOtp {
+  otpRequired: true;
+  ticket: string;
+  expiresInSeconds: number;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -54,10 +60,16 @@ async function apiFetch<T>(path: string, init: RequestInit): Promise<T> {
 
 export const apiClient = {
   login: (email: string, password: string) =>
-    apiFetch<AuthResult>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    apiFetch<PendingOtp>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
   register: (firstName: string, lastName: string, email: string, password: string) =>
-    apiFetch<AuthResult>('/auth/register', { method: 'POST', body: JSON.stringify({ firstName, lastName, email, password }) }),
+    apiFetch<PendingOtp>('/auth/register', { method: 'POST', body: JSON.stringify({ firstName, lastName, email, password }) }),
+
+  verifyOtp: (ticket: string, code: string) =>
+    apiFetch<AuthResult>('/auth/otp/verify', { method: 'POST', body: JSON.stringify({ ticket, code }) }),
+
+  resendOtp: (ticket: string) =>
+    apiFetch<void>('/auth/otp/resend', { method: 'POST', body: JSON.stringify({ ticket }) }),
 
   refresh: (refreshToken: string) =>
     apiFetch<AuthTokens>('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken }) }),

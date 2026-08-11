@@ -195,7 +195,7 @@ export class SubmissionsController {
     ]);
 
     return {
-      items: items.map((submission) => ({
+      items: await Promise.all(items.map(async (submission) => ({
         id: submission.id,
         promptText: submission.prompt.text,
         dialectTag: submission.dialectTag,
@@ -203,11 +203,12 @@ export class SubmissionsController {
         tokensSpent: submission.tokensSpent.toString(),
         score: submission.score?.toString() ?? null,
         payoutTokenAmount: submission.payoutTokenAmount?.toString() ?? null,
+        audioUrl: (await this.storage.createPresignedDownloadUrl(submission.audioBucket, submission.audioKey)).url,
         rejectionReason: submission.rejectionReason,
         createdAt: submission.createdAt,
         scoredAt: submission.scoredAt,
         settledAt: submission.settledAt,
-      })),
+      }))),
       page: query.page,
       pageSize: query.pageSize,
       total,

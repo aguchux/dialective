@@ -3,8 +3,8 @@ import { WordsService } from './words.service';
 describe('WordsService', () => {
   const trainer = { id: 'trainer-1', dialect: { tag: 'ig', name: 'Igbo' } };
   const session = { id: 'session-1', userId: trainer.id, endedAt: null };
-  const settings = { isReverseWordTrainingEnabled: jest.fn() };
-  const storage = { createPresignedUploadUrl: jest.fn() };
+  const settings = { getTaskTokenCost: jest.fn(), isReverseWordTrainingEnabled: jest.fn() };
+  const storage = { createPresignedDownloadUrl: jest.fn(), createPresignedUploadUrl: jest.fn() };
   let prisma: any;
   let service: WordsService;
 
@@ -16,10 +16,12 @@ describe('WordsService', () => {
         count: jest.fn().mockResolvedValue(1),
         findMany: jest.fn().mockResolvedValue([{ id: 'word-1', text: 'welcome' }]),
       },
+      wallet: { upsert: jest.fn().mockResolvedValue({ id: 'wallet-1', balance: 10 }) },
       wordRecording: { count: jest.fn(), findMany: jest.fn() },
       wordTrainingAssignment: { create: jest.fn(), findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(),
     };
+    settings.getTaskTokenCost.mockResolvedValue(1);
     settings.isReverseWordTrainingEnabled.mockReset();
     service = new WordsService(prisma, storage as any, settings as any);
   });
@@ -71,6 +73,8 @@ describe('WordsService', () => {
     };
     prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
     prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) => callback({
+      ledgerEntry: { create: jest.fn() },
+      wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       wordRecording: {
         create: jest.fn().mockImplementation(({ data }) => ({

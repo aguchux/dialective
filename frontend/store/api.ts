@@ -17,6 +17,12 @@ export interface PublicUser {
   referralCode: string;
 }
 
+export interface PendingOtp {
+  otpRequired: true;
+  ticket: string;
+  expiresInSeconds: number;
+}
+
 export interface AuthResult {
   accessToken: string;
   refreshToken: string;
@@ -182,6 +188,7 @@ export interface PlatformSettings {
   trainingPayoutBonusCapMultiple: string | null;
   taskTokenCost: string | null;
   reverseWordTrainingEnabled: boolean;
+  adminPayoutOtpEnabled: boolean;
   updatedAt: string;
   createdAt: string;
 }
@@ -194,6 +201,7 @@ export interface PlatformSettingsInput {
   trainingPayoutBonusCapMultiple?: number | null;
   taskTokenCost?: number | null;
   reverseWordTrainingEnabled?: boolean;
+  adminPayoutOtpEnabled?: boolean;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';
@@ -268,6 +276,7 @@ export interface TrainerSubmissionSummary {
   tokensSpent: string;
   score: string | null;
   payoutTokenAmount: string | null;
+  audioUrl: string | null;
   rejectionReason: string | null;
   createdAt: string;
   scoredAt: string | null;
@@ -369,7 +378,7 @@ export const dialectivaApi = createApi({
   }),
   tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools'],
   endpoints: (builder) => ({
-    register: builder.mutation<AuthResult, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
+    register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
         url: '/auth/register',
         method: 'POST',
@@ -436,8 +445,24 @@ export const dialectivaApi = createApi({
     >({
       query: (body) => ({ url: '/words/recordings', method: 'POST', body }),
     }),
-    createTokenDeposit: builder.mutation<{ depositId: string; hostedCheckoutUrl: string }, { usdAmount: number; currency: 'USDC' | 'USDT' }>({
+    requestDepositOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { usdAmount: number; currency: 'USDC' | 'USDT' }>({
+      query: (body) => ({ url: '/wallet/deposits/otp', method: 'POST', body }),
+    }),
+    createTokenDeposit: builder.mutation<
+      { depositId: string; hostedCheckoutUrl: string },
+      { usdAmount: number; currency: 'USDC' | 'USDT'; otpRequestId: string; code: string }
+    >({
       query: (body) => ({ url: '/wallet/deposits', method: 'POST', body }),
+    }),
+    requestWithdrawalOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { tokenAmount: number; destinationAddress: string }>({
+      query: (body) => ({ url: '/wallet/withdrawals/otp', method: 'POST', body }),
+    }),
+    createWithdrawal: builder.mutation<
+      { withdrawalId: string; status: string },
+      { tokenAmount: number; destinationAddress: string; otpRequestId: string; code: string }
+    >({
+      query: (body) => ({ url: '/wallet/withdrawals', method: 'POST', body }),
+      invalidatesTags: ['Wallet'],
     }),
     updateProfile: builder.mutation<
       PublicUser,
@@ -549,7 +574,16 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['Users'],
     }),
-    createTrainingPayout: builder.mutation<{ userId: string; netAmount: string }, { userId: string; tokenAmount: number; reference: string }>({
+    requestTrainingPayoutOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { userId: string; tokenAmount: number; reference: string }
+    >({
+      query: (body) => ({ url: '/admin/training-payouts/otp', method: 'POST', body }),
+    }),
+    createTrainingPayout: builder.mutation<
+      { userId: string; netAmount: string },
+      { userId: string; tokenAmount: number; reference: string; otpRequestId?: string; code?: string }
+    >({
       query: (body) => ({
         url: '/admin/training-payouts',
         method: 'POST',
@@ -650,7 +684,10 @@ export const {
   useEndWordTrainingSessionMutation,
   useCreateWordRecordingUploadMutation,
   useSubmitWordRecordingMutation,
+  useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
+  useRequestWithdrawalOtpMutation,
+  useCreateWithdrawalMutation,
   useUpdateProfileMutation,
   useCreateDataAccessLeadMutation,
   useGetReferralSettingsQuery,
@@ -666,6 +703,7 @@ export const {
   useGetUsersQuery,
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,
+  useRequestTrainingPayoutOtpMutation,
   useCreateTrainingPayoutMutation,
   useGetAdminCountriesQuery,
   useCreateCountryMutation,
