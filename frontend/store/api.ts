@@ -393,7 +393,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools', 'Submissions'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -430,12 +430,14 @@ export const dialectivaApi = createApi({
         url: '/submissions/mine',
         params: { page, pageSize, status: status?.join(',') },
       }),
+      providesTags: ['Submissions'],
     }),
     getMyWordRecordings: builder.query<SubmissionsPage, { page: number; pageSize: number; status?: TrainerSubmissionSummary['status'][] }>({
       query: ({ page, pageSize, status }) => ({
         url: '/words/mine',
         params: { page, pageSize, status: status?.join(',') },
       }),
+      providesTags: ['Submissions'],
     }),
     startWordTrainingSession: builder.mutation<WordTrainingSession, { acceptedVoiceTerms: true }>({
       query: (body) => ({ url: '/words/sessions', method: 'POST', body }),
@@ -461,6 +463,7 @@ export const dialectivaApi = createApi({
       }
     >({
       query: (body) => ({ url: '/words/recordings', method: 'POST', body }),
+      invalidatesTags: ['Submissions', 'Wallet'],
     }),
     requestDepositOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { usdAmount: number; currency: 'USDC' | 'USDT' }>({
       query: (body) => ({ url: '/wallet/deposits/otp', method: 'POST', body }),
