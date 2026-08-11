@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(NEXTAUTH_SECRET=dummy NEXTAUTH_URL=http://localhost:3000 NEXT_PUBLIC_API_BASE_URL=https://api.dialectlibrary.com API_BASE_URL=https://api.dialectlibrary.com OAUTH_CALLBACK_SECRET=dummy GOOGLE_CLIENT_ID=dummy GOOGLE_CLIENT_SECRET=dummy npm run build)"
+      "Bash(NEXTAUTH_SECRET=dummy NEXTAUTH_URL=http://localhost:3000 NEXT_PUBLIC_API_BASE_URL=https://api.dialectlibrary.com API_BASE_URL=https://api.dialectlibrary.com OAUTH_CALLBACK_SECRET=dummy GOOGLE_CLIENT_ID=dummy GOOGLE_CLIENT_SECRET=dummy npm run build)",
+      "Bash(rm -rf /tmp_test_symlink)",
+      "Bash(mkdir -p symlink_test/src/@scope/pkg symlink_test/dest)",
+      "Bash(echo '{\"name\":\"pkg\"}')",
+      "Bash(node -e ' *)",
+      "Bash(rm -rf symlink_test)"
     ]
   }
 }
