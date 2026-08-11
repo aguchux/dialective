@@ -7,6 +7,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/db/package.json ./packages/db/
 COPY services/api/package.json ./services/api/
+COPY services/consensus-scorer/package.json ./services/consensus-scorer/
 COPY services/settlement-job/package.json ./services/settlement-job/
 RUN npm ci
 
