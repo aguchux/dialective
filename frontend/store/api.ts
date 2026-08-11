@@ -405,6 +405,12 @@ export const dialectivaApi = createApi({
         params: { page, pageSize, status: status?.join(',') },
       }),
     }),
+    getMyWordRecordings: builder.query<SubmissionsPage, { page: number; pageSize: number; status?: TrainerSubmissionSummary['status'][] }>({
+      query: ({ page, pageSize, status }) => ({
+        url: '/words/mine',
+        params: { page, pageSize, status: status?.join(',') },
+      }),
+    }),
     startWordTrainingSession: builder.mutation<WordTrainingSession, { acceptedVoiceTerms: true }>({
       query: (body) => ({ url: '/words/sessions', method: 'POST', body }),
     }),
@@ -638,6 +644,7 @@ export const {
   useGetEarningHistoryQuery,
   useGetEarningsChartQuery,
   useGetMySubmissionsQuery,
+  useGetMyWordRecordingsQuery,
   useStartWordTrainingSessionMutation,
   useLazyGetNextWordTrainingAssignmentQuery,
   useEndWordTrainingSessionMutation,

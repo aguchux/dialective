@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
+import { ListSubmissionsDto } from '../submissions/dto/list-submissions.dto';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
 import { StartTrainingSessionDto } from './dto/start-training-session.dto';
@@ -9,6 +10,11 @@ import { WordsService } from './words.service';
 @UseGuards(JwtAuthGuard)
 export class WordsController {
   constructor(private readonly words: WordsService) {}
+
+  @Get('mine')
+  listMine(@Req() req: AuthenticatedRequest, @Query() query: ListSubmissionsDto) {
+    return this.words.listMine(req.user.sub, query);
+  }
 
   @Post('sessions')
   startSession(@Req() req: AuthenticatedRequest, @Body() _body: StartTrainingSessionDto) {

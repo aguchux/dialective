@@ -78,7 +78,7 @@ export class PoolsController {
    */
   @Get('summary')
   async summary() {
-    const [activeAgg, activeCount, settledAgg] = await Promise.all([
+    const [activeAgg, activeCount, settledSubmissionAgg, settledWordAgg] = await Promise.all([
       this.prisma.subscriptionPool.aggregate({
         where: { status: SubscriptionPoolStatus.ACTIVE },
         _sum: { usdAmount: true },
@@ -88,17 +88,23 @@ export class PoolsController {
         where: { settledAt: { not: null } },
         _sum: { payoutTokenAmount: true },
       }),
+      this.prisma.wordRecording.aggregate({
+        where: { settledAt: { not: null } },
+        _sum: { payoutTokenAmount: true },
+      }),
     ]);
 
     const rate = await this.platformSettings.getTokenUsdRate();
     const totalAvailableUsd = Number(activeAgg._sum.usdAmount ?? 0);
-    const totalAvailableTokens = totalAvailableUsd / rate - Number(settledAgg._sum.payoutTokenAmount ?? 0);
+    const totalSettledTokens =
+      Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) + Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
+    const totalAvailableTokens = totalAvailableUsd / rate - totalSettledTokens;
 
     return {
       totalAvailableTokens: totalAvailableTokens.toString(),
       totalAvailableUsd: totalAvailableUsd.toString(),
       activePoolCount: activeCount,
-      totalSettledTokens: (settledAgg._sum.payoutTokenAmount ?? 0).toString(),
+      totalSettledTokens: totalSettledTokens.toString(),
     };
   }
 

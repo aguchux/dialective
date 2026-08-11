@@ -56,6 +56,7 @@ import {
   useGetEarningHistoryQuery,
   useGetEarningsChartQuery,
   useGetMySubmissionsQuery,
+  useGetMyWordRecordingsQuery,
   useGetTrainerDashboardQuery,
   useUpdateProfileMutation,
 } from '@/store/api';
@@ -594,14 +595,48 @@ function estimatedScoredPayout(tokensSpent: string, score: string) {
   return spent + spent * scoreFraction;
 }
 
+/**
+ * Two independent task pipelines feed My Tasks/My Scores: sentence-dictation
+ * Submissions (consensus-scored) and word-training WordRecordings (scored
+ * via exact-match / peer reverse-validation) -- see WordRecording's doc
+ * comment in schema.prisma. Both share the same status/score/payout shape,
+ * so they're merged into one client-side-paginated list here rather than
+ * shown as two separate tables.
+ */
+const MERGE_FETCH_PAGE_SIZE = 50;
+
+function useMergedSubmissions(status: TrainerSubmissionSummary['status'][], page: number, pageSize: number, pollingInterval?: number) {
+  const submissions = useGetMySubmissionsQuery({ page: 1, pageSize: MERGE_FETCH_PAGE_SIZE, status }, { pollingInterval });
+  const wordRecordings = useGetMyWordRecordingsQuery({ page: 1, pageSize: MERGE_FETCH_PAGE_SIZE, status }, { pollingInterval });
+
+  const isLoading = submissions.isLoading || wordRecordings.isLoading;
+  const isFetching = submissions.isFetching || wordRecordings.isFetching;
+  const isError = submissions.isError && wordRecordings.isError;
+
+  const merged = [...(submissions.data?.items ?? []), ...(wordRecordings.data?.items ?? [])].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  const total = merged.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const items = merged.slice((page - 1) * pageSize, page * pageSize);
+
+  function refetch() {
+    void submissions.refetch();
+    void wordRecordings.refetch();
+  }
+
+  return { items, total, totalPages, isLoading, isFetching, isError, refetch };
+}
+
 function MyTasksView() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const { data, isLoading, isFetching, isError, refetch } = useGetMySubmissionsQuery(
-    { page, pageSize, status: ['PENDING', 'TRANSCRIBED'] },
-    { pollingInterval: 30000 },
+  const { items, total, totalPages, isLoading, isFetching, isError, refetch } = useMergedSubmissions(
+    ['PENDING', 'TRANSCRIBED'],
+    page,
+    pageSize,
+    30000,
   );
-  const totalPages = data?.totalPages ?? 1;
   const now = Date.now();
 
   return (
@@ -626,7 +661,7 @@ function MyTasksView() {
             Try again
           </button>
         </div>
-      ) : data?.items.length ? (
+      ) : items.length ? (
         <>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[820px] border-collapse text-left text-sm">
@@ -642,7 +677,7 @@ function MyTasksView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {data.items.map((submission) => (
+                {items.map((submission) => (
                   <TaskRow key={submission.id} now={now} submission={submission} />
                 ))}
               </tbody>
@@ -650,7 +685,7 @@ function MyTasksView() {
           </div>
 
           <div className="divide-y divide-line md:hidden">
-            {data.items.map((submission) => (
+            {items.map((submission) => (
               <TaskCard key={submission.id} now={now} submission={submission} />
             ))}
           </div>
@@ -659,9 +694,9 @@ function MyTasksView() {
         <EmptyPanel actionHref="/dashboard?view=training" actionLabel="Start training" icon={Headphones} title="No tasks submitted yet" unframed />
       )}
 
-      {data && data.total > 0 ? (
+      {total > 0 ? (
         <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-muted px-4 py-3 md:px-5">
-          <p className="text-sm font-bold text-muted">Page {data.page} of {totalPages}</p>
+          <p className="text-sm font-bold text-muted">Page {page} of {totalPages}</p>
           <div className="flex items-center gap-2">
             <button aria-label="Previous page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page <= 1 || isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button">
               <ChevronLeft className="size-4" aria-hidden="true" />
@@ -911,12 +946,11 @@ const submissionStatusTones: Record<TrainerSubmissionSummary['status'], string> 
 function ScoresView() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const { data, isLoading, isFetching, isError, refetch } = useGetMySubmissionsQuery({
+  const { items, total, totalPages, isLoading, isFetching, isError, refetch } = useMergedSubmissions(
+    ['SCORED', 'SETTLED', 'REJECTED'],
     page,
     pageSize,
-    status: ['SCORED', 'SETTLED', 'REJECTED'],
-  });
-  const totalPages = data?.totalPages ?? 1;
+  );
 
   return (
     <div>
@@ -942,7 +976,7 @@ function ScoresView() {
               Try again
             </button>
           </div>
-        ) : data?.items.length ? (
+        ) : items.length ? (
           <>
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[760px] border-collapse text-left text-sm">
@@ -958,7 +992,7 @@ function ScoresView() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {data.items.map((submission) => (
+                  {items.map((submission) => (
                     <tr className="hover:bg-surface-muted/60" key={submission.id}>
                       <td className="max-w-64 truncate px-5 py-4 font-bold" title={submission.promptText}>{submission.promptText}</td>
                       <td className="px-5 py-4 text-muted">{submission.dialectTag.toUpperCase()}</td>
@@ -985,7 +1019,7 @@ function ScoresView() {
             </div>
 
             <div className="divide-y divide-line md:hidden">
-              {data.items.map((submission) => (
+              {items.map((submission) => (
                 <article className="grid gap-3 p-4" key={submission.id}>
                   <div className="flex items-start justify-between gap-3">
                     <p className="min-w-0 truncate font-bold" title={submission.promptText}>{submission.promptText}</p>
@@ -1012,9 +1046,9 @@ function ScoresView() {
           <EmptyPanel actionHref="/dashboard?view=training" actionLabel="Start training" icon={Headphones} title="No scored submissions yet" unframed />
         )}
 
-        {data && data.total > 0 ? (
+        {total > 0 ? (
           <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-muted px-4 py-3 md:px-5">
-            <p className="text-sm font-bold text-muted">Page {data.page} of {totalPages}</p>
+            <p className="text-sm font-bold text-muted">Page {page} of {totalPages}</p>
             <div className="flex items-center gap-2">
               <button aria-label="Previous page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page <= 1 || isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button">
                 <ChevronLeft className="size-4" aria-hidden="true" />
@@ -1185,7 +1219,9 @@ function EarningsChart({ buckets, range, loading }: { buckets: EarningsChart_Buc
             <div className="flex h-[150px] w-full max-w-10 items-end rounded-md bg-surface-muted" title={`${formatTokens(value)} tokens`}>
               <div className="w-full rounded-md bg-accent" style={{ height: `${height}%` }} />
             </div>
-            {!dense && <span className="text-xs font-extrabold text-muted">{formatBucketLabel(bucket.label, range)}</span>}
+            <span className="text-xs font-extrabold text-muted">
+              {dense ? formatBucketDayNumber(bucket.label) : formatBucketLabel(bucket.label, range)}
+            </span>
           </div>
         );
       })}
@@ -1194,6 +1230,14 @@ function EarningsChart({ buckets, range, loading }: { buckets: EarningsChart_Buc
 }
 
 type EarningsChart_Bucket = { label: string; amount: string };
+
+/** Bare day-of-month number (e.g. "14"), used when there are too many bars for the full "14 Aug" label. */
+function formatBucketDayNumber(label: string) {
+  if (!label) return '';
+  const date = new Date(`${label}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return '';
+  return String(date.getUTCDate());
+}
 
 function formatBucketLabel(label: string, range: EarningsChartRange) {
   if (!label) return '';

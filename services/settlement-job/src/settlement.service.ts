@@ -22,17 +22,33 @@ export class SettlementService {
   async run(): Promise<void> {
     this.logger.log('Settlement run starting');
 
+    const bonusCapMultiple = await this.getTrainingPayoutBonusCapMultiple();
+
+    const submissionResult = await this.settleSubmissions(bonusCapMultiple);
+    const wordRecordingResult = await this.settleWordRecordings(bonusCapMultiple);
+
+    const settledCount = submissionResult.settledCount + wordRecordingResult.settledCount;
+    const eligibleCount = submissionResult.eligibleCount + wordRecordingResult.eligibleCount;
+    const totalPayout = submissionResult.totalPayout + wordRecordingResult.totalPayout;
+
+    if (eligibleCount === 0) {
+      this.logger.log('Settlement run complete: nothing to settle');
+      return;
+    }
+
+    const poolBalance = await this.getRewardPoolAvailableTokens();
+    this.logger.log(
+      `Settlement run complete: settled=${settledCount}/${eligibleCount} totalPayout=${totalPayout.toFixed(2)} ` +
+        `poolAvailable=${poolBalance.toFixed(2)}`,
+    );
+  }
+
+  private async settleSubmissions(bonusCapMultiple: number) {
     const submissions = await this.prisma.submission.findMany({
       where: { status: 'SCORED', settledAt: null },
       select: { id: true, userId: true, tokensSpent: true, score: true },
     });
 
-    if (submissions.length === 0) {
-      this.logger.log('Settlement run complete: nothing to settle');
-      return;
-    }
-
-    const bonusCapMultiple = await this.getTrainingPayoutBonusCapMultiple();
     let settledCount = 0;
     let totalPayout = 0;
 
@@ -63,11 +79,52 @@ export class SettlementService {
       }
     }
 
-    const poolBalance = await this.getRewardPoolAvailableTokens();
-    this.logger.log(
-      `Settlement run complete: settled=${settledCount}/${submissions.length} totalPayout=${totalPayout.toFixed(2)} ` +
-        `poolAvailable=${poolBalance.toFixed(2)}`,
-    );
+    return { settledCount, eligibleCount: submissions.length, totalPayout };
+  }
+
+  /**
+   * Same no-loss formula/ledger path as settleSubmissions, against
+   * WordRecording rows instead -- see the model's doc comment in
+   * schema.prisma for why word training has its own SCORED path (no
+   * consensus/quorum) but shares this settlement step.
+   */
+  private async settleWordRecordings(bonusCapMultiple: number) {
+    const recordings = await this.prisma.wordRecording.findMany({
+      where: { status: 'SCORED', settledAt: null, userId: { not: null } },
+      select: { id: true, userId: true, tokensSpent: true, score: true },
+    });
+
+    let settledCount = 0;
+    let totalPayout = 0;
+
+    for (const recording of recordings) {
+      if (recording.score === null || recording.userId === null) {
+        this.logger.warn(`Skipping wordRecording=${recording.id}: status SCORED but score/userId missing`);
+        continue;
+      }
+
+      try {
+        const payout = computeTrainingPayout(recording.tokensSpent, recording.score, bonusCapMultiple);
+        const { ops } = await creditTrainingPayoutOps(this.prisma, recording.userId, payout, recording.id);
+
+        await this.prisma.$transaction([
+          ...ops,
+          this.prisma.wordRecording.update({
+            where: { id: recording.id },
+            data: { payoutTokenAmount: payout, settledAt: new Date() },
+          }),
+        ]);
+
+        settledCount += 1;
+        totalPayout += payout.toNumber();
+      } catch (err) {
+        this.logger.error(
+          `Failed to settle wordRecording=${recording.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    return { settledCount, eligibleCount: recordings.length, totalPayout };
   }
 
   /**
@@ -112,7 +169,7 @@ export class SettlementService {
    * need opening.
    */
   private async getRewardPoolAvailableTokens(): Promise<number> {
-    const [activeAgg, settledAgg, rate] = await Promise.all([
+    const [activeAgg, settledSubmissionAgg, settledWordAgg, rate] = await Promise.all([
       this.prisma.subscriptionPool.aggregate({
         where: { status: 'ACTIVE' },
         _sum: { usdAmount: true },
@@ -121,10 +178,16 @@ export class SettlementService {
         where: { settledAt: { not: null } },
         _sum: { payoutTokenAmount: true },
       }),
+      this.prisma.wordRecording.aggregate({
+        where: { settledAt: { not: null } },
+        _sum: { payoutTokenAmount: true },
+      }),
       this.getTokenUsdRate(),
     ]);
 
     const totalAvailableUsd = Number(activeAgg._sum.usdAmount ?? 0);
-    return totalAvailableUsd / rate - Number(settledAgg._sum.payoutTokenAmount ?? 0);
+    const totalSettled =
+      Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) + Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
+    return totalAvailableUsd / rate - totalSettled;
   }
 }
