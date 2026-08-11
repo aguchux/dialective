@@ -217,8 +217,8 @@ export class SettlementService {
    * rather than waiting on a SCORED transition that may never come.
    */
   private async refundStuckWordRecordings(): Promise<number> {
-    const timeoutHours = await this.getWordStuckTimeoutHours();
-    const cutoff = new Date(Date.now() - timeoutHours * 60 * 60 * 1000);
+    const timeoutMinutes = await this.getWordStuckTimeoutMinutes();
+    const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000);
 
     const recordings = await this.prisma.wordRecording.findMany({
       where: {
@@ -267,7 +267,7 @@ export class SettlementService {
   /**
    * A task still unscored (Submission PENDING/TRANSCRIBED, or WordRecording
    * PENDING outside the ENGLISH_TO_DIALECT stuck-timeout path already
-   * covered by refundStuckWordRecordings) past scoringSlaHours needs some
+   * covered by refundStuckWordRecordings) past scoringSlaMinutes needs some
    * resolution -- otherwise its lock sits forever waiting on a
    * consensus/reverse-validation outcome that may never land. When
    * noFailOnTrainEnabled is off, this is a plain refund (same shape as
@@ -280,12 +280,12 @@ export class SettlementService {
    * requiring a real consensus/exact-match/reverse-validation result.
    */
   private async resolveTimedOutScoring(bonusCapMultiple: number) {
-    const [slaHours, noFailEnabled, scoreRange] = await Promise.all([
-      this.getScoringSlaHours(),
+    const [slaMinutes, noFailEnabled, scoreRange] = await Promise.all([
+      this.getScoringSlaMinutes(),
       this.isNoFailOnTrainEnabled(),
       this.getScoreRange(),
     ]);
-    const cutoff = new Date(Date.now() - slaHours * 60 * 60 * 1000);
+    const cutoff = new Date(Date.now() - slaMinutes * 60 * 1000);
 
     const [timedOutSubmissions, timedOutRecordings] = await Promise.all([
       this.prisma.submission.findMany({
@@ -406,18 +406,18 @@ export class SettlementService {
   }
 
   /**
-   * Mirrors PlatformSettingsService.getScoringSlaHours/isNoFailOnTrainEnabled/
+   * Mirrors PlatformSettingsService.getScoringSlaMinutes/isNoFailOnTrainEnabled/
    * getScoreRange's DB-override/env-fallback logic -- see
    * getTrainingPayoutBonusCapMultiple above for why this is a duplicated
    * read, not duplicated business logic.
    */
-  private async getScoringSlaHours(): Promise<number> {
+  private async getScoringSlaMinutes(): Promise<number> {
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
       update: {},
       create: { id: 'default' },
     });
-    return row.scoringSlaHours || 1;
+    return row.scoringSlaMinutes || 60;
   }
 
   private async isNoFailOnTrainEnabled(): Promise<boolean> {
@@ -445,22 +445,22 @@ export class SettlementService {
   }
 
   /**
-   * Mirrors PlatformSettingsService.getWordStuckTimeoutHours's
+   * Mirrors PlatformSettingsService.getWordStuckTimeoutMinutes's
    * DB-override/env-fallback logic -- see getTrainingPayoutBonusCapMultiple
    * above for why this is a duplicated read, not duplicated business logic.
    */
-  private async getWordStuckTimeoutHours(): Promise<number> {
+  private async getWordStuckTimeoutMinutes(): Promise<number> {
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
       update: {},
       create: { id: 'default' },
     });
-    if (row.wordStuckTimeoutHours) {
-      return row.wordStuckTimeoutHours;
+    if (row.wordStuckTimeoutMinutes) {
+      return row.wordStuckTimeoutMinutes;
     }
-    const raw = process.env.WORD_STUCK_TIMEOUT_HOURS ?? '24';
-    const hours = Number(raw);
-    return Number.isFinite(hours) && hours > 0 ? hours : 24;
+    const raw = process.env.WORD_STUCK_TIMEOUT_MINUTES ?? '1440';
+    const minutes = Number(raw);
+    return Number.isFinite(minutes) && minutes > 0 ? minutes : 1440;
   }
 
   /**

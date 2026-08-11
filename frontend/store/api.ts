@@ -123,7 +123,7 @@ export interface TrainerDashboardSummary {
   lockedBalance: string;
   tokenUsdRate: number;
   taskTokenCost: string;
-  scoringSlaHours: number;
+  scoringSlaMinutes: number;
   fundedTokens: string;
   trainingEarningsTokens: string;
   referralEarningsTokens: string;
@@ -196,8 +196,8 @@ export interface PlatformSettings {
   taskTokenCost: string | null;
   reverseWordTrainingEnabled: boolean;
   adminPayoutOtpEnabled: boolean;
-  wordStuckTimeoutHours: number;
-  scoringSlaHours: number;
+  wordStuckTimeoutMinutes: number;
+  scoringSlaMinutes: number;
   noFailOnTrainEnabled: boolean;
   minScoreRange: string;
   maxScoreRange: string;
@@ -214,8 +214,8 @@ export interface PlatformSettingsInput {
   taskTokenCost?: number | null;
   reverseWordTrainingEnabled?: boolean;
   adminPayoutOtpEnabled?: boolean;
-  wordStuckTimeoutHours?: number;
-  scoringSlaHours?: number;
+  wordStuckTimeoutMinutes?: number;
+  scoringSlaMinutes?: number;
   noFailOnTrainEnabled?: boolean;
   minScoreRange?: number;
   maxScoreRange?: number;

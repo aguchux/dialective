@@ -83,14 +83,14 @@ export class PlatformSettingsService {
     return row.adminPayoutOtpEnabled;
   }
 
-  async getWordStuckTimeoutHours(): Promise<number> {
+  async getWordStuckTimeoutMinutes(): Promise<number> {
     const row = await this.getRow();
-    return row.wordStuckTimeoutHours;
+    return row.wordStuckTimeoutMinutes;
   }
 
-  async getScoringSlaHours(): Promise<number> {
+  async getScoringSlaMinutes(): Promise<number> {
     const row = await this.getRow();
-    return row.scoringSlaHours;
+    return row.scoringSlaMinutes;
   }
 
   async isNoFailOnTrainEnabled(): Promise<boolean> {
@@ -124,8 +124,8 @@ export class PlatformSettingsService {
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
-      wordStuckTimeoutHours: row.wordStuckTimeoutHours,
-      scoringSlaHours: row.scoringSlaHours,
+      wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
+      scoringSlaMinutes: row.scoringSlaMinutes,
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,
       minScoreRange: row.minScoreRange.toString(),
       maxScoreRange: row.maxScoreRange.toString(),
@@ -143,8 +143,8 @@ export class PlatformSettingsService {
     taskTokenCost?: number | null;
     reverseWordTrainingEnabled?: boolean;
     adminPayoutOtpEnabled?: boolean;
-    wordStuckTimeoutHours?: number;
-    scoringSlaHours?: number;
+    wordStuckTimeoutMinutes?: number;
+    scoringSlaMinutes?: number;
     noFailOnTrainEnabled?: boolean;
     minScoreRange?: number;
     maxScoreRange?: number;
@@ -163,8 +163,8 @@ export class PlatformSettingsService {
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
-      wordStuckTimeoutHours: row.wordStuckTimeoutHours,
-      scoringSlaHours: row.scoringSlaHours,
+      wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
+      scoringSlaMinutes: row.scoringSlaMinutes,
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,
       minScoreRange: row.minScoreRange.toString(),
       maxScoreRange: row.maxScoreRange.toString(),

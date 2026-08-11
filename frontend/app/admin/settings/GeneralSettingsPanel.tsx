@@ -18,8 +18,8 @@ export function GeneralSettingsPanel() {
   const [trainingPayoutBonusCapMultiple, setTrainingPayoutBonusCapMultiple] = useState('');
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
   const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
-  const [wordStuckTimeoutHours, setWordStuckTimeoutHours] = useState('');
-  const [scoringSlaHours, setScoringSlaHours] = useState('');
+  const [wordStuckTimeoutMinutes, setWordStuckTimeoutMinutes] = useState('');
+  const [scoringSlaMinutes, setScoringSlaMinutes] = useState('');
   const [noFailOnTrainEnabled, setNoFailOnTrainEnabled] = useState(false);
   const [minScoreRange, setMinScoreRange] = useState('');
   const [maxScoreRange, setMaxScoreRange] = useState('');
@@ -34,8 +34,8 @@ export function GeneralSettingsPanel() {
     setTrainingPayoutBonusCapMultiple(settings.trainingPayoutBonusCapMultiple ?? '');
     setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
     setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
-    setWordStuckTimeoutHours(String(settings.wordStuckTimeoutHours));
-    setScoringSlaHours(String(settings.scoringSlaHours));
+    setWordStuckTimeoutMinutes(String(settings.wordStuckTimeoutMinutes));
+    setScoringSlaMinutes(String(settings.scoringSlaMinutes));
     setNoFailOnTrainEnabled(settings.noFailOnTrainEnabled);
     setMinScoreRange(settings.minScoreRange);
     setMaxScoreRange(settings.maxScoreRange);
@@ -61,8 +61,8 @@ export function GeneralSettingsPanel() {
           : {}),
         reverseWordTrainingEnabled,
         adminPayoutOtpEnabled,
-        ...(wordStuckTimeoutHours !== '' ? { wordStuckTimeoutHours: Number(wordStuckTimeoutHours) } : {}),
-        ...(scoringSlaHours !== '' ? { scoringSlaHours: Number(scoringSlaHours) } : {}),
+        ...(wordStuckTimeoutMinutes !== '' ? { wordStuckTimeoutMinutes: Number(wordStuckTimeoutMinutes) } : {}),
+        ...(scoringSlaMinutes !== '' ? { scoringSlaMinutes: Number(scoringSlaMinutes) } : {}),
         noFailOnTrainEnabled,
         ...(minScoreRange !== '' ? { minScoreRange: Number(minScoreRange) } : {}),
         ...(maxScoreRange !== '' ? { maxScoreRange: Number(maxScoreRange) } : {}),
@@ -157,8 +157,8 @@ export function GeneralSettingsPanel() {
           </div>
 
           <div className="grid gap-1">
-            <label className="font-bold" htmlFor="word-stuck-timeout-hours">
-              Unmatched word recording timeout (hours)
+            <label className="font-bold" htmlFor="word-stuck-timeout-minutes">
+              Unmatched word recording timeout (minutes)
             </label>
             <p className="text-sm leading-relaxed text-muted">
               How long a dialect-to-English word recording can wait for peer reverse-validation before its held
@@ -166,18 +166,18 @@ export function GeneralSettingsPanel() {
             </p>
             <input
               className={inputClass}
-              id="word-stuck-timeout-hours"
+              id="word-stuck-timeout-minutes"
               type="number"
               step="1"
               min="1"
-              value={wordStuckTimeoutHours}
-              onChange={(e) => setWordStuckTimeoutHours(e.target.value)}
+              value={wordStuckTimeoutMinutes}
+              onChange={(e) => setWordStuckTimeoutMinutes(e.target.value)}
             />
           </div>
 
           <div className="grid gap-1">
-            <label className="font-bold" htmlFor="scoring-sla-hours">
-              Scoring time limit (hours)
+            <label className="font-bold" htmlFor="scoring-sla-minutes">
+              Scoring time limit (minutes)
             </label>
             <p className="text-sm leading-relaxed text-muted">
               How long a submitted task can wait for consensus scoring before it's resolved automatically -- either
@@ -185,12 +185,12 @@ export function GeneralSettingsPanel() {
             </p>
             <input
               className={inputClass}
-              id="scoring-sla-hours"
+              id="scoring-sla-minutes"
               type="number"
               step="1"
               min="1"
-              value={scoringSlaHours}
-              onChange={(e) => setScoringSlaHours(e.target.value)}
+              value={scoringSlaMinutes}
+              onChange={(e) => setScoringSlaMinutes(e.target.value)}
             />
           </div>
 

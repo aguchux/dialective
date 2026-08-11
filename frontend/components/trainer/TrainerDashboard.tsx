@@ -519,15 +519,25 @@ function EarningTypeLabel({ type }: { type: LedgerEntryType }) {
 }
 
 /**
- * Admin-configured via PlatformSettings.scoringSlaHours (default 1h) --
+ * Admin-configured via PlatformSettings.scoringSlaMinutes (default 60min) --
  * RTK Query caches getTrainerDashboard by its (empty) arg, so calling the
  * hook again here reads the already-fetched result instead of firing a
- * second request. Falls back to 24h only for the brief window before the
+ * second request. Falls back to 60min only for the brief window before the
  * dashboard query has resolved.
  */
 function useScoringSlaMs(): number {
   const { data } = useGetTrainerDashboardQuery();
-  return (data?.scoringSlaHours ?? 24) * 60 * 60 * 1000;
+  return (data?.scoringSlaMinutes ?? 60) * 60 * 1000;
+}
+
+/** e.g. 90_000 -> "1m", 5_400_000 -> "1h 30m", 3_600_000 -> "1h" -- now that the SLA is minute-configurable, a fixed "Xh" label would misrepresent sub-hour or non-round-hour values. */
+function formatDurationLabel(ms: number): string {
+  const totalMinutes = Math.max(1, Math.round(ms / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}m`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
 }
 
 type TrainingTab = 'training' | 'tasks';
@@ -698,7 +708,7 @@ function MyTasksView() {
     30000,
   );
   const now = Date.now();
-  const scoringSlaHours = useScoringSlaMs() / (60 * 60 * 1000);
+  const scoringSlaLabel = formatDurationLabel(useScoringSlaMs());
 
   return (
     <section className={`${cardClass} overflow-hidden`}>
@@ -706,7 +716,7 @@ function MyTasksView() {
         <span className="grid size-9 place-items-center rounded-lg bg-[#e8f0fe] text-[#3B6DF0]"><Clock3 className="size-5" aria-hidden="true" /></span>
         <div>
           <h3 className="font-black">Submitted tasks</h3>
-          <p className="text-sm text-muted">Consensus scoring completes once enough trainers submit the same prompt, typically within {scoringSlaHours}h.</p>
+          <p className="text-sm text-muted">Consensus scoring completes once enough trainers submit the same prompt, typically within {scoringSlaLabel}.</p>
         </div>
       </div>
 

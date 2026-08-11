@@ -36,12 +36,12 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsInt()
   @Min(1)
-  wordStuckTimeoutHours?: number;
+  wordStuckTimeoutMinutes?: number;
 
   @IsOptional()
   @IsInt()
   @Min(1)
-  scoringSlaHours?: number;
+  scoringSlaMinutes?: number;
 
   @IsOptional()
   @IsBoolean()
