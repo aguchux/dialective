@@ -50,14 +50,20 @@ COPY --from=production-dependencies /app/services/api/node_modules ./services/ap
 # under services/api/node_modules instead of root even though @nestjs/core
 # resolves at root -- Node's require() only walks up from @nestjs/core's own
 # location, never sideways into services/api/node_modules, so anything
-# nested there is invisible to it. Mirror services/api's local packages into
-# root so root-resolving requires can still find them. A plain `cp -rn`
-# won't do this: busybox cp treats an existing destination directory (e.g.
-# the @nestjs scope folder, already at root) as a full skip rather than
-# merging into it, so scoped packages nested one level under an existing
-# root dir never get copied. Copy each leaf package directory individually
-# instead (via Node, since busybox sh lacks the string/array handling this
-# needs).
+# nested there is invisible to it. Symlink services/api's local packages
+# into root so root-resolving requires can find them too. This MUST be
+# symlinks, not file copies: copying class-transformer (a real past bug)
+# creates a second physical package, which Node treats as a second module
+# instance with its own decorator-metadata registry -- class-validator's
+# @IsInt() then silently sees no metadata from a DTO's @Type() decorator
+# (which ran against the *other* instance), so every numeric query param
+# fails validation despite being valid. A symlink keeps exactly one real
+# package on disk no matter which path resolves to it. A plain `cp -rn`
+# wouldn't even reach nested scoped packages anyway: busybox cp treats an
+# existing destination directory (e.g. the @nestjs scope folder, already at
+# root) as a full skip rather than merging into it. Symlink each leaf
+# package individually instead (via Node, since busybox sh lacks the
+# string/array handling this needs).
 RUN node -e " \
   const fs = require('fs'), path = require('path'); \
   const src = './services/api/node_modules', dest = './node_modules'; \
@@ -68,8 +74,8 @@ RUN node -e " \
     }); \
   } \
   for (const rel of leaves(src)) { \
-    const from = path.join(src, rel), to = path.join(dest, rel); \
-    if (!fs.existsSync(to)) { fs.mkdirSync(path.dirname(to), { recursive: true }); fs.cpSync(from, to, { recursive: true }); } \
+    const from = path.resolve(src, rel), to = path.join(dest, rel); \
+    if (!fs.existsSync(to)) { fs.mkdirSync(path.dirname(to), { recursive: true }); fs.symlinkSync(path.relative(path.dirname(to), from), to, 'dir'); } \
   } \
 "
 COPY --from=build /app/services/api/dist ./services/api/dist
