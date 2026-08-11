@@ -46,6 +46,13 @@ COPY --from=build /app/packages/db/package.json ./packages/db/package.json
 COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=production-dependencies /app/services/api/node_modules ./services/api/node_modules
+# npm's workspace hoisting nests some deps (e.g. @nestjs/platform-express)
+# under services/api/node_modules instead of root even though @nestjs/core
+# resolves at root -- Node's require() only walks up from @nestjs/core's own
+# location, never sideways into services/api/node_modules, so anything
+# nested there is invisible to it. Mirror services/api's local packages into
+# root so root-resolving requires can still find them.
+RUN cp -rn ./services/api/node_modules/. ./node_modules/ 2>/dev/null || true
 COPY --from=build /app/services/api/dist ./services/api/dist
 COPY models/asr-registry.yaml ./services/api/dist/models/asr-registry.yaml
 WORKDIR /app/services/api
