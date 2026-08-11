@@ -580,6 +580,10 @@ model PlatformSettings {
   reverseWordTrainingEnabled Boolean @default(false)
   adminPayoutOtpEnabled    Boolean @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
   wordStuckTimeoutHours    Int      @default(24) // hours an ENGLISH_TO_DIALECT WordRecording can stay PENDING (unmatched by reverse-validation) before settlement-job auto-refunds its locked tokens
+  scoringSlaHours          Int      @default(1) // hours a Submission/WordRecording can stay unscored before settlement-job resolves it via noFailOnTrainEnabled (synthetic score) or a plain refund
+  noFailOnTrainEnabled     Boolean  @default(false) // when true, a task still unscored past scoringSlaHours is paid out at a random score in [minScoreRange, maxScoreRange] instead of just refunded -- guarantees payment for completed work even if consensus/reverse-validation never resolves it
+  minScoreRange            Decimal  @default(10) @db.Decimal(5, 2) // lower bound (%) of the random synthetic score used when noFailOnTrainEnabled fires
+  maxScoreRange            Decimal  @default(30) @db.Decimal(5, 2) // upper bound (%) of the random synthetic score used when noFailOnTrainEnabled fires
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 

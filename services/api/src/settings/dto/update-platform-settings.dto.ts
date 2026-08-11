@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsInt, IsOptional, IsPositive, Min } from 'class-validator';
+import { IsBoolean, IsEmail, IsInt, IsNumber, IsOptional, IsPositive, Max, Min } from 'class-validator';
 
 export class UpdatePlatformSettingsDto {
   @IsOptional()
@@ -37,4 +37,25 @@ export class UpdatePlatformSettingsDto {
   @IsInt()
   @Min(1)
   wordStuckTimeoutHours?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  scoringSlaHours?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  noFailOnTrainEnabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  minScoreRange?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  maxScoreRange?: number;
 }

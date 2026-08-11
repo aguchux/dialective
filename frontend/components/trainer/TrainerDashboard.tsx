@@ -518,8 +518,17 @@ function EarningTypeLabel({ type }: { type: LedgerEntryType }) {
   );
 }
 
-const SCORING_SLA_HOURS = 24;
-const SCORING_SLA_MS = SCORING_SLA_HOURS * 60 * 60 * 1000;
+/**
+ * Admin-configured via PlatformSettings.scoringSlaHours (default 1h) --
+ * RTK Query caches getTrainerDashboard by its (empty) arg, so calling the
+ * hook again here reads the already-fetched result instead of firing a
+ * second request. Falls back to 24h only for the brief window before the
+ * dashboard query has resolved.
+ */
+function useScoringSlaMs(): number {
+  const { data } = useGetTrainerDashboardQuery();
+  return (data?.scoringSlaHours ?? 24) * 60 * 60 * 1000;
+}
 
 type TrainingTab = 'training' | 'tasks';
 
@@ -626,10 +635,10 @@ function formatCountdown(ms: number) {
  * client-side only -- nothing is written back. If the real job scores it
  * later, the next refetch's live status corrects the display immediately.
  */
-function deriveTaskStatus(submission: TrainerSubmissionSummary, nowMs: number): TaskDisplayStatus {
+function deriveTaskStatus(submission: TrainerSubmissionSummary, nowMs: number, slaMs: number): TaskDisplayStatus {
   if (submission.status === 'REJECTED') return 'REJECTED';
   if (submission.status === 'SCORED' || submission.status === 'SETTLED') return submission.status;
-  const deadline = new Date(submission.createdAt).getTime() + SCORING_SLA_MS;
+  const deadline = new Date(submission.createdAt).getTime() + slaMs;
   if (nowMs >= deadline) return 'FAILED';
   return submission.status;
 }
@@ -689,6 +698,7 @@ function MyTasksView() {
     30000,
   );
   const now = Date.now();
+  const scoringSlaHours = useScoringSlaMs() / (60 * 60 * 1000);
 
   return (
     <section className={`${cardClass} overflow-hidden`}>
@@ -696,7 +706,7 @@ function MyTasksView() {
         <span className="grid size-9 place-items-center rounded-lg bg-[#e8f0fe] text-[#3B6DF0]"><Clock3 className="size-5" aria-hidden="true" /></span>
         <div>
           <h3 className="font-black">Submitted tasks</h3>
-          <p className="text-sm text-muted">Consensus scoring completes once enough trainers submit the same prompt, typically within {SCORING_SLA_HOURS}h.</p>
+          <p className="text-sm text-muted">Consensus scoring completes once enough trainers submit the same prompt, typically within {scoringSlaHours}h.</p>
         </div>
       </div>
 
@@ -763,7 +773,8 @@ function MyTasksView() {
 }
 
 function TaskCountdownCell({ submission }: { submission: TrainerSubmissionSummary }) {
-  const deadline = new Date(submission.createdAt).getTime() + SCORING_SLA_MS;
+  const slaMs = useScoringSlaMs();
+  const deadline = new Date(submission.createdAt).getTime() + slaMs;
   const remaining = useCountdown(deadline);
   const finalized = submission.status === 'SCORED' || submission.status === 'SETTLED' || submission.status === 'REJECTED';
   if (finalized) return <span className="text-muted">—</span>;
@@ -853,7 +864,7 @@ function TaskAudioButton({ audioUrl, label }: { audioUrl: string | null; label: 
 }
 
 function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; now: number }) {
-  const displayStatus = deriveTaskStatus(submission, now);
+  const displayStatus = deriveTaskStatus(submission, now, useScoringSlaMs());
   return (
     <tr className="hover:bg-surface-muted/60">
       <td className="max-w-64 px-5 py-4" title={submission.promptText}>
@@ -880,7 +891,7 @@ function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; no
 }
 
 function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; now: number }) {
-  const displayStatus = deriveTaskStatus(submission, now);
+  const displayStatus = deriveTaskStatus(submission, now, useScoringSlaMs());
   const finalized = submission.status === 'SCORED' || submission.status === 'SETTLED' || submission.status === 'REJECTED';
   return (
     <article className="grid gap-3 p-4">

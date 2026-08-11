@@ -123,6 +123,7 @@ export interface TrainerDashboardSummary {
   lockedBalance: string;
   tokenUsdRate: number;
   taskTokenCost: string;
+  scoringSlaHours: number;
   fundedTokens: string;
   trainingEarningsTokens: string;
   referralEarningsTokens: string;
@@ -196,6 +197,10 @@ export interface PlatformSettings {
   reverseWordTrainingEnabled: boolean;
   adminPayoutOtpEnabled: boolean;
   wordStuckTimeoutHours: number;
+  scoringSlaHours: number;
+  noFailOnTrainEnabled: boolean;
+  minScoreRange: string;
+  maxScoreRange: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -210,6 +215,10 @@ export interface PlatformSettingsInput {
   reverseWordTrainingEnabled?: boolean;
   adminPayoutOtpEnabled?: boolean;
   wordStuckTimeoutHours?: number;
+  scoringSlaHours?: number;
+  noFailOnTrainEnabled?: boolean;
+  minScoreRange?: number;
+  maxScoreRange?: number;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';

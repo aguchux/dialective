@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "platform_settings"
+  ADD COLUMN "scoringSlaHours" INTEGER NOT NULL DEFAULT 1,
+  ADD COLUMN "noFailOnTrainEnabled" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN "minScoreRange" DECIMAL(5,2) NOT NULL DEFAULT 10,
+  ADD COLUMN "maxScoreRange" DECIMAL(5,2) NOT NULL DEFAULT 30;

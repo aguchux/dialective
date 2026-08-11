@@ -19,6 +19,10 @@ export function GeneralSettingsPanel() {
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
   const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
   const [wordStuckTimeoutHours, setWordStuckTimeoutHours] = useState('');
+  const [scoringSlaHours, setScoringSlaHours] = useState('');
+  const [noFailOnTrainEnabled, setNoFailOnTrainEnabled] = useState(false);
+  const [minScoreRange, setMinScoreRange] = useState('');
+  const [maxScoreRange, setMaxScoreRange] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,12 +35,21 @@ export function GeneralSettingsPanel() {
     setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
     setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
     setWordStuckTimeoutHours(String(settings.wordStuckTimeoutHours));
+    setScoringSlaHours(String(settings.scoringSlaHours));
+    setNoFailOnTrainEnabled(settings.noFailOnTrainEnabled);
+    setMinScoreRange(settings.minScoreRange);
+    setMaxScoreRange(settings.maxScoreRange);
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
     setError(null);
+
+    if (minScoreRange !== '' && maxScoreRange !== '' && Number(minScoreRange) > Number(maxScoreRange)) {
+      setError('Minimum score range cannot be greater than the maximum.');
+      return;
+    }
 
     try {
       await updateSettings({
@@ -49,6 +62,10 @@ export function GeneralSettingsPanel() {
         reverseWordTrainingEnabled,
         adminPayoutOtpEnabled,
         ...(wordStuckTimeoutHours !== '' ? { wordStuckTimeoutHours: Number(wordStuckTimeoutHours) } : {}),
+        ...(scoringSlaHours !== '' ? { scoringSlaHours: Number(scoringSlaHours) } : {}),
+        noFailOnTrainEnabled,
+        ...(minScoreRange !== '' ? { minScoreRange: Number(minScoreRange) } : {}),
+        ...(maxScoreRange !== '' ? { maxScoreRange: Number(maxScoreRange) } : {}),
       }).unwrap();
       setMessage('General settings saved.');
     } catch (err) {
@@ -157,6 +174,80 @@ export function GeneralSettingsPanel() {
               onChange={(e) => setWordStuckTimeoutHours(e.target.value)}
             />
           </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="scoring-sla-hours">
+              Scoring time limit (hours)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              How long a submitted task can wait for consensus scoring before it's resolved automatically -- either
+              refunded (below) or, if "Pay on timeout" is on, paid out at a random score.
+            </p>
+            <input
+              className={inputClass}
+              id="scoring-sla-hours"
+              type="number"
+              step="1"
+              min="1"
+              value={scoringSlaHours}
+              onChange={(e) => setScoringSlaHours(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="no-fail-on-train">
+              <input
+                checked={noFailOnTrainEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="no-fail-on-train"
+                onChange={(event) => setNoFailOnTrainEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Pay on timeout (no fail on train)</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  When on, a task still unscored past the scoring time limit is paid out at a random score within the
+                  range below instead of just being refunded -- the trainer completed and submitted real work, so
+                  they're paid for it even if consensus/reverse-validation never resolves.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          {noFailOnTrainEnabled && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1">
+                <label className="font-bold" htmlFor="min-score-range">
+                  Min score (%)
+                </label>
+                <input
+                  className={inputClass}
+                  id="min-score-range"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={minScoreRange}
+                  onChange={(e) => setMinScoreRange(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1">
+                <label className="font-bold" htmlFor="max-score-range">
+                  Max score (%)
+                </label>
+                <input
+                  className={inputClass}
+                  id="max-score-range"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={maxScoreRange}
+                  onChange={(e) => setMaxScoreRange(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="reverse-word-training">

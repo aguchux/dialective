@@ -169,6 +169,7 @@ export class WalletController {
       lockedBalance: wallet.lockedBalance.toString(),
       tokenUsdRate: await this.platformSettings.getTokenUsdRate(),
       taskTokenCost: (await this.platformSettings.getTaskTokenCost()).toString(),
+      scoringSlaHours: await this.platformSettings.getScoringSlaHours(),
       fundedTokens: ledgerAmount(['DEPOSIT']).toString(),
       trainingEarningsTokens: ledgerAmount(['TRAINING_PAYOUT']).toString(),
       referralEarningsTokens: ledgerAmount([

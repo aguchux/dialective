@@ -88,6 +88,21 @@ export class PlatformSettingsService {
     return row.wordStuckTimeoutHours;
   }
 
+  async getScoringSlaHours(): Promise<number> {
+    const row = await this.getRow();
+    return row.scoringSlaHours;
+  }
+
+  async isNoFailOnTrainEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.noFailOnTrainEnabled;
+  }
+
+  async getScoreRange(): Promise<{ min: number; max: number }> {
+    const row = await this.getRow();
+    return { min: row.minScoreRange.toNumber(), max: row.maxScoreRange.toNumber() };
+  }
+
   async getResendFromAddress(): Promise<string> {
     const row = await this.getRow();
     return row.resendFromAddress ?? process.env.RESEND_FROM_ADDRESS ?? 'noreply@dialectlibrary.com';
@@ -110,6 +125,10 @@ export class PlatformSettingsService {
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       wordStuckTimeoutHours: row.wordStuckTimeoutHours,
+      scoringSlaHours: row.scoringSlaHours,
+      noFailOnTrainEnabled: row.noFailOnTrainEnabled,
+      minScoreRange: row.minScoreRange.toString(),
+      maxScoreRange: row.maxScoreRange.toString(),
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -125,6 +144,10 @@ export class PlatformSettingsService {
     reverseWordTrainingEnabled?: boolean;
     adminPayoutOtpEnabled?: boolean;
     wordStuckTimeoutHours?: number;
+    scoringSlaHours?: number;
+    noFailOnTrainEnabled?: boolean;
+    minScoreRange?: number;
+    maxScoreRange?: number;
   }) {
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
@@ -141,6 +164,10 @@ export class PlatformSettingsService {
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       wordStuckTimeoutHours: row.wordStuckTimeoutHours,
+      scoringSlaHours: row.scoringSlaHours,
+      noFailOnTrainEnabled: row.noFailOnTrainEnabled,
+      minScoreRange: row.minScoreRange.toString(),
+      maxScoreRange: row.maxScoreRange.toString(),
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

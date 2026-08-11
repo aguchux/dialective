@@ -16,7 +16,7 @@ import {
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: HomeIcon },
   { href: '/admin/users', label: 'Users', icon: UsersIcon },
-  { href: '/admin/geo', label: 'Countries & Dialects', icon: GeoIcon },
+  { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
   { href: '/admin/referrals', label: 'Referrals', icon: ReferralIcon },
   { href: '/admin/pools', label: 'Reward Pool', icon: PoolIcon },
   { href: '/admin/blog', label: 'Blog', icon: BlogIcon },
