@@ -37,6 +37,20 @@ COPY --from=build /app/packages/db/package.json ./packages/db/package.json
 COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=production-dependencies /app/services/consensus-scorer/node_modules ./services/consensus-scorer/node_modules
+RUN node -e " \
+  const fs = require('fs'), path = require('path'); \
+  const src = './services/consensus-scorer/node_modules', dest = './node_modules'; \
+  function leaves(dir) { \
+    return fs.readdirSync(dir).flatMap((name) => { \
+      if (name.startsWith('@')) return fs.readdirSync(path.join(dir, name)).map((sub) => path.join(name, sub)); \
+      return [name]; \
+    }); \
+  } \
+  for (const rel of leaves(src)) { \
+    const from = path.join(src, rel), to = path.join(dest, rel); \
+    if (!fs.existsSync(to)) { fs.mkdirSync(path.dirname(to), { recursive: true }); fs.cpSync(from, to, { recursive: true }); } \
+  } \
+"
 COPY --from=build /app/services/consensus-scorer/dist ./services/consensus-scorer/dist
 WORKDIR /app/services/consensus-scorer
 RUN node -e "require('reflect-metadata'); require('@dialectiva/db')"
