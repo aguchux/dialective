@@ -49,6 +49,8 @@ model User {
   role          Role     @default(TRAINER)
   status        UserStatus @default(ACTIVE)
   emailVerified DateTime?
+  phoneNumber     String?   @unique // E.164 international format, e.g. "+2348012345678"
+  phoneVerifiedAt DateTime?
   countryId     String?
   country       Country? @relation(fields: [countryId], references: [id])
   dialectId     String?
@@ -186,6 +188,7 @@ enum OtpPurpose {
   DEPOSIT
   ADMIN_PAYOUT
   P2P_PAYMENT_METHOD
+  PHONE_VERIFICATION
 }
 
 /// One-time email codes gating registration/login (2FA), wallet/admin-payout,
@@ -869,6 +872,7 @@ model PlatformSettings {
   spellingNormalizationEnabled Boolean @default(false) // master kill switch for AI spelling normalization on ENGLISH_TO_DIALECT word recordings; writes WordRecording.normalizedTranslationText only, never affects scoring
   spellingNormalizationProviderOrder String @default("openai,deepseek,anthropic") // CSV fallback-try order for spelling normalization, same permutation rules as llmProviderOrder
   sentenceRebuildEnabled   Boolean  @default(false) // master kill switch for the SENTENCE_REBUILD word-training exercise; WordsService.nextAssignment never offers it when false
+  smsProviderOrder         String   @default("termii,twilio,africastalking") // CSV fallback-try order for phone-verification SMS OTPs, must be a permutation of {termii,twilio,africastalking}, validated app-side like llmProviderOrder
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 

@@ -34,6 +34,9 @@ secretGenerator:
   - name: llm-creds
     envs:
       - secrets/llm.env
+  - name: sms-creds
+    envs:
+      - secrets/sms.env
 
 configMapGenerator:
   - name: api-config

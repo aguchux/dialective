@@ -28,6 +28,7 @@
     "@radix-ui/react-popover": "^1.1.23",
     "@reduxjs/toolkit": "^2.12.0",
     "editorjs-drag-drop": "^1.1.16",
+    "libphonenumber-js": "^1.13.10",
     "lucide-react": "^1.31.0",
     "next": "^14.2.5",
     "next-auth": "^4.24.7",

@@ -10,6 +10,8 @@ export interface PublicUser {
   role: 'TRAINER' | 'ADMIN' | 'PARTNER';
   status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
   emailVerified: boolean;
+  phoneNumber: string | null;
+  phoneVerified: boolean;
   countryId: string | null;
   dialectId: string | null;
   dialectTag: string | null;
@@ -721,7 +723,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -887,6 +889,7 @@ export const dialectivaApi = createApi({
     }),
     getMe: builder.query<PublicUser, void>({
       query: () => '/auth/me',
+      providesTags: ['Profile'],
     }),
     updateProfile: builder.mutation<
       PublicUser,
@@ -897,6 +900,14 @@ export const dialectivaApi = createApi({
         method: 'PATCH',
         body,
       }),
+      invalidatesTags: ['Profile'],
+    }),
+    requestPhoneOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { phoneNumber: string }>({
+      query: (body) => ({ url: '/auth/phone/otp', method: 'POST', body }),
+    }),
+    verifyPhone: builder.mutation<PublicUser, { phoneNumber: string; otpRequestId: string; code: string }>({
+      query: (body) => ({ url: '/auth/phone/verify', method: 'POST', body }),
+      invalidatesTags: ['Profile'],
     }),
     requestMagicLink: builder.mutation<void, { email: string }>({
       query: (body) => ({
@@ -1192,6 +1203,8 @@ export const {
   useCreateWithdrawalMutation,
   useGetMeQuery,
   useUpdateProfileMutation,
+  useRequestPhoneOtpMutation,
+  useVerifyPhoneMutation,
   useCreateDataAccessLeadMutation,
   useGetAdminDataAccessLeadsQuery,
   useUpdateAdminDataAccessLeadContactMutation,

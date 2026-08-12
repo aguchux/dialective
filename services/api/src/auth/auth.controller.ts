@@ -12,6 +12,8 @@ import { ConsumeMagicLinkDto } from './dto/consume-magic-link.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { RequestPhoneOtpDto } from './dto/request-phone-otp.dto';
+import { VerifyPhoneOtpDto } from './dto/verify-phone-otp.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { OAuthCallbackGuard } from './guards/oauth-callback.guard';
@@ -106,6 +108,18 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   updateMe(@CurrentUser() user: AccessTokenClaims, @Body() dto: UpdateProfileDto) {
     return this.auth.updateProfile(user.sub, dto);
+  }
+
+  @Post('phone/otp')
+  @UseGuards(JwtAuthGuard)
+  requestPhoneOtp(@CurrentUser() user: AccessTokenClaims, @Body() dto: RequestPhoneOtpDto) {
+    return this.auth.requestPhoneVerificationOtp(user.sub, dto.phoneNumber);
+  }
+
+  @Post('phone/verify')
+  @UseGuards(JwtAuthGuard)
+  verifyPhone(@CurrentUser() user: AccessTokenClaims, @Body() dto: VerifyPhoneOtpDto) {
+    return this.auth.verifyPhoneNumber(user.sub, dto.phoneNumber, dto.otpRequestId, dto.code);
   }
 
   // --- Admin: user management ------------------------------------------------

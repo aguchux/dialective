@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { AsYouType, isValidPhoneNumber } from 'libphonenumber-js';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -63,6 +64,9 @@ import {
   useGetP2PPaymentMethodsQuery,
   useGetP2PSettingsQuery,
   useGetP2PReferenceRateQuery,
+  useGetMeQuery,
+  useRequestPhoneOtpMutation,
+  useVerifyPhoneMutation,
   useRequestP2PPaymentMethodOtpMutation,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
@@ -993,6 +997,7 @@ function MarketView() {
   const { data: sellOffers = [] } = useListP2POffersQuery({ type: 'SELL' });
   const { data: buyOffers = [] } = useListP2POffersQuery({ type: 'BUY' });
   const { data: trades = [] } = useListMyP2PTradesQuery();
+  const { data: me } = useGetMeQuery();
   const [createOffer, { isLoading: offerSaving }] = useCreateP2POfferMutation();
   const [acceptOffer, { isLoading: accepting }] = useAcceptP2POfferMutation();
   const [markPaid] = useMarkP2PTradePaidMutation();
@@ -1000,7 +1005,8 @@ function MarketView() {
   const [requestCancel] = useRequestP2PTradeCancelMutation();
   const [raiseDispute] = useRaiseP2PDisputeMutation();
   const primaryMethod = methods.find((method) => method.enabled);
-  const marketDisabled = !settings?.enabled;
+  const phoneVerified = me?.phoneVerified ?? false;
+  const marketDisabled = !settings?.enabled || !phoneVerified;
 
   // Pre-fills the offer form's currency with the trainer's own country currency once known; the field stays editable.
   useEffect(() => {
@@ -1110,10 +1116,16 @@ function MarketView() {
         </Dialog>
       </div>
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div>}
-      {marketDisabled && (
+      {!settings?.enabled && (
         <div className={`${cardClass} mb-5 p-5`}>
           <p className="font-black">P2P market is currently disabled.</p>
           <p className="mt-1 text-sm text-muted">Admin must enable marketplace settings before trades can start.</p>
+        </div>
+      )}
+      {settings?.enabled && !phoneVerified && (
+        <div className={`${cardClass} mb-5 p-5`}>
+          <p className="font-black">Verify your phone number to trade.</p>
+          <p className="mt-1 text-sm text-muted">Add and verify a phone number in Profile before buying or selling on the P2P market.</p>
         </div>
       )}
 
@@ -1136,8 +1148,8 @@ function MarketView() {
         </div>
 
         <div className="grid gap-5">
-          {activeTab === 'SELL' && <MarketOfferList accepting={accepting} offers={sellOffers} onAccept={accept} title="Sell offers" />}
-          {activeTab === 'BUY' && <MarketOfferList accepting={accepting} offers={buyOffers} onAccept={accept} title="Buy requests" />}
+          {activeTab === 'SELL' && <MarketOfferList accepting={accepting} disabled={marketDisabled} offers={sellOffers} onAccept={accept} title="Sell offers" />}
+          {activeTab === 'BUY' && <MarketOfferList accepting={accepting} disabled={marketDisabled} offers={buyOffers} onAccept={accept} title="Buy requests" />}
           {activeTab === 'TRADES' && (
           <section>
             <SectionTitle title="My trades" subtitle="Pay, release, cancel safely, or raise disputes." />
@@ -1167,11 +1179,13 @@ function MarketOfferList({
   offers,
   onAccept,
   accepting,
+  disabled,
 }: {
   title: string;
   offers: P2POffer[];
   onAccept: (offer: P2POffer) => void;
   accepting: boolean;
+  disabled: boolean;
 }) {
   return (
     <section>
@@ -1189,7 +1203,7 @@ function MarketOfferList({
             </div>
             <p className="font-extrabold">{Number(offer.fiatAmount).toLocaleString()} {offer.fiatCurrency}</p>
             <p className="text-sm text-muted">Expires {formatDateTime(offer.expiresAt)}</p>
-            <button className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50" disabled={accepting} onClick={() => onAccept(offer)} type="button">
+            <button className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50" disabled={accepting || disabled} onClick={() => onAccept(offer)} type="button">
               {offer.type === 'SELL' ? 'Buy tokens' : 'Sell to buyer'}
             </button>
           </div>
@@ -1310,6 +1324,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updateProfile, { isLoading }] = useUpdateProfileMutation();
+  const { data: me } = useGetMeQuery();
   const { data: methods = [] } = useGetP2PPaymentMethodsQuery();
   const [requestPaymentOtp, { isLoading: paymentOtpSending }] = useRequestP2PPaymentMethodOtpMutation();
   const [createPaymentMethod, { isLoading: paymentCreating }] = useCreateP2PPaymentMethodMutation();
@@ -1317,6 +1332,15 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const primaryMethod = methods.find((method) => method.enabled);
   const paymentSaving = paymentCreating || paymentUpdating;
   const { data: referenceRate } = useGetP2PReferenceRateQuery();
+  const phoneVerified = me?.phoneVerified ?? false;
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneOtpRequestId, setPhoneOtpRequestId] = useState('');
+  const [phoneOtpCode, setPhoneOtpCode] = useState('');
+  const [phoneMessage, setPhoneMessage] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [requestPhoneOtp, { isLoading: phoneOtpSending }] = useRequestPhoneOtpMutation();
+  const [verifyPhone, { isLoading: phoneVerifying }] = useVerifyPhoneMutation();
+  const phoneValid = isValidPhoneNumber(phoneNumber);
 
   const dirty = firstName.trim() !== (session.user.firstName ?? '') || lastName.trim() !== (session.user.lastName ?? '');
   const paymentPayload = {
@@ -1347,6 +1371,47 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     setter(value);
     setPaymentOtpRequestId('');
     setPaymentOtpCode('');
+  }
+
+  useEffect(() => {
+    if (me?.phoneNumber) setPhoneNumber(me.phoneNumber);
+  }, [me?.phoneNumber]);
+
+  function updatePhoneField(value: string) {
+    setPhoneNumber(value);
+    setPhoneOtpRequestId('');
+    setPhoneOtpCode('');
+  }
+
+  async function sendPhoneOtp() {
+    setPhoneMessage(null);
+    setPhoneError(null);
+    try {
+      const otp = await requestPhoneOtp({ phoneNumber }).unwrap();
+      setPhoneOtpRequestId(otp.otpRequestId);
+      setPhoneOtpCode('');
+      setPhoneMessage('Verification code sent by SMS.');
+    } catch (err) {
+      setPhoneError(normalizeErrorMessage(err, 'Could not send verification code.'));
+    }
+  }
+
+  async function submitPhoneVerification(event: FormEvent) {
+    event.preventDefault();
+    setPhoneMessage(null);
+    setPhoneError(null);
+    try {
+      if (!phoneOtpRequestId) {
+        await sendPhoneOtp();
+        return;
+      }
+      await verifyPhone({ phoneNumber, otpRequestId: phoneOtpRequestId, code: phoneOtpCode.trim() }).unwrap();
+      setPhoneOtpRequestId('');
+      setPhoneOtpCode('');
+      setPhoneMessage('Phone number verified.');
+    } catch (err) {
+      setPhoneError(normalizeErrorMessage(err, 'Could not verify phone number.'));
+    }
   }
 
   async function submit(event: FormEvent) {
@@ -1449,8 +1514,75 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
           </div>
         </form>
 
+        <form className={`${cardClass} grid gap-4 p-5`} onSubmit={submitPhoneVerification}>
+          <SectionTitle
+            title="Phone number"
+            subtitle={phoneVerified ? 'Verified. Required for payment methods and P2P trading.' : 'Verify by SMS before adding a payment method or trading on the P2P market.'}
+          />
+          <label className="grid gap-1.5 text-sm font-bold">
+            Phone number
+            <input
+              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+              disabled={phoneVerified}
+              onChange={(event) => updatePhoneField(new AsYouType().input(event.target.value))}
+              placeholder="+234 801 234 5678"
+              required
+              value={phoneNumber}
+            />
+          </label>
+          {phoneVerified && (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              This number is verified.
+            </p>
+          )}
+          {!phoneVerified && phoneOtpRequestId ? (
+            <label className="grid gap-1.5 text-sm font-bold">
+              SMS verification code
+              <input
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                inputMode="numeric"
+                maxLength={6}
+                onChange={(event) => setPhoneOtpCode(event.target.value)}
+                required
+                value={phoneOtpCode}
+              />
+            </label>
+          ) : null}
+          {phoneMessage && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{phoneMessage}</p>}
+          {phoneError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{phoneError}</p>}
+          {!phoneVerified && (
+            <div className="flex flex-wrap gap-2">
+              <ActionButton
+                className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!phoneValid}
+                onClick={() => void sendPhoneOtp()}
+                pending={phoneOtpSending}
+                pendingLabel="Sending"
+                type="button"
+              >
+                Send code
+              </ActionButton>
+              <ActionButton
+                className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!phoneValid || !phoneOtpRequestId || !phoneOtpCode.trim()}
+                pending={phoneVerifying}
+                pendingLabel="Verifying"
+                type="submit"
+              >
+                Verify
+              </ActionButton>
+            </div>
+          )}
+        </form>
+
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={savePaymentMethod}>
           <SectionTitle title="Payment method" subtitle="Stored in Profile and protected by email 2FA for every edit." />
+          {!phoneVerified && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              Verify your phone number above before adding a payment method.
+            </p>
+          )}
+          <fieldset className="contents" disabled={!phoneVerified}>
           <label className="grid gap-1.5 text-sm font-bold">
             Bank name
             <input
@@ -1522,6 +1654,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               Save bank details
             </ActionButton>
           </div>
+          </fieldset>
         </form>
 
         <div className={`${cardClass} grid gap-4 p-5`}>

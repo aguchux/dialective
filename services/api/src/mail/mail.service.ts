@@ -108,6 +108,10 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
       return { subject: 'Confirm this payout', intro: 'Enter this code to confirm this admin payout action.' };
     case 'P2P_PAYMENT_METHOD':
       return { subject: 'Confirm your payment method', intro: 'Enter this code to save your payment method.' };
+    case 'PHONE_VERIFICATION':
+      // Always SMS-delivered in practice (see OtpService.deliver) -- this
+      // case exists only so the switch stays exhaustive if ever called by mistake.
+      return { subject: 'Verify your phone number', intro: 'Enter this code to verify your phone number.' };
   }
 }
 

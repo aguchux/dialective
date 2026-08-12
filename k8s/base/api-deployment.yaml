@@ -164,6 +164,46 @@ spec:
                 secretKeyRef:
                   name: llm-creds
                   key: anthropic_api_key
+            - name: TWILIO_ACCOUNT_SID
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: twilio_account_sid
+            - name: TWILIO_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: twilio_auth_token
+            - name: TWILIO_FROM_NUMBER
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: twilio_from_number
+            - name: TERMII_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: termii_api_key
+            - name: TERMII_SENDER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: termii_sender_id
+            - name: AFRICASTALKING_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: africastalking_api_key
+            - name: AFRICASTALKING_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: africastalking_username
+            - name: AFRICASTALKING_SENDER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: africastalking_sender_id
           readinessProbe:
             httpGet:
               path: /health

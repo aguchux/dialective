@@ -127,4 +127,12 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsBoolean()
   sentenceRebuildEnabled?: boolean;
+
+  // 3 comma-separated tokens from {termii,twilio,africastalking}; exact
+  // permutation validated in PlatformSettingsService.update, same shape as
+  // llmProviderOrder.
+  @IsOptional()
+  @IsString()
+  @Matches(/^(termii|twilio|africastalking),(termii|twilio|africastalking),(termii|twilio|africastalking)$/)
+  smsProviderOrder?: string;
 }

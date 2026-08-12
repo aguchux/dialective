@@ -8,12 +8,14 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, randomUUID } from 'crypto';
-import { AuthProvider, OtpPurpose, Role, User, UserStatus } from '@dialectiva/db';
+import { AuthProvider, OtpPurpose, Prisma, Role, User, UserStatus } from '@dialectiva/db';
+import { isValidPhoneNumber } from 'libphonenumber-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { OtpService } from '../otp/otp.service';
 import { generateOpaqueToken, hashToken } from './token.util';
 import { signAccessToken } from './jwt.util';
+import { phoneVerificationContextHash } from './phone-otp-context.util';
 
 const BCRYPT_ROUNDS = 12;
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -44,6 +46,8 @@ export interface PublicUser {
   role: Role;
   status: UserStatus;
   emailVerified: boolean;
+  phoneNumber: string | null;
+  phoneVerified: boolean;
   countryId: string | null;
   dialectId: string | null;
   dialectTag: string | null;
@@ -62,6 +66,8 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     role: user.role,
     status: user.status,
     emailVerified: user.emailVerified !== null,
+    phoneNumber: user.phoneNumber,
+    phoneVerified: user.phoneVerifiedAt !== null,
     countryId: user.countryId,
     dialectId: user.dialectId,
     dialectTag: user.dialect?.tag ?? null,
@@ -454,6 +460,56 @@ export class AuthService {
     });
 
     return toPublicUser(user);
+  }
+
+  /**
+   * Issues an SMS OTP to a candidate phone number, context-bound so the
+   * code can't later be redeemed against a different number. Never trust
+   * client-side E.164 validation alone -- re-validated here.
+   */
+  async requestPhoneVerificationOtp(userId: string, phoneNumber: string) {
+    if (!isValidPhoneNumber(phoneNumber)) {
+      throw new UnprocessableEntityException('Enter a valid phone number in international format');
+    }
+    const existing = await this.prisma.user.findUnique({ where: { phoneNumber }, select: { id: true } });
+    if (existing && existing.id !== userId) {
+      throw new ConflictException('This phone number is already verified on another account');
+    }
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    return this.otp.issueForUser(
+      user.id,
+      OtpPurpose.PHONE_VERIFICATION,
+      phoneNumber,
+      phoneVerificationContextHash(phoneNumber),
+      'SMS',
+    );
+  }
+
+  async verifyPhoneNumber(userId: string, phoneNumber: string, otpRequestId: string, code: string): Promise<PublicUser> {
+    if (!isValidPhoneNumber(phoneNumber)) {
+      throw new UnprocessableEntityException('Enter a valid phone number in international format');
+    }
+    await this.otp.verify({
+      otpRequestId,
+      userId,
+      purpose: OtpPurpose.PHONE_VERIFICATION,
+      code,
+      contextHash: phoneVerificationContextHash(phoneNumber),
+    });
+
+    try {
+      const user = await this.prisma.user.update({
+        where: { id: userId },
+        data: { phoneNumber, phoneVerifiedAt: new Date() },
+        include: { dialect: true },
+      });
+      return toPublicUser(user);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('This phone number is already verified on another account');
+      }
+      throw err;
+    }
   }
 
   // --- Admin: user management ------------------------------------------------

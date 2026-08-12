@@ -100,7 +100,16 @@ export class P2PService {
     return this.otp.issueForUser(userId, OtpPurpose.P2P_PAYMENT_METHOD, user.email, paymentMethodContextHash(dto));
   }
 
+  /** Verify-phone gate for payment methods and P2P trading -- see schema.prisma's User.phoneVerifiedAt doc. */
+  private async requirePhoneVerified(userId: string, action: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { phoneVerifiedAt: true } });
+    if (!user.phoneVerifiedAt) {
+      throw new UnprocessableEntityException(`Verify your phone number before ${action}`);
+    }
+  }
+
   async createPaymentMethod(userId: string, dto: UpsertPaymentMethodDto) {
+    await this.requirePhoneVerified(userId, 'adding a payment method');
     await this.verifyPaymentMethodOtp(userId, dto);
     return this.prisma.userPaymentMethod.create({
       data: {
@@ -112,6 +121,7 @@ export class P2PService {
   }
 
   async updatePaymentMethod(userId: string, id: string, dto: UpsertPaymentMethodDto) {
+    await this.requirePhoneVerified(userId, 'editing a payment method');
     const method = await this.prisma.userPaymentMethod.findFirst({ where: { id, userId } });
     if (!method) throw new NotFoundException('Payment method not found');
     await this.verifyPaymentMethodOtp(userId, { ...dto, id });
@@ -119,6 +129,7 @@ export class P2PService {
   }
 
   async createOffer(userId: string, dto: CreateOfferDto) {
+    await this.requirePhoneVerified(userId, 'trading on the P2P market');
     const settings = await this.requireMarketEnabled(dto.type);
     this.validateTradeInput(settings, dto.tokenAmount, dto.fiatCurrency, dto.paymentMethod);
 
@@ -228,6 +239,7 @@ export class P2PService {
   }
 
   async acceptOffer(userId: string, offerId: string, dto: AcceptOfferDto) {
+    await this.requirePhoneVerified(userId, 'trading on the P2P market');
     await this.expireStaleRecords();
     const offer = await this.prisma.p2PTokenOffer.findUnique({ where: { id: offerId }, include: { paymentMethodRef: true } });
     if (!offer || offer.status !== P2POfferStatus.ACTIVE || offer.expiresAt <= new Date()) {

@@ -2,8 +2,11 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { OtpPurpose } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { SmsService } from '../sms/sms.service';
 import { generateOpaqueToken, hashToken } from '../auth/token.util';
 import { generateOtpCode, hashOtpCode } from './otp.util';
+
+export type OtpChannel = 'EMAIL' | 'SMS';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_TTL_SECONDS = OTP_TTL_MS / 1000;
@@ -35,9 +38,23 @@ export class OtpService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly sms: SmsService,
   ) {}
 
-  async issueWithTicket(userId: string, purpose: OtpPurpose, email: string): Promise<IssuedTicketOtp> {
+  private async deliver(channel: OtpChannel, destination: string, code: string, purpose: OtpPurpose): Promise<void> {
+    if (channel === 'SMS') {
+      await this.sms.sendOtp(destination, code);
+    } else {
+      await this.mail.sendOtpEmail(destination, code, purpose);
+    }
+  }
+
+  async issueWithTicket(
+    userId: string,
+    purpose: OtpPurpose,
+    destination: string,
+    channel: OtpChannel = 'EMAIL',
+  ): Promise<IssuedTicketOtp> {
     const { code, hash: codeHash } = generateOtpCode();
     const { token: ticket, hash: ticketHash } = generateOpaqueToken();
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
@@ -45,7 +62,7 @@ export class OtpService {
     await this.prisma.otpCode.create({
       data: { userId, purpose, codeHash, ticketHash, expiresAt },
     });
-    await this.mail.sendOtpEmail(email, code, purpose);
+    await this.deliver(channel, destination, code, purpose);
 
     return { ticket, expiresInSeconds: OTP_TTL_SECONDS };
   }
@@ -53,8 +70,9 @@ export class OtpService {
   async issueForUser(
     userId: string,
     purpose: OtpPurpose,
-    email: string,
+    destination: string,
     contextHash: string | null,
+    channel: OtpChannel = 'EMAIL',
   ): Promise<IssuedRequestOtp> {
     const { code, hash: codeHash } = generateOtpCode();
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
@@ -62,7 +80,7 @@ export class OtpService {
     const row = await this.prisma.otpCode.create({
       data: { userId, purpose, codeHash, contextHash, expiresAt },
     });
-    await this.mail.sendOtpEmail(email, code, purpose);
+    await this.deliver(channel, destination, code, purpose);
 
     return { otpRequestId: row.id, expiresInSeconds: OTP_TTL_SECONDS };
   }
@@ -71,7 +89,11 @@ export class OtpService {
    * Regenerates the code on the same still-pending row (keeps the same
    * ticket/otpRequestId/contextHash so the client doesn't need to re-fetch
    * an id) -- simpler than minting a fresh row, and equally safe since the
-   * old code is overwritten (no longer valid) the moment this runs.
+   * old code is overwritten (no longer valid) the moment this runs. Routes
+   * to SMS for PHONE_VERIFICATION (destination = user.phoneNumber, set by
+   * the same request that created this row) and email otherwise -- purpose
+   * is a reliable channel discriminant since PHONE_VERIFICATION is the only
+   * SMS-delivered purpose.
    */
   async resend(idOrTicket: string, byTicket: boolean): Promise<void> {
     const row = byTicket
@@ -87,7 +109,13 @@ export class OtpService {
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
     await this.prisma.otpCode.update({ where: { id: row.id }, data: { codeHash, expiresAt, attempts: 0 } });
-    await this.mail.sendOtpEmail(user.email, code, row.purpose);
+
+    if (row.purpose === 'PHONE_VERIFICATION') {
+      if (!user.phoneNumber) throw new UnauthorizedException('This code request is no longer valid');
+      await this.sms.sendOtp(user.phoneNumber, code);
+    } else {
+      await this.mail.sendOtpEmail(user.email, code, row.purpose);
+    }
   }
 
   /**

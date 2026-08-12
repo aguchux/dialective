@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 const LLM_PROVIDER_KEYS = ['openai', 'deepseek', 'anthropic'];
+const SMS_PROVIDER_KEYS = ['termii', 'twilio', 'africastalking'];
 
 /**
  * Admin-editable platform settings that previously only existed as env-var
@@ -95,6 +96,11 @@ export class PlatformSettingsService {
     return row.sentenceRebuildEnabled;
   }
 
+  async getSmsProviderOrder(): Promise<string> {
+    const row = await this.getRow();
+    return row.smsProviderOrder;
+  }
+
   async isAdminPayoutOtpEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.adminPayoutOtpEnabled;
@@ -158,6 +164,7 @@ export class PlatformSettingsService {
       spellingNormalizationEnabled: row.spellingNormalizationEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
+      smsProviderOrder: row.smsProviderOrder,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -189,6 +196,7 @@ export class PlatformSettingsService {
     spellingNormalizationEnabled?: boolean;
     spellingNormalizationProviderOrder?: string;
     sentenceRebuildEnabled?: boolean;
+    smsProviderOrder?: string;
   }) {
     if (data.llmProviderOrder) {
       const tokens = data.llmProviderOrder.split(',');
@@ -209,6 +217,17 @@ export class PlatformSettingsService {
         new Set(tokens).size === LLM_PROVIDER_KEYS.length;
       if (!isValidPermutation) {
         throw new BadRequestException('spellingNormalizationProviderOrder must list openai, deepseek, and anthropic exactly once each');
+      }
+    }
+
+    if (data.smsProviderOrder) {
+      const tokens = data.smsProviderOrder.split(',');
+      const isValidPermutation =
+        tokens.length === SMS_PROVIDER_KEYS.length &&
+        SMS_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
+        new Set(tokens).size === SMS_PROVIDER_KEYS.length;
+      if (!isValidPermutation) {
+        throw new BadRequestException('smsProviderOrder must list termii, twilio, and africastalking exactly once each');
       }
     }
 
@@ -263,6 +282,7 @@ export class PlatformSettingsService {
       spellingNormalizationEnabled: row.spellingNormalizationEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
+      smsProviderOrder: row.smsProviderOrder,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
