@@ -27,7 +27,8 @@ export function LandingHeader() {
   const isAuthenticated = status === 'authenticated';
   const homePath = roleHomePath(session?.user?.role, session?.user?.onboardingComplete);
   const email = session?.user?.email ?? '';
-  const initial = email ? email[0].toUpperCase() : '?';
+  const displayName = [session?.user?.firstName, session?.user?.lastName].filter(Boolean).join(' ') || email;
+  const initial = displayName ? displayName[0].toUpperCase() : '?';
 
   const [pinned, setPinned] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -100,10 +101,10 @@ export function LandingHeader() {
                   <span className="grid size-8 place-items-center rounded-full bg-accent text-sm font-black text-white">
                     {initial}
                   </span>
-                  <span className="hidden max-w-40 truncate font-bold sm:inline">{email}</span>
+                  <span className="hidden max-w-40 truncate font-bold sm:inline">{displayName}</span>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
-                  <DropdownMenuLabel>{email}</DropdownMenuLabel>
+                  <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => router.push(homePath)}>Dashboard</DropdownMenuItem>
                   <DropdownMenuSeparator />

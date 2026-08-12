@@ -629,6 +629,9 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/wallet/withdrawals', method: 'POST', body }),
       invalidatesTags: ['Wallet'],
     }),
+    getMe: builder.query<PublicUser, void>({
+      query: () => '/auth/me',
+    }),
     updateProfile: builder.mutation<
       PublicUser,
       { countryId?: string; dialectId?: string; firstName?: string; lastName?: string }
@@ -887,6 +890,7 @@ export const {
   useCreateTokenDepositMutation,
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
+  useGetMeQuery,
   useUpdateProfileMutation,
   useCreateDataAccessLeadMutation,
   useGetAdminDataAccessLeadsQuery,
