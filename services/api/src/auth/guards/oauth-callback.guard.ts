@@ -1,4 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { timingSafeEqual } from 'crypto';
 import { Request } from 'express';
 
 /**
@@ -18,7 +19,10 @@ export class OAuthCallbackGuard implements CanActivate {
     if (!expected) {
       throw new Error('OAUTH_CALLBACK_SECRET is not set');
     }
-    if (provided !== expected) {
+    const value = Array.isArray(provided) ? provided[0] : provided;
+    const expectedBuf = Buffer.from(expected);
+    const providedBuf = Buffer.from(value ?? '');
+    if (expectedBuf.length !== providedBuf.length || !timingSafeEqual(expectedBuf, providedBuf)) {
       throw new UnauthorizedException('Invalid callback secret');
     }
     return true;

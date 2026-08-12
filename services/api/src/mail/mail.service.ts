@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Resend } from 'resend';
 import { OtpPurpose } from '@dialectiva/db';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
@@ -76,7 +76,7 @@ export class MailService {
     const { error } = await this.resend.emails.send({ from, to, subject, html, text });
     if (error) {
       this.logger.error(`Resend send failed for ${to}: ${error.message}`);
-      throw new Error(`Failed to send email: ${error.message}`);
+      throw new ServiceUnavailableException('Email delivery is temporarily unavailable');
     }
   }
 }

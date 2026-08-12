@@ -1,5 +1,6 @@
 import {
   Body,
+  ForbiddenException,
   Controller,
   Get,
   NotFoundException,
@@ -30,6 +31,7 @@ const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   'audio/webm': 'webm',
   'audio/ogg': 'ogg',
 };
+const SUBMISSION_KEY_PATTERN = /^[a-z0-9-]+\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(wav|webm|ogg)$/i;
 
 @Controller('submissions')
 export class SubmissionsController {
@@ -52,6 +54,19 @@ export class SubmissionsController {
   @Post('upload-url')
   @UseGuards(JwtAuthGuard)
   async createUploadUrl(@Body() body: CreateUploadUrlDto) {
+    const route = this.asrRegistry.resolve(body.dialectTag);
+    if (!route) {
+      throw new UnprocessableEntityException(`Unsupported dialect: ${body.dialectTag}`);
+    }
+
+    const prompt = await this.prisma.prompt.findFirst({
+      where: { id: body.promptId, dialectTag: body.dialectTag, active: true },
+      select: { id: true },
+    });
+    if (!prompt) {
+      throw new NotFoundException('Prompt not found');
+    }
+
     const submissionId = randomUUID();
     const extension = EXTENSION_BY_CONTENT_TYPE[body.contentType];
     const key = `${body.dialectTag}/${body.promptId}/${submissionId}.${extension}`;
@@ -86,12 +101,22 @@ export class SubmissionsController {
   @Post('create')
   @UseGuards(JwtAuthGuard)
   async create(@Req() req: AuthenticatedRequest, @Body() body: CreateSubmissionDto) {
+    if (body.bucket !== SUBMISSIONS_BUCKET || !SUBMISSION_KEY_PATTERN.test(body.audioKey)) {
+      throw new ForbiddenException('Submission upload does not match an issued upload target');
+    }
+    const expectedKeyPrefix = `${body.dialectTag}/${body.promptId}/${body.submissionId}.`;
+    if (!body.audioKey.startsWith(expectedKeyPrefix)) {
+      throw new ForbiddenException('Submission upload does not belong to this prompt');
+    }
+
     const route = this.asrRegistry.resolve(body.dialectTag);
     if (!route) {
       throw new UnprocessableEntityException(`Unsupported dialect: ${body.dialectTag}`);
     }
 
-    const prompt = await this.prisma.prompt.findUnique({ where: { id: body.promptId } });
+    const prompt = await this.prisma.prompt.findFirst({
+      where: { id: body.promptId, dialectTag: body.dialectTag, active: true },
+    });
     if (!prompt) {
       throw new NotFoundException('Prompt not found');
     }
@@ -108,46 +133,47 @@ export class SubmissionsController {
 
     // updateMany's WHERE (not a read-then-compare) makes the lock safe
     // under concurrent requests -- same atomic-guard pattern as
-    // WalletController.createWithdrawal. Both writes are one $transaction,
-    // so if updateMany matches 0 rows, the LedgerEntry create still ran
-    // (updateMany matching 0 rows isn't a thrown error) -- delete it
-    // explicitly below rather than assume an implicit rollback. This moves
+    // WalletController.createWithdrawal. The wallet lock, ledger entry,
+    // and submission row are one transaction, so duplicate or rejected
+    // submissions cannot leave orphaned token locks. This moves
     // taskTokenCost from spendable balance into lockedBalance rather than
     // debiting it outright -- see Wallet.lockedBalance; the lock releases
     // back to balance on REJECTED (settlement-job's refund sweep) or is
     // replaced by the full no-loss payout on SCORED (settlement).
-    const [lock] = await this.prisma.$transaction([
-      this.prisma.wallet.updateMany({
+    const locked = await this.prisma.$transaction(async (tx) => {
+      const lock = await tx.wallet.updateMany({
         where: { id: wallet.id, balance: { gte: taskTokenCost } },
         data: { balance: { decrement: taskTokenCost }, lockedBalance: { increment: taskTokenCost } },
-      }),
-      this.prisma.ledgerEntry.create({
+      });
+      if (lock.count === 0) {
+        throw new UnprocessableEntityException(`Insufficient balance: this task costs ${taskTokenCost} tokens`);
+      }
+
+      await tx.ledgerEntry.create({
         data: {
           walletId: wallet.id,
           type: 'TASK_LOCK',
           amount: -taskTokenCost,
           reference: body.submissionId,
         },
-      }),
-    ]);
+      });
 
-    if (lock.count === 0) {
-      await this.prisma.ledgerEntry.deleteMany({ where: { reference: body.submissionId, type: 'TASK_LOCK' } });
-      throw new UnprocessableEntityException(`Insufficient balance: this task costs ${taskTokenCost} tokens`);
-    }
+      await tx.submission.create({
+        data: {
+          id: body.submissionId,
+          userId: req.user.sub,
+          promptId: body.promptId,
+          dialectTag: body.dialectTag,
+          audioBucket: body.bucket,
+          audioKey: body.audioKey,
+          status: 'PENDING',
+          tokensSpent: taskTokenCost,
+        },
+      });
 
-    await this.prisma.submission.create({
-      data: {
-        id: body.submissionId,
-        userId: req.user.sub,
-        promptId: body.promptId,
-        dialectTag: body.dialectTag,
-        audioBucket: body.bucket,
-        audioKey: body.audioKey,
-        status: 'PENDING',
-        tokensSpent: taskTokenCost,
-      },
+      return true;
     });
+    if (!locked) throw new UnprocessableEntityException('Unable to lock task tokens');
 
     await this.streams.publish(route.stream, {
       submission_id: body.submissionId,
@@ -169,7 +195,15 @@ export class SubmissionsController {
    */
   @Get(':submissionId/result')
   @UseGuards(JwtAuthGuard)
-  async getResult(@Param('submissionId') submissionId: string) {
+  async getResult(@Req() req: AuthenticatedRequest, @Param('submissionId') submissionId: string) {
+    const submission = await this.prisma.submission.findFirst({
+      where: { id: submissionId, userId: req.user.sub },
+      select: { id: true },
+    });
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
+    }
+
     const raw = await this.streams.get(`result:${submissionId}`);
     if (!raw) {
       throw new NotFoundException('Result not ready yet');

@@ -76,8 +76,6 @@ export class BlogAdminController {
 }
 
 function safeExtension(fileName: string, contentType: string): string {
-  const extension = fileName.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (extension && extension.length <= 8) return extension;
   const fallbacks: Record<string, string> = {
     'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif',
     'video/mp4': 'mp4', 'video/webm': 'webm', 'video/ogg': 'ogv', 'video/quicktime': 'mov',
