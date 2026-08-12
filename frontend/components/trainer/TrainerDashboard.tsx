@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { isValidPhoneNumber } from 'libphonenumber-js';
+import { isValidPhoneNumber, parsePhoneNumberFromString } from 'libphonenumber-js';
 import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
@@ -1342,7 +1342,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [requestPhoneOtp, { isLoading: phoneOtpSending }] = useRequestPhoneOtpMutation();
   const [verifyPhone, { isLoading: phoneVerifying }] = useVerifyPhoneMutation();
-  const phoneValid = isValidPhoneNumber(phoneNumber);
+  const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+  const phoneValid = isValidPhoneNumber(normalizedPhoneNumber);
 
   const dirty = firstName.trim() !== (session.user.firstName ?? '') || lastName.trim() !== (session.user.lastName ?? '');
   const paymentPayload = {
@@ -1380,7 +1381,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   }, [me?.phoneNumber]);
 
   function updatePhoneField(value: string) {
-    setPhoneNumber(value);
+    setPhoneNumber(normalizePhoneNumber(value));
     setPhoneOtpRequestId('');
     setPhoneOtpCode('');
   }
@@ -1389,7 +1390,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     setPhoneMessage(null);
     setPhoneError(null);
     try {
-      const otp = await requestPhoneOtp({ phoneNumber }).unwrap();
+      const otp = await requestPhoneOtp({ phoneNumber: normalizedPhoneNumber }).unwrap();
       setPhoneOtpRequestId(otp.otpRequestId);
       setPhoneOtpCode('');
       setPhoneMessage('Verification code sent by SMS.');
@@ -1407,7 +1408,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
         await sendPhoneOtp();
         return;
       }
-      await verifyPhone({ phoneNumber, otpRequestId: phoneOtpRequestId, code: phoneOtpCode.trim() }).unwrap();
+      await verifyPhone({ phoneNumber: normalizedPhoneNumber, otpRequestId: phoneOtpRequestId, code: phoneOtpCode.trim() }).unwrap();
       setPhoneOtpRequestId('');
       setPhoneOtpCode('');
       setPhoneMessage('Phone number verified.');
@@ -1535,7 +1536,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                 placeholder: 'Mobile number',
               }}
               countrySelectorStyleProps={{
-                buttonClassName: '!min-h-11 !rounded-l-lg !rounded-r-none !border !border-line !border-r-0 !bg-surface',
+                buttonClassName: '!min-h-11 !rounded-l-lg !rounded-r-none !border !border-line !border-r-0 !bg-surface !pl-3',
+                buttonContentWrapperClassName: '!gap-1.5',
+                flagClassName: '!m-0',
               }}
               dialCodePreviewStyleProps={{
                 className: '!min-h-11 !items-center !border !border-line !border-r-0 !bg-surface !px-2 !font-extrabold !text-muted',
@@ -2241,6 +2244,11 @@ function formatMonth(value: string) {
   const date = new Date(`${value}-01T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return '';
   return new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(date);
+}
+
+function normalizePhoneNumber(value: string) {
+  const parsed = parsePhoneNumberFromString(value);
+  return parsed?.number ?? `+${value.replace(/\D/g, '')}`;
 }
 
 function emailName(email?: string | null) {

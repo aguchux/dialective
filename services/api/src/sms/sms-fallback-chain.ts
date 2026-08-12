@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { SmsDeliveryException } from './sms-delivery.exception';
 import { SmsProvider, SmsProviderKey } from './sms-provider.interface';
 
 /**
@@ -27,6 +28,7 @@ export class SmsFallbackChain {
       }
     }
 
-    throw new Error(`All SMS providers failed -- ${failures.join('; ')}`);
+    this.logger.error(`All SMS providers failed -- ${failures.join('; ')}`);
+    throw new SmsDeliveryException();
   }
 }

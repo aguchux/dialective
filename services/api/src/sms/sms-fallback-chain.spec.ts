@@ -80,7 +80,7 @@ describe('SmsFallbackChain', () => {
 
     await expect(
       chain.send('+2348012345678', 'code', ['termii', 'twilio', 'africastalking', 'smslive247']),
-    ).rejects.toThrow(/termii: bad key.*twilio: timeout.*africastalking: unauthorized.*smslive247: invalid sender id/s);
+    ).rejects.toThrow('SMS delivery is temporarily unavailable');
   });
 
   it('respects a custom (non-default) provider order', async () => {
