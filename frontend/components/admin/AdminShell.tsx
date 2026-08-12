@@ -30,7 +30,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { data: session } = useSession();
   const email = session?.user?.email ?? '';
-  const initial = email ? email[0].toUpperCase() : '?';
+  const displayName = [session?.user?.firstName, session?.user?.lastName].filter(Boolean).join(' ') || email;
+  const initial = displayName ? displayName[0].toUpperCase() : '?';
 
   return (
     <div className="grid min-h-screen bg-surface-muted text-ink md:grid-cols-[240px_1fr]">
@@ -84,11 +85,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pl-1 pr-2.5 transition-colors hover:bg-surface-muted">
                 <span className="grid size-7 place-items-center rounded-full bg-accent text-sm font-black text-white">{initial}</span>
-                <span className="hidden max-w-40 truncate text-sm font-bold sm:inline">{email}</span>
+                <span className="hidden max-w-40 truncate text-sm font-bold sm:inline">{displayName}</span>
                 <ChevronIcon />
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuLabel>{email}</DropdownMenuLabel>
+                <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => router.push('/admin/profile')}>
                   <ProfileIcon />
