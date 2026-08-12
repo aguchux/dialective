@@ -204,6 +204,16 @@ spec:
                 secretKeyRef:
                   name: sms-creds
                   key: africastalking_sender_id
+            - name: SMSLIVE247_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: smslive247_api_key
+            - name: SMSLIVE247_SENDER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: smslive247_sender_id
           readinessProbe:
             httpGet:
               path: /health

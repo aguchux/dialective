@@ -1,6 +1,6 @@
-export type SmsProviderKey = 'termii' | 'twilio' | 'africastalking';
+export type SmsProviderKey = 'termii' | 'twilio' | 'africastalking' | 'smslive247';
 
-export const ALL_SMS_PROVIDER_KEYS: SmsProviderKey[] = ['termii', 'twilio', 'africastalking'];
+export const ALL_SMS_PROVIDER_KEYS: SmsProviderKey[] = ['termii', 'twilio', 'africastalking', 'smslive247'];
 
 /**
  * A single provider sends one SMS to one E.164 number. Each implementation
@@ -15,7 +15,7 @@ export interface SmsProvider {
   send(toE164: string, body: string): Promise<void>;
 }
 
-const DEFAULT_PROVIDER_ORDER: SmsProviderKey[] = ['termii', 'twilio', 'africastalking'];
+const DEFAULT_PROVIDER_ORDER: SmsProviderKey[] = ['termii', 'twilio', 'africastalking', 'smslive247'];
 
 /** Parses a CSV provider-order string, falling back to the default order if it isn't a valid permutation. */
 export function parseSmsProviderOrder(csv: string): SmsProviderKey[] {

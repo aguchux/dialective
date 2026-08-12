@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 const LLM_PROVIDER_KEYS = ['openai', 'deepseek', 'anthropic'];
-const SMS_PROVIDER_KEYS = ['termii', 'twilio', 'africastalking'];
+const SMS_PROVIDER_KEYS = ['termii', 'twilio', 'africastalking', 'smslive247'];
 
 /**
  * Admin-editable platform settings that previously only existed as env-var
@@ -227,7 +227,7 @@ export class PlatformSettingsService {
         SMS_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
         new Set(tokens).size === SMS_PROVIDER_KEYS.length;
       if (!isValidPermutation) {
-        throw new BadRequestException('smsProviderOrder must list termii, twilio, and africastalking exactly once each');
+        throw new BadRequestException('smsProviderOrder must list termii, twilio, africastalking, and smslive247 exactly once each');
       }
     }
 

@@ -8,19 +8,23 @@ const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
-type SmsProviderKey = 'termii' | 'twilio' | 'africastalking';
+type SmsProviderKey = 'termii' | 'twilio' | 'africastalking' | 'smslive247';
 
 const PROVIDER_LABELS: Record<SmsProviderKey, string> = {
   termii: 'Termii',
   twilio: 'Twilio',
   africastalking: "Africa's Talking",
+  smslive247: 'SMSLive247',
 };
 
-const DEFAULT_ORDER: SmsProviderKey[] = ['termii', 'twilio', 'africastalking'];
+const DEFAULT_ORDER: SmsProviderKey[] = ['termii', 'twilio', 'africastalking', 'smslive247'];
 
 function parseOrder(csv: string): SmsProviderKey[] {
   const parts = csv.split(',').map((part) => part.trim()) as SmsProviderKey[];
-  const isValid = parts.length === 3 && DEFAULT_ORDER.every((key) => parts.includes(key)) && new Set(parts).size === 3;
+  const isValid =
+    parts.length === DEFAULT_ORDER.length &&
+    DEFAULT_ORDER.every((key) => parts.includes(key)) &&
+    new Set(parts).size === DEFAULT_ORDER.length;
   return isValid ? parts : DEFAULT_ORDER;
 }
 
@@ -37,7 +41,7 @@ export function SmsSettingsPanel() {
     setOrder(parseOrder(settings.smsProviderOrder));
   }, [settings]);
 
-  function setChoice(position: 0 | 1 | 2, provider: SmsProviderKey) {
+  function setChoice(position: 0 | 1 | 2 | 3, provider: SmsProviderKey) {
     setOrder((current) => {
       const next = [...current] as SmsProviderKey[];
       next[position] = provider;
@@ -50,8 +54,8 @@ export function SmsSettingsPanel() {
     setMessage(null);
     setError(null);
 
-    if (new Set(order).size !== 3) {
-      setError('Each provider choice (1st, 2nd, 3rd) must be distinct.');
+    if (new Set(order).size !== DEFAULT_ORDER.length) {
+      setError('Each provider choice must be distinct.');
       return;
     }
 
@@ -80,11 +84,11 @@ export function SmsSettingsPanel() {
           <div className="grid gap-2">
             <span className="font-bold">Provider order (fallback chain)</span>
             <p className="text-sm leading-relaxed text-muted">
-              1st choice is tried first; 2nd and 3rd are only used if the ones before them fail. All three must be
+              1st choice is tried first; the rest are only used if the ones before them fail. All four must be
               distinct.
             </p>
-            <div className="grid grid-cols-3 gap-3">
-              {(['1st choice', '2nd choice', '3rd choice'] as const).map((label, index) => (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {(['1st choice', '2nd choice', '3rd choice', '4th choice'] as const).map((label, index) => (
                 <div className="grid gap-1" key={label}>
                   <label className="text-sm font-bold" htmlFor={`sms-order-${index}`}>
                     {label}
@@ -93,7 +97,7 @@ export function SmsSettingsPanel() {
                     className={inputClass}
                     id={`sms-order-${index}`}
                     value={order[index]}
-                    onChange={(e) => setChoice(index as 0 | 1 | 2, e.target.value as SmsProviderKey)}
+                    onChange={(e) => setChoice(index as 0 | 1 | 2 | 3, e.target.value as SmsProviderKey)}
                   >
                     {DEFAULT_ORDER.map((key) => (
                       <option key={key} value={key}>
