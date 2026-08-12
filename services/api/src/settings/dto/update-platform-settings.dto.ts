@@ -1,4 +1,22 @@
-import { IsBoolean, IsEmail, IsInt, IsNumber, IsOptional, IsPositive, IsString, Matches, Max, Min } from 'class-validator';
+import { IsBoolean, IsEmail, IsInt, IsNumber, IsOptional, IsPositive, IsString, Matches, Max, Min, Validate } from 'class-validator';
+import { ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
+
+/** Accepts either a bare email ("noreply@x.com") or a display-name form ("Dialect Library" <noreply@x.com>) -- both are valid Resend "from" values. */
+@ValidatorConstraint({ name: 'isEmailOrNamedEmail', async: false })
+class IsEmailOrNamedEmailConstraint implements ValidatorConstraintInterface {
+  private static readonly EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  private static readonly NAMED_RE = /^"?([^"<]{1,200}?)"?\s*<([^\s@]+@[^\s@]+\.[^\s@]+)>$/;
+
+  validate(value: unknown): boolean {
+    if (typeof value !== 'string') return false;
+    const trimmed = value.trim();
+    return IsEmailOrNamedEmailConstraint.EMAIL_RE.test(trimmed) || IsEmailOrNamedEmailConstraint.NAMED_RE.test(trimmed);
+  }
+
+  defaultMessage(): string {
+    return 'Must be an email address, or "Display Name" <email@address.com>';
+  }
+}
 
 export class UpdatePlatformSettingsDto {
   @IsOptional()
@@ -10,7 +28,8 @@ export class UpdatePlatformSettingsDto {
   minWithdrawalTokens?: number;
 
   @IsOptional()
-  @IsEmail()
+  @IsString()
+  @Validate(IsEmailOrNamedEmailConstraint)
   resendFromAddress?: string;
 
   @IsOptional()

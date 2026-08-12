@@ -8,18 +8,36 @@ const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
+// Splits a Resend "from" string ("Dialect Library" <noreply@x.com>) into its
+// display-name and email parts for editing as two separate fields; a bare
+// email (no name) round-trips as senderName: ''.
+function parseFromAddress(value: string): { senderName: string; senderEmail: string } {
+  const match = value.trim().match(/^"?([^"<]*?)"?\s*<([^<>]+)>$/);
+  if (match) return { senderName: match[1].trim(), senderEmail: match[2].trim() };
+  return { senderName: '', senderEmail: value.trim() };
+}
+
+function formatFromAddress(senderName: string, senderEmail: string): string {
+  const name = senderName.trim();
+  const email = senderEmail.trim();
+  return name ? `"${name}" <${email}>` : email;
+}
+
 export function NotificationSettingsPanel() {
   const { data: settings, isLoading } = useGetPlatformSettingsQuery();
   const [updateSettings, { isLoading: isSaving }] = useUpdatePlatformSettingsMutation();
 
-  const [resendFromAddress, setResendFromAddress] = useState('');
+  const [senderName, setSenderName] = useState('');
+  const [senderEmail, setSenderEmail] = useState('');
   const [leadsNotificationAddress, setLeadsNotificationAddress] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!settings) return;
-    setResendFromAddress(settings.resendFromAddress ?? '');
+    const parsed = parseFromAddress(settings.resendFromAddress ?? '');
+    setSenderName(parsed.senderName);
+    setSenderEmail(parsed.senderEmail);
     setLeadsNotificationAddress(settings.leadsNotificationAddress ?? '');
   }, [settings]);
 
@@ -30,7 +48,7 @@ export function NotificationSettingsPanel() {
 
     try {
       await updateSettings({
-        ...(resendFromAddress !== '' ? { resendFromAddress } : {}),
+        ...(senderEmail !== '' ? { resendFromAddress: formatFromAddress(senderName, senderEmail) } : {}),
         ...(leadsNotificationAddress !== '' ? { leadsNotificationAddress } : {}),
       }).unwrap();
       setMessage('Notification settings saved.');
@@ -53,21 +71,36 @@ export function NotificationSettingsPanel() {
       {!isLoading && (
         <form className="grid gap-4 md:max-w-md" onSubmit={handleSave}>
           <div className="grid gap-1">
-            <label className="font-bold" htmlFor="resend-from">
-              Sender address
+            <label className="font-bold" htmlFor="resend-from-name">
+              Sender name &amp; address
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              &quot;From&quot; address on password-reset, verification, and magic-link emails. Must be a verified
-              domain in Resend.
+              &quot;From&quot; name and address on password-reset, verification, and magic-link emails. The email
+              must be a verified domain in Resend. Name is optional.
             </p>
-            <input
-              className={inputClass}
-              id="resend-from"
-              type="email"
-              placeholder="Default"
-              value={resendFromAddress}
-              onChange={(e) => setResendFromAddress(e.target.value)}
-            />
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2">
+              <input
+                className={inputClass}
+                id="resend-from-name"
+                type="text"
+                placeholder="Dialect Library"
+                value={senderName}
+                onChange={(e) => setSenderName(e.target.value)}
+              />
+              <input
+                className={inputClass}
+                id="resend-from-email"
+                type="email"
+                placeholder="Default"
+                value={senderEmail}
+                onChange={(e) => setSenderEmail(e.target.value)}
+              />
+            </div>
+            {senderEmail && (
+              <p className="text-xs text-muted">
+                Sends as: {formatFromAddress(senderName, senderEmail)}
+              </p>
+            )}
           </div>
 
           <div className="grid gap-1">

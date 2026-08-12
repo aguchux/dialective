@@ -1526,10 +1526,19 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
             <PhoneInput
               className="phone-input-field"
               defaultCountry="ng"
+              disableDialCodeAndPrefix
+              showDisabledDialCodeAndPrefix
               disabled={phoneVerified}
               inputClassName="!min-h-11 !w-full !rounded-r-lg !border !border-line !bg-surface !text-ink !outline-none focus:!border-accent"
+              inputProps={{
+                inputMode: 'numeric',
+                placeholder: 'Mobile number',
+              }}
               countrySelectorStyleProps={{
-                buttonClassName: '!min-h-11 !rounded-l-lg !border !border-line !bg-surface',
+                buttonClassName: '!min-h-11 !rounded-l-lg !rounded-r-none !border !border-line !border-r-0 !bg-surface',
+              }}
+              dialCodePreviewStyleProps={{
+                className: '!min-h-11 !items-center !border !border-line !border-r-0 !bg-surface !px-2 !font-extrabold !text-muted',
               }}
               onChange={updatePhoneField}
               value={phoneNumber}

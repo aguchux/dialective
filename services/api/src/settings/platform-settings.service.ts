@@ -128,7 +128,7 @@ export class PlatformSettingsService {
 
   async getResendFromAddress(): Promise<string> {
     const row = await this.getRow();
-    return row.resendFromAddress ?? process.env.RESEND_FROM_ADDRESS ?? 'noreply@dialectlibrary.com';
+    return row.resendFromAddress ?? process.env.RESEND_FROM_ADDRESS ?? 'Dialect Library <noreply@dialectlibrary.com>';
   }
 
   async getLeadsNotificationAddress(): Promise<string> {
