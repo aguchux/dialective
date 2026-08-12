@@ -157,7 +157,14 @@ function CountriesSection({ countries, isLoading }: { countries: AdminCountry[] 
         </p>
       )}
 
-      <DataTable columns={columns} rows={countries ?? []} rowKey={(c) => c.id} isLoading={isLoading} emptyMessage="No countries yet." />
+      <DataTable
+        columns={columns}
+        rows={countries ?? []}
+        rowKey={(c) => c.id}
+        isLoading={isLoading}
+        emptyMessage="No countries yet."
+        searchPlaceholder="Search countries..."
+      />
 
       {addDialectFor && <AddDialectDialog country={addDialectFor} onClose={() => setAddDialectFor(null)} />}
     </section>
@@ -401,7 +408,14 @@ function DialectsSection({ dialects, isLoading }: { dialects: AdminDialect[] | u
         </p>
       )}
 
-      <DataTable columns={columns} rows={dialects ?? []} rowKey={(d) => d.id} isLoading={isLoading} emptyMessage="No dialects yet." />
+      <DataTable
+        columns={columns}
+        rows={dialects ?? []}
+        rowKey={(d) => d.id}
+        isLoading={isLoading}
+        emptyMessage="No dialects yet."
+        searchPlaceholder="Search dialects..."
+      />
     </section>
   );
 }

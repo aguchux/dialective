@@ -54,8 +54,11 @@ export class PromptsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async listPromptsForAdmin(@Query() query: ListPromptsAdminDto) {
-    const { page, pageSize, dialectTag } = query;
-    const where = dialectTag ? { dialectTag } : {};
+    const { page, pageSize, dialectTag, search } = query;
+    const where = {
+      ...(dialectTag ? { dialectTag } : {}),
+      ...(search ? { text: { contains: search, mode: 'insensitive' as const } } : {}),
+    };
     const [items, total] = await Promise.all([
       this.prisma.prompt.findMany({
         where,

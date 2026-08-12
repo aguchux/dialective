@@ -18,4 +18,8 @@ export class ListPromptsAdminDto {
   @IsOptional()
   @IsString()
   dialectTag?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

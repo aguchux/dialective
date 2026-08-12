@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Search } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
@@ -22,6 +23,32 @@ const tabs = [
 ] as const;
 
 type TabKey = (typeof tabs)[number]['key'];
+
+/** Debounces a fast-changing value (e.g. every keystroke) so a search box doesn't fire a request per character. */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
+
+function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
+  return (
+    <div className="relative max-w-sm">
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+      <input
+        className="min-h-10 w-full rounded-lg border border-line bg-white py-2 pl-9 pr-3 text-sm text-ink dark:bg-surface-muted"
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        type="search"
+        value={value}
+        aria-label={placeholder}
+      />
+    </div>
+  );
+}
 
 export default function AdminWordsPage() {
   const [active, setActive] = useState<TabKey>('words');
@@ -61,11 +88,21 @@ export default function AdminWordsPage() {
 
 function WordsTab() {
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const pageSize = 20;
-  const { data, isLoading, isFetching, isError, refetch } = useGetAdminWordsQuery({ page, pageSize });
+  const { data, isLoading, isFetching, isError, refetch } = useGetAdminWordsQuery({
+    page,
+    pageSize,
+    search: debouncedSearch || undefined,
+  });
   const [deleteWord] = useDeleteWordMutation();
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   async function handleDelete(id: string) {
     setError(null);
@@ -81,8 +118,12 @@ function WordsTab() {
 
   return (
     <section className="grid gap-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+      <div className="border-b border-line p-3">
+        <SearchBox value={search} onChange={setSearch} placeholder="Search words..." />
+      </div>
+
       {error && (
-        <p className="px-5 pt-4 leading-relaxed text-danger" role="alert">
+        <p className="px-5 leading-relaxed text-danger" role="alert">
           {error}
         </p>
       )}
@@ -97,44 +138,71 @@ function WordsTab() {
           </button>
         </div>
       ) : data && data.items.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-left text-sm">
-            <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
-              <tr>
-                <th className="px-5 py-3.5" scope="col">Word</th>
-                <th className="px-5 py-3.5" scope="col">Translations</th>
-                <th className="px-5 py-3.5" scope="col">Added</th>
-                <th className="px-5 py-3.5" scope="col">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {data.items.map((word) => (
-                <tr key={word.id}>
-                  <td className="px-5 py-3.5 font-extrabold">{word.text}</td>
-                  <td className="px-5 py-3.5 text-muted">
-                    {word.translations.length === 0
-                      ? '—'
-                      : word.translations.map((t) => `${t.dialectTag}: ${t.text}`).join(', ')}
-                  </td>
-                  <td className="px-5 py-3.5 text-muted">{new Date(word.createdAt).toLocaleDateString()}</td>
-                  <td className="px-5 py-3.5">
-                    <ActionButton
-                      className={dangerButtonClass}
-                      onClick={() => handleDelete(word.id)}
-                      pending={deletingId === word.id}
-                      pendingLabel="Deleting"
-                      type="button"
-                    >
-                      Delete
-                    </ActionButton>
-                  </td>
+        <>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+              <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
+                <tr>
+                  <th className="px-5 py-3.5" scope="col">Word</th>
+                  <th className="px-5 py-3.5" scope="col">Translations</th>
+                  <th className="px-5 py-3.5" scope="col">Added</th>
+                  <th className="px-5 py-3.5" scope="col">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {data.items.map((word) => (
+                  <tr key={word.id}>
+                    <td className="px-5 py-3.5 font-extrabold">{word.text}</td>
+                    <td className="px-5 py-3.5 text-muted">
+                      {word.translations.length === 0
+                        ? '—'
+                        : word.translations.map((t) => `${t.dialectTag}: ${t.text}`).join(', ')}
+                    </td>
+                    <td className="px-5 py-3.5 text-muted">{new Date(word.createdAt).toLocaleDateString()}</td>
+                    <td className="px-5 py-3.5">
+                      <ActionButton
+                        className={dangerButtonClass}
+                        onClick={() => handleDelete(word.id)}
+                        pending={deletingId === word.id}
+                        pendingLabel="Deleting"
+                        type="button"
+                      >
+                        Delete
+                      </ActionButton>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="divide-y divide-line md:hidden">
+            {data.items.map((word) => (
+              <article className="grid gap-3 p-4" key={word.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="font-extrabold">{word.text}</p>
+                  <ActionButton
+                    className={dangerButtonClass}
+                    onClick={() => handleDelete(word.id)}
+                    pending={deletingId === word.id}
+                    pendingLabel="Deleting"
+                    type="button"
+                  >
+                    Delete
+                  </ActionButton>
+                </div>
+                <p className="text-sm text-muted">
+                  {word.translations.length === 0
+                    ? 'No translations yet'
+                    : word.translations.map((t) => `${t.dialectTag}: ${t.text}`).join(', ')}
+                </p>
+                <p className="text-xs text-muted">Added {new Date(word.createdAt).toLocaleDateString()}</p>
+              </article>
+            ))}
+          </div>
+        </>
       ) : (
-        <p className="p-5 text-muted">No words yet.</p>
+        <p className="p-5 text-muted">{debouncedSearch ? `No words match "${debouncedSearch}".` : 'No words yet.'}</p>
       )}
 
       {data && data.totalPages > 1 && (
@@ -147,15 +215,22 @@ function WordsTab() {
 function PromptsTab() {
   const [page, setPage] = useState(1);
   const [dialectTag, setDialectTag] = useState('');
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const pageSize = 20;
   const { data, isLoading, isFetching, isError, refetch } = useGetAdminPromptsQuery({
     page,
     pageSize,
     dialectTag: dialectTag || undefined,
+    search: debouncedSearch || undefined,
   });
   const [updatePrompt] = useUpdatePromptMutation();
   const [error, setError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, dialectTag]);
 
   async function handleToggleActive(id: string, active: boolean) {
     setError(null);
@@ -171,20 +246,20 @@ function PromptsTab() {
 
   return (
     <section className="grid gap-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-      <div className="flex items-center gap-3 border-b border-line bg-surface-muted px-5 py-4">
-        <label className="text-sm font-bold" htmlFor="prompt-dialect-filter">
-          Dialect
-        </label>
-        <input
-          className="min-h-9 w-32 rounded-lg border border-line bg-white px-3 text-sm"
-          id="prompt-dialect-filter"
-          placeholder="e.g. en-us"
-          value={dialectTag}
-          onChange={(e) => {
-            setDialectTag(e.target.value);
-            setPage(1);
-          }}
-        />
+      <div className="flex flex-wrap items-center gap-3 border-b border-line p-3">
+        <SearchBox value={search} onChange={setSearch} placeholder="Search prompt text..." />
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-bold" htmlFor="prompt-dialect-filter">
+            Dialect
+          </label>
+          <input
+            className="min-h-9 w-32 rounded-lg border border-line bg-white px-3 text-sm"
+            id="prompt-dialect-filter"
+            placeholder="e.g. en-us"
+            value={dialectTag}
+            onChange={(e) => setDialectTag(e.target.value)}
+          />
+        </div>
       </div>
 
       {error && (
@@ -203,41 +278,67 @@ function PromptsTab() {
           </button>
         </div>
       ) : data && data.items.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-            <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
-              <tr>
-                <th className="px-5 py-3.5" scope="col">Dialect</th>
-                <th className="px-5 py-3.5" scope="col">Text</th>
-                <th className="px-5 py-3.5" scope="col">Added</th>
-                <th className="px-5 py-3.5" scope="col">Active</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {data.items.map((prompt) => (
-                <tr key={prompt.id}>
-                  <td className="px-5 py-3.5 font-extrabold">{prompt.dialectTag}</td>
-                  <td className="px-5 py-3.5">{prompt.text}</td>
-                  <td className="px-5 py-3.5 text-muted">{new Date(prompt.createdAt).toLocaleDateString()}</td>
-                  <td className="px-5 py-3.5">
-                    <label className="flex items-center gap-2 text-sm font-bold">
-                      <input
-                        checked={prompt.active}
-                        className="size-4 accent-accent"
-                        disabled={togglingId === prompt.id}
-                        onChange={(e) => handleToggleActive(prompt.id, e.target.checked)}
-                        type="checkbox"
-                      />
-                      {prompt.active ? 'Active' : 'Inactive'}
-                    </label>
-                  </td>
+        <>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+              <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
+                <tr>
+                  <th className="px-5 py-3.5" scope="col">Dialect</th>
+                  <th className="px-5 py-3.5" scope="col">Text</th>
+                  <th className="px-5 py-3.5" scope="col">Added</th>
+                  <th className="px-5 py-3.5" scope="col">Active</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {data.items.map((prompt) => (
+                  <tr key={prompt.id}>
+                    <td className="px-5 py-3.5 font-extrabold">{prompt.dialectTag}</td>
+                    <td className="px-5 py-3.5">{prompt.text}</td>
+                    <td className="px-5 py-3.5 text-muted">{new Date(prompt.createdAt).toLocaleDateString()}</td>
+                    <td className="px-5 py-3.5">
+                      <label className="flex items-center gap-2 text-sm font-bold">
+                        <input
+                          checked={prompt.active}
+                          className="size-4 accent-accent"
+                          disabled={togglingId === prompt.id}
+                          onChange={(e) => handleToggleActive(prompt.id, e.target.checked)}
+                          type="checkbox"
+                        />
+                        {prompt.active ? 'Active' : 'Inactive'}
+                      </label>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="divide-y divide-line md:hidden">
+            {data.items.map((prompt) => (
+              <article className="grid gap-3 p-4" key={prompt.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <span className="shrink-0 rounded-md bg-surface-muted px-2.5 py-1 text-xs font-extrabold text-muted">
+                    {prompt.dialectTag}
+                  </span>
+                  <label className="flex items-center gap-2 text-sm font-bold">
+                    <input
+                      checked={prompt.active}
+                      className="size-4 accent-accent"
+                      disabled={togglingId === prompt.id}
+                      onChange={(e) => handleToggleActive(prompt.id, e.target.checked)}
+                      type="checkbox"
+                    />
+                    {prompt.active ? 'Active' : 'Inactive'}
+                  </label>
+                </div>
+                <p className="text-sm">{prompt.text}</p>
+                <p className="text-xs text-muted">Added {new Date(prompt.createdAt).toLocaleDateString()}</p>
+              </article>
+            ))}
+          </div>
+        </>
       ) : (
-        <p className="p-5 text-muted">No prompts yet.</p>
+        <p className="p-5 text-muted">{debouncedSearch ? `No prompts match "${debouncedSearch}".` : 'No prompts yet.'}</p>
       )}
 
       {data && data.totalPages > 1 && (

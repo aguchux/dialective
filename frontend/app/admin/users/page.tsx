@@ -182,6 +182,7 @@ export default function AdminUsersPage() {
           rowKey={(u) => u.id}
           isLoading={isLoading}
           emptyMessage="No users match these filters."
+          searchable={false}
         />
       </div>
 

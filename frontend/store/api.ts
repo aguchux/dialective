@@ -713,16 +713,16 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['PlatformSettings'],
     }),
-    getAdminWords: builder.query<AdminWordsPage, { page: number; pageSize: number }>({
-      query: ({ page, pageSize }) => ({ url: '/words/admin', params: { page, pageSize } }),
+    getAdminWords: builder.query<AdminWordsPage, { page: number; pageSize: number; search?: string }>({
+      query: ({ page, pageSize, search }) => ({ url: '/words/admin', params: { page, pageSize, search } }),
       providesTags: ['AdminWords'],
     }),
     deleteWord: builder.mutation<{ id: string; deleted: boolean }, string>({
       query: (id) => ({ url: `/words/admin/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminWords'],
     }),
-    getAdminPrompts: builder.query<AdminPromptsPage, { page: number; pageSize: number; dialectTag?: string }>({
-      query: ({ page, pageSize, dialectTag }) => ({ url: '/prompts/admin', params: { page, pageSize, dialectTag } }),
+    getAdminPrompts: builder.query<AdminPromptsPage, { page: number; pageSize: number; dialectTag?: string; search?: string }>({
+      query: ({ page, pageSize, dialectTag, search }) => ({ url: '/prompts/admin', params: { page, pageSize, dialectTag, search } }),
       providesTags: ['AdminPrompts'],
     }),
     updatePrompt: builder.mutation<AdminPrompt, { id: string; active: boolean }>({

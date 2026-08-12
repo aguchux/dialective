@@ -219,6 +219,7 @@ export default function AdminPoolsPage() {
             rowKey={(p) => p.id}
             isLoading={isLoadingPools}
             emptyMessage="No subscription pools opened yet."
+            searchPlaceholder="Search pools..."
           />
         </section>
 

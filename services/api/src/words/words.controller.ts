@@ -58,15 +58,17 @@ export class WordsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async listWordsForAdmin(@Query() query: ListWordsAdminDto) {
-    const { page, pageSize } = query;
+    const { page, pageSize, search } = query;
+    const where = search ? { text: { contains: search, mode: 'insensitive' as const } } : {};
     const [items, total] = await Promise.all([
       this.prisma.word.findMany({
+        where,
         include: { translations: { orderBy: { dialectTag: 'asc' } } },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      this.prisma.word.count(),
+      this.prisma.word.count({ where }),
     ]);
     return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
   }
