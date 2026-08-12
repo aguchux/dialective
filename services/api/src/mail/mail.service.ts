@@ -106,6 +106,8 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
       return { subject: 'Confirm your deposit', intro: 'Enter this code to confirm your token purchase.' };
     case 'ADMIN_PAYOUT':
       return { subject: 'Confirm this payout', intro: 'Enter this code to confirm this admin payout action.' };
+    case 'P2P_PAYMENT_METHOD':
+      return { subject: 'Confirm your payment method', intro: 'Enter this code to save your payment method.' };
   }
 }
 

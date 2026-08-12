@@ -33,6 +33,51 @@ export class UpsertPaymentMethodDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  @IsUUID()
+  otpRequestId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
+}
+
+export class RequestPaymentMethodOtpDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  label!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  methodType!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  fiatCurrency!: string;
+
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @IsOptional()
+  @IsString()
+  accountName?: string;
+
+  @IsOptional()
+  @IsString()
+  accountNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  instructions?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
 }
 
 export class CreateOfferDto {

@@ -62,6 +62,7 @@ import {
   useCreateP2PPaymentMethodMutation,
   useGetP2PPaymentMethodsQuery,
   useGetP2PSettingsQuery,
+  useRequestP2PPaymentMethodOtpMutation,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
   useRequestWithdrawalOtpMutation,
@@ -77,6 +78,7 @@ import {
   useRaiseP2PDisputeMutation,
   useReleaseP2PTradeMutation,
   useRequestP2PTradeCancelMutation,
+  useUpdateP2PPaymentMethodMutation,
   useUpdateProfileMutation,
 } from '@/store/api';
 import type { Session } from 'next-auth';
@@ -969,19 +971,17 @@ function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; n
 }
 
 function MarketView() {
+  const [activeTab, setActiveTab] = useState<'SELL' | 'BUY' | 'TRADES'>('SELL');
   const [offerType, setOfferType] = useState<'SELL' | 'BUY'>('SELL');
   const [tokenAmount, setTokenAmount] = useState('10');
   const [fiatAmount, setFiatAmount] = useState('10000');
-  const [bankName, setBankName] = useState('');
-  const [accountName, setAccountName] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
   const [error, setError] = useState('');
   const { data: settings } = useGetP2PSettingsQuery();
   const { data: methods = [] } = useGetP2PPaymentMethodsQuery();
   const { data: sellOffers = [] } = useListP2POffersQuery({ type: 'SELL' });
   const { data: buyOffers = [] } = useListP2POffersQuery({ type: 'BUY' });
   const { data: trades = [] } = useListMyP2PTradesQuery();
-  const [createMethod, { isLoading: methodSaving }] = useCreateP2PPaymentMethodMutation();
   const [createOffer, { isLoading: offerSaving }] = useCreateP2POfferMutation();
   const [acceptOffer, { isLoading: accepting }] = useAcceptP2POfferMutation();
   const [markPaid] = useMarkP2PTradePaidMutation();
@@ -990,27 +990,6 @@ function MarketView() {
   const [raiseDispute] = useRaiseP2PDisputeMutation();
   const primaryMethod = methods.find((method) => method.enabled);
   const marketDisabled = !settings?.enabled;
-
-  async function savePaymentMethod(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError('');
-    try {
-      await createMethod({
-        label: 'Bank transfer',
-        methodType: 'BANK_TRANSFER',
-        fiatCurrency: 'NGN',
-        bankName,
-        accountName,
-        accountNumber,
-        enabled: true,
-      }).unwrap();
-      setBankName('');
-      setAccountName('');
-      setAccountNumber('');
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Could not save payment method'));
-    }
-  }
 
   async function submitOffer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1024,6 +1003,8 @@ function MarketView() {
         paymentMethod: 'BANK_TRANSFER',
         paymentMethodId: offerType === 'SELL' ? primaryMethod?.id : undefined,
       }).unwrap();
+      setCreateOpen(false);
+      setActiveTab(offerType);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not post market offer'));
     }
@@ -1040,7 +1021,62 @@ function MarketView() {
 
   return (
     <div>
-      <ViewHeading title="Token market" subtitle="Peer-to-peer token escrow for sell offers and buy requests." />
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-black tracking-normal md:text-3xl">Token market</h1>
+          <p className="mt-1 text-muted">Peer-to-peer token escrow for sell offers and buy requests.</p>
+        </div>
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogTrigger asChild>
+            <button
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={marketDisabled}
+              type="button"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              Create request
+            </button>
+          </DialogTrigger>
+          <DialogContent title="Create market request" description="Post a sell offer or a buy request. Trades use escrow until payment is confirmed.">
+            <form className="grid gap-3" onSubmit={submitOffer}>
+              <div className="grid grid-cols-2 gap-2 rounded-lg bg-bg p-1">
+                {(['SELL', 'BUY'] as const).map((type) => (
+                  <button
+                    className={`min-h-10 rounded-md font-extrabold ${offerType === type ? 'bg-accent text-white' : 'text-muted hover:bg-surface'}`}
+                    key={type}
+                    onClick={() => setOfferType(type)}
+                    type="button"
+                  >
+                    {type === 'SELL' ? 'Sell tokens' : 'Buy request'}
+                  </button>
+                ))}
+              </div>
+              <label className="grid gap-1.5 text-sm font-bold">
+                Token amount
+                <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => setTokenAmount(e.target.value)} type="number" value={tokenAmount} />
+              </label>
+              <label className="grid gap-1.5 text-sm font-bold">
+                Amount in NGN
+                <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => setFiatAmount(e.target.value)} type="number" value={fiatAmount} />
+              </label>
+              {offerType === 'SELL' && !primaryMethod && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                  Add your bank details in Profile before posting a sell offer.
+                </p>
+              )}
+              <ActionButton
+                className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={marketDisabled || (offerType === 'SELL' && !primaryMethod)}
+                pending={offerSaving}
+                pendingLabel="Posting"
+                type="submit"
+              >
+                {offerType === 'SELL' ? 'Post sell offer' : 'Post buy request'}
+              </ActionButton>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div>}
       {marketDisabled && (
         <div className={`${cardClass} mb-5 p-5`}>
@@ -1049,53 +1085,28 @@ function MarketView() {
         </div>
       )}
 
-      <section className="grid gap-4 lg:grid-cols-[360px_1fr]">
-        <div className="grid gap-4">
-          <form className={`${cardClass} grid gap-3 p-5`} onSubmit={savePaymentMethod}>
-            <SectionTitle title="Payment method" subtitle="Shown only after a trade starts." />
-            {primaryMethod && (
-              <div className="rounded-lg border border-line bg-bg p-3 text-sm">
-                <p className="font-black">{primaryMethod.bankName}</p>
-                <p className="text-muted">{primaryMethod.accountName} · {primaryMethod.accountNumber}</p>
-              </div>
-            )}
-            <input className="min-h-11 rounded-lg border border-line bg-bg px-3" onChange={(e) => setBankName(e.target.value)} placeholder="Bank name" value={bankName} />
-            <input className="min-h-11 rounded-lg border border-line bg-bg px-3" onChange={(e) => setAccountName(e.target.value)} placeholder="Account name" value={accountName} />
-            <input className="min-h-11 rounded-lg border border-line bg-bg px-3" onChange={(e) => setAccountNumber(e.target.value)} placeholder="Account number" value={accountNumber} />
-            <button className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:opacity-50" disabled={methodSaving} type="submit">
-              {methodSaving ? 'Saving...' : 'Save bank details'}
-            </button>
-          </form>
-
-          <form className={`${cardClass} grid gap-3 p-5`} onSubmit={submitOffer}>
-            <SectionTitle title="Post offer" subtitle="Sell tokens or request to buy tokens." />
-            <div className="grid grid-cols-2 gap-2 rounded-lg bg-bg p-1">
-              {(['SELL', 'BUY'] as const).map((type) => (
-                <button
-                  className={`min-h-10 rounded-md font-extrabold ${offerType === type ? 'bg-accent text-white' : 'text-muted'}`}
-                  key={type}
-                  onClick={() => setOfferType(type)}
-                  type="button"
-                >
-                  {type === 'SELL' ? 'Sell' : 'Buy request'}
-                </button>
-              ))}
-            </div>
-            <input className="min-h-11 rounded-lg border border-line bg-bg px-3" onChange={(e) => setTokenAmount(e.target.value)} placeholder="Token amount" type="number" value={tokenAmount} />
-            <input className="min-h-11 rounded-lg border border-line bg-bg px-3" onChange={(e) => setFiatAmount(e.target.value)} placeholder="Amount in NGN" type="number" value={fiatAmount} />
+      <section>
+        <div className="mb-5 flex w-fit max-w-full overflow-x-auto rounded-lg border border-line bg-surface p-1">
+          {[
+            { id: 'SELL', label: 'Sell offers', count: sellOffers.length },
+            { id: 'BUY', label: 'Buy requests', count: buyOffers.length },
+            { id: 'TRADES', label: 'My trades', count: trades.length },
+          ].map((tab) => (
             <button
-              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:opacity-50"
-              disabled={marketDisabled || offerSaving || (offerType === 'SELL' && !primaryMethod)}
-              type="submit"
+              className={`min-h-10 whitespace-nowrap rounded-md px-4 text-sm font-extrabold ${activeTab === tab.id ? 'bg-accent text-white' : 'text-muted hover:bg-surface-muted'}`}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as 'SELL' | 'BUY' | 'TRADES')}
+              type="button"
             >
-              {offerSaving ? 'Posting...' : offerType === 'SELL' ? 'Post sell offer' : 'Post buy request'}
+              {tab.label} <span className="ml-1 opacity-80">{tab.count}</span>
             </button>
-          </form>
+          ))}
         </div>
 
         <div className="grid gap-5">
-          <MarketOfferList accepting={accepting} offers={sellOffers} onAccept={accept} title="Sell offers" />
-          <MarketOfferList accepting={accepting} offers={buyOffers} onAccept={accept} title="Buy requests" />
+          {activeTab === 'SELL' && <MarketOfferList accepting={accepting} offers={sellOffers} onAccept={accept} title="Sell offers" />}
+          {activeTab === 'BUY' && <MarketOfferList accepting={accepting} offers={buyOffers} onAccept={accept} title="Buy requests" />}
+          {activeTab === 'TRADES' && (
           <section>
             <SectionTitle title="My trades" subtitle="Pay, release, cancel safely, or raise disputes." />
             <div className="grid gap-3">
@@ -1112,6 +1123,7 @@ function MarketView() {
               ))}
             </div>
           </section>
+          )}
         </div>
       </section>
     </div>
@@ -1257,11 +1269,48 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
 function ProfileView({ session, update }: { session: Session; update: SessionUpdateFn }) {
   const [firstName, setFirstName] = useState(session.user.firstName ?? '');
   const [lastName, setLastName] = useState(session.user.lastName ?? '');
+  const [bankName, setBankName] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [paymentOtpRequestId, setPaymentOtpRequestId] = useState('');
+  const [paymentOtpCode, setPaymentOtpCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updateProfile, { isLoading }] = useUpdateProfileMutation();
+  const { data: methods = [] } = useGetP2PPaymentMethodsQuery();
+  const [requestPaymentOtp, { isLoading: paymentOtpSending }] = useRequestP2PPaymentMethodOtpMutation();
+  const [createPaymentMethod, { isLoading: paymentCreating }] = useCreateP2PPaymentMethodMutation();
+  const [updatePaymentMethod, { isLoading: paymentUpdating }] = useUpdateP2PPaymentMethodMutation();
+  const primaryMethod = methods.find((method) => method.enabled);
+  const paymentSaving = paymentCreating || paymentUpdating;
 
   const dirty = firstName.trim() !== (session.user.firstName ?? '') || lastName.trim() !== (session.user.lastName ?? '');
+  const paymentPayload = {
+    label: 'Bank transfer',
+    methodType: 'BANK_TRANSFER',
+    fiatCurrency: 'NGN',
+    bankName: bankName.trim(),
+    accountName: accountName.trim(),
+    accountNumber: accountNumber.trim(),
+    enabled: true,
+  };
+  const paymentDirty = bankName.trim() !== (primaryMethod?.bankName ?? '') ||
+    accountName.trim() !== (primaryMethod?.accountName ?? '') ||
+    accountNumber.trim() !== (primaryMethod?.accountNumber ?? '');
+
+  useEffect(() => {
+    setBankName(primaryMethod?.bankName ?? '');
+    setAccountName(primaryMethod?.accountName ?? '');
+    setAccountNumber(primaryMethod?.accountNumber ?? '');
+    setPaymentOtpRequestId('');
+    setPaymentOtpCode('');
+  }, [primaryMethod?.id, primaryMethod?.bankName, primaryMethod?.accountName, primaryMethod?.accountNumber]);
+
+  function updatePaymentField(setter: (value: string) => void, value: string) {
+    setter(value);
+    setPaymentOtpRequestId('');
+    setPaymentOtpCode('');
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -1273,6 +1322,42 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       setMessage('Profile updated.');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not save your profile.'));
+    }
+  }
+
+  async function requestPaymentMethodOtp() {
+    setMessage(null);
+    setError(null);
+    try {
+      const otp = await requestPaymentOtp({ ...paymentPayload, id: primaryMethod?.id }).unwrap();
+      setPaymentOtpRequestId(otp.otpRequestId);
+      setPaymentOtpCode('');
+      setMessage('Verification code sent to your email.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not send verification code.'));
+    }
+  }
+
+  async function savePaymentMethod(event: FormEvent) {
+    event.preventDefault();
+    setMessage(null);
+    setError(null);
+    try {
+      if (!paymentOtpRequestId) {
+        await requestPaymentMethodOtp();
+        return;
+      }
+      const body = { ...paymentPayload, otpRequestId: paymentOtpRequestId, code: paymentOtpCode.trim() };
+      if (primaryMethod) {
+        await updatePaymentMethod({ id: primaryMethod.id, body }).unwrap();
+      } else {
+        await createPaymentMethod(body).unwrap();
+      }
+      setPaymentOtpRequestId('');
+      setPaymentOtpCode('');
+      setMessage('Payment method saved.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not save payment method.'));
     }
   }
 
@@ -1323,6 +1408,74 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               type="submit"
             >
               Save changes
+            </ActionButton>
+          </div>
+        </form>
+
+        <form className={`${cardClass} grid gap-4 p-5`} onSubmit={savePaymentMethod}>
+          <SectionTitle title="Payment method" subtitle="Stored in Profile and protected by email 2FA for every edit." />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-1.5 text-sm font-bold">
+              Bank name
+              <input
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                onChange={(event) => updatePaymentField(setBankName, event.target.value)}
+                required
+                value={bankName}
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-bold">
+              Account number
+              <input
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                inputMode="numeric"
+                onChange={(event) => updatePaymentField(setAccountNumber, event.target.value)}
+                required
+                value={accountNumber}
+              />
+            </label>
+          </div>
+          <label className="grid gap-1.5 text-sm font-bold">
+            Account name
+            <input
+              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+              onChange={(event) => updatePaymentField(setAccountName, event.target.value)}
+              required
+              value={accountName}
+            />
+          </label>
+          {paymentOtpRequestId ? (
+            <label className="grid gap-1.5 text-sm font-bold">
+              Email verification code
+              <input
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                inputMode="numeric"
+                maxLength={8}
+                onChange={(event) => setPaymentOtpCode(event.target.value)}
+                required
+                value={paymentOtpCode}
+              />
+            </label>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <ActionButton
+              className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!paymentDirty || !bankName.trim() || !accountName.trim() || !accountNumber.trim()}
+              onClick={() => void requestPaymentMethodOtp()}
+              pending={paymentOtpSending}
+              pendingLabel="Sending"
+              type="button"
+            >
+              Email code
+            </ActionButton>
+            <ActionButton
+              className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!paymentDirty || !paymentOtpRequestId || !paymentOtpCode.trim()}
+              pending={paymentSaving}
+              pendingLabel="Saving"
+              type="submit"
+            >
+              Save bank details
             </ActionButton>
           </div>
         </form>

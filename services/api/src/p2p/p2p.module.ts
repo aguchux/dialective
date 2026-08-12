@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
+import { OtpModule } from '../otp/otp.module';
 import { P2PController } from './p2p.controller';
 import { P2PService } from './p2p.service';
 
 @Module({
+  imports: [OtpModule],
   controllers: [P2PController],
   providers: [P2PService],
 })

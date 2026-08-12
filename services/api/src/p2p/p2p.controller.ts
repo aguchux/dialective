@@ -10,6 +10,7 @@ import {
   ListDisputesDto,
   ListOffersDto,
   ListTradesDto,
+  RequestPaymentMethodOtpDto,
   RaiseDisputeDto,
   ResolveDisputeDto,
   UpdateP2PMarketSettingsDto,
@@ -29,6 +30,11 @@ export class P2PController {
   @Get('payment-methods')
   listPaymentMethods(@Req() req: AuthenticatedRequest) {
     return this.p2p.listPaymentMethods(req.user.sub);
+  }
+
+  @Post('payment-methods/otp')
+  requestPaymentMethodOtp(@Req() req: AuthenticatedRequest, @Body() body: RequestPaymentMethodOtpDto) {
+    return this.p2p.requestPaymentMethodOtp(req.user.sub, body);
   }
 
   @Post('payment-methods')

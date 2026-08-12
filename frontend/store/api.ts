@@ -180,6 +180,23 @@ export interface UserPaymentMethod {
   updatedAt: string;
 }
 
+export interface PaymentMethodInput {
+  id?: string;
+  label: string;
+  methodType: string;
+  fiatCurrency: string;
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  instructions?: string;
+  enabled?: boolean;
+}
+
+export interface VerifiedPaymentMethodInput extends PaymentMethodInput {
+  otpRequestId: string;
+  code: string;
+}
+
 export interface P2PMarketSettings {
   enabled: boolean;
   sellOffersEnabled: boolean;
@@ -709,11 +726,14 @@ export const dialectivaApi = createApi({
       query: () => '/p2p/payment-methods',
       providesTags: ['P2P'],
     }),
-    createP2PPaymentMethod: builder.mutation<UserPaymentMethod, Partial<UserPaymentMethod>>({
+    requestP2PPaymentMethodOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, PaymentMethodInput>({
+      query: (body) => ({ url: '/p2p/payment-methods/otp', method: 'POST', body }),
+    }),
+    createP2PPaymentMethod: builder.mutation<UserPaymentMethod, VerifiedPaymentMethodInput>({
       query: (body) => ({ url: '/p2p/payment-methods', method: 'POST', body }),
       invalidatesTags: ['P2P'],
     }),
-    updateP2PPaymentMethod: builder.mutation<UserPaymentMethod, { id: string; body: Partial<UserPaymentMethod> }>({
+    updateP2PPaymentMethod: builder.mutation<UserPaymentMethod, { id: string; body: VerifiedPaymentMethodInput }>({
       query: ({ id, body }) => ({ url: `/p2p/payment-methods/${id}`, method: 'PATCH', body }),
       invalidatesTags: ['P2P'],
     }),
@@ -1110,6 +1130,7 @@ export const {
   useGetWalletQuery,
   useGetP2PSettingsQuery,
   useGetP2PPaymentMethodsQuery,
+  useRequestP2PPaymentMethodOtpMutation,
   useCreateP2PPaymentMethodMutation,
   useUpdateP2PPaymentMethodMutation,
   useListP2POffersQuery,

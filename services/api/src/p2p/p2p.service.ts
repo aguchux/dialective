@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   LedgerEntryType,
+  OtpPurpose,
   P2PDisputeStatus,
   P2POfferStatus,
   P2POfferType,
@@ -14,6 +15,7 @@ import {
   Prisma,
 } from '@dialectiva/db';
 import { randomUUID } from 'crypto';
+import { OtpService } from '../otp/otp.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AcceptOfferDto,
@@ -21,18 +23,23 @@ import {
   ListDisputesDto,
   ListOffersDto,
   ListTradesDto,
+  RequestPaymentMethodOtpDto,
   RaiseDisputeDto,
   ResolveDisputeDto,
   UpdateP2PMarketSettingsDto,
   UpsertPaymentMethodDto,
 } from './dto/p2p.dto';
+import { paymentMethodContextHash } from './p2p-otp-context.util';
 
 const OPEN_OFFER_STATUSES = [P2POfferStatus.ACTIVE, P2POfferStatus.RESERVED];
 const OPEN_TRADE_STATUSES = [P2PTradeStatus.AWAITING_PAYMENT, P2PTradeStatus.PAID_MARKED, P2PTradeStatus.CANCEL_PENDING];
 
 @Injectable()
 export class P2PService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly otp: OtpService,
+  ) {}
 
   async getSettings() {
     const row = await this.settingsRow();
@@ -58,17 +65,21 @@ export class P2PService {
     });
   }
 
+  async requestPaymentMethodOtp(userId: string, dto: RequestPaymentMethodOtpDto) {
+    if (dto.id) {
+      const method = await this.prisma.userPaymentMethod.findFirst({ where: { id: dto.id, userId }, select: { id: true } });
+      if (!method) throw new NotFoundException('Payment method not found');
+    }
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } });
+    return this.otp.issueForUser(userId, OtpPurpose.P2P_PAYMENT_METHOD, user.email, paymentMethodContextHash(dto));
+  }
+
   async createPaymentMethod(userId: string, dto: UpsertPaymentMethodDto) {
+    await this.verifyPaymentMethodOtp(userId, dto);
     return this.prisma.userPaymentMethod.create({
       data: {
         userId,
-        label: dto.label,
-        methodType: dto.methodType,
-        fiatCurrency: dto.fiatCurrency,
-        bankName: dto.bankName,
-        accountName: dto.accountName,
-        accountNumber: dto.accountNumber,
-        instructions: dto.instructions,
+        ...paymentMethodData(dto),
         enabled: dto.enabled ?? true,
       },
     });
@@ -77,7 +88,8 @@ export class P2PService {
   async updatePaymentMethod(userId: string, id: string, dto: UpsertPaymentMethodDto) {
     const method = await this.prisma.userPaymentMethod.findFirst({ where: { id, userId } });
     if (!method) throw new NotFoundException('Payment method not found');
-    return this.prisma.userPaymentMethod.update({ where: { id }, data: dto });
+    await this.verifyPaymentMethodOtp(userId, { ...dto, id });
+    return this.prisma.userPaymentMethod.update({ where: { id }, data: paymentMethodData(dto) });
   }
 
   async createOffer(userId: string, dto: CreateOfferDto) {
@@ -427,6 +439,16 @@ export class P2PService {
     return method;
   }
 
+  private async verifyPaymentMethodOtp(userId: string, dto: UpsertPaymentMethodDto & { id?: string }) {
+    await this.otp.verify({
+      otpRequestId: dto.otpRequestId,
+      userId,
+      purpose: OtpPurpose.P2P_PAYMENT_METHOD,
+      code: dto.code,
+      contextHash: paymentMethodContextHash(dto),
+    });
+  }
+
   private async enforceOpenTradeLimit(userId: string, max: number) {
     const openTrades = await this.prisma.p2PTokenTrade.count({
       where: { status: { in: OPEN_TRADE_STATUSES }, OR: [{ buyerId: userId }, { sellerId: userId }] },
@@ -592,6 +614,19 @@ function addMinutes(date: Date, minutes: number) {
 
 function csvIncludes(csv: string, value: string) {
   return csv.split(',').map((item) => item.trim().toUpperCase()).includes(value.trim().toUpperCase());
+}
+
+function paymentMethodData(dto: UpsertPaymentMethodDto) {
+  return {
+    label: dto.label.trim(),
+    methodType: dto.methodType.trim().toUpperCase(),
+    fiatCurrency: dto.fiatCurrency.trim().toUpperCase(),
+    bankName: dto.bankName?.trim() || null,
+    accountName: dto.accountName?.trim() || null,
+    accountNumber: dto.accountNumber?.trim() || null,
+    instructions: dto.instructions?.trim() || null,
+    enabled: dto.enabled ?? true,
+  };
 }
 
 function serializeSettings(row: Awaited<ReturnType<P2PService['settingsRow']>>) {

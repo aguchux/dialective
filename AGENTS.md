@@ -224,7 +224,33 @@ The **Utility Token Pool** from `docs/Dialectiva_Business_Plan.md` §5 — a peg
 - **Auth:** every route except the webhook requires `@UseGuards(JwtAuthGuard)` and reads `request.user.sub` — never accept a `userId` in a request body (unlike the no-auth `words/`/`prompts/` test flows, this is real money). Admin routes additionally require `@UseGuards(JwtAuthGuard, RolesGuard)` + `@Roles(Role.ADMIN)`.
 - **NOWPayments IPN signature verification is HMAC-SHA512 over `JSON.stringify()` of the *parsed* body with all object keys recursively sorted alphabetically** (`NowPaymentsService.verifyIpnSignature`/`sortKeysDeep`) — **not** over the raw request bytes. This is a meaningfully different scheme from Coinbase Commerce's raw-byte HMAC-SHA256 (which this repo briefly used and had to work around with path-scoped raw-body middleware in `main.ts` — see git history if you need the details of that bug). Because NOWPayments verifies the re-sorted parsed body, Nest's default JSON body parser is sufficient here; **do not reintroduce raw-body middleware for this route**, it isn't needed and was the source of a real production bug the one time it was added for the previous provider. If `sortKeysDeep`'s sort order or serialization ever drifts from what NOWPayments does on their end, every signature will mismatch — verify against a real NOWPayments-sent payload if this route ever needs to change.
 - **Secrets/config:** `nowpayments-creds` (`nowpayments_api_key`, `nowpayments_ipn_secret`) + `TOKEN_USD_RATE`/`MIN_WITHDRAWAL_TOKENS`/`API_PUBLIC_BASE_URL` in `api-config`, same gitignored-`.env`-with-committed-`.example` pattern as every other secret/config in this repo. `API_PUBLIC_BASE_URL` (default `https://api.dialectlibrary.com`) is used to build the `ipn_callback_url` sent with every invoice-creation request.
-- **Not built yet (explicit non-goals of the current implementation):** automated crypto payout API integration, P2P token escrow/marketplace (business plan §4 step 8), KYC/AML identity verification flow, multi-chain address selection (delegated entirely to NOWPayments' hosted invoice UI).
+- **Not built yet (explicit non-goals of the current implementation):** automated crypto payout API integration, KYC/AML identity verification flow, multi-chain address selection (delegated entirely to NOWPayments' hosted invoice UI).
+
+### P2P escrow market (`services/api/src/p2p/`)
+The P2P token market is a **two-sided internal escrow system**, not an on-chain market and not an automated fiat payment rail. Trainers can post either:
+- `SELL` offers: "I want to sell X tokens." The seller must have a saved enabled `UserPaymentMethod`; tokens lock immediately when the offer is created.
+- `BUY` requests: "I want to buy X tokens." No tokens lock at post time. A seller accepts the request, chooses their payment method, and their tokens lock at accept time.
+
+Both flows become one trade lifecycle: offer/request posted → counterparty accepts → seller tokens are locked in `Wallet.lockedBalance` → buyer pays seller off-platform → buyer marks paid → seller confirms receipt and releases tokens → system credits buyer. If anything goes wrong, either party can raise a dispute and admin resolves by either releasing to buyer or refunding seller.
+
+**Schema:** `P2PMarketSettings` (admin singleton toggles/limits), `UserPaymentMethod` (trainer bank/payment details), `P2PTokenOffer` (`SELL`/`BUY` market post), `P2PTokenTrade` (accepted escrow trade), and `P2PDispute` (one open/resolved dispute per trade). Migration `20260812200000_add_p2p_escrow_market` adds these tables and the ledger entry types `P2P_ESCROW_LOCK`, `P2P_ESCROW_REFUND`, `P2P_ESCROW_RELEASE`, and `P2P_ESCROW_CREDIT`.
+
+**Ledger and wallet rules:**
+- Every escrow balance mutation must happen in one Prisma `$transaction` with the matching `LedgerEntry`.
+- Locking uses atomic `wallet.updateMany({ where: { id, balance: { gte: tokenAmount } } })` so concurrent offers/accepts cannot overspend the same balance.
+- `P2P_ESCROW_LOCK` is negative and moves spendable balance into `lockedBalance`.
+- `P2P_ESCROW_REFUND` is positive and moves `lockedBalance` back to seller balance.
+- `P2P_ESCROW_RELEASE` records seller-side release with amount `0` because the seller's spendable balance was already debited at lock time; do not double-debit the seller ledger on release.
+- `P2P_ESCROW_CREDIT` is positive and credits the buyer.
+- Never update/delete ledger rows to "fix" a trade; corrections are new rows plus explicit trade/dispute status changes.
+
+**Cancellation safety:** unaccepted offers can be cancelled immediately (`SELL` offer cancellation refunds locked tokens). Once a trade has a counterparty, cancellation is never immediate: it moves to `CANCEL_PENDING` with `cancelAvailableAt = now + P2PMarketSettings.cancelGraceMinutes`. If the buyer marks paid before that time, cancellation is cleared and the trade moves to `PAID_MARKED`. Once marked paid, cancellation is disabled; only seller release or dispute is allowed. This protects both sides from a party receiving money and closing the trade before the payment notification can be submitted.
+
+**Admin settings and controls:** all market behavior is gated by `P2PMarketSettings`, edited from the admin settings UI. Admin can enable/disable the whole market, independently enable sell offers and buy requests, set min/max token amounts, payment window, cancellation grace, offer expiry, max open offers/trades per user, allowed fiat currencies/payment methods, dispute window, and whether admin OTP is required for dispute resolution. Admin monitoring/resolution lives under `/admin/p2p`.
+
+**Frontend surfaces:** trainer dashboard has a `Market` tab for payment methods, sell offers, buy requests, active offers, and trades. Admin has `P2P Market` navigation plus `Settings → P2P Market`. `frontend` stays database-free; all P2P state comes from `/api/v1/p2p/*`.
+
+**Guardrails:** never expose seller bank/payment details in public offer lists; only include them for trade participants after a trade starts. Never accept `buyerId`, `sellerId`, or `userId` from client bodies; derive the actor from `JwtAuthGuard` and the role from `RolesGuard`. Admin dispute resolution must remain admin-only and should use OTP when `adminOtpRequiredForDisputes` is enabled.
 
 ### Language / dialect model mapping
 - Every Vosk model in use must be registered in `models/registry.yaml` (dialect_tag → model path/URL). **Never hardcode a model path inside worker logic** — always resolve it through the registry so dialect coverage can be extended without code changes.
@@ -431,7 +457,8 @@ pytest services/prompt-audio-service/tests/
 9. **`frontend` stays database-free** — no Prisma/TypeORM, no NextAuth database adapter added to `frontend`; any new persistence need is a new `api` endpoint that `frontend` calls, per "Authentication." No Dockerfile or k8s manifest added back for it either — it deploys via Vercel (see "Frontend deployment (Vercel)").
 10. **New sensitive/admin routes are guarded** — `@UseGuards(JwtAuthGuard)` at minimum, plus `@UseGuards(JwtAuthGuard, RolesGuard)` + `@Roles(Role.ADMIN)` (in that order) for admin-only routes. Don't ship an unguarded route that returns user-specific or privileged data.
 11. **Refresh-token rotation preserved** — any change to `AuthService.refresh`/`logout` keeps the rotate-on-use + family-revocation-on-replay behavior intact; don't simplify it to a non-rotating refresh token.
-12. **Docs updated** — if you change the architecture (new service, new stream, new scoring approach), update `docs/Dialectiva_ASR_K8s_Design_Plan.md` alongside the code, not as a follow-up.
+12. **Financial ledger invariants preserved** — any wallet, withdrawal, payout, task-lock, or P2P escrow change uses atomic balance guards and writes wallet mutation + ledger entry in the same Prisma transaction. P2P accepted-trade cancellation must keep the grace-window behavior; never add an instant cancel path after a counterparty has accepted.
+13. **Docs updated** — if you change the architecture (new service, new stream, new scoring approach, financial flow, or admin-gated market setting), update `docs/Dialectiva_ASR_K8s_Design_Plan.md` or `AGENTS.md` alongside the code, not as a follow-up.
 
 ---
 
