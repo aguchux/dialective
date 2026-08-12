@@ -433,6 +433,7 @@ export interface PlatformSettings {
   spellingNormalizationEnabled: boolean;
   spellingNormalizationProviderOrder: string;
   sentenceRebuildEnabled: boolean;
+  smsProviderOrder: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -463,6 +464,7 @@ export interface PlatformSettingsInput {
   spellingNormalizationEnabled?: boolean;
   spellingNormalizationProviderOrder?: string;
   sentenceRebuildEnabled?: boolean;
+  smsProviderOrder?: string;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD';
