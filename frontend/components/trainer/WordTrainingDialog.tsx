@@ -6,6 +6,7 @@ import {
   ArrowRight,
   BookOpenCheck,
   Check,
+  Clock3,
   LoaderCircle,
   Mic,
   Pause,
@@ -18,6 +19,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePortalContainer } from '@/components/ui/PortalContainer';
 import {
+  ApiErrorShape,
   RecordingNoiseRating,
   WordTrainingAssignment,
   WordTrainingSession,
@@ -33,7 +35,18 @@ const MAX_RECORDING_MS = 60_000;
 const RING_RADIUS = 104;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-type FlowStep = 'select' | 'terms' | 'loading' | 'training';
+// Distinct, stable messages the backend returns when the word bank is
+// empty (see WordsService.nextAssignment's NO_WORDS_AVAILABLE) -- matched
+// here to show a "check back later" empty state instead of a generic error
+// banner. There is no per-word usage limit; this only ever means the pool
+// itself has zero rows right now.
+function isNoWordsAvailable(err: unknown): boolean {
+  const message = (err as { data?: ApiErrorShape } | undefined)?.data?.message;
+  const text = Array.isArray(message) ? message.join(' ') : message;
+  return text === 'NO_WORDS_AVAILABLE';
+}
+
+type FlowStep = 'select' | 'terms' | 'loading' | 'training' | 'unavailable';
 type RecorderState = 'ready' | 'recording' | 'recorded' | 'playing' | 'paused' | 'submitting' | 'submitted';
 
 export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -130,6 +143,10 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
       } catch (err) {
         void endSession(created.sessionId);
         setSession(null);
+        if (isNoWordsAvailable(err)) {
+          setStep('unavailable');
+          return;
+        }
         throw err;
       }
     } catch (err) {
@@ -147,6 +164,10 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
     try {
       setAssignment(await loadNext(session.sessionId, false).unwrap());
     } catch (err) {
+      if (isNoWordsAvailable(err)) {
+        setStep('unavailable');
+        return;
+      }
       setError(normalizeErrorMessage(err, 'Unable to load the next word.'));
     }
   }
@@ -424,6 +445,22 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
                     )}
                   </>
                 )}
+              </section>
+            )}
+
+            {step === 'unavailable' && (
+              <section className="mx-auto grid w-full max-w-md gap-4 text-center">
+                <span className="mx-auto grid size-14 place-items-center rounded-full bg-accent-soft text-accent">
+                  <Clock3 className="size-7" aria-hidden="true" />
+                </span>
+                <h2 className="text-2xl font-black">No words available right now</h2>
+                <p className="leading-relaxed text-muted">
+                  The word dictionary is temporarily empty for your dialect. Check back later -- new words are added
+                  regularly.
+                </p>
+                <button className="mx-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted" onClick={() => void closeDialog()} type="button">
+                  Close
+                </button>
               </section>
             )}
           </main>

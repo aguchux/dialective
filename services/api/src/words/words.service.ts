@@ -87,7 +87,15 @@ export class WordsService {
     }
 
     const count = await this.prisma.word.count();
-    if (count === 0) throw new NotFoundException('No words available');
+    if (count === 0) {
+      // Distinct, stable message the frontend matches on to show a "check
+      // back later" empty state instead of a generic error banner -- see
+      // WordTrainingDialog.tsx. There is no per-word usage cap: the same
+      // word can be (and is expected to be) assigned to the same trainer
+      // again in a future session, so an empty pool only ever means the
+      // word bank itself has zero rows, not "this trainer used them all."
+      throw new NotFoundException('NO_WORDS_AVAILABLE');
+    }
     const [word] = await this.prisma.word.findMany({ take: 1, skip: Math.floor(Math.random() * count) });
     const assignment = await this.prisma.wordTrainingAssignment.create({
       data: { sessionId, wordId: word.id, direction: 'ENGLISH_TO_DIALECT' },

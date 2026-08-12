@@ -1,4 +1,4 @@
-import { Body, Controller, Get, NotFoundException, Param, Patch, Query, UnprocessableEntityException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { Prisma, Role } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
@@ -25,7 +25,13 @@ export class PromptsController {
     const dialectTag = dialectTagRaw ?? 'en-us';
     const count = await this.prisma.prompt.count({ where: { dialectTag, active: true } });
     if (count === 0) {
-      throw new UnprocessableEntityException(`Unsupported dialect: ${dialectTag}`);
+      // Distinct, stable message the frontend matches on to show a "check
+      // back later" empty state instead of a generic error banner -- see
+      // NO_WORDS_AVAILABLE in WordsService.nextAssignment for the same
+      // pattern. No per-prompt usage cap: the same prompt can be assigned
+      // to the same trainer again later, so empty only means zero rows for
+      // this dialect, not "this trainer used them all."
+      throw new NotFoundException('NO_PROMPTS_AVAILABLE');
     }
 
     const skip = Math.floor(Math.random() * count);
