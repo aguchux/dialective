@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { AsYouType, isValidPhoneNumber } from 'libphonenumber-js';
+import { AsYouType, CountryCode, getCountries, getCountryCallingCode, isValidPhoneNumber, parsePhoneNumberFromString } from 'libphonenumber-js';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -1312,6 +1312,89 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
   );
 }
 
+const PHONE_COUNTRIES: { code: CountryCode; name: string; callingCode: string }[] = (() => {
+  let displayNames: Intl.DisplayNames | null = null;
+  try {
+    displayNames = new Intl.DisplayNames(['en'], { type: 'region' });
+  } catch {
+    displayNames = null;
+  }
+  return getCountries()
+    .map((code) => ({ code, name: displayNames?.of(code) ?? code, callingCode: getCountryCallingCode(code) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+})();
+
+function flagEmoji(countryCode: string): string {
+  return countryCode
+    .toUpperCase()
+    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+}
+
+/**
+ * Country-calling-code select + national-number input, combined into a
+ * single E.164 string via libphonenumber-js -- avoids trainers having to
+ * type a leading "+234" themselves and formats-as-you-type per country.
+ */
+function PhoneNumberInput({
+  value,
+  onChange,
+  disabled,
+  defaultCountry = 'NG',
+}: {
+  value: string;
+  onChange: (e164: string) => void;
+  disabled?: boolean;
+  defaultCountry?: CountryCode;
+}) {
+  const parsed = value ? parsePhoneNumberFromString(value) : undefined;
+  const [country, setCountry] = useState<CountryCode>(parsed?.country ?? defaultCountry);
+  const [national, setNational] = useState(parsed?.formatNational() ?? '');
+
+  useEffect(() => {
+    if (!value) return;
+    const next = parsePhoneNumberFromString(value);
+    if (next?.country) setCountry(next.country);
+    setNational(next?.formatNational() ?? value);
+  }, [value]);
+
+  function emit(nextCountry: CountryCode, nextNational: string) {
+    const formatted = new AsYouType(nextCountry).input(nextNational);
+    setNational(formatted);
+    const digits = formatted.replace(/\D/g, '');
+    onChange(digits ? `+${getCountryCallingCode(nextCountry)}${digits.replace(/^0+/, '')}` : '');
+  }
+
+  return (
+    <div className="grid grid-cols-[minmax(0,140px)_1fr] gap-2">
+      <select
+        className="min-h-11 rounded-lg border border-line bg-surface px-2 text-ink outline-none focus:border-accent"
+        disabled={disabled}
+        onChange={(event) => {
+          const nextCountry = event.target.value as CountryCode;
+          setCountry(nextCountry);
+          emit(nextCountry, national);
+        }}
+        value={country}
+      >
+        {PHONE_COUNTRIES.map((entry) => (
+          <option key={entry.code} value={entry.code}>
+            {flagEmoji(entry.code)} +{entry.callingCode} {entry.name}
+          </option>
+        ))}
+      </select>
+      <input
+        className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+        disabled={disabled}
+        inputMode="tel"
+        onChange={(event) => emit(country, event.target.value)}
+        placeholder="801 234 5678"
+        required
+        value={national}
+      />
+    </div>
+  );
+}
+
 function ProfileView({ session, update }: { session: Session; update: SessionUpdateFn }) {
   const [firstName, setFirstName] = useState(session.user.firstName ?? '');
   const [lastName, setLastName] = useState(session.user.lastName ?? '');
@@ -1521,14 +1604,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
           />
           <label className="grid gap-1.5 text-sm font-bold">
             Phone number
-            <input
-              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-              disabled={phoneVerified}
-              onChange={(event) => updatePhoneField(new AsYouType().input(event.target.value))}
-              placeholder="+234 801 234 5678"
-              required
-              value={phoneNumber}
-            />
+            <PhoneNumberInput disabled={phoneVerified} onChange={updatePhoneField} value={phoneNumber} />
           </label>
           {phoneVerified && (
             <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
