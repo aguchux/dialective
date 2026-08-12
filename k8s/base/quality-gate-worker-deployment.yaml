@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quality-gate-worker
+  labels:
+    app: quality-gate-worker
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: quality-gate-worker
+  template:
+    metadata:
+      labels:
+        app: quality-gate-worker
+    spec:
+      # No initContainer/PVC needed here, unlike vosk-worker/whisper-worker's
+      # GB-scale ASR models -- the liveness classifier is a KB-scale joblib
+      # artifact baked directly into the image (see its Dockerfile).
+      containers:
+        - name: quality-gate-worker
+          image: golojan/dialect-quality-gate-worker:latest
+          env:
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: quality-gate-worker-config
+                  key: redis_host
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: quality-gate-worker-config
+                  key: redis_port
+            - name: QUALITY_GATE_STREAM
+              valueFrom:
+                configMapKeyRef:
+                  name: quality-gate-worker-config
+                  key: quality_gate_stream
+            - name: CONSUMER_GROUP
+              valueFrom:
+                configMapKeyRef:
+                  name: quality-gate-worker-config
+                  key: consumer_group
+            - name: SPACES_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: quality-gate-worker-config
+                  key: spaces_region
+            - name: SPACES_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: endpoint
+            - name: SPACES_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: access_key
+            - name: SPACES_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: secret_key
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: connection_string

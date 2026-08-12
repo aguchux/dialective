@@ -11,6 +11,7 @@ on:
       - "services/word-generator-job/**"
       - "services/vosk-worker/**"
       - "services/whisper-worker/**"
+      - "services/quality-gate-worker/**"
       - "packages/db/**"
       - "package.json"
       - "package-lock.json"
@@ -58,6 +59,9 @@ jobs:
           - service: whisper-worker
             context: .
             image: whisper-worker
+          - service: quality-gate-worker
+            context: .
+            image: quality-gate-worker
     steps:
       - name: Checkout
         uses: actions/checkout@v4

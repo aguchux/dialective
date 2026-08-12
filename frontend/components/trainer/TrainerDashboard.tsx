@@ -666,6 +666,23 @@ function estimatedScoredPayout(tokensSpent: string, score: string) {
 }
 
 /**
+ * Hover-tooltip breakdown of the four signals behind compositeScore -- shown
+ * whenever compositeScore differs from the raw transcript/exact-match score,
+ * so a trainer can see why their payout used a different percentage than
+ * their accuracy score alone would suggest (see AGENTS.md quality-gate
+ * notes: noise/quality/liveness blend into payout, never gate submission).
+ */
+function qualityBreakdownTitle(submission: TrainerSubmissionSummary): string | undefined {
+  if (submission.compositeScore === null) return undefined;
+  const parts = [`Transcript/exact-match: ${submission.score !== null ? Number(submission.score).toFixed(1) : '—'}%`];
+  if (submission.noiseScore !== null) parts.push(`Background noise: ${Number(submission.noiseScore).toFixed(1)}%`);
+  if (submission.qualityScore !== null) parts.push(`Audio quality: ${Number(submission.qualityScore).toFixed(1)}%`);
+  if (submission.livenessScore !== null) parts.push(`Voice liveness: ${Number(submission.livenessScore).toFixed(1)}%`);
+  parts.push(`Composite (used for payout): ${Number(submission.compositeScore).toFixed(1)}%`);
+  return parts.join('\n');
+}
+
+/**
  * Two independent task pipelines feed My Tasks/My Scores: sentence-dictation
  * Submissions (consensus-scored) and word-training WordRecordings (scored
  * via exact-match / peer reverse-validation) -- see WordRecording's doc
@@ -1162,8 +1179,11 @@ function ScoresView() {
                           {submissionStatusLabels[submission.status]}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-4 text-right font-bold">
+                      <td className="whitespace-nowrap px-5 py-4 text-right font-bold" title={qualityBreakdownTitle(submission)}>
                         {submission.score !== null ? `${Number(submission.score).toFixed(1)}%` : '—'}
+                        {submission.compositeScore !== null && Number(submission.compositeScore).toFixed(1) !== Number(submission.score).toFixed(1) && (
+                          <span className="ml-1 font-normal text-muted">({Number(submission.compositeScore).toFixed(1)}% paid)</span>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-5 py-4 text-right font-black text-emerald-700 dark:text-emerald-300">
                         {submission.payoutTokenAmount !== null
@@ -1191,7 +1211,14 @@ function ScoresView() {
                   <div className="flex items-end justify-between gap-3 text-sm">
                     <div className="min-w-0">
                       <p className="text-muted">{submission.dialectTag.toUpperCase()} &middot; {formatDateTime(submission.createdAt)}</p>
-                      {submission.score !== null && <p className="font-bold">Score: {Number(submission.score).toFixed(1)}%</p>}
+                      {submission.score !== null && (
+                        <p className="font-bold" title={qualityBreakdownTitle(submission)}>
+                          Score: {Number(submission.score).toFixed(1)}%
+                          {submission.compositeScore !== null && Number(submission.compositeScore).toFixed(1) !== Number(submission.score).toFixed(1) && (
+                            <span className="font-normal text-muted"> ({Number(submission.compositeScore).toFixed(1)}% paid)</span>
+                          )}
+                        </p>
+                      )}
                     </div>
                     {submission.payoutTokenAmount !== null ? (
                       <span className="shrink-0 font-black text-emerald-700 dark:text-emerald-300">+{formatTokens(submission.payoutTokenAmount)}</span>

@@ -6,7 +6,8 @@
       "Bash(mkdir -p symlink_test/src/@scope/pkg symlink_test/dest)",
       "Bash(echo '{\"name\":\"pkg\"}')",
       "Bash(node -e ' *)",
-      "Bash(rm -rf symlink_test)"
+      "Bash(rm -rf symlink_test)",
+      "Bash(DATABASE_URL=\"postgresql://placeholder:placeholder@localhost:5432/placeholder\" npx prisma generate)"
     ]
   }
 }

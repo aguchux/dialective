@@ -8,7 +8,8 @@ interface DataAccessLeadNotification {
   name: string;
   email: string;
   organization: string | null;
-  useCase: string | null;
+  website: string | null;
+  countriesInterested: string | null;
 }
 
 function frontendUrl(): string {
@@ -127,7 +128,8 @@ function dataAccessLeadHtml(lead: DataAccessLeadNotification): string {
   <li>Name: ${escapeHtml(lead.name)}</li>
   <li>Email: ${escapeHtml(lead.email)}</li>
   <li>Organization: ${lead.organization ? escapeHtml(lead.organization) : '(not provided)'}</li>
-  <li>Use case: ${lead.useCase ? escapeHtml(lead.useCase) : '(not provided)'}</li>
+  <li>Website: ${lead.website ? escapeHtml(lead.website) : '(not provided)'}</li>
+  <li>Countries interested in: ${lead.countriesInterested ? escapeHtml(lead.countriesInterested) : '(not provided)'}</li>
 </ul>`;
 }
 
@@ -136,5 +138,6 @@ function dataAccessLeadText(lead: DataAccessLeadNotification): string {
 Name: ${lead.name}
 Email: ${lead.email}
 Organization: ${lead.organization ?? '(not provided)'}
-Use case: ${lead.useCase ?? '(not provided)'}`;
+Website: ${lead.website ?? '(not provided)'}
+Countries interested in: ${lead.countriesInterested ?? '(not provided)'}`;
 }

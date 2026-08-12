@@ -5,6 +5,7 @@ describe('WordsService', () => {
   const session = { id: 'session-1', userId: trainer.id, endedAt: null };
   const settings = { getTaskTokenCost: jest.fn(), isReverseWordTrainingEnabled: jest.fn() };
   const storage = { createPresignedDownloadUrl: jest.fn(), createPresignedUploadUrl: jest.fn() };
+  const streams = { publish: jest.fn() };
   let prisma: any;
   let service: WordsService;
 
@@ -23,7 +24,7 @@ describe('WordsService', () => {
     };
     settings.getTaskTokenCost.mockResolvedValue(1);
     settings.isReverseWordTrainingEnabled.mockReset();
-    service = new WordsService(prisma, storage as any, settings as any);
+    service = new WordsService(prisma, storage as any, settings as any, streams as any);
   });
 
   it('only issues English-to-dialect assignments when reverse training is disabled', async () => {

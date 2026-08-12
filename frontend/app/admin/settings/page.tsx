@@ -6,12 +6,14 @@ import { GeneralSettingsPanel } from './GeneralSettingsPanel';
 import { NotificationSettingsPanel } from './NotificationSettingsPanel';
 import { ReferralBonusSettingsPanel } from './ReferralBonusSettingsPanel';
 import { WordGenerationSettingsPanel } from './WordGenerationSettingsPanel';
+import { QualityGateSettingsPanel } from './QualityGateSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
   { key: 'referrals', label: 'Referral Bonuses' },
   { key: 'notifications', label: 'Notification Settings' },
   { key: 'wordGeneration', label: 'Word Generation' },
+  { key: 'qualityGate', label: 'Voice Quality Gate' },
 ] as const;
 
 type GroupKey = (typeof groups)[number]['key'];
@@ -51,6 +53,7 @@ export default function AdminSettingsPage() {
             {active === 'referrals' && <ReferralBonusSettingsPanel />}
             {active === 'notifications' && <NotificationSettingsPanel />}
             {active === 'wordGeneration' && <WordGenerationSettingsPanel />}
+            {active === 'qualityGate' && <QualityGateSettingsPanel />}
           </div>
         </div>
       </div>

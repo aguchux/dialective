@@ -9,7 +9,6 @@ import { normalizeErrorMessage, useCreateDataAccessLeadMutation } from '@/store/
 import { ActionButton } from '@/components/ui/ActionButton';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
-const textareaClass = `${inputClass} min-h-24 resize-y py-2`;
 const primaryButtonClass =
   'inline-flex min-h-11 items-center justify-center rounded-full border border-accent bg-accent px-5 py-3 font-extrabold text-white transition-colors hover:border-accent-dark hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -32,7 +31,8 @@ export default function DataAccessPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [organization, setOrganization] = useState('');
-  const [useCase, setUseCase] = useState('');
+  const [website, setWebsite] = useState('');
+  const [countriesInterested, setCountriesInterested] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [createLead, { isLoading }] = useCreateDataAccessLeadMutation();
@@ -44,8 +44,9 @@ export default function DataAccessPage() {
       await createLead({
         name,
         email,
-        organization: organization.trim() || undefined,
-        useCase: useCase.trim() || undefined,
+        organization,
+        website,
+        countriesInterested,
       }).unwrap();
       setSubmitted(true);
     } catch (err) {
@@ -70,8 +71,8 @@ export default function DataAccessPage() {
               License voice and dialect data collected by real speakers.
             </h1>
             <p className="max-w-2xl text-lg leading-relaxed text-[rgba(5,5,5,0.68)]">
-              Dialect Library&apos;s dataset is growing every day. Tell us what you&apos;re building and
-              we&apos;ll follow up about access, coverage, and licensing terms.
+              Dialect Library&apos;s dataset is growing every day. Tell us your organization, website, and target
+              countries and we&apos;ll follow up about access, coverage, and licensing terms.
             </p>
           </div>
 
@@ -106,15 +107,26 @@ export default function DataAccessPage() {
                   <input
                     className={inputClass}
                     type="text"
-                    placeholder="Organization (optional)"
+                    placeholder="Company / organization"
                     value={organization}
                     onChange={(e) => setOrganization(e.target.value)}
+                    required
                   />
-                  <textarea
-                    className={textareaClass}
-                    placeholder="What are you building? (optional)"
-                    value={useCase}
-                    onChange={(e) => setUseCase(e.target.value)}
+                  <input
+                    className={inputClass}
+                    type="url"
+                    placeholder="Website"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    required
+                  />
+                  <input
+                    className={inputClass}
+                    type="text"
+                    placeholder="Countries interested in (e.g. Nigeria, Ghana, Kenya)"
+                    value={countriesInterested}
+                    onChange={(e) => setCountriesInterested(e.target.value)}
+                    required
                   />
                   <ActionButton className={primaryButtonClass} type="submit" pending={isLoading} pendingLabel="Submitting request">
                     Subscribe to voice data

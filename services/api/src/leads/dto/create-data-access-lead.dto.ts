@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, IsUrl, MaxLength } from 'class-validator';
 
 export class CreateDataAccessLeadDto {
   @IsString()
@@ -9,13 +9,19 @@ export class CreateDataAccessLeadDto {
   @IsEmail()
   email!: string;
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(200)
-  organization?: string;
+  organization!: string;
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(300)
+  @IsUrl({ require_tld: false }, { message: 'website must be a valid URL' })
+  website!: string;
+
+  @IsString()
+  @IsNotEmpty()
   @MaxLength(2000)
-  useCase?: string;
+  countriesInterested!: string;
 }

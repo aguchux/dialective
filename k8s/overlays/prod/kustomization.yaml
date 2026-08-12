@@ -45,6 +45,9 @@ configMapGenerator:
   - name: whisper-worker-config
     envs:
       - configs/whisper-worker.env
+  - name: quality-gate-worker-config
+    envs:
+      - configs/quality-gate-worker.env
   - name: prompt-audio-service-config
     envs:
       - configs/prompt-audio-service.env

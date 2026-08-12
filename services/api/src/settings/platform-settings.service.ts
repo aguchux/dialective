@@ -135,6 +135,11 @@ export class PlatformSettingsService {
       llmProviderOrder: row.llmProviderOrder,
       llmWordsPerItem: row.llmWordsPerItem,
       llmItemsPerRun: row.llmItemsPerRun,
+      qualityGateEnabled: row.qualityGateEnabled,
+      qualityWeightConsensus: row.qualityWeightConsensus.toString(),
+      qualityWeightNoise: row.qualityWeightNoise.toString(),
+      qualityWeightQuality: row.qualityWeightQuality.toString(),
+      qualityWeightLiveness: row.qualityWeightLiveness.toString(),
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -158,6 +163,11 @@ export class PlatformSettingsService {
     llmProviderOrder?: string;
     llmWordsPerItem?: number;
     llmItemsPerRun?: number;
+    qualityGateEnabled?: boolean;
+    qualityWeightConsensus?: number;
+    qualityWeightNoise?: number;
+    qualityWeightQuality?: number;
+    qualityWeightLiveness?: number;
   }) {
     if (data.llmProviderOrder) {
       const tokens = data.llmProviderOrder.split(',');
@@ -167,6 +177,26 @@ export class PlatformSettingsService {
         new Set(tokens).size === LLM_PROVIDER_KEYS.length;
       if (!isValidPermutation) {
         throw new BadRequestException('llmProviderOrder must list openai, deepseek, and anthropic exactly once each');
+      }
+    }
+
+    const anyWeightProvided =
+      data.qualityWeightConsensus !== undefined ||
+      data.qualityWeightNoise !== undefined ||
+      data.qualityWeightQuality !== undefined ||
+      data.qualityWeightLiveness !== undefined;
+    if (anyWeightProvided) {
+      // A partial weight update can't be validated in isolation -- the sum
+      // check needs all four values, so read whatever isn't in this patch
+      // off the existing row first.
+      const existing = await this.getRow();
+      const consensus = data.qualityWeightConsensus ?? existing.qualityWeightConsensus.toNumber();
+      const noise = data.qualityWeightNoise ?? existing.qualityWeightNoise.toNumber();
+      const quality = data.qualityWeightQuality ?? existing.qualityWeightQuality.toNumber();
+      const liveness = data.qualityWeightLiveness ?? existing.qualityWeightLiveness.toNumber();
+      const sum = consensus + noise + quality + liveness;
+      if (Math.abs(sum - 100) > 0.01) {
+        throw new BadRequestException('qualityWeightConsensus/Noise/Quality/Liveness must sum to 100');
       }
     }
 
@@ -193,6 +223,11 @@ export class PlatformSettingsService {
       llmProviderOrder: row.llmProviderOrder,
       llmWordsPerItem: row.llmWordsPerItem,
       llmItemsPerRun: row.llmItemsPerRun,
+      qualityGateEnabled: row.qualityGateEnabled,
+      qualityWeightConsensus: row.qualityWeightConsensus.toString(),
+      qualityWeightNoise: row.qualityWeightNoise.toString(),
+      qualityWeightQuality: row.qualityWeightQuality.toString(),
+      qualityWeightLiveness: row.qualityWeightLiveness.toString(),
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

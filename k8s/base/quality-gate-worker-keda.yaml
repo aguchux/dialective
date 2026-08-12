@@ -1,0 +1,19 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: quality-gate-worker-scaler
+spec:
+  scaleTargetRef:
+    name: quality-gate-worker
+  minReplicaCount: 0
+  maxReplicaCount: 15
+  cooldownPeriod: 120
+  pollingInterval: 15
+  triggers:
+    - type: redis-streams
+      metadata:
+        address: redis.dai.svc.cluster.local:6379
+        stream: quality-gate-jobs
+        consumerGroup: quality-gate-workers
+        lagCount: "1"
+        activationLagCount: "0"

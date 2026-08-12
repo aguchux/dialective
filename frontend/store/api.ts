@@ -75,8 +75,41 @@ export interface DialectInput {
 export interface DataAccessLeadInput {
   name: string;
   email: string;
-  organization?: string;
-  useCase?: string;
+  organization: string;
+  website: string;
+  countriesInterested: string;
+}
+
+export interface AdminDataAccessLead {
+  id: string;
+  name: string;
+  email: string;
+  organization: string | null;
+  website: string | null;
+  countriesInterested: string | null;
+  contactedAt: string | null;
+  contactNote: string | null;
+  contactedByUserId: string | null;
+  contactedBy: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
+  createdAt: string;
+}
+
+export interface DataAccessLeadsPage {
+  items: AdminDataAccessLead[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface DataAccessLeadContactUpdateInput {
+  contacted: boolean;
+  note?: string;
 }
 
 export interface ReferralSettings {
@@ -177,7 +210,12 @@ export interface EarningHistoryPage {
 }
 
 export interface AdminStats {
+  totalUsers: number;
   totalTrainers: number;
+  totalAdmins: number;
+  activeUsers: number;
+  suspendedUsers: number;
+  verifiedUsers: number;
   referralSettings: {
     fundingBonusRate: string;
     fundingBonusEnabled: boolean;
@@ -185,10 +223,45 @@ export interface AdminStats {
     payoutBonusEnabled: boolean;
   };
   pendingWithdrawals: number;
+  pendingWithdrawalTokens: string;
+  pendingWithdrawalUsdt: string;
   dataAccessLeads: number;
+  countriesCount: number;
+  dialectsCount: number;
+  wordsCount: number;
+  wordTranslationsCount: number;
+  promptsCount: number;
+  activePromptsCount: number;
+  promptTranslationsCount: number;
+  trainingSessionsCount: number;
+  wordRecordingsCount: number;
+  wordRecordingsPending: number;
+  wordRecordingsScored: number;
+  wordRecordingsSettled: number;
+  submissionsCount: number;
+  submissionsPending: number;
+  submissionsTranscribed: number;
+  submissionsScored: number;
+  submissionsSettled: number;
+  submissionsRejected: number;
+  walletsCount: number;
+  totalWalletBalance: string;
+  totalLockedTokens: string;
   totalDepositsUsd: string;
   totalTokensFunded: string;
+  pendingDeposits: number;
+  confirmedDeposits: number;
+  ipnEventsCount: number;
   totalReferralBonuses: string;
+  totalTrainingPayouts: string;
+  totalWithdrawnTokens: string;
+  totalWithdrawnUsdt: string;
+  subscriptionPoolsCount: number;
+  activeSubscriptionPools: number;
+  activeSubscriptionPoolUsd: string;
+  blogPostsCount: number;
+  publishedBlogPostsCount: number;
+  draftBlogPostsCount: number;
 }
 
 export interface PlatformSettings {
@@ -209,6 +282,11 @@ export interface PlatformSettings {
   llmProviderOrder: string;
   llmWordsPerItem: number;
   llmItemsPerRun: number;
+  qualityGateEnabled: boolean;
+  qualityWeightConsensus: string;
+  qualityWeightNoise: string;
+  qualityWeightQuality: string;
+  qualityWeightLiveness: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -231,6 +309,11 @@ export interface PlatformSettingsInput {
   llmProviderOrder?: string;
   llmWordsPerItem?: number;
   llmItemsPerRun?: number;
+  qualityGateEnabled?: boolean;
+  qualityWeightConsensus?: number;
+  qualityWeightNoise?: number;
+  qualityWeightQuality?: number;
+  qualityWeightLiveness?: number;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';
@@ -304,6 +387,10 @@ export interface TrainerSubmissionSummary {
   status: 'PENDING' | 'TRANSCRIBED' | 'REJECTED' | 'SCORED' | 'SETTLED';
   tokensSpent: string;
   score: string | null;
+  noiseScore: string | null;
+  qualityScore: string | null;
+  livenessScore: string | null;
+  compositeScore: string | null;
   payoutTokenAmount: string | null;
   audioUrl: string | null;
   rejectionReason: string | null;
@@ -451,7 +538,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -586,6 +673,24 @@ export const dialectivaApi = createApi({
         method: 'POST',
         body,
       }),
+    }),
+    getAdminDataAccessLeads: builder.query<DataAccessLeadsPage, { page?: number; pageSize?: number } | void>({
+      query: (params) => ({
+        url: '/leads/admin/data-access',
+        params: params ?? undefined,
+      }),
+      providesTags: ['DataAccessLeads'],
+    }),
+    updateAdminDataAccessLeadContact: builder.mutation<
+      AdminDataAccessLead,
+      { id: string; body: DataAccessLeadContactUpdateInput }
+    >({
+      query: ({ id, body }) => ({
+        url: `/leads/admin/data-access/${id}/contact`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['DataAccessLeads'],
     }),
     getReferralSettings: builder.query<ReferralSettings, void>({
       query: () => '/admin/referral-settings',
@@ -784,6 +889,8 @@ export const {
   useCreateWithdrawalMutation,
   useUpdateProfileMutation,
   useCreateDataAccessLeadMutation,
+  useGetAdminDataAccessLeadsQuery,
+  useUpdateAdminDataAccessLeadContactMutation,
   useGetReferralSettingsQuery,
   useUpdateReferralSettingsMutation,
   useGetReferralsQuery,

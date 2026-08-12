@@ -82,4 +82,35 @@ export class UpdatePlatformSettingsDto {
   @Min(1)
   @Max(100)
   llmItemsPerRun?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  qualityGateEnabled?: boolean;
+
+  // The four qualityWeight* fields must sum to 100 -- validated in
+  // PlatformSettingsService.update, not expressible via per-field decorators
+  // (mirrors the llmProviderOrder permutation check's pattern).
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  qualityWeightConsensus?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  qualityWeightNoise?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  qualityWeightQuality?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  qualityWeightLiveness?: number;
 }

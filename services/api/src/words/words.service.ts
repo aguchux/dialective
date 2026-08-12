@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { StorageService } from '../storage/storage.service';
+import { RedisStreamsService } from '../redis-streams/redis-streams.service';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
 import { ListSubmissionsDto } from '../submissions/dto/list-submissions.dto';
@@ -29,6 +30,7 @@ export class WordsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly settings: PlatformSettingsService,
+    private readonly streams: RedisStreamsService,
   ) {}
 
   async startSession(userId: string) {
@@ -219,6 +221,19 @@ export class WordsService {
       await this.scoreReverseValidatedSource(assignment.sourceRecordingId, validationScore!);
     }
 
+    // Same quality-gate-jobs stream Submissions publish to (see
+    // SubmissionsController.create) -- no asr_stream field here since word
+    // recordings have no ASR step to forward to; the worker only writes
+    // noise/quality/livenessScore onto this row. No prefilter-reject path
+    // either (no equivalent "duration_out_of_range"/"mostly_silence" gate
+    // exists for word recordings today), so this is purely score annotation.
+    await this.streams.publish('quality-gate-jobs', {
+      record_kind: 'word_recording',
+      word_recording_id: recording.id,
+      bucket: body.bucket,
+      audio_key: body.audioKey,
+    });
+
     return {
       recordingId: recording.id,
       status: 'saved',
@@ -260,6 +275,10 @@ export class WordsService {
         status: recording.status,
         tokensSpent: recording.tokensSpent.toString(),
         score: recording.score?.toString() ?? null,
+        noiseScore: recording.noiseScore?.toString() ?? null,
+        qualityScore: recording.qualityScore?.toString() ?? null,
+        livenessScore: recording.livenessScore?.toString() ?? null,
+        compositeScore: recording.compositeScore?.toString() ?? null,
         payoutTokenAmount: recording.payoutTokenAmount?.toString() ?? null,
         audioUrl: (await this.storage.createPresignedDownloadUrl(recording.audioBucket, recording.audioKey)).url,
         rejectionReason: null as string | null,

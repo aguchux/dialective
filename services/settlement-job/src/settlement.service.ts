@@ -8,6 +8,46 @@ function randomInRange(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
 
+export interface QualityWeights {
+  consensus: number;
+  noise: number;
+  quality: number;
+  liveness: number;
+}
+
+/**
+ * Blends the real consensus/exact-match score with the quality-gate-worker's
+ * three signals (weighted average, admin-configurable weights), then clamps
+ * the result into [minScoreRange, maxScoreRange] -- the same range the
+ * no-fail-on-train synthetic-timeout path already respects (see
+ * settleWithSyntheticScore's randomInRange). Unlike that path, this is a
+ * deterministic computation from real signals, never a random draw. Missing
+ * noise/quality/liveness scores (gate disabled when the row was created, or
+ * the async worker hasn't written them yet) fall back to a neutral 100 so
+ * absence never penalizes a trainer -- see schema.prisma's compositeScore
+ * comment.
+ */
+export function computeCompositeScore(
+  realScore: Prisma.Decimal,
+  noiseScore: Prisma.Decimal | null,
+  qualityScore: Prisma.Decimal | null,
+  livenessScore: Prisma.Decimal | null,
+  weights: QualityWeights,
+  scoreRange: { min: number; max: number },
+): number {
+  const weightSum = weights.consensus + weights.noise + weights.quality + weights.liveness;
+  const blended =
+    weightSum <= 0
+      ? realScore.toNumber()
+      : (realScore.toNumber() * weights.consensus +
+          (noiseScore?.toNumber() ?? 100) * weights.noise +
+          (qualityScore?.toNumber() ?? 100) * weights.quality +
+          (livenessScore?.toNumber() ?? 100) * weights.liveness) /
+        weightSum;
+
+  return Math.max(scoreRange.min, Math.min(scoreRange.max, blended));
+}
+
 /**
  * Reads scored-but-unsettled submissions from Postgres, computes each
  * payout via the shared no-loss formula (computeTrainingPayout in
@@ -29,9 +69,14 @@ export class SettlementService {
     this.logger.log('Settlement run starting');
 
     const bonusCapMultiple = await this.getTrainingPayoutBonusCapMultiple();
+    const [qualityGateEnabled, qualityWeights, scoreRange] = await Promise.all([
+      this.isQualityGateEnabled(),
+      this.getQualityWeights(),
+      this.getScoreRange(),
+    ]);
 
-    const submissionResult = await this.settleSubmissions(bonusCapMultiple);
-    const wordRecordingResult = await this.settleWordRecordings(bonusCapMultiple);
+    const submissionResult = await this.settleSubmissions(bonusCapMultiple, qualityGateEnabled, qualityWeights, scoreRange);
+    const wordRecordingResult = await this.settleWordRecordings(bonusCapMultiple, qualityGateEnabled, qualityWeights, scoreRange);
     const rejectedRefundCount = await this.refundRejectedSubmissions();
     const stuckRefundCount = await this.refundStuckWordRecordings();
     const timeoutResult = await this.resolveTimedOutScoring(bonusCapMultiple);
@@ -62,10 +107,23 @@ export class SettlementService {
     );
   }
 
-  private async settleSubmissions(bonusCapMultiple: number) {
+  private async settleSubmissions(
+    bonusCapMultiple: number,
+    qualityGateEnabled: boolean,
+    qualityWeights: QualityWeights,
+    scoreRange: { min: number; max: number },
+  ) {
     const submissions = await this.prisma.submission.findMany({
       where: { status: 'SCORED', settledAt: null },
-      select: { id: true, userId: true, tokensSpent: true, score: true },
+      select: {
+        id: true,
+        userId: true,
+        tokensSpent: true,
+        score: true,
+        noiseScore: true,
+        qualityScore: true,
+        livenessScore: true,
+      },
     });
 
     let settledCount = 0;
@@ -78,7 +136,21 @@ export class SettlementService {
       }
 
       try {
-        const payout = computeTrainingPayout(submission.tokensSpent, submission.score, bonusCapMultiple);
+        // compositeScore is only used to influence payout once
+        // qualityGateEnabled -- otherwise it's still computed and stored
+        // (useful for admin visibility/tuning) but computeTrainingPayout
+        // gets the raw score, matching today's behavior exactly. See
+        // computeCompositeScore's doc comment for the blend/clamp mechanism.
+        const compositeScore = computeCompositeScore(
+          submission.score,
+          submission.noiseScore,
+          submission.qualityScore,
+          submission.livenessScore,
+          qualityWeights,
+          scoreRange,
+        );
+        const payoutScore = qualityGateEnabled ? compositeScore : submission.score;
+        const payout = computeTrainingPayout(submission.tokensSpent, payoutScore, bonusCapMultiple);
         const { ops } = await creditTrainingPayoutOps(this.prisma, submission.userId, payout, submission.id);
 
         // Release the lock taken at submit time in the same transaction as
@@ -99,7 +171,7 @@ export class SettlementService {
           ...ops,
           this.prisma.submission.update({
             where: { id: submission.id },
-            data: { payoutTokenAmount: payout, settledAt: new Date() },
+            data: { compositeScore, payoutTokenAmount: payout, settledAt: new Date() },
           }),
         ]);
 
@@ -121,10 +193,23 @@ export class SettlementService {
    * schema.prisma for why word training has its own SCORED path (no
    * consensus/quorum) but shares this settlement step.
    */
-  private async settleWordRecordings(bonusCapMultiple: number) {
+  private async settleWordRecordings(
+    bonusCapMultiple: number,
+    qualityGateEnabled: boolean,
+    qualityWeights: QualityWeights,
+    scoreRange: { min: number; max: number },
+  ) {
     const recordings = await this.prisma.wordRecording.findMany({
       where: { status: 'SCORED', settledAt: null, userId: { not: null } },
-      select: { id: true, userId: true, tokensSpent: true, score: true },
+      select: {
+        id: true,
+        userId: true,
+        tokensSpent: true,
+        score: true,
+        noiseScore: true,
+        qualityScore: true,
+        livenessScore: true,
+      },
     });
 
     let settledCount = 0;
@@ -137,7 +222,16 @@ export class SettlementService {
       }
 
       try {
-        const payout = computeTrainingPayout(recording.tokensSpent, recording.score, bonusCapMultiple);
+        const compositeScore = computeCompositeScore(
+          recording.score,
+          recording.noiseScore,
+          recording.qualityScore,
+          recording.livenessScore,
+          qualityWeights,
+          scoreRange,
+        );
+        const payoutScore = qualityGateEnabled ? compositeScore : recording.score;
+        const payout = computeTrainingPayout(recording.tokensSpent, payoutScore, bonusCapMultiple);
         const { ops } = await creditTrainingPayoutOps(this.prisma, recording.userId, payout, recording.id);
 
         // Same lock-release-alongside-payout pattern as settleSubmissions,
@@ -155,7 +249,7 @@ export class SettlementService {
           ...ops,
           this.prisma.wordRecording.update({
             where: { id: recording.id },
-            data: { payoutTokenAmount: payout, settledAt: new Date() },
+            data: { compositeScore, payoutTokenAmount: payout, settledAt: new Date() },
           }),
         ]);
 
@@ -436,6 +530,36 @@ export class SettlementService {
       create: { id: 'default' },
     });
     return { min: row.minScoreRange.toNumber(), max: row.maxScoreRange.toNumber() };
+  }
+
+  /**
+   * Mirrors PlatformSettingsService.isQualityGateEnabled/getQualityWeights'
+   * DB-read logic -- see getTrainingPayoutBonusCapMultiple above for why
+   * this is a duplicated read, not duplicated business logic. Unlike most
+   * other settings here, these have no env-var fallback -- they're new
+   * fields with sane non-null defaults set at the schema level.
+   */
+  private async isQualityGateEnabled(): Promise<boolean> {
+    const row = await this.prisma.platformSettings.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    });
+    return row.qualityGateEnabled;
+  }
+
+  private async getQualityWeights(): Promise<QualityWeights> {
+    const row = await this.prisma.platformSettings.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    });
+    return {
+      consensus: row.qualityWeightConsensus.toNumber(),
+      noise: row.qualityWeightNoise.toNumber(),
+      quality: row.qualityWeightQuality.toNumber(),
+      liveness: row.qualityWeightLiveness.toNumber(),
+    };
   }
 
   private async getOrCreateWallet(userId: string) {

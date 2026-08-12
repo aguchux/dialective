@@ -16,6 +16,7 @@ import {
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: HomeIcon },
   { href: '/admin/users', label: 'Users', icon: UsersIcon },
+  { href: '/admin/data-access', label: 'Data Access Leads', icon: LeadsIcon },
   { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
   { href: '/admin/words', label: 'Words', icon: WordsIcon },
   { href: '/admin/referrals', label: 'Referrals', icon: ReferralIcon },
@@ -142,6 +143,15 @@ function UsersIcon() {
       <path d="M2.5 20a6.5 6.5 0 0 1 13 0" strokeLinecap="round" />
       <path d="M15.5 5.5a3.25 3.25 0 0 1 0 6.4" strokeLinecap="round" />
       <path d="M17 14.2a6.5 6.5 0 0 1 4.5 5.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function LeadsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" ry="2" />
+      <path d="m3 7 9 6 9-6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

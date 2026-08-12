@@ -175,12 +175,19 @@ export class SubmissionsController {
     });
     if (!locked) throw new UnprocessableEntityException('Unable to lock task tokens');
 
-    await this.streams.publish(route.stream, {
+    // Routed through quality-gate-jobs first, not directly to the ASR
+    // stream -- quality-gate-worker runs the existing duration/silence
+    // prefilter plus noise/quality/liveness scoring, then forwards to
+    // asr_stream (the same route.stream resolved above) only once the
+    // clip clears the prefilter. See AGENTS.md/quality-gate-worker docs.
+    await this.streams.publish('quality-gate-jobs', {
+      record_kind: 'submission',
       submission_id: body.submissionId,
       prompt_id: body.promptId,
       dialect_tag: body.dialectTag,
       bucket: body.bucket,
       audio_key: body.audioKey,
+      asr_stream: route.stream,
     });
 
     return { submissionId: body.submissionId, status: 'queued', tokensSpent: taskTokenCost };
@@ -240,6 +247,10 @@ export class SubmissionsController {
         status: submission.status,
         tokensSpent: submission.tokensSpent.toString(),
         score: submission.score?.toString() ?? null,
+        noiseScore: submission.noiseScore?.toString() ?? null,
+        qualityScore: submission.qualityScore?.toString() ?? null,
+        livenessScore: submission.livenessScore?.toString() ?? null,
+        compositeScore: submission.compositeScore?.toString() ?? null,
         payoutTokenAmount: submission.payoutTokenAmount?.toString() ?? null,
         audioUrl: (await this.storage.createPresignedDownloadUrl(submission.audioBucket, submission.audioKey)).url,
         rejectionReason: submission.rejectionReason,

@@ -71,6 +71,7 @@ model User {
   trainingSessions TrainingSession[]
   wordRecordings WordRecording[]
   subscriptionPoolsOpened SubscriptionPool[] @relation("SubscriptionPoolOpenedBy")
+  dataAccessLeadsContacted DataAccessLead[] @relation("DataAccessLeadContactedBy")
 
   @@map("users")
 }
@@ -278,6 +279,11 @@ model Submission {
   tokensSpent       Decimal          @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
   score             Decimal?         @db.Decimal(5, 2) // 0.00-100.00 consensus agreement score, null until SCORED
   isOutlier         Boolean          @default(false) // flagged for human QA review, never auto-rejected -- see AGENTS.md "Consensus scoring"
+  noiseScore        Decimal?         @db.Decimal(5, 2) // 0-100, quality-gate-worker's SNR-derived estimate; null until the gate has run
+  qualityScore      Decimal?         @db.Decimal(5, 2) // 0-100, quality-gate-worker's clipping/artifact composite; null until the gate has run
+  livenessScore     Decimal?         @db.Decimal(5, 2) // 0-100, quality-gate-worker's live-human-voice classifier confidence; null until the gate has run
+  compositeScore    Decimal?         @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore (PlatformSettings.qualityWeight*), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled
+  qualityGateCheckedAt DateTime?     // when quality-gate-worker last wrote noise/quality/livenessScore
   payoutTokenAmount Decimal?         @db.Decimal(20, 8) // computed at settlement, null until SETTLED
   scoredAt          DateTime?
   settledAt         DateTime?
@@ -443,6 +449,11 @@ model WordRecording {
   status            SubmissionStatus @default(PENDING) // PENDING|SCORED|SETTLED only -- no ASR step, TRANSCRIBED/REJECTED unused here
   tokensSpent       Decimal  @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
   score             Decimal? @db.Decimal(5, 2) // 0.00-100.00, same scale as Submission.score; null until SCORED
+  noiseScore        Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's SNR-derived estimate; null until the gate has run
+  qualityScore      Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's clipping/artifact composite; null until the gate has run
+  livenessScore     Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's live-human-voice classifier confidence; null until the gate has run
+  compositeScore    Decimal? @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore (PlatformSettings.qualityWeight*), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled
+  qualityGateCheckedAt DateTime? // when quality-gate-worker last wrote noise/quality/livenessScore
   payoutTokenAmount Decimal? @db.Decimal(20, 8) // computed at settlement, null until SETTLED
   scoredAt          DateTime?
   settledAt         DateTime?
@@ -622,12 +633,17 @@ model PlatformSettings {
   wordStuckTimeoutMinutes  Int      @default(1440) // minutes an ENGLISH_TO_DIALECT WordRecording can stay PENDING (unmatched by reverse-validation) before settlement-job auto-refunds its locked tokens
   scoringSlaMinutes        Int      @default(60) // minutes a Submission/WordRecording can stay unscored before settlement-job resolves it via noFailOnTrainEnabled (synthetic score) or a plain refund
   noFailOnTrainEnabled     Boolean  @default(false) // when true, a task still unscored past scoringSlaMinutes is paid out at a random score in [minScoreRange, maxScoreRange] instead of just refunded -- guarantees payment for completed work even if consensus/reverse-validation never resolves it
-  minScoreRange            Decimal  @default(10) @db.Decimal(5, 2) // lower bound (%) of the random synthetic score used when noFailOnTrainEnabled fires
-  maxScoreRange            Decimal  @default(30) @db.Decimal(5, 2) // upper bound (%) of the random synthetic score used when noFailOnTrainEnabled fires
+  minScoreRange            Decimal  @default(10) @db.Decimal(5, 2) // lower bound (%) of every scored payout's bonus -- random synthetic-timeout scores are drawn from this range; real (consensus/exact-match) scores' compositeScore is clamped into this range too once qualityGateEnabled
+  maxScoreRange            Decimal  @default(30) @db.Decimal(5, 2) // upper bound (%) of every scored payout's bonus -- see minScoreRange
   llmGenerationEnabled     Boolean  @default(false) // master kill switch for word-generator-job; job no-ops when false
   llmProviderOrder         String   @default("openai,deepseek,anthropic") // CSV fallback-try order, must be a permutation of {openai,deepseek,anthropic}, validated app-side
   llmWordsPerItem          Int      @default(1) // 1 = single word -> Word table; 2-5 = short phrase -> Prompt table (dialectTag 'en-us')
   llmItemsPerRun           Int      @default(15) // batch size requested from the LLM per scheduled run
+  qualityGateEnabled       Boolean  @default(false) // master kill switch for the quality-gate-worker's effect on payout; worker still runs and records noise/quality/livenessScore when false, but compositeScore computation falls back to the raw score (today's behavior) until enabled
+  qualityWeightConsensus   Decimal  @default(60) @db.Decimal(5, 2) // weight (%) given to the real score (consensus agreement / exact-match) in compositeScore's blend
+  qualityWeightNoise       Decimal  @default(15) @db.Decimal(5, 2) // weight (%) given to noiseScore in compositeScore's blend
+  qualityWeightQuality     Decimal  @default(10) @db.Decimal(5, 2) // weight (%) given to qualityScore in compositeScore's blend
+  qualityWeightLiveness    Decimal  @default(15) @db.Decimal(5, 2) // weight (%) given to livenessScore in compositeScore's blend -- the four qualityWeight* fields must sum to 100, validated in PlatformSettingsService.update
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 
@@ -640,16 +656,24 @@ model PlatformSettings {
 /// self-serve subscription flow yet; this just captures interest for
 /// manual follow-up (MailService notifies an admin address on submit).
 model DataAccessLead {
-  id           String   @id @default(uuid())
-  name         String
-  email        String
-  organization String?
-  useCase      String?
-  createdAt    DateTime @default(now())
+  id                 String   @id @default(uuid())
+  name               String
+  email              String
+  organization       String?
+  website            String?
+  countriesInterested String?
+  contactedAt        DateTime?
+  contactNote        String?
+  contactedByUserId  String?
+  contactedBy        User?    @relation("DataAccessLeadContactedBy", fields: [contactedByUserId], references: [id], onDelete: SetNull)
+  createdAt          DateTime @default(now())
 
   subscriptionPools SubscriptionPool[]
 
   @@index([createdAt])
+  @@index([email])
+  @@index([contactedAt])
+  @@index([contactedByUserId])
   @@map("data_access_leads")
 }
 
