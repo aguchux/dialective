@@ -2,7 +2,11 @@ import { LlmFallbackChain } from './llm-fallback-chain';
 import { LlmProvider, LlmProviderKey } from './llm-provider.interface';
 
 function fakeProvider(key: LlmProviderKey, impl: () => Promise<string[]>): LlmProvider {
-  return { key, generate: jest.fn(impl) };
+  return {
+    key,
+    generate: jest.fn(impl),
+    generateRaw: jest.fn(async () => JSON.stringify({ items: await impl() })),
+  };
 }
 
 describe('LlmFallbackChain', () => {

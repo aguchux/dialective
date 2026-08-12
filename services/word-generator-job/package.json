@@ -6,6 +6,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "start:dev": "ts-node src/main.ts",
+    "backfill": "node dist/main.backfill.js",
+    "backfill:dev": "ts-node src/main.backfill.ts",
     "test": "jest"
   },
   "dependencies": {

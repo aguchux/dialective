@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { PartOfSpeech } from '@dialectiva/db';
+import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ListWordsAdminDto {
   @IsOptional()
@@ -18,4 +19,8 @@ export class ListWordsAdminDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsEnum(PartOfSpeech)
+  partOfSpeech?: PartOfSpeech;
 }

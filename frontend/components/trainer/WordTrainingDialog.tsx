@@ -13,12 +13,14 @@ import {
   Mic,
   Pause,
   Play,
+  RotateCcw,
   Send,
   Square,
   Trash2,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActionButton } from '@/components/ui/ActionButton';
 import { usePortalContainer } from '@/components/ui/PortalContainer';
 import {
   ApiErrorShape,
@@ -69,6 +71,10 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
   const [suggestions, setSuggestions] = useState<{ text: string; source: 'community' | 'ai' }[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [pickedIndexes, setPickedIndexes] = useState<number[]>([]);
+  const [rebuildSubmitting, setRebuildSubmitting] = useState(false);
+  const [rebuildSubmitted, setRebuildSubmitted] = useState(false);
+  const [rebuildScore, setRebuildScore] = useState<number | null>(null);
 
   const [startSession, { isLoading: isStarting }] = useStartWordTrainingSessionMutation();
   const [loadNext] = useLazyGetNextWordTrainingAssignmentQuery();
@@ -132,17 +138,23 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
     setSuggestions([]);
     setSuggestionsOpen(false);
     setKeyboardOpen(false);
+    setPickedIndexes([]);
+    setRebuildSubmitting(false);
+    setRebuildSubmitted(false);
+    setRebuildScore(null);
   }, [clearRecording, open, releaseMicrophone]);
 
   useEffect(() => {
-    if (!assignment || assignment.direction !== 'ENGLISH_TO_DIALECT' || !assignment.dialectTag) {
+    if (!assignment || assignment.direction !== 'ENGLISH_TO_DIALECT' || !assignment.dialectTag || !assignment.wordId) {
       setSuggestions([]);
       return;
     }
+    const wordId = assignment.wordId;
+    const dialectTag = assignment.dialectTag;
     const query = responseText.trim();
     if (suggestionsDebounceRef.current !== null) window.clearTimeout(suggestionsDebounceRef.current);
     suggestionsDebounceRef.current = window.setTimeout(() => {
-      loadSuggestions({ wordId: assignment.wordId, dialectTag: assignment.dialectTag!, query })
+      loadSuggestions({ wordId, dialectTag, query })
         .unwrap()
         .then((result) => setSuggestions(result.suggestions))
         .catch(() => setSuggestions([]));
@@ -195,6 +207,10 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
     setSuggestions([]);
     setSuggestionsOpen(false);
     setKeyboardOpen(false);
+    setPickedIndexes([]);
+    setRebuildSubmitting(false);
+    setRebuildSubmitted(false);
+    setRebuildScore(null);
     try {
       setAssignment(await loadNext(session.sessionId, false).unwrap());
     } catch (err) {
@@ -345,6 +361,37 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
     }
   }
 
+  async function submitSentenceRebuild() {
+    if (!assignment || !assignment.fragments || pickedIndexes.length !== assignment.fragments.length) {
+      setError('Tap all the fragments in order before submitting.');
+      return;
+    }
+    setError(null);
+    setRebuildSubmitting(true);
+    try {
+      const submittedOrder = pickedIndexes.map((index) => assignment.fragments![index].position);
+      const result = await submitRecording({
+        assignmentId: assignment.assignmentId,
+        submittedOrder,
+      }).unwrap();
+      setRebuildScore(result.validationScore);
+      setRebuildSubmitted(true);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to submit your answer.'));
+    } finally {
+      setRebuildSubmitting(false);
+    }
+  }
+
+  function pickFragment(index: number) {
+    if (pickedIndexes.includes(index)) return;
+    setPickedIndexes((current) => [...current, index]);
+  }
+
+  function unpickLast() {
+    setPickedIndexes((current) => current.slice(0, -1));
+  }
+
   const progress = Math.min(1, elapsedMs / MAX_RECORDING_MS);
   const ringColor = noiseColor(noiseRating);
 
@@ -424,7 +471,74 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
 
             {step === 'training' && (
               <section className="mx-auto grid w-full max-w-3xl gap-6 text-center">
-                {!assignment ? <LoadingState label="Generating next word" /> : (
+                {!assignment ? <LoadingState label="Generating next word" /> : assignment.direction === 'SENTENCE_REBUILD' ? (
+                  <>
+                    <div>
+                      <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
+                        {assignment.responseLanguage} sentence rebuild
+                      </span>
+                      <p className="mt-4 text-sm font-bold text-muted">Tap the fragments in the correct order</p>
+                    </div>
+
+                    <div className="mx-auto flex min-h-16 w-full max-w-xl flex-wrap items-center justify-center gap-2 rounded-lg border-2 border-dashed border-line bg-surface p-4">
+                      {pickedIndexes.length === 0 && <span className="text-sm text-muted">Tap fragments below to build the sentence</span>}
+                      {pickedIndexes.map((index, position) => (
+                        <span className="rounded-md bg-accent px-3 py-1.5 font-bold text-white" key={`${index}-${position}`}>
+                          {assignment.fragments![index].text}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-center gap-2">
+                      {assignment.fragments!.map((fragment, index) => (
+                        <button
+                          className="rounded-md border border-line bg-white px-3 py-1.5 font-bold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
+                          disabled={pickedIndexes.includes(index) || rebuildSubmitting || rebuildSubmitted}
+                          key={index}
+                          onClick={() => pickFragment(index)}
+                          type="button"
+                        >
+                          {fragment.text}
+                        </button>
+                      ))}
+                    </div>
+
+                    {error && <p className="text-sm font-bold text-danger" role="alert">{error}</p>}
+
+                    {!rebuildSubmitted && (
+                      <div className="flex flex-wrap items-center justify-center gap-3">
+                        <button
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-45"
+                          disabled={pickedIndexes.length === 0 || rebuildSubmitting}
+                          onClick={unpickLast}
+                          type="button"
+                        >
+                          <RotateCcw className="size-4" aria-hidden="true" />
+                          Undo
+                        </button>
+                        <ActionButton
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45"
+                          disabled={pickedIndexes.length !== assignment.fragments!.length}
+                          onClick={() => void submitSentenceRebuild()}
+                          pending={rebuildSubmitting}
+                          pendingLabel="Submitting"
+                          type="button"
+                        >
+                          <Send className="size-4" aria-hidden="true" />
+                          Submit
+                        </ActionButton>
+                      </div>
+                    )}
+
+                    {rebuildSubmitted && (
+                      <div className="mx-auto grid w-full max-w-md gap-4 rounded-lg border border-line bg-surface p-5">
+                        <div className="flex items-center justify-center gap-2 font-black text-emerald-700 dark:text-emerald-300"><Check className="size-5" aria-hidden="true" />Answer submitted</div>
+                        {rebuildScore !== null && <p className="text-sm font-bold text-muted">Order match: {rebuildScore === 1 ? 'Correct' : 'Not quite'}</p>}
+                        <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark" onClick={() => void nextWord()} type="button">Next word <ArrowRight className="size-4" aria-hidden="true" /></button>
+                      </div>
+                    )}
+                  </>
+                ) : (
                   <>
                     <div>
                       <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">

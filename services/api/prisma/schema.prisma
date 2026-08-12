@@ -228,9 +228,37 @@ model Prompt {
 
   submissions  Submission[]
   translations PromptTranslation[]
+  words        PromptWord[]
+  assignments  WordTrainingAssignment[]
+  recordings   WordRecording[]
 
   @@index([dialectTag, active])
   @@map("prompts")
+}
+
+/// Ordered, classified word-fragment sequence for a Prompt/dialect --
+/// powers the SENTENCE_REBUILD word-training exercise (trainer taps
+/// shuffled fragments back into this order). `text` is stored
+/// denormalized (not resolved live via WordTranslation) since a
+/// fragment's inflected/contextual form within this specific sentence can
+/// differ from the word's canonical dictionary translation; `wordId`
+/// still links it to the classified Word for POS display/filtering.
+/// Populated by word-generator-job in the same run that creates the
+/// Prompt (or by the one-off backfill script for pre-existing prompts).
+model PromptWord {
+  id         String   @id @default(uuid())
+  promptId   String
+  prompt     Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  dialectTag String
+  position   Int
+  wordId     String
+  word       Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@unique([promptId, dialectTag, position])
+  @@index([promptId, dialectTag])
+  @@map("prompt_words")
 }
 
 /// Links a word-generator-job-generated English source Prompt (dialectTag
@@ -337,15 +365,30 @@ model SubscriptionPool {
 /// Not user-editable -- adding a word means adding it to the seed list and
 /// re-running the seed, same as any other reference data in this repo.
 model Word {
-  id        String   @id @default(uuid())
-  text      String   @unique
-  createdAt DateTime @default(now())
+  id           String        @id @default(uuid())
+  text         String        @unique
+  partOfSpeech PartOfSpeech? // English part of speech; null until LLM-classified (word-generator-job) or backfilled
+  createdAt    DateTime      @default(now())
 
   recordings WordRecording[]
   trainingAssignments WordTrainingAssignment[]
   translations WordTranslation[]
+  promptWords  PromptWord[]
 
   @@map("words")
+}
+
+enum PartOfSpeech {
+  NOUN
+  VERB
+  ADJECTIVE
+  ADVERB
+  PRONOUN
+  PREPOSITION
+  CONJUNCTION
+  INTERJECTION
+  DETERMINER
+  OTHER
 }
 
 /// LLM-generated dialect translation of a Word's English text, produced by
@@ -354,12 +397,13 @@ model Word {
 /// this table doesn't need a second trainer-facing insert the way
 /// PromptTranslation does.
 model WordTranslation {
-  id         String   @id @default(uuid())
-  wordId     String
-  word       Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
-  dialectTag String
-  text       String
-  createdAt  DateTime @default(now())
+  id           String        @id @default(uuid())
+  wordId       String
+  word         Word          @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  dialectTag   String
+  text         String
+  partOfSpeech PartOfSpeech? // dialect-specific part of speech for this translation -- can differ from the English Word's (e.g. a translation that's a different grammatical category)
+  createdAt    DateTime      @default(now())
 
   @@unique([wordId, dialectTag])
   @@index([dialectTag])
@@ -369,6 +413,7 @@ model WordTranslation {
 enum WordTrainingDirection {
   ENGLISH_TO_DIALECT
   DIALECT_TO_ENGLISH
+  SENTENCE_REBUILD
 }
 
 enum RecordingNoiseRating {
@@ -399,8 +444,10 @@ model WordTrainingAssignment {
   id                String                @id @default(uuid())
   sessionId         String
   session           TrainingSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  wordId            String
-  word              Word                  @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  wordId            String?               // required for ENGLISH_TO_DIALECT/DIALECT_TO_ENGLISH, null for SENTENCE_REBUILD
+  word              Word?                 @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  promptId          String?               // required for SENTENCE_REBUILD, null otherwise
+  prompt            Prompt?               @relation(fields: [promptId], references: [id], onDelete: Cascade)
   direction         WordTrainingDirection
   sourceRecordingId String?
   uploadBucket      String?
@@ -411,6 +458,7 @@ model WordTrainingAssignment {
 
   @@index([sessionId, createdAt])
   @@index([sourceRecordingId])
+  @@index([promptId])
   @@map("word_training_assignments")
 }
 
@@ -431,8 +479,10 @@ model WordTrainingAssignment {
 ///     and is excluded from settlement, same as an un-quorum'd Submission.
 model WordRecording {
   id                String           @id @default(uuid())
-  wordId            String
-  word              Word             @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  wordId            String? // null for SENTENCE_REBUILD (points at a Prompt via promptId instead)
+  word              Word?            @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  promptId          String? // set for SENTENCE_REBUILD, null otherwise
+  prompt            Prompt?          @relation(fields: [promptId], references: [id], onDelete: Cascade)
   userId            String?
   user              User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   sessionId         String?
@@ -443,8 +493,9 @@ model WordRecording {
   dialectTag        String
   translationText   String
   normalizedTranslationText String? // AI spelling-normalization of translationText (PlatformSettings.spellingNormalizationEnabled), ENGLISH_TO_DIALECT only -- informational only, never feeds validationScore/score
-  audioBucket       String
-  audioKey          String
+  audioBucket       String? // null for SENTENCE_REBUILD (no audio step)
+  audioKey          String? // null for SENTENCE_REBUILD
+  submittedOrder    Int[]    @default([]) // SENTENCE_REBUILD only: PromptWord.position values in the order the trainer tapped them, compared against the natural 0..n-1 order for exact-match scoring
   durationMs        Int?
   noiseRating       RecordingNoiseRating?
   validationScore   Decimal? @db.Decimal(5, 4) // 0-1 exact-match score, DIALECT_TO_ENGLISH only
@@ -463,6 +514,7 @@ model WordRecording {
   createdAt         DateTime @default(now())
 
   @@index([wordId])
+  @@index([promptId])
   @@index([userId, createdAt])
   @@index([sessionId])
   @@index([dialectTag])
@@ -648,6 +700,7 @@ model PlatformSettings {
   qualityWeightLiveness    Decimal  @default(15) @db.Decimal(5, 2) // weight (%) given to livenessScore in compositeScore's blend -- the four qualityWeight* fields must sum to 100, validated in PlatformSettingsService.update
   spellingNormalizationEnabled Boolean @default(false) // master kill switch for AI spelling normalization on ENGLISH_TO_DIALECT word recordings; writes WordRecording.normalizedTranslationText only, never affects scoring
   spellingNormalizationProviderOrder String @default("openai,deepseek,anthropic") // CSV fallback-try order for spelling normalization, same permutation rules as llmProviderOrder
+  sentenceRebuildEnabled   Boolean  @default(false) // master kill switch for the SENTENCE_REBUILD word-training exercise; WordsService.nextAssignment never offers it when false
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 

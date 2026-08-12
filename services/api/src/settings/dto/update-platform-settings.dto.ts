@@ -123,4 +123,8 @@ export class UpdatePlatformSettingsDto {
   @IsString()
   @Matches(/^(openai|deepseek|anthropic),(openai|deepseek|anthropic),(openai|deepseek|anthropic)$/)
   spellingNormalizationProviderOrder?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  sentenceRebuildEnabled?: boolean;
 }

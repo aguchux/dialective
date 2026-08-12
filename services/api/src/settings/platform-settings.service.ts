@@ -90,6 +90,11 @@ export class PlatformSettingsService {
     return row.spellingNormalizationProviderOrder;
   }
 
+  async isSentenceRebuildEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.sentenceRebuildEnabled;
+  }
+
   async isAdminPayoutOtpEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.adminPayoutOtpEnabled;
@@ -152,6 +157,7 @@ export class PlatformSettingsService {
       qualityWeightLiveness: row.qualityWeightLiveness.toString(),
       spellingNormalizationEnabled: row.spellingNormalizationEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
+      sentenceRebuildEnabled: row.sentenceRebuildEnabled,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -182,6 +188,7 @@ export class PlatformSettingsService {
     qualityWeightLiveness?: number;
     spellingNormalizationEnabled?: boolean;
     spellingNormalizationProviderOrder?: string;
+    sentenceRebuildEnabled?: boolean;
   }) {
     if (data.llmProviderOrder) {
       const tokens = data.llmProviderOrder.split(',');
@@ -255,6 +262,7 @@ export class PlatformSettingsService {
       qualityWeightLiveness: row.qualityWeightLiveness.toString(),
       spellingNormalizationEnabled: row.spellingNormalizationEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
+      sentenceRebuildEnabled: row.sentenceRebuildEnabled,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

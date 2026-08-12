@@ -70,7 +70,10 @@ export class WordsService {
 
     const trainer = await this.getTrainer(userId);
     const reverseEnabled = await this.settings.isReverseWordTrainingEnabled();
-    const reverseSource = reverseEnabled && Math.random() >= 0.5
+    const sentenceRebuildEnabled = await this.settings.isSentenceRebuildEnabled();
+
+    const roll = Math.random();
+    const reverseSource = reverseEnabled && roll < 1 / 3
       ? await this.pickReverseSource(userId, sessionId, trainer.dialect!.tag)
       : null;
 
@@ -92,6 +95,28 @@ export class WordsService {
         responseLanguage: 'English',
         dialectTag: null as string | null,
         dialectKeyboardLayout: null as string | null,
+        fragments: null as { text: string; position: number }[] | null,
+      };
+    }
+
+    const sentenceRebuild = sentenceRebuildEnabled && roll < 2 / 3
+      ? await this.pickSentenceRebuildSource(trainer.dialect!.tag)
+      : null;
+
+    if (sentenceRebuild) {
+      const assignment = await this.prisma.wordTrainingAssignment.create({
+        data: { sessionId, promptId: sentenceRebuild.promptId, direction: 'SENTENCE_REBUILD' },
+      });
+      return {
+        assignmentId: assignment.id,
+        wordId: null as string | null,
+        direction: assignment.direction,
+        promptText: null as string | null,
+        sourceLanguage: trainer.dialect!.name,
+        responseLanguage: trainer.dialect!.name,
+        dialectTag: trainer.dialect!.tag,
+        dialectKeyboardLayout: null as string | null,
+        fragments: shuffle(sentenceRebuild.fragments.map((text, position) => ({ text, position }))),
       };
     }
 
@@ -118,6 +143,7 @@ export class WordsService {
       responseLanguage: trainer.dialect!.name,
       dialectTag: trainer.dialect!.tag,
       dialectKeyboardLayout: trainer.dialect!.keyboardLayout,
+      fragments: null as { text: string; position: number }[] | null,
     };
   }
 
@@ -148,16 +174,30 @@ export class WordsService {
    * same "wait for independent corroboration" shape as Submission's
    * consensus quorum, just without needing N>=quorum peers -- one
    * reverse-validation is enough since it's a binary exact-match check, not
-   * an agreement-ratio computation.
+   * an agreement-ratio computation. SENTENCE_REBUILD also self-scores
+   * immediately (exact-sequence match against the assignment's known
+   * PromptWord order) and has no audio step at all -- see
+   * createSentenceRebuildRecording.
    */
   async createRecording(userId: string, body: CreateWordRecordingDto) {
     const assignment = await this.getOwnedAssignment(userId, body.assignmentId);
     if (assignment.consumedAt) throw new ConflictException('This word has already been submitted');
+
+    if (assignment.direction === 'SENTENCE_REBUILD') {
+      return this.createSentenceRebuildRecording(userId, assignment, body);
+    }
+
     if (!assignment.uploadBucket || !assignment.uploadKey) {
       throw new UnprocessableEntityException('Upload the recording before submitting it');
     }
     if (assignment.uploadBucket !== body.bucket || assignment.uploadKey !== body.audioKey) {
       throw new ForbiddenException('Recording upload does not belong to this assignment');
+    }
+    if (!body.responseText || !body.audioKey || !body.bucket || body.durationMs === undefined || !body.noiseRating) {
+      throw new UnprocessableEntityException('responseText, bucket, audioKey, durationMs, and noiseRating are required for this assignment');
+    }
+    if (!assignment.word) {
+      throw new UnprocessableEntityException('This assignment has no associated word');
     }
 
     const normalizedAnswer = normalizeAnswer(body.responseText);
@@ -202,7 +242,7 @@ export class WordsService {
           assignmentId: assignment.id,
           direction: assignment.direction,
           dialectTag: assignment.session.user.dialect!.tag,
-          translationText: body.responseText.trim(),
+          translationText: body.responseText!.trim(),
           audioBucket: body.bucket,
           audioKey: body.audioKey,
           durationMs: body.durationMs,
@@ -232,7 +272,7 @@ export class WordsService {
     }
 
     if (assignment.direction === 'ENGLISH_TO_DIALECT') {
-      await this.normalizeSpellingBestEffort(recording.id, assignment.word.text, assignment.session.user.dialect!.name, body.responseText.trim());
+      await this.normalizeSpellingBestEffort(recording.id, assignment.word.text, assignment.session.user.dialect!.name, body.responseText!.trim());
     }
 
     // Same quality-gate-jobs stream Submissions publish to (see
@@ -257,12 +297,112 @@ export class WordsService {
   }
 
   /**
+   * SENTENCE_REBUILD: no audio, no upload step. The trainer taps
+   * PromptWord.position values in the order they believe is correct;
+   * scoring compares that submitted sequence against the assignment's own
+   * PromptWord.position values in stored (ascending) order -- an exact
+   * match scores 100, anything else scores 0. Self-scores immediately
+   * (ground truth is known server-side), same no-loss stake-return
+   * economics as the other two directions.
+   */
+  private async createSentenceRebuildRecording(
+    userId: string,
+    assignment: NonNullable<Awaited<ReturnType<WordsService['getOwnedAssignment']>>>,
+    body: CreateWordRecordingDto,
+  ) {
+    if (!body.submittedOrder || body.submittedOrder.length < 2) {
+      throw new UnprocessableEntityException('submittedOrder is required for this assignment');
+    }
+    if (!assignment.promptId || !assignment.prompt) {
+      throw new UnprocessableEntityException('This assignment has no associated prompt');
+    }
+
+    const dialectTag = assignment.session.user.dialect!.tag;
+    const promptWords = assignment.prompt.words
+      .filter((w) => w.dialectTag === dialectTag)
+      .sort((a, b) => a.position - b.position);
+    if (promptWords.length < 2) {
+      throw new UnprocessableEntityException('This assignment has no fragment sequence to score');
+    }
+
+    const correctOrder = promptWords.map((w) => w.position);
+    const submitted = body.submittedOrder;
+    const isExactMatch = submitted.length === correctOrder.length && submitted.every((position, index) => position === correctOrder[index]);
+    const score = isExactMatch ? 100 : 0;
+
+    const positionToText = new Map(promptWords.map((w) => [w.position, w.text]));
+    const submittedText = submitted.map((position) => positionToText.get(position) ?? '?').join(' ');
+
+    const taskTokenCost = await this.settings.getTaskTokenCost();
+    const wallet = await this.prisma.wallet.upsert({
+      where: { userId },
+      update: {},
+      create: { userId },
+    });
+
+    const recording = await this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.wordTrainingAssignment.updateMany({
+        where: { id: assignment.id, consumedAt: null },
+        data: { consumedAt: new Date() },
+      });
+      if (consumed.count === 0) throw new ConflictException('This word has already been submitted');
+
+      const lock = await tx.wallet.updateMany({
+        where: { id: wallet.id, balance: { gte: taskTokenCost } },
+        data: { balance: { decrement: taskTokenCost }, lockedBalance: { increment: taskTokenCost } },
+      });
+      if (lock.count === 0) {
+        throw new UnprocessableEntityException(`Insufficient balance: this task costs ${taskTokenCost} tokens`);
+      }
+
+      const created = await tx.wordRecording.create({
+        data: {
+          wordId: null,
+          promptId: assignment.promptId,
+          userId,
+          sessionId: assignment.sessionId,
+          assignmentId: assignment.id,
+          direction: 'SENTENCE_REBUILD',
+          dialectTag,
+          translationText: submittedText,
+          submittedOrder: submitted,
+          tokensSpent: taskTokenCost,
+          score,
+          validationScore: isExactMatch ? 1 : 0,
+          status: 'SCORED',
+          scoredAt: new Date(),
+        },
+      });
+
+      await tx.ledgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          type: 'TASK_LOCK',
+          amount: -taskTokenCost,
+          reference: created.id,
+        },
+      });
+
+      return created;
+    });
+
+    return {
+      recordingId: recording.id,
+      status: 'saved',
+      direction: recording.direction,
+      validationScore: recording.validationScore?.toNumber() ?? null,
+    };
+  }
+
+  /**
    * A trainer's own word-training recordings -- same shape as
    * SubmissionsController.listMine's /mine so the dashboard's My
    * Tasks/My Scores views can merge both lists. translationText stands in
    * for promptText (the word's own text isn't loaded here to avoid an
    * extra join; translationText is what the trainer actually produced,
-   * which is the more useful column to show anyway).
+   * which is the more useful column to show anyway). SENTENCE_REBUILD
+   * rows have no word/audio -- promptText comes from the linked Prompt,
+   * audioUrl is null.
    */
   async listMine(userId: string, query: ListSubmissionsDto) {
     const where = { userId, ...(query.status ? { status: { in: query.status } } : {}) };
@@ -273,7 +413,7 @@ export class WordsService {
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: query.pageSize,
-        include: { word: { select: { text: true } } },
+        include: { word: { select: { text: true } }, prompt: { select: { text: true } } },
       }),
       this.prisma.wordRecording.count({ where }),
     ]);
@@ -282,9 +422,11 @@ export class WordsService {
       items: await Promise.all(items.map(async (recording) => ({
         id: recording.id,
         promptText:
-          recording.direction === 'ENGLISH_TO_DIALECT'
-            ? recording.word.text
-            : `Translate: ${recording.translationText}`,
+          recording.direction === 'SENTENCE_REBUILD'
+            ? `Rebuild: ${recording.prompt?.text ?? recording.translationText}`
+            : recording.direction === 'ENGLISH_TO_DIALECT'
+              ? (recording.word?.text ?? recording.translationText)
+              : `Translate: ${recording.translationText}`,
         dialectTag: recording.dialectTag,
         status: recording.status,
         tokensSpent: recording.tokensSpent.toString(),
@@ -294,7 +436,10 @@ export class WordsService {
         livenessScore: recording.livenessScore?.toString() ?? null,
         compositeScore: recording.compositeScore?.toString() ?? null,
         payoutTokenAmount: recording.payoutTokenAmount?.toString() ?? null,
-        audioUrl: (await this.storage.createPresignedDownloadUrl(recording.audioBucket, recording.audioKey)).url,
+        audioUrl:
+          recording.audioBucket && recording.audioKey
+            ? (await this.storage.createPresignedDownloadUrl(recording.audioBucket, recording.audioKey)).url
+            : null,
         rejectionReason: null as string | null,
         createdAt: recording.createdAt,
         scoredAt: recording.scoredAt,
@@ -434,11 +579,34 @@ export class WordsService {
   private async getOwnedAssignment(userId: string, assignmentId: string) {
     const assignment = await this.prisma.wordTrainingAssignment.findUnique({
       where: { id: assignmentId },
-      include: { word: true, session: { include: { user: { include: { dialect: true } } } } },
+      include: {
+        word: true,
+        prompt: { include: { words: { orderBy: { position: 'asc' } } } },
+        session: { include: { user: { include: { dialect: true } } } },
+      },
     });
     if (!assignment) throw new NotFoundException('Word assignment not found');
     if (assignment.session.userId !== userId) throw new ForbiddenException('Word assignment does not belong to you');
     return assignment;
+  }
+
+  private async pickSentenceRebuildSource(dialectTag: string): Promise<{ promptId: string; fragments: string[] } | null> {
+    const where = { dialectTag, active: true, words: { some: { dialectTag } } };
+    const promptIds = await this.prisma.prompt.findMany({ where, select: { id: true } });
+    const eligible: string[] = [];
+    for (const { id } of promptIds) {
+      const wordCount = await this.prisma.promptWord.count({ where: { promptId: id, dialectTag } });
+      if (wordCount >= 2) eligible.push(id);
+    }
+    if (eligible.length === 0) return null;
+
+    const promptId = eligible[Math.floor(Math.random() * eligible.length)];
+    const words = await this.prisma.promptWord.findMany({
+      where: { promptId, dialectTag },
+      orderBy: { position: 'asc' },
+      select: { text: true },
+    });
+    return { promptId, fragments: words.map((w) => w.text) };
   }
 
   private async pickReverseSource(userId: string, sessionId: string, dialectTag: string) {
@@ -466,4 +634,14 @@ export class WordsService {
 
 function normalizeAnswer(value: string): string {
   return value.trim().toLocaleLowerCase('en').replace(/[^a-z0-9\s'-]/g, '').replace(/\s+/g, ' ');
+}
+
+/** Fisher-Yates shuffle -- used to present SENTENCE_REBUILD fragments in random order (never the correct order). */
+function shuffle<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
 }

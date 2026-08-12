@@ -6,6 +6,7 @@ describe('WordsService', () => {
   const settings = {
     getTaskTokenCost: jest.fn(),
     isReverseWordTrainingEnabled: jest.fn(),
+    isSentenceRebuildEnabled: jest.fn(),
     isSpellingNormalizationEnabled: jest.fn().mockResolvedValue(false),
     getSpellingNormalizationProviderOrder: jest.fn().mockResolvedValue('openai,deepseek,anthropic'),
   };
@@ -26,16 +27,20 @@ describe('WordsService', () => {
       wallet: { upsert: jest.fn().mockResolvedValue({ id: 'wallet-1', balance: 10 }) },
       wordRecording: { count: jest.fn(), findMany: jest.fn() },
       wordTrainingAssignment: { create: jest.fn(), findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      prompt: { findMany: jest.fn().mockResolvedValue([]) },
+      promptWord: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(),
     };
     settings.getTaskTokenCost.mockResolvedValue(1);
     settings.isReverseWordTrainingEnabled.mockReset();
+    settings.isSentenceRebuildEnabled.mockReset().mockResolvedValue(false);
     settings.isSpellingNormalizationEnabled.mockResolvedValue(false);
     service = new WordsService(prisma, storage as any, settings as any, streams as any, llm as any);
   });
 
-  it('only issues English-to-dialect assignments when reverse training is disabled', async () => {
+  it('only issues English-to-dialect assignments when reverse training and sentence-rebuild are disabled', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+    settings.isSentenceRebuildEnabled.mockResolvedValue(false);
     prisma.wordTrainingAssignment.create.mockResolvedValue({ id: 'assignment-1', direction: 'ENGLISH_TO_DIALECT' });
 
     await expect(service.nextAssignment(trainer.id, session.id)).resolves.toEqual({
@@ -47,13 +52,15 @@ describe('WordsService', () => {
       responseLanguage: 'Igbo',
       dialectTag: 'ig',
       dialectKeyboardLayout: null,
+      fragments: null,
     });
     expect(prisma.wordRecording.count).not.toHaveBeenCalled();
   });
 
   it('uses another trainer submission for reverse validation when enabled', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(true);
-    jest.spyOn(Math, 'random').mockReturnValue(0.75);
+    settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+    jest.spyOn(Math, 'random').mockReturnValue(0.1);
     prisma.wordRecording.count.mockResolvedValue(1);
     prisma.wordRecording.findMany.mockResolvedValue([{ id: 'source-1', wordId: 'word-1', translationText: 'nnabata' }]);
     prisma.wordTrainingAssignment.create.mockResolvedValue({ id: 'assignment-2', direction: 'DIALECT_TO_ENGLISH' });
@@ -104,5 +111,111 @@ describe('WordsService', () => {
       durationMs: 1200,
       noiseRating: 'QUIET',
     })).resolves.toMatchObject({ validationScore: 1 });
+  });
+
+  it('picks a sentence-rebuild assignment and shuffles its fragments when enabled', async () => {
+    settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+    settings.isSentenceRebuildEnabled.mockResolvedValue(true);
+    jest.spyOn(Math, 'random').mockReturnValue(0.5);
+    prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-1' }]);
+    prisma.promptWord.count.mockResolvedValue(3);
+    prisma.promptWord.findMany.mockResolvedValue([
+      { text: 'I' },
+      { text: 'am' },
+      { text: 'well' },
+    ]);
+    prisma.wordTrainingAssignment.create.mockResolvedValue({ id: 'assignment-3', direction: 'SENTENCE_REBUILD' });
+
+    const result = await service.nextAssignment(trainer.id, session.id);
+
+    expect(result).toMatchObject({
+      assignmentId: 'assignment-3',
+      wordId: null,
+      direction: 'SENTENCE_REBUILD',
+      promptText: null,
+      sourceLanguage: 'Igbo',
+      responseLanguage: 'Igbo',
+      dialectTag: 'ig',
+    });
+    expect(result.fragments).toHaveLength(3);
+    expect(result.fragments!.map((f) => f.text).sort()).toEqual(['I', 'am', 'well']);
+    expect(result.fragments!.map((f) => f.position).sort()).toEqual([0, 1, 2]);
+    jest.restoreAllMocks();
+  });
+
+  it('scores an exact-order sentence-rebuild submission as 100', async () => {
+    const assignment = {
+      id: 'assignment-3',
+      sessionId: session.id,
+      wordId: null,
+      promptId: 'prompt-1',
+      direction: 'SENTENCE_REBUILD',
+      consumedAt: null,
+      word: null,
+      prompt: {
+        words: [
+          { position: 0, dialectTag: 'ig', text: 'A' },
+          { position: 1, dialectTag: 'ig', text: 'na' },
+          { position: 2, dialectTag: 'ig', text: 'agba' },
+        ],
+      },
+      session: { userId: trainer.id, user: trainer },
+    };
+    prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) => callback({
+      ledgerEntry: { create: jest.fn() },
+      wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      wordRecording: {
+        create: jest.fn().mockImplementation(({ data }) => ({
+          id: 'recording-2',
+          direction: data.direction,
+          validationScore: { toNumber: () => data.validationScore },
+        })),
+      },
+    }));
+
+    await expect(service.createRecording(trainer.id, {
+      assignmentId: assignment.id,
+      submittedOrder: [0, 1, 2],
+    })).resolves.toMatchObject({ validationScore: 1 });
+  });
+
+  it('scores a shuffled/wrong-order sentence-rebuild submission as 0', async () => {
+    const assignment = {
+      id: 'assignment-3',
+      sessionId: session.id,
+      wordId: null,
+      promptId: 'prompt-1',
+      direction: 'SENTENCE_REBUILD',
+      consumedAt: null,
+      word: null,
+      prompt: {
+        words: [
+          { position: 0, dialectTag: 'ig', text: 'A' },
+          { position: 1, dialectTag: 'ig', text: 'na' },
+          { position: 2, dialectTag: 'ig', text: 'agba' },
+        ],
+      },
+      session: { userId: trainer.id, user: trainer },
+    };
+    prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) => callback({
+      ledgerEntry: { create: jest.fn() },
+      wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      wordRecording: {
+        create: jest.fn().mockImplementation(({ data }) => ({
+          id: 'recording-3',
+          direction: data.direction,
+          validationScore: { toNumber: () => data.validationScore },
+        })),
+      },
+    }));
+
+    await expect(service.createRecording(trainer.id, {
+      assignmentId: assignment.id,
+      submittedOrder: [2, 0, 1],
+    })).resolves.toMatchObject({ validationScore: 0 });
   });
 });

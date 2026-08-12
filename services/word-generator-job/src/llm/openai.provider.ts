@@ -7,6 +7,10 @@ export class OpenAiProvider implements LlmProvider {
   readonly key = 'openai' as const;
 
   async generate(prompt: string): Promise<string[]> {
+    return parseJsonStringArray(await this.generateRaw(prompt));
+  }
+
+  async generateRaw(prompt: string): Promise<string> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY not set');
 
@@ -19,6 +23,6 @@ export class OpenAiProvider implements LlmProvider {
     });
     const content = completion.choices[0]?.message?.content;
     if (!content) throw new Error('OpenAI response had no content');
-    return parseJsonStringArray(content);
+    return content;
   }
 }

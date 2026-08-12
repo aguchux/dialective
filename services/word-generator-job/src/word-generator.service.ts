@@ -2,7 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
 import { isFlaggedContent } from './content-filter';
 import { LlmFallbackChain } from './llm/llm-fallback-chain';
-import { ALL_PROVIDER_KEYS, LlmProvider, LlmProviderKey } from './llm/llm-provider.interface';
+import {
+  ALL_PROVIDER_KEYS,
+  LlmProvider,
+  LlmProviderKey,
+  PART_OF_SPEECH_VALUES,
+  PosItem,
+  parsePosItemArray,
+} from './llm/llm-provider.interface';
 import { OpenAiProvider } from './llm/openai.provider';
 import { DeepSeekProvider } from './llm/deepseek.provider';
 import { AnthropicProvider } from './llm/anthropic.provider';
@@ -54,19 +61,20 @@ export class WordGeneratorService {
         `providerOrder=${providerOrder.join('>')} translationDialects=${dialectTags.length ? dialectTags.join(',') : 'none'}`,
     );
 
-    const prompt = this.buildGenerationPrompt(wordsPerItem, itemsPerRun);
-    const { items: rawItems, provider: englishProvider } = await this.chain.generate(prompt, providerOrder);
-
-    const { accepted: englishItems, filteredCount } = this.filterAndValidate(rawItems, wordsPerItem);
-
     let inserted = 0;
     let skippedDuplicate = 0;
     let translationsInserted = 0;
     let translationsSkipped = 0;
     let translationFailures = 0;
+    let promptWordFailures = 0;
 
     if (wordsPerItem === 1) {
-      const result = await this.insertWords(englishItems);
+      const prompt = this.buildWordGenerationPrompt(itemsPerRun);
+      const { items: rawItems, provider: englishProvider } = await this.chain.generateStructured(prompt, providerOrder, parsePosItemArray);
+      const { accepted, filteredCount } = this.filterAndValidatePosItems(rawItems, 1);
+      this.logger.log(`Generation run starting: provider=${englishProvider} generated=${rawItems.length} filteredOut=${filteredCount}`);
+
+      const result = await this.insertWords(accepted);
       inserted = result.inserted;
       skippedDuplicate = result.skippedDuplicate;
 
@@ -79,35 +87,123 @@ export class WordGeneratorService {
         }
       }
     } else {
+      const prompt = this.buildGenerationPrompt(wordsPerItem, itemsPerRun);
+      const { items: rawItems, provider: englishProvider } = await this.chain.generate(prompt, providerOrder);
+      const { accepted: englishItems, filteredCount } = this.filterAndValidate(rawItems, wordsPerItem);
+      this.logger.log(`Generation run starting: provider=${englishProvider} generated=${rawItems.length} filteredOut=${filteredCount}`);
+
       const result = await this.insertPrompts(englishItems);
       inserted = result.inserted;
       skippedDuplicate = result.skippedDuplicate;
 
       for (const promptRow of result.insertedRows) {
+        promptWordFailures += await this.segmentAndLinkPromptWords(promptRow.id, promptRow.text, 'en-us', providerOrder);
+
         for (const dialectTag of dialectTags) {
           const outcome = await this.translateAndLinkPrompt(promptRow.id, promptRow.text, dialectTag, providerOrder);
           if (outcome === 'inserted') translationsInserted += 1;
           else if (outcome === 'duplicate') translationsSkipped += 1;
           else translationFailures += 1;
+
+          if (outcome === 'inserted') {
+            const translatedText = await this.getPromptTranslationText(promptRow.id, dialectTag);
+            if (translatedText) promptWordFailures += await this.segmentAndLinkPromptWords(promptRow.id, translatedText, dialectTag, providerOrder);
+          }
         }
       }
     }
 
     this.logger.log(
-      `Generation run complete: provider=${englishProvider} generated=${rawItems.length} ` +
-        `filteredOut=${filteredCount} inserted=${inserted} skippedDuplicate=${skippedDuplicate} ` +
+      `Generation run complete: inserted=${inserted} skippedDuplicate=${skippedDuplicate} ` +
         `translationsInserted=${translationsInserted} translationsSkippedDuplicate=${translationsSkipped} ` +
-        `translationFailures=${translationFailures}`,
+        `translationFailures=${translationFailures} promptWordFailures=${promptWordFailures}`,
+    );
+  }
+
+  /**
+   * One-off backfill for content that predates part-of-speech
+   * classification/PromptWord segmentation (the static seed list, and any
+   * generation run before this feature shipped). Idempotent -- only
+   * touches Word/WordTranslation rows with partOfSpeech IS NULL and
+   * Prompt rows with zero PromptWord rows for a given dialect, so it's
+   * safe to re-run if interrupted. Not scheduled; invoked manually via
+   * `npm run backfill` (see main.backfill.ts).
+   */
+  async backfillClassification(): Promise<void> {
+    const settings = await this.getSettings();
+    const providerOrder = this.parseProviderOrder(settings.llmProviderOrder);
+    const dialectTags = await this.getEnabledDialectTags();
+
+    const unclassifiedWords = await this.prisma.word.findMany({ where: { partOfSpeech: null }, select: { id: true, text: true } });
+    this.logger.log(`Backfill: classifying ${unclassifiedWords.length} unclassified word(s)`);
+    let wordsClassified = 0;
+    for (const word of unclassifiedWords) {
+      try {
+        const prompt = `Classify the part of speech of the English word "${word.text}" as exactly one of: ${PART_OF_SPEECH_VALUES.join(', ')}. Respond with ONLY a JSON object of the exact shape {"items": [{"text": "${word.text}", "partOfSpeech": "NOUN"}]}. No other text.`;
+        const { items } = await this.chain.generateStructured(prompt, providerOrder, parsePosItemArray);
+        const partOfSpeech = items[0]?.partOfSpeech ?? 'OTHER';
+        await this.prisma.word.update({ where: { id: word.id }, data: { partOfSpeech } });
+        wordsClassified += 1;
+      } catch (err) {
+        this.logger.warn(`Backfill classification failed word=${word.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    const unclassifiedTranslations = await this.prisma.wordTranslation.findMany({
+      where: { partOfSpeech: null },
+      select: { id: true, text: true, dialectTag: true },
+    });
+    this.logger.log(`Backfill: classifying ${unclassifiedTranslations.length} unclassified word translation(s)`);
+    let translationsClassified = 0;
+    for (const translation of unclassifiedTranslations) {
+      try {
+        const dialect = await this.prisma.dialect.findUnique({ where: { tag: translation.dialectTag }, select: { name: true } });
+        if (!dialect) continue;
+        const prompt = `Classify the part of speech of the ${dialect.name} word "${translation.text}" as exactly one of: ${PART_OF_SPEECH_VALUES.join(', ')}. Respond with ONLY a JSON object of the exact shape {"items": [{"text": "${translation.text}", "partOfSpeech": "NOUN"}]}. No other text.`;
+        const { items } = await this.chain.generateStructured(prompt, providerOrder, parsePosItemArray);
+        const partOfSpeech = items[0]?.partOfSpeech ?? 'OTHER';
+        await this.prisma.wordTranslation.update({ where: { id: translation.id }, data: { partOfSpeech } });
+        translationsClassified += 1;
+      } catch (err) {
+        this.logger.warn(`Backfill classification failed translation=${translation.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    const prompts = await this.prisma.prompt.findMany({ select: { id: true, text: true, dialectTag: true } });
+    this.logger.log(`Backfill: checking ${prompts.length} prompt(s) for missing PromptWord segmentation`);
+    let promptWordFailures = 0;
+    let promptsSegmented = 0;
+    for (const promptRow of prompts) {
+      const existingCount = await this.prisma.promptWord.count({ where: { promptId: promptRow.id, dialectTag: promptRow.dialectTag } });
+      if (existingCount > 0) continue;
+      promptWordFailures += await this.segmentAndLinkPromptWords(promptRow.id, promptRow.text, promptRow.dialectTag, providerOrder);
+      promptsSegmented += 1;
+    }
+
+    this.logger.log(
+      `Backfill complete: wordsClassified=${wordsClassified}/${unclassifiedWords.length} ` +
+        `translationsClassified=${translationsClassified}/${unclassifiedTranslations.length} ` +
+        `promptsSegmented=${promptsSegmented} promptWordFailures=${promptWordFailures} ` +
+        `translationDialects=${dialectTags.length ? dialectTags.join(',') : 'none'}`,
     );
   }
 
   // --- English generation -------------------------------------------------
 
+  private buildWordGenerationPrompt(itemsPerRun: number): string {
+    return [
+      `Generate exactly ${itemsPerRun} distinct items for a language-learning dictation/vocabulary app used by adult learners.`,
+      'Each item must be exactly one word each (a single word, no spaces, no punctuation).',
+      'Use common, everyday English vocabulary that an ordinary adult would recognize -- plain words are fine even if their origin is Latin or Greek (e.g. "family", "photograph"), but avoid rare, obscure, archaic, overly technical, or academic vocabulary.',
+      'Do not include profanity, slurs, sexual content, violence, or anything inappropriate for a general audience.',
+      'Do not repeat any item.',
+      `For each word, also classify its part of speech as exactly one of: ${PART_OF_SPEECH_VALUES.join(', ')}.`,
+      `Respond with ONLY a JSON object of the exact shape {"items": [{"text": "...", "partOfSpeech": "NOUN"}, ...]} containing exactly ${itemsPerRun} items. No other text.`,
+    ].join(' ');
+  }
+
   private buildGenerationPrompt(wordsPerItem: number, itemsPerRun: number): string {
-    const lengthInstruction =
-      wordsPerItem === 1
-        ? 'exactly one word each (a single word, no spaces, no punctuation)'
-        : `exactly ${wordsPerItem} words each (a short natural phrase or sentence, exactly ${wordsPerItem} words when split on whitespace)`;
+    const lengthInstruction = `exactly ${wordsPerItem} words each (a short natural phrase or sentence, exactly ${wordsPerItem} words when split on whitespace)`;
 
     return [
       `Generate exactly ${itemsPerRun} distinct items for a language-learning dictation/vocabulary app used by adult learners.`,
@@ -125,6 +221,25 @@ export class WordGeneratorService {
       'Provide the natural, everyday equivalent a native speaker would actually say -- not a literal word-for-word translation.',
       'Do not include profanity, slurs, sexual content, violence, or anything inappropriate for a general audience.',
       'Respond with ONLY a JSON object of the exact shape {"items": ["<translation>"]} containing exactly one string. No other text.',
+    ].join(' ');
+  }
+
+  private buildWordTranslationPrompt(sourceText: string, dialectName: string): string {
+    return [
+      `Translate the following English word into ${dialectName}: "${sourceText}"`,
+      'Provide the natural, everyday equivalent a native speaker would actually say -- not a literal word-for-word translation.',
+      'Do not include profanity, slurs, sexual content, violence, or anything inappropriate for a general audience.',
+      `Also classify the translation's part of speech as exactly one of: ${PART_OF_SPEECH_VALUES.join(', ')} (it may differ from the English word's part of speech).`,
+      'Respond with ONLY a JSON object of the exact shape {"items": [{"text": "<translation>", "partOfSpeech": "NOUN"}]} containing exactly one item. No other text.',
+    ].join(' ');
+  }
+
+  private buildSegmentationPrompt(sentence: string, dialectName: string): string {
+    return [
+      `Break this ${dialectName} sentence into its individual words, in original order: "${sentence}"`,
+      'Preserve each word/token exactly as it appears in the sentence (including any inflection), just split it out -- do not translate, correct, or normalize spelling.',
+      `For each word, classify its part of speech as exactly one of: ${PART_OF_SPEECH_VALUES.join(', ')}.`,
+      'Respond with ONLY a JSON object of the exact shape {"items": [{"text": "...", "partOfSpeech": "..."}, ...]} in original sentence order. No other text.',
     ].join(' ');
   }
 
@@ -149,29 +264,54 @@ export class WordGeneratorService {
     return { accepted, filteredCount };
   }
 
+  private filterAndValidatePosItems(rawItems: PosItem[], wordsPerItem: number): { accepted: PosItem[]; filteredCount: number } {
+    const seen = new Set<string>();
+    const accepted: PosItem[] = [];
+    let filteredCount = 0;
+
+    for (const raw of rawItems) {
+      const text = raw.text.trim();
+      const key = text.toLowerCase();
+      if (!text || seen.has(key)) continue;
+      if (text.split(/\s+/).length !== wordsPerItem) continue;
+      if (isFlaggedContent(text)) {
+        filteredCount += 1;
+        continue;
+      }
+      seen.add(key);
+      accepted.push({ text, partOfSpeech: raw.partOfSpeech });
+    }
+
+    return { accepted, filteredCount };
+  }
+
   // --- Insert (English source) --------------------------------------------
 
-  private async insertWords(texts: string[]): Promise<{ inserted: number; skippedDuplicate: number; insertedRows: { id: string; text: string }[] }> {
-    if (texts.length === 0) return { inserted: 0, skippedDuplicate: 0, insertedRows: [] };
+  private async insertWords(items: PosItem[]): Promise<{ inserted: number; skippedDuplicate: number; insertedRows: { id: string; text: string }[] }> {
+    if (items.length === 0) return { inserted: 0, skippedDuplicate: 0, insertedRows: [] };
 
+    const texts = items.map((item) => item.text);
     const existing = await this.prisma.word.findMany({
       where: { text: { in: texts, mode: 'insensitive' } },
       select: { text: true },
     });
     const existingSet = new Set(existing.map((row) => row.text.toLowerCase()));
-    const newTexts = texts.filter((text) => !existingSet.has(text.toLowerCase()));
+    const newItems = items.filter((item) => !existingSet.has(item.text.toLowerCase()));
 
-    if (newTexts.length === 0) {
-      return { inserted: 0, skippedDuplicate: texts.length, insertedRows: [] };
+    if (newItems.length === 0) {
+      return { inserted: 0, skippedDuplicate: items.length, insertedRows: [] };
     }
 
-    await this.prisma.word.createMany({ data: newTexts.map((text) => ({ text })), skipDuplicates: true });
+    await this.prisma.word.createMany({
+      data: newItems.map((item) => ({ text: item.text, partOfSpeech: item.partOfSpeech })),
+      skipDuplicates: true,
+    });
     const insertedRows = await this.prisma.word.findMany({
-      where: { text: { in: newTexts } },
+      where: { text: { in: newItems.map((item) => item.text) } },
       select: { id: true, text: true },
     });
 
-    return { inserted: insertedRows.length, skippedDuplicate: texts.length - newTexts.length, insertedRows };
+    return { inserted: insertedRows.length, skippedDuplicate: items.length - newItems.length, insertedRows };
   }
 
   private async insertPrompts(texts: string[]): Promise<{ inserted: number; skippedDuplicate: number; insertedRows: { id: string; text: string }[] }> {
@@ -213,12 +353,12 @@ export class WordGeneratorService {
       });
       if (existing) return 'duplicate';
 
-      const prompt = this.buildTranslationPrompt(sourceText, dialect.name);
-      const { items } = await this.chain.generate(prompt, providerOrder);
-      const text = items[0]?.trim();
-      if (!text || isFlaggedContent(text)) return 'failed';
+      const prompt = this.buildWordTranslationPrompt(sourceText, dialect.name);
+      const { items } = await this.chain.generateStructured(prompt, providerOrder, parsePosItemArray);
+      const item = items[0];
+      if (!item?.text || isFlaggedContent(item.text)) return 'failed';
 
-      await this.prisma.wordTranslation.create({ data: { wordId, dialectTag, text } });
+      await this.prisma.wordTranslation.create({ data: { wordId, dialectTag, text: item.text, partOfSpeech: item.partOfSpeech } });
       return 'inserted';
     } catch (err) {
       this.logger.warn(`Translation failed word=${wordId} dialect=${dialectTag}: ${err instanceof Error ? err.message : String(err)}`);
@@ -261,6 +401,107 @@ export class WordGeneratorService {
       this.logger.warn(`Translation failed prompt=${promptId} dialect=${dialectTag}: ${err instanceof Error ? err.message : String(err)}`);
       return 'failed';
     }
+  }
+
+  private async getPromptTranslationText(promptId: string, dialectTag: string): Promise<string | null> {
+    const row = await this.prisma.promptTranslation.findUnique({ where: { promptId_dialectTag: { promptId, dialectTag } } });
+    return row?.text ?? null;
+  }
+
+  /**
+   * Segments a Prompt's sentence (English source or a dialect translation)
+   * into its constituent words, in order, mapping each to (or creating) a
+   * classified Word + WordTranslation and inserting the corresponding
+   * PromptWord row -- this is the ordered fragment sequence the
+   * SENTENCE_REBUILD trainer exercise shuffles and asks the trainer to
+   * reassemble. Returns the number of items that failed to link (for
+   * logging only; a partial segmentation still leaves a usable, just
+   * shorter, exercise -- WordsService.nextAssignment requires >=2
+   * PromptWord rows to offer an assignment).
+   */
+  private async segmentAndLinkPromptWords(
+    promptId: string,
+    sentence: string,
+    dialectTag: string,
+    providerOrder: LlmProviderKey[],
+  ): Promise<number> {
+    try {
+      const existingCount = await this.prisma.promptWord.count({ where: { promptId, dialectTag } });
+      if (existingCount > 0) return 0;
+
+      const dialect = dialectTag === 'en-us' ? { name: 'English' } : await this.prisma.dialect.findUnique({ where: { tag: dialectTag }, select: { name: true } });
+      if (!dialect) return 1;
+
+      const prompt = this.buildSegmentationPrompt(sentence, dialect.name);
+      const { items } = await this.chain.generateStructured(prompt, providerOrder, parsePosItemArray);
+      if (items.length < 2) return 1;
+
+      let failures = 0;
+      let position = 0;
+      for (const item of items) {
+        try {
+          const word = await this.findOrCreateWordForFragment(item, dialectTag, providerOrder);
+          if (!word) {
+            failures += 1;
+            continue;
+          }
+          await this.prisma.promptWord.create({
+            data: { promptId, dialectTag, position, wordId: word.id, text: item.text },
+          });
+          position += 1;
+        } catch {
+          failures += 1;
+        }
+      }
+      return failures;
+    } catch (err) {
+      this.logger.warn(`Segmentation failed prompt=${promptId} dialect=${dialectTag}: ${err instanceof Error ? err.message : String(err)}`);
+      return 1;
+    }
+  }
+
+  /**
+   * Resolves a segmented fragment back to a real, classified Word row.
+   * English fragments (dialectTag 'en-us') map directly onto Word.text;
+   * dialect fragments look up an existing WordTranslation with matching
+   * text first (case-insensitive), and only mint a brand-new bootstrap
+   * Word (English text = the fragment itself, best-effort) if nothing
+   * matches -- this keeps PromptWord always backed by a real classified
+   * Word without requiring every fragment to already exist in the word
+   * bank ahead of time.
+   */
+  private async findOrCreateWordForFragment(
+    item: PosItem,
+    dialectTag: string,
+    providerOrder: LlmProviderKey[],
+  ): Promise<{ id: string } | null> {
+    if (dialectTag === 'en-us') {
+      const existing = await this.prisma.word.findFirst({ where: { text: { equals: item.text, mode: 'insensitive' } }, select: { id: true } });
+      if (existing) return existing;
+      const created = await this.prisma.word.create({ data: { text: item.text, partOfSpeech: item.partOfSpeech }, select: { id: true } });
+      return created;
+    }
+
+    const existingTranslation = await this.prisma.wordTranslation.findFirst({
+      where: { dialectTag, text: { equals: item.text, mode: 'insensitive' } },
+      select: { wordId: true },
+    });
+    if (existingTranslation) return { id: existingTranslation.wordId };
+
+    // No matching translation yet -- bootstrap a new Word using the
+    // fragment's own text as a same-text placeholder English entry (best
+    // effort; word-generator-job's regular translation pass will never
+    // touch this row since it isn't in dialectTags' generation flow, but
+    // it's enough to satisfy PromptWord's real-Word requirement and gives
+    // admins a classified row to review/fix).
+    const englishWord = await this.prisma.word.create({
+      data: { text: item.text },
+      select: { id: true },
+    });
+    await this.prisma.wordTranslation.create({
+      data: { wordId: englishWord.id, dialectTag, text: item.text, partOfSpeech: item.partOfSpeech },
+    });
+    return englishWord;
   }
 
   // --- Settings / coverage --------------------------------------------------

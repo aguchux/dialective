@@ -5,12 +5,19 @@ import { Search } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
+  PART_OF_SPEECH_VALUES,
+  PartOfSpeech,
   normalizeErrorMessage,
   useDeleteWordMutation,
   useGetAdminPromptsQuery,
   useGetAdminWordsQuery,
   useUpdatePromptMutation,
 } from '@/store/api';
+
+function formatPartOfSpeech(value: PartOfSpeech | null): string {
+  if (!value) return '—';
+  return value.charAt(0) + value.slice(1).toLowerCase();
+}
 
 const secondaryButtonClass =
   'inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
@@ -89,12 +96,14 @@ export default function AdminWordsPage() {
 function WordsTab() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [partOfSpeech, setPartOfSpeech] = useState<PartOfSpeech | ''>('');
   const debouncedSearch = useDebouncedValue(search, 300);
   const pageSize = 20;
   const { data, isLoading, isFetching, isError, refetch } = useGetAdminWordsQuery({
     page,
     pageSize,
     search: debouncedSearch || undefined,
+    partOfSpeech: partOfSpeech || undefined,
   });
   const [deleteWord] = useDeleteWordMutation();
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +111,7 @@ function WordsTab() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, partOfSpeech]);
 
   async function handleDelete(id: string) {
     setError(null);
@@ -118,8 +127,26 @@ function WordsTab() {
 
   return (
     <section className="grid gap-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-      <div className="border-b border-line p-3">
+      <div className="flex flex-wrap items-center gap-3 border-b border-line p-3">
         <SearchBox value={search} onChange={setSearch} placeholder="Search words..." />
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-bold" htmlFor="word-pos-filter">
+            Part of speech
+          </label>
+          <select
+            className="min-h-9 rounded-lg border border-line bg-white px-3 text-sm"
+            id="word-pos-filter"
+            onChange={(e) => setPartOfSpeech(e.target.value as PartOfSpeech | '')}
+            value={partOfSpeech}
+          >
+            <option value="">All</option>
+            {PART_OF_SPEECH_VALUES.map((value) => (
+              <option key={value} value={value}>
+                {formatPartOfSpeech(value)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error && (
@@ -140,10 +167,11 @@ function WordsTab() {
       ) : data && data.items.length > 0 ? (
         <>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+            <table className="w-full min-w-180 border-collapse text-left text-sm">
               <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                 <tr>
                   <th className="px-5 py-3.5" scope="col">Word</th>
+                  <th className="px-5 py-3.5" scope="col">Part of speech</th>
                   <th className="px-5 py-3.5" scope="col">Translations</th>
                   <th className="px-5 py-3.5" scope="col">Added</th>
                   <th className="px-5 py-3.5" scope="col">Actions</th>
@@ -153,6 +181,7 @@ function WordsTab() {
                 {data.items.map((word) => (
                   <tr key={word.id}>
                     <td className="px-5 py-3.5 font-extrabold">{word.text}</td>
+                    <td className="px-5 py-3.5 text-muted">{formatPartOfSpeech(word.partOfSpeech)}</td>
                     <td className="px-5 py-3.5 text-muted">
                       {word.translations.length === 0
                         ? '—'
@@ -180,7 +209,10 @@ function WordsTab() {
             {data.items.map((word) => (
               <article className="grid gap-3 p-4" key={word.id}>
                 <div className="flex items-start justify-between gap-3">
-                  <p className="font-extrabold">{word.text}</p>
+                  <div>
+                    <p className="font-extrabold">{word.text}</p>
+                    <p className="text-xs text-muted">{formatPartOfSpeech(word.partOfSpeech)}</p>
+                  </div>
                   <ActionButton
                     className={dangerButtonClass}
                     onClick={() => handleDelete(word.id)}

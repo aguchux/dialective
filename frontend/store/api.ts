@@ -291,6 +291,7 @@ export interface PlatformSettings {
   qualityWeightLiveness: string;
   spellingNormalizationEnabled: boolean;
   spellingNormalizationProviderOrder: string;
+  sentenceRebuildEnabled: boolean;
   updatedAt: string;
   createdAt: string;
 }
@@ -320,9 +321,10 @@ export interface PlatformSettingsInput {
   qualityWeightLiveness?: number;
   spellingNormalizationEnabled?: boolean;
   spellingNormalizationProviderOrder?: string;
+  sentenceRebuildEnabled?: boolean;
 }
 
-export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';
+export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD';
 export type RecordingNoiseRating = 'NOISY' | 'FAIR' | 'QUIET';
 
 export interface WordTrainingSession {
@@ -335,13 +337,14 @@ export interface WordTrainingSession {
 
 export interface WordTrainingAssignment {
   assignmentId: string;
-  wordId: string;
+  wordId: string | null;
   direction: WordTrainingDirection;
-  promptText: string;
+  promptText: string | null;
   sourceLanguage: string;
   responseLanguage: string;
   dialectTag: string | null;
   dialectKeyboardLayout: string | null;
+  fragments: { text: string; position: number }[] | null;
 }
 
 export interface SpellingSuggestion {
@@ -421,16 +424,43 @@ export interface SubmissionsPage {
   totalPages: number;
 }
 
+export type PartOfSpeech =
+  | 'NOUN'
+  | 'VERB'
+  | 'ADJECTIVE'
+  | 'ADVERB'
+  | 'PRONOUN'
+  | 'PREPOSITION'
+  | 'CONJUNCTION'
+  | 'INTERJECTION'
+  | 'DETERMINER'
+  | 'OTHER';
+
+export const PART_OF_SPEECH_VALUES: PartOfSpeech[] = [
+  'NOUN',
+  'VERB',
+  'ADJECTIVE',
+  'ADVERB',
+  'PRONOUN',
+  'PREPOSITION',
+  'CONJUNCTION',
+  'INTERJECTION',
+  'DETERMINER',
+  'OTHER',
+];
+
 export interface AdminWordTranslation {
   id: string;
   dialectTag: string;
   text: string;
+  partOfSpeech: PartOfSpeech | null;
   createdAt: string;
 }
 
 export interface AdminWord {
   id: string;
   text: string;
+  partOfSpeech: PartOfSpeech | null;
   createdAt: string;
   translations: AdminWordTranslation[];
 }
@@ -620,11 +650,12 @@ export const dialectivaApi = createApi({
       { recordingId: string; status: string; direction: WordTrainingDirection; validationScore: number | null },
       {
         assignmentId: string;
-        responseText: string;
-        bucket: string;
-        audioKey: string;
-        durationMs: number;
-        noiseRating: RecordingNoiseRating;
+        responseText?: string;
+        bucket?: string;
+        audioKey?: string;
+        durationMs?: number;
+        noiseRating?: RecordingNoiseRating;
+        submittedOrder?: number[];
       }
     >({
       query: (body) => ({ url: '/words/recordings', method: 'POST', body }),
@@ -844,8 +875,8 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['PlatformSettings'],
     }),
-    getAdminWords: builder.query<AdminWordsPage, { page: number; pageSize: number; search?: string }>({
-      query: ({ page, pageSize, search }) => ({ url: '/words/admin', params: { page, pageSize, search } }),
+    getAdminWords: builder.query<AdminWordsPage, { page: number; pageSize: number; search?: string; partOfSpeech?: PartOfSpeech }>({
+      query: ({ page, pageSize, search, partOfSpeech }) => ({ url: '/words/admin', params: { page, pageSize, search, partOfSpeech } }),
       providesTags: ['AdminWords'],
     }),
     deleteWord: builder.mutation<{ id: string; deleted: boolean }, string>({

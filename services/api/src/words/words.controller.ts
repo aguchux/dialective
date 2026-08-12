@@ -64,8 +64,11 @@ export class WordsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async listWordsForAdmin(@Query() query: ListWordsAdminDto) {
-    const { page, pageSize, search } = query;
-    const where = search ? { text: { contains: search, mode: 'insensitive' as const } } : {};
+    const { page, pageSize, search, partOfSpeech } = query;
+    const where = {
+      ...(search ? { text: { contains: search, mode: 'insensitive' as const } } : {}),
+      ...(partOfSpeech ? { partOfSpeech } : {}),
+    };
     const [items, total] = await Promise.all([
       this.prisma.word.findMany({
         where,

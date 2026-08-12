@@ -17,6 +17,7 @@ export function GeneralSettingsPanel() {
   const [taskTokenCost, setTaskTokenCost] = useState('');
   const [trainingPayoutBonusCapMultiple, setTrainingPayoutBonusCapMultiple] = useState('');
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
+  const [sentenceRebuildEnabled, setSentenceRebuildEnabled] = useState(false);
   const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
   const [wordStuckTimeoutMinutes, setWordStuckTimeoutMinutes] = useState('');
   const [scoringSlaMinutes, setScoringSlaMinutes] = useState('');
@@ -33,6 +34,7 @@ export function GeneralSettingsPanel() {
     setTaskTokenCost(settings.taskTokenCost ?? '');
     setTrainingPayoutBonusCapMultiple(settings.trainingPayoutBonusCapMultiple ?? '');
     setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
+    setSentenceRebuildEnabled(settings.sentenceRebuildEnabled);
     setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
     setWordStuckTimeoutMinutes(String(settings.wordStuckTimeoutMinutes));
     setScoringSlaMinutes(String(settings.scoringSlaMinutes));
@@ -60,6 +62,7 @@ export function GeneralSettingsPanel() {
           ? { trainingPayoutBonusCapMultiple: Number(trainingPayoutBonusCapMultiple) }
           : {}),
         reverseWordTrainingEnabled,
+        sentenceRebuildEnabled,
         adminPayoutOtpEnabled,
         ...(wordStuckTimeoutMinutes !== '' ? { wordStuckTimeoutMinutes: Number(wordStuckTimeoutMinutes) } : {}),
         ...(scoringSlaMinutes !== '' ? { scoringSlaMinutes: Number(scoringSlaMinutes) } : {}),
@@ -262,6 +265,26 @@ export function GeneralSettingsPanel() {
                 <span className="block font-bold">Dialect-to-English validation</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   Mix translations submitted by other trainers into word sessions for reverse validation and scoring.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="sentence-rebuild">
+              <input
+                checked={sentenceRebuildEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="sentence-rebuild"
+                onChange={(event) => setSentenceRebuildEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Sentence rebuild exercise</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Mix in a tap-the-fragments-in-order sentence exercise during word sessions, using classified word
+                  sequences generated for each prompt. Requires part-of-speech classification and segmentation to be
+                  populated for at least some prompts.
                 </span>
               </span>
             </label>
