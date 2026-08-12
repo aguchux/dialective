@@ -1304,6 +1304,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [bankName, setBankName] = useState('');
   const [accountName, setAccountName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
+  const [instructions, setInstructions] = useState('');
   const [paymentOtpRequestId, setPaymentOtpRequestId] = useState('');
   const [paymentOtpCode, setPaymentOtpCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -1325,19 +1326,22 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     bankName: bankName.trim(),
     accountName: accountName.trim(),
     accountNumber: accountNumber.trim(),
+    instructions: instructions.trim() || undefined,
     enabled: true,
   };
   const paymentDirty = bankName.trim() !== (primaryMethod?.bankName ?? '') ||
     accountName.trim() !== (primaryMethod?.accountName ?? '') ||
-    accountNumber.trim() !== (primaryMethod?.accountNumber ?? '');
+    accountNumber.trim() !== (primaryMethod?.accountNumber ?? '') ||
+    instructions.trim() !== (primaryMethod?.instructions ?? '');
 
   useEffect(() => {
     setBankName(primaryMethod?.bankName ?? '');
     setAccountName(primaryMethod?.accountName ?? '');
     setAccountNumber(primaryMethod?.accountNumber ?? '');
+    setInstructions(primaryMethod?.instructions ?? '');
     setPaymentOtpRequestId('');
     setPaymentOtpCode('');
-  }, [primaryMethod?.id, primaryMethod?.bankName, primaryMethod?.accountName, primaryMethod?.accountNumber]);
+  }, [primaryMethod?.id, primaryMethod?.bankName, primaryMethod?.accountName, primaryMethod?.accountNumber, primaryMethod?.instructions]);
 
   function updatePaymentField(setter: (value: string) => void, value: string) {
     setter(value);
@@ -1447,27 +1451,25 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
 
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={savePaymentMethod}>
           <SectionTitle title="Payment method" subtitle="Stored in Profile and protected by email 2FA for every edit." />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-1.5 text-sm font-bold">
-              Bank name
-              <input
-                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                onChange={(event) => updatePaymentField(setBankName, event.target.value)}
-                required
-                value={bankName}
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm font-bold">
-              Account number
-              <input
-                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                inputMode="numeric"
-                onChange={(event) => updatePaymentField(setAccountNumber, event.target.value)}
-                required
-                value={accountNumber}
-              />
-            </label>
-          </div>
+          <label className="grid gap-1.5 text-sm font-bold">
+            Bank name
+            <input
+              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+              onChange={(event) => updatePaymentField(setBankName, event.target.value)}
+              required
+              value={bankName}
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-bold">
+            Account number
+            <input
+              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+              inputMode="numeric"
+              onChange={(event) => updatePaymentField(setAccountNumber, event.target.value)}
+              required
+              value={accountNumber}
+            />
+          </label>
           <label className="grid gap-1.5 text-sm font-bold">
             Account name
             <input
@@ -1475,6 +1477,15 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               onChange={(event) => updatePaymentField(setAccountName, event.target.value)}
               required
               value={accountName}
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-bold">
+            Notes <span className="font-normal text-muted">(optional)</span>
+            <textarea
+              className="min-h-20 resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-ink outline-none focus:border-accent"
+              onChange={(event) => updatePaymentField(setInstructions, event.target.value)}
+              placeholder="Anything a buyer should know before paying, e.g. preferred payment window or reference format"
+              value={instructions}
             />
           </label>
           {paymentOtpRequestId ? (
