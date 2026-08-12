@@ -9,6 +9,7 @@ on:
       - "services/prompt-audio-service/**"
       - "services/settlement-job/**"
       - "services/word-generator-job/**"
+      - "services/fx-rate-job/**"
       - "services/vosk-worker/**"
       - "services/whisper-worker/**"
       - "services/quality-gate-worker/**"
@@ -50,6 +51,9 @@ jobs:
           - service: word-generator-job
             context: .
             image: word-generator-job
+          - service: fx-rate-job
+            context: .
+            image: fx-rate-job
           - service: prompt-audio-service
             context: .
             image: prompt-audio-service

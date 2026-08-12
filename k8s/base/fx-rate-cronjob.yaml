@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: fx-rate-job
+spec:
+  # Staggered off settlement-job ("0 */12 * * *") and word-generator-job
+  # ("15 */1 * * *") so all three scheduled jobs don't hit the DB in the
+  # same instant. FX rates don't need to be fresher than daily.
+  schedule: "30 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: fx-rate-job
+              image: golojan/dialect-fx-rate-job:latest
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-creds
+                      key: connection_string

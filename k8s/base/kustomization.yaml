@@ -27,3 +27,4 @@ resources:
   - consensus-scorer-hpa.yaml
   - settlement-cronjob.yaml
   - word-generator-cronjob.yaml
+  - fx-rate-cronjob.yaml
