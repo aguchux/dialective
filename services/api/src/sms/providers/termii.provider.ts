@@ -1,5 +1,11 @@
 import { SmsProvider } from '../sms-provider.interface';
 
+// Termii issues an account/region-specific base URL (visible on the
+// dashboard) -- v4.api.termii.com is their current documented default, but
+// TERMII_BASE_URL lets an account with a different assigned host override it
+// without a code change.
+const DEFAULT_BASE_URL = 'https://v4.api.termii.com';
+
 export class TermiiProvider implements SmsProvider {
   readonly key = 'termii' as const;
 
@@ -8,7 +14,8 @@ export class TermiiProvider implements SmsProvider {
     const senderId = process.env.TERMII_SENDER_ID;
     if (!apiKey || !senderId) throw new Error('Termii credentials not set');
 
-    const res = await fetch('https://api.ng.termii.com/api/sms/send', {
+    const baseUrl = process.env.TERMII_BASE_URL ?? DEFAULT_BASE_URL;
+    const res = await fetch(`${baseUrl}/api/sms/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
