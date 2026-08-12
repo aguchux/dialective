@@ -27,6 +27,11 @@ export class P2PController {
     return this.p2p.getSettings();
   }
 
+  @Get('reference-rate')
+  getReferenceRate(@Req() req: AuthenticatedRequest) {
+    return this.p2p.getReferenceRate(req.user.sub);
+  }
+
   @Get('payment-methods')
   listPaymentMethods(@Req() req: AuthenticatedRequest) {
     return this.p2p.listPaymentMethods(req.user.sub);

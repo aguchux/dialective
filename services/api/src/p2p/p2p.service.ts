@@ -17,6 +17,8 @@ import {
 import { randomUUID } from 'crypto';
 import { OtpService } from '../otp/otp.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { tokensToLocalCurrency } from '../wallet/currency-rate.util';
 import {
   AcceptOfferDto,
   CreateOfferDto,
@@ -39,11 +41,35 @@ export class P2PService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly otp: OtpService,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   async getSettings() {
     const row = await this.settingsRow();
     return serializeSettings(row);
+  }
+
+  /**
+   * Display-only context for the offer-creation form: the caller's own
+   * country currency and a "1 token ≈ X <currency>" reference figure, so a
+   * seller can see roughly where the market sits before pricing their
+   * offer above or below it. Never enforced -- fiatAmount stays free-text.
+   */
+  async getReferenceRate(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { country: { select: { currencyCode: true, usdExchangeRate: true, exchangeRateUpdatedAt: true } } },
+    });
+    if (!user?.country || user.country.usdExchangeRate === null) {
+      return { currencyCode: null, tokenReferencePrice: null, updatedAt: null };
+    }
+    const tokenUsdRate = await this.platformSettings.getTokenUsdRate();
+    const tokenReferencePrice = tokensToLocalCurrency(1, tokenUsdRate, user.country.usdExchangeRate.toNumber());
+    return {
+      currencyCode: user.country.currencyCode,
+      tokenReferencePrice: tokenReferencePrice.toString(),
+      updatedAt: user.country.exchangeRateUpdatedAt,
+    };
   }
 
   async updateSettings(dto: UpdateP2PMarketSettingsDto) {

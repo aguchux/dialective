@@ -33,6 +33,7 @@ export interface Country {
   id: string;
   code: string;
   name: string;
+  currencyCode: string;
 }
 
 export interface Dialect {
@@ -46,6 +47,10 @@ export interface AdminCountry {
   code: string;
   name: string;
   llmGenerationEnabled: boolean;
+  currencyCode: string;
+  usdExchangeRate: string | null;
+  exchangeRateSource: 'LIVE' | 'MANUAL';
+  exchangeRateUpdatedAt: string | null;
   _count: { dialects: number; users: number };
 }
 
@@ -64,6 +69,8 @@ export interface CountryInput {
   code: string;
   name: string;
   llmGenerationEnabled?: boolean;
+  currencyCode?: string;
+  usdExchangeRate?: number;
 }
 
 export interface DialectInput {
@@ -139,11 +146,19 @@ export interface ReferralSummary {
   bonusEventCount: number;
 }
 
+export interface LocalCurrency {
+  code: string;
+  usdExchangeRate: string;
+  updatedAt: string | null;
+}
+
 export interface Wallet {
   balance: string;
   lockedBalance: string;
   tokenUsdRate: number;
   taskTokenCost: string;
+  localCurrency: LocalCurrency | null;
+  balanceInLocalCurrency: string | null;
 }
 
 export type LedgerEntryType =
@@ -216,6 +231,12 @@ export interface P2PMarketSettings {
   createdAt: string;
 }
 
+export interface P2PReferenceRate {
+  currencyCode: string | null;
+  tokenReferencePrice: string | null;
+  updatedAt: string | null;
+}
+
 export interface P2POffer {
   id: string;
   type: P2POfferType;
@@ -279,6 +300,8 @@ export interface TrainerDashboardSummary {
   tokenUsdRate: number;
   taskTokenCost: string;
   scoringSlaMinutes: number;
+  localCurrency: LocalCurrency | null;
+  balanceInLocalCurrency: string | null;
   fundedTokens: string;
   trainingEarningsTokens: string;
   referralEarningsTokens: string;
@@ -722,6 +745,10 @@ export const dialectivaApi = createApi({
       query: () => '/p2p/settings',
       providesTags: ['P2P'],
     }),
+    getP2PReferenceRate: builder.query<P2PReferenceRate, void>({
+      query: () => '/p2p/reference-rate',
+      providesTags: ['P2P'],
+    }),
     getP2PPaymentMethods: builder.query<UserPaymentMethod[], void>({
       query: () => '/p2p/payment-methods',
       providesTags: ['P2P'],
@@ -1042,6 +1069,10 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/geo/admin/countries/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminCountries'],
     }),
+    resetCountryExchangeRate: builder.mutation<AdminCountry, string>({
+      query: (id) => ({ url: `/geo/admin/countries/${id}/reset-exchange-rate`, method: 'POST' }),
+      invalidatesTags: ['AdminCountries'],
+    }),
     getAdminDialects: builder.query<AdminDialect[], void>({
       query: () => '/geo/admin/dialects',
       providesTags: ['AdminDialects'],
@@ -1129,6 +1160,7 @@ export const {
   useGetDialectsQuery,
   useGetWalletQuery,
   useGetP2PSettingsQuery,
+  useGetP2PReferenceRateQuery,
   useGetP2PPaymentMethodsQuery,
   useRequestP2PPaymentMethodOtpMutation,
   useCreateP2PPaymentMethodMutation,
@@ -1187,6 +1219,7 @@ export const {
   useCreateCountryMutation,
   useUpdateCountryMutation,
   useDeleteCountryMutation,
+  useResetCountryExchangeRateMutation,
   useGetAdminDialectsQuery,
   useCreateDialectMutation,
   useUpdateDialectMutation,

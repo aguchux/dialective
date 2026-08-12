@@ -90,6 +90,10 @@ model Country {
   code                 String    @unique // ISO 3166-1 alpha-2, e.g. "NG", "US"
   name                 String
   llmGenerationEnabled Boolean   @default(false) // opts this country's dialects into word-generator-job's translation sweep; a dialect only participates when both this AND Dialect.llmGenerationEnabled are true
+  currencyCode         String    @default("USD") // ISO 4217, e.g. "NGN", "KES" -- what wallet balances and P2P offers display in for this country's users
+  usdExchangeRate      Decimal?  @db.Decimal(18, 6) // units of currencyCode per 1 USD; null until fx-rate-job's first successful fetch or an admin sets one manually
+  exchangeRateSource   String    @default("LIVE") // "LIVE" (fx-rate-job may overwrite usdExchangeRate) or "MANUAL" (admin-set, fx-rate-job skips this row until reset)
+  exchangeRateUpdatedAt DateTime? // last time usdExchangeRate changed (live fetch or admin edit) -- shown in UI so a stale rate is visible, not silently trusted
   dialects             Dialect[]
   users                User[]
 

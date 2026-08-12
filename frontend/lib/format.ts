@@ -35,3 +35,25 @@ export function formatCompactNumber(value: number | string) {
 export function formatCompactTokens(value: number | string) {
   return `${compactNumberFormatter.format(Number(value))} tokens`;
 }
+
+const compactCurrencyFormatters = new Map<string, Intl.NumberFormat>();
+
+/** e.g. formatCompactLocalCurrency(15000000, "NGN") -> "₦15M" (falls back to a plain compact number if the currency code isn't recognized) */
+export function formatCompactLocalCurrency(value: number | string, currencyCode: string) {
+  let formatter = compactCurrencyFormatters.get(currencyCode);
+  if (!formatter) {
+    try {
+      formatter = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currencyCode,
+        notation: 'compact',
+        maximumFractionDigits: 2,
+      });
+    } catch {
+      formatter = undefined;
+    }
+    if (formatter) compactCurrencyFormatters.set(currencyCode, formatter);
+  }
+  if (!formatter) return `${compactNumberFormatter.format(Number(value))} ${currencyCode}`;
+  return formatter.format(Number(value));
+}

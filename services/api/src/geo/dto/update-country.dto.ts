@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsPositive, IsString, Length } from 'class-validator';
 
 export class UpdateCountryDto {
   @IsOptional()
@@ -13,4 +13,15 @@ export class UpdateCountryDto {
   @IsOptional()
   @IsBoolean()
   llmGenerationEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @Length(3, 3)
+  currencyCode?: string;
+
+  /** Setting this marks exchangeRateSource: 'MANUAL' -- fx-rate-job skips this country until resetExchangeRateToLive is called. */
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  usdExchangeRate?: number;
 }

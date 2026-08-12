@@ -5,6 +5,7 @@
     "packages/*",
     "services/api",
     "services/consensus-scorer",
+    "services/fx-rate-job",
     "services/settlement-job",
     "services/word-generator-job"
   ]

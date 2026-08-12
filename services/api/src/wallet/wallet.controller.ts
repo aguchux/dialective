@@ -50,6 +50,7 @@ import { CreateTrainingPayoutDto } from './dto/create-training-payout.dto';
 import { ListEarningsDto } from './dto/list-earnings.dto';
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { tokensToUsdt, usdToTokens } from './token-rate.util';
+import { tokensToLocalCurrency } from './currency-rate.util';
 import { withdrawalContextHash, depositContextHash, adminActionContextHash } from './otp-context.util';
 
 const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
@@ -98,15 +99,37 @@ export class WalletController {
     });
   }
 
+  /** Display-only local-currency context for the requesting user's country -- null when the user has no country yet (pre-onboarding) or no rate has been fetched. */
+  private async getLocalCurrency(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { country: { select: { currencyCode: true, usdExchangeRate: true, exchangeRateUpdatedAt: true } } },
+    });
+    if (!user?.country || user.country.usdExchangeRate === null) {
+      return null;
+    }
+    return {
+      code: user.country.currencyCode,
+      usdExchangeRate: user.country.usdExchangeRate.toString(),
+      updatedAt: user.country.exchangeRateUpdatedAt,
+    };
+  }
+
   @Get('wallet')
   @UseGuards(JwtAuthGuard)
   async getWallet(@Req() req: AuthenticatedRequest) {
     const wallet = await this.getOrCreateWallet(req.user.sub);
+    const tokenUsdRate = await this.platformSettings.getTokenUsdRate();
+    const localCurrency = await this.getLocalCurrency(req.user.sub);
     return {
       balance: wallet.balance.toString(),
       lockedBalance: wallet.lockedBalance.toString(),
-      tokenUsdRate: await this.platformSettings.getTokenUsdRate(),
+      tokenUsdRate,
       taskTokenCost: (await this.platformSettings.getTaskTokenCost()).toString(),
+      localCurrency,
+      balanceInLocalCurrency: localCurrency
+        ? tokensToLocalCurrency(wallet.balance.toNumber(), tokenUsdRate, Number(localCurrency.usdExchangeRate)).toString()
+        : null,
     };
   }
 
@@ -175,12 +198,23 @@ export class WalletController {
       monthTotals.set(key, (monthTotals.get(key) ?? 0) + Number(entry.amount));
     }
 
+    const dashboardTokenUsdRate = await this.platformSettings.getTokenUsdRate();
+    const dashboardLocalCurrency = await this.getLocalCurrency(req.user.sub);
+
     return {
       balance: wallet.balance.toString(),
       lockedBalance: wallet.lockedBalance.toString(),
-      tokenUsdRate: await this.platformSettings.getTokenUsdRate(),
+      tokenUsdRate: dashboardTokenUsdRate,
       taskTokenCost: (await this.platformSettings.getTaskTokenCost()).toString(),
       scoringSlaMinutes: await this.platformSettings.getScoringSlaMinutes(),
+      localCurrency: dashboardLocalCurrency,
+      balanceInLocalCurrency: dashboardLocalCurrency
+        ? tokensToLocalCurrency(
+            wallet.balance.toNumber(),
+            dashboardTokenUsdRate,
+            Number(dashboardLocalCurrency.usdExchangeRate),
+          ).toString()
+        : null,
       fundedTokens: ledgerAmount(['DEPOSIT']).toString(),
       trainingEarningsTokens: ledgerAmount(['TRAINING_PAYOUT']).toString(),
       referralEarningsTokens: ledgerAmount([

@@ -39,7 +39,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
-import { formatCompactNumber, formatCompactUsd } from '@/lib/format';
+import { formatCompactLocalCurrency, formatCompactNumber, formatCompactUsd } from '@/lib/format';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
 import {
   DropdownMenu,
@@ -62,6 +62,7 @@ import {
   useCreateP2PPaymentMethodMutation,
   useGetP2PPaymentMethodsQuery,
   useGetP2PSettingsQuery,
+  useGetP2PReferenceRateQuery,
   useRequestP2PPaymentMethodOtpMutation,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
@@ -92,12 +93,11 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
   { id: 'earnings', label: 'Earnings', icon: CircleDollarSign },
   { id: 'training', label: 'Training', icon: Mic2 },
   { id: 'market', label: 'Market', icon: Landmark },
-  { id: 'referrals', label: 'Referrals', icon: Users },
   { id: 'scores', label: 'My Scores', icon: Star },
 ];
 
 // Reachable only from the account dropdown, not the main tab bar/mobile nav.
-const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'profile'];
+const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'referrals', 'profile'];
 
 const activityLabels: Record<LedgerEntryType, string> = {
   DEPOSIT: 'Token funding',
@@ -292,6 +292,9 @@ function DashboardHeader({
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=profile')}>
                 <UserIcon className="size-4" aria-hidden="true" /> Profile
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/dashboard?view=referrals')}>
+                <Users className="size-4" aria-hidden="true" /> Referrals
+              </DropdownMenuItem>
               <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>
                 <LogOut className="size-4" aria-hidden="true" /> Logout
               </DropdownMenuItem>
@@ -401,6 +404,12 @@ function TokensView({ data, refreshing }: { data: TrainerDashboardSummary; refre
         <MetricCard icon={Banknote} label="Estimated value" value={formatCompactUsd(usdValue)} tone="green" />
         <MetricCard icon={CircleDollarSign} label="Current rate" value={`${formatUsd(data.tokenUsdRate)} / token`} tone="amber" compact />
       </section>
+      {data.localCurrency && data.balanceInLocalCurrency && (
+        <p className="mt-3 text-sm leading-relaxed text-muted">
+          ≈ {formatCompactLocalCurrency(data.balanceInLocalCurrency, data.localCurrency.code)}
+          {data.localCurrency.updatedAt && ` · rate as of ${formatDateTime(data.localCurrency.updatedAt)}`}
+        </p>
+      )}
       <section className="mt-8">
         <SectionTitle title="Recent activity" subtitle="Funding, earnings, referrals, and payouts." />
         <ActivityList entries={data.recentActivity} />
@@ -975,9 +984,11 @@ function MarketView() {
   const [offerType, setOfferType] = useState<'SELL' | 'BUY'>('SELL');
   const [tokenAmount, setTokenAmount] = useState('10');
   const [fiatAmount, setFiatAmount] = useState('10000');
+  const [fiatCurrency, setFiatCurrency] = useState('NGN');
   const [createOpen, setCreateOpen] = useState(false);
   const [error, setError] = useState('');
   const { data: settings } = useGetP2PSettingsQuery();
+  const { data: referenceRate } = useGetP2PReferenceRateQuery();
   const { data: methods = [] } = useGetP2PPaymentMethodsQuery();
   const { data: sellOffers = [] } = useListP2POffersQuery({ type: 'SELL' });
   const { data: buyOffers = [] } = useListP2POffersQuery({ type: 'BUY' });
@@ -991,6 +1002,11 @@ function MarketView() {
   const primaryMethod = methods.find((method) => method.enabled);
   const marketDisabled = !settings?.enabled;
 
+  // Pre-fills the offer form's currency with the trainer's own country currency once known; the field stays editable.
+  useEffect(() => {
+    if (referenceRate?.currencyCode) setFiatCurrency(referenceRate.currencyCode);
+  }, [referenceRate?.currencyCode]);
+
   async function submitOffer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -999,7 +1015,7 @@ function MarketView() {
         type: offerType,
         tokenAmount: Number(tokenAmount),
         fiatAmount: Number(fiatAmount),
-        fiatCurrency: 'NGN',
+        fiatCurrency,
         paymentMethod: 'BANK_TRANSFER',
         paymentMethodId: offerType === 'SELL' ? primaryMethod?.id : undefined,
       }).unwrap();
@@ -1055,10 +1071,26 @@ function MarketView() {
                 Token amount
                 <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => setTokenAmount(e.target.value)} type="number" value={tokenAmount} />
               </label>
-              <label className="grid gap-1.5 text-sm font-bold">
-                Amount in NGN
-                <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => setFiatAmount(e.target.value)} type="number" value={fiatAmount} />
-              </label>
+              {referenceRate?.tokenReferencePrice && referenceRate.currencyCode && (
+                <p className="text-xs text-muted">
+                  Reference: 1 token ≈ {Number(referenceRate.tokenReferencePrice).toLocaleString()} {referenceRate.currencyCode} — you can price above or below this.
+                </p>
+              )}
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <label className="grid gap-1.5 text-sm font-bold">
+                  Fiat amount
+                  <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => setFiatAmount(e.target.value)} type="number" value={fiatAmount} />
+                </label>
+                <label className="grid gap-1.5 text-sm font-bold">
+                  Currency
+                  <input
+                    className="min-h-11 w-20 rounded-lg border border-line bg-bg px-2 text-center uppercase"
+                    maxLength={3}
+                    onChange={(e) => setFiatCurrency(e.target.value.toUpperCase())}
+                    value={fiatCurrency}
+                  />
+                </label>
+              </div>
               {offerType === 'SELL' && !primaryMethod && (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
                   Add your bank details in Profile before posting a sell offer.
@@ -1283,12 +1315,13 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [updatePaymentMethod, { isLoading: paymentUpdating }] = useUpdateP2PPaymentMethodMutation();
   const primaryMethod = methods.find((method) => method.enabled);
   const paymentSaving = paymentCreating || paymentUpdating;
+  const { data: referenceRate } = useGetP2PReferenceRateQuery();
 
   const dirty = firstName.trim() !== (session.user.firstName ?? '') || lastName.trim() !== (session.user.lastName ?? '');
   const paymentPayload = {
     label: 'Bank transfer',
     methodType: 'BANK_TRANSFER',
-    fiatCurrency: 'NGN',
+    fiatCurrency: primaryMethod?.fiatCurrency ?? referenceRate?.currencyCode ?? 'NGN',
     bankName: bankName.trim(),
     accountName: accountName.trim(),
     accountNumber: accountNumber.trim(),

@@ -1,4 +1,4 @@
-import { IsString, Length } from 'class-validator';
+import { IsOptional, IsString, Length } from 'class-validator';
 
 export class CreateCountryDto {
   @IsString()
@@ -7,4 +7,9 @@ export class CreateCountryDto {
 
   @IsString()
   name!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(3, 3)
+  currencyCode?: string; // ISO 4217, defaults to "USD" if omitted
 }

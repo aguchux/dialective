@@ -34,7 +34,7 @@ export class GeoController {
   @Get('countries')
   getCountries() {
     return this.prisma.country.findMany({
-      select: { id: true, code: true, name: true, _count: { select: { dialects: true } } },
+      select: { id: true, code: true, name: true, currencyCode: true, _count: { select: { dialects: true } } },
       orderBy: { name: 'asc' },
     });
   }
@@ -104,7 +104,11 @@ export class GeoController {
   async createCountry(@Body() dto: CreateCountryDto) {
     try {
       return await this.prisma.country.create({
-        data: { code: dto.code.toUpperCase(), name: dto.name },
+        data: {
+          code: dto.code.toUpperCase(),
+          name: dto.name,
+          currencyCode: dto.currencyCode ? dto.currencyCode.toUpperCase() : undefined,
+        },
       });
     } catch (err) {
       throw mapPrismaError(err, 'A country with this code already exists');
@@ -122,10 +126,29 @@ export class GeoController {
           code: dto.code ? dto.code.toUpperCase() : undefined,
           name: dto.name,
           llmGenerationEnabled: dto.llmGenerationEnabled,
+          currencyCode: dto.currencyCode ? dto.currencyCode.toUpperCase() : undefined,
+          usdExchangeRate: dto.usdExchangeRate,
+          exchangeRateSource: dto.usdExchangeRate !== undefined ? 'MANUAL' : undefined,
+          exchangeRateUpdatedAt: dto.usdExchangeRate !== undefined ? new Date() : undefined,
         },
       });
     } catch (err) {
       throw mapPrismaError(err, 'A country with this code already exists', 'Country not found');
+    }
+  }
+
+  /** Flips a MANUAL-override country back to LIVE -- fx-rate-job resumes overwriting its rate on the next run. */
+  @Post('admin/countries/:id/reset-exchange-rate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async resetExchangeRateToLive(@Param('id') id: string) {
+    try {
+      return await this.prisma.country.update({
+        where: { id },
+        data: { exchangeRateSource: 'LIVE' },
+      });
+    } catch (err) {
+      throw mapPrismaError(err, undefined, 'Country not found');
     }
   }
 

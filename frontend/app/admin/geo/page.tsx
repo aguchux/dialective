@@ -17,6 +17,7 @@ import {
   useGenerateDialectKeyboardLayoutMutation,
   useGetAdminCountriesQuery,
   useGetAdminDialectsQuery,
+  useResetCountryExchangeRateMutation,
   useUpdateCountryMutation,
   useUpdateDialectMutation,
 } from '@/store/api';
@@ -55,6 +56,7 @@ function CountriesSection({ countries, isLoading }: { countries: AdminCountry[] 
   const [updateCountry] = useUpdateCountryMutation();
   const [error, setError] = useState<string | null>(null);
   const [addDialectFor, setAddDialectFor] = useState<AdminCountry | null>(null);
+  const [editingRateFor, setEditingRateFor] = useState<AdminCountry | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
@@ -123,10 +125,28 @@ function CountriesSection({ countries, isLoading }: { countries: AdminCountry[] 
       ),
     },
     {
+      key: 'currency',
+      header: 'Currency / rate',
+      sortValue: (c) => c.currencyCode,
+      render: (c) => (
+        <div className="grid gap-0.5">
+          <p className="font-extrabold">{c.currencyCode}</p>
+          <p className="text-xs text-muted">
+            {c.usdExchangeRate ? `1 USD ≈ ${c.usdExchangeRate} ${c.currencyCode}` : 'No rate yet'}
+            {' · '}
+            <span className={c.exchangeRateSource === 'MANUAL' ? 'text-accent' : ''}>{c.exchangeRateSource}</span>
+          </p>
+        </div>
+      ),
+    },
+    {
       key: 'actions',
       header: 'Actions',
       render: (c) => (
         <div className="flex flex-wrap gap-2">
+          <button className={secondaryButtonClass} onClick={() => setEditingRateFor(c)} type="button">
+            Edit rate
+          </button>
           <button className={secondaryButtonClass} onClick={() => setAddDialectFor(c)} type="button">
             + Add dialect
           </button>
@@ -169,7 +189,110 @@ function CountriesSection({ countries, isLoading }: { countries: AdminCountry[] 
       />
 
       {addDialectFor && <AddDialectDialog country={addDialectFor} onClose={() => setAddDialectFor(null)} />}
+      {editingRateFor && <EditExchangeRateDialog country={editingRateFor} onClose={() => setEditingRateFor(null)} />}
     </section>
+  );
+}
+
+function EditExchangeRateDialog({ country, onClose }: { country: AdminCountry; onClose: () => void }) {
+  const [currencyCode, setCurrencyCode] = useState(country.currencyCode);
+  const [rate, setRate] = useState(country.usdExchangeRate ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [updateCountry, { isLoading: isSaving }] = useUpdateCountryMutation();
+  const [resetRate, { isLoading: isResetting }] = useResetCountryExchangeRateMutation();
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      const body: { currencyCode: string; usdExchangeRate?: number } = { currencyCode: currencyCode.toUpperCase() };
+      if (rate !== '') body.usdExchangeRate = Number(rate);
+      await updateCountry({ id: country.id, body }).unwrap();
+      onClose();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to update currency/rate.'));
+    }
+  }
+
+  async function handleResetToLive() {
+    setError(null);
+    try {
+      await resetRate(country.id).unwrap();
+      onClose();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to reset the exchange rate to live.'));
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        title={`${country.name} currency & rate`}
+        description="Trainers in this country see wallet balances and P2P reference prices in this currency. usdExchangeRate is units of currency per 1 USD."
+      >
+        <form className="grid gap-3" onSubmit={handleSave}>
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="country-currency-code">
+              Currency code (ISO 4217)
+            </label>
+            <input
+              className={inputClass}
+              id="country-currency-code"
+              type="text"
+              maxLength={3}
+              placeholder="NGN"
+              value={currencyCode}
+              onChange={(e) => setCurrencyCode(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="country-exchange-rate">
+              Manual USD exchange rate (optional)
+            </label>
+            <input
+              className={inputClass}
+              id="country-exchange-rate"
+              type="number"
+              min="0"
+              step="any"
+              placeholder="Leave blank to keep the current rate"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+            />
+            <p className="text-xs text-muted">
+              Current: {country.usdExchangeRate ? `1 USD ≈ ${country.usdExchangeRate} ${country.currencyCode}` : 'not set yet'} ·{' '}
+              {country.exchangeRateSource}
+              {country.exchangeRateUpdatedAt && ` · as of ${new Date(country.exchangeRateUpdatedAt).toLocaleString()}`}
+            </p>
+            <p className="text-xs text-muted">Setting a rate here marks it MANUAL -- the live fx-rate-job will skip this country until reset.</p>
+          </div>
+          {error && (
+            <p className="leading-relaxed text-danger" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <ActionButton
+              className={secondaryButtonClass}
+              disabled={country.exchangeRateSource !== 'MANUAL'}
+              onClick={handleResetToLive}
+              pending={isResetting}
+              pendingLabel="Resetting"
+              type="button"
+            >
+              Reset to live
+            </ActionButton>
+            <div className="flex gap-2">
+              <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
+              <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+                Save
+              </ActionButton>
+            </div>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -177,6 +300,7 @@ function AddCountryDialog() {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [currencyCode, setCurrencyCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [createCountry, { isLoading }] = useCreateCountryMutation();
 
@@ -184,9 +308,14 @@ function AddCountryDialog() {
     e.preventDefault();
     setError(null);
     try {
-      await createCountry({ code: code.toUpperCase(), name }).unwrap();
+      await createCountry({
+        code: code.toUpperCase(),
+        name,
+        currencyCode: currencyCode ? currencyCode.toUpperCase() : undefined,
+      }).unwrap();
       setCode('');
       setName('');
+      setCurrencyCode('');
       setOpen(false);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to create country.'));
@@ -225,6 +354,20 @@ function AddCountryDialog() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
+            />
+          </div>
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="new-country-currency">
+              Currency code (ISO 4217, optional)
+            </label>
+            <input
+              className={inputClass}
+              id="new-country-currency"
+              type="text"
+              maxLength={3}
+              placeholder="NGN (defaults to USD)"
+              value={currencyCode}
+              onChange={(e) => setCurrencyCode(e.target.value)}
             />
           </div>
           {error && (
