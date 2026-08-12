@@ -1,5 +1,7 @@
 FROM python:3.11-slim
-RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+# build-essential is needed to compile webrtcvad's C extension (no prebuilt
+# manylinux wheel exists for it) -- python:3.11-slim has no compiler by default.
+RUN apt-get update && apt-get install -y ffmpeg build-essential && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # Build context must be repo root, same as vosk-worker/whisper-worker:
