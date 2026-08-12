@@ -8,6 +8,7 @@ import { ReferralBonusSettingsPanel } from './ReferralBonusSettingsPanel';
 import { WordGenerationSettingsPanel } from './WordGenerationSettingsPanel';
 import { QualityGateSettingsPanel } from './QualityGateSettingsPanel';
 import { SpellingNormalizationSettingsPanel } from './SpellingNormalizationSettingsPanel';
+import { P2PMarketSettingsPanel } from './P2PMarketSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
@@ -16,6 +17,7 @@ const groups = [
   { key: 'wordGeneration', label: 'Word Generation' },
   { key: 'qualityGate', label: 'Voice Quality Gate' },
   { key: 'spellingNormalization', label: 'Spelling Normalization' },
+  { key: 'p2pMarket', label: 'P2P Market' },
 ] as const;
 
 type GroupKey = (typeof groups)[number]['key'];
@@ -57,6 +59,7 @@ export default function AdminSettingsPage() {
             {active === 'wordGeneration' && <WordGenerationSettingsPanel />}
             {active === 'qualityGate' && <QualityGateSettingsPanel />}
             {active === 'spellingNormalization' && <SpellingNormalizationSettingsPanel />}
+            {active === 'p2pMarket' && <P2PMarketSettingsPanel />}
           </div>
         </div>
       </div>

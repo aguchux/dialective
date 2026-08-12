@@ -155,7 +155,106 @@ export type LedgerEntryType =
   | 'WITHDRAWAL_REVERSED'
   | 'REFERRAL_COMMISSION'
   | 'REFERRAL_FUNDING_BONUS'
-  | 'REFERRAL_PAYOUT_BONUS';
+  | 'REFERRAL_PAYOUT_BONUS'
+  | 'P2P_ESCROW_LOCK'
+  | 'P2P_ESCROW_REFUND'
+  | 'P2P_ESCROW_RELEASE'
+  | 'P2P_ESCROW_CREDIT';
+
+export type P2POfferType = 'SELL' | 'BUY';
+export type P2POfferStatus = 'ACTIVE' | 'RESERVED' | 'EXPIRED' | 'CANCELLED' | 'COMPLETED' | 'DISPUTED';
+export type P2PTradeStatus = 'AWAITING_PAYMENT' | 'PAID_MARKED' | 'RELEASED' | 'CANCEL_PENDING' | 'CANCELLED' | 'DISPUTED' | 'EXPIRED';
+export type P2PDisputeStatus = 'OPEN' | 'RESOLVED_BUYER' | 'RESOLVED_SELLER';
+
+export interface UserPaymentMethod {
+  id: string;
+  label: string;
+  methodType: string;
+  fiatCurrency: string;
+  bankName: string | null;
+  accountName: string | null;
+  accountNumber: string | null;
+  instructions: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface P2PMarketSettings {
+  enabled: boolean;
+  sellOffersEnabled: boolean;
+  buyRequestsEnabled: boolean;
+  minTradeTokens: string;
+  maxTradeTokens: string;
+  paymentWindowMinutes: number;
+  cancelGraceMinutes: number;
+  offerExpiryMinutes: number;
+  maxOpenOffersPerUser: number;
+  maxOpenTradesPerUser: number;
+  allowedFiatCurrencies: string;
+  allowedPaymentMethods: string;
+  disputeWindowMinutes: number;
+  adminOtpRequiredForDisputes: boolean;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface P2POffer {
+  id: string;
+  type: P2POfferType;
+  userId: string;
+  user?: { id: string; email: string; firstName: string | null; lastName: string | null };
+  tokenAmount: string;
+  remainingTokens: string;
+  fiatAmount: string;
+  fiatCurrency: string;
+  paymentMethod: string;
+  paymentMethodDetails: UserPaymentMethod | null;
+  status: P2POfferStatus;
+  expiresAt: string;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface P2PTrade {
+  id: string;
+  offerId: string;
+  offerType: P2POfferType;
+  buyerId: string;
+  sellerId: string;
+  buyer: { id: string; email: string; firstName: string | null; lastName: string | null };
+  seller: { id: string; email: string; firstName: string | null; lastName: string | null };
+  tokenAmount: string;
+  fiatAmount: string;
+  fiatCurrency: string;
+  paymentMethod: string;
+  sellerPaymentMethod: UserPaymentMethod | null;
+  status: P2PTradeStatus;
+  paymentDeadlineAt: string;
+  cancelRequestedByUserId: string | null;
+  cancelAvailableAt: string | null;
+  paidAt: string | null;
+  releasedAt: string | null;
+  cancelledAt: string | null;
+  disputedAt: string | null;
+  dispute: { id: string; status: P2PDisputeStatus; reason: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface P2PDispute {
+  id: string;
+  status: P2PDisputeStatus;
+  reason: string;
+  evidenceUrl: string | null;
+  resolutionNote: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  raisedBy: { id: string; email: string; firstName: string | null; lastName: string | null };
+  trade: P2PTrade;
+}
 
 export interface TrainerDashboardSummary {
   balance: string;
@@ -582,7 +681,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -601,6 +700,65 @@ export const dialectivaApi = createApi({
     getWallet: builder.query<Wallet, void>({
       query: () => '/wallet',
       providesTags: ['Wallet'],
+    }),
+    getP2PSettings: builder.query<P2PMarketSettings, void>({
+      query: () => '/p2p/settings',
+      providesTags: ['P2P'],
+    }),
+    getP2PPaymentMethods: builder.query<UserPaymentMethod[], void>({
+      query: () => '/p2p/payment-methods',
+      providesTags: ['P2P'],
+    }),
+    createP2PPaymentMethod: builder.mutation<UserPaymentMethod, Partial<UserPaymentMethod>>({
+      query: (body) => ({ url: '/p2p/payment-methods', method: 'POST', body }),
+      invalidatesTags: ['P2P'],
+    }),
+    updateP2PPaymentMethod: builder.mutation<UserPaymentMethod, { id: string; body: Partial<UserPaymentMethod> }>({
+      query: ({ id, body }) => ({ url: `/p2p/payment-methods/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['P2P'],
+    }),
+    listP2POffers: builder.query<P2POffer[], { type?: P2POfferType; status?: P2POfferStatus } | void>({
+      query: (params) => ({ url: '/p2p/offers', params: params ?? undefined }),
+      providesTags: ['P2P'],
+    }),
+    listMyP2POffers: builder.query<P2POffer[], void>({
+      query: () => '/p2p/offers/mine',
+      providesTags: ['P2P'],
+    }),
+    createP2POffer: builder.mutation<
+      P2POffer,
+      { type: P2POfferType; tokenAmount: number; fiatAmount: number; fiatCurrency: string; paymentMethod: string; paymentMethodId?: string; expiresInMinutes?: number }
+    >({
+      query: (body) => ({ url: '/p2p/offers', method: 'POST', body }),
+      invalidatesTags: ['P2P', 'Wallet'],
+    }),
+    acceptP2POffer: builder.mutation<P2PTrade, { id: string; sellerPaymentMethodId?: string }>({
+      query: ({ id, sellerPaymentMethodId }) => ({ url: `/p2p/offers/${id}/accept`, method: 'POST', body: { sellerPaymentMethodId } }),
+      invalidatesTags: ['P2P', 'Wallet'],
+    }),
+    cancelP2POffer: builder.mutation<P2POffer, string>({
+      query: (id) => ({ url: `/p2p/offers/${id}/cancel`, method: 'POST' }),
+      invalidatesTags: ['P2P', 'Wallet'],
+    }),
+    listMyP2PTrades: builder.query<P2PTrade[], { status?: P2PTradeStatus } | void>({
+      query: (params) => ({ url: '/p2p/trades/mine', params: params ?? undefined }),
+      providesTags: ['P2P'],
+    }),
+    markP2PTradePaid: builder.mutation<P2PTrade, string>({
+      query: (id) => ({ url: `/p2p/trades/${id}/mark-paid`, method: 'POST' }),
+      invalidatesTags: ['P2P'],
+    }),
+    requestP2PTradeCancel: builder.mutation<P2PTrade, string>({
+      query: (id) => ({ url: `/p2p/trades/${id}/request-cancel`, method: 'POST' }),
+      invalidatesTags: ['P2P', 'Wallet'],
+    }),
+    releaseP2PTrade: builder.mutation<P2PTrade, string>({
+      query: (id) => ({ url: `/p2p/trades/${id}/release`, method: 'POST' }),
+      invalidatesTags: ['P2P', 'Wallet'],
+    }),
+    raiseP2PDispute: builder.mutation<P2PTrade, { id: string; reason: string; evidenceUrl?: string }>({
+      query: ({ id, reason, evidenceUrl }) => ({ url: `/p2p/trades/${id}/dispute`, method: 'POST', body: { reason, evidenceUrl } }),
+      invalidatesTags: ['P2P'],
     }),
     getTrainerDashboard: builder.query<TrainerDashboardSummary, void>({
       query: () => '/wallet/dashboard',
@@ -788,6 +946,26 @@ export const dialectivaApi = createApi({
     getAdminStats: builder.query<AdminStats, void>({
       query: () => '/admin/stats',
     }),
+    getAdminP2PSettings: builder.query<P2PMarketSettings, void>({
+      query: () => '/p2p/admin/settings',
+      providesTags: ['P2P'],
+    }),
+    updateAdminP2PSettings: builder.mutation<P2PMarketSettings, Partial<P2PMarketSettings>>({
+      query: (body) => ({ url: '/p2p/admin/settings', method: 'PATCH', body }),
+      invalidatesTags: ['P2P'],
+    }),
+    listAdminP2PTrades: builder.query<P2PTrade[], { status?: P2PTradeStatus } | void>({
+      query: (params) => ({ url: '/p2p/admin/trades', params: params ?? undefined }),
+      providesTags: ['P2P'],
+    }),
+    listAdminP2PDisputes: builder.query<P2PDispute[], { status?: P2PDisputeStatus } | void>({
+      query: (params) => ({ url: '/p2p/admin/disputes', params: params ?? undefined }),
+      providesTags: ['P2P'],
+    }),
+    resolveP2PDispute: builder.mutation<P2PDispute, { id: string; winner: 'buyer' | 'seller'; resolutionNote?: string }>({
+      query: ({ id, winner, resolutionNote }) => ({ url: `/p2p/admin/disputes/${id}/resolve`, method: 'POST', body: { winner, resolutionNote } }),
+      invalidatesTags: ['P2P', 'Wallet'],
+    }),
     getUsers: builder.query<PublicUser[], { role?: string; status?: string; search?: string } | void>({
       query: (params) => ({
         url: '/auth/admin/users',
@@ -930,6 +1108,20 @@ export const {
   useGetCountriesQuery,
   useGetDialectsQuery,
   useGetWalletQuery,
+  useGetP2PSettingsQuery,
+  useGetP2PPaymentMethodsQuery,
+  useCreateP2PPaymentMethodMutation,
+  useUpdateP2PPaymentMethodMutation,
+  useListP2POffersQuery,
+  useListMyP2POffersQuery,
+  useCreateP2POfferMutation,
+  useAcceptP2POfferMutation,
+  useCancelP2POfferMutation,
+  useListMyP2PTradesQuery,
+  useMarkP2PTradePaidMutation,
+  useRequestP2PTradeCancelMutation,
+  useReleaseP2PTradeMutation,
+  useRaiseP2PDisputeMutation,
   useGetTrainerDashboardQuery,
   useGetEarningHistoryQuery,
   useGetEarningsChartQuery,
@@ -960,6 +1152,11 @@ export const {
   useUpdateSubscriptionPoolMutation,
   useDeleteSubscriptionPoolMutation,
   useGetAdminStatsQuery,
+  useGetAdminP2PSettingsQuery,
+  useUpdateAdminP2PSettingsMutation,
+  useListAdminP2PTradesQuery,
+  useListAdminP2PDisputesQuery,
+  useResolveP2PDisputeMutation,
   useGetUsersQuery,
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,

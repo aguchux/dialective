@@ -20,6 +20,7 @@ const navItems = [
   { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
   { href: '/admin/words', label: 'Words', icon: WordsIcon },
   { href: '/admin/referrals', label: 'Referrals', icon: ReferralIcon },
+  { href: '/admin/p2p', label: 'P2P Market', icon: P2PIcon },
   { href: '/admin/pools', label: 'Reward Pool', icon: PoolIcon },
   { href: '/admin/blog', label: 'Blog', icon: BlogIcon },
   { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
@@ -234,6 +235,17 @@ function PoolIcon() {
       <path d="M3 19c2 1.2 4 1.2 6 0s4-1.2 6 0 4 1.2 6 0" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M3 11c2 1.2 4 1.2 6 0s4-1.2 6 0 4 1.2 6 0" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M5 5h14v6H5z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function P2PIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M7 7h11l-3-3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M17 17H6l3 3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M18 7a5 5 0 0 1-5 5H8" strokeLinecap="round" />
+      <path d="M6 17a5 5 0 0 1 5-5h5" strokeLinecap="round" />
     </svg>
   );
 }

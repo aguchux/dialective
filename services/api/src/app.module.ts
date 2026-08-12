@@ -16,6 +16,7 @@ import { AuthModule } from "./auth/auth.module";
 import { SettingsModule } from "./settings/settings.module";
 import { BlogModule } from "./blog/blog.module";
 import { PoolsModule } from "./pools/pools.module";
+import { P2PModule } from "./p2p/p2p.module";
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PoolsModule } from "./pools/pools.module";
     SettingsModule,
     BlogModule,
     PoolsModule,
+    P2PModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

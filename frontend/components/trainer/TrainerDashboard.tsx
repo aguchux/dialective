@@ -21,6 +21,7 @@ import {
   Copy,
   FileText as FileTextIcon,
   Headphones,
+  Landmark,
   LogOut,
   Mic2,
   Plus,
@@ -52,8 +53,15 @@ import {
   EarningsChartRange,
   LedgerEntryType,
   TrainerDashboardSummary,
+  P2POffer,
+  P2PTrade,
   TrainerSubmissionSummary,
   normalizeErrorMessage,
+  useAcceptP2POfferMutation,
+  useCreateP2POfferMutation,
+  useCreateP2PPaymentMethodMutation,
+  useGetP2PPaymentMethodsQuery,
+  useGetP2PSettingsQuery,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
   useRequestWithdrawalOtpMutation,
@@ -63,18 +71,25 @@ import {
   useGetMySubmissionsQuery,
   useGetMyWordRecordingsQuery,
   useGetTrainerDashboardQuery,
+  useListMyP2PTradesQuery,
+  useListP2POffersQuery,
+  useMarkP2PTradePaidMutation,
+  useRaiseP2PDisputeMutation,
+  useReleaseP2PTradeMutation,
+  useRequestP2PTradeCancelMutation,
   useUpdateProfileMutation,
 } from '@/store/api';
 import type { Session } from 'next-auth';
 
 type SessionUpdateFn = (data?: Record<string, unknown>) => Promise<Session | null>;
 
-type DashboardView = 'tokens' | 'earnings' | 'training' | 'referrals' | 'scores' | 'profile';
+type DashboardView = 'tokens' | 'earnings' | 'training' | 'market' | 'referrals' | 'scores' | 'profile';
 
 const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = [
   { id: 'tokens', label: 'Tokens', icon: WalletCards },
   { id: 'earnings', label: 'Earnings', icon: CircleDollarSign },
   { id: 'training', label: 'Training', icon: Mic2 },
+  { id: 'market', label: 'Market', icon: Landmark },
   { id: 'referrals', label: 'Referrals', icon: Users },
   { id: 'scores', label: 'My Scores', icon: Star },
 ];
@@ -92,6 +107,10 @@ const activityLabels: Record<LedgerEntryType, string> = {
   REFERRAL_COMMISSION: 'Referral bonus',
   REFERRAL_FUNDING_BONUS: 'Funding referral bonus',
   REFERRAL_PAYOUT_BONUS: 'Training referral bonus',
+  P2P_ESCROW_LOCK: 'P2P escrow lock',
+  P2P_ESCROW_REFUND: 'P2P escrow returned',
+  P2P_ESCROW_RELEASE: 'P2P escrow released',
+  P2P_ESCROW_CREDIT: 'P2P token purchase',
 };
 
 const cardClass = 'min-w-0 rounded-lg border border-line bg-surface shadow-[0_8px_24px_rgba(31,25,41,0.04)]';
@@ -345,6 +364,7 @@ function DashboardViewContent({
 }) {
   if (activeView === 'earnings') return <EarningsView data={data} refreshing={refreshing} />;
   if (activeView === 'training') return <TrainingView dialectTag={dialectTag} onStartTask={onStartTask} />;
+  if (activeView === 'market') return <MarketView />;
   if (activeView === 'referrals') return <ReferralsView data={data} email={email} />;
   if (activeView === 'scores') return <ScoresView />;
   return <TokensView data={data} refreshing={refreshing} />;
@@ -945,6 +965,232 @@ function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; n
         </span>
       </div>
     </article>
+  );
+}
+
+function MarketView() {
+  const [offerType, setOfferType] = useState<'SELL' | 'BUY'>('SELL');
+  const [tokenAmount, setTokenAmount] = useState('10');
+  const [fiatAmount, setFiatAmount] = useState('10000');
+  const [bankName, setBankName] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [error, setError] = useState('');
+  const { data: settings } = useGetP2PSettingsQuery();
+  const { data: methods = [] } = useGetP2PPaymentMethodsQuery();
+  const { data: sellOffers = [] } = useListP2POffersQuery({ type: 'SELL' });
+  const { data: buyOffers = [] } = useListP2POffersQuery({ type: 'BUY' });
+  const { data: trades = [] } = useListMyP2PTradesQuery();
+  const [createMethod, { isLoading: methodSaving }] = useCreateP2PPaymentMethodMutation();
+  const [createOffer, { isLoading: offerSaving }] = useCreateP2POfferMutation();
+  const [acceptOffer, { isLoading: accepting }] = useAcceptP2POfferMutation();
+  const [markPaid] = useMarkP2PTradePaidMutation();
+  const [releaseTrade] = useReleaseP2PTradeMutation();
+  const [requestCancel] = useRequestP2PTradeCancelMutation();
+  const [raiseDispute] = useRaiseP2PDisputeMutation();
+  const primaryMethod = methods.find((method) => method.enabled);
+  const marketDisabled = !settings?.enabled;
+
+  async function savePaymentMethod(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    try {
+      await createMethod({
+        label: 'Bank transfer',
+        methodType: 'BANK_TRANSFER',
+        fiatCurrency: 'NGN',
+        bankName,
+        accountName,
+        accountNumber,
+        enabled: true,
+      }).unwrap();
+      setBankName('');
+      setAccountName('');
+      setAccountNumber('');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not save payment method'));
+    }
+  }
+
+  async function submitOffer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    try {
+      await createOffer({
+        type: offerType,
+        tokenAmount: Number(tokenAmount),
+        fiatAmount: Number(fiatAmount),
+        fiatCurrency: 'NGN',
+        paymentMethod: 'BANK_TRANSFER',
+        paymentMethodId: offerType === 'SELL' ? primaryMethod?.id : undefined,
+      }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not post market offer'));
+    }
+  }
+
+  async function accept(offer: P2POffer) {
+    setError('');
+    try {
+      await acceptOffer({ id: offer.id, sellerPaymentMethodId: offer.type === 'BUY' ? primaryMethod?.id : undefined }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not accept offer'));
+    }
+  }
+
+  return (
+    <div>
+      <ViewHeading title="Token market" subtitle="Peer-to-peer token escrow for sell offers and buy requests." />
+      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div>}
+      {marketDisabled && (
+        <div className={`${cardClass} mb-5 p-5`}>
+          <p className="font-black">P2P market is currently disabled.</p>
+          <p className="mt-1 text-sm text-muted">Admin must enable marketplace settings before trades can start.</p>
+        </div>
+      )}
+
+      <section className="grid gap-4 lg:grid-cols-[360px_1fr]">
+        <div className="grid gap-4">
+          <form className={`${cardClass} grid gap-3 p-5`} onSubmit={savePaymentMethod}>
+            <SectionTitle title="Payment method" subtitle="Shown only after a trade starts." />
+            {primaryMethod && (
+              <div className="rounded-lg border border-line bg-bg p-3 text-sm">
+                <p className="font-black">{primaryMethod.bankName}</p>
+                <p className="text-muted">{primaryMethod.accountName} · {primaryMethod.accountNumber}</p>
+              </div>
+            )}
+            <input className="min-h-11 rounded-lg border border-line bg-bg px-3" onChange={(e) => setBankName(e.target.value)} placeholder="Bank name" value={bankName} />
+            <input className="min-h-11 rounded-lg border border-line bg-bg px-3" onChange={(e) => setAccountName(e.target.value)} placeholder="Account name" value={accountName} />
+            <input className="min-h-11 rounded-lg border border-line bg-bg px-3" onChange={(e) => setAccountNumber(e.target.value)} placeholder="Account number" value={accountNumber} />
+            <button className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:opacity-50" disabled={methodSaving} type="submit">
+              {methodSaving ? 'Saving...' : 'Save bank details'}
+            </button>
+          </form>
+
+          <form className={`${cardClass} grid gap-3 p-5`} onSubmit={submitOffer}>
+            <SectionTitle title="Post offer" subtitle="Sell tokens or request to buy tokens." />
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-bg p-1">
+              {(['SELL', 'BUY'] as const).map((type) => (
+                <button
+                  className={`min-h-10 rounded-md font-extrabold ${offerType === type ? 'bg-accent text-white' : 'text-muted'}`}
+                  key={type}
+                  onClick={() => setOfferType(type)}
+                  type="button"
+                >
+                  {type === 'SELL' ? 'Sell' : 'Buy request'}
+                </button>
+              ))}
+            </div>
+            <input className="min-h-11 rounded-lg border border-line bg-bg px-3" onChange={(e) => setTokenAmount(e.target.value)} placeholder="Token amount" type="number" value={tokenAmount} />
+            <input className="min-h-11 rounded-lg border border-line bg-bg px-3" onChange={(e) => setFiatAmount(e.target.value)} placeholder="Amount in NGN" type="number" value={fiatAmount} />
+            <button
+              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:opacity-50"
+              disabled={marketDisabled || offerSaving || (offerType === 'SELL' && !primaryMethod)}
+              type="submit"
+            >
+              {offerSaving ? 'Posting...' : offerType === 'SELL' ? 'Post sell offer' : 'Post buy request'}
+            </button>
+          </form>
+        </div>
+
+        <div className="grid gap-5">
+          <MarketOfferList accepting={accepting} offers={sellOffers} onAccept={accept} title="Sell offers" />
+          <MarketOfferList accepting={accepting} offers={buyOffers} onAccept={accept} title="Buy requests" />
+          <section>
+            <SectionTitle title="My trades" subtitle="Pay, release, cancel safely, or raise disputes." />
+            <div className="grid gap-3">
+              {trades.length === 0 && <EmptyPanel icon={Clock3} title="No trades yet" unframed />}
+              {trades.map((trade) => (
+                <TradeCard
+                  key={trade.id}
+                  trade={trade}
+                  onCancel={(id) => requestCancel(id)}
+                  onDispute={(id) => raiseDispute({ id, reason: 'Payment/escrow issue requires admin review' })}
+                  onMarkPaid={(id) => markPaid(id)}
+                  onRelease={(id) => releaseTrade(id)}
+                />
+              ))}
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MarketOfferList({
+  title,
+  offers,
+  onAccept,
+  accepting,
+}: {
+  title: string;
+  offers: P2POffer[];
+  onAccept: (offer: P2POffer) => void;
+  accepting: boolean;
+}) {
+  return (
+    <section>
+      <SectionTitle title={title} subtitle="Active marketplace posts." />
+      <div className="grid gap-3 md:grid-cols-2">
+        {offers.length === 0 && <EmptyPanel icon={Landmark} title="No active posts" unframed />}
+        {offers.map((offer) => (
+          <div className={`${cardClass} grid gap-3 p-4`} key={offer.id}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-muted">{offer.type === 'SELL' ? 'Selling' : 'Buying'}</p>
+                <p className="text-2xl font-black">{formatCompactTokensValue(offer.tokenAmount)}</p>
+              </div>
+              <p className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-black text-accent">{offer.status}</p>
+            </div>
+            <p className="font-extrabold">{Number(offer.fiatAmount).toLocaleString()} {offer.fiatCurrency}</p>
+            <p className="text-sm text-muted">Expires {formatDateTime(offer.expiresAt)}</p>
+            <button className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50" disabled={accepting} onClick={() => onAccept(offer)} type="button">
+              {offer.type === 'SELL' ? 'Buy tokens' : 'Sell to buyer'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TradeCard({
+  trade,
+  onMarkPaid,
+  onRelease,
+  onCancel,
+  onDispute,
+}: {
+  trade: P2PTrade;
+  onMarkPaid: (id: string) => void;
+  onRelease: (id: string) => void;
+  onCancel: (id: string) => void;
+  onDispute: (id: string) => void;
+}) {
+  return (
+    <div className={`${cardClass} grid gap-3 p-4`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold text-muted">{trade.offerType === 'SELL' ? 'Sell offer trade' : 'Buy request trade'}</p>
+          <p className="text-xl font-black">{formatCompactTokensValue(trade.tokenAmount)} · {Number(trade.fiatAmount).toLocaleString()} {trade.fiatCurrency}</p>
+        </div>
+        <span className="rounded-full bg-bg px-2.5 py-1 text-xs font-black">{trade.status}</span>
+      </div>
+      {trade.sellerPaymentMethod && (
+        <div className="rounded-lg border border-line bg-bg p-3 text-sm">
+          <p className="font-black">Seller payment details</p>
+          <p>{trade.sellerPaymentMethod.bankName} · {trade.sellerPaymentMethod.accountName} · {trade.sellerPaymentMethod.accountNumber}</p>
+        </div>
+      )}
+      <p className="text-sm text-muted">Payment deadline: {formatDateTime(trade.paymentDeadlineAt)}</p>
+      <div className="flex flex-wrap gap-2">
+        <button className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white" onClick={() => onMarkPaid(trade.id)} type="button">I have paid</button>
+        <button className="min-h-10 rounded-lg border border-line px-3 font-extrabold" onClick={() => onRelease(trade.id)} type="button">Release tokens</button>
+        <button className="min-h-10 rounded-lg border border-line px-3 font-extrabold" onClick={() => onCancel(trade.id)} type="button">Request cancel</button>
+        <button className="min-h-10 rounded-lg border border-red-200 px-3 font-extrabold text-red-700" onClick={() => onDispute(trade.id)} type="button">Dispute</button>
+      </div>
+    </div>
   );
 }
 

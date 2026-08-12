@@ -72,6 +72,12 @@ model User {
   wordRecordings WordRecording[]
   subscriptionPoolsOpened SubscriptionPool[] @relation("SubscriptionPoolOpenedBy")
   dataAccessLeadsContacted DataAccessLead[] @relation("DataAccessLeadContactedBy")
+  paymentMethods UserPaymentMethod[]
+  p2pOffers      P2PTokenOffer[]
+  p2pBuyerTrades P2PTokenTrade[] @relation("P2PBuyerTrades")
+  p2pSellerTrades P2PTokenTrade[] @relation("P2PSellerTrades")
+  p2pDisputesRaised P2PDispute[] @relation("P2PDisputesRaised")
+  p2pDisputesResolved P2PDispute[] @relation("P2PDisputesResolved")
 
   @@map("users")
 }
@@ -533,6 +539,10 @@ enum LedgerEntryType {
   REFERRAL_COMMISSION // legacy: old single-rate funding commission entries
   REFERRAL_FUNDING_BONUS
   REFERRAL_PAYOUT_BONUS
+  P2P_ESCROW_LOCK
+  P2P_ESCROW_REFUND
+  P2P_ESCROW_RELEASE
+  P2P_ESCROW_CREDIT
 }
 
 enum WithdrawalStatus {
@@ -649,6 +659,159 @@ model WithdrawalRequest {
   @@index([walletId])
   @@index([status])
   @@map("withdrawal_requests")
+}
+
+enum P2POfferType {
+  SELL
+  BUY
+}
+
+enum P2POfferStatus {
+  ACTIVE
+  RESERVED
+  EXPIRED
+  CANCELLED
+  COMPLETED
+  DISPUTED
+}
+
+enum P2PTradeStatus {
+  AWAITING_PAYMENT
+  PAID_MARKED
+  RELEASED
+  CANCEL_PENDING
+  CANCELLED
+  DISPUTED
+  EXPIRED
+}
+
+enum P2PDisputeStatus {
+  OPEN
+  RESOLVED_BUYER
+  RESOLVED_SELLER
+}
+
+model P2PMarketSettings {
+  id                          String   @id @default("default")
+  enabled                     Boolean  @default(false)
+  sellOffersEnabled           Boolean  @default(false)
+  buyRequestsEnabled          Boolean  @default(false)
+  minTradeTokens              Decimal  @default(1) @db.Decimal(20, 8)
+  maxTradeTokens              Decimal  @default(1000) @db.Decimal(20, 8)
+  paymentWindowMinutes        Int      @default(15)
+  cancelGraceMinutes          Int      @default(5)
+  offerExpiryMinutes          Int      @default(1440)
+  maxOpenOffersPerUser        Int      @default(5)
+  maxOpenTradesPerUser        Int      @default(3)
+  allowedFiatCurrencies       String   @default("NGN")
+  allowedPaymentMethods       String   @default("BANK_TRANSFER")
+  disputeWindowMinutes        Int      @default(1440)
+  adminOtpRequiredForDisputes Boolean  @default(true)
+  updatedAt                   DateTime @updatedAt
+  createdAt                   DateTime @default(now())
+
+  @@map("p2p_market_settings")
+}
+
+model UserPaymentMethod {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label         String
+  methodType    String
+  fiatCurrency  String
+  bankName      String?
+  accountName   String?
+  accountNumber String?
+  instructions  String?
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  offers P2PTokenOffer[]
+  sellerTrades P2PTokenTrade[] @relation("P2PTradeSellerPaymentMethod")
+
+  @@index([userId, enabled])
+  @@map("user_payment_methods")
+}
+
+model P2PTokenOffer {
+  id              String          @id @default(uuid())
+  type            P2POfferType
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenAmount     Decimal         @db.Decimal(20, 8)
+  remainingTokens Decimal         @db.Decimal(20, 8)
+  fiatAmount      Decimal         @db.Decimal(20, 8)
+  fiatCurrency    String
+  paymentMethod   String
+  paymentMethodId String?
+  paymentMethodRef UserPaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  status          P2POfferStatus  @default(ACTIVE)
+  expiresAt       DateTime
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  trades          P2PTokenTrade[]
+
+  @@index([type, status, expiresAt])
+  @@index([userId, status])
+  @@map("p2p_token_offers")
+}
+
+model P2PTokenTrade {
+  id              String          @id @default(uuid())
+  offerId         String
+  offer           P2PTokenOffer   @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  buyerId         String
+  buyer           User            @relation("P2PBuyerTrades", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId        String
+  seller          User            @relation("P2PSellerTrades", fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerPaymentMethodId String?
+  sellerPaymentMethod UserPaymentMethod? @relation("P2PTradeSellerPaymentMethod", fields: [sellerPaymentMethodId], references: [id], onDelete: SetNull)
+  tokenAmount     Decimal         @db.Decimal(20, 8)
+  fiatAmount      Decimal         @db.Decimal(20, 8)
+  fiatCurrency    String
+  paymentMethod   String
+  status          P2PTradeStatus  @default(AWAITING_PAYMENT)
+  paymentDeadlineAt DateTime
+  cancelRequestedByUserId String?
+  cancelAvailableAt DateTime?
+  paidAt          DateTime?
+  releasedAt      DateTime?
+  cancelledAt     DateTime?
+  disputedAt      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  dispute         P2PDispute?
+
+  @@index([buyerId, status, createdAt])
+  @@index([sellerId, status, createdAt])
+  @@index([offerId])
+  @@index([status, paymentDeadlineAt])
+  @@map("p2p_token_trades")
+}
+
+model P2PDispute {
+  id               String           @id @default(uuid())
+  tradeId          String           @unique
+  trade            P2PTokenTrade    @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  raisedByUserId   String
+  raisedByUser     User             @relation("P2PDisputesRaised", fields: [raisedByUserId], references: [id], onDelete: Cascade)
+  reason           String
+  evidenceUrl      String?
+  status           P2PDisputeStatus @default(OPEN)
+  resolvedByAdminId String?
+  resolvedByAdmin  User?            @relation("P2PDisputesResolved", fields: [resolvedByAdminId], references: [id], onDelete: SetNull)
+  resolutionNote   String?
+  createdAt        DateTime         @default(now())
+  resolvedAt       DateTime?
+
+  @@index([status, createdAt])
+  @@map("p2p_disputes")
 }
 
 /// Fixed platform referral settings. Admins don't create referral campaigns;
