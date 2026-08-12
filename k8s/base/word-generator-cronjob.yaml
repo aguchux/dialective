@@ -3,9 +3,9 @@ kind: CronJob
 metadata:
   name: word-generator-job
 spec:
-  # Staggered 15 min off settlement-job's "0 */12 * * *" so both scheduled
+  # Staggered 15 min off settlement-job's "0 */1 * * *" so both scheduled
   # jobs don't hit the DB in the same instant.
-  schedule: "15 */12 * * *"
+  schedule: "15 */1 * * *" 
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
