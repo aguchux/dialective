@@ -79,11 +79,12 @@ model User {
 /// their chosen country -- enforced in AuthService.updateProfile, not at the
 /// schema level, since Prisma has no cross-FK check constraint.
 model Country {
-  id       String    @id @default(uuid())
-  code     String    @unique // ISO 3166-1 alpha-2, e.g. "NG", "US"
-  name     String
-  dialects Dialect[]
-  users    User[]
+  id                   String    @id @default(uuid())
+  code                 String    @unique // ISO 3166-1 alpha-2, e.g. "NG", "US"
+  name                 String
+  llmGenerationEnabled Boolean   @default(false) // opts this country's dialects into word-generator-job's translation sweep; a dialect only participates when both this AND Dialect.llmGenerationEnabled are true
+  dialects             Dialect[]
+  users                User[]
 
   @@map("countries")
 }
@@ -93,12 +94,13 @@ model Country {
 /// -- this table is the source of truth for that list going forward, not a
 /// parallel/competing enum.
 model Dialect {
-  id        String  @id @default(uuid())
-  tag       String  @unique
-  name      String
-  countryId String
-  country   Country @relation(fields: [countryId], references: [id])
-  users     User[]
+  id                   String  @id @default(uuid())
+  tag                  String  @unique
+  name                 String
+  countryId            String
+  llmGenerationEnabled Boolean @default(false) // per-dialect override within an enabled country -- lets admin exclude one dialect without disabling the whole country
+  country              Country @relation(fields: [countryId], references: [id])
+  users                User[]
 
   @@index([countryId])
   @@map("dialects")
@@ -222,10 +224,29 @@ model Prompt {
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
 
-  submissions Submission[]
+  submissions  Submission[]
+  translations PromptTranslation[]
 
   @@index([dialectTag, active])
   @@map("prompts")
+}
+
+/// Links a word-generator-job-generated English source Prompt (dialectTag
+/// 'en-us') to its LLM-translated equivalent in another dialect. Recorded
+/// for dedup/curation/admin display; the translated text is ALSO inserted
+/// as its own real Prompt row (dialectTag: target) since PromptsController.
+/// getRandom reads directly from Prompt, not from this table.
+model PromptTranslation {
+  id         String   @id @default(uuid())
+  promptId   String
+  prompt     Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  dialectTag String
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@unique([promptId, dialectTag])
+  @@index([dialectTag])
+  @@map("prompt_translations")
 }
 
 /// One sentence-prompt dictation submission. Row is inserted by
@@ -315,8 +336,27 @@ model Word {
 
   recordings WordRecording[]
   trainingAssignments WordTrainingAssignment[]
+  translations WordTranslation[]
 
   @@map("words")
+}
+
+/// LLM-generated dialect translation of a Word's English text, produced by
+/// word-generator-job for admin curation/reference. Dialect only enters the
+/// actual training flow at recording time (WordRecording.dialectTag), so
+/// this table doesn't need a second trainer-facing insert the way
+/// PromptTranslation does.
+model WordTranslation {
+  id         String   @id @default(uuid())
+  wordId     String
+  word       Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  dialectTag String
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@unique([wordId, dialectTag])
+  @@index([dialectTag])
+  @@map("word_translations")
 }
 
 enum WordTrainingDirection {
@@ -584,6 +624,10 @@ model PlatformSettings {
   noFailOnTrainEnabled     Boolean  @default(false) // when true, a task still unscored past scoringSlaMinutes is paid out at a random score in [minScoreRange, maxScoreRange] instead of just refunded -- guarantees payment for completed work even if consensus/reverse-validation never resolves it
   minScoreRange            Decimal  @default(10) @db.Decimal(5, 2) // lower bound (%) of the random synthetic score used when noFailOnTrainEnabled fires
   maxScoreRange            Decimal  @default(30) @db.Decimal(5, 2) // upper bound (%) of the random synthetic score used when noFailOnTrainEnabled fires
+  llmGenerationEnabled     Boolean  @default(false) // master kill switch for word-generator-job; job no-ops when false
+  llmProviderOrder         String   @default("openai,deepseek,anthropic") // CSV fallback-try order, must be a permutation of {openai,deepseek,anthropic}, validated app-side
+  llmWordsPerItem          Int      @default(1) // 1 = single word -> Word table; 2-5 = short phrase -> Prompt table (dialectTag 'en-us')
+  llmItemsPerRun           Int      @default(15) // batch size requested from the LLM per scheduled run
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 

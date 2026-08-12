@@ -5,11 +5,13 @@ import { AdminShell } from '@/components/admin/AdminShell';
 import { GeneralSettingsPanel } from './GeneralSettingsPanel';
 import { NotificationSettingsPanel } from './NotificationSettingsPanel';
 import { ReferralBonusSettingsPanel } from './ReferralBonusSettingsPanel';
+import { WordGenerationSettingsPanel } from './WordGenerationSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
   { key: 'referrals', label: 'Referral Bonuses' },
   { key: 'notifications', label: 'Notification Settings' },
+  { key: 'wordGeneration', label: 'Word Generation' },
 ] as const;
 
 type GroupKey = (typeof groups)[number]['key'];
@@ -48,6 +50,7 @@ export default function AdminSettingsPage() {
             {active === 'general' && <GeneralSettingsPanel />}
             {active === 'referrals' && <ReferralBonusSettingsPanel />}
             {active === 'notifications' && <NotificationSettingsPanel />}
+            {active === 'wordGeneration' && <WordGenerationSettingsPanel />}
           </div>
         </div>
       </div>

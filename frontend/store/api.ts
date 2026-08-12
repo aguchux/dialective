@@ -45,6 +45,7 @@ export interface AdminCountry {
   id: string;
   code: string;
   name: string;
+  llmGenerationEnabled: boolean;
   _count: { dialects: number; users: number };
 }
 
@@ -53,6 +54,7 @@ export interface AdminDialect {
   tag: string;
   name: string;
   countryId: string;
+  llmGenerationEnabled: boolean;
   country: { id: string; name: string; code: string };
   _count: { users: number };
 }
@@ -60,12 +62,14 @@ export interface AdminDialect {
 export interface CountryInput {
   code: string;
   name: string;
+  llmGenerationEnabled?: boolean;
 }
 
 export interface DialectInput {
   tag: string;
   name: string;
   countryId: string;
+  llmGenerationEnabled?: boolean;
 }
 
 export interface DataAccessLeadInput {
@@ -201,6 +205,10 @@ export interface PlatformSettings {
   noFailOnTrainEnabled: boolean;
   minScoreRange: string;
   maxScoreRange: string;
+  llmGenerationEnabled: boolean;
+  llmProviderOrder: string;
+  llmWordsPerItem: number;
+  llmItemsPerRun: number;
   updatedAt: string;
   createdAt: string;
 }
@@ -219,6 +227,10 @@ export interface PlatformSettingsInput {
   noFailOnTrainEnabled?: boolean;
   minScoreRange?: number;
   maxScoreRange?: number;
+  llmGenerationEnabled?: boolean;
+  llmProviderOrder?: string;
+  llmWordsPerItem?: number;
+  llmItemsPerRun?: number;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';
@@ -302,6 +314,52 @@ export interface TrainerSubmissionSummary {
 
 export interface SubmissionsPage {
   items: TrainerSubmissionSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface AdminWordTranslation {
+  id: string;
+  dialectTag: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface AdminWord {
+  id: string;
+  text: string;
+  createdAt: string;
+  translations: AdminWordTranslation[];
+}
+
+export interface AdminWordsPage {
+  items: AdminWord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface AdminPromptTranslation {
+  id: string;
+  dialectTag: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface AdminPrompt {
+  id: string;
+  dialectTag: string;
+  text: string;
+  active: boolean;
+  createdAt: string;
+  translations: AdminPromptTranslation[];
+}
+
+export interface AdminPromptsPage {
+  items: AdminPrompt[];
   page: number;
   pageSize: number;
   total: number;
@@ -393,7 +451,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools', 'Submissions'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -655,6 +713,22 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['PlatformSettings'],
     }),
+    getAdminWords: builder.query<AdminWordsPage, { page: number; pageSize: number }>({
+      query: ({ page, pageSize }) => ({ url: '/words/admin', params: { page, pageSize } }),
+      providesTags: ['AdminWords'],
+    }),
+    deleteWord: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/words/admin/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['AdminWords'],
+    }),
+    getAdminPrompts: builder.query<AdminPromptsPage, { page: number; pageSize: number; dialectTag?: string }>({
+      query: ({ page, pageSize, dialectTag }) => ({ url: '/prompts/admin', params: { page, pageSize, dialectTag } }),
+      providesTags: ['AdminPrompts'],
+    }),
+    updatePrompt: builder.mutation<AdminPrompt, { id: string; active: boolean }>({
+      query: ({ id, active }) => ({ url: `/prompts/admin/${id}`, method: 'PATCH', body: { active } }),
+      invalidatesTags: ['AdminPrompts'],
+    }),
     getAdminBlogPosts: builder.query<BlogPost[], void>({
       query: () => '/blog/admin/posts',
       providesTags: ['BlogPosts'],
@@ -735,6 +809,10 @@ export const {
   useDeleteDialectMutation,
   useGetPlatformSettingsQuery,
   useUpdatePlatformSettingsMutation,
+  useGetAdminWordsQuery,
+  useDeleteWordMutation,
+  useGetAdminPromptsQuery,
+  useUpdatePromptMutation,
   useGetAdminBlogPostsQuery,
   useGetAdminBlogPostQuery,
   useCreateBlogPostMutation,

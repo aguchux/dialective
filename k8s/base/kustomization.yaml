@@ -24,3 +24,4 @@ resources:
   - consensus-scorer-deployment.yaml
   - consensus-scorer-hpa.yaml
   - settlement-cronjob.yaml
+  - word-generator-cronjob.yaml

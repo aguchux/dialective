@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Length } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
 
 export class UpdateCountryDto {
   @IsOptional()
@@ -9,4 +9,8 @@ export class UpdateCountryDto {
   @IsOptional()
   @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  llmGenerationEnabled?: boolean;
 }

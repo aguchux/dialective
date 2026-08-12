@@ -1,15 +1,23 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Query, Req, UnprocessableEntityException, UseGuards } from '@nestjs/common';
+import { Prisma, Role } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { PrismaService } from '../prisma/prisma.service';
 import { ListSubmissionsDto } from '../submissions/dto/list-submissions.dto';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
+import { ListWordsAdminDto } from './dto/list-words-admin.dto';
 import { StartTrainingSessionDto } from './dto/start-training-session.dto';
 import { WordsService } from './words.service';
 
 @Controller('words')
 @UseGuards(JwtAuthGuard)
 export class WordsController {
-  constructor(private readonly words: WordsService) {}
+  constructor(
+    private readonly words: WordsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get('mine')
   listMine(@Req() req: AuthenticatedRequest, @Query() query: ListSubmissionsDto) {
@@ -39,5 +47,43 @@ export class WordsController {
   @Post('recordings')
   createRecording(@Req() req: AuthenticatedRequest, @Body() body: CreateWordRecordingDto) {
     return this.words.createRecording(req.user.sub, body);
+  }
+
+  // --- Admin: generated word bank -----------------------------------------
+  // Read/curate the Word table -- word-generator-job is the primary writer
+  // now (see prisma/seed.ts, whose WORDS array is bootstrap-only going
+  // forward), admins review/delete from here.
+
+  @Get('admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async listWordsForAdmin(@Query() query: ListWordsAdminDto) {
+    const { page, pageSize } = query;
+    const [items, total] = await Promise.all([
+      this.prisma.word.findMany({
+        include: { translations: { orderBy: { dialectTag: 'asc' } } },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.word.count(),
+    ]);
+    return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+  }
+
+  @Delete('admin/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async deleteWord(@Param('id') id: string) {
+    try {
+      await this.prisma.word.delete({ where: { id } });
+      return { id, deleted: true };
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === 'P2025') throw new NotFoundException('Word not found');
+        if (err.code === 'P2003') throw new UnprocessableEntityException('Word still has recordings or assignments referencing it');
+      }
+      throw err;
+    }
   }
 }

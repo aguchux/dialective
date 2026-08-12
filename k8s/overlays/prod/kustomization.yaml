@@ -31,6 +31,9 @@ secretGenerator:
   - name: nowpayments-creds
     envs:
       - secrets/nowpayments.env
+  - name: llm-creds
+    envs:
+      - secrets/llm.env
 
 configMapGenerator:
   - name: api-config

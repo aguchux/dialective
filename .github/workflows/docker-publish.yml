@@ -8,6 +8,7 @@ on:
       - "services/consensus-scorer/**"
       - "services/prompt-audio-service/**"
       - "services/settlement-job/**"
+      - "services/word-generator-job/**"
       - "services/vosk-worker/**"
       - "services/whisper-worker/**"
       - "packages/db/**"
@@ -45,6 +46,9 @@ jobs:
           - service: settlement-job
             context: .
             image: settlement-job
+          - service: word-generator-job
+            context: .
+            image: word-generator-job
           - service: prompt-audio-service
             context: .
             image: prompt-audio-service

@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsInt, IsNumber, IsOptional, IsPositive, Max, Min } from 'class-validator';
+import { IsBoolean, IsEmail, IsInt, IsNumber, IsOptional, IsPositive, IsString, Matches, Max, Min } from 'class-validator';
 
 export class UpdatePlatformSettingsDto {
   @IsOptional()
@@ -58,4 +58,28 @@ export class UpdatePlatformSettingsDto {
   @Min(0)
   @Max(100)
   maxScoreRange?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  llmGenerationEnabled?: boolean;
+
+  // 3 comma-separated tokens from {openai,deepseek,anthropic}; exact
+  // permutation (all 3 distinct, no repeats/omissions) is validated in
+  // PlatformSettingsService.update, not expressible via a single regex.
+  @IsOptional()
+  @IsString()
+  @Matches(/^(openai|deepseek|anthropic),(openai|deepseek|anthropic),(openai|deepseek|anthropic)$/)
+  llmProviderOrder?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  llmWordsPerItem?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  llmItemsPerRun?: number;
 }

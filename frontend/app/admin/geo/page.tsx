@@ -15,6 +15,8 @@ import {
   useDeleteDialectMutation,
   useGetAdminCountriesQuery,
   useGetAdminDialectsQuery,
+  useUpdateCountryMutation,
+  useUpdateDialectMutation,
 } from '@/store/api';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
@@ -48,9 +50,11 @@ export default function AdminGeoPage() {
 
 function CountriesSection({ countries, isLoading }: { countries: AdminCountry[] | undefined; isLoading: boolean }) {
   const [deleteCountry] = useDeleteCountryMutation();
+  const [updateCountry] = useUpdateCountryMutation();
   const [error, setError] = useState<string | null>(null);
   const [addDialectFor, setAddDialectFor] = useState<AdminCountry | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
     setError(null);
@@ -61,6 +65,18 @@ function CountriesSection({ countries, isLoading }: { countries: AdminCountry[] 
       setError(normalizeErrorMessage(err, 'Unable to delete country.'));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleToggleGeneration(id: string, llmGenerationEnabled: boolean) {
+    setError(null);
+    setTogglingId(id);
+    try {
+      await updateCountry({ id, body: { llmGenerationEnabled } }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to update word generation coverage.'));
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -86,6 +102,23 @@ function CountriesSection({ countries, isLoading }: { countries: AdminCountry[] 
       header: 'Users',
       sortValue: (c) => c._count.users,
       render: (c) => c._count.users,
+    },
+    {
+      key: 'wordGeneration',
+      header: 'Word generation',
+      sortValue: (c) => (c.llmGenerationEnabled ? 1 : 0),
+      render: (c) => (
+        <label className="flex items-center gap-2 text-sm font-bold">
+          <input
+            checked={c.llmGenerationEnabled}
+            className="size-4 accent-accent"
+            disabled={togglingId === c.id}
+            onChange={(e) => handleToggleGeneration(c.id, e.target.checked)}
+            type="checkbox"
+          />
+          {c.llmGenerationEnabled ? 'Enabled' : 'Disabled'}
+        </label>
+      ),
     },
     {
       key: 'actions',
@@ -270,8 +303,10 @@ function AddDialectDialog({ country, onClose }: { country: AdminCountry; onClose
 
 function DialectsSection({ dialects, isLoading }: { dialects: AdminDialect[] | undefined; isLoading: boolean }) {
   const [deleteDialect] = useDeleteDialectMutation();
+  const [updateDialect] = useUpdateDialectMutation();
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
     setError(null);
@@ -282,6 +317,18 @@ function DialectsSection({ dialects, isLoading }: { dialects: AdminDialect[] | u
       setError(normalizeErrorMessage(err, 'Unable to delete dialect.'));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleToggleGeneration(id: string, llmGenerationEnabled: boolean) {
+    setError(null);
+    setTogglingId(id);
+    try {
+      await updateDialect({ id, body: { llmGenerationEnabled } }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to update word generation coverage.'));
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -307,6 +354,23 @@ function DialectsSection({ dialects, isLoading }: { dialects: AdminDialect[] | u
       header: 'Users',
       sortValue: (d) => d._count.users,
       render: (d) => d._count.users,
+    },
+    {
+      key: 'wordGeneration',
+      header: 'Word generation',
+      sortValue: (d) => (d.llmGenerationEnabled ? 1 : 0),
+      render: (d) => (
+        <label className="flex items-center gap-2 text-sm font-bold" title="Also requires word generation enabled on the parent country">
+          <input
+            checked={d.llmGenerationEnabled}
+            className="size-4 accent-accent"
+            disabled={togglingId === d.id}
+            onChange={(e) => handleToggleGeneration(d.id, e.target.checked)}
+            type="checkbox"
+          />
+          {d.llmGenerationEnabled ? 'Enabled' : 'Disabled'}
+        </label>
+      ),
     },
     {
       key: 'actions',

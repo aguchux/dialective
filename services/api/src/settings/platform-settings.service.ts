@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+
+const LLM_PROVIDER_KEYS = ['openai', 'deepseek', 'anthropic'];
 
 /**
  * Admin-editable platform settings that previously only existed as env-var
@@ -129,6 +131,10 @@ export class PlatformSettingsService {
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,
       minScoreRange: row.minScoreRange.toString(),
       maxScoreRange: row.maxScoreRange.toString(),
+      llmGenerationEnabled: row.llmGenerationEnabled,
+      llmProviderOrder: row.llmProviderOrder,
+      llmWordsPerItem: row.llmWordsPerItem,
+      llmItemsPerRun: row.llmItemsPerRun,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -148,7 +154,22 @@ export class PlatformSettingsService {
     noFailOnTrainEnabled?: boolean;
     minScoreRange?: number;
     maxScoreRange?: number;
+    llmGenerationEnabled?: boolean;
+    llmProviderOrder?: string;
+    llmWordsPerItem?: number;
+    llmItemsPerRun?: number;
   }) {
+    if (data.llmProviderOrder) {
+      const tokens = data.llmProviderOrder.split(',');
+      const isValidPermutation =
+        tokens.length === LLM_PROVIDER_KEYS.length &&
+        LLM_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
+        new Set(tokens).size === LLM_PROVIDER_KEYS.length;
+      if (!isValidPermutation) {
+        throw new BadRequestException('llmProviderOrder must list openai, deepseek, and anthropic exactly once each');
+      }
+    }
+
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
       create: { id: 'default', ...data },
@@ -168,6 +189,10 @@ export class PlatformSettingsService {
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,
       minScoreRange: row.minScoreRange.toString(),
       maxScoreRange: row.maxScoreRange.toString(),
+      llmGenerationEnabled: row.llmGenerationEnabled,
+      llmProviderOrder: row.llmProviderOrder,
+      llmWordsPerItem: row.llmWordsPerItem,
+      llmItemsPerRun: row.llmItemsPerRun,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

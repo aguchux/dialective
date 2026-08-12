@@ -115,7 +115,11 @@ export class GeoController {
     try {
       return await this.prisma.country.update({
         where: { id },
-        data: { code: dto.code ? dto.code.toUpperCase() : undefined, name: dto.name },
+        data: {
+          code: dto.code ? dto.code.toUpperCase() : undefined,
+          name: dto.name,
+          llmGenerationEnabled: dto.llmGenerationEnabled,
+        },
       });
     } catch (err) {
       throw mapPrismaError(err, 'A country with this code already exists', 'Country not found');
@@ -176,7 +180,7 @@ export class GeoController {
     try {
       return await this.prisma.dialect.update({
         where: { id },
-        data: { tag: dto.tag, name: dto.name, countryId: dto.countryId },
+        data: { tag: dto.tag, name: dto.name, countryId: dto.countryId, llmGenerationEnabled: dto.llmGenerationEnabled },
       });
     } catch (err) {
       throw mapPrismaError(err, 'A dialect with this tag already exists', 'Dialect not found');

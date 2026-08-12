@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class UpdateDialectDto {
   @IsOptional()
@@ -12,4 +12,8 @@ export class UpdateDialectDto {
   @IsOptional()
   @IsUUID()
   countryId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  llmGenerationEnabled?: boolean;
 }
