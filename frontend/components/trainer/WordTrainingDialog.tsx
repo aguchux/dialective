@@ -1,12 +1,14 @@
 'use client';
 
 import * as RadixDialog from '@radix-ui/react-dialog';
+import * as RadixPopover from '@radix-ui/react-popover';
 import {
   ArrowLeft,
   ArrowRight,
   BookOpenCheck,
   Check,
   Clock3,
+  Keyboard,
   LoaderCircle,
   Mic,
   Pause,
@@ -27,6 +29,7 @@ import {
   useCreateWordRecordingUploadMutation,
   useEndWordTrainingSessionMutation,
   useLazyGetNextWordTrainingAssignmentQuery,
+  useLazyGetSpellingSuggestionsQuery,
   useStartWordTrainingSessionMutation,
   useSubmitWordRecordingMutation,
 } from '@/store/api';
@@ -63,12 +66,19 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [score, setScore] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<{ text: string; source: 'community' | 'ai' }[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   const [startSession, { isLoading: isStarting }] = useStartWordTrainingSessionMutation();
   const [loadNext] = useLazyGetNextWordTrainingAssignmentQuery();
   const [endSession] = useEndWordTrainingSessionMutation();
   const [createUpload] = useCreateWordRecordingUploadMutation();
   const [submitRecording] = useSubmitWordRecordingMutation();
+  const [loadSuggestions] = useLazyGetSpellingSuggestionsQuery();
+
+  const responseInputRef = useRef<HTMLInputElement | null>(null);
+  const suggestionsDebounceRef = useRef<number | null>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -119,7 +129,28 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
     setAssignment(null);
     setResponseText('');
     setError(null);
+    setSuggestions([]);
+    setSuggestionsOpen(false);
+    setKeyboardOpen(false);
   }, [clearRecording, open, releaseMicrophone]);
+
+  useEffect(() => {
+    if (!assignment || assignment.direction !== 'ENGLISH_TO_DIALECT' || !assignment.dialectTag) {
+      setSuggestions([]);
+      return;
+    }
+    const query = responseText.trim();
+    if (suggestionsDebounceRef.current !== null) window.clearTimeout(suggestionsDebounceRef.current);
+    suggestionsDebounceRef.current = window.setTimeout(() => {
+      loadSuggestions({ wordId: assignment.wordId, dialectTag: assignment.dialectTag!, query })
+        .unwrap()
+        .then((result) => setSuggestions(result.suggestions))
+        .catch(() => setSuggestions([]));
+    }, 250);
+    return () => {
+      if (suggestionsDebounceRef.current !== null) window.clearTimeout(suggestionsDebounceRef.current);
+    };
+  }, [assignment, loadSuggestions, responseText]);
 
   async function closeDialog() {
     if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
@@ -161,6 +192,9 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
     clearRecording();
     setResponseText('');
     setAssignment(null);
+    setSuggestions([]);
+    setSuggestionsOpen(false);
+    setKeyboardOpen(false);
     try {
       setAssignment(await loadNext(session.sessionId, false).unwrap());
     } catch (err) {
@@ -247,6 +281,19 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
       animationFrameRef.current = requestAnimationFrame(read);
     };
     read();
+  }
+
+  function insertCharacter(char: string) {
+    const input = responseInputRef.current;
+    const start = input?.selectionStart ?? responseText.length;
+    const end = input?.selectionEnd ?? responseText.length;
+    const next = responseText.slice(0, start) + char + responseText.slice(end);
+    setResponseText(next);
+    const cursor = start + char.length;
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(cursor, cursor);
+    });
   }
 
   function stopRecording() {
@@ -389,15 +436,88 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
 
                     <div className="mx-auto grid w-full max-w-md gap-2 text-left">
                       <label className="text-sm font-extrabold" htmlFor="training-response">Spelling in {assignment.responseLanguage}</label>
-                      <input
-                        autoComplete="off"
-                        className="min-h-12 w-full rounded-lg border border-line bg-surface px-4 text-base font-bold outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft disabled:opacity-60"
-                        disabled={recorderState === 'submitting' || recorderState === 'submitted'}
-                        id="training-response"
-                        onChange={(event) => setResponseText(event.target.value)}
-                        placeholder={`Type the ${assignment.responseLanguage} spelling`}
-                        value={responseText}
-                      />
+                      <RadixPopover.Root open={suggestionsOpen && suggestions.length > 0} onOpenChange={setSuggestionsOpen}>
+                        <RadixPopover.Anchor asChild>
+                          <div className="relative">
+                            <input
+                              autoComplete="off"
+                              className="min-h-12 w-full rounded-lg border border-line bg-surface px-4 text-base font-bold outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft disabled:opacity-60"
+                              disabled={recorderState === 'submitting' || recorderState === 'submitted'}
+                              id="training-response"
+                              onChange={(event) => {
+                                setResponseText(event.target.value);
+                                setSuggestionsOpen(true);
+                              }}
+                              onFocus={() => setSuggestionsOpen(true)}
+                              placeholder={`Type the ${assignment.responseLanguage} spelling`}
+                              ref={responseInputRef}
+                              value={responseText}
+                            />
+                            {assignment.dialectKeyboardLayout && (
+                              <button
+                                aria-label={keyboardOpen ? 'Hide dialect keyboard' : 'Show dialect keyboard'}
+                                aria-pressed={keyboardOpen}
+                                className={`absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md transition-colors ${
+                                  keyboardOpen ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-surface-muted'
+                                }`}
+                                disabled={recorderState === 'submitting' || recorderState === 'submitted'}
+                                onClick={() => setKeyboardOpen((current) => !current)}
+                                type="button"
+                              >
+                                <Keyboard className="size-4" aria-hidden="true" />
+                              </button>
+                            )}
+                          </div>
+                        </RadixPopover.Anchor>
+                        <RadixPopover.Portal container={portalContainer}>
+                          <RadixPopover.Content
+                            align="start"
+                            className="z-60 w-[min(var(--container-md),90vw)] rounded-lg border border-line bg-surface p-1.5 shadow-[0_12px_32px_rgba(27,31,27,0.15)]"
+                            onOpenAutoFocus={(event) => event.preventDefault()}
+                            sideOffset={6}
+                          >
+                            <ul className="grid gap-0.5">
+                              {suggestions.map((suggestion) => (
+                                <li key={`${suggestion.source}-${suggestion.text}`}>
+                                  <button
+                                    className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left font-bold hover:bg-surface-muted"
+                                    onClick={() => {
+                                      setResponseText(suggestion.text);
+                                      setSuggestionsOpen(false);
+                                      responseInputRef.current?.focus();
+                                    }}
+                                    type="button"
+                                  >
+                                    <span>{suggestion.text}</span>
+                                    <span
+                                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-extrabold ${
+                                        suggestion.source === 'community' ? 'bg-emerald-100 text-emerald-700' : 'bg-accent-soft text-accent'
+                                      }`}
+                                    >
+                                      {suggestion.source === 'community' ? 'Community' : 'AI'}
+                                    </span>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </RadixPopover.Content>
+                        </RadixPopover.Portal>
+                      </RadixPopover.Root>
+
+                      {keyboardOpen && assignment.dialectKeyboardLayout && (
+                        <div className="flex flex-wrap gap-1.5 rounded-lg border border-line bg-surface p-2">
+                          {assignment.dialectKeyboardLayout.split(/\s+/).filter(Boolean).map((char) => (
+                            <button
+                              className="grid min-w-9 place-items-center rounded-md border border-line bg-white px-2 py-1.5 text-base font-bold hover:bg-surface-muted"
+                              key={char}
+                              onClick={() => insertCharacter(char)}
+                              type="button"
+                            >
+                              {char}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="relative mx-auto grid size-[248px] place-items-center md:size-[288px]">

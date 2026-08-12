@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ListSubmissionsDto } from '../submissions/dto/list-submissions.dto';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
+import { GetSpellingSuggestionsDto } from './dto/get-spelling-suggestions.dto';
 import { ListWordsAdminDto } from './dto/list-words-admin.dto';
 import { StartTrainingSessionDto } from './dto/start-training-session.dto';
 import { WordsService } from './words.service';
@@ -47,6 +48,11 @@ export class WordsController {
   @Post('recordings')
   createRecording(@Req() req: AuthenticatedRequest, @Body() body: CreateWordRecordingDto) {
     return this.words.createRecording(req.user.sub, body);
+  }
+
+  @Get('spelling-suggestions')
+  getSpellingSuggestions(@Query() query: GetSpellingSuggestionsDto) {
+    return this.words.getSpellingSuggestions(query);
   }
 
   // --- Admin: generated word bank -----------------------------------------

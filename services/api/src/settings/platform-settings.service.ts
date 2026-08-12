@@ -80,6 +80,16 @@ export class PlatformSettingsService {
     return row.reverseWordTrainingEnabled;
   }
 
+  async isSpellingNormalizationEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.spellingNormalizationEnabled;
+  }
+
+  async getSpellingNormalizationProviderOrder(): Promise<string> {
+    const row = await this.getRow();
+    return row.spellingNormalizationProviderOrder;
+  }
+
   async isAdminPayoutOtpEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.adminPayoutOtpEnabled;
@@ -140,6 +150,8 @@ export class PlatformSettingsService {
       qualityWeightNoise: row.qualityWeightNoise.toString(),
       qualityWeightQuality: row.qualityWeightQuality.toString(),
       qualityWeightLiveness: row.qualityWeightLiveness.toString(),
+      spellingNormalizationEnabled: row.spellingNormalizationEnabled,
+      spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -168,6 +180,8 @@ export class PlatformSettingsService {
     qualityWeightNoise?: number;
     qualityWeightQuality?: number;
     qualityWeightLiveness?: number;
+    spellingNormalizationEnabled?: boolean;
+    spellingNormalizationProviderOrder?: string;
   }) {
     if (data.llmProviderOrder) {
       const tokens = data.llmProviderOrder.split(',');
@@ -177,6 +191,17 @@ export class PlatformSettingsService {
         new Set(tokens).size === LLM_PROVIDER_KEYS.length;
       if (!isValidPermutation) {
         throw new BadRequestException('llmProviderOrder must list openai, deepseek, and anthropic exactly once each');
+      }
+    }
+
+    if (data.spellingNormalizationProviderOrder) {
+      const tokens = data.spellingNormalizationProviderOrder.split(',');
+      const isValidPermutation =
+        tokens.length === LLM_PROVIDER_KEYS.length &&
+        LLM_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
+        new Set(tokens).size === LLM_PROVIDER_KEYS.length;
+      if (!isValidPermutation) {
+        throw new BadRequestException('spellingNormalizationProviderOrder must list openai, deepseek, and anthropic exactly once each');
       }
     }
 
@@ -228,6 +253,8 @@ export class PlatformSettingsService {
       qualityWeightNoise: row.qualityWeightNoise.toString(),
       qualityWeightQuality: row.qualityWeightQuality.toString(),
       qualityWeightLiveness: row.qualityWeightLiveness.toString(),
+      spellingNormalizationEnabled: row.spellingNormalizationEnabled,
+      spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

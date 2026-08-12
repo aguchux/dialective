@@ -10,8 +10,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { StorageService } from '../storage/storage.service';
 import { RedisStreamsService } from '../redis-streams/redis-streams.service';
+import { LlmNormalizerService } from '../llm/llm-normalizer.service';
+import { parseProviderOrder } from '../llm/llm-provider.interface';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
+import { GetSpellingSuggestionsDto } from './dto/get-spelling-suggestions.dto';
 import { ListSubmissionsDto } from '../submissions/dto/list-submissions.dto';
 
 const RECORDINGS_BUCKET = process.env.SPACES_WORD_RECORDINGS_BUCKET ?? 'dialectiva-word-recordings';
@@ -31,6 +34,7 @@ export class WordsService {
     private readonly storage: StorageService,
     private readonly settings: PlatformSettingsService,
     private readonly streams: RedisStreamsService,
+    private readonly llm: LlmNormalizerService,
   ) {}
 
   async startSession(userId: string) {
@@ -81,10 +85,13 @@ export class WordsService {
       });
       return {
         assignmentId: assignment.id,
+        wordId: reverseSource.wordId,
         direction: assignment.direction,
         promptText: reverseSource.translationText,
         sourceLanguage: trainer.dialect!.name,
         responseLanguage: 'English',
+        dialectTag: null as string | null,
+        dialectKeyboardLayout: null as string | null,
       };
     }
 
@@ -104,10 +111,13 @@ export class WordsService {
     });
     return {
       assignmentId: assignment.id,
+      wordId: word.id,
       direction: assignment.direction,
       promptText: word.text,
       sourceLanguage: 'English',
       responseLanguage: trainer.dialect!.name,
+      dialectTag: trainer.dialect!.tag,
+      dialectKeyboardLayout: trainer.dialect!.keyboardLayout,
     };
   }
 
@@ -221,6 +231,10 @@ export class WordsService {
       await this.scoreReverseValidatedSource(assignment.sourceRecordingId, validationScore!);
     }
 
+    if (assignment.direction === 'ENGLISH_TO_DIALECT') {
+      await this.normalizeSpellingBestEffort(recording.id, assignment.word.text, assignment.session.user.dialect!.name, body.responseText.trim());
+    }
+
     // Same quality-gate-jobs stream Submissions publish to (see
     // SubmissionsController.create) -- no asr_stream field here since word
     // recordings have no ASR step to forward to; the worker only writes
@@ -291,6 +305,95 @@ export class WordsService {
       total,
       totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
     };
+  }
+
+  /**
+   * Best-effort AI spelling normalization for ENGLISH_TO_DIALECT
+   * recordings -- writes normalizedTranslationText alongside the trainer's
+   * raw translationText, purely informational (never touches
+   * validationScore/score/status). Any failure (disabled, all providers
+   * down, etc.) is swallowed: this must never fail or delay the
+   * already-completed recording submission.
+   */
+  private async normalizeSpellingBestEffort(recordingId: string, englishWord: string, dialectName: string, typedText: string) {
+    try {
+      const enabled = await this.settings.isSpellingNormalizationEnabled();
+      if (!enabled) return;
+
+      const order = parseProviderOrder(await this.settings.getSpellingNormalizationProviderOrder());
+      const prompt = [
+        `A language learner attempted to spell the ${dialectName} translation of the English word "${englishWord}".`,
+        `Their typed attempt: "${typedText}"`,
+        `Correct the spelling into proper ${dialectName} orthography (correct diacritics, letters, and punctuation for ${dialectName}) while preserving the same word/phrase.`,
+        'Respond with ONLY the corrected word or phrase, no explanation, no quotes.',
+      ].join(' ');
+
+      const normalized = await this.llm.normalize(prompt, order);
+      if (!normalized.trim()) return;
+
+      await this.prisma.wordRecording.update({
+        where: { id: recordingId },
+        data: { normalizedTranslationText: normalized.trim() },
+      });
+    } catch {
+      // Fail-open: normalization is informational-only and must never
+      // affect the trainer-facing submission flow.
+    }
+  }
+
+  /**
+   * Typing-suggestion source for the word-training spelling input.
+   * Peer-validated spellings (a reverse-validated ENGLISH_TO_DIALECT
+   * WordRecording, score=100 -- see scoreReverseValidatedSource) are
+   * preferred since they're human-corroborated; word-generator-job's raw
+   * LLM WordTranslation rows fill in the remainder when peer-validated
+   * coverage is thin, tagged distinctly so the frontend can show trainers
+   * which is which.
+   */
+  async getSpellingSuggestions(query: GetSpellingSuggestionsDto) {
+    const search = query.query?.trim();
+    const textFilter = search ? { contains: search, mode: 'insensitive' as const } : undefined;
+
+    const communityRows = await this.prisma.wordRecording.findMany({
+      where: {
+        wordId: query.wordId,
+        dialectTag: query.dialectTag,
+        direction: 'ENGLISH_TO_DIALECT',
+        status: 'SCORED',
+        score: 100,
+        ...(textFilter ? { translationText: textFilter } : {}),
+      },
+      distinct: ['translationText'],
+      select: { translationText: true },
+      take: 8,
+    });
+
+    const suggestions: { text: string; source: 'community' | 'ai' }[] = communityRows.map((row) => ({
+      text: row.translationText,
+      source: 'community' as const,
+    }));
+
+    const remaining = 8 - suggestions.length;
+    if (remaining > 0) {
+      const seen = new Set(suggestions.map((s) => s.text.toLowerCase()));
+      const aiRows = await this.prisma.wordTranslation.findMany({
+        where: {
+          wordId: query.wordId,
+          dialectTag: query.dialectTag,
+          ...(textFilter ? { text: textFilter } : {}),
+        },
+        select: { text: true },
+        take: remaining + suggestions.length,
+      });
+      for (const row of aiRows) {
+        if (suggestions.length >= 8) break;
+        if (seen.has(row.text.toLowerCase())) continue;
+        seen.add(row.text.toLowerCase());
+        suggestions.push({ text: row.text, source: 'ai' });
+      }
+    }
+
+    return { suggestions };
   }
 
   /**

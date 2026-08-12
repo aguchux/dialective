@@ -55,6 +55,7 @@ export interface AdminDialect {
   name: string;
   countryId: string;
   llmGenerationEnabled: boolean;
+  keyboardLayout: string | null;
   country: { id: string; name: string; code: string };
   _count: { users: number };
 }
@@ -70,6 +71,7 @@ export interface DialectInput {
   name: string;
   countryId: string;
   llmGenerationEnabled?: boolean;
+  keyboardLayout?: string;
 }
 
 export interface DataAccessLeadInput {
@@ -287,6 +289,8 @@ export interface PlatformSettings {
   qualityWeightNoise: string;
   qualityWeightQuality: string;
   qualityWeightLiveness: string;
+  spellingNormalizationEnabled: boolean;
+  spellingNormalizationProviderOrder: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -314,6 +318,8 @@ export interface PlatformSettingsInput {
   qualityWeightNoise?: number;
   qualityWeightQuality?: number;
   qualityWeightLiveness?: number;
+  spellingNormalizationEnabled?: boolean;
+  spellingNormalizationProviderOrder?: string;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';
@@ -329,10 +335,18 @@ export interface WordTrainingSession {
 
 export interface WordTrainingAssignment {
   assignmentId: string;
+  wordId: string;
   direction: WordTrainingDirection;
   promptText: string;
   sourceLanguage: string;
   responseLanguage: string;
+  dialectTag: string | null;
+  dialectKeyboardLayout: string | null;
+}
+
+export interface SpellingSuggestion {
+  text: string;
+  source: 'community' | 'ai';
 }
 
 export interface WordRecordingUpload {
@@ -590,6 +604,12 @@ export const dialectivaApi = createApi({
     getNextWordTrainingAssignment: builder.query<WordTrainingAssignment, string>({
       query: (sessionId) => `/words/sessions/${sessionId}/next`,
     }),
+    getSpellingSuggestions: builder.query<
+      { suggestions: SpellingSuggestion[] },
+      { wordId: string; dialectTag: string; query: string }
+    >({
+      query: (params) => ({ url: '/words/spelling-suggestions', params }),
+    }),
     endWordTrainingSession: builder.mutation<{ ended: boolean }, string>({
       query: (sessionId) => ({ url: `/words/sessions/${sessionId}/end`, method: 'POST' }),
     }),
@@ -809,6 +829,9 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/geo/admin/dialects/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminDialects', 'AdminCountries'],
     }),
+    generateDialectKeyboardLayout: builder.mutation<{ keyboardLayout: string }, string>({
+      query: (id) => ({ url: `/geo/admin/dialects/${id}/generate-keyboard-layout`, method: 'POST' }),
+    }),
     getPlatformSettings: builder.query<PlatformSettings, void>({
       query: () => '/admin/platform-settings',
       providesTags: ['PlatformSettings'],
@@ -883,6 +906,7 @@ export const {
   useGetMyWordRecordingsQuery,
   useStartWordTrainingSessionMutation,
   useLazyGetNextWordTrainingAssignmentQuery,
+  useLazyGetSpellingSuggestionsQuery,
   useEndWordTrainingSessionMutation,
   useCreateWordRecordingUploadMutation,
   useSubmitWordRecordingMutation,
@@ -918,6 +942,7 @@ export const {
   useCreateDialectMutation,
   useUpdateDialectMutation,
   useDeleteDialectMutation,
+  useGenerateDialectKeyboardLayoutMutation,
   useGetPlatformSettingsQuery,
   useUpdatePlatformSettingsMutation,
   useGetAdminWordsQuery,

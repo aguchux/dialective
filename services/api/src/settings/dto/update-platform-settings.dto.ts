@@ -113,4 +113,14 @@ export class UpdatePlatformSettingsDto {
   @Min(0)
   @Max(100)
   qualityWeightLiveness?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  spellingNormalizationEnabled?: boolean;
+
+  // Same permutation constraint/validation shape as llmProviderOrder.
+  @IsOptional()
+  @IsString()
+  @Matches(/^(openai|deepseek|anthropic),(openai|deepseek|anthropic),(openai|deepseek|anthropic)$/)
+  spellingNormalizationProviderOrder?: string;
 }

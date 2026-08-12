@@ -7,6 +7,7 @@ import { NotificationSettingsPanel } from './NotificationSettingsPanel';
 import { ReferralBonusSettingsPanel } from './ReferralBonusSettingsPanel';
 import { WordGenerationSettingsPanel } from './WordGenerationSettingsPanel';
 import { QualityGateSettingsPanel } from './QualityGateSettingsPanel';
+import { SpellingNormalizationSettingsPanel } from './SpellingNormalizationSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
@@ -14,6 +15,7 @@ const groups = [
   { key: 'notifications', label: 'Notification Settings' },
   { key: 'wordGeneration', label: 'Word Generation' },
   { key: 'qualityGate', label: 'Voice Quality Gate' },
+  { key: 'spellingNormalization', label: 'Spelling Normalization' },
 ] as const;
 
 type GroupKey = (typeof groups)[number]['key'];
@@ -54,6 +56,7 @@ export default function AdminSettingsPage() {
             {active === 'notifications' && <NotificationSettingsPanel />}
             {active === 'wordGeneration' && <WordGenerationSettingsPanel />}
             {active === 'qualityGate' && <QualityGateSettingsPanel />}
+            {active === 'spellingNormalization' && <SpellingNormalizationSettingsPanel />}
           </div>
         </div>
       </div>

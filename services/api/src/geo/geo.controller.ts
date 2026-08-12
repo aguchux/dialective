@@ -5,6 +5,8 @@ import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { LlmNormalizerService } from '../llm/llm-normalizer.service';
+import { parseProviderOrder } from '../llm/llm-provider.interface';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
 import { CreateDialectDto } from './dto/create-dialect.dto';
@@ -26,6 +28,7 @@ export class GeoController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly platformSettings: PlatformSettingsService,
+    private readonly llm: LlmNormalizerService,
   ) {}
 
   @Get('countries')
@@ -160,7 +163,7 @@ export class GeoController {
     }
     try {
       return await this.prisma.dialect.create({
-        data: { tag: dto.tag, name: dto.name, countryId: dto.countryId },
+        data: { tag: dto.tag, name: dto.name, countryId: dto.countryId, keyboardLayout: dto.keyboardLayout },
       });
     } catch (err) {
       throw mapPrismaError(err, 'A dialect with this tag already exists');
@@ -180,11 +183,40 @@ export class GeoController {
     try {
       return await this.prisma.dialect.update({
         where: { id },
-        data: { tag: dto.tag, name: dto.name, countryId: dto.countryId, llmGenerationEnabled: dto.llmGenerationEnabled },
+        data: {
+          tag: dto.tag,
+          name: dto.name,
+          countryId: dto.countryId,
+          llmGenerationEnabled: dto.llmGenerationEnabled,
+          keyboardLayout: dto.keyboardLayout,
+        },
       });
     } catch (err) {
       throw mapPrismaError(err, 'A dialect with this tag already exists', 'Dialect not found');
     }
+  }
+
+  /**
+   * Drafts a starter keyboard-layout character set for the admin to review
+   * and edit before saving via the normal PATCH above -- deliberately a
+   * separate step, does not write to the DB itself.
+   */
+  @Post('admin/dialects/:id/generate-keyboard-layout')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async generateKeyboardLayout(@Param('id') id: string) {
+    const dialect = await this.prisma.dialect.findUnique({ where: { id }, include: { country: true } });
+    if (!dialect) throw new NotFoundException('Dialect not found');
+
+    const prompt = [
+      `List the characters, diacritics, and special letters unique to written ${dialect.name}`,
+      `(spoken in ${dialect.country.name}) that are not on a standard QWERTY keyboard.`,
+      'Respond with ONLY a space-separated list of characters, no explanation, no numbering.',
+    ].join(' ');
+
+    const order = parseProviderOrder((await this.platformSettings.getForAdmin()).spellingNormalizationProviderOrder);
+    const keyboardLayout = await this.llm.normalize(prompt, order);
+    return { keyboardLayout: keyboardLayout.trim() };
   }
 
   @Delete('admin/dialects/:id')

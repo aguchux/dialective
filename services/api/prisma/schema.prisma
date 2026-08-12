@@ -100,6 +100,7 @@ model Dialect {
   name                 String
   countryId            String
   llmGenerationEnabled Boolean @default(false) // per-dialect override within an enabled country -- lets admin exclude one dialect without disabling the whole country
+  keyboardLayout       String? // space-separated dialect-specific characters/diacritics for the inline virtual keyboard on the word-training spelling input; admin-edited, optionally AI-drafted via POST /geo/admin/dialects/:id/generate-keyboard-layout
   country              Country @relation(fields: [countryId], references: [id])
   users                User[]
 
@@ -441,6 +442,7 @@ model WordRecording {
   direction         WordTrainingDirection @default(ENGLISH_TO_DIALECT)
   dialectTag        String
   translationText   String
+  normalizedTranslationText String? // AI spelling-normalization of translationText (PlatformSettings.spellingNormalizationEnabled), ENGLISH_TO_DIALECT only -- informational only, never feeds validationScore/score
   audioBucket       String
   audioKey          String
   durationMs        Int?
@@ -644,6 +646,8 @@ model PlatformSettings {
   qualityWeightNoise       Decimal  @default(15) @db.Decimal(5, 2) // weight (%) given to noiseScore in compositeScore's blend
   qualityWeightQuality     Decimal  @default(10) @db.Decimal(5, 2) // weight (%) given to qualityScore in compositeScore's blend
   qualityWeightLiveness    Decimal  @default(15) @db.Decimal(5, 2) // weight (%) given to livenessScore in compositeScore's blend -- the four qualityWeight* fields must sum to 100, validated in PlatformSettingsService.update
+  spellingNormalizationEnabled Boolean @default(false) // master kill switch for AI spelling normalization on ENGLISH_TO_DIALECT word recordings; writes WordRecording.normalizedTranslationText only, never affects scoring
+  spellingNormalizationProviderOrder String @default("openai,deepseek,anthropic") // CSV fallback-try order for spelling normalization, same permutation rules as llmProviderOrder
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 

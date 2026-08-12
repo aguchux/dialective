@@ -1,11 +1,17 @@
 import { WordsService } from './words.service';
 
 describe('WordsService', () => {
-  const trainer = { id: 'trainer-1', dialect: { tag: 'ig', name: 'Igbo' } };
+  const trainer = { id: 'trainer-1', dialect: { tag: 'ig', name: 'Igbo', keyboardLayout: null } };
   const session = { id: 'session-1', userId: trainer.id, endedAt: null };
-  const settings = { getTaskTokenCost: jest.fn(), isReverseWordTrainingEnabled: jest.fn() };
+  const settings = {
+    getTaskTokenCost: jest.fn(),
+    isReverseWordTrainingEnabled: jest.fn(),
+    isSpellingNormalizationEnabled: jest.fn().mockResolvedValue(false),
+    getSpellingNormalizationProviderOrder: jest.fn().mockResolvedValue('openai,deepseek,anthropic'),
+  };
   const storage = { createPresignedDownloadUrl: jest.fn(), createPresignedUploadUrl: jest.fn() };
   const streams = { publish: jest.fn() };
+  const llm = { normalize: jest.fn() };
   let prisma: any;
   let service: WordsService;
 
@@ -24,7 +30,8 @@ describe('WordsService', () => {
     };
     settings.getTaskTokenCost.mockResolvedValue(1);
     settings.isReverseWordTrainingEnabled.mockReset();
-    service = new WordsService(prisma, storage as any, settings as any, streams as any);
+    settings.isSpellingNormalizationEnabled.mockResolvedValue(false);
+    service = new WordsService(prisma, storage as any, settings as any, streams as any, llm as any);
   });
 
   it('only issues English-to-dialect assignments when reverse training is disabled', async () => {
@@ -33,10 +40,13 @@ describe('WordsService', () => {
 
     await expect(service.nextAssignment(trainer.id, session.id)).resolves.toEqual({
       assignmentId: 'assignment-1',
+      wordId: 'word-1',
       direction: 'ENGLISH_TO_DIALECT',
       promptText: 'welcome',
       sourceLanguage: 'English',
       responseLanguage: 'Igbo',
+      dialectTag: 'ig',
+      dialectKeyboardLayout: null,
     });
     expect(prisma.wordRecording.count).not.toHaveBeenCalled();
   });

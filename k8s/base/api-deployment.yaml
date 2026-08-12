@@ -149,6 +149,21 @@ spec:
                 secretKeyRef:
                   name: nowpayments-creds
                   key: nowpayments_ipn_secret
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-creds
+                  key: openai_api_key
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-creds
+                  key: deepseek_api_key
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-creds
+                  key: anthropic_api_key
           readinessProbe:
             httpGet:
               path: /health

@@ -5,6 +5,7 @@ import { AdminShell } from '@/components/admin/AdminShell';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { Keyboard } from 'lucide-react';
 import {
   AdminCountry,
   AdminDialect,
@@ -13,6 +14,7 @@ import {
   useCreateDialectMutation,
   useDeleteCountryMutation,
   useDeleteDialectMutation,
+  useGenerateDialectKeyboardLayoutMutation,
   useGetAdminCountriesQuery,
   useGetAdminDialectsQuery,
   useUpdateCountryMutation,
@@ -314,6 +316,7 @@ function DialectsSection({ dialects, isLoading }: { dialects: AdminDialect[] | u
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [editingKeyboardFor, setEditingKeyboardFor] = useState<AdminDialect | null>(null);
 
   async function handleDelete(id: string) {
     setError(null);
@@ -383,17 +386,23 @@ function DialectsSection({ dialects, isLoading }: { dialects: AdminDialect[] | u
       key: 'actions',
       header: 'Actions',
       render: (d) => (
-        <ActionButton
-          className={dangerButtonClass}
-          onClick={() => handleDelete(d.id)}
-          disabled={d._count.users > 0}
-          pending={deletingId === d.id}
-          pendingLabel="Deleting"
-          title={d._count.users > 0 ? 'Reassign users first' : undefined}
-          type="button"
-        >
-          Delete
-        </ActionButton>
+        <div className="flex flex-wrap gap-2">
+          <button className={secondaryButtonClass} onClick={() => setEditingKeyboardFor(d)} type="button">
+            <Keyboard className="mr-1.5 inline size-4" aria-hidden="true" />
+            Keyboard
+          </button>
+          <ActionButton
+            className={dangerButtonClass}
+            onClick={() => handleDelete(d.id)}
+            disabled={d._count.users > 0}
+            pending={deletingId === d.id}
+            pendingLabel="Deleting"
+            title={d._count.users > 0 ? 'Reassign users first' : undefined}
+            type="button"
+          >
+            Delete
+          </ActionButton>
+        </div>
       ),
     },
   ];
@@ -416,6 +425,84 @@ function DialectsSection({ dialects, isLoading }: { dialects: AdminDialect[] | u
         emptyMessage="No dialects yet."
         searchPlaceholder="Search dialects..."
       />
+
+      {editingKeyboardFor && (
+        <EditKeyboardLayoutDialog dialect={editingKeyboardFor} onClose={() => setEditingKeyboardFor(null)} />
+      )}
     </section>
+  );
+}
+
+function EditKeyboardLayoutDialog({ dialect, onClose }: { dialect: AdminDialect; onClose: () => void }) {
+  const [layout, setLayout] = useState(dialect.keyboardLayout ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [updateDialect, { isLoading: isSaving }] = useUpdateDialectMutation();
+  const [generateLayout, { isLoading: isGenerating }] = useGenerateDialectKeyboardLayoutMutation();
+
+  async function handleGenerate() {
+    setError(null);
+    try {
+      const result = await generateLayout(dialect.id).unwrap();
+      setLayout(result.keyboardLayout);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to generate a suggested keyboard layout.'));
+    }
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      await updateDialect({ id: dialect.id, body: { keyboardLayout: layout } }).unwrap();
+      onClose();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to save the keyboard layout.'));
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        title={`${dialect.name} keyboard layout`}
+        description="Space-separated characters/diacritics shown as the inline virtual keyboard during word training. Leave empty to hide the keyboard for this dialect."
+      >
+        <form className="grid gap-3" onSubmit={handleSave}>
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="dialect-keyboard-layout">
+              Characters
+            </label>
+            <textarea
+              className={`${inputClass} min-h-24 resize-y font-mono`}
+              id="dialect-keyboard-layout"
+              onChange={(e) => setLayout(e.target.value)}
+              placeholder="á à â ã ā ç ñ ..."
+              value={layout}
+            />
+          </div>
+          <div>
+            <ActionButton
+              className={secondaryButtonClass}
+              onClick={handleGenerate}
+              pending={isGenerating}
+              pendingLabel="Generating"
+              type="button"
+            >
+              Generate suggested keyboard
+            </ActionButton>
+          </div>
+          {error && (
+            <p className="leading-relaxed text-danger" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
+            <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+              Save
+            </ActionButton>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
