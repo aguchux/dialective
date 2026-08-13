@@ -1108,7 +1108,7 @@ function MarketView() {
               <div className="grid grid-cols-[1fr_auto] gap-2">
                 <label className="grid gap-1.5 text-sm font-bold">
                   Fiat amount
-                  <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => setFiatAmount(e.target.value)} type="number" value={fiatAmount} />
+                  <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => setFiatAmount(e.target.value)} step="0.01" type="number" value={fiatAmount} />
                 </label>
                 <label className="grid gap-1.5 text-sm font-bold">
                   Currency
