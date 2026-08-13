@@ -1015,6 +1015,27 @@ function MarketView() {
     if (referenceRate?.currencyCode) setFiatCurrency(referenceRate.currencyCode);
   }, [referenceRate?.currencyCode]);
 
+  function deriveFiatAmount(tokens: number): string | null {
+    const rate = referenceRate?.tokenReferencePrice ? Number(referenceRate.tokenReferencePrice) : null;
+    if (!rate || !Number.isFinite(tokens) || tokens <= 0) return null;
+    return (tokens * rate).toFixed(2).replace(/\.00$/, '');
+  }
+
+  function updateTokenAmount(value: string) {
+    setTokenAmount(value);
+    const derived = deriveFiatAmount(Number(value));
+    if (derived) setFiatAmount(derived);
+  }
+
+  // Re-derive the fiat amount from the current token amount whenever the dialog opens, so a stale
+  // manual edit from a previous session doesn't linger once the reference rate is known.
+  useEffect(() => {
+    if (!createOpen) return;
+    const derived = deriveFiatAmount(Number(tokenAmount));
+    if (derived) setFiatAmount(derived);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createOpen, referenceRate?.tokenReferencePrice]);
+
   async function submitOffer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -1077,7 +1098,7 @@ function MarketView() {
               </div>
               <label className="grid gap-1.5 text-sm font-bold">
                 Token amount
-                <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => setTokenAmount(e.target.value)} type="number" value={tokenAmount} />
+                <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => updateTokenAmount(e.target.value)} type="number" value={tokenAmount} />
               </label>
               {referenceRate?.tokenReferencePrice && referenceRate.currencyCode && (
                 <p className="text-xs text-muted">
