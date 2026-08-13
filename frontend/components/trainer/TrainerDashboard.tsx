@@ -1266,11 +1266,12 @@ function traderDisplayName(user: { firstName: string | null; lastName: string | 
 }
 
 function TraderProfileDialog({ userId, onOpenChange }: { userId: string | null; onOpenChange: (open: boolean) => void }) {
-  const { data: profile, isLoading } = useGetP2PTraderProfileQuery(userId ?? '', { skip: !userId });
+  const { data: profile, isLoading, error } = useGetP2PTraderProfileQuery(userId ?? '', { skip: !userId });
   return (
     <Dialog open={userId !== null} onOpenChange={onOpenChange}>
       <DialogContent title="Trader profile" description="Basic info shown to other traders in the market.">
         {isLoading && <p className="text-sm text-muted">Loading…</p>}
+        {!isLoading && error && <p className="text-sm text-danger">{normalizeErrorMessage(error, 'Could not load this trader profile')}</p>}
         {profile && (
           <div className="grid gap-4">
             <div className="flex items-center gap-3">
