@@ -31,36 +31,18 @@ export function LandingHeader() {
   const initial = displayName ? displayName[0].toUpperCase() : '?';
 
   const [pinned, setPinned] = useState(false);
-  const [hidden, setHidden] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
-  const lastScrollY = useRef(0);
   const pastThreshold = useRef(0);
 
   useEffect(() => {
     pastThreshold.current = headerRef.current?.offsetHeight ?? 72;
-    lastScrollY.current = window.scrollY;
 
     function handleScroll() {
-      const currentScrollY = window.scrollY;
-      const delta = currentScrollY - lastScrollY.current;
-      const threshold = pastThreshold.current;
-
-      if (currentScrollY < threshold) {
-        setPinned(false);
-        setHidden(false);
-      } else {
-        setPinned(true);
-        if (delta > 4) {
-          setHidden(true);
-        } else if (delta < -4) {
-          setHidden(false);
-        }
-      }
-
-      lastScrollY.current = currentScrollY;
+      setPinned(window.scrollY >= pastThreshold.current);
     }
 
+    handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -74,9 +56,9 @@ export function LandingHeader() {
       {pinned && <div style={{ height: headerRef.current?.offsetHeight ?? 0 }} aria-hidden="true" />}
       <header
         ref={headerRef}
-        className={`top-0 z-50 w-full px-4 py-3 text-[#050505] transition-all duration-300 sm:px-6 md:px-8 ${
+        className={`top-0 z-50 w-full px-4 py-3 text-[#050505] transition-colors duration-300 sm:px-6 md:px-8 ${
           pinned ? 'fixed bg-white/90 shadow-[0_2px_12px_rgba(5,5,5,0.08)] backdrop-blur-md' : 'relative bg-transparent'
-        } ${pinned && hidden ? '-translate-y-full' : 'translate-y-0'}`}
+        }`}
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-4 sm:gap-6">
