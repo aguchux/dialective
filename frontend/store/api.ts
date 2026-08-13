@@ -167,6 +167,36 @@ export interface Wallet {
   balanceInLocalCurrency: string | null;
 }
 
+export type WithdrawalCurrency = 'USDT' | 'USDC';
+export type WithdrawalNetwork = 'TRC20' | 'ERC20' | 'BEP20' | 'SOL' | 'POLYGON';
+export type WithdrawalStatus = 'PENDING' | 'APPROVED' | 'PROCESSING' | 'PAID' | 'FAILED' | 'REJECTED';
+
+export interface AdminWithdrawalRequest {
+  id: string;
+  walletId: string;
+  wallet: { user: { email: string } };
+  tokenAmount: string;
+  usdtAmount: string;
+  destinationAddress: string;
+  destinationCurrency: WithdrawalCurrency;
+  destinationNetwork: WithdrawalNetwork;
+  status: WithdrawalStatus;
+  approvedByAdminId: string | null;
+  approvedAt: string | null;
+  provider: string | null;
+  providerPayoutId: string | null;
+  providerStatus: string | null;
+  providerCurrency: string | null;
+  providerNetwork: string | null;
+  providerAddress: string | null;
+  providerError: string | null;
+  submittedToProviderAt: string | null;
+  providerSettledAt: string | null;
+  adminNote: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export type LedgerEntryType =
   | 'DEPOSIT'
   | 'TRAINING_PAYOUT'
@@ -467,6 +497,14 @@ export interface PlatformSettings {
   p2pSmsPaymentMarkedEnabled: boolean;
   p2pSmsTokensReleasedEnabled: boolean;
   p2pSmsCancelledEnabled: boolean;
+  cryptoWithdrawalsEnabled: boolean;
+  nowPaymentsPayoutsEnabled: boolean;
+  allowedWithdrawalCurrencies: string;
+  allowedWithdrawalNetworks: string;
+  withdrawalFeeMode: string;
+  withdrawalFeeTokenAmount: string;
+  withdrawalFeePercent: string;
+  autoSubmitAfterApproval: boolean;
   updatedAt: string;
   createdAt: string;
 }
@@ -504,6 +542,14 @@ export interface PlatformSettingsInput {
   p2pSmsPaymentMarkedEnabled?: boolean;
   p2pSmsTokensReleasedEnabled?: boolean;
   p2pSmsCancelledEnabled?: boolean;
+  cryptoWithdrawalsEnabled?: boolean;
+  nowPaymentsPayoutsEnabled?: boolean;
+  allowedWithdrawalCurrencies?: string;
+  allowedWithdrawalNetworks?: string;
+  withdrawalFeeMode?: string;
+  withdrawalFeeTokenAmount?: number;
+  withdrawalFeePercent?: number;
+  autoSubmitAfterApproval?: boolean;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD';
@@ -926,14 +972,63 @@ export const dialectivaApi = createApi({
     >({
       query: (body) => ({ url: '/wallet/deposits', method: 'POST', body }),
     }),
-    requestWithdrawalOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { tokenAmount: number; destinationAddress: string }>({
+    requestWithdrawalOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { tokenAmount: number; destinationAddress: string; destinationCurrency: WithdrawalCurrency; destinationNetwork: WithdrawalNetwork }
+    >({
       query: (body) => ({ url: '/wallet/withdrawals/otp', method: 'POST', body }),
     }),
     createWithdrawal: builder.mutation<
       { withdrawalId: string; status: string },
-      { tokenAmount: number; destinationAddress: string; otpRequestId: string; code: string }
+      {
+        tokenAmount: number;
+        destinationAddress: string;
+        destinationCurrency: WithdrawalCurrency;
+        destinationNetwork: WithdrawalNetwork;
+        otpRequestId: string;
+        code: string;
+      }
     >({
       query: (body) => ({ url: '/wallet/withdrawals', method: 'POST', body }),
+      invalidatesTags: ['Wallet'],
+    }),
+    listAdminWithdrawals: builder.query<AdminWithdrawalRequest[], { status?: WithdrawalStatus } | void>({
+      query: (params) => ({ url: '/admin/withdrawals', params: params ?? undefined }),
+      providesTags: ['Wallet'],
+    }),
+    requestWithdrawalResolveOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, string>({
+      query: (id) => ({ url: `/admin/withdrawals/${id}/resolve/otp`, method: 'POST' }),
+    }),
+    approveWithdrawal: builder.mutation<
+      { withdrawalId: string; status: string },
+      { id: string; otpRequestId?: string; code?: string; adminNote?: string }
+    >({
+      query: ({ id, ...body }) => ({ url: `/admin/withdrawals/${id}/approve`, method: 'POST', body }),
+      invalidatesTags: ['Wallet'],
+    }),
+    submitWithdrawalToNowPayments: builder.mutation<
+      { withdrawalId: string; status: string; providerPayoutId?: string },
+      { id: string; otpRequestId?: string; code?: string; verificationCode?: string; adminNote?: string }
+    >({
+      query: ({ id, ...body }) => ({ url: `/admin/withdrawals/${id}/submit-nowpayments`, method: 'POST', body }),
+      invalidatesTags: ['Wallet'],
+    }),
+    verifyWithdrawalPayout: builder.mutation<
+      { withdrawalId: string; status: string; providerPayoutId: string },
+      { id: string; verificationCode: string }
+    >({
+      query: ({ id, verificationCode }) => ({ url: `/admin/withdrawals/${id}/verify-nowpayments`, method: 'POST', body: { verificationCode } }),
+      invalidatesTags: ['Wallet'],
+    }),
+    refreshWithdrawalStatus: builder.mutation<{ withdrawalId: string; status: string; providerPayoutId: string }, string>({
+      query: (id) => ({ url: `/admin/withdrawals/${id}/refresh-nowpayments`, method: 'POST' }),
+      invalidatesTags: ['Wallet'],
+    }),
+    resolveWithdrawal: builder.mutation<
+      { withdrawalId: string; status: string },
+      { id: string; outcome: 'paid' | 'rejected'; otpRequestId?: string; code?: string; adminNote?: string }
+    >({
+      query: ({ id, ...body }) => ({ url: `/admin/withdrawals/${id}/resolve`, method: 'POST', body }),
       invalidatesTags: ['Wallet'],
     }),
     getMe: builder.query<PublicUser, void>({
@@ -1261,6 +1356,13 @@ export const {
   useCreateTokenDepositMutation,
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
+  useListAdminWithdrawalsQuery,
+  useRequestWithdrawalResolveOtpMutation,
+  useApproveWithdrawalMutation,
+  useSubmitWithdrawalToNowPaymentsMutation,
+  useVerifyWithdrawalPayoutMutation,
+  useRefreshWithdrawalStatusMutation,
+  useResolveWithdrawalMutation,
   useGetMeQuery,
   useUpdateProfileMutation,
   useRequestPhoneOtpMutation,

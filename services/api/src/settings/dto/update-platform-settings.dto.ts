@@ -186,4 +186,41 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsBoolean()
   p2pSmsCancelledEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  cryptoWithdrawalsEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  nowPaymentsPayoutsEnabled?: boolean;
+
+  // Non-empty CSV subset of {USDT,USDC}; validated in PlatformSettingsService.update.
+  @IsOptional()
+  @IsString()
+  allowedWithdrawalCurrencies?: string;
+
+  // Non-empty CSV subset of {TRC20,ERC20,BEP20,SOL,POLYGON}; validated in PlatformSettingsService.update.
+  @IsOptional()
+  @IsString()
+  allowedWithdrawalNetworks?: string;
+
+  @IsOptional()
+  @IsString()
+  withdrawalFeeMode?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  withdrawalFeeTokenAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  withdrawalFeePercent?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  autoSubmitAfterApproval?: boolean;
 }

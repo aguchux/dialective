@@ -149,6 +149,16 @@ spec:
                 secretKeyRef:
                   name: nowpayments-creds
                   key: nowpayments_ipn_secret
+            - name: NOWPAYMENTS_PAYOUT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: nowpayments-creds
+                  key: nowpayments_payout_email
+            - name: NOWPAYMENTS_PAYOUT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nowpayments-creds
+                  key: nowpayments_payout_password
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:

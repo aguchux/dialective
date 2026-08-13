@@ -137,6 +137,40 @@ export class PlatformSettingsService {
     return row.adminPayoutOtpEnabled;
   }
 
+  async isCryptoWithdrawalsEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.cryptoWithdrawalsEnabled;
+  }
+
+  async isNowPaymentsPayoutsEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.nowPaymentsPayoutsEnabled;
+  }
+
+  async getAllowedWithdrawalCurrencies(): Promise<string[]> {
+    const row = await this.getRow();
+    return row.allowedWithdrawalCurrencies.split(',').map((v) => v.trim().toUpperCase()).filter(Boolean);
+  }
+
+  async getAllowedWithdrawalNetworks(): Promise<string[]> {
+    const row = await this.getRow();
+    return row.allowedWithdrawalNetworks.split(',').map((v) => v.trim().toUpperCase()).filter(Boolean);
+  }
+
+  async getWithdrawalFeeSettings(): Promise<{ mode: string; tokenAmount: number; percent: number }> {
+    const row = await this.getRow();
+    return {
+      mode: row.withdrawalFeeMode,
+      tokenAmount: row.withdrawalFeeTokenAmount.toNumber(),
+      percent: row.withdrawalFeePercent.toNumber(),
+    };
+  }
+
+  async isAutoSubmitAfterApprovalEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.autoSubmitAfterApproval;
+  }
+
   async getWordStuckTimeoutMinutes(): Promise<number> {
     const row = await this.getRow();
     return row.wordStuckTimeoutMinutes;
@@ -202,6 +236,14 @@ export class PlatformSettingsService {
       p2pSmsPaymentMarkedEnabled: row.p2pSmsPaymentMarkedEnabled,
       p2pSmsTokensReleasedEnabled: row.p2pSmsTokensReleasedEnabled,
       p2pSmsCancelledEnabled: row.p2pSmsCancelledEnabled,
+      cryptoWithdrawalsEnabled: row.cryptoWithdrawalsEnabled,
+      nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
+      allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
+      allowedWithdrawalNetworks: row.allowedWithdrawalNetworks,
+      withdrawalFeeMode: row.withdrawalFeeMode,
+      withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
+      withdrawalFeePercent: row.withdrawalFeePercent.toString(),
+      autoSubmitAfterApproval: row.autoSubmitAfterApproval,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -240,6 +282,14 @@ export class PlatformSettingsService {
     p2pSmsPaymentMarkedEnabled?: boolean;
     p2pSmsTokensReleasedEnabled?: boolean;
     p2pSmsCancelledEnabled?: boolean;
+    cryptoWithdrawalsEnabled?: boolean;
+    nowPaymentsPayoutsEnabled?: boolean;
+    allowedWithdrawalCurrencies?: string;
+    allowedWithdrawalNetworks?: string;
+    withdrawalFeeMode?: string;
+    withdrawalFeeTokenAmount?: number;
+    withdrawalFeePercent?: number;
+    autoSubmitAfterApproval?: boolean;
   }) {
     if (data.llmProviderOrder) {
       const tokens = data.llmProviderOrder.split(',');
@@ -283,6 +333,27 @@ export class PlatformSettingsService {
       if (!isValidPermutation) {
         throw new BadRequestException('smsTransactionalProviderOrder must list termii, twilio, africastalking, and smslive247 exactly once each');
       }
+    }
+
+    const SUPPORTED_WITHDRAWAL_CURRENCIES = ['USDT', 'USDC'];
+    const SUPPORTED_WITHDRAWAL_NETWORKS = ['TRC20', 'ERC20', 'BEP20', 'SOL', 'POLYGON'];
+
+    if (data.allowedWithdrawalCurrencies) {
+      const tokens = data.allowedWithdrawalCurrencies.split(',').map((v) => v.trim().toUpperCase());
+      if (tokens.length === 0 || !tokens.every((t) => SUPPORTED_WITHDRAWAL_CURRENCIES.includes(t))) {
+        throw new BadRequestException(`allowedWithdrawalCurrencies must be a non-empty CSV subset of ${SUPPORTED_WITHDRAWAL_CURRENCIES.join(', ')}`);
+      }
+    }
+
+    if (data.allowedWithdrawalNetworks) {
+      const tokens = data.allowedWithdrawalNetworks.split(',').map((v) => v.trim().toUpperCase());
+      if (tokens.length === 0 || !tokens.every((t) => SUPPORTED_WITHDRAWAL_NETWORKS.includes(t))) {
+        throw new BadRequestException(`allowedWithdrawalNetworks must be a non-empty CSV subset of ${SUPPORTED_WITHDRAWAL_NETWORKS.join(', ')}`);
+      }
+    }
+
+    if (data.withdrawalFeeMode && !['platform', 'user'].includes(data.withdrawalFeeMode)) {
+      throw new BadRequestException('withdrawalFeeMode must be "platform" or "user"');
     }
 
     const anyWeightProvided =
@@ -343,6 +414,14 @@ export class PlatformSettingsService {
       p2pSmsPaymentMarkedEnabled: row.p2pSmsPaymentMarkedEnabled,
       p2pSmsTokensReleasedEnabled: row.p2pSmsTokensReleasedEnabled,
       p2pSmsCancelledEnabled: row.p2pSmsCancelledEnabled,
+      cryptoWithdrawalsEnabled: row.cryptoWithdrawalsEnabled,
+      nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
+      allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
+      allowedWithdrawalNetworks: row.allowedWithdrawalNetworks,
+      withdrawalFeeMode: row.withdrawalFeeMode,
+      withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
+      withdrawalFeePercent: row.withdrawalFeePercent.toString(),
+      autoSubmitAfterApproval: row.autoSubmitAfterApproval,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

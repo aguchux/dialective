@@ -10,6 +10,7 @@ import { QualityGateSettingsPanel } from './QualityGateSettingsPanel';
 import { SpellingNormalizationSettingsPanel } from './SpellingNormalizationSettingsPanel';
 import { P2PMarketSettingsPanel } from './P2PMarketSettingsPanel';
 import { SmsSettingsPanel } from './SmsSettingsPanel';
+import { WithdrawalSettingsPanel } from './WithdrawalSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
@@ -20,6 +21,7 @@ const groups = [
   { key: 'spellingNormalization', label: 'Spelling Normalization' },
   { key: 'p2pMarket', label: 'P2P Market' },
   { key: 'sms', label: 'SMS Providers' },
+  { key: 'withdrawals', label: 'Crypto Withdrawals' },
 ] as const;
 
 type GroupKey = (typeof groups)[number]['key'];
@@ -63,6 +65,7 @@ export default function AdminSettingsPage() {
             {active === 'spellingNormalization' && <SpellingNormalizationSettingsPanel />}
             {active === 'p2pMarket' && <P2PMarketSettingsPanel />}
             {active === 'sms' && <SmsSettingsPanel />}
+            {active === 'withdrawals' && <WithdrawalSettingsPanel />}
           </div>
         </div>
       </div>

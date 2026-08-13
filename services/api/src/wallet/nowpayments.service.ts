@@ -20,6 +20,25 @@ export interface CreateInvoiceResult {
   invoiceUrl: string;
 }
 
+export interface CreatePayoutParams {
+  address: string;
+  currency: 'USDT' | 'USDC';
+  amount: number;
+  withdrawalId: string;
+}
+
+export interface CreatePayoutResult {
+  payoutId: string;
+  status: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface PayoutStatusResult {
+  payoutId: string;
+  status: string | null;
+  raw: Record<string, unknown>;
+}
+
 /**
  * Thin wrapper around NOWPayments' hosted-invoice API -- same "one class
  * per external integration" shape as StorageService (Spaces) and
@@ -49,6 +68,22 @@ export class NowPaymentsService {
       throw new Error('NOWPAYMENTS_IPN_SECRET is not set');
     }
     return secret;
+  }
+
+  private get payoutEmail(): string {
+    const email = process.env.NOWPAYMENTS_PAYOUT_EMAIL;
+    if (!email) {
+      throw new Error('NOWPAYMENTS_PAYOUT_EMAIL is not set');
+    }
+    return email;
+  }
+
+  private get payoutPassword(): string {
+    const password = process.env.NOWPAYMENTS_PAYOUT_PASSWORD;
+    if (!password) {
+      throw new Error('NOWPAYMENTS_PAYOUT_PASSWORD is not set');
+    }
+    return password;
   }
 
   async createInvoice(params: CreateInvoiceParams): Promise<CreateInvoiceResult> {
@@ -85,6 +120,98 @@ export class NowPaymentsService {
     return { invoiceId: json.id, invoiceUrl: json.invoice_url };
   }
 
+  async createPayout(params: CreatePayoutParams): Promise<CreatePayoutResult> {
+    const token = await this.getPayoutAuthToken();
+    const providerCurrency = NOWPAYMENTS_PAY_CURRENCIES[params.currency];
+    const res = await fetch(`${NOWPAYMENTS_API_BASE}/create/payout`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+      },
+      body: JSON.stringify({
+        withdrawals: [
+          {
+            address: params.address,
+            currency: providerCurrency,
+            amount: Number(params.amount.toFixed(6)),
+            unique_external_id: params.withdrawalId,
+          },
+        ],
+      }),
+    });
+
+    const raw = await readNowPaymentsJson(res);
+    if (!res.ok) {
+      this.logger.error(`NOWPayments createPayout failed: ${res.status} ${JSON.stringify(raw)}`);
+      throw new BadGatewayException('The payout provider could not start this withdrawal. Please try again.');
+    }
+
+    const payout = extractPayout(raw);
+    if (!payout.id) {
+      this.logger.error(`NOWPayments createPayout response did not include payout id: ${JSON.stringify(raw)}`);
+      throw new BadGatewayException('The payout provider returned an invalid payout response.');
+    }
+
+    return { payoutId: payout.id, status: payout.status, raw };
+  }
+
+  async verifyPayout(payoutId: string, verificationCode: string): Promise<PayoutStatusResult> {
+    const token = await this.getPayoutAuthToken();
+    const res = await fetch(`${NOWPAYMENTS_API_BASE}/verify/payout`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+      },
+      body: JSON.stringify({ payout_id: payoutId, verification_code: verificationCode }),
+    });
+    const raw = await readNowPaymentsJson(res);
+    if (!res.ok) {
+      this.logger.error(`NOWPayments verifyPayout failed: ${res.status} ${JSON.stringify(raw)}`);
+      throw new BadGatewayException('The payout provider could not verify this payout.');
+    }
+    const payout = extractPayout(raw, payoutId);
+    return { payoutId: payout.id ?? payoutId, status: payout.status, raw };
+  }
+
+  async getPayoutStatus(payoutId: string): Promise<PayoutStatusResult> {
+    const token = await this.getPayoutAuthToken();
+    const res = await fetch(`${NOWPAYMENTS_API_BASE}/payout/${encodeURIComponent(payoutId)}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'x-api-key': this.apiKey,
+      },
+    });
+    const raw = await readNowPaymentsJson(res);
+    if (!res.ok) {
+      this.logger.error(`NOWPayments getPayoutStatus failed: ${res.status} ${JSON.stringify(raw)}`);
+      throw new BadGatewayException('The payout provider could not return payout status.');
+    }
+    const payout = extractPayout(raw, payoutId);
+    return { payoutId: payout.id ?? payoutId, status: payout.status, raw };
+  }
+
+  private async getPayoutAuthToken(): Promise<string> {
+    const res = await fetch(`${NOWPAYMENTS_API_BASE}/auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+      },
+      body: JSON.stringify({ email: this.payoutEmail, password: this.payoutPassword }),
+    });
+    const raw = await readNowPaymentsJson(res);
+    if (!res.ok || typeof raw.token !== 'string') {
+      this.logger.error(`NOWPayments payout auth failed: ${res.status} ${JSON.stringify(raw)}`);
+      throw new BadGatewayException('The payout provider could not authenticate this payout request.');
+    }
+    return raw.token;
+  }
+
   /**
    * NOWPayments signs IPN callbacks with HMAC-SHA512, but NOT over the raw
    * request bytes -- it's over JSON.stringify() of the parsed body with all
@@ -112,6 +239,35 @@ export class NowPaymentsService {
   getIpnEventHash(parsedBody: unknown): string {
     return createHash('sha256').update(JSON.stringify(sortKeysDeep(parsedBody))).digest('hex');
   }
+}
+
+async function readNowPaymentsJson(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { raw: text };
+  }
+}
+
+function extractPayout(raw: Record<string, unknown>, fallbackId?: string): { id: string | null; status: string | null } {
+  const candidates = [
+    raw,
+    raw.payout as Record<string, unknown> | undefined,
+    raw.result as Record<string, unknown> | undefined,
+    Array.isArray(raw.withdrawals) ? (raw.withdrawals[0] as Record<string, unknown> | undefined) : undefined,
+  ].filter(Boolean) as Record<string, unknown>[];
+
+  for (const candidate of candidates) {
+    const id = candidate.id ?? candidate.payout_id ?? candidate.batch_withdrawal_id ?? candidate.withdrawal_id;
+    const status = candidate.status ?? candidate.payout_status ?? candidate.withdrawal_status;
+    if (typeof id === 'string' || typeof id === 'number') {
+      return { id: String(id), status: typeof status === 'string' ? status : null };
+    }
+  }
+
+  return { id: fallbackId ?? null, status: typeof raw.status === 'string' ? raw.status : null };
 }
 
 function sortKeysDeep(value: unknown): unknown {

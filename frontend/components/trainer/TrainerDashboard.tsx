@@ -75,6 +75,8 @@ import {
   useCreateTokenDepositMutation,
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
+  WithdrawalCurrency,
+  WithdrawalNetwork,
   useGetEarningHistoryQuery,
   useGetEarningsChartQuery,
   useGetMySubmissionsQuery,
@@ -284,6 +286,15 @@ function DashboardHeader({
           ))}
         </nav>
         <div className="flex items-center gap-2">
+          {activeView !== 'home' && (
+            <Link
+              className="inline-flex h-10 items-center gap-1 rounded-lg border border-line bg-surface px-2.5 text-sm font-bold text-accent transition-colors hover:bg-surface-muted"
+              href="/dashboard"
+            >
+              <ChevronLeft className="size-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </Link>
+          )}
           <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -2233,20 +2244,50 @@ function FundTokensDialog() {
   );
 }
 
+const WITHDRAWAL_NETWORKS_BY_CURRENCY: Record<WithdrawalCurrency, WithdrawalNetwork[]> = {
+  USDT: ['TRC20', 'ERC20', 'BEP20'],
+  USDC: ['ERC20', 'SOL', 'POLYGON'],
+};
+
+// Light client-side sanity checks only -- the backend is the source of
+// truth for what's actually allowed/valid (PlatformSettings allow-lists +
+// NOWPayments itself rejecting a malformed address at payout time). This
+// just catches an obviously-wrong paste before the OTP round-trip.
+const WITHDRAWAL_ADDRESS_PATTERNS: Record<WithdrawalNetwork, RegExp> = {
+  TRC20: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
+  ERC20: /^0x[0-9a-fA-F]{40}$/,
+  BEP20: /^0x[0-9a-fA-F]{40}$/,
+  SOL: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+  POLYGON: /^0x[0-9a-fA-F]{40}$/,
+};
+
 function WithdrawTokensDialog({ balance }: { balance: string }) {
   const [amount, setAmount] = useState('');
   const [destinationAddress, setDestinationAddress] = useState('');
+  const [destinationCurrency, setDestinationCurrency] = useState<WithdrawalCurrency>('USDT');
+  const [destinationNetwork, setDestinationNetwork] = useState<WithdrawalNetwork>('TRC20');
   const [message, setMessage] = useState<string | null>(null);
   const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [requestOtp, { isLoading: isRequestingOtp }] = useRequestWithdrawalOtpMutation();
   const [createWithdrawal, { isLoading: isSubmitting }] = useCreateWithdrawalMutation();
 
+  const addressLooksValid = destinationAddress.length === 0 || WITHDRAWAL_ADDRESS_PATTERNS[destinationNetwork].test(destinationAddress.trim());
+
+  function updateCurrency(currency: WithdrawalCurrency) {
+    setDestinationCurrency(currency);
+    setDestinationNetwork(WITHDRAWAL_NETWORKS_BY_CURRENCY[currency][0]);
+  }
+
   async function submitDetails(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
+    if (!addressLooksValid) {
+      setMessage(`That doesn't look like a valid ${destinationNetwork} address.`);
+      return;
+    }
     try {
-      const result = await requestOtp({ tokenAmount: Number(amount), destinationAddress }).unwrap();
+      const result = await requestOtp({ tokenAmount: Number(amount), destinationAddress, destinationCurrency, destinationNetwork }).unwrap();
       setOtpRequestId(result.otpRequestId);
     } catch (error) {
       setMessage(normalizeErrorMessage(error, 'Could not send a confirmation code.'));
@@ -2258,7 +2299,7 @@ function WithdrawTokensDialog({ balance }: { balance: string }) {
     if (!otpRequestId) return;
     setMessage(null);
     try {
-      await createWithdrawal({ tokenAmount: Number(amount), destinationAddress, otpRequestId, code }).unwrap();
+      await createWithdrawal({ tokenAmount: Number(amount), destinationAddress, destinationCurrency, destinationNetwork, otpRequestId, code }).unwrap();
       setMessage(null);
       setOtpRequestId(null);
       setAmount('');
@@ -2308,12 +2349,46 @@ function WithdrawTokensDialog({ balance }: { balance: string }) {
               Amount in tokens
               <input className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent" min="0.00000001" onChange={(event) => setAmount(event.target.value)} required step="any" type="number" value={amount} />
             </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="grid gap-1.5 text-sm font-bold">
+                Currency
+                <select
+                  className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                  onChange={(event) => updateCurrency(event.target.value as WithdrawalCurrency)}
+                  value={destinationCurrency}
+                >
+                  {Object.keys(WITHDRAWAL_NETWORKS_BY_CURRENCY).map((currency) => (
+                    <option key={currency} value={currency}>{currency}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-sm font-bold">
+                Network
+                <select
+                  className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                  onChange={(event) => setDestinationNetwork(event.target.value as WithdrawalNetwork)}
+                  value={destinationNetwork}
+                >
+                  {WITHDRAWAL_NETWORKS_BY_CURRENCY[destinationCurrency].map((network) => (
+                    <option key={network} value={network}>{network}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <label className="grid gap-1.5 text-sm font-bold">
-              USDT destination address
-              <input className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent" onChange={(event) => setDestinationAddress(event.target.value)} placeholder="T..." required type="text" value={destinationAddress} />
+              {destinationCurrency} destination address ({destinationNetwork})
+              <input
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                onChange={(event) => setDestinationAddress(event.target.value.trim())}
+                placeholder={destinationNetwork === 'TRC20' ? 'T...' : destinationNetwork === 'SOL' ? 'Base58 address' : '0x...'}
+                required
+                type="text"
+                value={destinationAddress}
+              />
+              {!addressLooksValid && <span className="text-xs font-bold text-danger">Doesn&apos;t look like a valid {destinationNetwork} address.</span>}
             </label>
             {message && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{message}</p>}
-            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" pending={isRequestingOtp} pendingLabel="Sending code" type="submit">
+            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" disabled={!addressLooksValid} pending={isRequestingOtp} pendingLabel="Sending code" type="submit">
               Send confirmation code
             </ActionButton>
           </form>

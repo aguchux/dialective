@@ -7,8 +7,18 @@ import { hashContext } from '../otp/otp.util';
  * here (not left to call sites) so hashContext's JSON.stringify output is
  * deterministic regardless of how a caller happens to build the object.
  */
-export function withdrawalContextHash(input: { tokenAmount: number; destinationAddress: string }): string {
-  return hashContext({ tokenAmount: input.tokenAmount, destinationAddress: input.destinationAddress });
+export function withdrawalContextHash(input: {
+  tokenAmount: number;
+  destinationAddress: string;
+  destinationCurrency: string;
+  destinationNetwork: string;
+}): string {
+  return hashContext({
+    tokenAmount: input.tokenAmount,
+    destinationAddress: input.destinationAddress,
+    destinationCurrency: input.destinationCurrency,
+    destinationNetwork: input.destinationNetwork,
+  });
 }
 
 export function depositContextHash(input: { usdAmount: number; currency: string }): string {
@@ -17,14 +27,30 @@ export function depositContextHash(input: { usdAmount: number; currency: string 
 
 /**
  * Binds an admin-payout OTP (admin/training-payouts, admin/withdrawals/:id/
- * resolve) to the exact action being confirmed -- same anti-replay reasoning
- * as withdrawal/deposit binding, but scoped to whichever admin action is
- * being gated. `action` disambiguates which admin route the hash is for, so
- * a code issued for one action type can't validate another.
+ * approve|resolve|submit-nowpayments) to the exact action AND the exact
+ * transaction details being confirmed -- same anti-replay reasoning as
+ * withdrawal/deposit binding, but scoped to whichever admin action is being
+ * gated. `action` disambiguates which admin route the hash is for, so a code
+ * issued for one action type can't validate another.
+ *
+ * The withdrawal variant binds id/amount/currency/address/network (not just
+ * id) so an OTP issued for a withdrawal can only ever authorize sending
+ * funds to the exact destination/amount it was shown for -- if any of those
+ * fields change on the row between OTP issuance and consumption (e.g. an
+ * admin edits the note, or -- hypothetically -- the address), the hash
+ * re-derived from the current row no longer matches and verification fails
+ * closed rather than silently authorizing a different payout.
  */
 export function adminActionContextHash(
   input:
-    | { action: 'resolve-withdrawal'; id: string }
+    | {
+        action: 'withdrawal';
+        id: string;
+        tokenAmount: number;
+        destinationCurrency: string;
+        destinationAddress: string;
+        destinationNetwork: string;
+      }
     | { action: 'training-payout'; userId: string; tokenAmount: number; reference: string },
 ): string {
   return hashContext(input);

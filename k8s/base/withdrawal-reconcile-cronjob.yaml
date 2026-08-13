@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: withdrawal-reconcile
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: withdrawal-reconcile
+              image: golojan/dialect-api:latest
+              command: ["node", "dist/withdrawal-reconcile.js"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-creds
+                      key: connection_string
+                - name: NOWPAYMENTS_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: nowpayments-creds
+                      key: nowpayments_api_key
+                - name: NOWPAYMENTS_IPN_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: nowpayments-creds
+                      key: nowpayments_ipn_secret
+                - name: NOWPAYMENTS_PAYOUT_EMAIL
+                  valueFrom:
+                    secretKeyRef:
+                      name: nowpayments-creds
+                      key: nowpayments_payout_email
+                - name: NOWPAYMENTS_PAYOUT_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nowpayments-creds
+                      key: nowpayments_payout_password

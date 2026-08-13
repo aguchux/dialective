@@ -45,6 +45,8 @@ import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { RequestWithdrawalOtpDto } from './dto/request-withdrawal-otp.dto';
 import { RequestDepositOtpDto } from './dto/request-deposit-otp.dto';
 import { ResolveWithdrawalDto } from './dto/resolve-withdrawal.dto';
+import { SubmitWithdrawalPayoutDto } from './dto/submit-withdrawal-payout.dto';
+import { VerifyWithdrawalPayoutDto } from './dto/verify-withdrawal-payout.dto';
 import { UpdateReferralSettingsDto } from './dto/update-referral-settings.dto';
 import { CreateTrainingPayoutDto } from './dto/create-training-payout.dto';
 import { ListEarningsDto } from './dto/list-earnings.dto';
@@ -59,6 +61,9 @@ const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.REFERRAL_FUNDING_BONUS,
   LedgerEntryType.REFERRAL_PAYOUT_BONUS,
 ];
+
+const NOWPAYMENTS_PAYOUT_FINISHED_STATUSES = new Set(['finished', 'paid', 'complete', 'completed', 'success']);
+const NOWPAYMENTS_PAYOUT_FAILED_STATUSES = new Set(['failed', 'rejected', 'expired', 'cancelled', 'canceled']);
 
 /**
  * Wallet / Utility Token Pool: users fund their token balance with
@@ -554,19 +559,54 @@ export class WalletController {
   }
 
 
+  /** Shared PENDING withdrawal preconditions -- kill switch, minimum, allow-listed currency/network, verified contact. */
+  private async validateWithdrawalRequest(
+    userId: string,
+    tokenAmount: number,
+    destinationCurrency: string,
+    destinationNetwork: string,
+  ): Promise<void> {
+    if (!(await this.platformSettings.isCryptoWithdrawalsEnabled())) {
+      throw new UnprocessableEntityException('Crypto withdrawals are currently disabled');
+    }
+    const minTokens = await this.platformSettings.getMinWithdrawalTokens();
+    if (tokenAmount < minTokens) {
+      throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
+    }
+    const [allowedCurrencies, allowedNetworks] = await Promise.all([
+      this.platformSettings.getAllowedWithdrawalCurrencies(),
+      this.platformSettings.getAllowedWithdrawalNetworks(),
+    ]);
+    if (!allowedCurrencies.includes(destinationCurrency.toUpperCase())) {
+      throw new UnprocessableEntityException(`${destinationCurrency} is not an allowed withdrawal currency`);
+    }
+    if (!allowedNetworks.includes(destinationNetwork.toUpperCase())) {
+      throw new UnprocessableEntityException(`${destinationNetwork} is not an allowed withdrawal network`);
+    }
+
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.emailVerified) {
+      throw new UnprocessableEntityException('Verify your email before requesting a withdrawal');
+    }
+    if (!user.phoneVerifiedAt) {
+      throw new UnprocessableEntityException('Verify your phone number before requesting a withdrawal');
+    }
+  }
+
   @Post('wallet/withdrawals/otp')
   @UseGuards(JwtAuthGuard, UserThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
   async requestWithdrawalOtp(@Req() req: AuthenticatedRequest, @Body() body: RequestWithdrawalOtpDto) {
-    const minTokens = await this.platformSettings.getMinWithdrawalTokens();
-    if (body.tokenAmount < minTokens) {
-      throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
-    }
+    const destinationCurrency = body.destinationCurrency ?? 'USDT';
+    const destinationNetwork = body.destinationNetwork ?? 'TRC20';
+    await this.validateWithdrawalRequest(req.user.sub, body.tokenAmount, destinationCurrency, destinationNetwork);
 
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
     const contextHash = withdrawalContextHash({
       tokenAmount: body.tokenAmount,
       destinationAddress: body.destinationAddress,
+      destinationCurrency,
+      destinationNetwork,
     });
     return this.otp.issueForUser(req.user.sub, OtpPurpose.WITHDRAWAL, user.email, contextHash);
   }
@@ -575,25 +615,30 @@ export class WalletController {
   @UseGuards(JwtAuthGuard, UserThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
   async createWithdrawal(@Req() req: AuthenticatedRequest, @Body() body: CreateWithdrawalDto) {
-    const wallet = await this.getOrCreateWallet(req.user.sub);
-    const minTokens = await this.platformSettings.getMinWithdrawalTokens();
+    const destinationCurrency = body.destinationCurrency ?? 'USDT';
+    const destinationNetwork = body.destinationNetwork ?? 'TRC20';
+    await this.validateWithdrawalRequest(req.user.sub, body.tokenAmount, destinationCurrency, destinationNetwork);
 
-    if (body.tokenAmount < minTokens) {
-      throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
-    }
+    const wallet = await this.getOrCreateWallet(req.user.sub);
 
     // Read-only validation here; the actual consume write joins the debit
     // transaction below so a crash between "OTP consumed" and "debit
     // applied" can't happen. contextHash re-derived from the submitted body
     // (not trusted from the client) -- a mismatch means this code was
-    // issued for a different amount/destination than what's being submitted
-    // now, which is exactly the tamper/replay case this binding closes.
+    // issued for a different amount/destination/currency/network than
+    // what's being submitted now, which is exactly the tamper/replay case
+    // this binding closes.
     const otpRow = await this.otp.verifyWithoutConsuming({
       otpRequestId: body.otpRequestId,
       userId: req.user.sub,
       purpose: OtpPurpose.WITHDRAWAL,
       code: body.code,
-      contextHash: withdrawalContextHash({ tokenAmount: body.tokenAmount, destinationAddress: body.destinationAddress }),
+      contextHash: withdrawalContextHash({
+        tokenAmount: body.tokenAmount,
+        destinationAddress: body.destinationAddress,
+        destinationCurrency,
+        destinationNetwork,
+      }),
     });
 
     const rate = await this.platformSettings.getTokenUsdRate();
@@ -618,6 +663,8 @@ export class WalletController {
           tokenAmount: body.tokenAmount,
           usdtAmount,
           destinationAddress: body.destinationAddress,
+          destinationCurrency,
+          destinationNetwork,
           status: WithdrawalStatus.PENDING,
         },
       }),
@@ -673,14 +720,210 @@ export class WalletController {
     });
   }
 
+  /**
+   * One OTP purpose serves approve/resolve/submit -- all are "this admin
+   * authorizes moving this withdrawal's funds" actions, and the context
+   * hash (id + amount + currency + address + network) already prevents an
+   * OTP issued for one withdrawal from validating a different one or a
+   * since-changed destination. `action: 'withdrawal'` distinguishes this
+   * whole family from the unrelated training-payout OTP purpose.
+   */
   @Post('admin/withdrawals/:id/resolve/otp')
   @UseGuards(JwtAuthGuard, RolesGuard, UserThrottlerGuard)
   @Roles(Role.ADMIN)
   @Throttle({ default: { limit: 20, ttl: 60 * 60 * 1000 } })
   async requestResolveWithdrawalOtp(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    const withdrawal = await this.prisma.withdrawalRequest.findUniqueOrThrow({ where: { id } });
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
-    const contextHash = adminActionContextHash({ action: 'resolve-withdrawal', id });
+    const contextHash = adminActionContextHash({
+      action: 'withdrawal',
+      id,
+      tokenAmount: withdrawal.tokenAmount.toNumber(),
+      destinationCurrency: withdrawal.destinationCurrency,
+      destinationAddress: withdrawal.destinationAddress,
+      destinationNetwork: withdrawal.destinationNetwork,
+    });
     return this.otp.issueForUser(req.user.sub, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+  }
+
+  /**
+   * The human checkpoint (payout-automation plan point 1/3): an admin
+   * reviews user/amount/currency/address/network/id and explicitly greenlights
+   * this withdrawal before any provider call is made. Separate from
+   * submission so "approved" and "actually sent to NOWPayments" are always
+   * distinguishable in the status history, and so a stuck/slow provider
+   * doesn't retroactively make it look like nobody reviewed the request.
+   */
+  @Post('admin/withdrawals/:id/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async approveWithdrawal(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: SubmitWithdrawalPayoutDto) {
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
+    if (!withdrawal) {
+      throw new NotFoundException('Withdrawal request not found');
+    }
+    if (withdrawal.status !== WithdrawalStatus.PENDING) {
+      throw new UnprocessableEntityException('Only pending withdrawals can be approved');
+    }
+
+    await this.verifyAdminPayoutOtpIfEnabled(req.user.sub, withdrawal, body.otpRequestId, body.code);
+
+    const approved = await this.prisma.withdrawalRequest.update({
+      where: { id },
+      data: { status: WithdrawalStatus.APPROVED, approvedByAdminId: req.user.sub, approvedAt: new Date(), adminNote: body.adminNote },
+    });
+    this.logger.log(`Withdrawal approved: admin=${req.user.sub} withdrawal=${id}`);
+
+    if (await this.platformSettings.isAutoSubmitAfterApprovalEnabled()) {
+      return this.submitWithdrawalToNowPayments(req, id, body);
+    }
+
+    return { withdrawalId: id, status: approved.status };
+  }
+
+  @Post('admin/withdrawals/:id/submit-nowpayments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async submitWithdrawalToNowPayments(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: SubmitWithdrawalPayoutDto,
+  ) {
+    if (!(await this.platformSettings.isNowPaymentsPayoutsEnabled())) {
+      throw new UnprocessableEntityException('NOWPayments payouts are currently disabled');
+    }
+
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
+    if (!withdrawal) {
+      throw new NotFoundException('Withdrawal request not found');
+    }
+    if (withdrawal.status !== WithdrawalStatus.APPROVED) {
+      // FAILED withdrawals must go back through approve (a fresh, logged,
+      // OTP-gated checkpoint) rather than being resubmitted directly here --
+      // a create call whose response was lost to a network error may have
+      // still reached NOWPayments, so silently retrying create risks a
+      // second real payout. Forcing re-approval makes that retry a
+      // deliberate, audited admin decision instead of a same-click resend.
+      throw new UnprocessableEntityException('Only approved withdrawals can be submitted to NOWPayments -- re-approve failed withdrawals before retrying');
+    }
+    if (withdrawal.providerPayoutId) {
+      return this.refreshNowPaymentsWithdrawalStatus(id);
+    }
+
+    await this.verifyAdminPayoutOtpIfEnabled(req.user.sub, withdrawal, body.otpRequestId, body.code);
+
+    // Atomically claim the row before calling out to NOWPayments -- the
+    // WHERE clause (status still APPROVED, no providerPayoutId yet) is
+    // evaluated by Postgres as part of the row lock/update, so two
+    // concurrent submit calls for the same withdrawal (double-click, two
+    // admin tabs) can't both pass this check and both create a real
+    // provider-side payout. Only the request that wins this update
+    // proceeds to createPayout.
+    const claim = await this.prisma.withdrawalRequest.updateMany({
+      where: { id, status: WithdrawalStatus.APPROVED, providerPayoutId: null },
+      data: { providerStatus: 'submitting' },
+    });
+    if (claim.count === 0) {
+      throw new UnprocessableEntityException('This withdrawal is already being submitted or was already submitted');
+    }
+
+    try {
+      const payout = await this.nowPayments.createPayout({
+        withdrawalId: withdrawal.id,
+        address: withdrawal.destinationAddress,
+        currency: withdrawal.destinationCurrency as 'USDT' | 'USDC',
+        amount: withdrawal.usdtAmount.toNumber(),
+      });
+      await this.prisma.$transaction([
+        this.prisma.withdrawalRequest.update({
+          where: { id },
+          data: {
+            status: this.mapProviderPayoutStatus(payout.status),
+            provider: 'nowpayments',
+            providerPayoutId: payout.payoutId,
+            providerStatus: payout.status ?? 'created',
+            providerCurrency: withdrawal.destinationCurrency,
+            providerNetwork: withdrawal.destinationNetwork,
+            providerAddress: withdrawal.destinationAddress,
+            providerPayload: payout.raw as Prisma.InputJsonValue,
+            providerError: null,
+            submittedToProviderAt: new Date(),
+            providerSettledAt: this.isProviderPayoutFinished(payout.status) ? new Date() : null,
+            resolvedAt: this.isProviderPayoutFinished(payout.status) ? new Date() : null,
+            adminNote: body.adminNote,
+          },
+        }),
+        this.prisma.nowPaymentsPayoutEvent.create({
+          data: {
+            eventHash: randomUUID(),
+            withdrawalRequestId: id,
+            providerPayoutId: payout.payoutId,
+            eventType: 'create',
+            providerStatus: payout.status,
+            payload: payout.raw as Prisma.InputJsonValue,
+          },
+        }),
+      ]);
+      this.logger.log(`Withdrawal submitted to NOWPayments: admin=${req.user.sub} withdrawal=${id} providerPayoutId=${payout.payoutId}`);
+
+      if (body.verificationCode) {
+        return this.verifyNowPaymentsWithdrawalPayout(req, id, { verificationCode: body.verificationCode });
+      }
+
+      return { withdrawalId: id, status: this.mapProviderPayoutStatus(payout.status), providerPayoutId: payout.payoutId };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.prisma.withdrawalRequest.update({
+        where: { id },
+        data: { status: WithdrawalStatus.FAILED, provider: 'nowpayments', providerError: message, adminNote: body.adminNote },
+      });
+      await this.prisma.nowPaymentsPayoutEvent.create({
+        data: {
+          eventHash: randomUUID(),
+          withdrawalRequestId: id,
+          eventType: 'create_failed',
+          payload: { message },
+          processingError: message,
+        },
+      });
+      this.logger.error(`Withdrawal submit-to-NOWPayments failed: admin=${req.user.sub} withdrawal=${id}: ${message}`);
+      throw err;
+    }
+  }
+
+  @Post('admin/withdrawals/:id/verify-nowpayments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async verifyNowPaymentsWithdrawalPayout(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: VerifyWithdrawalPayoutDto) {
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
+    if (!withdrawal) {
+      throw new NotFoundException('Withdrawal request not found');
+    }
+    if (!withdrawal.providerPayoutId) {
+      throw new UnprocessableEntityException('Withdrawal has not been submitted to NOWPayments');
+    }
+
+    const result = await this.nowPayments.verifyPayout(withdrawal.providerPayoutId, body.verificationCode);
+    await this.recordNowPaymentsPayoutStatus(id, result.payoutId, 'verify', result.status, result.raw);
+    this.logger.log(`Withdrawal payout verified: admin=${req.user.sub} withdrawal=${id} providerStatus=${result.status ?? 'unknown'}`);
+    return { withdrawalId: id, status: this.mapProviderPayoutStatus(result.status), providerPayoutId: result.payoutId };
+  }
+
+  @Post('admin/withdrawals/:id/refresh-nowpayments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async refreshNowPaymentsWithdrawalStatus(@Param('id') id: string) {
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
+    if (!withdrawal) {
+      throw new NotFoundException('Withdrawal request not found');
+    }
+    if (!withdrawal.providerPayoutId) {
+      throw new UnprocessableEntityException('Withdrawal has not been submitted to NOWPayments');
+    }
+
+    const result = await this.nowPayments.getPayoutStatus(withdrawal.providerPayoutId);
+    await this.recordNowPaymentsPayoutStatus(id, result.payoutId, 'status', result.status, result.raw);
+    return { withdrawalId: id, status: this.mapProviderPayoutStatus(result.status), providerPayoutId: result.payoutId };
   }
 
   @Post('admin/withdrawals/:id/resolve')
@@ -691,8 +934,12 @@ export class WalletController {
     if (!withdrawal) {
       throw new NotFoundException('Withdrawal request not found');
     }
-    if (withdrawal.status !== WithdrawalStatus.PENDING) {
+    const resolvableStatuses: WithdrawalStatus[] = [WithdrawalStatus.PENDING, WithdrawalStatus.APPROVED, WithdrawalStatus.FAILED];
+    if (!resolvableStatuses.includes(withdrawal.status)) {
       throw new UnprocessableEntityException('Withdrawal request already resolved');
+    }
+    if (body.outcome === 'paid' && withdrawal.status === WithdrawalStatus.FAILED) {
+      throw new UnprocessableEntityException('A failed payout must be reconciled (check provider status) before marking paid manually -- reject/refund instead if the payout truly never went through');
     }
 
     // Only the money-moving outcome ("paid") is gated -- rejecting reverses
@@ -706,7 +953,14 @@ export class WalletController {
         userId: req.user.sub,
         purpose: OtpPurpose.ADMIN_PAYOUT,
         code: body.code,
-        contextHash: adminActionContextHash({ action: 'resolve-withdrawal', id }),
+        contextHash: adminActionContextHash({
+          action: 'withdrawal',
+          id,
+          tokenAmount: withdrawal.tokenAmount.toNumber(),
+          destinationCurrency: withdrawal.destinationCurrency,
+          destinationAddress: withdrawal.destinationAddress,
+          destinationNetwork: withdrawal.destinationNetwork,
+        }),
       });
     }
 
@@ -736,7 +990,82 @@ export class WalletController {
       ]);
     }
 
+    this.logger.log(`Withdrawal resolved: admin=${req.user.sub} withdrawal=${id} outcome=${body.outcome}`);
     return { withdrawalId: id, status: body.outcome === 'paid' ? 'paid' : 'rejected' };
+  }
+
+  private async verifyAdminPayoutOtpIfEnabled(
+    adminUserId: string,
+    withdrawal: { id: string; tokenAmount: Prisma.Decimal; destinationCurrency: string; destinationAddress: string; destinationNetwork: string },
+    otpRequestId?: string,
+    code?: string,
+  ): Promise<void> {
+    if (!(await this.platformSettings.isAdminPayoutOtpEnabled())) return;
+    if (!otpRequestId || !code) {
+      throw new UnprocessableEntityException('OTP verification is required to submit this withdrawal payout');
+    }
+    await this.otp.verify({
+      otpRequestId,
+      userId: adminUserId,
+      purpose: OtpPurpose.ADMIN_PAYOUT,
+      code,
+      contextHash: adminActionContextHash({
+        action: 'withdrawal',
+        id: withdrawal.id,
+        tokenAmount: withdrawal.tokenAmount.toNumber(),
+        destinationCurrency: withdrawal.destinationCurrency,
+        destinationAddress: withdrawal.destinationAddress,
+        destinationNetwork: withdrawal.destinationNetwork,
+      }),
+    });
+  }
+
+  private mapProviderPayoutStatus(status: string | null | undefined): WithdrawalStatus {
+    const normalized = status?.toLowerCase();
+    if (normalized && NOWPAYMENTS_PAYOUT_FINISHED_STATUSES.has(normalized)) return WithdrawalStatus.PAID;
+    if (normalized && NOWPAYMENTS_PAYOUT_FAILED_STATUSES.has(normalized)) return WithdrawalStatus.FAILED;
+    return WithdrawalStatus.PROCESSING;
+  }
+
+  private isProviderPayoutFinished(status: string | null | undefined): boolean {
+    const normalized = status?.toLowerCase();
+    return Boolean(normalized && NOWPAYMENTS_PAYOUT_FINISHED_STATUSES.has(normalized));
+  }
+
+  private async recordNowPaymentsPayoutStatus(
+    withdrawalId: string,
+    providerPayoutId: string,
+    eventType: string,
+    providerStatus: string | null,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const status = this.mapProviderPayoutStatus(providerStatus);
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.withdrawalRequest.update({
+        where: { id: withdrawalId },
+        data: {
+          status,
+          provider: 'nowpayments',
+          providerPayoutId,
+          providerStatus: providerStatus ?? undefined,
+          providerPayload: payload as Prisma.InputJsonValue,
+          providerError: null,
+          providerSettledAt: status === WithdrawalStatus.PAID ? now : undefined,
+          resolvedAt: status === WithdrawalStatus.PAID ? now : undefined,
+        },
+      }),
+      this.prisma.nowPaymentsPayoutEvent.create({
+        data: {
+          eventHash: randomUUID(),
+          withdrawalRequestId: withdrawalId,
+          providerPayoutId,
+          eventType,
+          providerStatus,
+          payload: payload as Prisma.InputJsonValue,
+        },
+      }),
+    ]);
   }
 
   /**

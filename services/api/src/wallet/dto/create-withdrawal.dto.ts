@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsString, IsUUID, Length, Matches, Min } from 'class-validator';
+import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Length, Matches, Min } from 'class-validator';
 
 export class CreateWithdrawalDto {
   @IsNumber()
@@ -8,6 +8,14 @@ export class CreateWithdrawalDto {
   @IsString()
   @IsNotEmpty()
   destinationAddress!: string;
+
+  @IsOptional()
+  @IsIn(['USDT', 'USDC'])
+  destinationCurrency?: string;
+
+  @IsOptional()
+  @IsIn(['TRC20', 'ERC20', 'BEP20', 'SOL', 'POLYGON'])
+  destinationNetwork?: string;
 
   @IsUUID()
   otpRequestId!: string;

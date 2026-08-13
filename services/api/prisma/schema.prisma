@@ -564,7 +564,10 @@ enum LedgerEntryType {
 
 enum WithdrawalStatus {
   PENDING
+  APPROVED
+  PROCESSING
   PAID
+  FAILED
   REJECTED
 }
 
@@ -659,8 +662,13 @@ model NowPaymentsIpnEvent {
 /// reserves the funds immediately so a user can't spend tokens on tasks AND
 /// request a withdrawal against the same balance. If an admin rejects the
 /// request, a WITHDRAWAL_REVERSED LedgerEntry credits the tokens back.
-/// Payout itself is manual (admin sends USDT by hand, then calls the
-/// resolve endpoint) -- no payout-provider API integration in this phase.
+/// Payout can be sent either manually (admin sends USDT by hand, then calls
+/// the resolve endpoint) or automated via NOWPayments' mass-payout API
+/// (admin approves -> submits -> provider processes -> settlement-job
+/// reconciles). approvedByAdminId/approvedAt record the human checkpoint
+/// (Point 1/3 of the payout-automation plan) independently of whether/when
+/// the payout was actually submitted to the provider -- submittedToProviderAt
+/// marks that separate, later step.
 model WithdrawalRequest {
   id                  String           @id @default(uuid())
   walletId            String
@@ -668,14 +676,55 @@ model WithdrawalRequest {
   tokenAmount         Decimal          @db.Decimal(20, 8)
   usdtAmount          Decimal          @db.Decimal(20, 8)
   destinationAddress  String
+  destinationCurrency String           @default("USDT") // user's chosen payout currency, validated at request time against PlatformSettings.allowedWithdrawalCurrencies
+  destinationNetwork  String           @default("TRC20") // user's chosen payout network, validated at request time against PlatformSettings.allowedWithdrawalNetworks
   status              WithdrawalStatus @default(PENDING)
+  approvedByAdminId   String?
+  approvedAt          DateTime?
+  provider            String?
+  providerPayoutId    String?          @unique
+  providerStatus      String?
+  providerCurrency    String?
+  providerNetwork     String?
+  providerAddress     String?
+  providerPayload     Json?
+  providerError       String?
+  submittedToProviderAt DateTime?
+  providerSettledAt   DateTime?
   adminNote           String?
   createdAt           DateTime         @default(now())
   resolvedAt          DateTime?
 
+  providerEvents NowPaymentsPayoutEvent[]
+
   @@index([walletId])
   @@index([status])
+  @@index([providerPayoutId])
   @@map("withdrawal_requests")
+}
+
+/// Every NOWPayments mass-payout create/status/verify response we persist
+/// for audit and reconciliation. Payouts may require provider-side 2FA, so
+/// status changes are not assumed final until NOWPayments reports a terminal
+/// state. eventHash dedupes a specific inbound payout callback delivery the
+/// same way NowPaymentsIpnEvent.eventHash does for deposits -- app-initiated
+/// writes (create/verify/status polls, which aren't inbound callbacks) get a
+/// freshly generated one instead so every row still has a stable identity.
+model NowPaymentsPayoutEvent {
+  id                  String            @id @default(uuid())
+  eventHash           String            @unique
+  withdrawalRequestId String?
+  withdrawalRequest   WithdrawalRequest? @relation(fields: [withdrawalRequestId], references: [id], onDelete: SetNull)
+  providerPayoutId    String?
+  eventType           String
+  providerStatus      String?
+  payload             Json
+  processingError     String?
+  receivedAt          DateTime          @default(now())
+
+  @@index([withdrawalRequestId])
+  @@index([providerPayoutId])
+  @@map("nowpayments_payout_events")
 }
 
 enum P2POfferType {
@@ -888,6 +937,14 @@ model PlatformSettings {
   p2pSmsPaymentMarkedEnabled  Boolean @default(false) // SMS the seller when the buyer marks a trade paid (markPaid)
   p2pSmsTokensReleasedEnabled Boolean @default(false) // SMS the buyer when the seller releases tokens (release)
   p2pSmsCancelledEnabled      Boolean @default(false) // SMS the seller when a trade is cancelled/expired/refunded (cancelTrade, refundTradeToSeller, dispute resolved to seller) and the non-raiser when a dispute is raised (raiseDispute)
+  cryptoWithdrawalsEnabled Boolean @default(true) // master kill switch -- when false, both wallet/withdrawals/otp and wallet/withdrawals reject new withdrawal requests outright
+  nowPaymentsPayoutsEnabled Boolean @default(false) // when false, admin/withdrawals/:id/submit-nowpayments is disabled -- admins can still resolve withdrawals manually (outcome=paid) while this is off, which is the safe default until payout credentials/allow-lists are configured
+  allowedWithdrawalCurrencies String @default("USDT") // CSV of currencies a withdrawal's destinationCurrency may be, validated app-side against NowPaymentsService's supported set (USDT, USDC)
+  allowedWithdrawalNetworks String @default("TRC20") // CSV of networks a withdrawal's destinationNetwork may be for its chosen currency, validated app-side against NowPaymentsService's supported set (TRC20, ERC20, BEP20, SOL, POLYGON)
+  withdrawalFeeMode        String   @default("platform") // "platform" (fee absorbed by platform, user receives full tokenAmount worth) or "user" (fee deducted from the payout, see withdrawalFeeTokenAmount/withdrawalFeePercent)
+  withdrawalFeeTokenAmount Decimal  @default(0) @db.Decimal(20, 8) // flat token fee deducted from payout when withdrawalFeeMode="user" and this is > 0 (takes precedence over withdrawalFeePercent if both are set)
+  withdrawalFeePercent     Decimal  @default(0) @db.Decimal(5, 2) // percentage fee (0-100) deducted from payout when withdrawalFeeMode="user" and withdrawalFeeTokenAmount is 0
+  autoSubmitAfterApproval  Boolean  @default(false) // when true, admin/withdrawals/:id/approve immediately submits to NOWPayments in the same call instead of leaving it APPROVED for a separate submit step -- defaults off per the payout-automation plan's explicit caution
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 
