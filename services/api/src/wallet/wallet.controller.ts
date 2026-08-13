@@ -322,6 +322,32 @@ export class WalletController {
     };
   }
 
+  @Get('wallet/activity')
+  @UseGuards(JwtAuthGuard)
+  async listActivity(@Req() req: AuthenticatedRequest, @Query() query: ListEarningsDto) {
+    const wallet = await this.getOrCreateWallet(req.user.sub);
+    const where: Prisma.LedgerEntryWhereInput = { walletId: wallet.id };
+    const skip = (query.page - 1) * query.pageSize;
+    const [entries, total] = await Promise.all([
+      this.prisma.ledgerEntry.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: query.pageSize,
+        select: { id: true, type: true, amount: true, reference: true, createdAt: true },
+      }),
+      this.prisma.ledgerEntry.count({ where }),
+    ]);
+
+    return {
+      items: entries.map((entry) => ({ ...entry, amount: entry.amount.toString() })),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+    };
+  }
+
   @Post('wallet/deposits/otp')
   @UseGuards(JwtAuthGuard, UserThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })

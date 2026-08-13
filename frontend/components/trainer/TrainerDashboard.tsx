@@ -80,6 +80,7 @@ import {
   useGetMySubmissionsQuery,
   useGetMyWordRecordingsQuery,
   useGetTrainerDashboardQuery,
+  useGetWalletActivityQuery,
   useListMyP2PTradesQuery,
   useListP2POffersQuery,
   useMarkP2PTradePaidMutation,
@@ -93,7 +94,7 @@ import type { Session } from 'next-auth';
 
 type SessionUpdateFn = (data?: Record<string, unknown>) => Promise<Session | null>;
 
-type DashboardView = 'tokens' | 'earnings' | 'training' | 'market' | 'referrals' | 'scores' | 'profile';
+type DashboardView = 'home' | 'tokens' | 'earnings' | 'training' | 'market' | 'referrals' | 'scores' | 'profile';
 
 const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = [
   { id: 'tokens', label: 'Tokens', icon: WalletCards },
@@ -104,7 +105,7 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
 ];
 
 // Reachable only from the account dropdown, not the main tab bar/mobile nav.
-const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'referrals', 'profile'];
+const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'home', 'referrals', 'profile'];
 
 const activityLabels: Record<LedgerEntryType, string> = {
   DEPOSIT: 'Token funding',
@@ -133,7 +134,7 @@ export function TrainerDashboard() {
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
   const requestedView = searchParams.get('view');
   const displayName = [session?.user.firstName, session?.user.lastName].filter(Boolean).join(' ');
-  const activeView = allViewIds.includes(requestedView as DashboardView) ? (requestedView as DashboardView) : 'tokens';
+  const activeView = allViewIds.includes(requestedView as DashboardView) ? (requestedView as DashboardView) : 'home';
   const { data, isLoading, isFetching, error, refetch } = useGetTrainerDashboardQuery(undefined, {
     skip: status !== 'authenticated' || session?.user.role === 'ADMIN',
   });
@@ -189,7 +190,7 @@ export function TrainerDashboard() {
         />
 
         <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
-          {activeView === 'tokens' && (
+          {activeView === 'home' && (
             <section className="mb-7 flex flex-wrap items-center gap-3 border-b border-line pb-6 md:gap-4">
               <Avatar email={session.user.email ?? 'Trainer'} image={session.user.image} large />
               <div className="min-w-0">
@@ -381,7 +382,8 @@ function DashboardViewContent({
   if (activeView === 'market') return <MarketView />;
   if (activeView === 'referrals') return <ReferralsView data={data} email={email} />;
   if (activeView === 'scores') return <ScoresView />;
-  return <TokensView data={data} refreshing={refreshing} />;
+  if (activeView === 'tokens') return <TokensView refreshing={refreshing} />;
+  return <HomeView data={data} refreshing={refreshing} />;
 }
 
 function ViewHeading({ title, subtitle, refreshing }: { title: string; subtitle: string; refreshing?: boolean }) {
@@ -396,12 +398,14 @@ function ViewHeading({ title, subtitle, refreshing }: { title: string; subtitle:
   );
 }
 
-function TokensView({ data, refreshing }: { data: TrainerDashboardSummary; refreshing: boolean }) {
+function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refreshing: boolean }) {
   const usdValue = Number(data.balance) * data.tokenUsdRate;
+  const router = useRouter();
+  const latest = data.recentActivity.slice(0, 10);
   return (
     <div>
       <div className="flex items-start justify-between gap-3">
-        <ViewHeading title="Tokens" subtitle="Your available platform balance and account activity." refreshing={refreshing} />
+        <ViewHeading title="Dashboard" subtitle="Your available platform balance at a glance." refreshing={refreshing} />
         <div className="flex shrink-0 items-center gap-2">
           <WithdrawTokensDialog balance={data.balance} />
           <FundTokensDialog />
@@ -420,8 +424,95 @@ function TokensView({ data, refreshing }: { data: TrainerDashboardSummary; refre
         </p>
       )}
       <section className="mt-8">
-        <SectionTitle title="Recent activity" subtitle="Funding, earnings, referrals, and payouts." />
-        <ActivityList entries={data.recentActivity} />
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <SectionTitle title="Recent activity" subtitle="Your latest token transactions." />
+          <button
+            className="shrink-0 text-sm font-extrabold text-accent hover:underline"
+            onClick={() => router.push('/dashboard?view=tokens')}
+            type="button"
+          >
+            View all
+          </button>
+        </div>
+        <ActivityList compact entries={latest} />
+      </section>
+    </div>
+  );
+}
+
+function TokensView({ refreshing }: { refreshing: boolean }) {
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const { data, isLoading, isFetching, isError, refetch } = useGetWalletActivityQuery({ page, pageSize });
+
+  return (
+    <div>
+      <ViewHeading title="Tokens" subtitle="Full history of your token activity." refreshing={refreshing || isFetching} />
+      <section className={`${cardClass} overflow-hidden`}>
+        {isLoading ? (
+          <div className="grid min-h-52 place-items-center" role="status">
+            <RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" />
+            <span className="sr-only">Loading token activity</span>
+          </div>
+        ) : isError ? (
+          <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
+            <p className="font-extrabold">Could not load your token activity.</p>
+            <button className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted" onClick={() => void refetch()} type="button">
+              Try again
+            </button>
+          </div>
+        ) : data && data.items.length ? (
+          <>
+            <div className="divide-y divide-line md:hidden">
+              {data.items.map((entry) => <ActivityMobileRow entry={entry} key={entry.id} />)}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[720px] text-left">
+                <thead className="bg-surface-muted/70 text-xs font-black uppercase text-muted">
+                  <tr>
+                    <th className="px-4 py-3">Activity</th>
+                    <th className="px-4 py-3">Reference</th>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {data.items.map((entry) => <ActivityTableRow entry={entry} key={entry.id} />)}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-col gap-3 border-t border-line px-4 py-3 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, data.total)} of {data.total}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  aria-label="Previous activity page"
+                  className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={page <= 1}
+                  onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+                  type="button"
+                >
+                  <ChevronLeft className="size-4" aria-hidden="true" />
+                </button>
+                <span className="min-w-16 text-center font-bold text-ink">
+                  {page} / {data.totalPages}
+                </span>
+                <button
+                  aria-label="Next activity page"
+                  className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={page >= data.totalPages}
+                  onClick={() => setPage((currentPage) => Math.min(data.totalPages, currentPage + 1))}
+                  type="button"
+                >
+                  <ChevronRight className="size-4" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <EmptyPanel icon={Clock3} title="No account activity yet" actionHref={undefined} actionLabel={undefined} />
+        )}
       </section>
     </div>
   );
@@ -648,7 +739,7 @@ function TrainingView({ dialectTag, onStartTask }: { dialectTag: string | null; 
   );
 }
 
-type TaskDisplayStatus = 'PENDING' | 'TRANSCRIBED' | 'SCORED' | 'SETTLED' | 'REJECTED' | 'FAILED';
+type TaskDisplayStatus = 'PENDING' | 'TRANSCRIBED' | 'SCORED' | 'SETTLED' | 'REJECTED' | 'EXPIRED' | 'FAILED';
 
 const taskStatusLabels: Record<TaskDisplayStatus, string> = {
   PENDING: 'Awaiting transcription',
@@ -656,6 +747,7 @@ const taskStatusLabels: Record<TaskDisplayStatus, string> = {
   SCORED: 'Scored',
   SETTLED: 'Scored',
   REJECTED: 'Rejected',
+  EXPIRED: 'Not enough submissions — refunded',
   FAILED: 'Failed to score',
 };
 
@@ -665,6 +757,7 @@ const taskStatusTones: Record<TaskDisplayStatus, string> = {
   SCORED: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
   SETTLED: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
   REJECTED: 'bg-red-50 text-danger dark:bg-red-950',
+  EXPIRED: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
   FAILED: 'bg-red-50 text-danger dark:bg-red-950',
 };
 
@@ -687,15 +780,17 @@ function formatCountdown(ms: number) {
 }
 
 /**
- * Scoring is quorum-triggered (no fixed schedule) and settlement runs every
- * 12h, so there's no real backend "scoring deadline" to poll. This is a
- * display-only SLA countdown anchored to createdAt: if a submission is still
- * PENDING/TRANSCRIBED once it elapses, the row shows as "Failed to score"
- * client-side only -- nothing is written back. If the real job scores it
- * later, the next refetch's live status corrects the display immediately.
+ * Scoring is quorum-triggered (no fixed schedule) and settlement-job only
+ * sweeps periodically, so there's a gap between a submission's SLA
+ * elapsing and the backend actually confirming it as EXPIRED (refunded,
+ * terminal). Until that sweep runs, this shows a display-only "Failed to
+ * score" guess client-side -- nothing is written back for it. Once
+ * settlement-job runs, submission.status flips to the real EXPIRED value
+ * and that's what renders instead.
  */
 function deriveTaskStatus(submission: TrainerSubmissionSummary, nowMs: number, slaMs: number): TaskDisplayStatus {
   if (submission.status === 'REJECTED') return 'REJECTED';
+  if (submission.status === 'EXPIRED') return 'EXPIRED';
   if (submission.status === 'SCORED' || submission.status === 'SETTLED') return submission.status;
   const deadline = new Date(submission.createdAt).getTime() + slaMs;
   if (nowMs >= deadline) return 'FAILED';
@@ -1901,6 +1996,7 @@ const submissionStatusLabels: Record<TrainerSubmissionSummary['status'], string>
   REJECTED: 'Rejected',
   SCORED: 'Scored',
   SETTLED: 'Settled',
+  EXPIRED: 'Not enough submissions — refunded',
 };
 
 const submissionStatusTones: Record<TrainerSubmissionSummary['status'], string> = {
@@ -1909,13 +2005,14 @@ const submissionStatusTones: Record<TrainerSubmissionSummary['status'], string> 
   REJECTED: 'bg-red-50 text-danger dark:bg-red-950',
   SCORED: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
   SETTLED: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+  EXPIRED: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
 };
 
 function ScoresView() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const { items, total, totalPages, isLoading, isFetching, isError, refetch } = useMergedSubmissions(
-    ['SCORED', 'SETTLED', 'REJECTED'],
+    ['SCORED', 'SETTLED', 'REJECTED', 'EXPIRED'],
     page,
     pageSize,
   );
@@ -2244,9 +2341,11 @@ function MetricCard({ icon: Icon, label, value, tone, compact = false }: { icon:
   );
 }
 
-function ActivityList({ entries, compact = false }: { entries: TrainerDashboardSummary['recentActivity']; compact?: boolean }) {
+type ActivityEntry = { id: string; type: LedgerEntryType; amount: string; reference: string; createdAt: string };
+
+function ActivityList({ entries, compact = false }: { entries: ActivityEntry[]; compact?: boolean }) {
   const [page, setPage] = useState(1);
-  const pageSize = compact ? 6 : 8;
+  const pageSize = compact ? Math.max(entries.length, 1) : 8;
   const totalPages = Math.max(1, Math.ceil(entries.length / pageSize));
   const startIndex = compact ? 0 : (page - 1) * pageSize;
   const shown = entries.slice(startIndex, startIndex + pageSize);
@@ -2313,7 +2412,7 @@ function ActivityList({ entries, compact = false }: { entries: TrainerDashboardS
   );
 }
 
-function ActivityMobileRow({ entry }: { entry: TrainerDashboardSummary['recentActivity'][number] }) {
+function ActivityMobileRow({ entry }: { entry: ActivityEntry }) {
   const positive = Number(entry.amount) >= 0;
   const Icon = entry.type === 'DEPOSIT' ? ArrowDownLeft : positive ? ArrowDownLeft : ArrowUpRight;
   return (
@@ -2332,7 +2431,7 @@ function ActivityMobileRow({ entry }: { entry: TrainerDashboardSummary['recentAc
   );
 }
 
-function ActivityTableRow({ entry }: { entry: TrainerDashboardSummary['recentActivity'][number] }) {
+function ActivityTableRow({ entry }: { entry: ActivityEntry }) {
   const positive = Number(entry.amount) >= 0;
   const Icon = entry.type === 'DEPOSIT' ? ArrowDownLeft : positive ? ArrowDownLeft : ArrowUpRight;
   return (

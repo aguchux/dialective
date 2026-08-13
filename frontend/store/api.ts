@@ -365,6 +365,20 @@ export interface EarningHistoryPage {
   totalPages: number;
 }
 
+export interface WalletActivityPage {
+  items: {
+    id: string;
+    type: LedgerEntryType;
+    amount: string;
+    reference: string;
+    createdAt: string;
+  }[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface AdminStats {
   totalUsers: number;
   totalTrainers: number;
@@ -569,7 +583,7 @@ export interface TrainerSubmissionSummary {
   id: string;
   promptText: string;
   dialectTag: string;
-  status: 'PENDING' | 'TRANSCRIBED' | 'REJECTED' | 'SCORED' | 'SETTLED';
+  status: 'PENDING' | 'TRANSCRIBED' | 'REJECTED' | 'SCORED' | 'SETTLED' | 'EXPIRED';
   tokensSpent: string;
   rawScore: string | null;
   score: string | null;
@@ -846,6 +860,10 @@ export const dialectivaApi = createApi({
     }),
     getEarningHistory: builder.query<EarningHistoryPage, { page: number; pageSize: number }>({
       query: ({ page, pageSize }) => ({ url: '/wallet/earnings', params: { page, pageSize } }),
+      providesTags: ['Wallet'],
+    }),
+    getWalletActivity: builder.query<WalletActivityPage, { page: number; pageSize: number }>({
+      query: ({ page, pageSize }) => ({ url: '/wallet/activity', params: { page, pageSize } }),
       providesTags: ['Wallet'],
     }),
     getEarningsChart: builder.query<EarningsChart, { range: EarningsChartRange }>({
@@ -1229,6 +1247,7 @@ export const {
   useRaiseP2PDisputeMutation,
   useGetTrainerDashboardQuery,
   useGetEarningHistoryQuery,
+  useGetWalletActivityQuery,
   useGetEarningsChartQuery,
   useGetMySubmissionsQuery,
   useGetMyWordRecordingsQuery,

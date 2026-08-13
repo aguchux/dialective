@@ -409,7 +409,7 @@ export class SettlementService {
           totalPayout += payout;
         } else {
           await this.refundTokens(submission.userId, submission.tokensSpent, submission.id);
-          await this.prisma.submission.update({ where: { id: submission.id }, data: { refundedAt: new Date() } });
+          await this.prisma.submission.update({ where: { id: submission.id }, data: { refundedAt: new Date(), status: 'EXPIRED' } });
           refundedCount += 1;
         }
       } catch (err) {
@@ -435,7 +435,7 @@ export class SettlementService {
           totalPayout += payout;
         } else {
           await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
-          await this.prisma.wordRecording.update({ where: { id: recording.id }, data: { refundedAt: new Date() } });
+          await this.prisma.wordRecording.update({ where: { id: recording.id }, data: { refundedAt: new Date(), status: 'EXPIRED' } });
           refundedCount += 1;
         }
       } catch (err) {

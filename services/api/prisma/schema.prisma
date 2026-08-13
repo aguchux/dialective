@@ -230,6 +230,7 @@ enum SubmissionStatus {
   REJECTED    // ASR prefilter/unreadable/unsupported-dialect rejection
   SCORED      // consensus-scorer wrote a score
   SETTLED     // settlement-job paid it out
+  EXPIRED     // settlement-job's scoring SLA elapsed with no quorum reached; tokens refunded, terminal state
 }
 
 /// Seeded (services/api/prisma/seed.ts), stable sentence prompts for the
