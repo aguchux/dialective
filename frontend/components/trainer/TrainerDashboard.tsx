@@ -68,6 +68,7 @@ import {
   useGetP2PReferenceRateQuery,
   useGetP2PTraderProfileQuery,
   useGetMeQuery,
+  useResendEmailVerificationMutation,
   useRequestPhoneOtpMutation,
   useVerifyPhoneMutation,
   useRequestP2PPaymentMethodOtpMutation,
@@ -140,6 +141,7 @@ export function TrainerDashboard() {
   const { data, isLoading, isFetching, error, refetch } = useGetTrainerDashboardQuery(undefined, {
     skip: status !== 'authenticated' || session?.user.role === 'ADMIN',
   });
+  const { data: me } = useGetMeQuery(undefined, { skip: status !== 'authenticated' || session?.user.role === 'ADMIN' });
 
   // Pre-check affordability client-side so a trainer sees an actionable
   // "fund your account" prompt instead of only discovering insufficient
@@ -190,6 +192,8 @@ export function TrainerDashboard() {
           email={session.user.email ?? 'Trainer'}
           image={session.user.image}
         />
+
+        {me && !me.emailVerified && <EmailVerificationBanner />}
 
         <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
           {activeView === 'home' && (
@@ -261,6 +265,105 @@ function LowBalanceDialog({
         <FundTokensDialog />
       </DialogContent>
     </Dialog>
+  );
+}
+
+function EmailVerificationBanner() {
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resend, { isLoading }] = useResendEmailVerificationMutation();
+  const router = useRouter();
+
+  async function handleSend() {
+    setError(null);
+    try {
+      await resend().unwrap();
+      setSent(true);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not send the verification link.'));
+    }
+  }
+
+  return (
+    <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm dark:border-amber-900 dark:bg-amber-950">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 md:px-2">
+        <p className="font-bold text-amber-800 dark:text-amber-200">
+          {sent
+            ? 'Verification link sent — check your inbox.'
+            : error
+              ? error
+              : 'Your email address is not verified.'}
+        </p>
+        {!sent && (
+          <button
+            className="shrink-0 font-extrabold text-amber-800 underline hover:no-underline disabled:cursor-not-allowed disabled:opacity-60 dark:text-amber-200"
+            disabled={isLoading}
+            onClick={() => void handleSend()}
+            type="button"
+          >
+            {isLoading ? 'Sending…' : 'Click here to send verification link'}
+          </button>
+        )}
+        {sent && (
+          <button
+            className="shrink-0 font-extrabold text-amber-800 underline hover:no-underline dark:text-amber-200"
+            onClick={() => router.push('/dashboard?view=profile')}
+            type="button"
+          >
+            Manage in Profile
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmailVerificationCard({ email, emailVerified }: { email: string; emailVerified: boolean }) {
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resend, { isLoading }] = useResendEmailVerificationMutation();
+
+  async function handleSend() {
+    setError(null);
+    setSent(false);
+    try {
+      await resend().unwrap();
+      setSent(true);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not send the verification link.'));
+    }
+  }
+
+  return (
+    <div className={`${cardClass} grid gap-4 p-5`}>
+      <SectionTitle title="Email address" subtitle={emailVerified ? 'Verified.' : 'Verify your email address.'} />
+      <p className="text-sm font-bold">{email}</p>
+      {emailVerified ? (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+          This email address is verified.
+        </p>
+      ) : (
+        <>
+          {sent && (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              Verification link sent — check your inbox.
+            </p>
+          )}
+          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{error}</p>}
+          <div>
+            <ActionButton
+              className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void handleSend()}
+              pending={isLoading}
+              pendingLabel="Sending"
+              type="button"
+            >
+              Send verification link
+            </ActionButton>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -1751,6 +1854,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
             </ActionButton>
           </div>
         </form>
+
+        <EmailVerificationCard email={session.user.email ?? ''} emailVerified={me?.emailVerified ?? false} />
 
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={submitPhoneVerification}>
           <SectionTitle

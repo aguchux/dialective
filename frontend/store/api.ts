@@ -1090,6 +1090,9 @@ export const dialectivaApi = createApi({
         body,
       }),
     }),
+    resendEmailVerification: builder.mutation<void, void>({
+      query: () => ({ url: '/auth/verify-email/resend', method: 'POST' }),
+    }),
     createDataAccessLead: builder.mutation<{ id: string; status: string }, DataAccessLeadInput>({
       query: (body) => ({
         url: '/leads/data-access',
@@ -1320,6 +1323,7 @@ export const {
   useRequestPasswordResetMutation,
   useResetPasswordMutation,
   useVerifyEmailMutation,
+  useResendEmailVerificationMutation,
   useGetCountriesQuery,
   useGetDialectsQuery,
   useGetWalletQuery,

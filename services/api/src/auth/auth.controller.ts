@@ -84,6 +84,14 @@ export class AuthController {
     await this.auth.verifyEmail(dto.token);
   }
 
+  @Post('verify-email/resend')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 3, ttl: 10 * 60 * 1000 } })
+  async resendEmailVerification(@CurrentUser() user: AccessTokenClaims): Promise<void> {
+    await this.auth.resendEmailVerification(user.sub);
+  }
+
   @Post('magic-link/request')
   @HttpCode(HttpStatus.NO_CONTENT)
   async requestMagicLink(@Body() dto: RequestMagicLinkDto): Promise<void> {

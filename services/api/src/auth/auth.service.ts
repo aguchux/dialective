@@ -436,6 +436,13 @@ export class AuthService {
     ]);
   }
 
+  /** No-ops (rather than erroring) if already verified -- the caller (Profile/top-bar banner) just wants "send it" to always be safe to click. */
+  async resendEmailVerification(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.emailVerified) return;
+    await this.issueEmailVerification(user);
+  }
+
   // --- Profile / onboarding -------------------------------------------------
 
   async getProfile(userId: string): Promise<PublicUser> {
