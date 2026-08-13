@@ -64,7 +64,7 @@ export function LandingHeader() {
       {pinned && <div style={{ height: headerHeight }} aria-hidden="true" />}
       <header
         ref={headerRef}
-        className={`top-0 z-50 w-full px-4 py-3 text-[#050505] transition-colors duration-300 sm:px-6 md:px-8 ${
+        className={`top-0 z-100 w-full px-4 py-3 text-[#050505] transition-colors duration-300 sm:px-6 md:px-8 ${
           pinned ? 'fixed bg-white/90 shadow-[0_2px_12px_rgba(5,5,5,0.08)] backdrop-blur-md' : 'relative bg-transparent'
         }`}
       >
