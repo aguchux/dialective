@@ -38,6 +38,11 @@ spec:
                 configMapKeyRef:
                   name: consensus-scorer-config
                   key: consumer_group
+            - name: MIN_QUORUM
+              valueFrom:
+                configMapKeyRef:
+                  name: consensus-scorer-config
+                  key: min_quorum
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

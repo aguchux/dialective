@@ -1,1 +1,1 @@
-export const MIN_QUORUM = Number(process.env.MIN_QUORUM ?? 5);
+export const MIN_QUORUM = Number(process.env.MIN_QUORUM ?? 3);

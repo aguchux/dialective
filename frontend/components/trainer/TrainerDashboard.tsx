@@ -980,7 +980,7 @@ function MyTasksView() {
     ['PENDING', 'TRANSCRIBED'],
     page,
     pageSize,
-    30000,
+    10000,
   );
   const now = Date.now();
   const scoringSlaLabel = formatDurationLabel(useScoringSlaMs());
@@ -2131,6 +2131,7 @@ function ScoresView() {
     ['SCORED', 'SETTLED', 'REJECTED', 'EXPIRED'],
     page,
     pageSize,
+    10000,
   );
 
   return (
