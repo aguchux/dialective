@@ -2048,29 +2048,112 @@ function MetricCard({ icon: Icon, label, value, tone, compact = false }: { icon:
 }
 
 function ActivityList({ entries, compact = false }: { entries: TrainerDashboardSummary['recentActivity']; compact?: boolean }) {
+  const [page, setPage] = useState(1);
+  const pageSize = compact ? 6 : 8;
+  const totalPages = Math.max(1, Math.ceil(entries.length / pageSize));
+  const startIndex = compact ? 0 : (page - 1) * pageSize;
+  const shown = entries.slice(startIndex, startIndex + pageSize);
+  const showingFrom = entries.length ? startIndex + 1 : 0;
+  const showingTo = Math.min(startIndex + shown.length, entries.length);
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, totalPages));
+  }, [totalPages]);
+
   if (!entries.length) return <EmptyPanel icon={Clock3} title="No account activity yet" actionHref={undefined} actionLabel={undefined} />;
-  const shown = compact ? entries.slice(0, 6) : entries;
+
   return (
-    <div className={`${cardClass} divide-y divide-line overflow-hidden`}>
-      {shown.map((entry) => {
-        const positive = Number(entry.amount) >= 0;
-        const Icon = entry.type === 'DEPOSIT' ? ArrowDownLeft : positive ? ArrowDownLeft : ArrowUpRight;
-        return (
-          <div className="flex items-center gap-3 p-3.5 md:px-4" key={entry.id}>
-            <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${positive ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-surface-muted text-muted'}`}>
-              <Icon className="size-4" aria-hidden="true" />
+    <div className={`${cardClass} overflow-hidden`}>
+      <div className="divide-y divide-line md:hidden">
+        {shown.map((entry) => <ActivityMobileRow entry={entry} key={entry.id} />)}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[720px] text-left">
+          <thead className="bg-surface-muted/70 text-xs font-black uppercase text-muted">
+            <tr>
+              <th className="px-4 py-3">Activity</th>
+              <th className="px-4 py-3">Reference</th>
+              <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3 text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {shown.map((entry) => <ActivityTableRow entry={entry} key={entry.id} />)}
+          </tbody>
+        </table>
+      </div>
+      {!compact && entries.length > pageSize ? (
+        <div className="flex flex-col gap-3 border-t border-line px-4 py-3 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Showing {showingFrom}-{showingTo} of {entries.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              aria-label="Previous activity page"
+              className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink disabled:cursor-not-allowed disabled:opacity-45"
+              disabled={page <= 1}
+              onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+              type="button"
+            >
+              <ChevronLeft className="size-4" aria-hidden="true" />
+            </button>
+            <span className="min-w-16 text-center font-bold text-ink">
+              {page} / {totalPages}
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-extrabold md:text-base">{activityLabels[entry.type]}</p>
-              <p className="text-xs text-muted md:text-sm">{formatDate(entry.createdAt)}</p>
-            </div>
-            <p className={`shrink-0 text-sm font-black md:text-base ${positive ? 'text-emerald-700 dark:text-emerald-300' : 'text-ink'}`}>
-              {positive ? '+' : ''}{formatTokens(entry.amount)}
-            </p>
+            <button
+              aria-label="Next activity page"
+              className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink disabled:cursor-not-allowed disabled:opacity-45"
+              disabled={page >= totalPages}
+              onClick={() => setPage((currentPage) => Math.min(totalPages, currentPage + 1))}
+              type="button"
+            >
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
           </div>
-        );
-      })}
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function ActivityMobileRow({ entry }: { entry: TrainerDashboardSummary['recentActivity'][number] }) {
+  const positive = Number(entry.amount) >= 0;
+  const Icon = entry.type === 'DEPOSIT' ? ArrowDownLeft : positive ? ArrowDownLeft : ArrowUpRight;
+  return (
+    <div className="flex items-center gap-3 p-3.5 md:px-4">
+      <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${positive ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-surface-muted text-muted'}`}>
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-extrabold md:text-base">{activityLabels[entry.type]}</p>
+        <p className="text-xs text-muted md:text-sm">{formatDate(entry.createdAt)}</p>
+      </div>
+      <p className={`shrink-0 text-sm font-black md:text-base ${positive ? 'text-emerald-700 dark:text-emerald-300' : 'text-ink'}`}>
+        {positive ? '+' : ''}{formatTokens(entry.amount)}
+      </p>
+    </div>
+  );
+}
+
+function ActivityTableRow({ entry }: { entry: TrainerDashboardSummary['recentActivity'][number] }) {
+  const positive = Number(entry.amount) >= 0;
+  const Icon = entry.type === 'DEPOSIT' ? ArrowDownLeft : positive ? ArrowDownLeft : ArrowUpRight;
+  return (
+    <tr className="align-middle">
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${positive ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-surface-muted text-muted'}`}>
+            <Icon className="size-4" aria-hidden="true" />
+          </span>
+          <span className="font-extrabold text-ink">{activityLabels[entry.type]}</span>
+        </div>
+      </td>
+      <td className="max-w-72 truncate px-4 py-3 font-mono text-xs text-muted">{entry.reference || '-'}</td>
+      <td className="whitespace-nowrap px-4 py-3 text-sm text-muted">{formatDate(entry.createdAt)}</td>
+      <td className={`whitespace-nowrap px-4 py-3 text-right font-black ${positive ? 'text-emerald-700 dark:text-emerald-300' : 'text-ink'}`}>
+        {positive ? '+' : ''}{formatTokens(entry.amount)}
+      </td>
+    </tr>
   );
 }
 

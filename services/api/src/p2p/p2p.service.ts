@@ -18,6 +18,7 @@ import { randomUUID } from 'crypto';
 import { OtpService } from '../otp/otp.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { SmsService } from '../sms/sms.service';
 import { tokensToLocalCurrency } from '../wallet/currency-rate.util';
 import {
   AcceptOfferDto,
@@ -42,6 +43,7 @@ export class P2PService {
     private readonly prisma: PrismaService,
     private readonly otp: OtpService,
     private readonly platformSettings: PlatformSettingsService,
+    private readonly sms: SmsService,
   ) {}
 
   async getSettings() {
@@ -106,6 +108,29 @@ export class P2PService {
     if (!user.phoneVerifiedAt) {
       throw new UnprocessableEntityException(`Verify your phone number before ${action}`);
     }
+  }
+
+  /**
+   * Best-effort trade-notification SMS -- gated per-event by an admin
+   * toggle, silently skipped for unverified/missing phone numbers, and
+   * never allowed to fail or block the trade action that triggered it
+   * (always called after the triggering DB write has already succeeded).
+   */
+  private async notify(userId: string, enabled: boolean, body: string): Promise<void> {
+    if (!enabled) return;
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { phoneNumber: true, phoneVerifiedAt: true } });
+    if (!user?.phoneNumber || !user.phoneVerifiedAt) return;
+    try {
+      await this.sms.sendTransactional(user.phoneNumber, body);
+    } catch {
+      // Already logged inside SmsFallbackChain -- notification delivery must never fail/block the trade action itself.
+    }
+  }
+
+  private async notifyTradeCreated(buyerId: string, sellerId: string, tokenAmount: string, paymentDeadlineAt: Date): Promise<void> {
+    const enabled = await this.platformSettings.isP2pSmsTradeCreatedEnabled();
+    const body = `Dialect Library: Your P2P trade for ${tokenAmount} tokens has started. Pay before ${paymentDeadlineAt.toISOString()}.`;
+    await Promise.all([this.notify(buyerId, enabled, body), this.notify(sellerId, enabled, body)]);
   }
 
   async createPaymentMethod(userId: string, dto: UpsertPaymentMethodDto) {
@@ -271,6 +296,7 @@ export class P2PService {
           },
         }),
       ]);
+      await this.notifyTradeCreated(userId, offer.userId, offer.tokenAmount.toString(), paymentDeadlineAt);
       return this.getTradeForUser(userId, tradeId);
     }
 
@@ -303,6 +329,7 @@ export class P2PService {
         data: { walletId: wallet.id, type: LedgerEntryType.P2P_ESCROW_LOCK, amount: -offer.tokenAmount, reference: tradeId },
       });
     });
+    await this.notifyTradeCreated(offer.userId, userId, offer.tokenAmount.toString(), paymentDeadlineAt);
     return this.getTradeForUser(userId, tradeId);
   }
 
@@ -337,6 +364,11 @@ export class P2PService {
         cancelAvailableAt: null,
       },
     });
+    await this.notify(
+      trade.sellerId,
+      await this.platformSettings.isP2pSmsPaymentMarkedEnabled(),
+      'Dialect Library: The buyer marked your P2P trade as paid -- confirm and release tokens in the app.',
+    );
     return this.getTradeForUser(userId, tradeId);
   }
 
@@ -372,6 +404,11 @@ export class P2PService {
     if (!trade || trade.sellerId !== userId) throw new NotFoundException('Trade not found');
     if (trade.status !== P2PTradeStatus.PAID_MARKED) throw new UnprocessableEntityException('Only paid trades can be released');
     await this.releaseTradeToBuyer(trade.id);
+    await this.notify(
+      trade.buyerId,
+      await this.platformSettings.isP2pSmsTokensReleasedEnabled(),
+      'Dialect Library: Tokens released -- your P2P trade is complete.',
+    );
     return this.getTradeForUser(userId, tradeId);
   }
 
@@ -395,6 +432,12 @@ export class P2PService {
       }),
       this.prisma.p2PTokenOffer.update({ where: { id: trade.offerId }, data: { status: P2POfferStatus.DISPUTED } }),
     ]);
+    const otherPartyId = trade.buyerId === userId ? trade.sellerId : trade.buyerId;
+    await this.notify(
+      otherPartyId,
+      await this.platformSettings.isP2pSmsCancelledEnabled(),
+      'Dialect Library: A dispute was raised on your P2P trade.',
+    );
     return this.getTradeForUser(userId, tradeId);
   }
 
@@ -588,6 +631,11 @@ export class P2PService {
           ]
         : []),
     ]);
+    await this.notify(
+      trade.sellerId,
+      await this.platformSettings.isP2pSmsCancelledEnabled(),
+      'Dialect Library: Your P2P trade was cancelled and your tokens were refunded.',
+    );
   }
 
   private async releaseTradeToBuyer(tradeId: string, disputeId?: string, adminId?: string, resolutionNote?: string) {

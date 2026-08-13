@@ -96,6 +96,7 @@ export class ConsensusService implements OnModuleInit {
       return this.prisma.submission.update({
         where: { id },
         data: {
+          rawScore: new Prisma.Decimal(score.toFixed(2)),
           score: new Prisma.Decimal(score.toFixed(2)),
           isOutlier,
           status: 'SCORED',

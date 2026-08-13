@@ -249,6 +249,7 @@ export class WordsService {
           noiseRating: body.noiseRating,
           validationScore,
           tokensSpent: taskTokenCost,
+          rawScore: score,
           score,
           status: score !== null ? 'SCORED' : 'PENDING',
           scoredAt: score !== null ? new Date() : null,
@@ -367,6 +368,7 @@ export class WordsService {
           translationText: submittedText,
           submittedOrder: submitted,
           tokensSpent: taskTokenCost,
+          rawScore: score,
           score,
           validationScore: isExactMatch ? 1 : 0,
           status: 'SCORED',
@@ -430,6 +432,7 @@ export class WordsService {
         dialectTag: recording.dialectTag,
         status: recording.status,
         tokensSpent: recording.tokensSpent.toString(),
+        rawScore: recording.rawScore?.toString() ?? null,
         score: recording.score?.toString() ?? null,
         noiseScore: recording.noiseScore?.toString() ?? null,
         qualityScore: recording.qualityScore?.toString() ?? null,
@@ -555,7 +558,7 @@ export class WordsService {
     if (reverseValidationScore < 1) return;
     await this.prisma.wordRecording.updateMany({
       where: { id: sourceRecordingId, status: 'PENDING' },
-      data: { score: 100, status: 'SCORED', scoredAt: new Date() },
+      data: { rawScore: 100, score: 100, status: 'SCORED', scoredAt: new Date() },
     });
   }
 

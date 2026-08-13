@@ -3,6 +3,18 @@ export type SmsProviderKey = 'termii' | 'twilio' | 'africastalking' | 'smslive24
 export const ALL_SMS_PROVIDER_KEYS: SmsProviderKey[] = ['termii', 'twilio', 'africastalking', 'smslive247'];
 
 /**
+ * Fallback-chain-eligible providers for the fire-and-forget "send this
+ * exact code" OTP contract (smsProviderOrder). smslive247 is deliberately
+ * excluded: their OTP-compliant route generates its own code and verifies
+ * it on their side (see smslive247-native-otp.ts) -- it can't fire-and-
+ * forget an arbitrary code the way Termii/Twilio/Africa's Talking can, and
+ * their generic /api/v5/sms route rejects messages containing OTP-shaped
+ * numbers outright. smslive247 stays a valid SmsProvider (for potential
+ * future non-OTP notification use) but is never a smsProviderOrder member.
+ */
+export const SMS_OTP_FALLBACK_PROVIDER_KEYS: SmsProviderKey[] = ['termii', 'twilio', 'africastalking'];
+
+/**
  * A single provider sends one SMS to one E.164 number. Each implementation
  * throws on any network error, non-2xx, or missing credentials so
  * SmsFallbackChain can treat "provider failed" uniformly via try/catch and
@@ -15,14 +27,35 @@ export interface SmsProvider {
   send(toE164: string, body: string): Promise<void>;
 }
 
-const DEFAULT_PROVIDER_ORDER: SmsProviderKey[] = ['termii', 'twilio', 'africastalking', 'smslive247'];
+const DEFAULT_PROVIDER_ORDER: SmsProviderKey[] = SMS_OTP_FALLBACK_PROVIDER_KEYS;
 
-/** Parses a CSV provider-order string, falling back to the default order if it isn't a valid permutation. */
+/** Parses a CSV provider-order string, falling back to the default order if it isn't a valid permutation of the OTP-eligible providers. */
 export function parseSmsProviderOrder(csv: string): SmsProviderKey[] {
   const parts = csv.split(',').map((part) => part.trim()) as SmsProviderKey[];
   const isValidPermutation =
-    parts.length === ALL_SMS_PROVIDER_KEYS.length &&
-    ALL_SMS_PROVIDER_KEYS.every((key) => parts.includes(key)) &&
-    new Set(parts).size === ALL_SMS_PROVIDER_KEYS.length;
+    parts.length === SMS_OTP_FALLBACK_PROVIDER_KEYS.length &&
+    SMS_OTP_FALLBACK_PROVIDER_KEYS.every((key) => parts.includes(key)) &&
+    new Set(parts).size === SMS_OTP_FALLBACK_PROVIDER_KEYS.length;
   return isValidPermutation ? parts : DEFAULT_PROVIDER_ORDER;
+}
+
+/**
+ * Fallback-chain-eligible providers for plain transactional/notification
+ * SMS (P2P trade updates, not OTP) -- unlike SMS_OTP_FALLBACK_PROVIDER_KEYS,
+ * smslive247 IS included here: their generic /api/v5/sms route only
+ * rejects messages containing OTP-shaped numbers, which ordinary
+ * notification text never does.
+ */
+export const SMS_TRANSACTIONAL_PROVIDER_KEYS: SmsProviderKey[] = ['termii', 'twilio', 'africastalking', 'smslive247'];
+
+const DEFAULT_TRANSACTIONAL_PROVIDER_ORDER: SmsProviderKey[] = SMS_TRANSACTIONAL_PROVIDER_KEYS;
+
+/** Parses a CSV provider-order string for transactional SMS, falling back to the default order if it isn't a valid permutation of all 4 providers. */
+export function parseSmsTransactionalProviderOrder(csv: string): SmsProviderKey[] {
+  const parts = csv.split(',').map((part) => part.trim()) as SmsProviderKey[];
+  const isValidPermutation =
+    parts.length === SMS_TRANSACTIONAL_PROVIDER_KEYS.length &&
+    SMS_TRANSACTIONAL_PROVIDER_KEYS.every((key) => parts.includes(key)) &&
+    new Set(parts).size === SMS_TRANSACTIONAL_PROVIDER_KEYS.length;
+  return isValidPermutation ? parts : DEFAULT_TRANSACTIONAL_PROVIDER_ORDER;
 }

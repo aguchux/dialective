@@ -2,7 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 const LLM_PROVIDER_KEYS = ['openai', 'deepseek', 'anthropic'];
-const SMS_PROVIDER_KEYS = ['termii', 'twilio', 'africastalking', 'smslive247'];
+const SMS_PROVIDER_KEYS = ['termii', 'twilio', 'africastalking'];
+const SMS_TRANSACTIONAL_PROVIDER_KEYS = ['termii', 'twilio', 'africastalking', 'smslive247'];
 
 /**
  * Admin-editable platform settings that previously only existed as env-var
@@ -101,6 +102,36 @@ export class PlatformSettingsService {
     return row.smsProviderOrder;
   }
 
+  async isSmslive247NativeOtpEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.smslive247NativeOtpEnabled;
+  }
+
+  async getSmsTransactionalProviderOrder(): Promise<string> {
+    const row = await this.getRow();
+    return row.smsTransactionalProviderOrder;
+  }
+
+  async isP2pSmsTradeCreatedEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.p2pSmsTradeCreatedEnabled;
+  }
+
+  async isP2pSmsPaymentMarkedEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.p2pSmsPaymentMarkedEnabled;
+  }
+
+  async isP2pSmsTokensReleasedEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.p2pSmsTokensReleasedEnabled;
+  }
+
+  async isP2pSmsCancelledEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.p2pSmsCancelledEnabled;
+  }
+
   async isAdminPayoutOtpEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.adminPayoutOtpEnabled;
@@ -165,6 +196,12 @@ export class PlatformSettingsService {
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
       smsProviderOrder: row.smsProviderOrder,
+      smslive247NativeOtpEnabled: row.smslive247NativeOtpEnabled,
+      smsTransactionalProviderOrder: row.smsTransactionalProviderOrder,
+      p2pSmsTradeCreatedEnabled: row.p2pSmsTradeCreatedEnabled,
+      p2pSmsPaymentMarkedEnabled: row.p2pSmsPaymentMarkedEnabled,
+      p2pSmsTokensReleasedEnabled: row.p2pSmsTokensReleasedEnabled,
+      p2pSmsCancelledEnabled: row.p2pSmsCancelledEnabled,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -197,6 +234,12 @@ export class PlatformSettingsService {
     spellingNormalizationProviderOrder?: string;
     sentenceRebuildEnabled?: boolean;
     smsProviderOrder?: string;
+    smslive247NativeOtpEnabled?: boolean;
+    smsTransactionalProviderOrder?: string;
+    p2pSmsTradeCreatedEnabled?: boolean;
+    p2pSmsPaymentMarkedEnabled?: boolean;
+    p2pSmsTokensReleasedEnabled?: boolean;
+    p2pSmsCancelledEnabled?: boolean;
   }) {
     if (data.llmProviderOrder) {
       const tokens = data.llmProviderOrder.split(',');
@@ -227,7 +270,18 @@ export class PlatformSettingsService {
         SMS_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
         new Set(tokens).size === SMS_PROVIDER_KEYS.length;
       if (!isValidPermutation) {
-        throw new BadRequestException('smsProviderOrder must list termii, twilio, africastalking, and smslive247 exactly once each');
+        throw new BadRequestException('smsProviderOrder must list termii, twilio, and africastalking exactly once each');
+      }
+    }
+
+    if (data.smsTransactionalProviderOrder) {
+      const tokens = data.smsTransactionalProviderOrder.split(',');
+      const isValidPermutation =
+        tokens.length === SMS_TRANSACTIONAL_PROVIDER_KEYS.length &&
+        SMS_TRANSACTIONAL_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
+        new Set(tokens).size === SMS_TRANSACTIONAL_PROVIDER_KEYS.length;
+      if (!isValidPermutation) {
+        throw new BadRequestException('smsTransactionalProviderOrder must list termii, twilio, africastalking, and smslive247 exactly once each');
       }
     }
 
@@ -283,6 +337,12 @@ export class PlatformSettingsService {
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
       smsProviderOrder: row.smsProviderOrder,
+      smslive247NativeOtpEnabled: row.smslive247NativeOtpEnabled,
+      smsTransactionalProviderOrder: row.smsTransactionalProviderOrder,
+      p2pSmsTradeCreatedEnabled: row.p2pSmsTradeCreatedEnabled,
+      p2pSmsPaymentMarkedEnabled: row.p2pSmsPaymentMarkedEnabled,
+      p2pSmsTokensReleasedEnabled: row.p2pSmsTokensReleasedEnabled,
+      p2pSmsCancelledEnabled: row.p2pSmsCancelledEnabled,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

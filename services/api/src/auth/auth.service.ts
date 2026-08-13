@@ -13,9 +13,13 @@ import { isValidPhoneNumber } from 'libphonenumber-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { OtpService } from '../otp/otp.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { createSmslive247Otp, verifySmslive247Otp } from '../sms/smslive247-native-otp';
 import { generateOpaqueToken, hashToken } from './token.util';
 import { signAccessToken } from './jwt.util';
 import { phoneVerificationContextHash } from './phone-otp-context.util';
+
+const SMSLIVE247_NATIVE_OTP_REQUEST_ID = 'smslive247-native';
 
 const BCRYPT_ROUNDS = 12;
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -96,6 +100,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly otp: OtpService,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   // --- Registration / credentials login ---------------------------------
@@ -465,7 +470,11 @@ export class AuthService {
   /**
    * Issues an SMS OTP to a candidate phone number, context-bound so the
    * code can't later be redeemed against a different number. Never trust
-   * client-side E.164 validation alone -- re-validated here.
+   * client-side E.164 validation alone -- re-validated here. When
+   * smslive247NativeOtpEnabled is on, bypasses OtpCode/the SMS fallback
+   * chain entirely and uses SMSLive247's own token-generate API instead --
+   * see smslive247-native-otp.ts's doc comment for why (their OTP-compliant
+   * route generates the code itself; we never see or store it).
    */
   async requestPhoneVerificationOtp(userId: string, phoneNumber: string) {
     if (!isValidPhoneNumber(phoneNumber)) {
@@ -476,6 +485,13 @@ export class AuthService {
       throw new ConflictException('This phone number is already verified on another account');
     }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+    if (await this.platformSettings.isSmslive247NativeOtpEnabled()) {
+      const { expiresAt } = await createSmslive247Otp(phoneNumber);
+      const expiresInSeconds = Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000));
+      return { otpRequestId: SMSLIVE247_NATIVE_OTP_REQUEST_ID, expiresInSeconds };
+    }
+
     return this.otp.issueForUser(
       user.id,
       OtpPurpose.PHONE_VERIFICATION,
@@ -489,13 +505,19 @@ export class AuthService {
     if (!isValidPhoneNumber(phoneNumber)) {
       throw new UnprocessableEntityException('Enter a valid phone number in international format');
     }
-    await this.otp.verify({
-      otpRequestId,
-      userId,
-      purpose: OtpPurpose.PHONE_VERIFICATION,
-      code,
-      contextHash: phoneVerificationContextHash(phoneNumber),
-    });
+
+    if (otpRequestId === SMSLIVE247_NATIVE_OTP_REQUEST_ID) {
+      const isValid = await verifySmslive247Otp(phoneNumber, code);
+      if (!isValid) throw new UnauthorizedException('Invalid or expired code');
+    } else {
+      await this.otp.verify({
+        otpRequestId,
+        userId,
+        purpose: OtpPurpose.PHONE_VERIFICATION,
+        code,
+        contextHash: phoneVerificationContextHash(phoneNumber),
+      });
+    }
 
     try {
       const user = await this.prisma.user.update({

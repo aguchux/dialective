@@ -246,6 +246,7 @@ export class SubmissionsController {
         dialectTag: submission.dialectTag,
         status: submission.status,
         tokensSpent: submission.tokensSpent.toString(),
+        rawScore: submission.rawScore?.toString() ?? null,
         score: submission.score?.toString() ?? null,
         noiseScore: submission.noiseScore?.toString() ?? null,
         qualityScore: submission.qualityScore?.toString() ?? null,

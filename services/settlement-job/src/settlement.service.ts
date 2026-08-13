@@ -119,6 +119,7 @@ export class SettlementService {
         id: true,
         userId: true,
         tokensSpent: true,
+        rawScore: true,
         score: true,
         noiseScore: true,
         qualityScore: true,
@@ -141,8 +142,9 @@ export class SettlementService {
         // (useful for admin visibility/tuning) but computeTrainingPayout
         // gets the raw score, matching today's behavior exactly. See
         // computeCompositeScore's doc comment for the blend/clamp mechanism.
+        const realScore = submission.rawScore ?? submission.score;
         const compositeScore = computeCompositeScore(
-          submission.score,
+          realScore,
           submission.noiseScore,
           submission.qualityScore,
           submission.livenessScore,
@@ -205,6 +207,7 @@ export class SettlementService {
         id: true,
         userId: true,
         tokensSpent: true,
+        rawScore: true,
         score: true,
         noiseScore: true,
         qualityScore: true,
@@ -222,8 +225,9 @@ export class SettlementService {
       }
 
       try {
+        const realScore = recording.rawScore ?? recording.score;
         const compositeScore = computeCompositeScore(
-          recording.score,
+          realScore,
           recording.noiseScore,
           recording.qualityScore,
           recording.livenessScore,
@@ -460,11 +464,11 @@ export class SettlementService {
       kind === 'submission'
         ? this.prisma.submission.update({
             where: { id },
-            data: { score, status: 'SETTLED', scoredAt: new Date(), payoutTokenAmount: payout, settledAt: new Date() },
+            data: { rawScore: score, score, status: 'SETTLED', scoredAt: new Date(), payoutTokenAmount: payout, settledAt: new Date() },
           })
         : this.prisma.wordRecording.update({
             where: { id },
-            data: { score, status: 'SETTLED', scoredAt: new Date(), payoutTokenAmount: payout, settledAt: new Date() },
+            data: { rawScore: score, score, status: 'SETTLED', scoredAt: new Date(), payoutTokenAmount: payout, settledAt: new Date() },
           });
 
     // Legacy (pre-locking) rows never locked anything -- skip that decrement for them.

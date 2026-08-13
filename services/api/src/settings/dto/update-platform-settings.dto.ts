@@ -147,13 +147,43 @@ export class UpdatePlatformSettingsDto {
   @IsBoolean()
   sentenceRebuildEnabled?: boolean;
 
+  // 3 comma-separated tokens from {termii,twilio,africastalking}; exact
+  // permutation validated in PlatformSettingsService.update, same shape as
+  // llmProviderOrder. smslive247 is not a fallback-chain member -- see
+  // smslive247NativeOtpEnabled below.
+  @IsOptional()
+  @IsString()
+  @Matches(/^(termii|twilio|africastalking),(termii|twilio|africastalking),(termii|twilio|africastalking)$/)
+  smsProviderOrder?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  smslive247NativeOtpEnabled?: boolean;
+
   // 4 comma-separated tokens from {termii,twilio,africastalking,smslive247};
-  // exact permutation validated in PlatformSettingsService.update, same
-  // shape as llmProviderOrder.
+  // exact permutation validated in PlatformSettingsService.update. Separate
+  // from smsProviderOrder -- smslive247 CAN send ordinary notification
+  // text, only their OTP route rejects OTP-shaped messages.
   @IsOptional()
   @IsString()
   @Matches(
     /^(termii|twilio|africastalking|smslive247),(termii|twilio|africastalking|smslive247),(termii|twilio|africastalking|smslive247),(termii|twilio|africastalking|smslive247)$/,
   )
-  smsProviderOrder?: string;
+  smsTransactionalProviderOrder?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  p2pSmsTradeCreatedEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  p2pSmsPaymentMarkedEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  p2pSmsTokensReleasedEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  p2pSmsCancelledEnabled?: boolean;
 }

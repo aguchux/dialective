@@ -434,6 +434,12 @@ export interface PlatformSettings {
   spellingNormalizationProviderOrder: string;
   sentenceRebuildEnabled: boolean;
   smsProviderOrder: string;
+  smslive247NativeOtpEnabled: boolean;
+  smsTransactionalProviderOrder: string;
+  p2pSmsTradeCreatedEnabled: boolean;
+  p2pSmsPaymentMarkedEnabled: boolean;
+  p2pSmsTokensReleasedEnabled: boolean;
+  p2pSmsCancelledEnabled: boolean;
   updatedAt: string;
   createdAt: string;
 }
@@ -465,6 +471,12 @@ export interface PlatformSettingsInput {
   spellingNormalizationProviderOrder?: string;
   sentenceRebuildEnabled?: boolean;
   smsProviderOrder?: string;
+  smslive247NativeOtpEnabled?: boolean;
+  smsTransactionalProviderOrder?: string;
+  p2pSmsTradeCreatedEnabled?: boolean;
+  p2pSmsPaymentMarkedEnabled?: boolean;
+  p2pSmsTokensReleasedEnabled?: boolean;
+  p2pSmsCancelledEnabled?: boolean;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD';
@@ -546,6 +558,7 @@ export interface TrainerSubmissionSummary {
   dialectTag: string;
   status: 'PENDING' | 'TRANSCRIBED' | 'REJECTED' | 'SCORED' | 'SETTLED';
   tokensSpent: string;
+  rawScore: string | null;
   score: string | null;
   noiseScore: string | null;
   qualityScore: string | null;
