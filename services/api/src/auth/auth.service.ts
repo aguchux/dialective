@@ -57,6 +57,10 @@ export interface PublicUser {
   dialectTag: string | null;
   onboardingComplete: boolean;
   referralCode: string;
+  emailNotificationsEnabled: boolean;
+  smsNotificationsEnabled: boolean;
+  marketingNotificationsEnabled: boolean;
+  blogNewsNotificationsEnabled: boolean;
 }
 
 type UserWithDialect = User & { dialect?: { tag: string } | null };
@@ -77,6 +81,10 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     dialectTag: user.dialect?.tag ?? null,
     onboardingComplete: user.countryId !== null && user.dialectId !== null,
     referralCode: user.referralCode,
+    emailNotificationsEnabled: user.emailNotificationsEnabled,
+    smsNotificationsEnabled: user.smsNotificationsEnabled,
+    marketingNotificationsEnabled: user.marketingNotificationsEnabled,
+    blogNewsNotificationsEnabled: user.blogNewsNotificationsEnabled,
   };
 }
 
@@ -440,9 +448,27 @@ export class AuthService {
 
   async updateProfile(
     userId: string,
-    fields: { countryId?: string; dialectId?: string; firstName?: string; lastName?: string },
+    fields: {
+      countryId?: string;
+      dialectId?: string;
+      firstName?: string;
+      lastName?: string;
+      emailNotificationsEnabled?: boolean;
+      smsNotificationsEnabled?: boolean;
+      marketingNotificationsEnabled?: boolean;
+      blogNewsNotificationsEnabled?: boolean;
+    },
   ): Promise<PublicUser> {
-    const { countryId, dialectId, firstName, lastName } = fields;
+    const {
+      countryId,
+      dialectId,
+      firstName,
+      lastName,
+      emailNotificationsEnabled,
+      smsNotificationsEnabled,
+      marketingNotificationsEnabled,
+      blogNewsNotificationsEnabled,
+    } = fields;
 
     if (countryId || dialectId) {
       if (!countryId || !dialectId) {
@@ -460,6 +486,10 @@ export class AuthService {
         ...(countryId && dialectId ? { countryId, dialectId } : {}),
         ...(firstName !== undefined ? { firstName: firstName.trim() } : {}),
         ...(lastName !== undefined ? { lastName: lastName.trim() } : {}),
+        ...(emailNotificationsEnabled !== undefined ? { emailNotificationsEnabled } : {}),
+        ...(smsNotificationsEnabled !== undefined ? { smsNotificationsEnabled } : {}),
+        ...(marketingNotificationsEnabled !== undefined ? { marketingNotificationsEnabled } : {}),
+        ...(blogNewsNotificationsEnabled !== undefined ? { blogNewsNotificationsEnabled } : {}),
       },
       include: { dialect: true },
     });

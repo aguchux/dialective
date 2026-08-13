@@ -1,7 +1,12 @@
 import { P2PService } from './p2p.service';
 
 describe('P2PService trade-notification SMS', () => {
-  const seller = { id: 'seller-1', phoneNumber: '+2348000000001', phoneVerifiedAt: new Date() };
+  const seller = {
+    id: 'seller-1',
+    phoneNumber: '+2348000000001',
+    phoneVerifiedAt: new Date(),
+    smsNotificationsEnabled: true,
+  };
   const trade = {
     id: 'trade-1',
     buyerId: 'buyer-1',
@@ -56,6 +61,15 @@ describe('P2PService trade-notification SMS', () => {
   it('skips sending when the seller has no verified phone number', async () => {
     platformSettings.isP2pSmsPaymentMarkedEnabled.mockResolvedValue(true);
     prisma.user.findUnique.mockResolvedValue({ ...seller, phoneVerifiedAt: null });
+
+    await service.markPaid('buyer-1', trade.id);
+
+    expect(sms.sendTransactional).not.toHaveBeenCalled();
+  });
+
+  it('skips sending when the seller has disabled SMS notifications', async () => {
+    platformSettings.isP2pSmsPaymentMarkedEnabled.mockResolvedValue(true);
+    prisma.user.findUnique.mockResolvedValue({ ...seller, smsNotificationsEnabled: false });
 
     await service.markPaid('buyer-1', trade.id);
 

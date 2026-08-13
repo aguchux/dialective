@@ -118,8 +118,11 @@ export class P2PService {
    */
   private async notify(userId: string, enabled: boolean, body: string): Promise<void> {
     if (!enabled) return;
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { phoneNumber: true, phoneVerifiedAt: true } });
-    if (!user?.phoneNumber || !user.phoneVerifiedAt) return;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phoneNumber: true, phoneVerifiedAt: true, smsNotificationsEnabled: true },
+    });
+    if (!user?.phoneNumber || !user.phoneVerifiedAt || !user.smsNotificationsEnabled) return;
     try {
       await this.sms.sendTransactional(user.phoneNumber, body);
     } catch {

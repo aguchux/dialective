@@ -17,6 +17,10 @@ export interface PublicUser {
   dialectTag: string | null;
   onboardingComplete: boolean;
   referralCode: string;
+  emailNotificationsEnabled: boolean;
+  smsNotificationsEnabled: boolean;
+  marketingNotificationsEnabled: boolean;
+  blogNewsNotificationsEnabled: boolean;
 }
 
 export interface PendingOtp {
@@ -908,7 +912,16 @@ export const dialectivaApi = createApi({
     }),
     updateProfile: builder.mutation<
       PublicUser,
-      { countryId?: string; dialectId?: string; firstName?: string; lastName?: string }
+      {
+        countryId?: string;
+        dialectId?: string;
+        firstName?: string;
+        lastName?: string;
+        emailNotificationsEnabled?: boolean;
+        smsNotificationsEnabled?: boolean;
+        marketingNotificationsEnabled?: boolean;
+        blogNewsNotificationsEnabled?: boolean;
+      }
     >({
       query: (body) => ({
         url: '/auth/me',

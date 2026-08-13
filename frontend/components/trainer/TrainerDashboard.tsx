@@ -1344,6 +1344,13 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [verifyPhone, { isLoading: phoneVerifying }] = useVerifyPhoneMutation();
   const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
   const phoneValid = isValidPhoneNumber(normalizedPhoneNumber);
+  const [notificationPrefs, setNotificationPrefs] = useState({
+    emailNotificationsEnabled: true,
+    smsNotificationsEnabled: true,
+    marketingNotificationsEnabled: false,
+    blogNewsNotificationsEnabled: false,
+  });
+  const [notificationSaving, setNotificationSaving] = useState<NotificationPreferenceKey | null>(null);
 
   const dirty = firstName.trim() !== (session.user.firstName ?? '') || lastName.trim() !== (session.user.lastName ?? '');
   const paymentPayload = {
@@ -1379,6 +1386,21 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   useEffect(() => {
     if (me?.phoneNumber) setPhoneNumber(me.phoneNumber);
   }, [me?.phoneNumber]);
+
+  useEffect(() => {
+    if (!me) return;
+    setNotificationPrefs({
+      emailNotificationsEnabled: me.emailNotificationsEnabled,
+      smsNotificationsEnabled: me.smsNotificationsEnabled,
+      marketingNotificationsEnabled: me.marketingNotificationsEnabled,
+      blogNewsNotificationsEnabled: me.blogNewsNotificationsEnabled,
+    });
+  }, [
+    me?.emailNotificationsEnabled,
+    me?.smsNotificationsEnabled,
+    me?.marketingNotificationsEnabled,
+    me?.blogNewsNotificationsEnabled,
+  ]);
 
   function updatePhoneField(value: string) {
     setPhoneNumber(normalizePhoneNumber(value));
@@ -1463,6 +1485,23 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       setMessage('Payment method saved.');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not save payment method.'));
+    }
+  }
+
+  async function toggleNotificationPreference(key: NotificationPreferenceKey, value: boolean) {
+    setMessage(null);
+    setError(null);
+    setNotificationSaving(key);
+    const previous = notificationPrefs[key];
+    setNotificationPrefs((current) => ({ ...current, [key]: value }));
+    try {
+      await updateProfile({ [key]: value }).unwrap();
+      setMessage('Notification preferences updated.');
+    } catch (err) {
+      setNotificationPrefs((current) => ({ ...current, [key]: previous }));
+      setError(normalizeErrorMessage(err, 'Could not update notification preferences.'));
+    } finally {
+      setNotificationSaving(null);
     }
   }
 
@@ -1674,26 +1713,94 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
           </fieldset>
         </form>
 
-        <div className={`${cardClass} grid gap-4 p-5`}>
-          <div className="flex items-center gap-3">
-            <Avatar email={session.user.email ?? 'Trainer'} image={session.user.image} large />
-            <div className="min-w-0">
-              <p className="truncate font-black">{[firstName, lastName].filter(Boolean).join(' ') || emailName(session.user.email)}</p>
-              <p className="truncate text-sm text-muted">{session.user.dialectTag ? `${session.user.dialectTag.toUpperCase()} trainer` : 'Dialect trainer'}</p>
-            </div>
-          </div>
-          <div className="grid gap-2 border-t border-line pt-4 text-sm">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted">Referral code</span>
-              <span className="font-extrabold">{session.user.referralCode ?? '—'}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted">Role</span>
-              <span className="font-extrabold">Trainer</span>
-            </div>
+        <div className={`${cardClass} grid content-start gap-4 p-5`}>
+          <SectionTitle title="Notifications" subtitle="Choose how Dialect Library should reach you." />
+          <div className="grid divide-y divide-line overflow-hidden rounded-lg border border-line">
+            <NotificationToggleRow
+              checked={notificationPrefs.emailNotificationsEnabled}
+              disabled={notificationSaving !== null}
+              label="Email"
+              loading={notificationSaving === 'emailNotificationsEnabled'}
+              onChange={(checked) => void toggleNotificationPreference('emailNotificationsEnabled', checked)}
+              subtitle="Account, task, payout, and security updates."
+            />
+            <NotificationToggleRow
+              checked={notificationPrefs.smsNotificationsEnabled}
+              disabled={notificationSaving !== null}
+              label="SMS"
+              loading={notificationSaving === 'smsNotificationsEnabled'}
+              onChange={(checked) => void toggleNotificationPreference('smsNotificationsEnabled', checked)}
+              subtitle="Urgent account and trade notifications."
+            />
+            <NotificationToggleRow
+              checked={notificationPrefs.marketingNotificationsEnabled}
+              disabled={notificationSaving !== null}
+              label="Marketing"
+              loading={notificationSaving === 'marketingNotificationsEnabled'}
+              onChange={(checked) => void toggleNotificationPreference('marketingNotificationsEnabled', checked)}
+              subtitle="Product offers and campaign updates."
+            />
+            <NotificationToggleRow
+              checked={notificationPrefs.blogNewsNotificationsEnabled}
+              disabled={notificationSaving !== null}
+              label="Blog & News"
+              loading={notificationSaving === 'blogNewsNotificationsEnabled'}
+              onChange={(checked) => void toggleNotificationPreference('blogNewsNotificationsEnabled', checked)}
+              subtitle="New articles, platform news, and learning content."
+            />
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+type NotificationPreferenceKey =
+  | 'emailNotificationsEnabled'
+  | 'smsNotificationsEnabled'
+  | 'marketingNotificationsEnabled'
+  | 'blogNewsNotificationsEnabled';
+
+function NotificationToggleRow({
+  checked,
+  disabled,
+  label,
+  loading,
+  onChange,
+  subtitle,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  label: string;
+  loading: boolean;
+  onChange: (checked: boolean) => void;
+  subtitle: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 bg-surface px-4 py-3">
+      <div className="min-w-0">
+        <p className="font-extrabold text-ink">{label}</p>
+        <p className="mt-0.5 text-sm text-muted">{subtitle}</p>
+      </div>
+      <button
+        aria-checked={checked}
+        aria-label={`${checked ? 'Disable' : 'Enable'} ${label} notifications`}
+        className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+          checked ? 'border-accent bg-accent' : 'border-line bg-surface-muted'
+        }`}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        role="switch"
+        type="button"
+      >
+        <span
+          className={`absolute top-1 grid size-5 place-items-center rounded-full bg-white text-accent shadow-sm transition-transform ${
+            checked ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        >
+          {loading ? <RefreshCw className="size-3 animate-spin" aria-hidden="true" /> : null}
+        </span>
+      </button>
     </div>
   );
 }
