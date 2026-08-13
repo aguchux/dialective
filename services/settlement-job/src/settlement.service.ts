@@ -289,15 +289,20 @@ export class SettlementService {
     let refundedCount = 0;
     for (const submission of submissions) {
       try {
+        // Atomic claim on refundedAt: null before touching tokens -- see the
+        // matching comment in refundStuckWordRecordings for why (prevents
+        // two overlapping runs from double-refunding the same row).
+        const claim = await this.prisma.submission.updateMany({
+          where: { id: submission.id, refundedAt: null },
+          data: { refundedAt: new Date() },
+        });
+        if (claim.count === 0) continue;
+
         // Legacy (pre-locking) rows spent balance directly and never locked
         // anything -- nothing to refund, just mark them resolved.
         if (await this.wasLocked(submission.id)) {
           await this.refundTokens(submission.userId, submission.tokensSpent, submission.id);
         }
-        await this.prisma.submission.update({
-          where: { id: submission.id },
-          data: { refundedAt: new Date() },
-        });
         refundedCount += 1;
       } catch (err) {
         this.logger.error(
@@ -336,15 +341,22 @@ export class SettlementService {
     for (const recording of recordings) {
       if (recording.userId === null) continue;
       try {
+        // Atomic claim on refundedAt: null before touching tokens -- two
+        // overlapping settlement-job runs both reading refundedAt: null via
+        // findMany above would otherwise both refund the same row (the
+        // ledger's walletId+type+reference unique constraint catches the
+        // second write, but only after refundTokens already ran).
+        const claim = await this.prisma.wordRecording.updateMany({
+          where: { id: recording.id, refundedAt: null },
+          data: { refundedAt: new Date() },
+        });
+        if (claim.count === 0) continue;
+
         // Legacy (pre-locking) rows spent balance directly and never locked
         // anything -- nothing to refund, just mark them resolved.
         if (await this.wasLocked(recording.id)) {
           await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
         }
-        await this.prisma.wordRecording.update({
-          where: { id: recording.id },
-          data: { refundedAt: new Date() },
-        });
         refundedCount += 1;
       } catch (err) {
         this.logger.error(
@@ -396,6 +408,19 @@ export class SettlementService {
 
     for (const submission of timedOutSubmissions) {
       try {
+        // Atomic claim, guarded on the same status this row was read with --
+        // this is the hard handoff point: once claimed, ASR/consensus-scorer's
+        // own status-guarded writes (see whisper-worker/vosk-worker db.py and
+        // ConsensusService.scoreCluster) can no longer touch this row, even if
+        // a transcription/scoring job for it is mid-flight right now. If a
+        // concurrent settlement-job run already claimed it first, count is 0
+        // and this run skips it -- no double refund/payout.
+        const claim = await this.prisma.submission.updateMany({
+          where: { id: submission.id, status: { in: ['PENDING', 'TRANSCRIBED'] }, refundedAt: null },
+          data: { status: 'EXPIRED', refundedAt: new Date() },
+        });
+        if (claim.count === 0) continue;
+
         if (noFailEnabled) {
           const payout = await this.settleWithSyntheticScore(
             'submission',
@@ -409,7 +434,6 @@ export class SettlementService {
           totalPayout += payout;
         } else {
           await this.refundTokens(submission.userId, submission.tokensSpent, submission.id);
-          await this.prisma.submission.update({ where: { id: submission.id }, data: { refundedAt: new Date(), status: 'EXPIRED' } });
           refundedCount += 1;
         }
       } catch (err) {
@@ -422,6 +446,13 @@ export class SettlementService {
     for (const recording of timedOutRecordings) {
       if (recording.userId === null) continue;
       try {
+        // Same atomic claim as above, for the WordRecording pipeline.
+        const claim = await this.prisma.wordRecording.updateMany({
+          where: { id: recording.id, status: 'PENDING', refundedAt: null },
+          data: { status: 'EXPIRED', refundedAt: new Date() },
+        });
+        if (claim.count === 0) continue;
+
         if (noFailEnabled) {
           const payout = await this.settleWithSyntheticScore(
             'wordRecording',
@@ -435,7 +466,6 @@ export class SettlementService {
           totalPayout += payout;
         } else {
           await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
-          await this.prisma.wordRecording.update({ where: { id: recording.id }, data: { refundedAt: new Date(), status: 'EXPIRED' } });
           refundedCount += 1;
         }
       } catch (err) {

@@ -18,7 +18,7 @@ SET status = %(status)s,
     "asrEngine" = %(asr_engine)s,
     "rejectionReason" = %(rejection_reason)s,
     "updatedAt" = now()
-WHERE id = %(submission_id)s
+WHERE id = %(submission_id)s AND status = 'PENDING'
 """
 
 
@@ -44,11 +44,14 @@ def update_submission_result(
 ) -> None:
     """
     Updates the Submission row api's POST /submissions/create already
-    inserted (status PENDING) before publishing to asr-jobs-*. This UPDATE
-    only matches a row if that insert already happened -- if it hasn't
-    (an ordering bug, or a stale/replayed message), this is a silent no-op
-    (0 rows matched), not an error; log it so it's visible without crashing
-    the worker loop.
+    inserted (status PENDING) before publishing to asr-jobs-*. The WHERE
+    clause requires status = 'PENDING' so this is a no-op once
+    settlement-job's timeout resolver has already claimed the row (moved it
+    to EXPIRED/SETTLED) -- ASR must never resurrect/overwrite a row settlement
+    already paid out or refunded, even if this job was queued/running before
+    the timeout fired. 0 rows matched is therefore either that race (expected,
+    not an error) or a genuine ordering bug (row never inserted); either way
+    it's a silent no-op, just logged for visibility.
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -65,7 +68,8 @@ def update_submission_result(
         if cur.rowcount == 0:
             logger.warning(
                 "update_submission_result matched 0 rows for submission=%s -- "
-                "was the Submission row inserted before this job was published?",
+                "already claimed by settlement-job's timeout resolver, or the "
+                "row was never inserted before this job was published?",
                 submission_id,
             )
     conn.commit()

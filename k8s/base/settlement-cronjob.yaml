@@ -3,7 +3,7 @@ kind: CronJob
 metadata:
   name: settlement-job
 spec:
-  schedule: "0 */12 * * *"
+  schedule: "*/5 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3

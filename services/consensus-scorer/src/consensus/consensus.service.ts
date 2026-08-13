@@ -91,10 +91,16 @@ export class ConsensusService implements OnModuleInit {
     // Flagged for human QA review, never auto-rejected -- dialect variation
     // is expected and must not be penalized as if it were fraud (AGENTS.md
     // "Consensus scoring"). isOutlier never affects the score or payout.
+    //
+    // updateMany guarded on status (rather than plain update({ where: { id } }))
+    // so this never overwrites a row settlement-job's timeout resolver already
+    // claimed (moved to EXPIRED/SETTLED) while this cluster was being scored --
+    // once a row times out, consensus scoring must hand off to the timeout
+    // bypass permanently, never resurrect it with a late-arriving score.
     const updates = scores.map(({ id, score }) => {
       const isOutlier = clusterStdDev > 0 && Math.abs(score - clusterMean) > 2 * clusterStdDev;
-      return this.prisma.submission.update({
-        where: { id },
+      return this.prisma.submission.updateMany({
+        where: { id, status: { in: [...SCORABLE_STATUSES] } },
         data: {
           rawScore: new Prisma.Decimal(score.toFixed(2)),
           score: new Prisma.Decimal(score.toFixed(2)),
