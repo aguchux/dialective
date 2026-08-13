@@ -14,9 +14,7 @@ export default function CookiesPage() {
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-white text-[#050505]">
       <ParallaxTopBackground />
-      <div className="relative z-10">
-        <LandingHeader />
-      </div>
+      <LandingHeader />
       <div className="relative z-10 mx-auto grid max-w-3xl gap-6 px-4 py-6 md:px-8">
         <Breadcrumbs items={[{ label: 'Cookie Policy' }]} />
         <section className="grid gap-3 rounded-lg border border-line bg-surface p-5">

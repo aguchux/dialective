@@ -20,7 +20,7 @@ export default async function BlogPage() {
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-white text-[#050505]">
       <ParallaxTopBackground />
-      <div className="relative z-10"><LandingHeader /></div>
+      <LandingHeader />
       <div className="relative z-10 mx-auto grid max-w-5xl gap-8 px-4 py-6 md:px-8">
         <Breadcrumbs items={[{ label: 'Blog' }]} />
         <header className="grid gap-3 border-b border-line pb-7">
