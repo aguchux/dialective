@@ -12,7 +12,7 @@ export const faqItems = [
   {
     question: 'What kind of tasks will I do?',
     answer:
-      'You will record short sentence prompts, translate English words into your dialect, and record yourself saying those translations.',
+      'There are two task types on the Training tab: word training (translate an English word into your dialect, or pronounce it, plus reverse-validating other trainers\' translations back to English) and sentence dictation (record yourself reading a full prompt sentence aloud in your dialect).',
   },
   {
     question: 'Do I need AI experience?',
@@ -20,9 +20,14 @@ export const faqItems = [
       'No. You only need to speak the language or dialect naturally and follow the recording prompts clearly.',
   },
   {
-    question: 'How are submissions reviewed?',
+    question: 'How are submissions scored?',
     answer:
-      'Recordings are checked against other trainers in the same dialect cluster before they count toward rewards. Submission tracking and quality scoring are still being built out, so your personal submission/review counts aren\'t shown on the dashboard yet.',
+      'Sentence-dictation recordings are transcribed automatically and then compared against other trainers who submitted the same prompt in your dialect (consensus scoring) -- more trainers active in your dialect means faster, more reliable scoring. Word-training translations are scored through peer reverse-validation, where another trainer transcribes your recording back to English. You can follow every submission\'s status on the Training tab, and see completed results with your accuracy score under My Scores.',
+  },
+  {
+    question: 'What happens if my submission never gets scored?',
+    answer:
+      'Every submission has a scoring time limit. If it isn\'t scored in time (for example, too few other trainers have submitted that prompt yet), it\'s automatically resolved -- either refunded, or, when enabled, paid out at a fair score anyway -- so you never lose your stake or your effort to low activity in your dialect.',
   },
   {
     question: 'How do I fund my account and what are tokens?',
@@ -32,7 +37,12 @@ export const faqItems = [
   {
     question: 'How do payouts and withdrawals work?',
     answer:
-      'Dialect Library uses an internal token ledger for every balance change. Once you have enough tokens, you can request a withdrawal to USDT; an admin reviews and pays out requests, and rejected requests are automatically credited back to your wallet.',
+      'Dialect Library uses an internal token ledger for every balance change. Once your balance reaches the minimum withdrawal threshold, you can request a withdrawal to a supported crypto currency and network from the Earnings tab. Your email must be verified first. An admin reviews and approves each request before it is paid out, and rejected or failed requests are automatically credited back to your wallet.',
+  },
+  {
+    question: 'Why do I need to verify my email?',
+    answer:
+      'Email verification confirms you control a real, recoverable account before any withdrawal is processed. If your email isn\'t verified yet, you\'ll see a reminder banner on your dashboard and in your Profile with a one-click option to resend the verification link.',
   },
   {
     question: 'What is the referral program?',

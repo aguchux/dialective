@@ -31,12 +31,20 @@ export function LandingHeader() {
   const initial = displayName ? displayName[0].toUpperCase() : '?';
 
   const [pinned, setPinned] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
   const pastThreshold = useRef(0);
 
   useEffect(() => {
-    pastThreshold.current = headerRef.current?.offsetHeight ?? 72;
+    // Measured once while the header is still in normal flow (unpinned) --
+    // reading offsetHeight during the same render that flips `pinned` to
+    // true would race the class-change commit to `position: fixed`, leaving
+    // a frame where the header floats over the page with nothing reserving
+    // its space underneath.
+    const height = headerRef.current?.offsetHeight ?? 72;
+    setHeaderHeight(height);
+    pastThreshold.current = height;
 
     function handleScroll() {
       setPinned(window.scrollY >= pastThreshold.current);
@@ -53,7 +61,7 @@ export function LandingHeader() {
 
   return (
     <>
-      {pinned && <div style={{ height: headerRef.current?.offsetHeight ?? 0 }} aria-hidden="true" />}
+      {pinned && <div style={{ height: headerHeight }} aria-hidden="true" />}
       <header
         ref={headerRef}
         className={`top-0 z-50 w-full px-4 py-3 text-[#050505] transition-colors duration-300 sm:px-6 md:px-8 ${
