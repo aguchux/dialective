@@ -189,24 +189,26 @@ export function TrainerDashboard() {
         />
 
         <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
-          <section className="mb-7 flex flex-wrap items-center gap-3 border-b border-line pb-6 md:gap-4">
-            <Avatar email={session.user.email ?? 'Trainer'} image={session.user.image} large />
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-muted">Welcome back</p>
-              <h1 className="truncate text-2xl font-black md:text-3xl">{displayName || emailName(session.user.email)}</h1>
-              <div className="mt-1 flex items-center gap-2 text-sm text-muted">
-                <BadgeCheck className="size-4 text-emerald-600" aria-hidden="true" />
-                <span>{session.user.dialectTag ? `${session.user.dialectTag.toUpperCase()} trainer` : 'Dialect trainer'}</span>
+          {activeView === 'tokens' && (
+            <section className="mb-7 flex flex-wrap items-center gap-3 border-b border-line pb-6 md:gap-4">
+              <Avatar email={session.user.email ?? 'Trainer'} image={session.user.image} large />
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-muted">Welcome back</p>
+                <h1 className="truncate text-2xl font-black md:text-3xl">{displayName || emailName(session.user.email)}</h1>
+                <div className="mt-1 flex items-center gap-2 text-sm text-muted">
+                  <BadgeCheck className="size-4 text-emerald-600" aria-hidden="true" />
+                  <span>{session.user.dialectTag ? `${session.user.dialectTag.toUpperCase()} trainer` : 'Dialect trainer'}</span>
+                </div>
               </div>
-            </div>
-            <button
-              className="ml-auto inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
-              onClick={handleStartTask}
-              type="button"
-            >
-              Start task <ArrowRight className="size-4" aria-hidden="true" />
-            </button>
-          </section>
+              <button
+                className="ml-auto inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+                onClick={handleStartTask}
+                type="button"
+              >
+                Start task <ArrowRight className="size-4" aria-hidden="true" />
+              </button>
+            </section>
+          )}
 
           {activeView === 'profile' ? (
             <ProfileView session={session} update={update} />
@@ -585,7 +587,16 @@ function TrainingView({ dialectTag, onStartTask }: { dialectTag: string | null; 
 
   return (
     <div>
-      <ViewHeading title="Training" subtitle="Translate and pronounce words in your dialect." />
+      <div className="flex items-start justify-between gap-3">
+        <ViewHeading title="Training" subtitle="Translate and pronounce words in your dialect." />
+        <button
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+          onClick={onStartTask}
+          type="button"
+        >
+          Start task <ArrowRight className="size-4" aria-hidden="true" />
+        </button>
+      </div>
 
       <div className="mb-6 inline-flex rounded-lg border border-line bg-surface p-1" role="tablist" aria-label="Training sections">
         <button
