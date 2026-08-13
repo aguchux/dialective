@@ -32,6 +32,7 @@ export function WordGenerationSettingsPanel() {
   const [order, setOrder] = useState<ProviderKey[]>(DEFAULT_ORDER);
   const [wordsPerItem, setWordsPerItem] = useState('1');
   const [itemsPerRun, setItemsPerRun] = useState('15');
+  const [maxPoolPerDialect, setMaxPoolPerDialect] = useState('50');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +42,7 @@ export function WordGenerationSettingsPanel() {
     setOrder(parseOrder(settings.llmProviderOrder));
     setWordsPerItem(String(settings.llmWordsPerItem));
     setItemsPerRun(String(settings.llmItemsPerRun));
+    setMaxPoolPerDialect(String(settings.llmMaxPoolPerDialect));
   }, [settings]);
 
   function setChoice(position: 0 | 1 | 2, provider: ProviderKey) {
@@ -67,6 +69,7 @@ export function WordGenerationSettingsPanel() {
         llmProviderOrder: order.join(','),
         ...(wordsPerItem !== '' ? { llmWordsPerItem: Number(wordsPerItem) } : {}),
         ...(itemsPerRun !== '' ? { llmItemsPerRun: Number(itemsPerRun) } : {}),
+        ...(maxPoolPerDialect !== '' ? { llmMaxPoolPerDialect: Number(maxPoolPerDialect) } : {}),
       }).unwrap();
       setMessage('Word generation settings saved.');
     } catch (err) {
@@ -169,6 +172,28 @@ export function WordGenerationSettingsPanel() {
               max="100"
               value={itemsPerRun}
               onChange={(e) => setItemsPerRun(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="llm-max-pool-per-dialect">
+              Max content pool per dialect
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              Once a dialect's combined prompt + word bank reaches this size, generation stops adding new translations
+              for it until you raise this limit. Scoring needs multiple trainers submitting the same prompt/word --
+              growing the pool faster than a dialect's trainer base can spread everyone too thin to ever reach quorum.
+              Increase this gradually as each dialect's active trainer count grows.
+            </p>
+            <input
+              className={inputClass}
+              id="llm-max-pool-per-dialect"
+              type="number"
+              step="1"
+              min="1"
+              max="5000"
+              value={maxPoolPerDialect}
+              onChange={(e) => setMaxPoolPerDialect(e.target.value)}
             />
           </div>
 
