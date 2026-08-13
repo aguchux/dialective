@@ -54,11 +54,16 @@ export class WordGeneratorService {
     const providerOrder = this.parseProviderOrder(settings.llmProviderOrder);
     const wordsPerItem = settings.llmWordsPerItem;
     const itemsPerRun = settings.llmItemsPerRun;
+    const maxPoolPerDialect = settings.llmMaxPoolPerDialect;
 
-    const dialectTags = await this.getEnabledDialectTags();
+    const enabledDialectTags = await this.getEnabledDialectTags();
+    const dialectTags = await this.filterDialectsUnderPoolCap(enabledDialectTags, maxPoolPerDialect);
+    const skippedDialects = enabledDialectTags.filter((tag) => !dialectTags.includes(tag));
     this.logger.log(
       `Generation run starting: wordsPerItem=${wordsPerItem} itemsPerRun=${itemsPerRun} ` +
-        `providerOrder=${providerOrder.join('>')} translationDialects=${dialectTags.length ? dialectTags.join(',') : 'none'}`,
+        `providerOrder=${providerOrder.join('>')} maxPoolPerDialect=${maxPoolPerDialect} ` +
+        `translationDialects=${dialectTags.length ? dialectTags.join(',') : 'none'} ` +
+        `poolCappedDialects=${skippedDialects.length ? skippedDialects.join(',') : 'none'}`,
     );
 
     let inserted = 0;
@@ -534,5 +539,32 @@ export class WordGeneratorService {
       select: { tag: true },
     });
     return dialects.map((row) => row.tag);
+  }
+
+  /**
+   * Consensus scoring and peer reverse-validation both need multiple
+   * trainers submitting the *same* prompt/word in a dialect -- growing the
+   * pool of distinct dialect content faster than that dialect's trainer
+   * base can cover means most of it never accumulates enough submissions to
+   * score (AGENTS.md/consensus-scorer's MIN_QUORUM). This throttles new
+   * translations per dialect once that dialect's existing pool (active
+   * Prompt translations + WordTranslation rows) already meets the
+   * admin-configured ceiling, so the pool only grows again once an admin
+   * raises the limit deliberately (e.g. as that dialect's trainer count
+   * grows) rather than automatically every scheduled run.
+   */
+  private async filterDialectsUnderPoolCap(dialectTags: string[], maxPoolPerDialect: number): Promise<string[]> {
+    if (dialectTags.length === 0) return [];
+
+    const [promptCounts, wordTranslationCounts] = await Promise.all([
+      this.prisma.prompt.groupBy({ by: ['dialectTag'], where: { dialectTag: { in: dialectTags }, active: true }, _count: { _all: true } }),
+      this.prisma.wordTranslation.groupBy({ by: ['dialectTag'], where: { dialectTag: { in: dialectTags } }, _count: { _all: true } }),
+    ]);
+
+    const poolSizeByDialect = new Map<string, number>();
+    for (const row of promptCounts) poolSizeByDialect.set(row.dialectTag, (poolSizeByDialect.get(row.dialectTag) ?? 0) + row._count._all);
+    for (const row of wordTranslationCounts) poolSizeByDialect.set(row.dialectTag, (poolSizeByDialect.get(row.dialectTag) ?? 0) + row._count._all);
+
+    return dialectTags.filter((tag) => (poolSizeByDialect.get(tag) ?? 0) < maxPoolPerDialect);
   }
 }

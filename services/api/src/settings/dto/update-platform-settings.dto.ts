@@ -103,6 +103,12 @@ export class UpdatePlatformSettingsDto {
   llmItemsPerRun?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5000)
+  llmMaxPoolPerDialect?: number;
+
+  @IsOptional()
   @IsBoolean()
   qualityGateEnabled?: boolean;
 
