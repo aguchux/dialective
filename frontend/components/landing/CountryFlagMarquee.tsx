@@ -6,10 +6,11 @@ interface MarqueeCountry {
   _count?: { dialects: number };
 }
 
-function flagEmoji(code: string): string {
-  return code
-    .toUpperCase()
-    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+// Regional-indicator flag emoji don't render as real flag icons on most
+// Windows desktop browsers (font-support gap; mobile OSes render them fine),
+// so this renders an actual flag image instead of relying on emoji font support.
+function flagImageUrl(code: string): string {
+  return `https://flagcdn.com/24x18/${code.toLowerCase()}.png`;
 }
 
 export function CountryFlagMarquee({ countries }: { countries: MarqueeCountry[] }) {
@@ -30,8 +31,9 @@ export function CountryFlagMarquee({ countries }: { countries: MarqueeCountry[] 
               key={`${country.code}-${index}`}
               title={country.name}
             >
-              <span className="text-base leading-none bg-[rgba(5,5,5,0.05)] rounded-full p-2 flex items-center justify-center" aria-hidden="true">
-                {flagEmoji(country.code)}
+              <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgba(5,5,5,0.05)]" aria-hidden="true">
+                {/* eslint-disable-next-line @next/next/no-img-element -- decorative marquee icon; not worth adding a new next/image remotePattern for */}
+                <img alt="" className="h-full w-full object-cover" height={18} loading="lazy" src={flagImageUrl(country.code)} width={24} />
               </span>
               <span className="whitespace-nowrap text-[rgba(5,5,5,0.72)]">
                 {country.name}
