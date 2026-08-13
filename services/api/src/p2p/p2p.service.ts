@@ -74,6 +74,45 @@ export class P2PService {
     };
   }
 
+  /**
+   * Public-to-traders profile shown when tapping an offer's creator: basic
+   * identity, join date, and a trust signal (average time this trader took
+   * to release tokens as a seller once paid, across their last 20
+   * completed sales). No contact details or financials are exposed here.
+   */
+  async getTraderProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, firstName: true, lastName: true, createdAt: true },
+    });
+    if (!user) throw new NotFoundException('Trader not found');
+
+    const completedSales = await this.prisma.p2PTokenTrade.findMany({
+      where: { sellerId: userId, status: P2PTradeStatus.RELEASED, paidAt: { not: null }, releasedAt: { not: null } },
+      select: { paidAt: true, releasedAt: true },
+      orderBy: { releasedAt: 'desc' },
+      take: 20,
+    });
+    const [completedSaleCount, avgReleaseSeconds] = [
+      completedSales.length,
+      completedSales.length
+        ? Math.round(
+            completedSales.reduce((sum, trade) => sum + (trade.releasedAt!.getTime() - trade.paidAt!.getTime()) / 1000, 0) /
+              completedSales.length,
+          )
+        : null,
+    ];
+
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      memberSince: user.createdAt,
+      completedSaleCount,
+      avgReleaseSeconds,
+    };
+  }
+
   async updateSettings(dto: UpdateP2PMarketSettingsDto) {
     if (dto.minTradeTokens !== undefined && dto.maxTradeTokens !== undefined && dto.minTradeTokens > dto.maxTradeTokens) {
       throw new BadRequestException('minTradeTokens cannot be greater than maxTradeTokens');

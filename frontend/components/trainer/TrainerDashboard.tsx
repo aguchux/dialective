@@ -66,6 +66,7 @@ import {
   useGetP2PPaymentMethodsQuery,
   useGetP2PSettingsQuery,
   useGetP2PReferenceRateQuery,
+  useGetP2PTraderProfileQuery,
   useGetMeQuery,
   useRequestPhoneOtpMutation,
   useVerifyPhoneMutation,
@@ -1210,6 +1211,7 @@ function MarketOfferList({
   accepting: boolean;
   disabled: boolean;
 }) {
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
   return (
     <section>
       <SectionTitle title={title} subtitle="Active marketplace posts." />
@@ -1224,6 +1226,16 @@ function MarketOfferList({
               </div>
               <p className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-black text-accent">{offer.status}</p>
             </div>
+            {offer.user && (
+              <button
+                className="flex items-center gap-2 justify-self-start rounded-lg text-left hover:opacity-80"
+                onClick={() => setProfileUserId(offer.userId)}
+                type="button"
+              >
+                <Avatar email={offer.user.email} />
+                <span className="text-sm font-bold">{traderDisplayName(offer.user)}</span>
+              </button>
+            )}
             <p className="font-extrabold">{Number(offer.fiatAmount).toLocaleString()} {offer.fiatCurrency}</p>
             <p className="text-sm text-muted">Expires {formatDateTime(offer.expiresAt)}</p>
             <button className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50" disabled={accepting || disabled} onClick={() => onAccept(offer)} type="button">
@@ -1232,8 +1244,53 @@ function MarketOfferList({
           </div>
         ))}
       </div>
+      <TraderProfileDialog onOpenChange={(open) => !open && setProfileUserId(null)} userId={profileUserId} />
     </section>
   );
+}
+
+function traderDisplayName(user: { firstName: string | null; lastName: string | null; email: string }) {
+  const name = [user.firstName, user.lastName].filter(Boolean).join(' ');
+  return name || user.email;
+}
+
+function TraderProfileDialog({ userId, onOpenChange }: { userId: string | null; onOpenChange: (open: boolean) => void }) {
+  const { data: profile, isLoading } = useGetP2PTraderProfileQuery(userId ?? '', { skip: !userId });
+  return (
+    <Dialog open={userId !== null} onOpenChange={onOpenChange}>
+      <DialogContent title="Trader profile" description="Basic info shown to other traders in the market.">
+        {isLoading && <p className="text-sm text-muted">Loading…</p>}
+        {profile && (
+          <div className="grid gap-4">
+            <div className="flex items-center gap-3">
+              <Avatar email={profile.firstName ?? profile.id} large />
+              <div>
+                <p className="text-lg font-black">{[profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Trainer'}</p>
+                <p className="text-sm text-muted">Member since {formatDate(profile.memberSince)}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-line bg-bg p-3">
+                <p className="text-xs font-bold text-muted">Completed sales</p>
+                <p className="text-xl font-black">{profile.completedSaleCount}</p>
+              </div>
+              <div className="rounded-lg border border-line bg-bg p-3">
+                <p className="text-xs font-bold text-muted">Avg. release time</p>
+                <p className="text-xl font-black">{formatResponseTime(profile.avgReleaseSeconds)}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function formatResponseTime(seconds: number | null) {
+  if (seconds === null) return 'No data yet';
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  return `${Math.round(seconds / 3600)}h`;
 }
 
 function TradeCard({

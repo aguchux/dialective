@@ -57,6 +57,11 @@ export class P2PController {
     return this.p2p.listOffers(req.user.sub, query);
   }
 
+  @Get('traders/:userId')
+  getTraderProfile(@Param('userId') userId: string) {
+    return this.p2p.getTraderProfile(userId);
+  }
+
   @Get('offers/mine')
   listMyOffers(@Req() req: AuthenticatedRequest) {
     return this.p2p.listMyOffers(req.user.sub);

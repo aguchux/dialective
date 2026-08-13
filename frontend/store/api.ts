@@ -262,6 +262,15 @@ export interface P2POffer {
   updatedAt: string;
 }
 
+export interface P2PTraderProfile {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  memberSince: string;
+  completedSaleCount: number;
+  avgReleaseSeconds: number | null;
+}
+
 export interface P2PTrade {
   id: string;
   offerId: string;
@@ -793,6 +802,9 @@ export const dialectivaApi = createApi({
       query: () => '/p2p/offers/mine',
       providesTags: ['P2P'],
     }),
+    getP2PTraderProfile: builder.query<P2PTraderProfile, string>({
+      query: (userId) => `/p2p/traders/${userId}`,
+    }),
     createP2POffer: builder.mutation<
       P2POffer,
       { type: P2POfferType; tokenAmount: number; fiatAmount: number; fiatCurrency: string; paymentMethod: string; paymentMethodId?: string; expiresInMinutes?: number }
@@ -1206,6 +1218,7 @@ export const {
   useUpdateP2PPaymentMethodMutation,
   useListP2POffersQuery,
   useListMyP2POffersQuery,
+  useGetP2PTraderProfileQuery,
   useCreateP2POfferMutation,
   useAcceptP2POfferMutation,
   useCancelP2POfferMutation,
