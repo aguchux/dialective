@@ -83,7 +83,7 @@ export const apiClient = {
   consumeMagicLink: (token: string) =>
     apiFetch<AuthResult>('/auth/magic-link/callback', {
       method: 'POST',
-      headers: { 'x-oauth-callback-secret': requireOAuthCallbackSecret() },
+      headers: optionalOAuthCallbackSecretHeader(),
       body: JSON.stringify({ token }),
     }),
 
@@ -100,10 +100,7 @@ export const apiClient = {
     apiFetch<void>('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) }),
 };
 
-function requireOAuthCallbackSecret(): string {
+function optionalOAuthCallbackSecretHeader(): Record<string, string> {
   const secret = process.env.OAUTH_CALLBACK_SECRET;
-  if (!secret) {
-    throw new Error('OAUTH_CALLBACK_SECRET is not set');
-  }
-  return secret;
+  return secret ? { 'x-oauth-callback-secret': secret } : {};
 }

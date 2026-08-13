@@ -51,6 +51,10 @@ model User {
   emailVerified DateTime?
   phoneNumber     String?   @unique // E.164 international format, e.g. "+2348012345678"
   phoneVerifiedAt DateTime?
+  emailNotificationsEnabled Boolean @default(true)
+  smsNotificationsEnabled   Boolean @default(true)
+  marketingNotificationsEnabled Boolean @default(false)
+  blogNewsNotificationsEnabled  Boolean @default(false)
   countryId     String?
   country       Country? @relation(fields: [countryId], references: [id])
   dialectId     String?

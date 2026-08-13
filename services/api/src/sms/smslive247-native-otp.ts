@@ -19,13 +19,20 @@ function credentials(): { apiKey: string; senderId: string } {
   return { apiKey, senderId };
 }
 
+// SMSLive247 rejects E.164's leading "+" on destination numbers ("None of
+// the provided destination numbers could be processed") -- they expect a
+// bare MSISDN, e.g. 2348012345678 rather than +2348012345678.
+function toSmslive247Msisdn(phoneNumberE164: string): string {
+  return phoneNumberE164.replace(/^\+/, '');
+}
+
 export async function createSmslive247Otp(phoneNumber: string): Promise<{ expiresAt: string }> {
   const { apiKey, senderId } = credentials();
 
   const res = await fetch(`${BASE_URL}/api/v5/tokens/sms`, {
     method: 'POST',
     headers: authHeaders(apiKey),
-    body: JSON.stringify({ phoneNumber, senderID: senderId }),
+    body: JSON.stringify({ phoneNumber: toSmslive247Msisdn(phoneNumber), senderID: senderId }),
   });
   if (!res.ok) throw new Error(`SMSLive247 token-create failed: ${res.status} ${await res.text()}`);
 
@@ -40,7 +47,7 @@ export async function verifySmslive247Otp(phoneNumber: string, code: string): Pr
   const res = await fetch(`${BASE_URL}/api/v5/tokens`, {
     method: 'DELETE',
     headers: authHeaders(apiKey),
-    body: JSON.stringify({ token: code, to: phoneNumber }),
+    body: JSON.stringify({ token: code, to: toSmslive247Msisdn(phoneNumber) }),
   });
   if (!res.ok) throw new Error(`SMSLive247 token-verify failed: ${res.status} ${await res.text()}`);
 

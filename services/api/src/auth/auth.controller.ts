@@ -16,7 +16,6 @@ import { RequestPhoneOtpDto } from './dto/request-phone-otp.dto';
 import { VerifyPhoneOtpDto } from './dto/verify-phone-otp.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
-import { OAuthCallbackGuard } from './guards/oauth-callback.guard';
 import { JwtAuthGuard } from './strategies/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
@@ -93,7 +92,6 @@ export class AuthController {
 
   @Post('magic-link/callback')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(OAuthCallbackGuard)
   consumeMagicLink(@Body() dto: ConsumeMagicLinkDto) {
     return this.auth.consumeMagicLink(dto.token);
   }

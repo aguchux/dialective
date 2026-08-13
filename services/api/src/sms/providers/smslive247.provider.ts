@@ -13,13 +13,16 @@ export class Smslive247Provider implements SmsProvider {
     const senderId = process.env.SMSLIVE247_SENDER_ID;
     if (!apiKey || !senderId) throw new Error('SMSLive247 credentials not set');
 
+    // SMSLive247 rejects E.164's leading "+" on destination numbers ("None
+    // of the provided destination numbers could be processed") -- they
+    // expect a bare MSISDN, e.g. 2348012345678 rather than +2348012345678.
     const res = await fetch(`${BASE_URL}/api/v5/sms`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ senderID: senderId, messageText: body, phoneNumber: toE164 }),
+      body: JSON.stringify({ senderID: senderId, messageText: body, phoneNumber: toE164.replace(/^\+/, '') }),
     });
     if (!res.ok) throw new Error(`SMSLive247 request failed: ${res.status} ${await res.text()}`);
   }

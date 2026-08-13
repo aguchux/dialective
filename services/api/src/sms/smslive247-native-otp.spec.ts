@@ -30,7 +30,7 @@ describe('smslive247-native-otp', () => {
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({ Authorization: 'Bearer test-key' }),
-          body: JSON.stringify({ phoneNumber: '+2348012345678', senderID: 'golojan' }),
+          body: JSON.stringify({ phoneNumber: '2348012345678', senderID: 'golojan' }),
         }),
       );
     });
@@ -62,7 +62,7 @@ describe('smslive247-native-otp', () => {
         'https://api.smslive247.com/api/v5/tokens',
         expect.objectContaining({
           method: 'DELETE',
-          body: JSON.stringify({ token: '123456', to: '+2348012345678' }),
+          body: JSON.stringify({ token: '123456', to: '2348012345678' }),
         }),
       );
     });
