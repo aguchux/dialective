@@ -100,7 +100,7 @@ type SessionUpdateFn = (data?: Record<string, unknown>) => Promise<Session | nul
 type DashboardView = 'home' | 'tokens' | 'earnings' | 'training' | 'market' | 'referrals' | 'scores' | 'profile';
 
 const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = [
-  { id: 'tokens', label: 'DL', icon: WalletCards },
+  { id: 'tokens', label: 'Tokens', icon: WalletCards },
   { id: 'earnings', label: 'Earnings', icon: CircleDollarSign },
   { id: 'training', label: 'Training', icon: Mic2 },
   { id: 'market', label: 'Market', icon: Landmark },
@@ -561,16 +561,16 @@ function TokensView({ refreshing }: { refreshing: boolean }) {
 
   return (
     <div>
-      <ViewHeading title="DL" subtitle="Full history of your DL activity." refreshing={refreshing || isFetching} />
+      <ViewHeading title="Tokens" subtitle="Full history of your token activity." refreshing={refreshing || isFetching} />
       <section className={`${cardClass} overflow-hidden`}>
         {isLoading ? (
           <div className="grid min-h-52 place-items-center" role="status">
             <RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" />
-            <span className="sr-only">Loading DL activity</span>
+            <span className="sr-only">Loading token activity</span>
           </div>
         ) : isError ? (
           <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
-            <p className="font-extrabold">Could not load your DL activity.</p>
+            <p className="font-extrabold">Could not load your token activity.</p>
             <button className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted" onClick={() => void refetch()} type="button">
               Try again
             </button>
