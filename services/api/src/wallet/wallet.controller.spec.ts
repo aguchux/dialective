@@ -49,7 +49,7 @@ describe('WalletController NOWPayments IPN', () => {
       verifyIpnSignature: jest.fn().mockReturnValue(true),
       getIpnEventHash: jest.fn().mockReturnValue('event-hash'),
     };
-    const controller = new WalletController(prisma as never, nowPayments as never, {} as never, {} as never);
+    const controller = new WalletController(prisma as never, nowPayments as never, {} as never, {} as never, {} as never);
     return { controller, prisma, tx };
   }
 
@@ -159,7 +159,7 @@ describe('WalletController withdrawal payout automation', () => {
       isAutoSubmitAfterApprovalEnabled: jest.fn().mockResolvedValue(false),
     };
     const otp = { verify: jest.fn().mockResolvedValue({}), issueForUser: jest.fn() };
-    const controller = new WalletController(prisma as never, nowPayments as never, platformSettings as never, otp as never);
+    const controller = new WalletController(prisma as never, nowPayments as never, platformSettings as never, otp as never, {} as never);
     const req = { user: { sub: 'admin-1' } } as never;
     return { controller, prisma, nowPayments, platformSettings, otp, req };
   }
@@ -224,7 +224,7 @@ describe('WalletController withdrawal payout automation', () => {
     };
     const platformSettings = { isNowPaymentsPayoutsEnabled: jest.fn().mockResolvedValue(true), isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false) };
     const otp = { verify: jest.fn(), issueForUser: jest.fn() };
-    const controllerWithFailingProvider = new WalletController(prisma as never, nowPayments as never, platformSettings as never, otp as never);
+    const controllerWithFailingProvider = new WalletController(prisma as never, nowPayments as never, platformSettings as never, otp as never, {} as never);
 
     await expect(
       controllerWithFailingProvider.submitWithdrawalToNowPayments({ user: { sub: 'admin-1' } } as never, 'withdrawal-1', {}),
@@ -322,7 +322,7 @@ describe('WalletController earning history', () => {
         count: jest.fn().mockResolvedValue(11),
       },
     };
-    const controller = new WalletController(prisma as never, {} as never, {} as never, {} as never);
+    const controller = new WalletController(prisma as never, {} as never, {} as never, {} as never, {} as never);
 
     await expect(
       controller.listEarnings(

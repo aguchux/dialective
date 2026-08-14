@@ -37,6 +37,28 @@ export class UpdatePlatformSettingsDto {
   leadsNotificationAddress?: string;
 
   @IsOptional()
+  @IsInt()
+  @Min(60)
+  referralCookiePersistSeconds?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(300)
+  referralInviteExpirySeconds?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(120)
+  wordTrainingRecordingTimeoutSeconds?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(1800)
+  wordTrainingRecordingMaxTimeoutSeconds?: number;
+
+  @IsOptional()
   @IsPositive()
   trainingPayoutBonusCapMultiple?: number;
 

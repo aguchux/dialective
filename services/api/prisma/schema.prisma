@@ -40,6 +40,11 @@ enum BlogPostStatus {
   PUBLISHED
 }
 
+enum ReferralInviteStatus {
+  INVITED
+  JOINED
+}
+
 model User {
   id            String   @id @default(uuid())
   firstName     String?
@@ -84,8 +89,43 @@ model User {
   p2pSellerTrades P2PTokenTrade[] @relation("P2PSellerTrades")
   p2pDisputesRaised P2PDispute[] @relation("P2PDisputesRaised")
   p2pDisputesResolved P2PDispute[] @relation("P2PDisputesResolved")
+  referralInvitesSent ReferralInvite[] @relation("ReferralInvitesSent")
+  referralInviteJoined ReferralInvite[] @relation("ReferralInviteJoined")
 
   @@map("users")
+}
+
+/// One pending/resolved invite an inviter sent to an email via the explicit
+/// "Invite" CTA (distinct from someone just sharing/copying their referral
+/// link -- that path never creates a row here, it's covered directly by
+/// User.referredById). INVITED rows expire 24h after creation and are
+/// lazily deleted on next read (WalletController.getTrainerDashboard) --
+/// never surfaced as "expired" in the UI, just removed. If the invited
+/// email registers under THIS inviter's code before expiry, the row
+/// transitions to JOINED (joinedUserId set) and is kept for history; if the
+/// email registers under any OTHER inviter's code (or with no code at all),
+/// the row is deleted outright since the invite is no longer relevant.
+/// @@unique([inviterId, email]) means a second invite to the same email by
+/// the same inviter reactivates (upserts) the existing row rather than
+/// creating a duplicate -- this does NOT block different inviters from
+/// each having their own pending invite to the same email.
+model ReferralInvite {
+  id           String               @id @default(uuid())
+  inviterId    String
+  inviter      User                 @relation("ReferralInvitesSent", fields: [inviterId], references: [id], onDelete: Cascade)
+  email        String
+  firstName    String
+  status       ReferralInviteStatus @default(INVITED)
+  joinedUserId String?
+  joinedUser   User?                @relation("ReferralInviteJoined", fields: [joinedUserId], references: [id], onDelete: SetNull)
+  expiresAt    DateTime
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@unique([inviterId, email])
+  @@index([email])
+  @@index([inviterId, status, expiresAt]) // covers getPendingReferralInvites's WHERE inviterId + status=INVITED + expiresAt filter (both the lazy-expiry deleteMany and the findMany that follows it)
+  @@map("referral_invites")
 }
 
 /// Onboarding country choice. A user's dialect (see Dialect) must belong to
@@ -909,6 +949,10 @@ model PlatformSettings {
   minWithdrawalTokens      Decimal? @db.Decimal(20, 8) // overrides MIN_WITHDRAWAL_TOKENS when set
   resendFromAddress        String? // overrides RESEND_FROM_ADDRESS when set
   leadsNotificationAddress String? // overrides LEADS_NOTIFICATION_ADDRESS when set
+  referralCookiePersistSeconds Int? // overrides REFERRAL_COOKIE_PERSIST_SECONDS when set; how long referral attribution cookie persists on register flows
+  referralInviteExpirySeconds Int? // overrides REFERRAL_INVITE_EXPIRY_SECONDS when set; pending invite lifetime before lazy deletion
+  wordTrainingRecordingTimeoutSeconds Int? // overrides WORD_TRAINING_RECORDING_TIMEOUT_SECONDS when set; per-WORD recording seconds in the trainer live recording flow -- the frontend multiplies this by the assignment's word count (splitting promptText on whitespace) to get the round's total countdown, so a 5s/word setting gives a 1-word assignment 5s and a 5-word sentence 25s
+  wordTrainingRecordingMaxTimeoutSeconds Int? // overrides WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS when set; hard ceiling on the total per-round countdown after the per-word multiplication, so an unusually long prompt can't produce a runaway timer
   trainingPayoutBonusCapMultiple Decimal? @db.Decimal(5, 2) // overrides TRAINING_PAYOUT_BONUS_CAP_MULTIPLE when set; caps the score-scaled bonus at this multiple of tokensSpent (see computeTrainingPayout)
   taskTokenCost            Decimal? @db.Decimal(20, 8) // overrides TASK_TOKEN_COST when set; tokens debited from a trainer's wallet per submission
   reverseWordTrainingEnabled Boolean @default(false)

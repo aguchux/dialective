@@ -36,9 +36,17 @@ import {
   useSubmitWordRecordingMutation,
 } from '@/store/api';
 
-const MAX_RECORDING_MS = 60_000;
+const DEFAULT_SECONDS_PER_WORD = 5;
+const DEFAULT_MAX_RECORDING_MS = 180_000;
 const RING_RADIUS = 104;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+/** Counts words in the assignment's prompt text -- 1-word dictionary entries today, but a general split so a multi-word phrase scales the timeout the same way. */
+function countPromptWords(promptText: string | null | undefined): number {
+  if (!promptText) return 1;
+  const words = promptText.trim().split(/\s+/).filter(Boolean);
+  return Math.max(1, words.length);
+}
 
 // Distinct, stable messages the backend returns when the word bank is
 // empty (see WordsService.nextAssignment's NO_WORDS_AVAILABLE) -- matched
@@ -54,7 +62,19 @@ function isNoWordsAvailable(err: unknown): boolean {
 type FlowStep = 'select' | 'terms' | 'loading' | 'training' | 'unavailable';
 type RecorderState = 'ready' | 'recording' | 'recorded' | 'playing' | 'paused' | 'submitting' | 'submitted';
 
-export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function WordTrainingDialog({
+  open,
+  onOpenChange,
+  recordingTimeoutSeconds,
+  recordingMaxTimeoutSeconds,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Seconds allowed per word (not a flat round total) -- multiplied by the assignment's word count to get the round's countdown. */
+  recordingTimeoutSeconds?: number;
+  /** Absolute ceiling on the round's total countdown after the per-word multiplication. */
+  recordingMaxTimeoutSeconds?: number;
+}) {
   const portalContainer = usePortalContainer();
   const [step, setStep] = useState<FlowStep>('select');
   const [accepted, setAccepted] = useState(false);
@@ -82,6 +102,21 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
   const [createUpload] = useCreateWordRecordingUploadMutation();
   const [submitRecording] = useSubmitWordRecordingMutation();
   const [loadSuggestions] = useLazyGetSpellingSuggestionsQuery();
+
+  // Per-word seconds x word count in the prompt, clamped to the admin's
+  // absolute ceiling -- a 5s/word setting gives a 1-word assignment 5s and
+  // a 5-word sentence 25s. Falls back to flat defaults if settings haven't
+  // loaded yet or the assignment itself hasn't (word count treated as 1).
+  const perWordSeconds =
+    recordingTimeoutSeconds && Number.isFinite(recordingTimeoutSeconds) && recordingTimeoutSeconds > 0
+      ? recordingTimeoutSeconds
+      : DEFAULT_SECONDS_PER_WORD;
+  const maxTotalSeconds =
+    recordingMaxTimeoutSeconds && Number.isFinite(recordingMaxTimeoutSeconds) && recordingMaxTimeoutSeconds > 0
+      ? recordingMaxTimeoutSeconds
+      : DEFAULT_MAX_RECORDING_MS / 1000;
+  const wordCount = countPromptWords(assignment?.promptText);
+  const maxRecordingMs = Math.min(perWordSeconds * wordCount, maxTotalSeconds) * 1000;
 
   const responseInputRef = useRef<HTMLInputElement | null>(null);
   const suggestionsDebounceRef = useRef<number | null>(null);
@@ -242,7 +277,7 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
       recorder.onstop = () => {
-        const duration = Math.min(MAX_RECORDING_MS, Math.max(1, Date.now() - startedAtRef.current));
+        const duration = Math.min(maxRecordingMs, Math.max(1, Date.now() - startedAtRef.current));
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         const url = URL.createObjectURL(blob);
         const averageNoise = noiseSamplesRef.current ? noiseTotalRef.current / noiseSamplesRef.current : 0;
@@ -259,9 +294,9 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
       setRecorderState('recording');
       recorder.start(250);
       timerRef.current = window.setInterval(() => {
-        const elapsed = Math.min(MAX_RECORDING_MS, Date.now() - startedAtRef.current);
+        const elapsed = Math.min(maxRecordingMs, Date.now() - startedAtRef.current);
         setElapsedMs(elapsed);
-        if (elapsed >= MAX_RECORDING_MS && recorder.state === 'recording') recorder.stop();
+        if (elapsed >= maxRecordingMs && recorder.state === 'recording') recorder.stop();
       }, 100);
     } catch (err) {
       releaseMicrophone();
@@ -392,7 +427,7 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
     setPickedIndexes((current) => current.slice(0, -1));
   }
 
-  const progress = Math.min(1, elapsedMs / MAX_RECORDING_MS);
+  const progress = Math.min(1, elapsedMs / maxRecordingMs);
   const ringColor = noiseColor(noiseRating);
 
   return (
@@ -655,7 +690,7 @@ export function WordTrainingDialog({ open, onOpenChange }: { open: boolean; onOp
                     </div>
 
                     <div className="flex items-center justify-center gap-3 text-sm font-bold">
-                      <span>{formatDuration(elapsedMs)} / 1:00</span>
+                      <span>{formatDuration(elapsedMs)} / {formatDuration(maxRecordingMs)}</span>
                       <span aria-hidden="true" className="text-line">|</span>
                       <span className="inline-flex items-center gap-2"><span className="size-2.5 rounded-full" style={{ backgroundColor: ringColor }} />{noiseLabel(noiseRating)}</span>
                     </div>

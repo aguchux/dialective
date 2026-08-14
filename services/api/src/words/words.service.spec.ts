@@ -9,6 +9,8 @@ describe('WordsService', () => {
     isSentenceRebuildEnabled: jest.fn(),
     isSpellingNormalizationEnabled: jest.fn().mockResolvedValue(false),
     getSpellingNormalizationProviderOrder: jest.fn().mockResolvedValue('openai,deepseek,anthropic'),
+    getWordTrainingRecordingTimeoutSeconds: jest.fn().mockResolvedValue(5),
+    getWordTrainingRecordingMaxTimeoutSeconds: jest.fn().mockResolvedValue(180),
   };
   const storage = { createPresignedDownloadUrl: jest.fn(), createPresignedUploadUrl: jest.fn() };
   const streams = { publish: jest.fn() };
@@ -111,6 +113,32 @@ describe('WordsService', () => {
       durationMs: 1200,
       noiseRating: 'QUIET',
     })).resolves.toMatchObject({ validationScore: 1 });
+  });
+
+  it('rejects a recording that exceeds the per-word timeout x word count, plus grace', async () => {
+    settings.getWordTrainingRecordingTimeoutSeconds.mockResolvedValue(5);
+    settings.getWordTrainingRecordingMaxTimeoutSeconds.mockResolvedValue(180);
+    const assignment = {
+      id: 'assignment-3',
+      sessionId: session.id,
+      wordId: 'word-1',
+      direction: 'DIALECT_TO_ENGLISH',
+      consumedAt: null,
+      uploadBucket: 'recordings',
+      uploadKey: 'ig/reverse/audio.webm',
+      word: { text: 'Welcome!' }, // 1 word -> 5s allowed + 5s grace = 10000ms
+      session: { userId: trainer.id, user: trainer },
+    };
+    prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+
+    await expect(service.createRecording(trainer.id, {
+      assignmentId: assignment.id,
+      responseText: 'WELCOME',
+      bucket: assignment.uploadBucket,
+      audioKey: assignment.uploadKey,
+      durationMs: 10001,
+      noiseRating: 'QUIET',
+    })).rejects.toThrow('Recording exceeds the 5s limit for this word');
   });
 
   it('picks a sentence-rebuild assignment and shuffles its fragments when enabled', async () => {

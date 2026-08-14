@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, randomUUID } from 'crypto';
-import { AuthProvider, OtpPurpose, Prisma, Role, User, UserStatus } from '@dialectiva/db';
+import { AuthProvider, OtpPurpose, Prisma, ReferralInviteStatus, Role, User, UserStatus } from '@dialectiva/db';
 import { isValidPhoneNumber } from 'libphonenumber-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
@@ -142,10 +142,42 @@ export class AuthService {
       data: { email, passwordHash, firstName, lastName, referralCode: generateReferralCode(), referredById },
     });
 
+    await this.reconcileReferralInvites(email, referredById, user.id);
     await this.issueEmailVerification(user);
 
     const { ticket, expiresInSeconds } = await this.otp.issueWithTicket(user.id, OtpPurpose.REGISTRATION, user.email);
     return { otpRequired: true, ticket, expiresInSeconds };
+  }
+
+  /**
+   * Resolves every outstanding ReferralInvite row for this email (there can
+   * be more than one -- multiple people are allowed to invite the same
+   * email, see schema.prisma's ReferralInvite doc comment): the row from
+   * the inviter this user actually registered under (if any) is marked
+   * JOINED so it stops showing as a pending invite; every other inviter's
+   * row for this email is deleted outright, since that invite is no longer
+   * actionable once the person has registered elsewhere (or with no
+   * referral at all).
+   */
+  private async reconcileReferralInvites(email: string, referredById: string | undefined, newUserId: string): Promise<void> {
+    const matchingInvites = await this.prisma.referralInvite.findMany({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true, inviterId: true },
+    });
+    if (matchingInvites.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      matchingInvites.map((invite) =>
+        invite.inviterId === referredById
+          ? this.prisma.referralInvite.update({
+              where: { id: invite.id },
+              data: { status: ReferralInviteStatus.JOINED, joinedUserId: newUserId },
+            })
+          : this.prisma.referralInvite.delete({ where: { id: invite.id } }),
+      ),
+    );
   }
 
   /**
@@ -215,6 +247,20 @@ export class AuthService {
         this.prisma.otpCode.update({ where: { id: row.id }, data: { consumedAt: new Date() } }),
         this.prisma.user.update({ where: { id: row.userId }, data: { emailVerified: new Date() } }),
       ]);
+
+      if (user.referredById) {
+        const inviter = await this.prisma.user.findUnique({
+          where: { id: user.referredById },
+          select: { email: true },
+        });
+        if (inviter?.email) {
+          const inviteeName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email;
+          void this.mail
+            .sendReferralJoinNotification({ inviterEmail: inviter.email, inviteeEmail: user.email, inviteeName })
+            .catch((err) => this.logger.warn(`Failed to send referral-join notification to inviter ${inviter.email}: ${err instanceof Error ? err.message : String(err)}`));
+        }
+      }
+
       return this.issueAuthResult(user);
     }
 

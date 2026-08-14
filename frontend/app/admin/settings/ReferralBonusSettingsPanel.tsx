@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { normalizeErrorMessage, useGetReferralSettingsQuery, useUpdateReferralSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useGetReferralSettingsQuery,
+  useUpdatePlatformSettingsMutation,
+  useUpdateReferralSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
@@ -13,11 +19,19 @@ export function ReferralBonusSettingsPanel() {
   const [fundingBonusEnabled, setFundingBonusEnabled] = useState(true);
   const [payoutBonusRate, setPayoutBonusRate] = useState('0.00');
   const [payoutBonusEnabled, setPayoutBonusEnabled] = useState(false);
+  const [cookiePersistSeconds, setCookiePersistSeconds] = useState('86400');
+  const [inviteExpirySeconds, setInviteExpirySeconds] = useState('86400');
+  const [recordingTimeoutSeconds, setRecordingTimeoutSeconds] = useState('5');
+  const [recordingMaxTimeoutSeconds, setRecordingMaxTimeoutSeconds] = useState('180');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const { data: settings, isLoading: isLoadingSettings } = useGetReferralSettingsQuery();
-  const [updateSettings, { isLoading: isSaving }] = useUpdateReferralSettingsMutation();
+  const { data: platformSettings, isLoading: isLoadingPlatformSettings } = useGetPlatformSettingsQuery();
+  const [updateSettings, { isLoading: isSavingReferral }] = useUpdateReferralSettingsMutation();
+  const [updatePlatformSettings, { isLoading: isSavingPlatform }] = useUpdatePlatformSettingsMutation();
+
+  const isSaving = isSavingReferral || isSavingPlatform;
 
   useEffect(() => {
     if (!settings) return;
@@ -27,18 +41,34 @@ export function ReferralBonusSettingsPanel() {
     setPayoutBonusEnabled(settings.payoutBonusEnabled);
   }, [settings]);
 
+  useEffect(() => {
+    if (!platformSettings) return;
+    setCookiePersistSeconds(String(platformSettings.referralCookiePersistSeconds));
+    setInviteExpirySeconds(String(platformSettings.referralInviteExpirySeconds));
+    setRecordingTimeoutSeconds(String(platformSettings.wordTrainingRecordingTimeoutSeconds));
+    setRecordingMaxTimeoutSeconds(String(platformSettings.wordTrainingRecordingMaxTimeoutSeconds));
+  }, [platformSettings]);
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
     setError(null);
 
     try {
-      await updateSettings({
-        fundingBonusRate: Number(fundingBonusRate),
-        fundingBonusEnabled,
-        payoutBonusRate: Number(payoutBonusRate),
-        payoutBonusEnabled,
-      }).unwrap();
+      await Promise.all([
+        updateSettings({
+          fundingBonusRate: Number(fundingBonusRate),
+          fundingBonusEnabled,
+          payoutBonusRate: Number(payoutBonusRate),
+          payoutBonusEnabled,
+        }).unwrap(),
+        updatePlatformSettings({
+          referralCookiePersistSeconds: Number(cookiePersistSeconds),
+          referralInviteExpirySeconds: Number(inviteExpirySeconds),
+          wordTrainingRecordingTimeoutSeconds: Number(recordingTimeoutSeconds),
+          wordTrainingRecordingMaxTimeoutSeconds: Number(recordingMaxTimeoutSeconds),
+        }).unwrap(),
+      ]);
       setMessage('Referral bonus settings saved.');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to save referral settings.'));
@@ -55,8 +85,8 @@ export function ReferralBonusSettingsPanel() {
         </p>
       </div>
 
-      {isLoadingSettings && <p className="text-muted">Loading...</p>}
-      {!isLoadingSettings && (
+      {(isLoadingSettings || isLoadingPlatformSettings) && <p className="text-muted">Loading...</p>}
+      {!isLoadingSettings && !isLoadingPlatformSettings && (
         <form className="grid gap-4 md:max-w-xl" onSubmit={handleSave}>
           <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
             <label className="flex items-center gap-2 font-bold" htmlFor="funding-enabled">
@@ -108,6 +138,67 @@ export function ReferralBonusSettingsPanel() {
               max="1"
               value={payoutBonusRate}
               onChange={(e) => setPayoutBonusRate(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
+            <p className="font-bold">Referral lifecycle and recording timers</p>
+            <p className="leading-relaxed text-muted">
+              Controls previously hardcoded in frontend/backend constants and deployment env vars.
+            </p>
+
+            <label htmlFor="cookie-persist-seconds">Referral cookie persist time (seconds)</label>
+            <input
+              className={inputClass}
+              id="cookie-persist-seconds"
+              type="number"
+              step="1"
+              min="60"
+              value={cookiePersistSeconds}
+              onChange={(e) => setCookiePersistSeconds(e.target.value)}
+              required
+            />
+
+            <label htmlFor="invite-expiry-seconds">Invitation expiry time (seconds)</label>
+            <input
+              className={inputClass}
+              id="invite-expiry-seconds"
+              type="number"
+              step="1"
+              min="300"
+              value={inviteExpirySeconds}
+              onChange={(e) => setInviteExpirySeconds(e.target.value)}
+              required
+            />
+
+            <label htmlFor="recording-timeout-seconds">Live recording timeout, per word (seconds)</label>
+            <p className="text-sm leading-relaxed text-muted">
+              Multiplied by the number of words in the assignment -- a 5-word sentence gets 5x this value, up to the
+              cap below.
+            </p>
+            <input
+              className={inputClass}
+              id="recording-timeout-seconds"
+              type="number"
+              step="1"
+              min="1"
+              max="120"
+              value={recordingTimeoutSeconds}
+              onChange={(e) => setRecordingTimeoutSeconds(e.target.value)}
+              required
+            />
+
+            <label htmlFor="recording-max-timeout-seconds">Live recording timeout cap, total (seconds)</label>
+            <input
+              className={inputClass}
+              id="recording-max-timeout-seconds"
+              type="number"
+              step="1"
+              min="5"
+              max="1800"
+              value={recordingMaxTimeoutSeconds}
+              onChange={(e) => setRecordingMaxTimeoutSeconds(e.target.value)}
               required
             />
           </div>

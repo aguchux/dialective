@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSession, signIn, useSession } from 'next-auth/react';
 import { apiClient } from '@/lib/api-client';
-import { normalizeErrorMessage, useRegisterMutation } from '@/store/api';
+import { normalizeErrorMessage, useGetPublicClientSettingsQuery, useRegisterMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { roleHomePath } from '@/lib/role-home';
@@ -16,12 +16,40 @@ const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const secondaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-3.5 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
+const REFERRAL_COOKIE_KEY = 'dialectiva_ref';
+const DEFAULT_REFERRAL_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60;
+
+function normalizeReferralCode(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return /^[A-Za-z0-9_-]{4,64}$/.test(trimmed) ? trimmed : undefined;
+}
+
+function readReferralCookie(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const parts = document.cookie.split(';').map((part) => part.trim());
+  const entry = parts.find((part) => part.startsWith(`${REFERRAL_COOKIE_KEY}=`));
+  if (!entry) return undefined;
+  const rawValue = entry.slice(`${REFERRAL_COOKIE_KEY}=`.length);
+  try {
+    return normalizeReferralCode(decodeURIComponent(rawValue));
+  } catch {
+    return normalizeReferralCode(rawValue);
+  }
+}
+
+function writeReferralCookie(code: string, maxAgeSeconds: number): void {
+  if (typeof document === 'undefined') return;
+  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${REFERRAL_COOKIE_KEY}=${encodeURIComponent(code)}; Max-Age=${maxAgeSeconds}; Path=/; SameSite=Lax${secure}`;
+}
 
 function RegisterContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const referralCode = searchParams.get('ref') ?? undefined;
+  const referralCode = normalizeReferralCode(searchParams.get('ref'));
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -34,6 +62,12 @@ function RegisterContent() {
   const [code, setCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const { data: publicClientSettings } = useGetPublicClientSettingsQuery();
+
+  const referralCookieMaxAgeSeconds =
+    publicClientSettings?.referralCookiePersistSeconds && publicClientSettings.referralCookiePersistSeconds > 0
+      ? publicClientSettings.referralCookiePersistSeconds
+      : DEFAULT_REFERRAL_COOKIE_MAX_AGE_SECONDS;
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -41,13 +75,24 @@ function RegisterContent() {
     }
   }, [status, session, router]);
 
+  useEffect(() => {
+    if (!referralCode) return;
+    // Re-fires once more when publicClientSettings resolves after this
+    // page's first paint (max-age jumps from the client default to the
+    // admin-configured value) -- writing again with the real value is
+    // cheap and correct (Max-Age always wins over whatever was set
+    // before), so no ref-guard needed to suppress the second write.
+    writeReferralCookie(referralCode, referralCookieMaxAgeSeconds);
+  }, [referralCode, referralCookieMaxAgeSeconds]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
 
     try {
-      const pending = await register({ firstName, lastName, email, password, referralCode }).unwrap();
+      const effectiveReferralCode = referralCode ?? readReferralCookie();
+      const pending = await register({ firstName, lastName, email, password, referralCode: effectiveReferralCode }).unwrap();
       setTicket(pending.ticket);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Registration failed'));

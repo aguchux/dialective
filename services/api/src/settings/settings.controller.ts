@@ -12,18 +12,30 @@ import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto';
  * WalletController's admin/referral-settings routes; not duplicated here.
  */
 @Controller('admin/platform-settings')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
 export class SettingsController {
   constructor(private readonly settings: PlatformSettingsService) {}
 
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   getSettings() {
     return this.settings.getForAdmin();
   }
 
   @Patch()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   updateSettings(@Body() dto: UpdatePlatformSettingsDto) {
     return this.settings.update(dto);
+  }
+}
+
+@Controller('settings')
+export class PublicSettingsController {
+  constructor(private readonly settings: PlatformSettingsService) {}
+
+  @Get('public')
+  getPublicSettings() {
+    return this.settings.getPublicClientSettings();
   }
 }

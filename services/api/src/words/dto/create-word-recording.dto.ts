@@ -30,10 +30,16 @@ export class CreateWordRecordingDto {
   @IsNotEmpty()
   audioKey?: string;
 
+  // Static upper bound only -- the real, admin-configurable ceiling is
+  // wordTrainingRecordingMaxTimeoutSeconds (see PlatformSettingsService),
+  // enforced dynamically in WordsService.createRecording since a
+  // class-validator decorator can't read DB-backed settings. This just
+  // needs to be >= the highest that setting is allowed to go
+  // (UpdatePlatformSettingsDto caps it at 1800s) plus a grace margin.
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(60000)
+  @Max(1_900_000)
   durationMs?: number;
 
   @IsOptional()

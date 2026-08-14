@@ -200,6 +200,23 @@ export class WordsService {
       throw new UnprocessableEntityException('This assignment has no associated word');
     }
 
+    // Mirrors the client's countdown (see WordTrainingDialog.tsx): per-word
+    // seconds x word count in the source text, clamped to the admin's
+    // absolute ceiling. A grace factor absorbs MediaRecorder chunking/
+    // upload latency between the client's own clamp and this check, so a
+    // recording that legitimately finished right at the client's limit
+    // isn't rejected for a few hundred ms of transport overhead.
+    const [perWordSeconds, maxSeconds] = await Promise.all([
+      this.settings.getWordTrainingRecordingTimeoutSeconds(),
+      this.settings.getWordTrainingRecordingMaxTimeoutSeconds(),
+    ]);
+    const wordCount = Math.max(1, assignment.word.text.trim().split(/\s+/).length);
+    const allowedMs = Math.min(perWordSeconds * wordCount, maxSeconds) * 1000;
+    const durationGraceMs = 5_000;
+    if (body.durationMs > allowedMs + durationGraceMs) {
+      throw new UnprocessableEntityException(`Recording exceeds the ${Math.round(allowedMs / 1000)}s limit for this word`);
+    }
+
     const normalizedAnswer = normalizeAnswer(body.responseText);
     const normalizedEnglish = normalizeAnswer(assignment.word.text);
     const validationScore = assignment.direction === 'DIALECT_TO_ENGLISH'

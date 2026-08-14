@@ -12,6 +12,20 @@ interface DataAccessLeadNotification {
   countriesInterested: string | null;
 }
 
+interface ReferralJoinNotification {
+  inviterEmail: string;
+  inviteeEmail: string;
+  inviteeName: string;
+}
+
+interface ReferralInviteEmail {
+  inviterName: string;
+  inviterEmail: string;
+  inviteeFirstName: string;
+  inviteeEmail: string;
+  referralUrl: string;
+}
+
 function frontendUrl(): string {
   return process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
 }
@@ -65,6 +79,25 @@ export class MailService {
   async sendDataAccessLeadNotification(lead: DataAccessLeadNotification): Promise<void> {
     const to = await this.settings.getLeadsNotificationAddress();
     await this.send(to, `New voice data lead: ${lead.name}`, dataAccessLeadHtml(lead), dataAccessLeadText(lead));
+  }
+
+  async sendReferralJoinNotification(payload: ReferralJoinNotification): Promise<void> {
+    const referralsUrl = `${frontendUrl()}/dashboard?view=referrals`;
+    await this.send(
+      payload.inviterEmail,
+      'Someone joined your referral network',
+      referralJoinHtml(payload.inviteeName, payload.inviteeEmail, referralsUrl),
+      referralJoinText(payload.inviteeName, payload.inviteeEmail, referralsUrl),
+    );
+  }
+
+  async sendReferralInviteEmail(payload: ReferralInviteEmail): Promise<void> {
+    await this.send(
+      payload.inviteeEmail,
+      `${payload.inviterName} invited you to Dialect Library`,
+      referralInviteHtml(payload),
+      referralInviteText(payload),
+    );
   }
 
   private async send(to: string, subject: string, html: string, text: string): Promise<void> {
@@ -146,4 +179,38 @@ Email: ${lead.email}
 Organization: ${lead.organization ?? '(not provided)'}
 Website: ${lead.website ?? '(not provided)'}
 Countries interested in: ${lead.countriesInterested ?? '(not provided)'}`;
+}
+
+function referralJoinHtml(inviteeName: string, inviteeEmail: string, referralsUrl: string): string {
+  return `<p>Good news. Someone just joined your referral network on Dialect Library.</p>
+<ul>
+  <li>Name: ${escapeHtml(inviteeName)}</li>
+  <li>Email: ${escapeHtml(inviteeEmail)}</li>
+</ul>
+<p>Track your referrals and bonus activity here:</p>
+<p><a href="${referralsUrl}">${referralsUrl}</a></p>`;
+}
+
+function referralJoinText(inviteeName: string, inviteeEmail: string, referralsUrl: string): string {
+  return `Someone joined your referral network on Dialect Library.
+Name: ${inviteeName}
+Email: ${inviteeEmail}
+Track your referrals: ${referralsUrl}`;
+}
+
+function referralInviteHtml(payload: ReferralInviteEmail): string {
+  return `<p>Hi ${escapeHtml(payload.inviteeFirstName)},</p>
+<p>${escapeHtml(payload.inviterName)} (${escapeHtml(payload.inviterEmail)}) invited you to join Dialect Library.</p>
+<p>Use this invite link to create your account:</p>
+<p><a href="${payload.referralUrl}">${payload.referralUrl}</a></p>
+<p>This link connects your account to ${escapeHtml(payload.inviterName)}'s referral network.</p>`;
+}
+
+function referralInviteText(payload: ReferralInviteEmail): string {
+  return `Hi ${payload.inviteeFirstName},
+${payload.inviterName} (${payload.inviterEmail}) invited you to join Dialect Library.
+Use this invite link to create your account:
+${payload.referralUrl}
+
+This link connects your account to ${payload.inviterName}'s referral network.`;
 }

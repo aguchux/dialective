@@ -29,6 +29,7 @@ import {
   LedgerEntryType,
   OtpPurpose,
   Prisma,
+  ReferralInviteStatus,
   Role,
   SubmissionStatus,
   SubscriptionPoolStatus,
@@ -51,9 +52,11 @@ import { UpdateReferralSettingsDto } from './dto/update-referral-settings.dto';
 import { CreateTrainingPayoutDto } from './dto/create-training-payout.dto';
 import { ListEarningsDto } from './dto/list-earnings.dto';
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
+import { CreateReferralInviteDto } from './dto/create-referral-invite.dto';
 import { tokensToUsdt, usdToTokens } from './token-rate.util';
 import { tokensToLocalCurrency } from './currency-rate.util';
 import { withdrawalContextHash, depositContextHash, adminActionContextHash } from './otp-context.util';
+import { MailService } from '../mail/mail.service';
 
 const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.TRAINING_PAYOUT,
@@ -86,6 +89,7 @@ export class WalletController {
     private readonly nowPayments: NowPaymentsService,
     private readonly platformSettings: PlatformSettingsService,
     private readonly otp: OtpService,
+    private readonly mail: MailService,
   ) {}
 
   private async getOrCreateWallet(userId: string) {
@@ -123,19 +127,73 @@ export class WalletController {
   @Get('wallet')
   @UseGuards(JwtAuthGuard)
   async getWallet(@Req() req: AuthenticatedRequest) {
-    const wallet = await this.getOrCreateWallet(req.user.sub);
-    const tokenUsdRate = await this.platformSettings.getTokenUsdRate();
-    const localCurrency = await this.getLocalCurrency(req.user.sub);
+    const [wallet, tokenUsdRate, localCurrency, taskTokenCost] = await Promise.all([
+      this.getOrCreateWallet(req.user.sub),
+      this.platformSettings.getTokenUsdRate(),
+      this.getLocalCurrency(req.user.sub),
+      this.platformSettings.getTaskTokenCost(),
+    ]);
     return {
       balance: wallet.balance.toString(),
       lockedBalance: wallet.lockedBalance.toString(),
       tokenUsdRate,
-      taskTokenCost: (await this.platformSettings.getTaskTokenCost()).toString(),
+      taskTokenCost: taskTokenCost.toString(),
       localCurrency,
       balanceInLocalCurrency: localCurrency
         ? tokensToLocalCurrency(wallet.balance.toNumber(), tokenUsdRate, Number(localCurrency.usdExchangeRate)).toString()
         : null,
     };
+  }
+
+  @Post('wallet/referrals/invite')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
+  async sendReferralInvite(@Req() req: AuthenticatedRequest, @Body() dto: CreateReferralInviteDto): Promise<void> {
+    const inviter = await this.prisma.user.findUnique({
+      where: { id: req.user.sub },
+      select: { firstName: true, lastName: true, email: true, referralCode: true },
+    });
+    if (!inviter) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (inviter.email.toLowerCase() === dto.email.toLowerCase()) {
+      throw new BadRequestException('You cannot invite your own email address');
+    }
+
+    // An already-registered email can never be (re-)invited -- they've
+    // either already joined a network or have none, but either way a new
+    // invite for them makes no sense (see AGENTS.md-style rule: "once
+    // registered, cannot be invited again").
+    const existingUser = await this.prisma.user.findFirst({ where: { email: { equals: dto.email, mode: 'insensitive' } }, select: { id: true } });
+    if (existingUser) {
+      throw new BadRequestException('This email is already registered');
+    }
+
+    const inviterName = [inviter.firstName, inviter.lastName].filter(Boolean).join(' ').trim() || inviter.email;
+    const frontend = process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
+    const referralUrl = `${frontend}/register?ref=${encodeURIComponent(inviter.referralCode)}`;
+    const inviteExpirySeconds = await this.platformSettings.getReferralInviteExpirySeconds();
+    const expiresAt = new Date(Date.now() + inviteExpirySeconds * 1000);
+
+    // Upsert on (inviterId, email): a repeat invite from the SAME inviter to
+    // the same email reactivates/extends the existing row rather than
+    // erroring or duplicating it. Different inviters each get their own row
+    // for the same email -- that's expected (see schema doc comment).
+    await this.prisma.referralInvite.upsert({
+      where: { inviterId_email: { inviterId: req.user.sub, email: dto.email } },
+      create: { inviterId: req.user.sub, email: dto.email, firstName: dto.firstName, expiresAt },
+      update: { firstName: dto.firstName, status: ReferralInviteStatus.INVITED, joinedUserId: null, expiresAt },
+    });
+
+    await this.mail.sendReferralInviteEmail({
+      inviterName,
+      inviterEmail: inviter.email,
+      inviteeFirstName: dto.firstName,
+      inviteeEmail: dto.email,
+      referralUrl,
+    });
   }
 
   @Get('wallet/dashboard')
@@ -146,7 +204,7 @@ export class WalletController {
     sixMonthsAgo.setUTCMonth(sixMonthsAgo.getUTCMonth() - 5, 1);
     sixMonthsAgo.setUTCHours(0, 0, 0, 0);
 
-    const [user, settings, ledgerTotals, recentActivity, earningsHistory, withdrawalTotals] = await Promise.all([
+    const [user, settings, ledgerTotals, recentActivity, earningsHistory, withdrawalTotals, pendingInvites] = await Promise.all([
       this.prisma.user.findUniqueOrThrow({
         where: { id: req.user.sub },
         select: {
@@ -154,7 +212,7 @@ export class WalletController {
           referrals: {
             orderBy: { createdAt: 'desc' },
             take: 8,
-            select: { id: true, email: true, createdAt: true },
+            select: { id: true, firstName: true, email: true, createdAt: true },
           },
           _count: { select: { referrals: true } },
         },
@@ -184,6 +242,7 @@ export class WalletController {
         where: { walletId: wallet.id },
         _sum: { tokenAmount: true },
       }),
+      this.getPendingReferralInvites(req.user.sub),
     ]);
 
     const ledgerAmount = (types: string[]) =>
@@ -203,15 +262,39 @@ export class WalletController {
       monthTotals.set(key, (monthTotals.get(key) ?? 0) + Number(entry.amount));
     }
 
-    const dashboardTokenUsdRate = await this.platformSettings.getTokenUsdRate();
-    const dashboardLocalCurrency = await this.getLocalCurrency(req.user.sub);
+    // Batched rather than sequential awaits -- each of these previously hit
+    // PlatformSettingsService.getRow() (a Prisma upsert) one at a time,
+    // turning this endpoint into 6+ round-trips end to end. getRow() now
+    // also caches briefly on its own, but running the calls concurrently
+    // still collapses this to a single wait even on a cache miss.
+    const [
+      dashboardTokenUsdRate,
+      dashboardLocalCurrency,
+      taskTokenCost,
+      scoringSlaMinutes,
+      recordingRoundTimeoutSeconds,
+      recordingRoundMaxTimeoutSeconds,
+      cookiePersistSeconds,
+      inviteExpirySeconds,
+    ] = await Promise.all([
+      this.platformSettings.getTokenUsdRate(),
+      this.getLocalCurrency(req.user.sub),
+      this.platformSettings.getTaskTokenCost(),
+      this.platformSettings.getScoringSlaMinutes(),
+      this.platformSettings.getWordTrainingRecordingTimeoutSeconds(),
+      this.platformSettings.getWordTrainingRecordingMaxTimeoutSeconds(),
+      this.platformSettings.getReferralCookiePersistSeconds(),
+      this.platformSettings.getReferralInviteExpirySeconds(),
+    ]);
 
     return {
       balance: wallet.balance.toString(),
       lockedBalance: wallet.lockedBalance.toString(),
       tokenUsdRate: dashboardTokenUsdRate,
-      taskTokenCost: (await this.platformSettings.getTaskTokenCost()).toString(),
-      scoringSlaMinutes: await this.platformSettings.getScoringSlaMinutes(),
+      taskTokenCost: taskTokenCost.toString(),
+      scoringSlaMinutes,
+      recordingRoundTimeoutSeconds,
+      recordingRoundMaxTimeoutSeconds,
       localCurrency: dashboardLocalCurrency,
       balanceInLocalCurrency: dashboardLocalCurrency
         ? tokensToLocalCurrency(
@@ -234,13 +317,54 @@ export class WalletController {
       referrals: {
         code: user.referralCode,
         invitedCount: user._count.referrals,
-        recentInvites: user.referrals,
+        recentInvites: this.mergeRecentInvites(user.referrals, pendingInvites),
+        cookiePersistSeconds,
+        inviteExpirySeconds,
         fundingBonusRate: settings.fundingBonusRate.toString(),
         fundingBonusEnabled: settings.fundingBonusEnabled,
         payoutBonusRate: settings.payoutBonusRate.toString(),
         payoutBonusEnabled: settings.payoutBonusEnabled,
       },
     };
+  }
+
+  /**
+    * Lazily deletes this inviter's expired pending invites before returning the
+   * remaining ones -- expired invites are never surfaced as "expired" in
+   * the dashboard, they just disappear from the list.
+   */
+  private async getPendingReferralInvites(inviterId: string) {
+    const now = new Date();
+    await this.prisma.referralInvite.deleteMany({
+      where: { inviterId, status: ReferralInviteStatus.INVITED, expiresAt: { lte: now } },
+    });
+    return this.prisma.referralInvite.findMany({
+      where: { inviterId, status: ReferralInviteStatus.INVITED, expiresAt: { gt: now } },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      select: { id: true, firstName: true, email: true, createdAt: true },
+    });
+  }
+
+  /**
+   * Combines actually-registered referred users (status JOINED, from
+   * User.referredById -- covers both the explicit Invite CTA and someone
+   * just sharing/copying their referral link) with still-pending
+   * ReferralInvite rows (status INVITED) into one list, newest first.
+   * JOINED ReferralInvite rows are intentionally excluded here -- once
+   * joined, the person already appears via the real User record, so
+   * including the invite row too would duplicate them.
+   */
+  private mergeRecentInvites(
+    joined: { id: string; firstName: string | null; email: string; createdAt: Date }[],
+    pending: { id: string; firstName: string; email: string; createdAt: Date }[],
+  ) {
+    const merged = [
+      ...joined.map((row) => ({ id: row.id, firstName: row.firstName, email: row.email, createdAt: row.createdAt, status: 'JOINED' as const })),
+      ...pending.map((row) => ({ id: row.id, firstName: row.firstName, email: row.email, createdAt: row.createdAt, status: 'INVITED' as const })),
+    ];
+    merged.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return merged.slice(0, 8);
   }
 
   /**

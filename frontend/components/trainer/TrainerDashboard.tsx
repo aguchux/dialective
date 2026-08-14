@@ -90,6 +90,7 @@ import {
   useRaiseP2PDisputeMutation,
   useReleaseP2PTradeMutation,
   useRequestP2PTradeCancelMutation,
+  useSendReferralInviteMutation,
   useUpdateP2PPaymentMethodMutation,
   useUpdateProfileMutation,
 } from '@/store/api';
@@ -236,7 +237,12 @@ export function TrainerDashboard() {
         </main>
 
         <MobileNavigation activeView={activeView} />
-        <WordTrainingDialog onOpenChange={setTrainingOpen} open={trainingOpen} />
+        <WordTrainingDialog
+          onOpenChange={setTrainingOpen}
+          open={trainingOpen}
+          recordingTimeoutSeconds={data?.recordingRoundTimeoutSeconds}
+          recordingMaxTimeoutSeconds={data?.recordingRoundMaxTimeoutSeconds}
+        />
         <LowBalanceDialog
           onOpenChange={setLowBalanceOpen}
           open={lowBalanceOpen}
@@ -1556,6 +1562,12 @@ function TradeCard({
 function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: string }) {
   const [copied, setCopied] = useState(false);
   const [referralLink, setReferralLink] = useState(`/register?ref=${data.referrals.code}`);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteFirstName, setInviteFirstName] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [sendReferralInvite, { isLoading: inviteSending }] = useSendReferralInviteMutation();
 
   useEffect(() => setReferralLink(`${window.location.origin}/register?ref=${data.referrals.code}`), [data.referrals.code]);
 
@@ -1565,9 +1577,81 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
     window.setTimeout(() => setCopied(false), 1800);
   }
 
+  async function handleInviteSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setInviteMessage(null);
+    setInviteError(null);
+
+    try {
+      await sendReferralInvite({ firstName: inviteFirstName.trim(), email: inviteEmail.trim() }).unwrap();
+      setInviteMessage('Invitation sent successfully.');
+      setInviteFirstName('');
+      setInviteEmail('');
+      setInviteOpen(false);
+    } catch (err) {
+      setInviteError(normalizeErrorMessage(err, 'Unable to send invitation right now.'));
+    }
+  }
+
   return (
     <div>
-      <ViewHeading title="Referrals" subtitle="Your invitations and credited lifetime referral bonuses." />
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <ViewHeading title="Referrals" subtitle="Your invitations and credited lifetime referral bonuses." />
+        <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+          <DialogTrigger asChild>
+            <button className="inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-4 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark">
+              Invite
+            </button>
+          </DialogTrigger>
+          <DialogContent title="Invite a trainer" description="Send one referral invite at a time.">
+            <form className="grid gap-3" onSubmit={handleInviteSubmit}>
+              <div className="grid gap-1">
+                <label className="text-sm font-bold" htmlFor="invite-first-name">
+                  First name
+                </label>
+                <input
+                  className="min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted"
+                  id="invite-first-name"
+                  maxLength={80}
+                  onChange={(e) => setInviteFirstName(e.target.value)}
+                  placeholder="First name"
+                  required
+                  type="text"
+                  value={inviteFirstName}
+                />
+              </div>
+              <div className="grid gap-1">
+                <label className="text-sm font-bold" htmlFor="invite-email">
+                  Email
+                </label>
+                <input
+                  className="min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted"
+                  id="invite-email"
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  required
+                  type="email"
+                  value={inviteEmail}
+                />
+              </div>
+              {inviteError && (
+                <p className="text-sm font-bold text-danger" role="alert">
+                  {inviteError}
+                </p>
+              )}
+              <ActionButton
+                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                pending={inviteSending}
+                pendingLabel="Sending"
+                type="submit"
+              >
+                Send invite
+              </ActionButton>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+      {inviteMessage && <p className="mb-4 text-sm font-bold text-emerald-700">{inviteMessage}</p>}
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Referral summary">
         <MetricCard icon={Users} label="People invited" value={data.referrals.invitedCount.toLocaleString()} tone="purple" />
         <MetricCard icon={CircleDollarSign} label="Bonus earned" value={formatCompactTokensLabel(data.referralEarningsTokens)} tone="green" compact />
@@ -1591,17 +1675,24 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
         </div>
       </section>
       <section className="mt-8">
-        <SectionTitle title="Recent invitations" subtitle="The latest trainers registered with your code." />
+        <SectionTitle title="Recent invitations" subtitle="People invited or registered under your referral network." />
         {data.referrals.recentInvites.length ? (
           <div className={`${cardClass} divide-y divide-line`}>
             {data.referrals.recentInvites.map((invite) => (
               <div className="flex items-center gap-3 p-4" key={invite.id}>
                 <Avatar email={invite.email} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-extrabold">{invite.email}</p>
-                  <p className="text-sm text-muted">Joined {formatDate(invite.createdAt)}</p>
+                  <p className="truncate font-extrabold">{invite.firstName ?? invite.email}</p>
+                  <p className="truncate text-sm text-muted">{invite.email}</p>
+                  <p className="text-sm text-muted">
+                    {invite.status === 'JOINED' ? 'Joined' : 'Invited'} {formatDate(invite.createdAt)}
+                  </p>
                 </div>
-                <BadgeCheck className="size-5 text-emerald-600" aria-label="Registered" />
+                {invite.status === 'JOINED' ? (
+                  <BadgeCheck className="size-5 shrink-0 text-emerald-600" aria-label="Joined" />
+                ) : (
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">Invited</span>
+                )}
               </div>
             ))}
           </div>

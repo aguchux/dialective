@@ -13,16 +13,50 @@ const SMS_TRANSACTIONAL_PROVIDER_KEYS = ['termii', 'twilio', 'africastalking', '
  * until an admin explicitly overrides a value from the Settings UI. Same
  * shape as WalletController.getReferralSettings's upsert-singleton pattern.
  */
+const ROW_CACHE_TTL_MS = 5_000;
+
 @Injectable()
 export class PlatformSettingsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async getRow() {
+  // Every getter/setter below funnels through getRow(), and a single
+  // request can easily call several of them (e.g. WalletController.
+  // getTrainerDashboard reads 6+ settings) -- without this cache each of
+  // those was its own upsert() round-trip to Postgres. A short TTL keeps
+  // admin changes visible within seconds without needing explicit
+  // invalidation wiring, while collapsing bursts of same-request reads
+  // into one query. update() below still always writes through and
+  // refreshes the cache immediately so admins see their own change
+  // reflected in the same response.
+  private cachedRow: Awaited<ReturnType<PlatformSettingsService['fetchRow']>> | null = null;
+  private cachedAt = 0;
+
+  private async fetchRow() {
     return this.prisma.platformSettings.upsert({
       where: { id: 'default' },
       update: {},
       create: { id: 'default' },
     });
+  }
+
+  private async getRow() {
+    const now = Date.now();
+    if (this.cachedRow && now - this.cachedAt < ROW_CACHE_TTL_MS) {
+      return this.cachedRow;
+    }
+    const row = await this.fetchRow();
+    this.cachedRow = row;
+    this.cachedAt = now;
+    return row;
+  }
+
+  private parsePositiveInt(raw: string | undefined, fallback: number, envName: string): number {
+    const value = raw ?? String(fallback);
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new Error(`Invalid ${envName}: ${value}`);
+    }
+    return parsed;
   }
 
   async getTokenUsdRate(): Promise<number> {
@@ -201,13 +235,77 @@ export class PlatformSettingsService {
     return row.leadsNotificationAddress ?? process.env.LEADS_NOTIFICATION_ADDRESS ?? 'hello@dialectlibrary.com';
   }
 
+  async getReferralCookiePersistSeconds(): Promise<number> {
+    const row = await this.getRow();
+    if (row.referralCookiePersistSeconds !== null) {
+      return row.referralCookiePersistSeconds;
+    }
+    return this.parsePositiveInt(process.env.REFERRAL_COOKIE_PERSIST_SECONDS, 24 * 60 * 60, 'REFERRAL_COOKIE_PERSIST_SECONDS');
+  }
+
+  async getReferralInviteExpirySeconds(): Promise<number> {
+    const row = await this.getRow();
+    if (row.referralInviteExpirySeconds !== null) {
+      return row.referralInviteExpirySeconds;
+    }
+    return this.parsePositiveInt(process.env.REFERRAL_INVITE_EXPIRY_SECONDS, 24 * 60 * 60, 'REFERRAL_INVITE_EXPIRY_SECONDS');
+  }
+
+  async getWordTrainingRecordingTimeoutSeconds(): Promise<number> {
+    const row = await this.getRow();
+    if (row.wordTrainingRecordingTimeoutSeconds !== null) {
+      return row.wordTrainingRecordingTimeoutSeconds;
+    }
+    return this.parsePositiveInt(
+      process.env.WORD_TRAINING_RECORDING_TIMEOUT_SECONDS,
+      5,
+      'WORD_TRAINING_RECORDING_TIMEOUT_SECONDS',
+    );
+  }
+
+  async getWordTrainingRecordingMaxTimeoutSeconds(): Promise<number> {
+    const row = await this.getRow();
+    if (row.wordTrainingRecordingMaxTimeoutSeconds !== null) {
+      return row.wordTrainingRecordingMaxTimeoutSeconds;
+    }
+    return this.parsePositiveInt(
+      process.env.WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS,
+      180,
+      'WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS',
+    );
+  }
+
   async getForAdmin() {
     const row = await this.getRow();
+    const referralCookiePersistSeconds =
+      row.referralCookiePersistSeconds ??
+      this.parsePositiveInt(process.env.REFERRAL_COOKIE_PERSIST_SECONDS, 24 * 60 * 60, 'REFERRAL_COOKIE_PERSIST_SECONDS');
+    const referralInviteExpirySeconds =
+      row.referralInviteExpirySeconds ??
+      this.parsePositiveInt(process.env.REFERRAL_INVITE_EXPIRY_SECONDS, 24 * 60 * 60, 'REFERRAL_INVITE_EXPIRY_SECONDS');
+    const wordTrainingRecordingTimeoutSeconds =
+      row.wordTrainingRecordingTimeoutSeconds ??
+      this.parsePositiveInt(
+        process.env.WORD_TRAINING_RECORDING_TIMEOUT_SECONDS,
+        5,
+        'WORD_TRAINING_RECORDING_TIMEOUT_SECONDS',
+      );
+    const wordTrainingRecordingMaxTimeoutSeconds =
+      row.wordTrainingRecordingMaxTimeoutSeconds ??
+      this.parsePositiveInt(
+        process.env.WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS,
+        180,
+        'WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS',
+      );
     return {
       tokenUsdRate: row.tokenUsdRate?.toString() ?? null,
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
       resendFromAddress: row.resendFromAddress,
       leadsNotificationAddress: row.leadsNotificationAddress,
+      referralCookiePersistSeconds,
+      referralInviteExpirySeconds,
+      wordTrainingRecordingTimeoutSeconds,
+      wordTrainingRecordingMaxTimeoutSeconds,
       trainingPayoutBonusCapMultiple: row.trainingPayoutBonusCapMultiple?.toString() ?? null,
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
@@ -257,6 +355,10 @@ export class PlatformSettingsService {
     minWithdrawalTokens?: number | null;
     resendFromAddress?: string | null;
     leadsNotificationAddress?: string | null;
+    referralCookiePersistSeconds?: number;
+    referralInviteExpirySeconds?: number;
+    wordTrainingRecordingTimeoutSeconds?: number;
+    wordTrainingRecordingMaxTimeoutSeconds?: number;
     trainingPayoutBonusCapMultiple?: number | null;
     taskTokenCost?: number | null;
     reverseWordTrainingEnabled?: boolean;
@@ -387,11 +489,37 @@ export class PlatformSettingsService {
       create: { id: 'default', ...data },
       update: data,
     });
+    this.cachedRow = row;
+    this.cachedAt = Date.now();
+    const referralCookiePersistSeconds =
+      row.referralCookiePersistSeconds ??
+      this.parsePositiveInt(process.env.REFERRAL_COOKIE_PERSIST_SECONDS, 24 * 60 * 60, 'REFERRAL_COOKIE_PERSIST_SECONDS');
+    const referralInviteExpirySeconds =
+      row.referralInviteExpirySeconds ??
+      this.parsePositiveInt(process.env.REFERRAL_INVITE_EXPIRY_SECONDS, 24 * 60 * 60, 'REFERRAL_INVITE_EXPIRY_SECONDS');
+    const wordTrainingRecordingTimeoutSeconds =
+      row.wordTrainingRecordingTimeoutSeconds ??
+      this.parsePositiveInt(
+        process.env.WORD_TRAINING_RECORDING_TIMEOUT_SECONDS,
+        5,
+        'WORD_TRAINING_RECORDING_TIMEOUT_SECONDS',
+      );
+    const wordTrainingRecordingMaxTimeoutSeconds =
+      row.wordTrainingRecordingMaxTimeoutSeconds ??
+      this.parsePositiveInt(
+        process.env.WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS,
+        180,
+        'WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS',
+      );
     return {
       tokenUsdRate: row.tokenUsdRate?.toString() ?? null,
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
       resendFromAddress: row.resendFromAddress,
       leadsNotificationAddress: row.leadsNotificationAddress,
+      referralCookiePersistSeconds,
+      referralInviteExpirySeconds,
+      wordTrainingRecordingTimeoutSeconds,
+      wordTrainingRecordingMaxTimeoutSeconds,
       trainingPayoutBonusCapMultiple: row.trainingPayoutBonusCapMultiple?.toString() ?? null,
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
@@ -433,6 +561,22 @@ export class PlatformSettingsService {
       autoSubmitAfterApproval: row.autoSubmitAfterApproval,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
+    };
+  }
+
+  async getPublicClientSettings() {
+    const [referralCookiePersistSeconds, referralInviteExpirySeconds, wordTrainingRecordingTimeoutSeconds, wordTrainingRecordingMaxTimeoutSeconds] =
+      await Promise.all([
+        this.getReferralCookiePersistSeconds(),
+        this.getReferralInviteExpirySeconds(),
+        this.getWordTrainingRecordingTimeoutSeconds(),
+        this.getWordTrainingRecordingMaxTimeoutSeconds(),
+      ]);
+    return {
+      referralCookiePersistSeconds,
+      referralInviteExpirySeconds,
+      wordTrainingRecordingTimeoutSeconds,
+      wordTrainingRecordingMaxTimeoutSeconds,
     };
   }
 }

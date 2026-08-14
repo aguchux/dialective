@@ -144,6 +144,11 @@ export interface ReferralSettingsInput {
   payoutBonusEnabled?: boolean;
 }
 
+export interface ReferralInviteInput {
+  firstName: string;
+  email: string;
+}
+
 export interface ReferralSummary {
   referrerEmail: string | null;
   referralCode: string | null;
@@ -345,6 +350,8 @@ export interface TrainerDashboardSummary {
   tokenUsdRate: number;
   taskTokenCost: string;
   scoringSlaMinutes: number;
+  recordingRoundTimeoutSeconds: number;
+  recordingRoundMaxTimeoutSeconds: number;
   localCurrency: LocalCurrency | null;
   balanceInLocalCurrency: string | null;
   fundedTokens: string;
@@ -363,12 +370,21 @@ export interface TrainerDashboardSummary {
   referrals: {
     code: string;
     invitedCount: number;
-    recentInvites: { id: string; email: string; createdAt: string }[];
+    recentInvites: { id: string; firstName: string | null; email: string; createdAt: string; status: 'INVITED' | 'JOINED' }[];
+    cookiePersistSeconds: number;
+    inviteExpirySeconds: number;
     fundingBonusRate: string;
     fundingBonusEnabled: boolean;
     payoutBonusRate: string;
     payoutBonusEnabled: boolean;
   };
+}
+
+export interface PublicClientSettings {
+  referralCookiePersistSeconds: number;
+  referralInviteExpirySeconds: number;
+  wordTrainingRecordingTimeoutSeconds: number;
+  wordTrainingRecordingMaxTimeoutSeconds: number;
 }
 
 export type EarningsChartRange = 'week' | 'month' | 'year';
@@ -469,6 +485,10 @@ export interface PlatformSettings {
   minWithdrawalTokens: string | null;
   resendFromAddress: string | null;
   leadsNotificationAddress: string | null;
+  referralCookiePersistSeconds: number;
+  referralInviteExpirySeconds: number;
+  wordTrainingRecordingTimeoutSeconds: number;
+  wordTrainingRecordingMaxTimeoutSeconds: number;
   trainingPayoutBonusCapMultiple: string | null;
   taskTokenCost: string | null;
   reverseWordTrainingEnabled: boolean;
@@ -517,6 +537,10 @@ export interface PlatformSettingsInput {
   minWithdrawalTokens?: number | null;
   resendFromAddress?: string | null;
   leadsNotificationAddress?: string | null;
+  referralCookiePersistSeconds?: number;
+  referralInviteExpirySeconds?: number;
+  wordTrainingRecordingTimeoutSeconds?: number;
+  wordTrainingRecordingMaxTimeoutSeconds?: number;
   trainingPayoutBonusCapMultiple?: number | null;
   taskTokenCost?: number | null;
   reverseWordTrainingEnabled?: boolean;
@@ -826,6 +850,13 @@ export const dialectivaApi = createApi({
         body,
       }),
       invalidatesTags: ['Auth'],
+    }),
+    sendReferralInvite: builder.mutation<void, ReferralInviteInput>({
+      query: (body) => ({
+        url: '/wallet/referrals/invite',
+        method: 'POST',
+        body,
+      }),
     }),
     getCountries: builder.query<Country[], void>({
       query: () => '/geo/countries',
@@ -1269,6 +1300,9 @@ export const dialectivaApi = createApi({
       query: () => '/admin/platform-settings',
       providesTags: ['PlatformSettings'],
     }),
+    getPublicClientSettings: builder.query<PublicClientSettings, void>({
+      query: () => '/settings/public',
+    }),
     updatePlatformSettings: builder.mutation<PlatformSettings, PlatformSettingsInput>({
       query: (body) => ({
         url: '/admin/platform-settings',
@@ -1325,6 +1359,7 @@ export const dialectivaApi = createApi({
 
 export const {
   useRegisterMutation,
+  useSendReferralInviteMutation,
   useRequestMagicLinkMutation,
   useRequestPasswordResetMutation,
   useResetPasswordMutation,
@@ -1411,6 +1446,7 @@ export const {
   useDeleteDialectMutation,
   useGenerateDialectKeyboardLayoutMutation,
   useGetPlatformSettingsQuery,
+  useGetPublicClientSettingsQuery,
   useUpdatePlatformSettingsMutation,
   useGetAdminWordsQuery,
   useDeleteWordMutation,
