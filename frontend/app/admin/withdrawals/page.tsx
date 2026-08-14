@@ -118,7 +118,7 @@ function WithdrawalRow({ withdrawal, otpRequired }: { withdrawal: AdminWithdrawa
       </td>
       <td className="px-4 py-3">{withdrawal.wallet.user.email}</td>
       <td className="px-4 py-3">
-        {withdrawal.tokenAmount} tokens
+        {withdrawal.tokenAmount} DL
         <p className="text-xs text-muted">{withdrawal.usdtAmount} {withdrawal.destinationCurrency}</p>
       </td>
       <td className="max-w-56 truncate px-4 py-3 font-mono text-xs" title={withdrawal.destinationAddress}>
@@ -184,7 +184,7 @@ const actionCopy: Record<ActionKind, { title: string; description: string; confi
   approve: { title: 'Approve withdrawal', description: 'Confirm you have reviewed this withdrawal before it can be submitted to the payout provider.', confirmLabel: 'Approve' },
   submit: { title: 'Submit to NOWPayments', description: 'This sends the payout request to NOWPayments now.', confirmLabel: 'Submit payout' },
   paid: { title: 'Mark paid manually', description: 'Only use this if you sent the payout outside of NOWPayments.', confirmLabel: 'Mark paid' },
-  reject: { title: 'Reject withdrawal', description: 'Tokens will be refunded to the trainer’s balance immediately.', confirmLabel: 'Reject & refund' },
+  reject: { title: 'Reject withdrawal', description: 'DL will be refunded to the trainer’s balance immediately.', confirmLabel: 'Reject & refund' },
 };
 
 function WithdrawalActionDialog({
@@ -260,7 +260,7 @@ function WithdrawalActionDialog({
           {!otpRequestId && (
             <div className="grid gap-2 rounded-lg border border-line bg-surface p-3 text-sm">
               <p><span className="font-bold">Trainer:</span> {withdrawal.wallet.user.email}</p>
-              <p><span className="font-bold">Amount:</span> {withdrawal.tokenAmount} tokens ({withdrawal.usdtAmount} {withdrawal.destinationCurrency})</p>
+              <p><span className="font-bold">Amount:</span> {withdrawal.tokenAmount} DL ({withdrawal.usdtAmount} {withdrawal.destinationCurrency})</p>
               <p className="break-all"><span className="font-bold">Address:</span> {withdrawal.destinationAddress}</p>
               <p><span className="font-bold">Network:</span> {withdrawal.destinationNetwork}</p>
               <p><span className="font-bold">Withdrawal ID:</span> <span className="font-mono text-xs">{withdrawal.id}</span></p>

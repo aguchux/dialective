@@ -221,6 +221,7 @@ export class PlatformSettingsService {
       llmProviderOrder: row.llmProviderOrder,
       llmWordsPerItem: row.llmWordsPerItem,
       llmItemsPerRun: row.llmItemsPerRun,
+      llmMaxTotalGeneratedItems: row.llmMaxTotalGeneratedItems,
       llmMaxPoolPerDialect: row.llmMaxPoolPerDialect,
       llmBackfillItemsPerDialectPerRun: row.llmBackfillItemsPerDialectPerRun,
       qualityGateEnabled: row.qualityGateEnabled,
@@ -269,6 +270,7 @@ export class PlatformSettingsService {
     llmProviderOrder?: string;
     llmWordsPerItem?: number;
     llmItemsPerRun?: number;
+    llmMaxTotalGeneratedItems?: number;
     llmMaxPoolPerDialect?: number;
     llmBackfillItemsPerDialectPerRun?: number;
     qualityGateEnabled?: boolean;
@@ -403,6 +405,7 @@ export class PlatformSettingsService {
       llmProviderOrder: row.llmProviderOrder,
       llmWordsPerItem: row.llmWordsPerItem,
       llmItemsPerRun: row.llmItemsPerRun,
+      llmMaxTotalGeneratedItems: row.llmMaxTotalGeneratedItems,
       llmMaxPoolPerDialect: row.llmMaxPoolPerDialect,
       llmBackfillItemsPerDialectPerRun: row.llmBackfillItemsPerDialectPerRun,
       qualityGateEnabled: row.qualityGateEnabled,

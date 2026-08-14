@@ -91,6 +91,7 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
           llmProviderOrder: 'openai,deepseek,anthropic',
           llmWordsPerItem: 1,
           llmItemsPerRun: 15,
+          llmMaxTotalGeneratedItems: 5000,
           llmMaxPoolPerDialect: 50,
           llmBackfillItemsPerDialectPerRun: 10,
         }),
@@ -99,6 +100,7 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
       prompt: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
       wordTranslation: { groupBy: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({}) },
       word: {
+        count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
         createMany: jest.fn().mockResolvedValue({}),
       },
@@ -136,5 +138,43 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
 
     expect(prisma.word.findMany).not.toHaveBeenCalled();
     expect(prisma.dialect.findMany).not.toHaveBeenCalled();
+  });
+
+  it('does not generate new content when the global max total generated items cap is already reached', async () => {
+    const { service, prisma } = setupRun();
+    prisma.platformSettings.upsert.mockResolvedValue({
+      llmGenerationEnabled: true,
+      llmProviderOrder: 'openai,deepseek,anthropic',
+      llmWordsPerItem: 1,
+      llmItemsPerRun: 15,
+      llmMaxTotalGeneratedItems: 100,
+      llmMaxPoolPerDialect: 50,
+      llmBackfillItemsPerDialectPerRun: 10,
+    });
+    prisma.word.count.mockResolvedValue(100);
+
+    await service.run();
+
+    expect(prisma.word.findMany).not.toHaveBeenCalled();
+    expect((service as any).chain.generateStructured).not.toHaveBeenCalled();
+  });
+
+  it('clips generation batch size to the remaining global headroom', async () => {
+    const { service, prisma } = setupRun();
+    prisma.platformSettings.upsert.mockResolvedValue({
+      llmGenerationEnabled: true,
+      llmProviderOrder: 'openai,deepseek,anthropic',
+      llmWordsPerItem: 1,
+      llmItemsPerRun: 15,
+      llmMaxTotalGeneratedItems: 12,
+      llmMaxPoolPerDialect: 50,
+      llmBackfillItemsPerDialectPerRun: 10,
+    });
+    prisma.word.count.mockResolvedValue(10);
+
+    await service.run();
+
+    const promptArg = (service as any).chain.generateStructured.mock.calls[0][0] as string;
+    expect(promptArg).toContain('exactly 2 distinct items');
   });
 });

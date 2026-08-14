@@ -100,7 +100,7 @@ type SessionUpdateFn = (data?: Record<string, unknown>) => Promise<Session | nul
 type DashboardView = 'home' | 'tokens' | 'earnings' | 'training' | 'market' | 'referrals' | 'scores' | 'profile';
 
 const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = [
-  { id: 'tokens', label: 'Tokens', icon: WalletCards },
+  { id: 'tokens', label: 'DL', icon: WalletCards },
   { id: 'earnings', label: 'Earnings', icon: CircleDollarSign },
   { id: 'training', label: 'Training', icon: Mic2 },
   { id: 'market', label: 'Market', icon: Landmark },
@@ -111,10 +111,10 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
 const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'home', 'referrals', 'profile'];
 
 const activityLabels: Record<LedgerEntryType, string> = {
-  DEPOSIT: 'Token funding',
+  DEPOSIT: 'DL funding',
   TRAINING_PAYOUT: 'Training payout',
-  TASK_LOCK: 'Tokens held for task',
-  TASK_REFUND: 'Held tokens returned',
+  TASK_LOCK: 'DL held for task',
+  TASK_REFUND: 'Held DL returned',
   WITHDRAWAL: 'Payout request',
   WITHDRAWAL_REVERSED: 'Payout returned',
   REFERRAL_COMMISSION: 'Referral bonus',
@@ -123,7 +123,7 @@ const activityLabels: Record<LedgerEntryType, string> = {
   P2P_ESCROW_LOCK: 'P2P escrow lock',
   P2P_ESCROW_REFUND: 'P2P escrow returned',
   P2P_ESCROW_RELEASE: 'P2P escrow released',
-  P2P_ESCROW_CREDIT: 'P2P token purchase',
+  P2P_ESCROW_CREDIT: 'P2P DL purchase',
 };
 
 const cardClass = 'min-w-0 rounded-lg border border-line bg-surface shadow-[0_8px_24px_rgba(31,25,41,0.04)]';
@@ -260,7 +260,7 @@ function LowBalanceDialog({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
         title="Fund your account to continue"
-        description={`Starting a task holds ${formatTokens(taskTokenCost)} tokens from your balance until it's scored. You don't have enough available tokens to cover that right now.`}
+        description={`Starting a task holds ${formatTokens(taskTokenCost)} DL from your balance until it's scored. You don't have enough available DL to cover that right now.`}
       >
         <FundTokensDialog />
       </DialogContent>
@@ -525,11 +525,11 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
           <FundTokensDialog />
         </div>
       </div>
-      <section className="grid gap-3 sm:grid-cols-4" aria-label="Token balance">
-        <MetricCard icon={WalletCards} label="Available tokens" value={formatCompactTokensValue(data.balance)} tone="purple" />
+      <section className="grid gap-3 sm:grid-cols-4" aria-label="DL balance">
+        <MetricCard icon={WalletCards} label="Available DL" value={formatCompactTokensValue(data.balance)} tone="purple" />
         <MetricCard icon={Clock3} label="Held in review" value={formatCompactTokensValue(data.lockedBalance)} tone="blue" compact />
         <MetricCard icon={Banknote} label="Estimated value" value={formatCompactUsd(usdValue)} tone="green" />
-        <MetricCard icon={CircleDollarSign} label="Current rate" value={`${formatUsd(data.tokenUsdRate)} / token`} tone="amber" compact />
+        <MetricCard icon={CircleDollarSign} label="Current rate" value={`${formatUsd(data.tokenUsdRate)} / DL`} tone="amber" compact />
       </section>
       {data.localCurrency && data.balanceInLocalCurrency && (
         <p className="mt-3 text-sm leading-relaxed text-muted">
@@ -539,7 +539,7 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
       )}
       <section className="mt-8">
         <div className="mb-3 flex items-start justify-between gap-3">
-          <SectionTitle title="Recent activity" subtitle="Your latest token transactions." />
+          <SectionTitle title="Recent activity" subtitle="Your latest DL transactions." />
           <button
             className="shrink-0 text-sm font-extrabold text-accent hover:underline"
             onClick={() => router.push('/dashboard?view=tokens')}
@@ -561,16 +561,16 @@ function TokensView({ refreshing }: { refreshing: boolean }) {
 
   return (
     <div>
-      <ViewHeading title="Tokens" subtitle="Full history of your token activity." refreshing={refreshing || isFetching} />
+      <ViewHeading title="DL" subtitle="Full history of your DL activity." refreshing={refreshing || isFetching} />
       <section className={`${cardClass} overflow-hidden`}>
         {isLoading ? (
           <div className="grid min-h-52 place-items-center" role="status">
             <RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" />
-            <span className="sr-only">Loading token activity</span>
+            <span className="sr-only">Loading DL activity</span>
           </div>
         ) : isError ? (
           <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
-            <p className="font-extrabold">Could not load your token activity.</p>
+            <p className="font-extrabold">Could not load your DL activity.</p>
             <button className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted" onClick={() => void refetch()} type="button">
               Try again
             </button>
@@ -695,7 +695,7 @@ function EarningHistoryTable({ tokenUsdRate }: { tokenUsdRate: number }) {
                     <th className="px-5 py-3.5" scope="col">Source</th>
                     <th className="px-5 py-3.5" scope="col">Reference</th>
                     <th className="px-5 py-3.5 text-right" scope="col">Value</th>
-                    <th className="px-5 py-3.5 text-right" scope="col">Tokens</th>
+                    <th className="px-5 py-3.5 text-right" scope="col">DL</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -913,7 +913,7 @@ function deriveTaskStatus(submission: TrainerSubmissionSummary, nowMs: number, s
 
 function estimatedReward(tokensSpent: string) {
   const spent = Number(tokensSpent);
-  return `${formatTokens(spent)} – ${formatTokens(spent * 2)} tokens`;
+  return `${formatTokens(spent)} – ${formatTokens(spent * 2)} DL`;
 }
 
 /** tokensSpent + tokensSpent*(score/100)*1.0 -- mirrors the backend's default no-loss payout formula (bonusCapMultiple=1.0). Settlement may use an admin-tuned cap, so this is an estimate until SETTLED. */
@@ -1168,7 +1168,7 @@ function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; no
         <TaskCountdownCell submission={submission} />
       </td>
       <td className="whitespace-nowrap px-5 py-4 text-right font-bold text-muted">
-        {submission.payoutTokenAmount !== null ? `+${formatTokens(submission.payoutTokenAmount)} tokens` : estimatedReward(submission.tokensSpent)}
+        {submission.payoutTokenAmount !== null ? `+${formatTokens(submission.payoutTokenAmount)} DL` : estimatedReward(submission.tokensSpent)}
       </td>
       <td className="whitespace-nowrap px-5 py-4 text-muted">{formatDateTime(submission.createdAt)}</td>
     </tr>
@@ -1289,8 +1289,8 @@ function MarketView() {
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black tracking-normal md:text-3xl">Token market</h1>
-          <p className="mt-1 text-muted">Peer-to-peer token escrow for sell offers and buy requests.</p>
+          <h1 className="text-2xl font-black tracking-normal md:text-3xl">DL market</h1>
+          <p className="mt-1 text-muted">Peer-to-peer DL escrow for sell offers and buy requests.</p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
@@ -1313,17 +1313,17 @@ function MarketView() {
                     onClick={() => setOfferType(type)}
                     type="button"
                   >
-                    {type === 'SELL' ? 'Sell tokens' : 'Buy request'}
+                    {type === 'SELL' ? 'Sell DL' : 'Buy request'}
                   </button>
                 ))}
               </div>
               <label className="grid gap-1.5 text-sm font-bold">
-                Token amount
+                DL amount
                 <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => updateTokenAmount(e.target.value)} type="number" value={tokenAmount} />
               </label>
               {referenceRate?.tokenReferencePrice && referenceRate.currencyCode && (
                 <p className="text-xs text-muted">
-                  Reference: 1 token ≈ {Number(referenceRate.tokenReferencePrice).toLocaleString()} {referenceRate.currencyCode} — you can price above or below this.
+                  Reference: 1 DL ≈ {Number(referenceRate.tokenReferencePrice).toLocaleString()} {referenceRate.currencyCode} — you can price above or below this.
                 </p>
               )}
               <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -1459,7 +1459,7 @@ function MarketOfferList({
             <p className="font-extrabold">{Number(offer.fiatAmount).toLocaleString()} {offer.fiatCurrency}</p>
             <p className="text-sm text-muted">Expires {formatDateTime(offer.expiresAt)}</p>
             <button className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50" disabled={accepting || disabled} onClick={() => onAccept(offer)} type="button">
-              {offer.type === 'SELL' ? 'Buy tokens' : 'Sell to buyer'}
+              {offer.type === 'SELL' ? 'Buy DL' : 'Sell to buyer'}
             </button>
           </div>
         ))}
@@ -1545,7 +1545,7 @@ function TradeCard({
       <p className="text-sm text-muted">Payment deadline: {formatDateTime(trade.paymentDeadlineAt)}</p>
       <div className="flex flex-wrap gap-2">
         <button className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white" onClick={() => onMarkPaid(trade.id)} type="button">I have paid</button>
-        <button className="min-h-10 rounded-lg border border-line px-3 font-extrabold" onClick={() => onRelease(trade.id)} type="button">Release tokens</button>
+        <button className="min-h-10 rounded-lg border border-line px-3 font-extrabold" onClick={() => onRelease(trade.id)} type="button">Release DL</button>
         <button className="min-h-10 rounded-lg border border-line px-3 font-extrabold" onClick={() => onCancel(trade.id)} type="button">Request cancel</button>
         <button className="min-h-10 rounded-lg border border-red-200 px-3 font-extrabold text-red-700" onClick={() => onDispute(trade.id)} type="button">Dispute</button>
       </div>
@@ -2285,7 +2285,7 @@ function FundTokensDialog() {
       const result = await createDeposit({ usdAmount: Number(amount), currency, otpRequestId, code }).unwrap();
       window.location.assign(result.hostedCheckoutUrl);
     } catch (error) {
-      setMessage(normalizeErrorMessage(error, 'Could not start token funding.'));
+      setMessage(normalizeErrorMessage(error, 'Could not start DL funding.'));
     }
   }
 
@@ -2299,7 +2299,7 @@ function FundTokensDialog() {
     <Dialog onOpenChange={(open) => !open && reset()}>
       <DialogTrigger asChild>
         <button className="mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-extrabold text-white hover:bg-accent-dark md:px-4" type="button">
-          <Plus className="size-4" aria-hidden="true" /> <span className="hidden sm:inline">Fund tokens</span><span className="sm:hidden">Fund</span>
+          <Plus className="size-4" aria-hidden="true" /> <span className="hidden sm:inline">Fund DL</span><span className="sm:hidden">Fund</span>
         </button>
       </DialogTrigger>
       {otpRequestId ? (
@@ -2322,7 +2322,7 @@ function FundTokensDialog() {
           </form>
         </DialogContent>
       ) : (
-        <DialogContent title="Fund tokens" description="Continue to secure USDC or USDT checkout.">
+        <DialogContent title="Fund DL" description="Continue to secure USDC or USDT checkout.">
           <form className="grid gap-4" onSubmit={submitAmount}>
             <label className="grid gap-1.5 text-sm font-bold">
               Amount in USD
@@ -2449,10 +2449,10 @@ function WithdrawTokensDialog({ balance }: { balance: string }) {
           </form>
         </DialogContent>
       ) : (
-        <DialogContent title="Withdraw tokens" description={`Available balance: ${formatTokens(balance)} tokens.`}>
+        <DialogContent title="Withdraw DL" description={`Available balance: ${formatTokens(balance)} DL.`}>
           <form className="grid gap-4" onSubmit={submitDetails}>
             <label className="grid gap-1.5 text-sm font-bold">
-              Amount in tokens
+              Amount in DL
               <input className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent" min="0.00000001" onChange={(event) => setAmount(event.target.value)} required step="any" type="number" value={amount} />
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -2641,9 +2641,9 @@ const earningsChartRangeLabels: Record<EarningsChartRange, string> = {
 };
 
 const earningsChartRangeSubtitles: Record<EarningsChartRange, string> = {
-  week: 'Tokens credited by day, last 7 days.',
-  month: 'Tokens credited by day, last 30 days.',
-  year: 'Tokens credited by month, last 12 months.',
+  week: 'DL credited by day, last 7 days.',
+  month: 'DL credited by day, last 30 days.',
+  year: 'DL credited by month, last 12 months.',
 };
 
 function EarningsChartSection() {
@@ -2690,7 +2690,7 @@ function EarningsChart({ buckets, range, loading }: { buckets: EarningsChart_Buc
         return (
           <div className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2" key={bucket.label}>
             {!dense && <span className="text-xs font-bold text-muted">{value ? formatTokens(value) : ''}</span>}
-            <div className="flex h-[150px] w-full max-w-10 items-end rounded-md bg-surface-muted" title={`${formatTokens(value)} tokens`}>
+            <div className="flex h-[150px] w-full max-w-10 items-end rounded-md bg-surface-muted" title={`${formatTokens(value)} DL`}>
               <div className="w-full rounded-md bg-accent" style={{ height: `${height}%` }} />
             </div>
             <span className="text-xs font-extrabold text-muted">
@@ -2779,7 +2779,7 @@ function formatCompactTokensValue(value: string | number) {
 }
 
 function formatCompactTokensLabel(value: string | number) {
-  return `${formatCompactNumber(value)} tokens`;
+  return `${formatCompactNumber(value)} DL`;
 }
 
 function formatUsd(value: number) {

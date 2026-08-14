@@ -49,7 +49,7 @@ export default function AdminPoolsPage() {
     {
       key: 'available',
       label: 'Reward Pool Available',
-      value: availableTokens !== null ? `${formatCompactNumber(availableTokens)} tokens` : '-',
+      value: availableTokens !== null ? `${formatCompactNumber(availableTokens)} DL` : '-',
       negative: availableTokens !== null && availableTokens < 0,
     },
     {
@@ -65,7 +65,7 @@ export default function AdminPoolsPage() {
     {
       key: 'settled',
       label: 'Total Settled Payouts',
-      value: summary ? `${formatCompactNumber(summary.totalSettledTokens)} tokens` : '-',
+      value: summary ? `${formatCompactNumber(summary.totalSettledTokens)} DL` : '-',
     },
   ];
 

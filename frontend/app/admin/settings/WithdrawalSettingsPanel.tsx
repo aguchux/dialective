@@ -181,8 +181,8 @@ export function WithdrawalSettingsPanel() {
           <div className="grid gap-1">
             <span className="font-bold">Withdrawal fee</span>
             <p className="text-sm leading-relaxed text-muted">
-              "Platform" absorbs any provider network fee -- the trainer receives the full tokenAmount worth. "User"
-              deducts a flat token amount (if set) or a percentage from the payout.
+              "Platform" absorbs any provider network fee -- the trainer receives the full DL amount worth. "User"
+              deducts a flat DL amount (if set) or a percentage from the payout.
             </p>
             <div className="flex gap-3">
               <label className="flex items-center gap-2 font-bold">
@@ -199,7 +199,7 @@ export function WithdrawalSettingsPanel() {
           {withdrawalFeeMode === 'user' && (
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1">
-                <label className="font-bold" htmlFor="withdrawal-fee-token-amount">Flat fee (tokens)</label>
+                <label className="font-bold" htmlFor="withdrawal-fee-token-amount">Flat fee (DL)</label>
                 <input
                   className={inputClass}
                   id="withdrawal-fee-token-amount"

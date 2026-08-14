@@ -80,8 +80,8 @@ export function P2PMarketSettingsPanel() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Field label="Min trade tokens" value={form.minTradeTokens} onChange={(minTradeTokens) => setForm((current) => ({ ...current, minTradeTokens }))} />
-        <Field label="Max trade tokens" value={form.maxTradeTokens} onChange={(maxTradeTokens) => setForm((current) => ({ ...current, maxTradeTokens }))} />
+        <Field label="Min trade DL" value={form.minTradeTokens} onChange={(minTradeTokens) => setForm((current) => ({ ...current, minTradeTokens }))} />
+        <Field label="Max trade DL" value={form.maxTradeTokens} onChange={(maxTradeTokens) => setForm((current) => ({ ...current, maxTradeTokens }))} />
         <NumberField label="Payment window minutes" value={form.paymentWindowMinutes} onChange={(paymentWindowMinutes) => setForm((current) => ({ ...current, paymentWindowMinutes }))} />
         <NumberField label="Cancel grace minutes" value={form.cancelGraceMinutes} onChange={(cancelGraceMinutes) => setForm((current) => ({ ...current, cancelGraceMinutes }))} />
         <NumberField label="Offer expiry minutes" value={form.offerExpiryMinutes} onChange={(offerExpiryMinutes) => setForm((current) => ({ ...current, offerExpiryMinutes }))} />

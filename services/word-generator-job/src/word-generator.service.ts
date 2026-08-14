@@ -54,14 +54,26 @@ export class WordGeneratorService {
     const providerOrder = this.parseProviderOrder(settings.llmProviderOrder);
     const wordsPerItem = settings.llmWordsPerItem;
     const itemsPerRun = settings.llmItemsPerRun;
+    const maxTotalGeneratedItems = settings.llmMaxTotalGeneratedItems;
     const maxPoolPerDialect = settings.llmMaxPoolPerDialect;
     const backfillItemsPerDialectPerRun = settings.llmBackfillItemsPerDialectPerRun;
+
+    const generatedItemsCount = await this.getGeneratedItemsCount(wordsPerItem);
+    const remainingGlobalHeadroom = Math.max(0, maxTotalGeneratedItems - generatedItemsCount);
+    if (remainingGlobalHeadroom <= 0) {
+      this.logger.log(
+        `Generation skipped: global cap reached (generated=${generatedItemsCount} maxTotalGeneratedItems=${maxTotalGeneratedItems})`,
+      );
+      return;
+    }
+    const effectiveItemsPerRun = Math.min(itemsPerRun, remainingGlobalHeadroom);
 
     const enabledDialectTags = await this.getEnabledDialectTags();
     const underCapDialectTags = await this.filterDialectsUnderPoolCap(enabledDialectTags, maxPoolPerDialect);
     const skippedDialects = enabledDialectTags.filter((tag) => !underCapDialectTags.includes(tag));
     this.logger.log(
-      `Generation run starting: wordsPerItem=${wordsPerItem} itemsPerRun=${itemsPerRun} ` +
+      `Generation run starting: wordsPerItem=${wordsPerItem} itemsPerRun=${itemsPerRun} effectiveItemsPerRun=${effectiveItemsPerRun} ` +
+        `maxTotalGeneratedItems=${maxTotalGeneratedItems} generatedItemsCount=${generatedItemsCount} ` +
         `providerOrder=${providerOrder.join('>')} maxPoolPerDialect=${maxPoolPerDialect} ` +
         `backfillItemsPerDialectPerRun=${backfillItemsPerDialectPerRun} ` +
         `translationDialects=${underCapDialectTags.length ? underCapDialectTags.join(',') : 'none'} ` +
@@ -99,7 +111,7 @@ export class WordGeneratorService {
     let promptWordFailures = 0;
 
     if (wordsPerItem === 1) {
-      const prompt = this.buildWordGenerationPrompt(itemsPerRun);
+      const prompt = this.buildWordGenerationPrompt(effectiveItemsPerRun);
       const { items: rawItems, provider: englishProvider } = await this.chain.generateStructured(prompt, providerOrder, parsePosItemArray);
       const { accepted, filteredCount } = this.filterAndValidatePosItems(rawItems, 1);
       this.logger.log(`Generation run starting: provider=${englishProvider} generated=${rawItems.length} filteredOut=${filteredCount}`);
@@ -117,7 +129,7 @@ export class WordGeneratorService {
         }
       }
     } else {
-      const prompt = this.buildGenerationPrompt(wordsPerItem, itemsPerRun);
+      const prompt = this.buildGenerationPrompt(wordsPerItem, effectiveItemsPerRun);
       const { items: rawItems, provider: englishProvider } = await this.chain.generate(prompt, providerOrder);
       const { accepted: englishItems, filteredCount } = this.filterAndValidate(rawItems, wordsPerItem);
       this.logger.log(`Generation run starting: provider=${englishProvider} generated=${rawItems.length} filteredOut=${filteredCount}`);
@@ -662,5 +674,12 @@ export class WordGeneratorService {
     }
 
     return { backfilled, skippedDuplicate, failed };
+  }
+
+  private async getGeneratedItemsCount(wordsPerItem: number): Promise<number> {
+    if (wordsPerItem === 1) {
+      return this.prisma.word.count();
+    }
+    return this.prisma.prompt.count({ where: { dialectTag: 'en-us' } });
   }
 }

@@ -62,7 +62,7 @@ export const howItWorksSteps = [
   },
   {
     title: 'Get reviewed and earn',
-    body: 'Submissions are cross-checked against other trainers in your dialect cluster. Accurate recordings earn tokens.',
+    body: 'Submissions are cross-checked against other trainers in your dialect cluster. Accurate recordings earn DL.',
   },
 ];
 

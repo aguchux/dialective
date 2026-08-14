@@ -46,7 +46,7 @@ export default function AdminP2PPage() {
                   <div>
                     <p className="font-black">{dispute.reason}</p>
                     <p className="text-sm text-muted">
-                      {dispute.trade.tokenAmount} tokens · {Number(dispute.trade.fiatAmount).toLocaleString()} {dispute.trade.fiatCurrency}
+                      {dispute.trade.tokenAmount} DL · {Number(dispute.trade.fiatAmount).toLocaleString()} {dispute.trade.fiatCurrency}
                     </p>
                     <p className="mt-1 text-sm text-muted">Raised by {dispute.raisedBy.email}</p>
                   </div>
@@ -100,7 +100,7 @@ function TradeRow({ trade }: { trade: P2PTrade }) {
     <tr className="border-t border-line">
       <td className="px-4 py-3 font-black">{trade.status}</td>
       <td className="px-4 py-3">{trade.offerType}</td>
-      <td className="px-4 py-3">{trade.tokenAmount} tokens · {Number(trade.fiatAmount).toLocaleString()} {trade.fiatCurrency}</td>
+      <td className="px-4 py-3">{trade.tokenAmount} DL · {Number(trade.fiatAmount).toLocaleString()} {trade.fiatCurrency}</td>
       <td className="px-4 py-3">{trade.buyer.email}</td>
       <td className="px-4 py-3">{trade.seller.email}</td>
       <td className="px-4 py-3">{new Date(trade.paymentDeadlineAt).toLocaleString()}</td>

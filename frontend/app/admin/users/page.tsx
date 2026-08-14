@@ -115,7 +115,7 @@ export default function AdminUsersPage() {
                 onClick={() => setFundingUser(u)}
                 type="button"
               >
-                + Add tokens
+                + Add DL
               </button>
             )}
           </div>
@@ -226,7 +226,7 @@ function AddTokensDialog({ user, onClose }: { user: PublicUser; onClose: () => v
       }).unwrap();
       onClose();
     } catch (err) {
-      setError(normalizeErrorMessage(err, otpRequestId ? 'Unable to verify this code.' : 'Unable to add tokens to this trainer.'));
+      setError(normalizeErrorMessage(err, otpRequestId ? 'Unable to verify this code.' : 'Unable to add DL to this trainer.'));
     }
   }
 
@@ -273,13 +273,13 @@ function AddTokensDialog({ user, onClose }: { user: PublicUser; onClose: () => v
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        title={`Add tokens to ${[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email}`}
+        title={`Add DL to ${[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email}`}
         description="Credits the trainer's wallet directly. This is recorded as a training payout on their earnings ledger."
       >
         <form className="grid gap-3" onSubmit={handleSubmit}>
           <div className="grid gap-1">
             <label className="text-xs font-bold uppercase text-muted" htmlFor="fund-token-amount">
-              Token amount
+              DL amount
             </label>
             <input
               className={inputClass}
@@ -320,7 +320,7 @@ function AddTokensDialog({ user, onClose }: { user: PublicUser; onClose: () => v
               pendingLabel={otpRequired ? 'Sending code' : 'Adding'}
               type="submit"
             >
-              {otpRequired ? 'Send confirmation code' : 'Add tokens'}
+              {otpRequired ? 'Send confirmation code' : 'Add DL'}
             </ActionButton>
           </div>
         </form>

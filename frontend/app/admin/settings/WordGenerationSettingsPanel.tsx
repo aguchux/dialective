@@ -32,6 +32,7 @@ export function WordGenerationSettingsPanel() {
   const [order, setOrder] = useState<ProviderKey[]>(DEFAULT_ORDER);
   const [wordsPerItem, setWordsPerItem] = useState('1');
   const [itemsPerRun, setItemsPerRun] = useState('15');
+  const [maxTotalGeneratedItems, setMaxTotalGeneratedItems] = useState('5000');
   const [maxPoolPerDialect, setMaxPoolPerDialect] = useState('50');
   const [backfillItemsPerDialectPerRun, setBackfillItemsPerDialectPerRun] = useState('10');
   const [message, setMessage] = useState<string | null>(null);
@@ -43,6 +44,7 @@ export function WordGenerationSettingsPanel() {
     setOrder(parseOrder(settings.llmProviderOrder));
     setWordsPerItem(String(settings.llmWordsPerItem));
     setItemsPerRun(String(settings.llmItemsPerRun));
+    setMaxTotalGeneratedItems(String(settings.llmMaxTotalGeneratedItems));
     setMaxPoolPerDialect(String(settings.llmMaxPoolPerDialect));
     setBackfillItemsPerDialectPerRun(String(settings.llmBackfillItemsPerDialectPerRun));
   }, [settings]);
@@ -71,6 +73,7 @@ export function WordGenerationSettingsPanel() {
         llmProviderOrder: order.join(','),
         ...(wordsPerItem !== '' ? { llmWordsPerItem: Number(wordsPerItem) } : {}),
         ...(itemsPerRun !== '' ? { llmItemsPerRun: Number(itemsPerRun) } : {}),
+        ...(maxTotalGeneratedItems !== '' ? { llmMaxTotalGeneratedItems: Number(maxTotalGeneratedItems) } : {}),
         ...(maxPoolPerDialect !== '' ? { llmMaxPoolPerDialect: Number(maxPoolPerDialect) } : {}),
         ...(backfillItemsPerDialectPerRun !== '' ? { llmBackfillItemsPerDialectPerRun: Number(backfillItemsPerDialectPerRun) } : {}),
       }).unwrap();
@@ -175,6 +178,26 @@ export function WordGenerationSettingsPanel() {
               max="100"
               value={itemsPerRun}
               onChange={(e) => setItemsPerRun(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="llm-max-total-generated-items">
+              Max total generated items (global)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              Hard global ceiling for generated source content. When reached, the generator stops creating brand-new
+              English items entirely until you raise this limit.
+            </p>
+            <input
+              className={inputClass}
+              id="llm-max-total-generated-items"
+              type="number"
+              step="1"
+              min="1"
+              max="1000000"
+              value={maxTotalGeneratedItems}
+              onChange={(e) => setMaxTotalGeneratedItems(e.target.value)}
             />
           </div>
 

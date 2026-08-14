@@ -32,7 +32,7 @@ export default function AdminReferralsPage() {
                   <p className="font-extrabold">{r.referrerEmail}</p>
                   <p className="text-sm text-muted">
                     {r.referredUsers.length} referred &middot; {r.bonusEventCount} bonus events &middot; earned{' '}
-                    {r.totalCommission} tokens
+                    {r.totalCommission} DL
                   </p>
                 </div>
               ))}

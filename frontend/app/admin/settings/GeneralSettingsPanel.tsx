@@ -81,7 +81,7 @@ export function GeneralSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">General</h2>
         <p className="leading-relaxed text-muted">
-          Token economics for the platform wallet. Leave a field blank to use the deployment default.
+          DL economics for the platform wallet. Leave a field blank to use the deployment default.
         </p>
       </div>
 
@@ -90,9 +90,9 @@ export function GeneralSettingsPanel() {
         <form className="grid gap-4 md:max-w-md" onSubmit={handleSave}>
           <div className="grid gap-1">
             <label className="font-bold" htmlFor="token-usd-rate">
-              Token/USD rate
+              DL/USD rate
             </label>
-            <p className="text-sm leading-relaxed text-muted">USD value of one platform token, e.g. 0.10 = 10 cents.</p>
+            <p className="text-sm leading-relaxed text-muted">USD value of one DL, e.g. 0.10 = 10 cents.</p>
             <input
               className={inputClass}
               id="token-usd-rate"
@@ -107,9 +107,9 @@ export function GeneralSettingsPanel() {
 
           <div className="grid gap-1">
             <label className="font-bold" htmlFor="min-withdrawal">
-              Minimum withdrawal (tokens)
+              Minimum withdrawal (DL)
             </label>
-            <p className="text-sm leading-relaxed text-muted">Smallest token amount a trainer can withdraw at once.</p>
+            <p className="text-sm leading-relaxed text-muted">Smallest DL amount a trainer can withdraw at once.</p>
             <input
               className={inputClass}
               id="min-withdrawal"
@@ -124,9 +124,9 @@ export function GeneralSettingsPanel() {
 
           <div className="grid gap-1">
             <label className="font-bold" htmlFor="task-token-cost">
-              Task cost (tokens)
+              Task cost (DL)
             </label>
-            <p className="text-sm leading-relaxed text-muted">Tokens debited from a trainer's wallet per submission.</p>
+            <p className="text-sm leading-relaxed text-muted">DL debited from a trainer's wallet per submission.</p>
             <input
               className={inputClass}
               id="task-token-cost"
@@ -144,8 +144,8 @@ export function GeneralSettingsPanel() {
               Training payout bonus cap (multiple of stake)
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              Caps the score-scaled Reward Pool bonus at this multiple of tokens spent, e.g. 1.0 = up to 1x stake as
-              bonus at a perfect score. The trainer always gets tokens spent back regardless of score.
+              Caps the score-scaled Reward Pool bonus at this multiple of DL spent, e.g. 1.0 = up to 1x stake as
+              bonus at a perfect score. The trainer always gets DL spent back regardless of score.
             </p>
             <input
               className={inputClass}
@@ -165,7 +165,7 @@ export function GeneralSettingsPanel() {
             </label>
             <p className="text-sm leading-relaxed text-muted">
               How long a dialect-to-English word recording can wait for peer reverse-validation before its held
-              tokens are automatically returned to the trainer's balance.
+              DL is automatically returned to the trainer's balance.
             </p>
             <input
               className={inputClass}

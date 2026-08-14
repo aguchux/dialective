@@ -482,6 +482,7 @@ export interface PlatformSettings {
   llmProviderOrder: string;
   llmWordsPerItem: number;
   llmItemsPerRun: number;
+  llmMaxTotalGeneratedItems: number;
   llmMaxPoolPerDialect: number;
   llmBackfillItemsPerDialectPerRun: number;
   qualityGateEnabled: boolean;
@@ -529,6 +530,7 @@ export interface PlatformSettingsInput {
   llmProviderOrder?: string;
   llmWordsPerItem?: number;
   llmItemsPerRun?: number;
+  llmMaxTotalGeneratedItems?: number;
   llmMaxPoolPerDialect?: number;
   llmBackfillItemsPerDialectPerRun?: number;
   qualityGateEnabled?: boolean;

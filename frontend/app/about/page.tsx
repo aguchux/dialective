@@ -30,7 +30,7 @@ const howItWorks = [
   {
     step: '01',
     title: 'Fund your account',
-    body: 'Trainers top up their wallet with tokens, which pay for the AI-assisted tools used to generate, transcribe, and analyze prompts during training.',
+    body: 'Trainers top up their wallet with DL, which pay for the AI-assisted tools used to generate, transcribe, and analyze prompts during training.',
   },
   {
     step: '02',
@@ -40,12 +40,12 @@ const howItWorks = [
   {
     step: '03',
     title: 'Get scored and paid',
-    body: 'Submissions are quality-scored and paid out from the pool funded by data subscribers, covering your token spend and putting you in profit.',
+    body: 'Submissions are quality-scored and paid out from the pool funded by data subscribers, covering your DL spend and putting you in profit.',
   },
   {
     step: '04',
     title: 'Refer, resell, or cash out',
-    body: 'Earn admin-configured referral bonuses from confirmed token funding and eligible scored training payouts from people you invite.',
+    body: 'Earn admin-configured referral bonuses from confirmed DL funding and eligible scored training payouts from people you invite.',
   },
 ];
 
@@ -104,8 +104,8 @@ export default function AboutPage() {
             ))}
           </div>
           <p className="leading-relaxed text-muted">
-            Payout scoring, the subscriber-funded reward pool, and member-to-member token resale are actively being built
-            out. Token funding is live today, and referral bonuses are controlled from the admin dashboard.
+            Payout scoring, the subscriber-funded reward pool, and member-to-member DL resale are actively being built
+            out. DL funding is live today, and referral bonuses are controlled from the admin dashboard.
           </p>
         </section>
 

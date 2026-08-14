@@ -30,14 +30,14 @@ export const faqItems = [
       'Every submission has a scoring time limit. If it isn\'t scored in time (for example, too few other trainers have submitted that prompt yet), it\'s automatically resolved -- either refunded, or, when enabled, paid out at a fair score anyway -- so you never lose your stake or your effort to low activity in your dialect.',
   },
   {
-    question: 'How do I fund my account and what are tokens?',
+    question: 'How do I fund my account and what is DL?',
     answer:
-      'Trainers top up their wallet with USDC or USDT through a secure hosted checkout. Your deposit is converted to tokens at a fixed rate once the payment is confirmed, and your wallet balance updates automatically.',
+      'DL (pronounced "dial") is Dialect Library\'s platform unit. Trainers top up their wallet with USDC or USDT through a secure hosted checkout. Your deposit is converted to DL at a fixed rate once the payment is confirmed, and your wallet balance updates automatically.',
   },
   {
     question: 'How do payouts and withdrawals work?',
     answer:
-      'Dialect Library uses an internal token ledger for every balance change. Once your balance reaches the minimum withdrawal threshold, you can request a withdrawal to a supported crypto currency and network from the Earnings tab. Your email must be verified first. An admin reviews and approves each request before it is paid out, and rejected or failed requests are automatically credited back to your wallet.',
+      'Dialect Library uses an internal DL ledger for every balance change. Once your balance reaches the minimum withdrawal threshold, you can request a withdrawal to a supported crypto currency and network from the Earnings tab. Your email must be verified first. An admin reviews and approves each request before it is paid out, and rejected or failed requests are automatically credited back to your wallet.',
   },
   {
     question: 'Why do I need to verify my email?',
@@ -47,7 +47,7 @@ export const faqItems = [
   {
     question: 'What is the referral program?',
     answer:
-      'Every account gets a personal referral link, available on your dashboard. When someone you refer registers and later makes a confirmed token deposit, you earn a commission on that deposit for as long as an active referral program is running. Referral rewards are not paid on registrations alone, only on confirmed funding.',
+      'Every account gets a personal referral link, available on your dashboard. When someone you refer registers and later makes a confirmed DL deposit, you earn a commission on that deposit for as long as an active referral program is running. Referral rewards are not paid on registrations alone, only on confirmed funding.',
   },
   {
     question: 'How do I sign in?',

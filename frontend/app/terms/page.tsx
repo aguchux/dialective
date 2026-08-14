@@ -30,7 +30,7 @@ export default function TermsPage() {
               Dialect Library (&quot;Dialect Library,&quot; &quot;we,&quot; &quot;us&quot;) operates a crowdsourced voice
               and dialect data platform at dialectlibrary.com. Dialect Library is registered in the United Kingdom.
               These Terms of Use (&quot;Terms&quot;) govern your access to and use of the platform, including our
-              website, trainer accounts, wallet and token features, and referral program.
+              website, trainer accounts, wallet and DL (token) features, and referral program.
             </p>
           </section>
 
@@ -66,14 +66,15 @@ export default function TermsPage() {
           </section>
 
           <section className="grid gap-2">
-            <h2 className="text-xl font-black text-[#050505]">5. Wallet, tokens, and payments</h2>
+            <h2 className="text-xl font-black text-[#050505]">5. Wallet, DL, and payments</h2>
             <p>
               Trainers may fund a platform wallet using USDC or USDT through our third-party payment processor,
-              NOWPayments. Deposits are converted to internal tokens at a fixed rate once payment is confirmed.
-              Tokens are an internal unit of account on Dialect Library and are not a cryptocurrency, security, or
-              transferable financial instrument outside the platform. Withdrawal requests are reviewed manually and
-              paid out to the crypto wallet address you provide; we may reject a withdrawal request and reverse the
-              associated token debit at our discretion, including where we suspect fraud or abuse.
+              NOWPayments. Deposits are converted to internal DL (short for &quot;Dial,&quot; our token unit) at a
+              fixed rate once payment is confirmed. DL is an internal unit of account on Dialect Library and is not a
+              cryptocurrency, security, or transferable financial instrument outside the platform. Withdrawal requests
+              are reviewed manually and paid out to the crypto wallet address you provide; we may reject a withdrawal
+              request and reverse the associated DL debit at our discretion, including where we suspect fraud or
+              abuse.
             </p>
           </section>
 
@@ -109,7 +110,7 @@ export default function TermsPage() {
             <h2 className="text-xl font-black text-[#050505]">9. Platform changes</h2>
             <p>
               Dialect Library is under active development. Features described on the site — including scoring,
-              reward pools, and peer-to-peer token resale — may not yet be fully available and are subject to change
+              reward pools, and peer-to-peer DL resale — may not yet be fully available and are subject to change
               as the platform evolves.
             </p>
           </section>
@@ -119,7 +120,7 @@ export default function TermsPage() {
             <p>
               Dialect Library is provided &quot;as is&quot; without warranties of any kind. To the fullest extent
               permitted by law, Dialect Library is not liable for indirect, incidental, or consequential damages
-              arising from your use of the platform, including losses related to token balances or delayed
+              arising from your use of the platform, including losses related to DL balances or delayed
               withdrawals.
             </p>
           </section>

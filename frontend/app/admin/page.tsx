@@ -193,7 +193,7 @@ export default function AdminDashboardPage() {
     },
     {
       key: 'tokensFunded',
-      label: 'Tokens funded',
+      label: 'DL funded',
       value: stats ? formatCompactTokens(stats.totalTokensFunded) : loadingValue,
       hint: stats ? `${formatCount(stats.pendingDeposits)} pending deposits` : undefined,
       icon: WalletCards,
@@ -209,7 +209,7 @@ export default function AdminDashboardPage() {
     },
     {
       key: 'lockedTokens',
-      label: 'Locked tokens',
+      label: 'Locked DL',
       value: stats ? formatCompactTokens(stats.totalLockedTokens) : loadingValue,
       hint: 'Tasks awaiting score/settlement',
       icon: Clock3,
@@ -273,14 +273,14 @@ export default function AdminDashboardPage() {
         <div>
           <h1 className="text-3xl font-black">Dashboard</h1>
           <p className="mt-2 max-w-4xl text-muted">
-            Platform health, content inventory, trainer activity, and token economy at a glance.
+            Platform health, content inventory, trainer activity, and DL economy at a glance.
           </p>
         </div>
 
         <MetricSection cards={platformCards} title="Platform" />
         <MetricSection cards={contentCards} title="Content & coverage" />
         <MetricSection cards={trainingCards} title="Training pipeline" />
-        <MetricSection cards={economyCards} title="Token economy" />
+        <MetricSection cards={economyCards} title="DL economy" />
 
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="grid content-start gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">

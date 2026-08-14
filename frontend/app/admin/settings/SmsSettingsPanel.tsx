@@ -239,7 +239,7 @@ export function SmsSettingsPanel() {
               <span>
                 <span className="block font-bold">Buyer marked paid</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  SMS the seller when the buyer marks a trade as paid, so they can confirm and release tokens.
+                  SMS the seller when the buyer marks a trade as paid, so they can confirm and release DL.
                 </span>
               </span>
             </label>
@@ -252,9 +252,9 @@ export function SmsSettingsPanel() {
                 type="checkbox"
               />
               <span>
-                <span className="block font-bold">Tokens released</span>
+                <span className="block font-bold">DL released</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  SMS the buyer when the seller releases tokens and the trade completes.
+                  SMS the buyer when the seller releases DL and the trade completes.
                 </span>
               </span>
             </label>

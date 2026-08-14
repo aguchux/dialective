@@ -66,10 +66,10 @@ export function ReferralBonusSettingsPanel() {
                 checked={fundingBonusEnabled}
                 onChange={(e) => setFundingBonusEnabled(e.target.checked)}
               />
-              Token funding referral bonus
+              DL funding referral bonus
             </label>
             <p className="leading-relaxed text-muted">
-              Paid to the referrer when an invited user&apos;s token funding payment is confirmed.
+              Paid to the referrer when an invited user&apos;s DL funding payment is confirmed.
             </p>
             <label htmlFor="funding-rate">Fractional rate, e.g. 0.10 = 10%</label>
             <input

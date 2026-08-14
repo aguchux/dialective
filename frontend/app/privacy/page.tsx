@@ -47,7 +47,7 @@ export default function PrivacyPage() {
                 (DigitalOcean Spaces).
               </li>
               <li>
-                <span className="font-bold text-[#050505]">Wallet and transaction data</span> — your token balance,
+                <span className="font-bold text-[#050505]">Wallet and transaction data</span> — your DL balance,
                 ledger of deposits, withdrawals, and referral bonuses, and the destination wallet address you provide
                 for withdrawals. Crypto deposits are processed by our payment processor, NOWPayments; we do not
                 collect or store your card details, since deposits are made in USDC/USDT, not by card.
