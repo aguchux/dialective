@@ -1,5 +1,11 @@
 import { WalletController } from './wallet.controller';
 
+jest.mock('@dialectiva/db', () => ({
+  ...jest.requireActual('@dialectiva/db'),
+  creditTrainingPayout: jest.fn(),
+}));
+import { creditTrainingPayout } from '@dialectiva/db';
+
 describe('WalletController NOWPayments IPN', () => {
   const finishedBody = {
     payment_id: 12345,
@@ -339,5 +345,57 @@ describe('WalletController earning history', () => {
     expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ skip: 10, take: 10, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
     );
+  });
+});
+
+describe('WalletController admin training payouts', () => {
+  function setup() {
+    (creditTrainingPayout as jest.Mock).mockReset().mockResolvedValue({
+      userId: 'trainer-1',
+      reference: 'ref-1',
+      grossAmount: '10',
+      netAmount: '9.5',
+      referralPayoutBonus: '0.5',
+      referrerUserId: null,
+    });
+    const prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue({ email: 'trainer@x.com' }) },
+    };
+    const platformSettings = { isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false) };
+    const mail = { sendTrainingPayoutCreditedEmail: jest.fn().mockResolvedValue(undefined) };
+    const controller = new WalletController(prisma as never, {} as never, platformSettings as never, {} as never, mail as never);
+    return { controller, prisma, mail };
+  }
+
+  it('returns the payout result without waiting on the notification email', async () => {
+    const { controller, mail } = setup();
+
+    const result = await controller.createTrainingPayout(
+      { user: { sub: 'admin-1' } } as never,
+      { userId: 'trainer-1', tokenAmount: 10, reference: 'ref-1' } as never,
+    );
+
+    expect(result).toEqual(expect.objectContaining({ netAmount: '9.5' }));
+    // Email dispatch is fire-and-forget (void promise chain) -- give the
+    // microtask queue a tick so the .then() has a chance to run before
+    // asserting on it, without making the endpoint itself await it.
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(mail.sendTrainingPayoutCreditedEmail).toHaveBeenCalledWith({
+      trainerEmail: 'trainer@x.com',
+      tokenAmount: '9.5',
+      reference: 'ref-1',
+    });
+  });
+
+  it('does not let a failed notification email affect the response', async () => {
+    const { controller, mail, prisma } = setup();
+    prisma.user.findUnique = jest.fn().mockRejectedValue(new Error('db hiccup'));
+
+    await expect(controller.createTrainingPayout(
+      { user: { sub: 'admin-1' } } as never,
+      { userId: 'trainer-1', tokenAmount: 10, reference: 'ref-1' } as never,
+    )).resolves.toEqual(expect.objectContaining({ netAmount: '9.5' }));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(mail.sendTrainingPayoutCreditedEmail).not.toHaveBeenCalled();
   });
 });

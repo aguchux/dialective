@@ -74,6 +74,11 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: spaces_blog_media_bucket
+            - name: SPACES_COURSE_MEDIA_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_course_media_bucket
             - name: SPACES_ENDPOINT
               valueFrom:
                 secretKeyRef:

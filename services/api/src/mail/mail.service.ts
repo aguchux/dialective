@@ -26,6 +26,12 @@ interface ReferralInviteEmail {
   referralUrl: string;
 }
 
+interface TrainingPayoutCreditedNotification {
+  trainerEmail: string;
+  tokenAmount: string;
+  reference: string | null;
+}
+
 function frontendUrl(): string {
   return process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
 }
@@ -97,6 +103,25 @@ export class MailService {
       `${payload.inviterName} invited you to Dialect Library`,
       referralInviteHtml(payload),
       referralInviteText(payload),
+    );
+  }
+
+  /**
+   * Fired from WalletController.createTrainingPayout -- covers both an
+   * admin's manual "Add DL" credit (frontend/app/admin/users/page.tsx) and
+   * any other caller of the same endpoint, since both go through this one
+   * controller action. Best-effort: send() already logs+throws on real
+   * Resend failures, but the payout itself has already landed by the time
+   * this is called, so a caller that wants the payout to still succeed even
+   * if the email fails should catch this separately (see call site).
+   */
+  async sendTrainingPayoutCreditedEmail(payload: TrainingPayoutCreditedNotification): Promise<void> {
+    const dashboardUrl = `${frontendUrl()}/dashboard?view=tokens`;
+    await this.send(
+      payload.trainerEmail,
+      `You received ${payload.tokenAmount} DL`,
+      trainingPayoutCreditedHtml(payload.tokenAmount, payload.reference, dashboardUrl),
+      trainingPayoutCreditedText(payload.tokenAmount, payload.reference, dashboardUrl),
     );
   }
 
@@ -213,4 +238,16 @@ Use this invite link to create your account:
 ${payload.referralUrl}
 
 This link connects your account to ${payload.inviterName}'s referral network.`;
+}
+
+function trainingPayoutCreditedHtml(tokenAmount: string, reference: string | null, dashboardUrl: string): string {
+  return `<p><strong>${escapeHtml(tokenAmount)} DL</strong> has been added to your Dialect Library wallet.</p>
+${reference ? `<p>Reason: ${escapeHtml(reference)}</p>` : ''}
+<p>View your balance and activity here:</p>
+<p><a href="${dashboardUrl}">${dashboardUrl}</a></p>`;
+}
+
+function trainingPayoutCreditedText(tokenAmount: string, reference: string | null, dashboardUrl: string): string {
+  return `${tokenAmount} DL has been added to your Dialect Library wallet.
+${reference ? `Reason: ${reference}\n` : ''}View your balance: ${dashboardUrl}`;
 }
