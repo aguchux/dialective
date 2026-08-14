@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { EditorDocument, validateEditorDocument } from '../blog/blog-content.util';
 
+// Capped at 50 slides to keep the course content manageable and avoid excessive storage or rendering issues.
 const MAX_SLIDES = 50;
 // A slide is a short narrated caption, not a full article -- capped well
 // below blog posts' 500-block ceiling (see validateEditorDocument).
