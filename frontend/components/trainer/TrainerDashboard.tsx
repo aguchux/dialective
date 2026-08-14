@@ -527,7 +527,7 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
       <div className="flex items-start justify-between gap-3">
         <ViewHeading title="Dashboard" subtitle="Your available platform balance at a glance." refreshing={refreshing} />
         <div className="flex shrink-0 items-center gap-2">
-          <WithdrawTokensDialog balance={data.balance} />
+          <WithdrawTokensDialog balance={data.balance} minWithdrawalTokens={data.minWithdrawalTokens} />
           <FundTokensDialog />
         </div>
       </div>
@@ -2458,11 +2458,12 @@ const WITHDRAWAL_ADDRESS_PATTERNS: Record<WithdrawalNetwork, RegExp> = {
   POLYGON: /^0x[0-9a-fA-F]{40}$/,
 };
 
-function WithdrawTokensDialog({ balance }: { balance: string }) {
-  const [amount, setAmount] = useState('');
+function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: string; minWithdrawalTokens: string }) {
+  const [amount, setAmount] = useState(minWithdrawalTokens);
   const [destinationAddress, setDestinationAddress] = useState('');
   const [destinationCurrency, setDestinationCurrency] = useState<WithdrawalCurrency>('USDT');
   const [destinationNetwork, setDestinationNetwork] = useState<WithdrawalNetwork>('TRC20');
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
   const [code, setCode] = useState('');
@@ -2474,6 +2475,12 @@ function WithdrawTokensDialog({ balance }: { balance: string }) {
   function updateCurrency(currency: WithdrawalCurrency) {
     setDestinationCurrency(currency);
     setDestinationNetwork(WITHDRAWAL_NETWORKS_BY_CURRENCY[currency][0]);
+    setAddressConfirmed(false);
+  }
+
+  function updateNetwork(network: WithdrawalNetwork) {
+    setDestinationNetwork(network);
+    setAddressConfirmed(false);
   }
 
   async function submitDetails(event: FormEvent) {
@@ -2481,6 +2488,10 @@ function WithdrawTokensDialog({ balance }: { balance: string }) {
     setMessage(null);
     if (!addressLooksValid) {
       setMessage(`That doesn't look like a valid ${destinationNetwork} address.`);
+      return;
+    }
+    if (!addressConfirmed) {
+      setMessage('Confirm the destination address before continuing.');
       return;
     }
     try {
@@ -2499,8 +2510,9 @@ function WithdrawTokensDialog({ balance }: { balance: string }) {
       await createWithdrawal({ tokenAmount: Number(amount), destinationAddress, destinationCurrency, destinationNetwork, otpRequestId, code }).unwrap();
       setMessage(null);
       setOtpRequestId(null);
-      setAmount('');
+      setAmount(minWithdrawalTokens);
       setDestinationAddress('');
+      setAddressConfirmed(false);
       setCode('');
     } catch (error) {
       setMessage(normalizeErrorMessage(error, 'Could not submit this withdrawal.'));
@@ -2563,7 +2575,7 @@ function WithdrawTokensDialog({ balance }: { balance: string }) {
                 Network
                 <select
                   className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                  onChange={(event) => setDestinationNetwork(event.target.value as WithdrawalNetwork)}
+                  onChange={(event) => updateNetwork(event.target.value as WithdrawalNetwork)}
                   value={destinationNetwork}
                 >
                   {WITHDRAWAL_NETWORKS_BY_CURRENCY[destinationCurrency].map((network) => (
@@ -2576,7 +2588,10 @@ function WithdrawTokensDialog({ balance }: { balance: string }) {
               {destinationCurrency} destination address ({destinationNetwork})
               <input
                 className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                onChange={(event) => setDestinationAddress(event.target.value.trim())}
+                onChange={(event) => {
+                  setDestinationAddress(event.target.value.trim());
+                  setAddressConfirmed(false);
+                }}
                 placeholder={destinationNetwork === 'TRC20' ? 'T...' : destinationNetwork === 'SOL' ? 'Base58 address' : '0x...'}
                 required
                 type="text"
@@ -2584,8 +2599,22 @@ function WithdrawTokensDialog({ balance }: { balance: string }) {
               />
               {!addressLooksValid && <span className="text-xs font-bold text-danger">Doesn&apos;t look like a valid {destinationNetwork} address.</span>}
             </label>
+            <label className="flex items-start gap-2.5 text-sm font-bold">
+              <input
+                checked={addressConfirmed}
+                className="mt-0.5 size-4 shrink-0 accent-accent"
+                onChange={(event) => setAddressConfirmed(event.target.checked)}
+                required
+                type="checkbox"
+              />
+              <span className="font-semibold leading-snug text-muted">
+                I confirm that the {destinationCurrency} address above is on the {destinationNetwork} network, belongs
+                to my own account, and I have double-checked it is correct. Funds sent to a wrong or unsupported
+                network cannot be recovered.
+              </span>
+            </label>
             {message && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{message}</p>}
-            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" disabled={!addressLooksValid} pending={isRequestingOtp} pendingLabel="Sending code" type="submit">
+            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" disabled={!addressLooksValid || !addressConfirmed} pending={isRequestingOtp} pendingLabel="Sending code" type="submit">
               Send confirmation code
             </ActionButton>
           </form>

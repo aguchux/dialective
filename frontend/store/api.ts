@@ -352,6 +352,7 @@ export interface TrainerDashboardSummary {
   scoringSlaMinutes: number;
   recordingRoundTimeoutSeconds: number;
   recordingRoundMaxTimeoutSeconds: number;
+  minWithdrawalTokens: string;
   localCurrency: LocalCurrency | null;
   balanceInLocalCurrency: string | null;
   fundedTokens: string;

@@ -276,6 +276,7 @@ export class WalletController {
       recordingRoundMaxTimeoutSeconds,
       cookiePersistSeconds,
       inviteExpirySeconds,
+      minWithdrawalTokens,
     ] = await Promise.all([
       this.platformSettings.getTokenUsdRate(),
       this.getLocalCurrency(req.user.sub),
@@ -285,6 +286,7 @@ export class WalletController {
       this.platformSettings.getWordTrainingRecordingMaxTimeoutSeconds(),
       this.platformSettings.getReferralCookiePersistSeconds(),
       this.platformSettings.getReferralInviteExpirySeconds(),
+      this.platformSettings.getMinWithdrawalTokens(),
     ]);
 
     return {
@@ -295,6 +297,7 @@ export class WalletController {
       scoringSlaMinutes,
       recordingRoundTimeoutSeconds,
       recordingRoundMaxTimeoutSeconds,
+      minWithdrawalTokens: minWithdrawalTokens.toString(),
       localCurrency: dashboardLocalCurrency,
       balanceInLocalCurrency: dashboardLocalCurrency
         ? tokensToLocalCurrency(
