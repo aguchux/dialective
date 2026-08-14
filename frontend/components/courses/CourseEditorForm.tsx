@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
 import type { BlogEditorHandle } from '@/components/blog/BlogEditor';
 import { ActionButton, ActionSpinner } from '@/components/ui/ActionButton';
@@ -27,9 +27,52 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
 const emptyEditorDocument: EditorDocument = { blocks: [] };
 
-function emptySlide(): CourseSlide {
-  return { text: emptyEditorDocument };
+let nextSlideKeyId = 0;
+function nextSlideKey() {
+  nextSlideKeyId += 1;
+  return `slide-${nextSlideKeyId}`;
 }
+
+// A slide paired with a stable client-only key -- separate from its array
+// index so add/remove/reorder never reassigns which slide a given
+// SlideTextEditor/Editor.js instance belongs to (see SlideTextEditor's
+// comment for why identity, not position, has to be the cache key here).
+interface KeyedSlide {
+  key: string;
+  slide: CourseSlide;
+}
+
+function emptyKeyedSlide(): KeyedSlide {
+  return { key: nextSlideKey(), slide: { text: emptyEditorDocument } };
+}
+
+/**
+ * Isolates each slide's Editor.js instance from the rest of the form's
+ * state. Without this, typing in the Title field re-renders
+ * CourseEditorForm, which would hand BlogEditor a brand-new inline onReady
+ * closure and a fresh `data` object on every keystroke -- BlogEditor's
+ * setup effect depends on both, so it would tear down and reconstruct the
+ * underlying Editor.js instance on every keystroke anywhere in the form,
+ * stealing focus/cursor position (including in the Title field itself,
+ * since the whole tree re-renders together). memo() plus a stable
+ * per-slide-key onReady callback (see getOnReadyCallback below) keeps this
+ * subtree from re-rendering when unrelated form state changes.
+ * `initialData` is intentionally captured once in local state and never
+ * re-synced from props, so BlogEditor's own `data` dependency also stays
+ * referentially stable across re-renders of this component.
+ */
+const SlideTextEditor = memo(function SlideTextEditor({
+  initialData,
+  onReady,
+  uploadMedia,
+}: {
+  initialData: EditorDocument;
+  onReady: (handle: BlogEditorHandle | null) => void;
+  uploadMedia: (file: File, kind: 'IMAGE' | 'VIDEO') => Promise<string>;
+}) {
+  const [stableData] = useState(initialData);
+  return <BlogEditor data={stableData} onReady={onReady} uploadMedia={uploadMedia} />;
+});
 
 export function CourseEditorForm({ course }: { course?: Course }) {
   const router = useRouter();
@@ -40,19 +83,39 @@ export function CourseEditorForm({ course }: { course?: Course }) {
   const [coverImageUrl, setCoverImageUrl] = useState(course?.coverImageUrl ?? '');
   const [coverImageKey, setCoverImageKey] = useState(course?.coverImageKey ?? '');
   const [coverImageAlt, setCoverImageAlt] = useState(course?.coverImageAlt ?? '');
-  const [slides, setSlides] = useState<CourseSlide[]>(course?.slides.slides.length ? course.slides.slides : [emptySlide()]);
+  const [slides, setSlides] = useState<KeyedSlide[]>(() =>
+    course?.slides.slides.length
+      ? course.slides.slides.map((slide) => ({ key: nextSlideKey(), slide }))
+      : [emptyKeyedSlide()],
+  );
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
-  const [uploadingSlideIndex, setUploadingSlideIndex] = useState<{ index: number; kind: 'image' | 'audio' } | null>(null);
+  const [uploadingSlideKey, setUploadingSlideKey] = useState<{ key: string; kind: 'image' | 'audio' } | null>(null);
   const [createCourse] = useCreateCourseMutation();
   const [updateCourse] = useUpdateCourseMutation();
   const [createUpload] = useCreateCourseMediaUploadMutation();
 
   // Each slide's Editor.js instance saves its own document asynchronously
-  // (editorHandle.save(), same as BlogEditorForm) -- keyed by slide index so
-  // handleSave can await every slide's current content in one pass.
-  const editorHandlesRef = useRef<Map<number, BlogEditorHandle>>(new Map());
+  // (editorHandle.save(), same as BlogEditorForm) -- keyed by the slide's
+  // stable key so handleSave can await every slide's current content in
+  // one pass, and so a removed slide's stale handle never gets read.
+  const editorHandlesRef = useRef<Map<string, BlogEditorHandle>>(new Map());
+
+  // One stable onReady closure per slide key, cached across renders -- this
+  // is what lets SlideTextEditor's memo() actually skip re-rendering when
+  // unrelated form state (e.g. Title) changes.
+  const onReadyCallbacksRef = useRef<Map<string, (handle: BlogEditorHandle | null) => void>>(new Map());
+  function getOnReadyCallback(key: string) {
+    const cached = onReadyCallbacksRef.current.get(key);
+    if (cached) return cached;
+    const callback = (handle: BlogEditorHandle | null) => {
+      if (handle) editorHandlesRef.current.set(key, handle);
+      else editorHandlesRef.current.delete(key);
+    };
+    onReadyCallbacksRef.current.set(key, callback);
+    return callback;
+  }
 
   const uploadMedia = useCallback(async (file: File, kind: 'IMAGE' | 'AUDIO') => {
     const maxBytes = kind === 'AUDIO' ? MAX_AUDIO_BYTES : MAX_IMAGE_BYTES;
@@ -96,19 +159,20 @@ export function CourseEditorForm({ course }: { course?: Course }) {
     if (!course) setSlugPreview(toSlug(value));
   };
 
-  function updateSlide(index: number, patch: Partial<CourseSlide>) {
-    setSlides((current) => current.map((slide, i) => (i === index ? { ...slide, ...patch } : slide)));
+  function updateSlide(key: string, patch: Partial<CourseSlide>) {
+    setSlides((current) => current.map((entry) => (entry.key === key ? { key, slide: { ...entry.slide, ...patch } } : entry)));
   }
 
   function addSlide() {
-    setSlides((current) => [...current, emptySlide()]);
+    setSlides((current) => [...current, emptyKeyedSlide()]);
   }
 
-  function removeSlide(index: number) {
+  function removeSlide(key: string) {
     setSlides((current) => {
       if (current.length <= 1) return current;
-      editorHandlesRef.current.delete(index);
-      return current.filter((_, i) => i !== index);
+      editorHandlesRef.current.delete(key);
+      onReadyCallbacksRef.current.delete(key);
+      return current.filter((entry) => entry.key !== key);
     });
   }
 
@@ -122,31 +186,31 @@ export function CourseEditorForm({ course }: { course?: Course }) {
     });
   }
 
-  async function handleSlideImage(index: number, file?: File) {
+  async function handleSlideImage(key: string, file?: File) {
     if (!file) return;
     setError('');
-    setUploadingSlideIndex({ index, kind: 'image' });
+    setUploadingSlideKey({ key, kind: 'image' });
     try {
       const url = await uploadMedia(file, 'IMAGE');
-      updateSlide(index, { imageUrl: url });
+      updateSlide(key, { imageUrl: url });
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Slide image upload failed');
     } finally {
-      setUploadingSlideIndex(null);
+      setUploadingSlideKey(null);
     }
   }
 
-  async function handleSlideAudio(index: number, file?: File) {
+  async function handleSlideAudio(key: string, file?: File) {
     if (!file) return;
     setError('');
-    setUploadingSlideIndex({ index, kind: 'audio' });
+    setUploadingSlideKey({ key, kind: 'audio' });
     try {
       const url = await uploadMedia(file, 'AUDIO');
-      updateSlide(index, { audioUrl: url });
+      updateSlide(key, { audioUrl: url });
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Slide narration upload failed');
     } finally {
-      setUploadingSlideIndex(null);
+      setUploadingSlideKey(null);
     }
   }
 
@@ -157,8 +221,8 @@ export function CourseEditorForm({ course }: { course?: Course }) {
 
     setIsSaving(true);
     try {
-      const savedSlides = await Promise.all(slides.map(async (slide, index) => {
-        const handle = editorHandlesRef.current.get(index);
+      const savedSlides = await Promise.all(slides.map(async ({ key, slide }) => {
+        const handle = editorHandlesRef.current.get(key);
         const text = handle ? await handle.save() : slide.text;
         return { ...slide, text };
       }));
@@ -189,7 +253,7 @@ export function CourseEditorForm({ course }: { course?: Course }) {
     }
   };
 
-  const anyUploading = isUploadingCover || uploadingSlideIndex !== null;
+  const anyUploading = isUploadingCover || uploadingSlideKey !== null;
 
   return (
     <div className="grid gap-6">
@@ -225,27 +289,20 @@ export function CourseEditorForm({ course }: { course?: Course }) {
               <button className="rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-bold hover:bg-surface-muted" onClick={addSlide} type="button">+ Add slide</button>
             </div>
 
-            {slides.map((slide, index) => (
-              <div className="grid gap-3 rounded-lg border border-line bg-surface p-4" key={index}>
+            {slides.map(({ key, slide }, index) => (
+              <div className="grid gap-3 rounded-lg border border-line bg-surface p-4" key={key}>
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-extrabold text-muted">Slide {index + 1}</p>
                   <div className="flex items-center gap-1">
                     <button aria-label="Move slide up" className="grid size-8 place-items-center rounded-md text-muted hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-30" disabled={index === 0} onClick={() => moveSlide(index, -1)} type="button"><ArrowUp className="size-4" aria-hidden="true" /></button>
                     <button aria-label="Move slide down" className="grid size-8 place-items-center rounded-md text-muted hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-30" disabled={index === slides.length - 1} onClick={() => moveSlide(index, 1)} type="button"><ArrowDown className="size-4" aria-hidden="true" /></button>
-                    <button aria-label="Remove slide" className="grid size-8 place-items-center rounded-md text-[#a3242f] hover:bg-[#fff1f2] disabled:cursor-not-allowed disabled:opacity-30" disabled={slides.length <= 1} onClick={() => removeSlide(index)} type="button"><Trash2 className="size-4" aria-hidden="true" /></button>
+                    <button aria-label="Remove slide" className="grid size-8 place-items-center rounded-md text-[#a3242f] hover:bg-[#fff1f2] disabled:cursor-not-allowed disabled:opacity-30" disabled={slides.length <= 1} onClick={() => removeSlide(key)} type="button"><Trash2 className="size-4" aria-hidden="true" /></button>
                   </div>
                 </div>
 
                 <div className="grid gap-1.5 text-sm font-bold">
                   Text
-                  <BlogEditor
-                    data={slide.text}
-                    onReady={(handle) => {
-                      if (handle) editorHandlesRef.current.set(index, handle);
-                      else editorHandlesRef.current.delete(index);
-                    }}
-                    uploadMedia={uploadSlideMedia}
-                  />
+                  <SlideTextEditor initialData={slide.text} onReady={getOnReadyCallback(key)} uploadMedia={uploadSlideMedia} />
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -253,16 +310,16 @@ export function CourseEditorForm({ course }: { course?: Course }) {
                     <p className="text-sm font-bold">Image</p>
                     {slide.imageUrl && <img alt={slide.imageAlt || ''} className="aspect-video w-full rounded-lg border border-line object-cover" src={slide.imageUrl} />}
                     <label className="grid min-h-16 cursor-pointer place-items-center rounded-lg border border-dashed border-line bg-white px-3 text-center text-sm font-bold text-muted hover:border-accent">
-                      {uploadingSlideIndex?.index === index && uploadingSlideIndex.kind === 'image' ? <span className="inline-flex items-center gap-2"><ActionSpinner />Uploading</span> : slide.imageUrl ? 'Replace image' : 'Choose image'}
-                      <input className="sr-only" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" disabled={anyUploading} onChange={(event) => handleSlideImage(index, event.target.files?.[0])} type="file" />
+                      {uploadingSlideKey?.key === key && uploadingSlideKey.kind === 'image' ? <span className="inline-flex items-center gap-2"><ActionSpinner />Uploading</span> : slide.imageUrl ? 'Replace image' : 'Choose image'}
+                      <input className="sr-only" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" disabled={anyUploading} onChange={(event) => handleSlideImage(key, event.target.files?.[0])} type="file" />
                     </label>
                   </div>
                   <div className="grid gap-1.5">
                     <p className="text-sm font-bold">Narration audio</p>
                     {slide.audioUrl && <audio className="w-full" controls src={slide.audioUrl} />}
                     <label className="grid min-h-16 cursor-pointer place-items-center rounded-lg border border-dashed border-line bg-white px-3 text-center text-sm font-bold text-muted hover:border-accent">
-                      {uploadingSlideIndex?.index === index && uploadingSlideIndex.kind === 'audio' ? <span className="inline-flex items-center gap-2"><ActionSpinner />Uploading</span> : slide.audioUrl ? 'Replace audio' : 'Choose audio'}
-                      <input className="sr-only" accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm" disabled={anyUploading} onChange={(event) => handleSlideAudio(index, event.target.files?.[0])} type="file" />
+                      {uploadingSlideKey?.key === key && uploadingSlideKey.kind === 'audio' ? <span className="inline-flex items-center gap-2"><ActionSpinner />Uploading</span> : slide.audioUrl ? 'Replace audio' : 'Choose audio'}
+                      <input className="sr-only" accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm" disabled={anyUploading} onChange={(event) => handleSlideAudio(key, event.target.files?.[0])} type="file" />
                     </label>
                   </div>
                 </div>
