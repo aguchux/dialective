@@ -108,7 +108,7 @@ describe('CoursesService', () => {
       prisma.course.create.mockImplementation(({ data }: any) => Promise.resolve(data));
 
       const result = await service.create('author-1', {
-        title: 'Getting Started', summary: 'sum', content: { slides: [{ text: 'hi' }] },
+        title: 'Getting Started', summary: 'sum', content: { slides: [{ text: { blocks: [{ type: 'paragraph', data: { text: 'hi' } }] } }] },
       } as any);
       expect(result.slug).toMatch(/^getting-started-/);
       expect(result.sortOrder).toBe(0);

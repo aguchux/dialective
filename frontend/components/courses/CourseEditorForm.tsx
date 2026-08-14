@@ -1,25 +1,34 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
+import type { BlogEditorHandle } from '@/components/blog/BlogEditor';
 import { ActionButton, ActionSpinner } from '@/components/ui/ActionButton';
 import {
   type Course,
   type CourseSlide,
+  type EditorDocument,
   normalizeErrorMessage,
   useCreateCourseMediaUploadMutation,
   useCreateCourseMutation,
   useUpdateCourseMutation,
 } from '@/store/api';
 
+const BlogEditor = dynamic(() => import('@/components/blog/BlogEditor').then((module) => module.BlogEditor), {
+  ssr: false,
+  loading: () => <div className="min-h-40 rounded-lg border border-line bg-white p-4 text-sm text-muted">Loading editor...</div>,
+});
+
 const fieldClass = 'min-h-11 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/15';
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
+const emptyEditorDocument: EditorDocument = { blocks: [] };
 
 function emptySlide(): CourseSlide {
-  return { text: '' };
+  return { text: emptyEditorDocument };
 }
 
 export function CourseEditorForm({ course }: { course?: Course }) {
@@ -40,6 +49,11 @@ export function CourseEditorForm({ course }: { course?: Course }) {
   const [updateCourse] = useUpdateCourseMutation();
   const [createUpload] = useCreateCourseMediaUploadMutation();
 
+  // Each slide's Editor.js instance saves its own document asynchronously
+  // (editorHandle.save(), same as BlogEditorForm) -- keyed by slide index so
+  // handleSave can await every slide's current content in one pass.
+  const editorHandlesRef = useRef<Map<number, BlogEditorHandle>>(new Map());
+
   const uploadMedia = useCallback(async (file: File, kind: 'IMAGE' | 'AUDIO') => {
     const maxBytes = kind === 'AUDIO' ? MAX_AUDIO_BYTES : MAX_IMAGE_BYTES;
     if (file.size > maxBytes) throw new Error(kind === 'AUDIO' ? 'Audio files must be 15 MB or smaller' : 'Images must be 10 MB or smaller');
@@ -53,6 +67,14 @@ export function CourseEditorForm({ course }: { course?: Course }) {
     if (!response.ok) throw new Error('Media upload failed');
     return signed.publicUrl;
   }, [createUpload]);
+
+  // BlogEditor's image tool needs a 'IMAGE' | 'VIDEO' uploader -- courses
+  // don't support video, so this adapter satisfies that signature while
+  // only ever forwarding IMAGE uploads to the course media endpoint.
+  const uploadSlideMedia = useCallback(async (file: File, kind: 'IMAGE' | 'VIDEO') => {
+    if (kind === 'VIDEO') throw new Error('Video is not supported in course slides');
+    return uploadMedia(file, 'IMAGE');
+  }, [uploadMedia]);
 
   const handleCover = async (file?: File) => {
     if (!file) return;
@@ -83,7 +105,11 @@ export function CourseEditorForm({ course }: { course?: Course }) {
   }
 
   function removeSlide(index: number) {
-    setSlides((current) => (current.length <= 1 ? current : current.filter((_, i) => i !== index)));
+    setSlides((current) => {
+      if (current.length <= 1) return current;
+      editorHandlesRef.current.delete(index);
+      return current.filter((_, i) => i !== index);
+    });
   }
 
   function moveSlide(index: number, direction: -1 | 1) {
@@ -128,15 +154,21 @@ export function CourseEditorForm({ course }: { course?: Course }) {
     setError('');
     if (!title.trim()) return setError('Title is required');
     if (!summary.trim()) return setError('Summary is required');
-    const cleanSlides = slides.filter((slide) => slide.text.trim());
-    if (cleanSlides.length === 0) return setError('At least one slide with text is required');
 
     setIsSaving(true);
     try {
+      const savedSlides = await Promise.all(slides.map(async (slide, index) => {
+        const handle = editorHandlesRef.current.get(index);
+        const text = handle ? await handle.save() : slide.text;
+        return { ...slide, text };
+      }));
+      const cleanSlides = savedSlides.filter((slide) => slide.text.blocks.length > 0);
+      if (cleanSlides.length === 0) return setError('At least one slide with text is required');
+
       const body = {
         title: title.trim(),
         summary: summary.trim(),
-        content: { slides: cleanSlides.map((slide) => ({ ...slide, text: slide.text.trim() })) },
+        content: { slides: cleanSlides },
         coverImageUrl: coverImageUrl || undefined,
         coverImageKey: coverImageKey || undefined,
         coverImageAlt: coverImageAlt || undefined,
@@ -204,7 +236,17 @@ export function CourseEditorForm({ course }: { course?: Course }) {
                   </div>
                 </div>
 
-                <label className="grid gap-1.5 text-sm font-bold">Text<textarea className={`${fieldClass} min-h-24`} maxLength={4000} onChange={(event) => updateSlide(index, { text: event.target.value })} value={slide.text} /></label>
+                <div className="grid gap-1.5 text-sm font-bold">
+                  Text
+                  <BlogEditor
+                    data={slide.text}
+                    onReady={(handle) => {
+                      if (handle) editorHandlesRef.current.set(index, handle);
+                      else editorHandlesRef.current.delete(index);
+                    }}
+                    uploadMedia={uploadSlideMedia}
+                  />
+                </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">

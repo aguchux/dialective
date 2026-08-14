@@ -1,7 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
+import { EditorDocument, validateEditorDocument } from '../blog/blog-content.util';
 
 const MAX_SLIDES = 50;
-const MAX_SLIDE_TEXT_LENGTH = 4000;
+// A slide is a short narrated caption, not a full article -- capped well
+// below blog posts' 500-block ceiling (see validateEditorDocument).
+const MAX_SLIDE_BLOCKS = 30;
 
 interface CourseSlideInput {
   imageUrl?: unknown;
@@ -13,12 +16,19 @@ interface CourseSlideInput {
 export interface CourseSlide {
   imageUrl?: string;
   imageAlt?: string;
-  text: string;
+  // Editor.js document, same block-JSON shape as BlogPost.content -- reuses
+  // validateEditorDocument/BlogContent.tsx's renderer rather than a
+  // duplicate plain-text/rich-text implementation.
+  text: EditorDocument;
   audioUrl?: string;
 }
 
 export interface CourseDocument {
   slides: CourseSlide[];
+}
+
+function hasNonEmptyBlocks(document: EditorDocument): boolean {
+  return document.blocks.length > 0;
 }
 
 export function validateCourseDocument(value: Record<string, unknown>): CourseDocument {
@@ -35,8 +45,20 @@ export function validateCourseDocument(value: Record<string, unknown>): CourseDo
     if (!slide || typeof slide !== 'object') {
       throw new BadRequestException(`Slide ${index + 1} is invalid`);
     }
-    if (typeof slide.text !== 'string' || !slide.text.trim() || slide.text.length > MAX_SLIDE_TEXT_LENGTH) {
-      throw new BadRequestException(`Slide ${index + 1} must have text between 1 and ${MAX_SLIDE_TEXT_LENGTH} characters`);
+    if (!slide.text || typeof slide.text !== 'object') {
+      throw new BadRequestException(`Slide ${index + 1} must have text`);
+    }
+    let text: EditorDocument;
+    try {
+      text = validateEditorDocument(slide.text as Record<string, unknown>);
+    } catch {
+      throw new BadRequestException(`Slide ${index + 1} has invalid text content`);
+    }
+    if (text.blocks.length > MAX_SLIDE_BLOCKS) {
+      throw new BadRequestException(`Slide ${index + 1} must contain at most ${MAX_SLIDE_BLOCKS} blocks`);
+    }
+    if (!hasNonEmptyBlocks(text)) {
+      throw new BadRequestException(`Slide ${index + 1} must have text`);
     }
     if (slide.imageUrl !== undefined && typeof slide.imageUrl !== 'string') {
       throw new BadRequestException(`Slide ${index + 1} has an invalid imageUrl`);
@@ -48,7 +70,7 @@ export function validateCourseDocument(value: Record<string, unknown>): CourseDo
       throw new BadRequestException(`Slide ${index + 1} has an invalid audioUrl`);
     }
 
-    const result: CourseSlide = { text: slide.text.trim() };
+    const result: CourseSlide = { text };
     if (typeof slide.imageUrl === 'string' && slide.imageUrl) result.imageUrl = slide.imageUrl;
     if (typeof slide.imageAlt === 'string' && slide.imageAlt) result.imageAlt = slide.imageAlt;
     if (typeof slide.audioUrl === 'string' && slide.audioUrl) result.audioUrl = slide.audioUrl;

@@ -808,7 +808,9 @@ export interface BlogMediaUpload {
 export interface CourseSlide {
   imageUrl?: string;
   imageAlt?: string;
-  text: string;
+  // Editor.js document, same block-JSON shape as BlogPost.content -- reuses
+  // BlogEditor/BlogContent rather than a separate plain-text slide editor.
+  text: EditorDocument;
   audioUrl?: string;
 }
 

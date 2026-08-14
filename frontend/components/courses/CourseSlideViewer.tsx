@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, LoaderCircle, Pause, Play } from 'lucide-react';
+import { BlogContent } from '@/components/blog/BlogContent';
 import type { CourseSlide } from '@/store/api';
 
 type PlaybackState = 'idle' | 'playing' | 'paused';
@@ -79,7 +80,9 @@ export function CourseSlideViewer({
           </div>
         )}
 
-        <p className="whitespace-pre-wrap text-lg leading-relaxed text-ink">{slide.text}</p>
+        <div className="blog-prose text-lg leading-relaxed text-ink">
+          <BlogContent blocks={slide.text.blocks} />
+        </div>
 
         {slide.audioUrl && (
           <div className="flex items-center gap-3 rounded-lg border border-line bg-surface p-3">
