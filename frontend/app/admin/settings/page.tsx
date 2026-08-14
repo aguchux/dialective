@@ -5,6 +5,7 @@ import { AdminShell } from '@/components/admin/AdminShell';
 import { GeneralSettingsPanel } from './GeneralSettingsPanel';
 import { NotificationSettingsPanel } from './NotificationSettingsPanel';
 import { ReferralBonusSettingsPanel } from './ReferralBonusSettingsPanel';
+import { TrainingTasksSettingsPanel } from './TrainingTasksSettingsPanel';
 import { WordGenerationSettingsPanel } from './WordGenerationSettingsPanel';
 import { QualityGateSettingsPanel } from './QualityGateSettingsPanel';
 import { SpellingNormalizationSettingsPanel } from './SpellingNormalizationSettingsPanel';
@@ -15,6 +16,7 @@ import { WithdrawalSettingsPanel } from './WithdrawalSettingsPanel';
 const groups = [
   { key: 'general', label: 'General Settings' },
   { key: 'referrals', label: 'Referral Bonuses' },
+  { key: 'trainingTasks', label: 'Training & Tasks' },
   { key: 'notifications', label: 'Notification Settings' },
   { key: 'wordGeneration', label: 'Word Generation' },
   { key: 'qualityGate', label: 'Voice Quality Gate' },
@@ -59,6 +61,7 @@ export default function AdminSettingsPage() {
           <div>
             {active === 'general' && <GeneralSettingsPanel />}
             {active === 'referrals' && <ReferralBonusSettingsPanel />}
+            {active === 'trainingTasks' && <TrainingTasksSettingsPanel />}
             {active === 'notifications' && <NotificationSettingsPanel />}
             {active === 'wordGeneration' && <WordGenerationSettingsPanel />}
             {active === 'qualityGate' && <QualityGateSettingsPanel />}

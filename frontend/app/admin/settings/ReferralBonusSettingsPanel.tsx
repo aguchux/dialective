@@ -21,8 +21,6 @@ export function ReferralBonusSettingsPanel() {
   const [payoutBonusEnabled, setPayoutBonusEnabled] = useState(false);
   const [cookiePersistSeconds, setCookiePersistSeconds] = useState('86400');
   const [inviteExpirySeconds, setInviteExpirySeconds] = useState('86400');
-  const [recordingTimeoutSeconds, setRecordingTimeoutSeconds] = useState('5');
-  const [recordingMaxTimeoutSeconds, setRecordingMaxTimeoutSeconds] = useState('180');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,8 +43,6 @@ export function ReferralBonusSettingsPanel() {
     if (!platformSettings) return;
     setCookiePersistSeconds(String(platformSettings.referralCookiePersistSeconds));
     setInviteExpirySeconds(String(platformSettings.referralInviteExpirySeconds));
-    setRecordingTimeoutSeconds(String(platformSettings.wordTrainingRecordingTimeoutSeconds));
-    setRecordingMaxTimeoutSeconds(String(platformSettings.wordTrainingRecordingMaxTimeoutSeconds));
   }, [platformSettings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -65,8 +61,6 @@ export function ReferralBonusSettingsPanel() {
         updatePlatformSettings({
           referralCookiePersistSeconds: Number(cookiePersistSeconds),
           referralInviteExpirySeconds: Number(inviteExpirySeconds),
-          wordTrainingRecordingTimeoutSeconds: Number(recordingTimeoutSeconds),
-          wordTrainingRecordingMaxTimeoutSeconds: Number(recordingMaxTimeoutSeconds),
         }).unwrap(),
       ]);
       setMessage('Referral bonus settings saved.');
@@ -143,7 +137,7 @@ export function ReferralBonusSettingsPanel() {
           </div>
 
           <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
-            <p className="font-bold">Referral lifecycle and recording timers</p>
+            <p className="font-bold">Referral lifecycle</p>
             <p className="leading-relaxed text-muted">
               Controls previously hardcoded in frontend/backend constants and deployment env vars.
             </p>
@@ -169,36 +163,6 @@ export function ReferralBonusSettingsPanel() {
               min="300"
               value={inviteExpirySeconds}
               onChange={(e) => setInviteExpirySeconds(e.target.value)}
-              required
-            />
-
-            <label htmlFor="recording-timeout-seconds">Live recording timeout, per word (seconds)</label>
-            <p className="text-sm leading-relaxed text-muted">
-              Multiplied by the number of words in the assignment -- a 5-word sentence gets 5x this value, up to the
-              cap below.
-            </p>
-            <input
-              className={inputClass}
-              id="recording-timeout-seconds"
-              type="number"
-              step="1"
-              min="1"
-              max="120"
-              value={recordingTimeoutSeconds}
-              onChange={(e) => setRecordingTimeoutSeconds(e.target.value)}
-              required
-            />
-
-            <label htmlFor="recording-max-timeout-seconds">Live recording timeout cap, total (seconds)</label>
-            <input
-              className={inputClass}
-              id="recording-max-timeout-seconds"
-              type="number"
-              step="1"
-              min="5"
-              max="1800"
-              value={recordingMaxTimeoutSeconds}
-              onChange={(e) => setRecordingMaxTimeoutSeconds(e.target.value)}
               required
             />
           </div>
