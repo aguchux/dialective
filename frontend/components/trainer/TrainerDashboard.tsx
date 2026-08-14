@@ -23,6 +23,7 @@ import {
   Clock3,
   Copy,
   FileText as FileTextIcon,
+  GraduationCap,
   Headphones,
   Landmark,
   LogOut,
@@ -424,6 +425,9 @@ function DashboardHeader({
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=referrals')}>
                 <Users className="size-4" aria-hidden="true" /> Referrals
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/learn')}>
+                <GraduationCap className="size-4" aria-hidden="true" /> Learning Center
               </DropdownMenuItem>
               <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>
                 <LogOut className="size-4" aria-hidden="true" /> Logout

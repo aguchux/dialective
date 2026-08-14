@@ -805,6 +805,88 @@ export interface BlogMediaUpload {
   expiresInSeconds: number;
 }
 
+export interface CourseSlide {
+  imageUrl?: string;
+  imageAlt?: string;
+  text: string;
+  audioUrl?: string;
+}
+
+export interface CourseDocument {
+  slides: CourseSlide[];
+}
+
+/** Admin CRUD shape -- full row, no slide content parsed out. */
+export interface Course {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  coverImageUrl: string | null;
+  coverImageKey: string | null;
+  coverImageAlt: string | null;
+  slides: CourseDocument;
+  status: BlogPostStatus;
+  sortOrder: number;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  author: { email: string };
+}
+
+export interface CourseInput {
+  title: string;
+  summary: string;
+  content: CourseDocument;
+  coverImageUrl?: string;
+  coverImageKey?: string;
+  coverImageAlt?: string;
+  status?: BlogPostStatus;
+}
+
+/** Public catalog card -- no slide content, safe to serve unauthenticated. */
+export interface CourseCard {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  coverImageUrl: string | null;
+  coverImageAlt: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Public preview -- catalog card fields plus a slide count, still no slide content. */
+export interface CoursePreview extends CourseCard {
+  slideCount: number;
+}
+
+export interface CourseProgress {
+  lastSlideIndex: number;
+  completedAt: string | null;
+}
+
+/** Protected "study" shape -- full slide content plus the caller's own progress. */
+export interface CourseStudy {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  coverImageUrl: string | null;
+  coverImageAlt: string | null;
+  slides: CourseSlide[];
+  progress: CourseProgress | null;
+}
+
+export interface CourseMediaUpload {
+  url: string;
+  key: string;
+  bucket: string;
+  publicUrl: string;
+  expiresInSeconds: number;
+}
+
 export interface ApiErrorShape {
   statusCode?: number;
   message?: string | string[];
@@ -842,7 +924,7 @@ export const dialectivaApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -1355,6 +1437,40 @@ export const dialectivaApi = createApi({
     createBlogMediaUpload: builder.mutation<BlogMediaUpload, { fileName: string; contentType: string; kind: 'IMAGE' | 'VIDEO' }>({
       query: (body) => ({ url: '/blog/admin/media/upload-url', method: 'POST', body }),
     }),
+    getAdminCourses: builder.query<Course[], void>({
+      query: () => '/courses/admin/courses',
+      providesTags: ['Courses'],
+    }),
+    getAdminCourse: builder.query<Course, string>({
+      query: (id) => `/courses/admin/courses/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'Courses', id }],
+    }),
+    createCourse: builder.mutation<Course, CourseInput>({
+      query: (body) => ({ url: '/courses/admin/courses', method: 'POST', body }),
+      invalidatesTags: ['Courses'],
+    }),
+    updateCourse: builder.mutation<Course, { id: string; body: Partial<CourseInput> }>({
+      query: ({ id, body }) => ({ url: `/courses/admin/courses/${id}`, method: 'PATCH', body }),
+      invalidatesTags: (_result, _error, { id }) => ['Courses', { type: 'Courses', id }],
+    }),
+    deleteCourse: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/courses/admin/courses/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Courses'],
+    }),
+    reorderCourses: builder.mutation<{ reordered: number }, { items: { id: string; sortOrder: number }[] }>({
+      query: (body) => ({ url: '/courses/admin/courses/reorder', method: 'PATCH', body }),
+      invalidatesTags: ['Courses'],
+    }),
+    createCourseMediaUpload: builder.mutation<CourseMediaUpload, { fileName: string; contentType: string; kind: 'IMAGE' | 'AUDIO' }>({
+      query: (body) => ({ url: '/courses/admin/media/upload-url', method: 'POST', body }),
+    }),
+    getCourseToStudy: builder.query<CourseStudy, string>({
+      query: (slug) => `/courses/study/${slug}`,
+      providesTags: (_result, _error, slug) => [{ type: 'Courses', id: slug }],
+    }),
+    saveCourseProgress: builder.mutation<CourseProgress, { slug: string; lastSlideIndex: number; totalSlides: number }>({
+      query: ({ slug, ...body }) => ({ url: `/courses/study/${slug}/progress`, method: 'PUT', body }),
+    }),
   }),
 });
 
@@ -1460,6 +1576,15 @@ export const {
   useDeleteBlogPostMutation,
   useReorderBlogPostsMutation,
   useCreateBlogMediaUploadMutation,
+  useGetAdminCoursesQuery,
+  useGetAdminCourseQuery,
+  useCreateCourseMutation,
+  useUpdateCourseMutation,
+  useDeleteCourseMutation,
+  useReorderCoursesMutation,
+  useCreateCourseMediaUploadMutation,
+  useGetCourseToStudyQuery,
+  useSaveCourseProgressMutation,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

@@ -15,6 +15,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { SettingsModule } from "./settings/settings.module";
 import { BlogModule } from "./blog/blog.module";
+import { CoursesModule } from "./courses/courses.module";
 import { PoolsModule } from "./pools/pools.module";
 import { P2PModule } from "./p2p/p2p.module";
 
@@ -33,6 +34,7 @@ import { P2PModule } from "./p2p/p2p.module";
     AuthModule,
     SettingsModule,
     BlogModule,
+    CoursesModule,
     PoolsModule,
     P2PModule,
   ],

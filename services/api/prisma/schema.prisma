@@ -78,6 +78,8 @@ model User {
   otpCodes       OtpCode[]
   wallet         Wallet?
   blogPosts      BlogPost[]
+  authoredCourses Course[]
+  courseProgress CourseProgress[]
   submissions    Submission[]
   trainingSessions TrainingSession[]
   wordRecordings WordRecording[]
@@ -1047,4 +1049,51 @@ model BlogPost {
   @@index([status, sortOrder])
   @@index([publishedAt])
   @@map("blog_posts")
+}
+
+/// Slide-deck learning content for the public Learning Center catalog.
+/// `slides` is a raw JSON array of { imageUrl?, imageAlt?, text, audioUrl? }
+/// (see CoursesModule's course-content.util.ts for validation) -- simpler
+/// than BlogPost.content's Editor.js blocks since a slide has one fixed
+/// shape, not a polymorphic block type. Reuses BlogPostStatus rather than a
+/// duplicate enum since the draft/published semantics are identical.
+model Course {
+  id            String           @id @default(uuid())
+  slug          String           @unique // always `${slugified title}-${id}`; regenerated on title change, same as BlogPost.slug
+  title         String
+  summary       String // admin-typed short description for catalog cards -- no paragraph to derive it from like BlogPost.excerpt
+  coverImageUrl String?
+  coverImageKey String?
+  coverImageAlt String?
+  slides        Json
+  status        BlogPostStatus   @default(DRAFT)
+  sortOrder     Int              @default(0)
+  authorId      String
+  author        User             @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  publishedAt   DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  progress      CourseProgress[]
+
+  @@index([status, sortOrder])
+  @@map("courses")
+}
+
+/// One row per (trainer, course) -- tracks how far a trainer has read into a
+/// course so the slide viewer can resume where they left off.
+/// completedAt is set once lastSlideIndex reaches the course's final slide.
+model CourseProgress {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId       String
+  course         Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lastSlideIndex Int       @default(0)
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@map("course_progress")
 }

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { BrandLogo } from '@/components/BrandLogo';
 
 const footerLinks = [
+  { href: '/learn', label: 'Learning Center' },
   { href: '/terms', label: 'Terms of Use' },
   { href: '/privacy', label: 'Privacy Policy' },
   { href: '/cookies', label: 'Cookie Policy' },
