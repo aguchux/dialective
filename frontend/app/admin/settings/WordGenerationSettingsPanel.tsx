@@ -33,6 +33,7 @@ export function WordGenerationSettingsPanel() {
   const [wordsPerItem, setWordsPerItem] = useState('1');
   const [itemsPerRun, setItemsPerRun] = useState('15');
   const [maxPoolPerDialect, setMaxPoolPerDialect] = useState('50');
+  const [backfillItemsPerDialectPerRun, setBackfillItemsPerDialectPerRun] = useState('10');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +44,7 @@ export function WordGenerationSettingsPanel() {
     setWordsPerItem(String(settings.llmWordsPerItem));
     setItemsPerRun(String(settings.llmItemsPerRun));
     setMaxPoolPerDialect(String(settings.llmMaxPoolPerDialect));
+    setBackfillItemsPerDialectPerRun(String(settings.llmBackfillItemsPerDialectPerRun));
   }, [settings]);
 
   function setChoice(position: 0 | 1 | 2, provider: ProviderKey) {
@@ -70,6 +72,7 @@ export function WordGenerationSettingsPanel() {
         ...(wordsPerItem !== '' ? { llmWordsPerItem: Number(wordsPerItem) } : {}),
         ...(itemsPerRun !== '' ? { llmItemsPerRun: Number(itemsPerRun) } : {}),
         ...(maxPoolPerDialect !== '' ? { llmMaxPoolPerDialect: Number(maxPoolPerDialect) } : {}),
+        ...(backfillItemsPerDialectPerRun !== '' ? { llmBackfillItemsPerDialectPerRun: Number(backfillItemsPerDialectPerRun) } : {}),
       }).unwrap();
       setMessage('Word generation settings saved.');
     } catch (err) {
@@ -194,6 +197,28 @@ export function WordGenerationSettingsPanel() {
               max="5000"
               value={maxPoolPerDialect}
               onChange={(e) => setMaxPoolPerDialect(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="llm-backfill-items-per-dialect-per-run">
+              Catch-up items per dialect per run
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              A newly-enabled dialect starts with zero content and would otherwise only grow from the shared trickle of
+              brand-new words each run, staying permanently behind dialects enabled earlier. Each run, every dialect
+              still under its pool cap gets up to this many pre-existing English words/prompts translated for it first
+              (oldest backlog first), before any brand-new content is generated.
+            </p>
+            <input
+              className={inputClass}
+              id="llm-backfill-items-per-dialect-per-run"
+              type="number"
+              step="1"
+              min="1"
+              max="500"
+              value={backfillItemsPerDialectPerRun}
+              onChange={(e) => setBackfillItemsPerDialectPerRun(e.target.value)}
             />
           </div>
 

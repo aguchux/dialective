@@ -483,6 +483,7 @@ export interface PlatformSettings {
   llmWordsPerItem: number;
   llmItemsPerRun: number;
   llmMaxPoolPerDialect: number;
+  llmBackfillItemsPerDialectPerRun: number;
   qualityGateEnabled: boolean;
   qualityWeightConsensus: string;
   qualityWeightNoise: string;
@@ -529,6 +530,7 @@ export interface PlatformSettingsInput {
   llmWordsPerItem?: number;
   llmItemsPerRun?: number;
   llmMaxPoolPerDialect?: number;
+  llmBackfillItemsPerDialectPerRun?: number;
   qualityGateEnabled?: boolean;
   qualityWeightConsensus?: number;
   qualityWeightNoise?: number;

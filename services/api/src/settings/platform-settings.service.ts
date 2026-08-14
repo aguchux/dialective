@@ -222,6 +222,7 @@ export class PlatformSettingsService {
       llmWordsPerItem: row.llmWordsPerItem,
       llmItemsPerRun: row.llmItemsPerRun,
       llmMaxPoolPerDialect: row.llmMaxPoolPerDialect,
+      llmBackfillItemsPerDialectPerRun: row.llmBackfillItemsPerDialectPerRun,
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),
@@ -269,6 +270,7 @@ export class PlatformSettingsService {
     llmWordsPerItem?: number;
     llmItemsPerRun?: number;
     llmMaxPoolPerDialect?: number;
+    llmBackfillItemsPerDialectPerRun?: number;
     qualityGateEnabled?: boolean;
     qualityWeightConsensus?: number;
     qualityWeightNoise?: number;
@@ -402,6 +404,7 @@ export class PlatformSettingsService {
       llmWordsPerItem: row.llmWordsPerItem,
       llmItemsPerRun: row.llmItemsPerRun,
       llmMaxPoolPerDialect: row.llmMaxPoolPerDialect,
+      llmBackfillItemsPerDialectPerRun: row.llmBackfillItemsPerDialectPerRun,
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),

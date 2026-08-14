@@ -55,16 +55,41 @@ export class WordGeneratorService {
     const wordsPerItem = settings.llmWordsPerItem;
     const itemsPerRun = settings.llmItemsPerRun;
     const maxPoolPerDialect = settings.llmMaxPoolPerDialect;
+    const backfillItemsPerDialectPerRun = settings.llmBackfillItemsPerDialectPerRun;
 
     const enabledDialectTags = await this.getEnabledDialectTags();
-    const dialectTags = await this.filterDialectsUnderPoolCap(enabledDialectTags, maxPoolPerDialect);
-    const skippedDialects = enabledDialectTags.filter((tag) => !dialectTags.includes(tag));
+    const underCapDialectTags = await this.filterDialectsUnderPoolCap(enabledDialectTags, maxPoolPerDialect);
+    const skippedDialects = enabledDialectTags.filter((tag) => !underCapDialectTags.includes(tag));
     this.logger.log(
       `Generation run starting: wordsPerItem=${wordsPerItem} itemsPerRun=${itemsPerRun} ` +
         `providerOrder=${providerOrder.join('>')} maxPoolPerDialect=${maxPoolPerDialect} ` +
-        `translationDialects=${dialectTags.length ? dialectTags.join(',') : 'none'} ` +
+        `backfillItemsPerDialectPerRun=${backfillItemsPerDialectPerRun} ` +
+        `translationDialects=${underCapDialectTags.length ? underCapDialectTags.join(',') : 'none'} ` +
         `poolCappedDialects=${skippedDialects.length ? skippedDialects.join(',') : 'none'}`,
     );
+
+    // Backfill existing English backlog into every under-cap dialect BEFORE
+    // generating any brand-new English content this run -- this is what lets
+    // a newly-enabled dialect (pool size 0, maximally under-cap) catch up on
+    // existing content instead of only ever growing via the shared trickle
+    // of new items below. Re-filter afterward so a dialect just topped up to
+    // its cap by backfill doesn't also receive new-English translations past
+    // the cap in this same run.
+    let backfilled = 0;
+    let backfillSkippedDuplicate = 0;
+    let backfillFailures = 0;
+    if (underCapDialectTags.length > 0) {
+      const poolSizeByDialect = await this.getPoolSizesByDialect(underCapDialectTags);
+      for (const dialectTag of underCapDialectTags) {
+        const headroom = maxPoolPerDialect - (poolSizeByDialect.get(dialectTag) ?? 0);
+        const maxItemsThisRun = Math.max(0, Math.min(backfillItemsPerDialectPerRun, headroom));
+        const result = await this.backfillDialectTranslations(dialectTag, wordsPerItem, providerOrder, maxItemsThisRun);
+        backfilled += result.backfilled;
+        backfillSkippedDuplicate += result.skippedDuplicate;
+        backfillFailures += result.failed;
+      }
+    }
+    const dialectTags = await this.filterDialectsUnderPoolCap(underCapDialectTags, maxPoolPerDialect);
 
     let inserted = 0;
     let skippedDuplicate = 0;
@@ -121,7 +146,8 @@ export class WordGeneratorService {
     this.logger.log(
       `Generation run complete: inserted=${inserted} skippedDuplicate=${skippedDuplicate} ` +
         `translationsInserted=${translationsInserted} translationsSkippedDuplicate=${translationsSkipped} ` +
-        `translationFailures=${translationFailures} promptWordFailures=${promptWordFailures}`,
+        `translationFailures=${translationFailures} promptWordFailures=${promptWordFailures} ` +
+        `backfilled=${backfilled} backfillSkippedDuplicate=${backfillSkippedDuplicate} backfillFailures=${backfillFailures}`,
     );
   }
 
@@ -555,16 +581,86 @@ export class WordGeneratorService {
    */
   private async filterDialectsUnderPoolCap(dialectTags: string[], maxPoolPerDialect: number): Promise<string[]> {
     if (dialectTags.length === 0) return [];
+    const poolSizeByDialect = await this.getPoolSizesByDialect(dialectTags);
+    return dialectTags.filter((tag) => (poolSizeByDialect.get(tag) ?? 0) < maxPoolPerDialect);
+  }
+
+  /** Combined active-Prompt + translated-Word count per dialect tag -- the same "how full is this dialect's pool" signal filterDialectsUnderPoolCap and the backfill step's remaining-headroom calculation both need. */
+  private async getPoolSizesByDialect(dialectTags: string[]): Promise<Map<string, number>> {
+    const poolSizeByDialect = new Map<string, number>();
+    if (dialectTags.length === 0) return poolSizeByDialect;
 
     const [promptCounts, wordTranslationCounts] = await Promise.all([
       this.prisma.prompt.groupBy({ by: ['dialectTag'], where: { dialectTag: { in: dialectTags }, active: true }, _count: { _all: true } }),
       this.prisma.wordTranslation.groupBy({ by: ['dialectTag'], where: { dialectTag: { in: dialectTags } }, _count: { _all: true } }),
     ]);
 
-    const poolSizeByDialect = new Map<string, number>();
     for (const row of promptCounts) poolSizeByDialect.set(row.dialectTag, (poolSizeByDialect.get(row.dialectTag) ?? 0) + row._count._all);
     for (const row of wordTranslationCounts) poolSizeByDialect.set(row.dialectTag, (poolSizeByDialect.get(row.dialectTag) ?? 0) + row._count._all);
 
-    return dialectTags.filter((tag) => (poolSizeByDialect.get(tag) ?? 0) < maxPoolPerDialect);
+    return poolSizeByDialect;
+  }
+
+  /**
+   * Translates pre-existing English Word/Prompt rows (oldest first) into a
+   * single dialect that doesn't have a translation for them yet, up to
+   * maxItemsThisRun. This is what lets a newly-enabled dialect (pool size 0)
+   * catch up on the existing backlog instead of only ever growing via the
+   * shared per-run trickle of brand-new content -- called once per dialect
+   * from run() BEFORE any new English generation happens that run. Reuses
+   * the exact same translateAndLinkWord/translateAndLinkPrompt/
+   * segmentAndLinkPromptWords helpers the main generation loop uses, so
+   * content-filtering, dedup, and PromptWord segmentation behave identically
+   * whether a translation came from fresh generation or backfill.
+   */
+  private async backfillDialectTranslations(
+    dialectTag: string,
+    wordsPerItem: number,
+    providerOrder: LlmProviderKey[],
+    maxItemsThisRun: number,
+  ): Promise<{ backfilled: number; skippedDuplicate: number; failed: number }> {
+    if (maxItemsThisRun <= 0) return { backfilled: 0, skippedDuplicate: 0, failed: 0 };
+
+    let backfilled = 0;
+    let skippedDuplicate = 0;
+    let failed = 0;
+
+    if (wordsPerItem === 1) {
+      const words = await this.prisma.word.findMany({
+        where: { translations: { none: { dialectTag } } },
+        orderBy: { createdAt: 'asc' },
+        take: maxItemsThisRun,
+        select: { id: true, text: true },
+      });
+
+      for (const word of words) {
+        const outcome = await this.translateAndLinkWord(word.id, word.text, dialectTag, providerOrder);
+        if (outcome === 'inserted') backfilled += 1;
+        else if (outcome === 'duplicate') skippedDuplicate += 1;
+        else failed += 1;
+      }
+    } else {
+      const prompts = await this.prisma.prompt.findMany({
+        where: { dialectTag: 'en-us', active: true, translations: { none: { dialectTag } } },
+        orderBy: { createdAt: 'asc' },
+        take: maxItemsThisRun,
+        select: { id: true, text: true },
+      });
+
+      for (const promptRow of prompts) {
+        const outcome = await this.translateAndLinkPrompt(promptRow.id, promptRow.text, dialectTag, providerOrder);
+        if (outcome === 'inserted') {
+          backfilled += 1;
+          const translatedText = await this.getPromptTranslationText(promptRow.id, dialectTag);
+          if (translatedText) await this.segmentAndLinkPromptWords(promptRow.id, translatedText, dialectTag, providerOrder);
+        } else if (outcome === 'duplicate') {
+          skippedDuplicate += 1;
+        } else {
+          failed += 1;
+        }
+      }
+    }
+
+    return { backfilled, skippedDuplicate, failed };
   }
 }
