@@ -63,6 +63,29 @@ describe('CoursesService', () => {
     });
   });
 
+  describe('getPublicForStudy', () => {
+    it('returns full slides with no progress field, filtered to PUBLISHED+PUBLIC', async () => {
+      prisma.course.findFirst.mockResolvedValue({
+        id: 'c1', slug: 'how-it-works', title: 'How It Works', summary: 'sum',
+        coverImageUrl: null, coverImageAlt: null,
+        slides: { slides: [{ text: 'a' }, { text: 'b' }] },
+      });
+
+      const result = await service.getPublicForStudy('how-it-works');
+
+      expect(prisma.course.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ slug: 'how-it-works', status: 'PUBLISHED', visibility: 'PUBLIC' }) }),
+      );
+      expect(result.slides).toEqual([{ text: 'a' }, { text: 'b' }]);
+      expect((result as Record<string, unknown>).progress).toBeUndefined();
+    });
+
+    it('404s on a PRIVATE course -- never reachable without login', async () => {
+      prisma.course.findFirst.mockResolvedValue(null);
+      await expect(service.getPublicForStudy('private-course')).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('saveProgress', () => {
     it('clamps lastSlideIndex into bounds and sets completedAt on the final slide', async () => {
       prisma.course.findFirst.mockResolvedValue({ id: 'c1' });

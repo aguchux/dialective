@@ -31,6 +31,14 @@ export interface CreditTrainingPayoutResult {
   netAmount: string;
   referralPayoutBonus: string;
   referrerUserId: string | null;
+  distributorReferralBonuses?: ReferralBonusCredit[];
+}
+
+export interface ReferralBonusCredit {
+  userId: string;
+  level: number;
+  rate: string;
+  amount: string;
 }
 
 /**
@@ -90,6 +98,61 @@ async function buildCreditTrainingPayoutOps(
   });
 
   const grossAmount = new Decimal(tokenAmount);
+  const distributorBonuses = await buildDistributorReferralBonuses(prisma, userId, grossAmount);
+  const distributorPayoutTotal = distributorBonuses.reduce((sum, bonus) => sum.add(bonus.amount), new Decimal(0));
+  if (distributorBonuses.length > 0) {
+    // Distributor commissions are platform-funded, not deducted from the
+    // trainer -- the trainer's own payout stays exactly grossAmount
+    // (unconditional stake-back + score bonus, per the no-loss guarantee
+    // documented above). Unlike the legacy single-level REFERRAL_PAYOUT_BONUS
+    // below (which predates the no-loss guarantee and is left as-is to avoid
+    // changing existing trainer-referral economics), a multi-level
+    // distributor chain could otherwise erode a trainer's payout below their
+    // stake once several levels are active -- minting the commissions
+    // instead of subtracting them keeps the guarantee intact regardless of
+    // how many levels or how high the configured rates are.
+    const ops = [
+      prisma.ledgerEntry.create({
+        data: { walletId: userWallet.id, type: 'TRAINING_PAYOUT', amount: grossAmount, reference },
+      }),
+      prisma.wallet.update({
+        where: { id: userWallet.id },
+        data: { balance: { increment: grossAmount } },
+      }),
+      ...distributorBonuses.flatMap((bonus) => [
+        prisma.ledgerEntry.create({
+          data: {
+            walletId: bonus.walletId,
+            type: 'DISTRIBUTOR_PAYOUT_BONUS' as const,
+            amount: bonus.amount,
+            reference: `${reference}:L${bonus.level}`,
+          },
+        }),
+        prisma.wallet.update({
+          where: { id: bonus.walletId },
+          data: { balance: { increment: bonus.amount } },
+        }),
+      ]),
+    ];
+
+    const result: CreditTrainingPayoutResult = {
+      userId,
+      reference,
+      grossAmount: grossAmount.toString(),
+      netAmount: grossAmount.toString(),
+      referralPayoutBonus: distributorPayoutTotal.toString(),
+      referrerUserId: distributorBonuses[0]?.userId ?? null,
+      distributorReferralBonuses: distributorBonuses.map((bonus) => ({
+        userId: bonus.userId,
+        level: bonus.level,
+        rate: bonus.rate.toString(),
+        amount: bonus.amount.toString(),
+      })),
+    };
+
+    return { ops, result };
+  }
+
   const hasPayoutBonus = user.referredById && settings.payoutBonusEnabled && settings.payoutBonusRate.gt(0);
   const payoutBonus = hasPayoutBonus ? settings.payoutBonusRate.mul(grossAmount) : null;
   const netAmount = payoutBonus ? grossAmount.sub(payoutBonus) : grossAmount;
@@ -132,6 +195,157 @@ async function buildCreditTrainingPayoutOps(
   };
 
   return { ops, result };
+}
+
+export async function creditFundingReferralBonusesOps(
+  prisma: PrismaClient,
+  userId: string,
+  tokenAmount: Decimal | number | string,
+  reference: string,
+) {
+  const baseAmount = new Decimal(tokenAmount);
+  const distributorBonuses = await buildDistributorReferralBonuses(prisma, userId, baseAmount);
+  if (distributorBonuses.length > 0) {
+    const ops = distributorBonuses.flatMap((bonus) => [
+      prisma.ledgerEntry.create({
+        data: {
+          walletId: bonus.walletId,
+          type: 'DISTRIBUTOR_FUNDING_BONUS' as const,
+          amount: bonus.amount,
+          reference: `${reference}:L${bonus.level}`,
+        },
+      }),
+      prisma.wallet.update({
+        where: { id: bonus.walletId },
+        data: { balance: { increment: bonus.amount } },
+      }),
+    ]);
+    return {
+      ops,
+      entries: distributorBonuses.map((bonus) => ({
+        walletId: bonus.walletId,
+        type: 'DISTRIBUTOR_FUNDING_BONUS' as const,
+        amount: bonus.amount,
+        reference: `${reference}:L${bonus.level}`,
+      })),
+      bonuses: distributorBonuses.map((bonus) => ({
+        userId: bonus.userId,
+        level: bonus.level,
+        rate: bonus.rate.toString(),
+        amount: bonus.amount.toString(),
+      })),
+    };
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const settings = await prisma.referralSettings.upsert({
+    where: { id: 'default' },
+    update: {},
+    create: { id: 'default' },
+  });
+  if (!user?.referredById || !settings.fundingBonusEnabled || !settings.fundingBonusRate.gt(0)) {
+    return { ops: [], entries: [], bonuses: [] };
+  }
+
+  const referrerWallet = await getOrCreateWallet(prisma, user.referredById);
+  const amount = settings.fundingBonusRate.mul(baseAmount);
+  return {
+    ops: [
+      prisma.ledgerEntry.create({
+        data: {
+          walletId: referrerWallet.id,
+          type: 'REFERRAL_FUNDING_BONUS',
+          amount,
+          reference,
+        },
+      }),
+      prisma.wallet.update({
+        where: { id: referrerWallet.id },
+        data: { balance: { increment: amount } },
+      }),
+    ],
+    entries: [
+      {
+        walletId: referrerWallet.id,
+        type: 'REFERRAL_FUNDING_BONUS' as const,
+        amount,
+        reference,
+      },
+    ],
+    bonuses: [
+      {
+        userId: user.referredById,
+        level: 1,
+        rate: settings.fundingBonusRate.toString(),
+        amount: amount.toString(),
+      },
+    ],
+  };
+}
+
+/**
+ * Every entry this returns has rate.gt(0) (filtered at the push site below),
+ * and baseAmount is always a positive deposit/payout amount by the time it
+ * reaches here -- so bonuses.length > 0 already implies every amount is
+ * strictly positive. Both call sites (creditFundingReferralBonusesOps and
+ * buildCreditTrainingPayoutOps) key their "did a distributor bonus apply"
+ * branch on this array's length alone; don't add a zero-rate/zero-amount
+ * entry here without updating both call sites' guards to match.
+ */
+async function buildDistributorReferralBonuses(
+  prisma: PrismaClient,
+  userId: string,
+  baseAmount: Decimal,
+) {
+  const settings = await prisma.distributorSettings.upsert({
+    where: { id: 'default' },
+    update: {},
+    create: { id: 'default' },
+  });
+  if (!settings.enabled || !settings.multiLevelReferralEnabled || settings.maxReferralDepth < 1) {
+    return [];
+  }
+
+  const rates = [
+    settings.level1Rate,
+    settings.level2Rate,
+    settings.level3Rate,
+    settings.level4Rate,
+    settings.level5Rate,
+  ];
+  const maxDepth = Math.min(5, settings.maxReferralDepth);
+  const bonuses: Array<{ userId: string; walletId: string; level: number; rate: Decimal; amount: Decimal }> = [];
+  let cursor = await prisma.user.findUnique({ where: { id: userId }, select: { referredById: true } });
+
+  for (let level = 1; level <= maxDepth && cursor?.referredById; level += 1) {
+    const ancestor = await prisma.user.findUnique({
+      where: { id: cursor.referredById },
+      select: { id: true, role: true, referredById: true },
+    });
+    if (!ancestor) break;
+
+    const rate = rates[level - 1] ?? new Decimal(0);
+    // ADMIN is deliberately included alongside DISTRIBUTOR here: an admin
+    // acting as a house/seed account in a referral chain earns the same
+    // per-level commission a distributor would. A plain TRAINER ancestor is
+    // skipped (no commission) but the walk still advances past them via
+    // cursor below, so a trainer sitting mid-chain doesn't break payouts to
+    // a distributor/admin further up.
+    if ((ancestor.role === 'DISTRIBUTOR' || ancestor.role === 'ADMIN') && rate.gt(0)) {
+      const wallet = await getOrCreateWallet(prisma, ancestor.id);
+      bonuses.push({
+        userId: ancestor.id,
+        walletId: wallet.id,
+        level,
+        rate,
+        amount: baseAmount.mul(rate),
+      });
+    }
+
+    cursor = { referredById: ancestor.referredById };
+  }
+
+  return bonuses;
 }
 
 async function getOrCreateWallet(prisma: PrismaClient, userId: string) {

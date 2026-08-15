@@ -173,6 +173,86 @@ input:disabled,
   animation: action-spin 700ms linear infinite;
 }
 
+.admin-shell {
+  --bg: #fbf9ff;
+  --surface: #ffffff;
+  --surface-muted: #f4eeff;
+  --ink: #05083d;
+  --muted: #5d587b;
+  --line: #e6dcfb;
+  --accent: #6f19dc;
+  --accent-dark: #5300bf;
+  --accent-soft: #efe5ff;
+  background:
+    radial-gradient(circle at top left, rgba(120, 32, 232, 0.09), transparent 34rem),
+    linear-gradient(135deg, #ffffff 0%, #faf7ff 42%, #f4efff 100%);
+}
+
+.admin-shell h1 {
+  color: #05083d;
+  letter-spacing: 0;
+}
+
+.admin-shell h2,
+.admin-shell h3 {
+  color: #05083d;
+  letter-spacing: 0;
+}
+
+.admin-shell main :where(.rounded-lg.border.border-line.bg-white, section.rounded-lg.border.border-line.bg-white, div.rounded-lg.border.border-line.bg-white, form.rounded-lg.border.border-line.bg-white) {
+  border-color: #e6dcfb;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 14px 38px rgba(72, 31, 152, 0.08);
+}
+
+.admin-shell main :where(.bg-surface, .bg-surface-muted) {
+  background-color: #f6f0ff;
+}
+
+.admin-shell main :where(.border-line) {
+  border-color: #e6dcfb;
+}
+
+.admin-shell main :where(.text-muted) {
+  color: #5d587b;
+}
+
+.admin-shell main :where(.bg-accent) {
+  background: linear-gradient(135deg, #7a19e6, #5e00d5);
+}
+
+.admin-shell main :where(.text-accent) {
+  color: #5e00d5;
+}
+
+.admin-shell main :where(button.bg-accent, a.bg-accent, .border-accent.bg-accent) {
+  box-shadow: 0 12px 24px rgba(111, 25, 218, 0.18);
+}
+
+.admin-shell main :where(input, select, textarea) {
+  border-color: #d9c9fa;
+  background-color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-shell main :where(input:focus, select:focus, textarea:focus) {
+  outline: 2px solid rgba(111, 25, 218, 0.18);
+  outline-offset: 2px;
+}
+
+.admin-shell main :where(table) {
+  color: #05083d;
+}
+
+.admin-shell main :where(thead, .bg-surface.text-muted) {
+  background-color: #f2ebff;
+  color: #5d587b;
+}
+
+.admin-shell main :where(.rounded-full) {
+  border-radius: 999px;
+}
+
 @keyframes action-spin {
   to {
     transform: rotate(360deg);

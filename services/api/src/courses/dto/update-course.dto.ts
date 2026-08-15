@@ -1,5 +1,5 @@
 import { IsEnum, IsObject, IsOptional, IsString, IsUrl, Length, MaxLength } from 'class-validator';
-import { BlogPostStatus } from '@dialectiva/db';
+import { BlogPostStatus, CourseVisibility } from '@dialectiva/db';
 
 export class UpdateCourseDto {
   @IsOptional()
@@ -33,4 +33,8 @@ export class UpdateCourseDto {
   @IsOptional()
   @IsEnum(BlogPostStatus)
   status?: BlogPostStatus;
+
+  @IsOptional()
+  @IsEnum(CourseVisibility)
+  visibility?: CourseVisibility;
 }

@@ -42,6 +42,11 @@ export default async function LearnPage() {
                 </Link>
               )}
               <div className="grid gap-3 p-5">
+                {course.visibility === 'PUBLIC' && (
+                  <span className="inline-flex w-fit items-center rounded-full bg-accent/10 px-2.5 py-1 text-xs font-extrabold uppercase text-accent">
+                    Public &middot; no login needed
+                  </span>
+                )}
                 <h2 className="text-2xl font-black leading-tight">
                   <Link className="text-ink no-underline hover:text-accent" href={`/learn/${course.slug}`}>{course.title}</Link>
                 </h2>

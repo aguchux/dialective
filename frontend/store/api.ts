@@ -9,7 +9,7 @@ export interface PublicUser {
   firstName: string | null;
   lastName: string | null;
   email: string;
-  role: 'TRAINER' | 'ADMIN' | 'PARTNER';
+  role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR';
   status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
   emailVerified: boolean;
   phoneNumber: string | null;
@@ -157,6 +157,101 @@ export interface ReferralSummary {
   referredUsers: { id: string; email: string; createdAt: string }[];
   totalCommission: string;
   bonusEventCount: number;
+}
+
+export interface DistributorSettings {
+  id: string;
+  enabled: boolean;
+  bulkAllocationEnabled: boolean;
+  defaultBulkDiscountRate: string;
+  multiLevelReferralEnabled: boolean;
+  maxReferralDepth: number;
+  level1Rate: string;
+  level2Rate: string;
+  level3Rate: string;
+  level4Rate: string;
+  level5Rate: string;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface DistributorSettingsInput {
+  enabled?: boolean;
+  bulkAllocationEnabled?: boolean;
+  defaultBulkDiscountRate?: number;
+  multiLevelReferralEnabled?: boolean;
+  maxReferralDepth?: number;
+  level1Rate?: number;
+  level2Rate?: number;
+  level3Rate?: number;
+  level4Rate?: number;
+  level5Rate?: number;
+}
+
+export interface DistributorAllocation {
+  id: string;
+  distributorId: string;
+  grantedById: string;
+  tokenAmount: string;
+  discountRate: string;
+  note: string | null;
+  createdAt: string;
+}
+
+/** Admin allocation-history row -- same fields as DistributorAllocation plus the two parties' display name/email, so the admin list doesn't need a separate user lookup per row. */
+export interface DistributorAllocationWithParties extends DistributorAllocation {
+  distributor: { id: string; name: string; email: string };
+  grantedBy: { id: string; name: string; email: string };
+}
+
+export interface DistributorAllocationsPage {
+  items: DistributorAllocationWithParties[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+// No `role` field -- the network view is deliberately name + balance only,
+// see DistributorsService.loadNetworkLevels' NetworkNode type on the backend.
+export interface DistributorNetworkNode {
+  id: string;
+  name: string;
+  level: number;
+  tokenBalance: string;
+  children: DistributorNetworkNode[];
+}
+
+export interface DistributorNetwork {
+  maxDepth: number;
+  directMembers: number;
+  totalMembers: number;
+  totalTokenBalance: string;
+  tree: DistributorNetworkNode[];
+  allMembers: Omit<DistributorNetworkNode, 'children'>[];
+}
+
+export interface DistributorReferralBonusLevel {
+  level: number;
+  amount: string;
+}
+
+export interface DistributorDashboard {
+  settings: DistributorSettings;
+  profile: { id: string; name: string; email: string; referralCode: string };
+  wallet: { balance: string; lockedBalance: string };
+  metrics: {
+    networkMembers: number;
+    networkTokenBalance: string;
+    directReferrals: number;
+    referralBonuses: string;
+    activeSellOffers: number;
+    activeBuyRequests: number;
+    completedSales: number;
+  };
+  referralBonusesByLevel: DistributorReferralBonusLevel[];
+  allocations: DistributorAllocation[];
+  network: DistributorNetwork;
 }
 
 export interface LocalCurrency {
@@ -843,6 +938,10 @@ export interface CourseDocument {
   slides: CourseSlide[];
 }
 
+// PUBLIC courses need no login and never track CourseProgress; PRIVATE
+// (default) courses study at the protected /dashboard/learn/{slug} viewer.
+export type CourseVisibility = 'PUBLIC' | 'PRIVATE';
+
 /** Admin CRUD shape -- full row, no slide content parsed out. */
 export interface Course {
   id: string;
@@ -854,6 +953,7 @@ export interface Course {
   coverImageAlt: string | null;
   slides: CourseDocument;
   status: BlogPostStatus;
+  visibility: CourseVisibility;
   sortOrder: number;
   publishedAt: string | null;
   createdAt: string;
@@ -869,6 +969,7 @@ export interface CourseInput {
   coverImageKey?: string;
   coverImageAlt?: string;
   status?: BlogPostStatus;
+  visibility?: CourseVisibility;
 }
 
 /** Public catalog card -- no slide content, safe to serve unauthenticated. */
@@ -877,6 +978,7 @@ export interface CourseCard {
   slug: string;
   title: string;
   summary: string;
+  visibility: CourseVisibility;
   coverImageUrl: string | null;
   coverImageAlt: string | null;
   publishedAt: string | null;
@@ -904,6 +1006,17 @@ export interface CourseStudy {
   coverImageAlt: string | null;
   slides: CourseSlide[];
   progress: CourseProgress | null;
+}
+
+/** Public, unauthenticated "study" shape (visibility=PUBLIC courses only) -- same as CourseStudy but no progress field, since there's no logged-in user to track it for. */
+export interface PublicCourseStudy {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  coverImageUrl: string | null;
+  coverImageAlt: string | null;
+  slides: CourseSlide[];
 }
 
 export interface CourseMediaUpload {
@@ -969,7 +1082,7 @@ const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptio
 export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
   baseQuery: baseQueryWithMaintenanceSignal,
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -1298,6 +1411,38 @@ export const dialectivaApi = createApi({
     getReferrals: builder.query<ReferralSummary[], void>({
       query: () => '/admin/referrals',
     }),
+    getDistributorSettings: builder.query<DistributorSettings, void>({
+      query: () => '/admin/distributors/settings',
+      providesTags: ['DistributorSettings'],
+    }),
+    updateDistributorSettings: builder.mutation<DistributorSettings, DistributorSettingsInput>({
+      query: (body) => ({
+        url: '/admin/distributors/settings',
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['DistributorSettings', 'DistributorDashboard'],
+    }),
+    createDistributorAllocation: builder.mutation<DistributorAllocation, { distributorId: string; tokenAmount: number; discountRate?: number; note?: string }>({
+      query: ({ distributorId, ...body }) => ({
+        url: `/admin/distributors/${distributorId}/allocations`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['DistributorDashboard', 'DistributorAllocations', 'Wallet', 'Users'],
+    }),
+    listDistributorAllocations: builder.query<DistributorAllocationsPage, { distributorId?: string; page?: number; pageSize?: number } | void>({
+      query: (params) => ({ url: '/admin/distributors/allocations', params: params ?? undefined }),
+      providesTags: ['DistributorAllocations'],
+    }),
+    getDistributorDashboard: builder.query<DistributorDashboard, void>({
+      query: () => '/distributors/dashboard',
+      providesTags: ['DistributorDashboard'],
+    }),
+    getDistributorNetwork: builder.query<DistributorNetwork, void>({
+      query: () => '/distributors/network',
+      providesTags: ['DistributorDashboard'],
+    }),
     getPoolsSummary: builder.query<PoolsSummary, void>({
       query: () => '/admin/pools/summary',
       providesTags: ['Pools'],
@@ -1580,6 +1725,12 @@ export const {
   useGetReferralSettingsQuery,
   useUpdateReferralSettingsMutation,
   useGetReferralsQuery,
+  useGetDistributorSettingsQuery,
+  useUpdateDistributorSettingsMutation,
+  useCreateDistributorAllocationMutation,
+  useListDistributorAllocationsQuery,
+  useGetDistributorDashboardQuery,
+  useGetDistributorNetworkQuery,
   useGetPoolsSummaryQuery,
   useListSubscriptionPoolsQuery,
   useCreateSubscriptionPoolMutation,

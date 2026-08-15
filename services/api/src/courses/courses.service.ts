@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { BlogPostStatus, Prisma } from '@dialectiva/db';
+import { BlogPostStatus, CourseVisibility, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
@@ -25,7 +25,7 @@ export class CoursesService {
       where: { status: BlogPostStatus.PUBLISHED },
       orderBy: [{ sortOrder: 'asc' }, { publishedAt: 'desc' }],
       select: {
-        id: true, slug: true, title: true, summary: true,
+        id: true, slug: true, title: true, summary: true, visibility: true,
         coverImageUrl: true, coverImageAlt: true, publishedAt: true,
         createdAt: true, updatedAt: true,
       },
@@ -36,7 +36,7 @@ export class CoursesService {
     const course = await this.prisma.course.findFirst({
       where: { slug, status: BlogPostStatus.PUBLISHED },
       select: {
-        id: true, slug: true, title: true, summary: true,
+        id: true, slug: true, title: true, summary: true, visibility: true,
         coverImageUrl: true, coverImageAlt: true, publishedAt: true,
         createdAt: true, updatedAt: true, slides: true,
       },
@@ -72,6 +72,30 @@ export class CoursesService {
       coverImageAlt: course.coverImageAlt,
       slides: (course.slides as unknown as CourseDocument).slides,
       progress: progress ? { lastSlideIndex: progress.lastSlideIndex, completedAt: progress.completedAt } : null,
+    };
+  }
+
+  /**
+   * Same shape as getForStudy but no auth, no progress -- only ever called
+   * for visibility=PUBLIC courses (CoursesPublicController checks that
+   * before calling this, see courses.controller.ts). A PRIVATE course's
+   * slug 404s here the same as a draft/nonexistent one, so this endpoint
+   * can never be used to read a private course's content without logging in.
+   */
+  async getPublicForStudy(slug: string) {
+    const course = await this.prisma.course.findFirst({
+      where: { slug, status: BlogPostStatus.PUBLISHED, visibility: CourseVisibility.PUBLIC },
+    });
+    if (!course) throw new NotFoundException('Course not found');
+
+    return {
+      id: course.id,
+      slug: course.slug,
+      title: course.title,
+      summary: course.summary,
+      coverImageUrl: course.coverImageUrl,
+      coverImageAlt: course.coverImageAlt,
+      slides: (course.slides as unknown as CourseDocument).slides,
     };
   }
 
@@ -134,6 +158,7 @@ export class CoursesService {
         coverImageKey: cleanOptional(dto.coverImageKey),
         coverImageAlt: cleanOptional(dto.coverImageAlt),
         status,
+        visibility: dto.visibility ?? CourseVisibility.PRIVATE,
         sortOrder: (lastCourse?.sortOrder ?? -1) + 1,
         authorId,
         publishedAt: status === BlogPostStatus.PUBLISHED ? new Date() : null,
@@ -163,6 +188,7 @@ export class CoursesService {
         ...(dto.coverImageUrl !== undefined && { coverImageUrl: cleanOptional(dto.coverImageUrl) }),
         ...(dto.coverImageKey !== undefined && { coverImageKey: cleanOptional(dto.coverImageKey) }),
         ...(dto.coverImageAlt !== undefined && { coverImageAlt: cleanOptional(dto.coverImageAlt) }),
+        ...(dto.visibility !== undefined && { visibility: dto.visibility }),
         ...(dto.status !== undefined && {
           status: dto.status,
           publishedAt: nextStatus === BlogPostStatus.PUBLISHED ? current.publishedAt ?? new Date() : null,

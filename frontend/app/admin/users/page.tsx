@@ -20,7 +20,7 @@ import {
 const selectClass = 'min-h-9 rounded-lg border border-line bg-white px-2.5 py-1.5 text-sm font-bold text-ink dark:bg-surface-muted';
 const inputClass = 'min-h-9 w-full max-w-xs rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink dark:bg-surface-muted';
 
-const roleOptions = ['TRAINER', 'ADMIN', 'PARTNER'] as const;
+const roleOptions = ['TRAINER', 'DISTRIBUTOR', 'PARTNER', 'ADMIN'] as const;
 const statusOptions = ['ACTIVE', 'SUSPENDED', 'BLOCKED'] as const;
 
 const statusStyles: Record<string, string> = {
@@ -129,7 +129,7 @@ export default function AdminUsersPage() {
       <div className="grid gap-6">
         <div className="grid gap-2">
           <h1 className="text-3xl font-black">Users</h1>
-          <p className="leading-relaxed text-muted">Manage roles and account status across trainers, partners, and admins.</p>
+          <p className="leading-relaxed text-muted">Manage roles and account status across trainers, distributors, partners, and admins.</p>
         </div>
 
         <section className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-white p-4 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">

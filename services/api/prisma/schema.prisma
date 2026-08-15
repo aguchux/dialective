@@ -22,6 +22,7 @@ enum Role {
   TRAINER
   ADMIN
   PARTNER
+  DISTRIBUTOR
 }
 
 enum UserStatus {
@@ -93,6 +94,8 @@ model User {
   p2pDisputesResolved P2PDispute[] @relation("P2PDisputesResolved")
   referralInvitesSent ReferralInvite[] @relation("ReferralInvitesSent")
   referralInviteJoined ReferralInvite[] @relation("ReferralInviteJoined")
+  distributorAllocations DistributorAllocation[] @relation("DistributorAllocations")
+  distributorAllocationsGranted DistributorAllocation[] @relation("DistributorAllocationsGranted")
 
   @@map("users")
 }
@@ -598,10 +601,47 @@ enum LedgerEntryType {
   REFERRAL_COMMISSION // legacy: old single-rate funding commission entries
   REFERRAL_FUNDING_BONUS
   REFERRAL_PAYOUT_BONUS
+  DISTRIBUTOR_BULK_ALLOCATION
+  DISTRIBUTOR_FUNDING_BONUS
+  DISTRIBUTOR_PAYOUT_BONUS
   P2P_ESCROW_LOCK
   P2P_ESCROW_REFUND
   P2P_ESCROW_RELEASE
   P2P_ESCROW_CREDIT
+}
+
+model DistributorSettings {
+  id                         String   @id @default("default")
+  enabled                    Boolean  @default(false)
+  bulkAllocationEnabled      Boolean  @default(false)
+  defaultBulkDiscountRate    Decimal  @default(0) @db.Decimal(8, 6)
+  multiLevelReferralEnabled  Boolean  @default(false)
+  maxReferralDepth           Int      @default(1)
+  level1Rate                 Decimal  @default(0.05) @db.Decimal(8, 6)
+  level2Rate                 Decimal  @default(0.02) @db.Decimal(8, 6)
+  level3Rate                 Decimal  @default(0.01) @db.Decimal(8, 6)
+  level4Rate                 Decimal  @default(0.002) @db.Decimal(8, 6)
+  level5Rate                 Decimal  @default(0.0003) @db.Decimal(8, 6)
+  updatedAt                  DateTime @updatedAt
+  createdAt                  DateTime @default(now())
+
+  @@map("distributor_settings")
+}
+
+model DistributorAllocation {
+  id             String   @id @default(uuid())
+  distributorId  String
+  distributor    User     @relation("DistributorAllocations", fields: [distributorId], references: [id], onDelete: Cascade)
+  grantedById    String
+  grantedBy      User     @relation("DistributorAllocationsGranted", fields: [grantedById], references: [id], onDelete: Restrict)
+  tokenAmount    Decimal  @db.Decimal(20, 8)
+  discountRate   Decimal  @default(0) @db.Decimal(8, 6)
+  note           String?
+  createdAt      DateTime @default(now())
+
+  @@index([distributorId, createdAt])
+  @@index([grantedById, createdAt])
+  @@map("distributor_allocations")
 }
 
 enum WithdrawalStatus {
@@ -1059,6 +1099,11 @@ model BlogPost {
   @@map("blog_posts")
 }
 
+enum CourseVisibility {
+  PUBLIC  // no login required -- study route is the public /learn/{slug}/view viewer, progress is never tracked (no CourseProgress row, since there's no authenticated user to attach one to)
+  PRIVATE // default -- study route is the protected /dashboard/learn/{slug} viewer, requires login, tracks CourseProgress per trainer
+}
+
 /// Slide-deck learning content for the public Learning Center catalog.
 /// `slides` is a raw JSON array of { imageUrl?, imageAlt?, text, audioUrl? }
 /// (see CoursesModule's course-content.util.ts for validation) -- simpler
@@ -1075,6 +1120,7 @@ model Course {
   coverImageAlt String?
   slides        Json
   status        BlogPostStatus   @default(DRAFT)
+  visibility    CourseVisibility @default(PRIVATE) // PUBLIC courses skip the login wall entirely -- see CourseVisibility doc comment
   sortOrder     Int              @default(0)
   authorId      String
   author        User             @relation(fields: [authorId], references: [id], onDelete: Restrict)

@@ -37,101 +37,159 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const initial = displayName ? displayName[0].toUpperCase() : '?';
 
   return (
-    <div className="grid min-h-screen bg-surface-muted text-ink md:grid-cols-[240px_1fr]">
-      <aside className="hidden flex-col gap-1 border-r border-line bg-[#151726] p-4 text-white md:flex">
-        <div className="mb-4 px-1">
-          <BrandLogo className="text-white" textClassName="text-base" size={32} />
-        </div>
-        <nav className="grid gap-1">
-          {navItems.map((item) => {
-            const active = item.href === '/admin' ? pathname === item.href : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold no-underline transition-colors ${
-                  active ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <item.icon />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <button
-          className="mt-auto flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold text-white/70 transition-colors hover:bg-white/5 hover:text-white"
-          onClick={() => signOut({ callbackUrl: '/' })}
-          type="button"
-        >
-          <SignOutIcon />
-          Sign out
-        </button>
-      </aside>
-
-      <div className="flex min-h-screen min-w-0 flex-col">
-        <header className="flex items-center justify-between gap-3 border-b border-line bg-white px-4 py-3 md:px-6">
-          <div className="flex items-center gap-2 md:hidden">
-            <BrandLogo size={28} textClassName="text-sm" />
+    <div className="admin-shell min-h-screen bg-[#f8f5ff] p-0 text-[#05083d] md:p-3">
+      <div className="grid min-h-screen overflow-hidden border-[#e7dcff] bg-white/80 shadow-[0_18px_60px_rgba(72,31,152,0.12)] md:min-h-[calc(100vh-24px)] md:grid-cols-[292px_minmax(0,1fr)] md:rounded-[28px] md:border">
+        <aside className="hidden min-h-0 flex-col border-r border-[#e7dcff] bg-white/82 px-6 py-7 backdrop-blur md:flex">
+          <div className="mb-9 px-2">
+            <BrandLogo className="text-[#06083e]" textClassName="text-lg font-black" size={36} />
           </div>
-          <span className="hidden text-lg font-black md:inline">Admin Panel</span>
-          <div className="flex items-center gap-3">
+          <nav className="grid gap-3">
+            {navItems.map((item) => {
+              const active = item.href === '/admin' ? pathname === item.href : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex min-h-12 items-center gap-3 rounded-xl px-4 font-extrabold no-underline transition-colors ${
+                    active
+                      ? 'bg-[linear-gradient(135deg,#7a19e6,#5e00d5)] text-white shadow-[0_12px_24px_rgba(111,25,218,0.24)]'
+                      : 'text-[#0a0d45] hover:bg-[#f3edff] hover:text-[#5e00d5]'
+                  }`}
+                >
+                  <item.icon />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="mt-auto grid gap-4 rounded-2xl border border-[#e7dcff] bg-[#fbf8ff] p-5 shadow-[0_10px_28px_rgba(72,31,152,0.08)]">
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-xl bg-[#f0e6ff] text-[#6e12d8]">
+                <SparkIcon />
+              </span>
+              <p className="text-sm font-black leading-snug">Dialect Library Admin</p>
+            </div>
+            <p className="text-sm leading-relaxed text-[#4d4a72]">Manage platform operations, users, content, and DL economy.</p>
             <button
-              className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink transition-colors hover:bg-surface-muted"
+              className="inline-flex min-h-10 items-center justify-between rounded-lg border border-[#cdb5ff] px-3 text-sm font-extrabold text-[#5e00d5] hover:bg-[#f2eaff]"
+              onClick={() => router.push('/')}
               type="button"
-              aria-label="Notifications"
             >
-              <BellIcon />
+              Back to site
+              <span aria-hidden="true">-&gt;</span>
             </button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pl-1 pr-2.5 transition-colors hover:bg-surface-muted">
-                <span className="grid size-7 place-items-center rounded-full bg-accent text-sm font-black text-white">{initial}</span>
-                <span className="hidden max-w-40 truncate text-sm font-bold sm:inline">{displayName}</span>
-                <ChevronIcon />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => router.push('/admin/profile')}>
-                  <ProfileIcon />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => router.push('/')}>
-                  <HomeIcon />
-                  Back to site
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>
-                  <SignOutIcon />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
-        </header>
 
-        <nav className="flex gap-1 overflow-x-auto border-b border-line bg-white px-4 py-2 md:hidden">
-          {navItems.map((item) => {
-            const active = item.href === '/admin' ? pathname === item.href : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold no-underline ${
-                  active ? 'bg-accent text-white' : 'bg-surface-muted text-ink'
-                }`}
+          <button
+            className="mt-5 flex min-h-11 items-center gap-3 rounded-xl px-4 font-extrabold text-[#4d4a72] transition-colors hover:bg-[#f3edff] hover:text-[#5e00d5]"
+            onClick={() => signOut({ callbackUrl: '/' })}
+            type="button"
+          >
+            <SignOutIcon />
+            Sign out
+          </button>
+        </aside>
+
+        <div className="flex min-h-screen min-w-0 flex-col md:min-h-0">
+          <header className="flex items-center justify-between gap-3 bg-white/90 px-4 py-4 backdrop-blur md:px-8 md:py-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="md:hidden">
+                <BrandLogo size={30} textClassName="text-sm font-black" />
+              </div>
+              <div className="hidden min-w-0 md:block">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#7658b3]">Admin Console</p>
+                <p className="truncate text-sm font-bold text-[#4d4a72]">Dialect Library operations</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                className="grid size-10 place-items-center rounded-xl border border-[#e1d5fb] bg-white text-[#05083d] shadow-[0_8px_20px_rgba(72,31,152,0.06)] hover:bg-[#f8f3ff]"
+                type="button"
+                aria-label="Notifications"
               >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+                <BellIcon />
+              </button>
+              <button
+                className="hidden size-10 place-items-center rounded-xl border border-[#e1d5fb] bg-white text-[#05083d] shadow-[0_8px_20px_rgba(72,31,152,0.06)] hover:bg-[#f8f3ff] sm:grid"
+                type="button"
+                aria-label="Language"
+              >
+                <GlobeIcon />
+              </button>
 
-        <main className="min-w-0 flex-1 px-4 py-6 md:px-8">{children}</main>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex min-h-11 items-center gap-2 rounded-xl border border-[#e1d5fb] bg-white py-1 pl-1 pr-3 shadow-[0_8px_20px_rgba(72,31,152,0.06)] hover:bg-[#f8f3ff]">
+                  <span className="grid size-9 place-items-center rounded-full bg-[linear-gradient(135deg,#7a19e6,#5e00d5)] text-sm font-black text-white">{initial}</span>
+                  <span className="hidden max-w-44 text-left sm:block">
+                    <span className="block truncate text-sm font-black leading-tight text-[#05083d]">{displayName}</span>
+                    <span className="block text-xs font-bold text-[#5e5879]">Administrator</span>
+                  </span>
+                  <ChevronIcon />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => router.push('/admin/profile')}>
+                    <ProfileIcon />
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => router.push('/')}>
+                    <HomeIcon />
+                    Back to site
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>
+                    <SignOutIcon />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </header>
+
+          <nav className="flex gap-2 overflow-x-auto border-y border-[#ece3ff] bg-white/88 px-4 py-3 md:hidden">
+            {navItems.map((item) => {
+              const active = item.href === '/admin' ? pathname === item.href : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-extrabold no-underline ${
+                    active ? 'bg-[linear-gradient(135deg,#7a19e6,#5e00d5)] text-white' : 'bg-[#f4eeff] text-[#0a0d45]'
+                  }`}
+                >
+                  <item.icon />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <main className="min-w-0 flex-1 overflow-x-hidden px-4 pb-8 pt-5 md:px-7 md:pb-8 md:pt-8 xl:px-8">
+            <div className="mx-auto max-w-[1560px]">{children}</div>
+          </main>
+        </div>
       </div>
     </div>
+  );
+}
+
+function SparkIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M12 3v5m0 8v5M3 12h5m8 0h5M6.3 6.3l3.5 3.5m4.4 4.4 3.5 3.5m0-11.4-3.5 3.5m-4.4 4.4-3.5 3.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3c2.2 2.4 3.3 5.4 3.3 9S14.2 18.6 12 21M12 3c-2.2 2.4-3.3 5.4-3.3 9S9.8 18.6 12 21" strokeLinecap="round" />
+    </svg>
   );
 }
 

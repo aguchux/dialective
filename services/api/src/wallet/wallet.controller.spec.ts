@@ -46,6 +46,16 @@ describe('WalletController NOWPayments IPN', () => {
       referralSettings: {
         upsert: jest.fn().mockResolvedValue({ fundingBonusEnabled: false, fundingBonusRate: { gt: () => false } }),
       },
+      // buildDistributorReferralBonuses (packages/db/src/payouts.ts) reads
+      // this before falling back to the legacy referralSettings path above --
+      // enabled: false short-circuits it to an empty bonus list, matching
+      // this fixture's intent of "no referral bonus of any kind applies".
+      distributorSettings: {
+        upsert: jest.fn().mockResolvedValue({ enabled: false, multiLevelReferralEnabled: false, maxReferralDepth: 0 }),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'user-1', referredById: null }),
+      },
       $transaction: jest.fn(async (input: unknown) => {
         if (typeof input === 'function') return input(tx);
         return Promise.all(input as Promise<unknown>[]);

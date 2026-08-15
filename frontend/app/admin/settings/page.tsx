@@ -13,11 +13,13 @@ import { P2PMarketSettingsPanel } from './P2PMarketSettingsPanel';
 import { SmsSettingsPanel } from './SmsSettingsPanel';
 import { WithdrawalSettingsPanel } from './WithdrawalSettingsPanel';
 import { MaintenanceSettingsPanel } from './MaintenanceSettingsPanel';
+import { DistributorSettingsPanel } from './DistributorSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
   { key: 'maintenance', label: 'Login & Signup Maintenance' },
   { key: 'referrals', label: 'Referral Bonuses' },
+  { key: 'distributors', label: 'Distributor Settings' },
   { key: 'trainingTasks', label: 'Training & Tasks' },
   { key: 'notifications', label: 'Notification Settings' },
   { key: 'wordGeneration', label: 'Word Generation' },
@@ -64,6 +66,7 @@ export default function AdminSettingsPage() {
             {active === 'general' && <GeneralSettingsPanel />}
             {active === 'maintenance' && <MaintenanceSettingsPanel />}
             {active === 'referrals' && <ReferralBonusSettingsPanel />}
+            {active === 'distributors' && <DistributorSettingsPanel />}
             {active === 'trainingTasks' && <TrainingTasksSettingsPanel />}
             {active === 'notifications' && <NotificationSettingsPanel />}
             {active === 'wordGeneration' && <WordGenerationSettingsPanel />}

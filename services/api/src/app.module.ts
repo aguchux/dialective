@@ -18,6 +18,7 @@ import { BlogModule } from "./blog/blog.module";
 import { CoursesModule } from "./courses/courses.module";
 import { PoolsModule } from "./pools/pools.module";
 import { P2PModule } from "./p2p/p2p.module";
+import { DistributorsModule } from "./distributors/distributors.module";
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { P2PModule } from "./p2p/p2p.module";
     CoursesModule,
     PoolsModule,
     P2PModule,
+    DistributorsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

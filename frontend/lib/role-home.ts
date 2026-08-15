@@ -2,6 +2,9 @@ export function roleHomePath(role: string | undefined, onboardingComplete = true
   if (role === 'ADMIN') {
     return '/admin';
   }
+  if (role === 'DISTRIBUTOR') {
+    return '/distributor';
+  }
 
   return onboardingComplete ? '/dashboard' : '/onboarding';
 }
@@ -21,7 +24,11 @@ export function postAuthPath(
     return callbackUrl;
   }
 
-  if (role !== 'ADMIN' && onboardingComplete && isPathWithin(callbackUrl, '/dashboard')) {
+  if (role === 'DISTRIBUTOR' && isPathWithin(callbackUrl, '/distributor')) {
+    return callbackUrl;
+  }
+
+  if (role !== 'ADMIN' && role !== 'DISTRIBUTOR' && onboardingComplete && isPathWithin(callbackUrl, '/dashboard')) {
     return callbackUrl;
   }
 

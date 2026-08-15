@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Play } from 'lucide-react';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { LandingFooter } from '@/components/landing/LandingFooter';
 import { LandingHeader } from '@/components/landing/LandingHeader';
@@ -25,6 +25,7 @@ export default async function CoursePreviewPage({ params }: CoursePreviewPagePro
   const course = await getPublishedCoursePreview(params.slug).catch(() => null);
   if (!course) notFound();
 
+  const isPublic = course.visibility === 'PUBLIC';
   const callbackUrl = `/dashboard/learn/${course.slug}`;
 
   return (
@@ -45,16 +46,31 @@ export default async function CoursePreviewPage({ params }: CoursePreviewPagePro
           </div>
         )}
         <div className="mx-auto max-w-3xl px-4 py-10 text-center md:px-8 md:py-14">
-          <Link
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-accent px-6 font-extrabold text-white no-underline hover:bg-accent-dark"
-            href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
-          >
-            <GraduationCap className="size-5" aria-hidden="true" />
-            Log in to start this course
-          </Link>
-          <p className="mt-4 text-sm text-muted">
-            New here? <Link className="font-bold text-accent no-underline hover:text-accent-dark" href="/register">Create an account</Link> to access the Learning Center.
-          </p>
+          {isPublic ? (
+            <>
+              <Link
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-accent px-6 font-extrabold text-white no-underline hover:bg-accent-dark"
+                href={`/learn/${course.slug}/view`}
+              >
+                <Play className="size-5" aria-hidden="true" />
+                Start course
+              </Link>
+              <p className="mt-4 text-sm text-muted">Free to view, no account needed.</p>
+            </>
+          ) : (
+            <>
+              <Link
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-accent px-6 font-extrabold text-white no-underline hover:bg-accent-dark"
+                href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+              >
+                <GraduationCap className="size-5" aria-hidden="true" />
+                Log in to start this course
+              </Link>
+              <p className="mt-4 text-sm text-muted">
+                New here? <Link className="font-bold text-accent no-underline hover:text-accent-dark" href="/register">Create an account</Link> to access the Learning Center.
+              </p>
+            </>
+          )}
           <div className="mt-10 border-t border-line pt-6 text-left">
             <Link className="font-bold text-accent no-underline hover:text-accent-dark" href="/learn">&larr; Back to Learning Center</Link>
           </div>

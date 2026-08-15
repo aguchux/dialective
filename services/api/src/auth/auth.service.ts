@@ -80,7 +80,7 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     countryId: user.countryId,
     dialectId: user.dialectId,
     dialectTag: user.dialect?.tag ?? null,
-    onboardingComplete: user.countryId !== null && user.dialectId !== null,
+    onboardingComplete: user.role !== Role.TRAINER || (user.countryId !== null && user.dialectId !== null),
     referralCode: user.referralCode,
     emailNotificationsEnabled: user.emailNotificationsEnabled,
     smsNotificationsEnabled: user.smsNotificationsEnabled,

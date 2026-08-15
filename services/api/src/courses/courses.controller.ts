@@ -27,6 +27,15 @@ export class CoursesPublicController {
   getPreview(@Param('slug') slug: string) {
     return this.courses.getPublishedPreview(slug);
   }
+
+  // No JwtAuthGuard -- only ever returns visibility=PUBLIC courses (see
+  // CoursesService.getPublicForStudy), so there's nothing here a login wall
+  // would protect. A PRIVATE course's slug 404s the same as a nonexistent
+  // one; the private study flow stays entirely on CoursesProtectedController.
+  @Get(':slug/view')
+  getPublicStudy(@Param('slug') slug: string) {
+    return this.courses.getPublicForStudy(slug);
+  }
 }
 
 // Any authenticated user (any role) -- no @Roles/@UseGuards(RolesGuard),

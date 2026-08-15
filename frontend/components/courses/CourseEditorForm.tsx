@@ -80,6 +80,7 @@ export function CourseEditorForm({ course }: { course?: Course }) {
   const [slugPreview, setSlugPreview] = useState(course?.slug ?? '');
   const [summary, setSummary] = useState(course?.summary ?? '');
   const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>(course?.status ?? 'DRAFT');
+  const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>(course?.visibility ?? 'PRIVATE');
   const [coverImageUrl, setCoverImageUrl] = useState(course?.coverImageUrl ?? '');
   const [coverImageKey, setCoverImageKey] = useState(course?.coverImageKey ?? '');
   const [coverImageAlt, setCoverImageAlt] = useState(course?.coverImageAlt ?? '');
@@ -237,6 +238,7 @@ export function CourseEditorForm({ course }: { course?: Course }) {
         coverImageKey: coverImageKey || undefined,
         coverImageAlt: coverImageAlt || undefined,
         status,
+        visibility,
       };
       if (course) {
         const saved = await updateCourse({ id: course.id, body }).unwrap();
@@ -333,6 +335,27 @@ export function CourseEditorForm({ course }: { course?: Course }) {
             <h2 className="text-base font-black">Publishing</h2>
             <div className="grid grid-cols-2 rounded-lg border border-line bg-surface-muted p-1" role="group" aria-label="Course status">
               {(['DRAFT', 'PUBLISHED'] as const).map((option) => <button className={`rounded-md px-3 py-2 text-sm font-extrabold ${status === option ? 'bg-white text-accent shadow-sm' : 'text-muted'}`} key={option} onClick={() => setStatus(option)} type="button">{option === 'DRAFT' ? 'Draft' : 'Published'}</button>)}
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-sm font-bold">Visibility</p>
+              <div className="grid grid-cols-2 rounded-lg border border-line bg-surface-muted p-1" role="group" aria-label="Course visibility">
+                {(['PRIVATE', 'PUBLIC'] as const).map((option) => (
+                  <button
+                    className={`rounded-md px-3 py-2 text-sm font-extrabold ${visibility === option ? 'bg-white text-accent shadow-sm' : 'text-muted'}`}
+                    key={option}
+                    onClick={() => setVisibility(option)}
+                    type="button"
+                  >
+                    {option === 'PRIVATE' ? 'Login required' : 'Public'}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted">
+                {visibility === 'PUBLIC'
+                  ? 'Anyone can view this course at /learn without an account.'
+                  : 'Trainers must log in to view this course.'}
+              </p>
             </div>
           </section>
 

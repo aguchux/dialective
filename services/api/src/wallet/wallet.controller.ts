@@ -35,6 +35,7 @@ import {
   SubscriptionPoolStatus,
   UserStatus,
   WithdrawalStatus,
+  creditFundingReferralBonusesOps,
   creditTrainingPayout,
 } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
@@ -629,12 +630,7 @@ export class WalletController {
       return { received: true, credited: false, status: paymentStatus };
     }
 
-    const settings = await this.getReferralSettings();
-    const referrerWallet =
-      deposit.wallet.user.referredById && settings.fundingBonusEnabled && settings.fundingBonusRate.gt(0)
-        ? await this.getOrCreateWallet(deposit.wallet.user.referredById)
-        : null;
-    const fundingBonus = referrerWallet ? deposit.tokenAmount.mul(settings.fundingBonusRate) : null;
+    const fundingBonuses = await creditFundingReferralBonusesOps(this.prisma, deposit.wallet.user.id, deposit.tokenAmount, deposit.id);
 
     const credited = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.deposit.updateMany({
@@ -655,18 +651,11 @@ export class WalletController {
         data: { balance: { increment: deposit.tokenAmount } },
       });
 
-      if (referrerWallet && fundingBonus) {
-        await tx.ledgerEntry.create({
-          data: {
-            walletId: referrerWallet.id,
-            type: 'REFERRAL_FUNDING_BONUS',
-            amount: fundingBonus,
-            reference: deposit.id,
-          },
-        });
+      for (const entry of fundingBonuses.entries) {
+        await tx.ledgerEntry.create({ data: entry });
         await tx.wallet.update({
-          where: { id: referrerWallet.id },
-          data: { balance: { increment: fundingBonus } },
+          where: { id: entry.walletId },
+          data: { balance: { increment: entry.amount } },
         });
       }
 
