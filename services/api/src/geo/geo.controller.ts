@@ -47,9 +47,10 @@ export class GeoController {
    */
   @Get('stats')
   async getStats() {
-    const [countryCount, dialectCount, activeAgg, settledSubmissionAgg, settledWordAgg, rate] = await Promise.all([
+    const [countryCount, dialectCount, totalTrainers, activeAgg, settledSubmissionAgg, settledWordAgg, rate] = await Promise.all([
       this.prisma.country.count(),
       this.prisma.dialect.count(),
+      this.prisma.user.count({ where: { role: Role.TRAINER } }),
       this.prisma.subscriptionPool.aggregate({
         where: { status: SubscriptionPoolStatus.ACTIVE },
         _sum: { usdAmount: true },
@@ -70,7 +71,7 @@ export class GeoController {
       Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) + Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
     const totalPayoutUsd = totalSettledTokens * rate;
 
-    return { countryCount, dialectCount, poolVolumeUsd, totalPayoutUsd };
+    return { countryCount, dialectCount, totalTrainers, poolVolumeUsd, totalPayoutUsd };
   }
 
   @Get('countries/:id/dialects')

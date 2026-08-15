@@ -78,6 +78,11 @@ export const landingStats = [
     detail: 'Active tracks',
   },
   {
+    label: 'Trainers',
+    value: '0',
+    detail: 'Registered contributors',
+  },
+  {
     label: 'Pool Volume',
     value: '$0',
     detail: 'Reward pool balance',

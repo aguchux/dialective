@@ -11,6 +11,7 @@ import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 interface GeoStats {
   countryCount: number;
   dialectCount: number;
+  totalTrainers: number;
   poolVolumeUsd: number;
   totalPayoutUsd: number;
 }
@@ -46,6 +47,7 @@ export async function LandingPage() {
   const [geoStats, countries] = await Promise.all([getGeoStats(), getCountries()]);
   const dialectCount = geoStats?.dialectCount ?? null;
   const countryCount = geoStats?.countryCount ?? null;
+  const totalTrainers = geoStats?.totalTrainers ?? null;
   const poolVolumeUsd = geoStats?.poolVolumeUsd ?? null;
   const totalPayoutUsd = geoStats?.totalPayoutUsd ?? null;
 
@@ -64,6 +66,7 @@ export async function LandingPage() {
             dialectCount={dialectCount}
             countryCount={countryCount}
             poolVolumeUsd={poolVolumeUsd}
+            totalTrainers={totalTrainers}
             totalPayoutUsd={totalPayoutUsd}
           />
         </div>
