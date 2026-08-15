@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsInt, IsNumber, IsOptional, IsPositive, IsString, Matches, Max, Min, Validate } from 'class-validator';
+import { IsBoolean, IsEmail, IsISO8601, IsInt, IsNumber, IsOptional, IsPositive, IsString, Matches, Max, MaxLength, Min, Validate } from 'class-validator';
 import { ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
 
 /** Accepts either a bare email ("noreply@x.com") or a display-name form ("Dialect Library" <noreply@x.com>) -- both are valid Resend "from" values. */
@@ -263,4 +263,45 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsBoolean()
   autoSubmitAfterApproval?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  authMaintenanceEnabled?: boolean;
+
+  // ISO 8601 timestamp, or null to clear it (e.g. when switching maintenance
+  // off). PlatformSettingsService.update requires this to be present and in
+  // the future whenever authMaintenanceEnabled is being turned on. Sent as a
+  // string over the wire, parsed to a Date in SettingsController before
+  // reaching the service.
+  @IsOptional()
+  @IsISO8601()
+  authMaintenanceUntil?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(280)
+  authMaintenanceMessage?: string;
+
+  // Checklist of what the maintenance window blocks -- PlatformSettingsService.update
+  // requires at least one of blockLogin/blockSignup/blockSessions to be true
+  // whenever authMaintenanceEnabled is being turned on.
+  @IsOptional()
+  @IsBoolean()
+  authMaintenanceBlockLogin?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  authMaintenanceBlockSignup?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  authMaintenanceBlockSessions?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  authMaintenanceExcludeAdmin?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  authMaintenanceExcludePartner?: boolean;
 }

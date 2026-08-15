@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSession, signIn, useSession } from 'next-auth/react';
 import { apiClient, ApiError } from '@/lib/api-client';
-import { normalizeErrorMessage, useRequestMagicLinkMutation } from '@/store/api';
+import { normalizeErrorMessage, useGetPublicClientSettingsQuery, useRequestMagicLinkMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
+import { AuthMaintenanceNotice } from '@/components/AuthMaintenanceNotice';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { postAuthPath } from '@/lib/role-home';
 import { ActionButton } from '@/components/ui/ActionButton';
@@ -25,6 +26,7 @@ function authDestination(role: string | undefined, onboardingComplete: boolean |
 export default function LoginPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { data: publicSettings } = useGetPublicClientSettingsQuery();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -35,6 +37,20 @@ export default function LoginPage() {
   const [code, setCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
+
+  // Set by AuthMaintenanceSessionHandler (app/providers.tsx) redirecting
+  // here after a forced sign-out mid-session -- lets this page show the
+  // same countdown notice a fresh visitor sees, even in the moment before
+  // publicSettings has refetched with authMaintenanceBlocksLogin=true (a
+  // session-only block can be on while login itself stays open).
+  const [forcedMaintenance, setForcedMaintenance] = useState<{ until: string | null; message: string | null } | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('reason') === 'maintenance') {
+      setForcedMaintenance({ until: params.get('until'), message: params.get('message') });
+    }
+  }, []);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -50,7 +66,11 @@ export default function LoginPage() {
       const pending = await apiClient.login(email, password);
       setTicket(pending.ticket);
     } catch (err) {
-      setMessage(err instanceof ApiError ? (err.status === 401 ? 'Invalid email or password.' : err.message) : normalizeErrorMessage(err, 'Unable to log in.'));
+      if (err instanceof ApiError && err.status === 503) {
+        setMessage('Login just went into scheduled maintenance. Please refresh the page.');
+      } else {
+        setMessage(err instanceof ApiError ? (err.status === 401 ? 'Invalid email or password.' : err.message) : normalizeErrorMessage(err, 'Unable to log in.'));
+      }
     } finally {
       setIsLoggingIn(false);
     }
@@ -104,6 +124,19 @@ export default function LoginPage() {
         <AuthPanel>
           <Breadcrumbs items={[{ label: 'Login' }]} />
           <p className="text-center text-muted">Loading...</p>
+        </AuthPanel>
+      </AuthPage>
+    );
+  }
+
+  if (publicSettings?.authMaintenanceBlocksLogin || forcedMaintenance) {
+    const until = forcedMaintenance?.until ?? publicSettings?.authMaintenanceUntil ?? null;
+    const note = forcedMaintenance?.message ?? publicSettings?.authMaintenanceMessage ?? null;
+    return (
+      <AuthPage>
+        <AuthPanel>
+          <Breadcrumbs items={[{ label: 'Login' }]} />
+          <AuthMaintenanceNotice until={until} note={note} />
         </AuthPanel>
       </AuthPage>
     );

@@ -26,7 +26,13 @@ export class SettingsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   updateSettings(@Body() dto: UpdatePlatformSettingsDto) {
-    return this.settings.update(dto);
+    const { authMaintenanceUntil, ...rest } = dto;
+    return this.settings.update({
+      ...rest,
+      ...(authMaintenanceUntil !== undefined && {
+        authMaintenanceUntil: authMaintenanceUntil === null ? null : new Date(authMaintenanceUntil),
+      }),
+    });
   }
 }
 

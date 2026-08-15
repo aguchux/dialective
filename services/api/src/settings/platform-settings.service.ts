@@ -59,6 +59,64 @@ export class PlatformSettingsService {
     return parsed;
   }
 
+  /**
+   * Single check point for every auth entry route (register/login/magic-link
+   * request) and for JwtAuthGuard (already-authenticated requests, gated
+   * separately by blockSessions). Self-healing: if authMaintenanceEnabled is
+   * true but authMaintenanceUntil has already passed, this clears every
+   * maintenance field in the DB right here (not just in the returned value)
+   * so the admin dashboard's next GET reflects "off" without a human having
+   * to remember to flip the toggle back.
+   */
+  async getAuthMaintenanceStatus(): Promise<{
+    enabled: boolean;
+    until: Date | null;
+    message: string | null;
+    blockLogin: boolean;
+    blockSignup: boolean;
+    blockSessions: boolean;
+    excludeAdmin: boolean;
+    excludePartner: boolean;
+  }> {
+    const row = await this.getRow();
+    const disabled = {
+      enabled: false,
+      until: null,
+      message: null,
+      blockLogin: false,
+      blockSignup: false,
+      blockSessions: false,
+      excludeAdmin: true,
+      excludePartner: false,
+    };
+    if (!row.authMaintenanceEnabled) {
+      return disabled;
+    }
+    if (row.authMaintenanceUntil && row.authMaintenanceUntil.getTime() <= Date.now()) {
+      const cleared = await this.prisma.platformSettings.update({
+        where: { id: 'default' },
+        data: {
+          authMaintenanceEnabled: false,
+          authMaintenanceUntil: null,
+          authMaintenanceMessage: null,
+        },
+      });
+      this.cachedRow = cleared;
+      this.cachedAt = Date.now();
+      return disabled;
+    }
+    return {
+      enabled: true,
+      until: row.authMaintenanceUntil,
+      message: row.authMaintenanceMessage,
+      blockLogin: row.authMaintenanceBlockLogin,
+      blockSignup: row.authMaintenanceBlockSignup,
+      blockSessions: row.authMaintenanceBlockSessions,
+      excludeAdmin: row.authMaintenanceExcludeAdmin,
+      excludePartner: row.authMaintenanceExcludePartner,
+    };
+  }
+
   async getTokenUsdRate(): Promise<number> {
     const row = await this.getRow();
     if (row.tokenUsdRate) {
@@ -345,6 +403,14 @@ export class PlatformSettingsService {
       withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
       withdrawalFeePercent: row.withdrawalFeePercent.toString(),
       autoSubmitAfterApproval: row.autoSubmitAfterApproval,
+      authMaintenanceEnabled: row.authMaintenanceEnabled,
+      authMaintenanceUntil: row.authMaintenanceUntil,
+      authMaintenanceMessage: row.authMaintenanceMessage,
+      authMaintenanceBlockLogin: row.authMaintenanceBlockLogin,
+      authMaintenanceBlockSignup: row.authMaintenanceBlockSignup,
+      authMaintenanceBlockSessions: row.authMaintenanceBlockSessions,
+      authMaintenanceExcludeAdmin: row.authMaintenanceExcludeAdmin,
+      authMaintenanceExcludePartner: row.authMaintenanceExcludePartner,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -398,7 +464,33 @@ export class PlatformSettingsService {
     withdrawalFeeTokenAmount?: number;
     withdrawalFeePercent?: number;
     autoSubmitAfterApproval?: boolean;
+    authMaintenanceEnabled?: boolean;
+    authMaintenanceUntil?: Date | null;
+    authMaintenanceMessage?: string | null;
+    authMaintenanceBlockLogin?: boolean;
+    authMaintenanceBlockSignup?: boolean;
+    authMaintenanceBlockSessions?: boolean;
+    authMaintenanceExcludeAdmin?: boolean;
+    authMaintenanceExcludePartner?: boolean;
   }) {
+    if (data.authMaintenanceEnabled) {
+      // Turning it on (or extending it) always needs a concrete end time --
+      // an admin flipping this switch is expected to say when it ends, per
+      // the countdown shown on the login/signup pages. authMaintenanceUntil
+      // is read from the existing row when the caller only patches the
+      // message/flag without resending the timestamp.
+      const existing = await this.getRow();
+      const until = data.authMaintenanceUntil !== undefined ? data.authMaintenanceUntil : existing.authMaintenanceUntil;
+      if (!until || until.getTime() <= Date.now()) {
+        throw new BadRequestException('authMaintenanceUntil must be a future date/time when enabling maintenance mode');
+      }
+      const blockLogin = data.authMaintenanceBlockLogin ?? existing.authMaintenanceBlockLogin;
+      const blockSignup = data.authMaintenanceBlockSignup ?? existing.authMaintenanceBlockSignup;
+      const blockSessions = data.authMaintenanceBlockSessions ?? existing.authMaintenanceBlockSessions;
+      if (!blockLogin && !blockSignup && !blockSessions) {
+        throw new BadRequestException('Select at least one of login, signup, or sessions to block when enabling maintenance mode');
+      }
+    }
     if (data.llmProviderOrder) {
       const tokens = data.llmProviderOrder.split(',');
       const isValidPermutation =
@@ -559,24 +651,47 @@ export class PlatformSettingsService {
       withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
       withdrawalFeePercent: row.withdrawalFeePercent.toString(),
       autoSubmitAfterApproval: row.autoSubmitAfterApproval,
+      authMaintenanceEnabled: row.authMaintenanceEnabled,
+      authMaintenanceUntil: row.authMaintenanceUntil,
+      authMaintenanceMessage: row.authMaintenanceMessage,
+      authMaintenanceBlockLogin: row.authMaintenanceBlockLogin,
+      authMaintenanceBlockSignup: row.authMaintenanceBlockSignup,
+      authMaintenanceBlockSessions: row.authMaintenanceBlockSessions,
+      authMaintenanceExcludeAdmin: row.authMaintenanceExcludeAdmin,
+      authMaintenanceExcludePartner: row.authMaintenanceExcludePartner,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
   }
 
   async getPublicClientSettings() {
-    const [referralCookiePersistSeconds, referralInviteExpirySeconds, wordTrainingRecordingTimeoutSeconds, wordTrainingRecordingMaxTimeoutSeconds] =
-      await Promise.all([
-        this.getReferralCookiePersistSeconds(),
-        this.getReferralInviteExpirySeconds(),
-        this.getWordTrainingRecordingTimeoutSeconds(),
-        this.getWordTrainingRecordingMaxTimeoutSeconds(),
-      ]);
+    const [
+      referralCookiePersistSeconds,
+      referralInviteExpirySeconds,
+      wordTrainingRecordingTimeoutSeconds,
+      wordTrainingRecordingMaxTimeoutSeconds,
+      authMaintenance,
+    ] = await Promise.all([
+      this.getReferralCookiePersistSeconds(),
+      this.getReferralInviteExpirySeconds(),
+      this.getWordTrainingRecordingTimeoutSeconds(),
+      this.getWordTrainingRecordingMaxTimeoutSeconds(),
+      this.getAuthMaintenanceStatus(),
+    ]);
     return {
       referralCookiePersistSeconds,
       referralInviteExpirySeconds,
       wordTrainingRecordingTimeoutSeconds,
       wordTrainingRecordingMaxTimeoutSeconds,
+      // Login page shows the notice if either login or signup is blocked
+      // (magic-link request is a signup path -- see requestMagicLink);
+      // register page shows it only if signup is blocked, so both are
+      // surfaced and the frontend picks the one relevant to the page it's on.
+      authMaintenanceEnabled: authMaintenance.enabled && (authMaintenance.blockLogin || authMaintenance.blockSignup),
+      authMaintenanceBlocksLogin: authMaintenance.enabled && authMaintenance.blockLogin,
+      authMaintenanceBlocksSignup: authMaintenance.enabled && authMaintenance.blockSignup,
+      authMaintenanceUntil: authMaintenance.until,
+      authMaintenanceMessage: authMaintenance.message,
     };
   }
 }

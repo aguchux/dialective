@@ -6,7 +6,7 @@ This file gives coding agents (Claude Code, Cursor, etc.) the context needed to 
 
 ## Project Overview
 
-**Dialectiva** is a crowdsourced voice/dialect data-collection platform. Trainers record prompts in their local dialect; submissions are transcribed and cross-validated for accuracy against other trainers in the same dialect cluster; scores drive a token-based payout.
+**Dialect Library** is a crowdsourced voice/dialect data-collection platform. Trainers record prompts in their local dialect; submissions are transcribed and cross-validated for accuracy against other trainers in the same dialect cluster; scores drive a token-based payout.
 
 This repo contains the **ASR scoring pipeline**: the subsystem that ingests audio submissions, transcribes them (currently via **Vosk**, CPU-only), runs consensus scoring across trainers, and writes results for the settlement/payout batch job. It also contains **prompt audio generation**: synthesizing spoken-word audio for text prompts via **MMS-TTS** pretrained checkpoints, so trainers can hear a prompt in the target language/dialect rather than only reading text.
 

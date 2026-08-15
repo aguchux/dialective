@@ -7,6 +7,7 @@ import { getSession, signIn, useSession } from 'next-auth/react';
 import { apiClient } from '@/lib/api-client';
 import { normalizeErrorMessage, useGetPublicClientSettingsQuery, useRegisterMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
+import { AuthMaintenanceNotice } from '@/components/AuthMaintenanceNotice';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { roleHomePath } from '@/lib/role-home';
 import { ActionButton } from '@/components/ui/ActionButton';
@@ -74,7 +75,12 @@ function RegisterContent() {
       const pending = await register({ firstName, lastName, email, password, referralCode: effectiveReferralCode }).unwrap();
       setTicket(pending.ticket);
     } catch (err) {
-      setError(normalizeErrorMessage(err, 'Registration failed'));
+      const status = (err as { status?: number })?.status;
+      if (status === 503) {
+        setError('Signup just went into scheduled maintenance. Please refresh the page.');
+      } else {
+        setError(normalizeErrorMessage(err, 'Registration failed'));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -119,6 +125,17 @@ function RegisterContent() {
         <AuthPanel>
           <Breadcrumbs items={[{ label: 'Register' }]} />
           <p className="text-center text-muted">Loading...</p>
+        </AuthPanel>
+      </AuthPage>
+    );
+  }
+
+  if (publicClientSettings?.authMaintenanceBlocksSignup) {
+    return (
+      <AuthPage>
+        <AuthPanel>
+          <Breadcrumbs items={[{ label: 'Register' }]} />
+          <AuthMaintenanceNotice until={publicClientSettings.authMaintenanceUntil} note={publicClientSettings.authMaintenanceMessage} />
         </AuthPanel>
       </AuthPage>
     );

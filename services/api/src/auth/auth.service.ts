@@ -16,6 +16,7 @@ import { OtpService } from '../otp/otp.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { createSmslive247Otp, verifySmslive247Otp } from '../sms/smslive247-native-otp';
 import { generateOpaqueToken, hashToken } from './token.util';
+import { AuthMaintenanceException } from './auth-maintenance.exception';
 import { signAccessToken } from './jwt.util';
 import { phoneVerificationContextHash } from './phone-otp-context.util';
 
@@ -107,6 +108,23 @@ export class AuthService {
     private readonly platformSettings: PlatformSettingsService,
   ) {}
 
+  /**
+   * Gate for login (register/login use scope="login") and signup
+   * (register/requestMagicLink use scope="signup" -- magic-link request
+   * creates the account on first use, so it's a signup path). Independent
+   * of authMaintenanceBlockSessions, which JwtAuthGuard enforces separately
+   * for already-authenticated requests. Throws AuthMaintenanceException,
+   * whose response body carries the countdown target so the frontend can
+   * render it without a second round-trip.
+   */
+  private async assertNotInAuthMaintenance(scope: 'login' | 'signup'): Promise<void> {
+    const status = await this.platformSettings.getAuthMaintenanceStatus();
+    const blocked = scope === 'login' ? status.blockLogin : status.blockSignup;
+    if (status.enabled && blocked) {
+      throw new AuthMaintenanceException(status.until!, status.message);
+    }
+  }
+
   // --- Registration / credentials login ---------------------------------
 
   /**
@@ -126,6 +144,7 @@ export class AuthService {
     lastName: string,
     referralCode?: string,
   ): Promise<PendingOtp> {
+    await this.assertNotInAuthMaintenance('signup');
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException('An account with this email already exists');
@@ -207,6 +226,7 @@ export class AuthService {
    * verifyOtp for the exchange step.
    */
   async login(email: string, password: string): Promise<PendingOtp> {
+    await this.assertNotInAuthMaintenance('login');
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user?.passwordHash) {
       throw new UnauthorizedException('Invalid email or password');
@@ -297,6 +317,7 @@ export class AuthService {
   // --- Magic-link, persisted after NextAuth verifies the identity ---
 
   async requestMagicLink(email: string): Promise<void> {
+    await this.assertNotInAuthMaintenance('signup');
     const { token, hash } = generateOpaqueToken();
     // Magic-link tokens reuse the email-verification token table's shape
     // but are issued/consumed via their own endpoints; a user need not

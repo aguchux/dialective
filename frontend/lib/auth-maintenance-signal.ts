@@ -1,0 +1,26 @@
+/**
+ * A single authenticated API call failing with the AuthMaintenance error
+ * (503, see backend AuthMaintenanceException) means an admin just turned on
+ * authMaintenanceBlockSessions -- every active session, not just this one
+ * request, needs to be logged out. dialectivaApi's base query calls
+ * notifyAuthMaintenance() the moment it sees that shape; providers.tsx
+ * subscribes once at the app root and drives the actual signOut/redirect,
+ * since RTK Query's base query has no router/next-auth context of its own.
+ */
+export interface AuthMaintenanceDetail {
+  until: string | null;
+  message: string | null;
+}
+
+type Listener = (detail: AuthMaintenanceDetail) => void;
+
+const listeners = new Set<Listener>();
+
+export function notifyAuthMaintenance(detail: AuthMaintenanceDetail): void {
+  listeners.forEach((listener) => listener(detail));
+}
+
+export function onAuthMaintenance(listener: Listener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}

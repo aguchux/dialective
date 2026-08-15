@@ -7,6 +7,7 @@ interface ErrorResponseBody {
   error: string;
   path: string;
   timestamp: string;
+  [extra: string]: unknown;
 }
 
 /**
@@ -28,6 +29,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     let message: string | string[];
     let error: string;
+    let extra: Record<string, unknown> | undefined;
 
     if (isHttpException) {
       const body = exception.getResponse();
@@ -35,9 +37,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = body;
         error = exception.name;
       } else {
-        const bodyObj = body as { message?: string | string[]; error?: string };
+        const bodyObj = body as { message?: string | string[]; error?: string; statusCode?: unknown; [k: string]: unknown };
         message = bodyObj.message ?? exception.message;
         error = bodyObj.error ?? exception.name;
+        // Custom exceptions (e.g. AuthMaintenanceException) attach fields
+        // like authMaintenanceUntil beyond the standard shape -- forward
+        // those through so the frontend doesn't need a second round-trip
+        // to render a countdown/detail, while still normalizing the
+        // required statusCode/message/error/path/timestamp keys above them.
+        const { message: _m, error: _e, statusCode: _s, ...rest } = bodyObj;
+        if (Object.keys(rest).length > 0) extra = rest;
       }
     } else {
       message = 'Internal server error';
@@ -54,6 +63,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       error,
       path: request.url,
       timestamp: new Date().toISOString(),
+      ...extra,
     };
 
     response.status(statusCode).json(body);

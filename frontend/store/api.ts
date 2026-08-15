@@ -1,6 +1,8 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { BaseQueryFn } from '@reduxjs/toolkit/query/react';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 import { getCurrentSession } from '@/lib/client-session';
+import { notifyAuthMaintenance } from '@/lib/auth-maintenance-signal';
 
 export interface PublicUser {
   id: string;
@@ -386,6 +388,13 @@ export interface PublicClientSettings {
   referralInviteExpirySeconds: number;
   wordTrainingRecordingTimeoutSeconds: number;
   wordTrainingRecordingMaxTimeoutSeconds: number;
+  // enabled = login OR signup is blocked; the two flags below let each page
+  // (login vs register) show the notice only when it actually applies to it.
+  authMaintenanceEnabled: boolean;
+  authMaintenanceBlocksLogin: boolean;
+  authMaintenanceBlocksSignup: boolean;
+  authMaintenanceUntil: string | null;
+  authMaintenanceMessage: string | null;
 }
 
 export type EarningsChartRange = 'week' | 'month' | 'year';
@@ -529,6 +538,14 @@ export interface PlatformSettings {
   withdrawalFeeTokenAmount: string;
   withdrawalFeePercent: string;
   autoSubmitAfterApproval: boolean;
+  authMaintenanceEnabled: boolean;
+  authMaintenanceUntil: string | null;
+  authMaintenanceMessage: string | null;
+  authMaintenanceBlockLogin: boolean;
+  authMaintenanceBlockSignup: boolean;
+  authMaintenanceBlockSessions: boolean;
+  authMaintenanceExcludeAdmin: boolean;
+  authMaintenanceExcludePartner: boolean;
   updatedAt: string;
   createdAt: string;
 }
@@ -581,6 +598,14 @@ export interface PlatformSettingsInput {
   withdrawalFeeTokenAmount?: number;
   withdrawalFeePercent?: number;
   autoSubmitAfterApproval?: boolean;
+  authMaintenanceEnabled?: boolean;
+  authMaintenanceUntil?: string | null;
+  authMaintenanceMessage?: string | null;
+  authMaintenanceBlockLogin?: boolean;
+  authMaintenanceBlockSignup?: boolean;
+  authMaintenanceBlockSessions?: boolean;
+  authMaintenanceExcludeAdmin?: boolean;
+  authMaintenanceExcludePartner?: boolean;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD';
@@ -910,22 +935,40 @@ function normalizeErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+const rawBaseQuery = fetchBaseQuery({
+  baseUrl: PUBLIC_API_V1_BASE_URL,
+  prepareHeaders: async (headers) => {
+    headers.set('Content-Type', 'application/json');
+    // A session-lookup failure must never block a request -- most endpoints
+    // (geo/countries, geo/stats, blog/posts, ...) are public and don't need
+    // a token at all.
+    const session = await getCurrentSession().catch(() => null);
+    if (session?.accessToken) {
+      headers.set('Authorization', `Bearer ${session.accessToken}`);
+    }
+    return headers;
+  },
+});
+
+// Any authenticated request can come back 503/AuthMaintenance the instant an
+// admin flips authMaintenanceBlockSessions on -- this is the one place every
+// such response passes through, so it's the one place that needs to notice
+// and fan the signal out (see lib/auth-maintenance-signal.ts) rather than
+// every page/component checking for it individually.
+const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptions) => {
+  const result = await rawBaseQuery(args, api, extraOptions);
+  if (result.error && result.error.status === 503) {
+    const data = result.error.data as { error?: string; authMaintenanceUntil?: string; authMaintenanceMessage?: string | null } | undefined;
+    if (data?.error === 'AuthMaintenance') {
+      notifyAuthMaintenance({ until: data.authMaintenanceUntil ?? null, message: data.authMaintenanceMessage ?? null });
+    }
+  }
+  return result;
+};
+
 export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: PUBLIC_API_V1_BASE_URL,
-    prepareHeaders: async (headers) => {
-      headers.set('Content-Type', 'application/json');
-      // A session-lookup failure must never block a request -- most endpoints
-      // (geo/countries, geo/stats, blog/posts, ...) are public and don't need
-      // a token at all.
-      const session = await getCurrentSession().catch(() => null);
-      if (session?.accessToken) {
-        headers.set('Authorization', `Bearer ${session.accessToken}`);
-      }
-      return headers;
-    },
-  }),
+  baseQuery: baseQueryWithMaintenanceSignal,
   tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({

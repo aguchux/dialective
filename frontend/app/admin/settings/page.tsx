@@ -12,9 +12,11 @@ import { SpellingNormalizationSettingsPanel } from './SpellingNormalizationSetti
 import { P2PMarketSettingsPanel } from './P2PMarketSettingsPanel';
 import { SmsSettingsPanel } from './SmsSettingsPanel';
 import { WithdrawalSettingsPanel } from './WithdrawalSettingsPanel';
+import { MaintenanceSettingsPanel } from './MaintenanceSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
+  { key: 'maintenance', label: 'Login & Signup Maintenance' },
   { key: 'referrals', label: 'Referral Bonuses' },
   { key: 'trainingTasks', label: 'Training & Tasks' },
   { key: 'notifications', label: 'Notification Settings' },
@@ -60,6 +62,7 @@ export default function AdminSettingsPage() {
 
           <div>
             {active === 'general' && <GeneralSettingsPanel />}
+            {active === 'maintenance' && <MaintenanceSettingsPanel />}
             {active === 'referrals' && <ReferralBonusSettingsPanel />}
             {active === 'trainingTasks' && <TrainingTasksSettingsPanel />}
             {active === 'notifications' && <NotificationSettingsPanel />}
