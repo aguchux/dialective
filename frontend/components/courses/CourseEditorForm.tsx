@@ -7,6 +7,7 @@ import { memo, useCallback, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
 import type { BlogEditorHandle } from '@/components/blog/BlogEditor';
 import { ActionButton, ActionSpinner } from '@/components/ui/ActionButton';
+import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import {
   type Course,
   type CourseSlide,
@@ -14,6 +15,7 @@ import {
   normalizeErrorMessage,
   useCreateCourseMediaUploadMutation,
   useCreateCourseMutation,
+  useDeleteCourseMutation,
   useUpdateCourseMutation,
 } from '@/store/api';
 
@@ -95,6 +97,7 @@ export function CourseEditorForm({ course }: { course?: Course }) {
   const [uploadingSlideKey, setUploadingSlideKey] = useState<{ key: string; kind: 'image' | 'audio' } | null>(null);
   const [createCourse] = useCreateCourseMutation();
   const [updateCourse] = useUpdateCourseMutation();
+  const [deleteCourse, { isLoading: isDeleting }] = useDeleteCourseMutation();
   const [createUpload] = useCreateCourseMediaUploadMutation();
 
   // Each slide's Editor.js instance saves its own document asynchronously
@@ -255,6 +258,18 @@ export function CourseEditorForm({ course }: { course?: Course }) {
     }
   };
 
+  const handleDelete = async () => {
+    if (!course) return;
+    setError('');
+    try {
+      await deleteCourse(course.id).unwrap();
+      router.push('/admin/courses');
+      router.refresh();
+    } catch (deleteError) {
+      setError(normalizeErrorMessage(deleteError, 'Could not delete this course.'));
+    }
+  };
+
   const anyUploading = isUploadingCover || uploadingSlideKey !== null;
 
   return (
@@ -266,6 +281,29 @@ export function CourseEditorForm({ course }: { course?: Course }) {
         </div>
         <div className="flex items-center gap-2">
           {course?.status === 'PUBLISHED' && <Link className="rounded-lg border border-line bg-white px-4 py-2 font-bold text-ink no-underline hover:bg-surface-muted" href={`/learn/${course.slug}`} target="_blank">View</Link>}
+          {course && (
+            <Dialog>
+              <DialogTrigger className="min-h-10 rounded-lg border border-line bg-white px-4 py-2 font-bold text-danger transition-colors hover:bg-[#fde8e8]" type="button">
+                Delete
+              </DialogTrigger>
+              <DialogContent title="Delete this course?" description="This permanently removes the course and its slides. This cannot be undone.">
+                <div className="flex justify-end gap-2">
+                  <DialogClose className="min-h-10 rounded-lg border border-line bg-white px-4 py-2 font-bold text-ink hover:bg-surface-muted" type="button">
+                    Cancel
+                  </DialogClose>
+                  <ActionButton
+                    className="min-h-10 rounded-lg bg-danger px-4 py-2 font-extrabold text-white disabled:opacity-60"
+                    onClick={handleDelete}
+                    pending={isDeleting}
+                    pendingLabel="Deleting"
+                    type="button"
+                  >
+                    Delete course
+                  </ActionButton>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
           <ActionButton className="min-h-10 rounded-lg bg-accent px-5 py-2 font-extrabold text-white disabled:opacity-60" disabled={anyUploading} onClick={save} pending={isSaving} pendingLabel="Saving course" type="button">
             Save course
           </ActionButton>

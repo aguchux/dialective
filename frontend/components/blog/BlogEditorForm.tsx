@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import type { BlogEditorHandle } from './BlogEditor';
 import { ActionButton, ActionSpinner } from '@/components/ui/ActionButton';
+import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import {
   type BlogPost,
   type BlogPostStatus,
@@ -13,6 +14,7 @@ import {
   normalizeErrorMessage,
   useCreateBlogMediaUploadMutation,
   useCreateBlogPostMutation,
+  useDeleteBlogPostMutation,
   useUpdateBlogPostMutation,
 } from '@/store/api';
 
@@ -39,6 +41,7 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [createPost] = useCreateBlogPostMutation();
   const [updatePost] = useUpdateBlogPostMutation();
+  const [deletePost, { isLoading: isDeleting }] = useDeleteBlogPostMutation();
   const [createUpload] = useCreateBlogMediaUploadMutation();
   const initialData = useMemo(() => post?.content ?? emptyDocument, [post?.content]);
 
@@ -108,6 +111,18 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
     }
   };
 
+  const handleDelete = async () => {
+    if (!post) return;
+    setError('');
+    try {
+      await deletePost(post.id).unwrap();
+      router.push('/admin/blog');
+      router.refresh();
+    } catch (deleteError) {
+      setError(normalizeErrorMessage(deleteError, 'Could not delete this post.'));
+    }
+  };
+
   return (
     <div className="grid gap-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -117,6 +132,29 @@ export function BlogEditorForm({ post }: { post?: BlogPost }) {
         </div>
         <div className="flex items-center gap-2">
           {post?.status === 'PUBLISHED' && <Link className="rounded-lg border border-line bg-white px-4 py-2 font-bold text-ink no-underline hover:bg-surface-muted" href={`/blog/${post.slug}`} target="_blank">View</Link>}
+          {post && (
+            <Dialog>
+              <DialogTrigger className="min-h-10 rounded-lg border border-line bg-white px-4 py-2 font-bold text-danger transition-colors hover:bg-[#fde8e8]" type="button">
+                Delete
+              </DialogTrigger>
+              <DialogContent title="Delete this post?" description="This permanently removes the post. This cannot be undone.">
+                <div className="flex justify-end gap-2">
+                  <DialogClose className="min-h-10 rounded-lg border border-line bg-white px-4 py-2 font-bold text-ink hover:bg-surface-muted" type="button">
+                    Cancel
+                  </DialogClose>
+                  <ActionButton
+                    className="min-h-10 rounded-lg bg-danger px-4 py-2 font-extrabold text-white disabled:opacity-60"
+                    onClick={handleDelete}
+                    pending={isDeleting}
+                    pendingLabel="Deleting"
+                    type="button"
+                  >
+                    Delete post
+                  </ActionButton>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
           <ActionButton className="min-h-10 rounded-lg bg-accent px-5 py-2 font-extrabold text-white disabled:opacity-60" disabled={isUploadingCover || !editorHandle} onClick={save} pending={isSaving} pendingLabel="Saving post" type="button">
             Save post
           </ActionButton>
