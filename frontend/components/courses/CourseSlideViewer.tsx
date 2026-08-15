@@ -13,8 +13,9 @@ type PlaybackState = 'idle' | 'playing' | 'paused';
 /**
  * Full-screen slide deck -- image + text + optional narration audio, linear
  * prev/next only (no swipe/loop, so plain index state beats a carousel
- * library). Desktop: image column fixed at 3/4 width, text column (1/4)
- * scrolls independently with the audio bar pinned under it. Mobile: image
+ * library). Desktop: text column sits on the left at 1/3 width while the
+ * slide image sits on the right at 2/3 width. The text column scrolls
+ * independently with the audio bar pinned under it. Mobile: image
  * runs edge-to-edge at the top, text scrolls below it, audio bar pins to the
  * viewport bottom. Renders through a Radix Dialog (not the shared
  * DialogContent, which is capped at 480px) so it gets focus-trap/Escape/
@@ -99,15 +100,15 @@ export function CourseSlideViewer({
   return (
     <RadixDialog.Root defaultOpen onOpenChange={(open) => !open && handleClose()}>
       <RadixDialog.Portal container={container}>
-        <RadixDialog.Overlay className="fixed inset-0 z-40 bg-black" />
+        <RadixDialog.Overlay className="fixed inset-0 z-[950] bg-black" />
         <RadixDialog.Content
-          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-black text-white focus:outline-none md:flex-row"
+          className="fixed inset-0 z-[960] flex flex-col overflow-hidden bg-black text-white focus:outline-none md:flex-row"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <RadixDialog.Title className="sr-only">{`Slide ${index + 1} of ${slides.length}`}</RadixDialog.Title>
 
-          {/* Image: edge-to-edge at top on mobile, fixed 3/4-width column on desktop. */}
-          <div className="relative w-full shrink-0 bg-black md:h-full md:w-3/4">
+          {/* Image: edge-to-edge at top on mobile, right-side 2/3 column on desktop. */}
+          <div className="relative order-1 w-full shrink-0 bg-black md:order-2 md:h-full md:w-2/3">
             {slide.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -121,7 +122,7 @@ export function CourseSlideViewer({
               </div>
             )}
 
-            <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent p-3 md:p-4">
+            <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent p-3 md:p-4">
               <span className="rounded-full bg-black/50 px-3 py-1 text-xs font-bold backdrop-blur-sm">
                 {index + 1} / {slides.length}
               </span>
@@ -134,7 +135,7 @@ export function CourseSlideViewer({
             </div>
 
             {/* Desktop-only prev/next -- overlaid on the image column so the text column stays purely for reading + audio. */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden items-center justify-between p-4 md:flex">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 hidden items-center justify-between p-4 md:flex">
               <button
                 className="pointer-events-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-black/50 px-5 font-extrabold text-white backdrop-blur-sm transition-colors hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={isFirst}
@@ -157,9 +158,9 @@ export function CourseSlideViewer({
           {/* Text column: independently scrollable. On mobile, prev/next + audio
               stack together in one fixed bottom strip (in that order) so they
               never overlap the scrolling text; on desktop only the audio bar
-              is pinned, under the (non-scrolling) text column, since prev/next
-              live over the image column instead. */}
-          <div className="flex min-h-0 flex-1 flex-col bg-white text-ink md:w-1/4">
+              is pinned, under the left text column, since prev/next live over
+              the image column instead. */}
+          <div className="order-2 flex min-h-0 flex-1 flex-col bg-white text-ink md:order-1 md:w-1/3 md:flex-none">
             <div className={`min-h-0 flex-1 overflow-y-auto p-5 md:p-6 ${slide.audioUrl ? 'pb-32 md:pb-6' : 'pb-20 md:pb-6'}`}>
               <div className="blog-prose text-base leading-relaxed">
                 <BlogContent blocks={slide.text.blocks} />
