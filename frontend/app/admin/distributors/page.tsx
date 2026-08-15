@@ -1,17 +1,15 @@
 'use client';
 
 import { FormEvent, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
-import { activityLabels } from '@/components/trainer/TrainerDashboard';
 import {
-  DistributorActivityEntry,
   DistributorAdminSummary,
   normalizeErrorMessage,
   useCreateDistributorAllocationMutation,
-  useGetDistributorActivityQuery,
   useGetDistributorSettingsQuery,
   useListAdminDistributorsQuery,
 } from '@/store/api';
@@ -35,7 +33,6 @@ function formatTokens(value: string | number) {
 export default function AdminDistributorsPage() {
   const { data: distributors, isLoading } = useListAdminDistributorsQuery();
   const [creditingDistributor, setCreditingDistributor] = useState<DistributorAdminSummary | null>(null);
-  const [activityDistributor, setActivityDistributor] = useState<DistributorAdminSummary | null>(null);
 
   const columns: DataTableColumn<DistributorAdminSummary>[] = [
     {
@@ -87,9 +84,9 @@ export default function AdminDistributorsPage() {
           <button className={secondaryButtonClass} onClick={() => setCreditingDistributor(d)} type="button">
             + Credit
           </button>
-          <button className={secondaryButtonClass} onClick={() => setActivityDistributor(d)} type="button">
+          <Link className={secondaryButtonClass} href={`/admin/distributors/${d.id}`}>
             View activity
-          </button>
+          </Link>
         </div>
       ),
     },
@@ -117,9 +114,6 @@ export default function AdminDistributorsPage() {
 
       {creditingDistributor && (
         <CreditDistributorDialog distributor={creditingDistributor} onClose={() => setCreditingDistributor(null)} />
-      )}
-      {activityDistributor && (
-        <DistributorActivityDialog distributor={activityDistributor} onClose={() => setActivityDistributor(null)} />
       )}
     </AdminShell>
   );
@@ -250,84 +244,3 @@ function CreditDistributorDialog({ distributor, onClose }: { distributor: Distri
   );
 }
 
-function DistributorActivityDialog({ distributor, onClose }: { distributor: DistributorAdminSummary; onClose: () => void }) {
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
-  const { data, isLoading } = useGetDistributorActivityQuery({ distributorId: distributor.id, page, pageSize });
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        title={`${distributor.name}'s activity`}
-        description="Every transaction against this distributor's wallet -- bulk allocations, referral bonuses at every level, P2P sales, and withdrawals."
-      >
-        <div className="grid gap-3">
-          {isLoading && <p className="text-muted">Loading...</p>}
-          {!isLoading && (!data || data.items.length === 0) && <p className="text-sm text-muted">No transactions yet.</p>}
-          {!isLoading && data && data.items.length > 0 && (
-            <div className="max-h-96 overflow-y-auto overflow-x-auto">
-              <table className="w-full min-w-96 text-left text-sm">
-                <thead>
-                  <tr className="border-b border-line text-xs font-bold uppercase text-muted">
-                    <th className="py-2 pr-3">Date</th>
-                    <th className="py-2 pr-3">Type</th>
-                    <th className="py-2">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((entry) => (
-                    <ActivityRow entry={entry} key={entry.id} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {data && data.totalPages > 1 && (
-            <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
-              <p className="text-sm text-muted">
-                Page {data.page} of {data.totalPages} &middot; {data.total} total
-              </p>
-              <div className="flex gap-2">
-                <button
-                  className="inline-flex min-h-8 items-center justify-center rounded-lg border border-line bg-surface px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  type="button"
-                >
-                  Previous
-                </button>
-                <button
-                  className="inline-flex min-h-8 items-center justify-center rounded-lg border border-line bg-surface px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={page >= data.totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  type="button"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="flex justify-end">
-            <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted">
-              Close
-            </DialogClose>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ActivityRow({ entry }: { entry: DistributorActivityEntry }) {
-  const isCredit = Number(entry.amount) >= 0;
-  return (
-    <tr className="border-b border-line last:border-0">
-      <td className="py-2 pr-3 text-muted">{new Date(entry.createdAt).toLocaleString()}</td>
-      <td className="py-2 pr-3 font-bold">{activityLabels[entry.type]}</td>
-      <td className={`py-2 font-bold ${isCredit ? 'text-accent-dark' : 'text-danger'}`}>
-        {isCredit ? '+' : ''}
-        {formatTokens(entry.amount)} DL
-      </td>
-    </tr>
-  );
-}

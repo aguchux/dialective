@@ -3,8 +3,9 @@ import { WalletController } from './wallet.controller';
 jest.mock('@dialectiva/db', () => ({
   ...jest.requireActual('@dialectiva/db'),
   creditTrainingPayout: jest.fn(),
+  creditAdminFunding: jest.fn(),
 }));
-import { creditTrainingPayout } from '@dialectiva/db';
+import { creditAdminFunding, creditTrainingPayout } from '@dialectiva/db';
 
 describe('WalletController NOWPayments IPN', () => {
   const finishedBody = {
@@ -360,13 +361,10 @@ describe('WalletController earning history', () => {
 
 describe('WalletController admin training payouts', () => {
   function setup() {
-    (creditTrainingPayout as jest.Mock).mockReset().mockResolvedValue({
+    (creditAdminFunding as jest.Mock).mockReset().mockResolvedValue({
       userId: 'trainer-1',
       reference: 'ref-1',
-      grossAmount: '10',
-      netAmount: '9.5',
-      referralPayoutBonus: '0.5',
-      referrerUserId: null,
+      amount: '10',
     });
     const prisma = {
       user: { findUnique: jest.fn().mockResolvedValue({ email: 'trainer@x.com' }) },
@@ -377,22 +375,23 @@ describe('WalletController admin training payouts', () => {
     return { controller, prisma, mail };
   }
 
-  it('returns the payout result without waiting on the notification email', async () => {
-    const { controller, mail } = setup();
+  it('returns the funding result without waiting on the notification email', async () => {
+    const { controller, mail, prisma } = setup();
 
     const result = await controller.createTrainingPayout(
       { user: { sub: 'admin-1' } } as never,
       { userId: 'trainer-1', tokenAmount: 10, reference: 'ref-1' } as never,
     );
 
-    expect(result).toEqual(expect.objectContaining({ netAmount: '9.5' }));
+    expect(result).toEqual(expect.objectContaining({ amount: '10' }));
+    expect(creditAdminFunding).toHaveBeenCalledWith(prisma, 'trainer-1', 10, 'ref-1');
     // Email dispatch is fire-and-forget (void promise chain) -- give the
     // microtask queue a tick so the .then() has a chance to run before
     // asserting on it, without making the endpoint itself await it.
     await new Promise((resolve) => setImmediate(resolve));
     expect(mail.sendTrainingPayoutCreditedEmail).toHaveBeenCalledWith({
       trainerEmail: 'trainer@x.com',
-      tokenAmount: '9.5',
+      tokenAmount: '10',
       reference: 'ref-1',
     });
   });
@@ -404,7 +403,7 @@ describe('WalletController admin training payouts', () => {
     await expect(controller.createTrainingPayout(
       { user: { sub: 'admin-1' } } as never,
       { userId: 'trainer-1', tokenAmount: 10, reference: 'ref-1' } as never,
-    )).resolves.toEqual(expect.objectContaining({ netAmount: '9.5' }));
+    )).resolves.toEqual(expect.objectContaining({ amount: '10' }));
     await new Promise((resolve) => setImmediate(resolve));
     expect(mail.sendTrainingPayoutCreditedEmail).not.toHaveBeenCalled();
   });

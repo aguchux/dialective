@@ -1,30 +1,53 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, LoaderCircle, Pause, Play } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import * as RadixDialog from '@radix-ui/react-dialog';
+import { ArrowLeft, ArrowRight, LoaderCircle, Pause, Play, X } from 'lucide-react';
 import { BlogContent } from '@/components/blog/BlogContent';
+import { usePortalContainer } from '@/components/ui/PortalContainer';
 import type { CourseSlide } from '@/store/api';
 
 type PlaybackState = 'idle' | 'playing' | 'paused';
 
 /**
- * Linear prev/next slide deck -- image + text + optional narration audio.
- * No carousel library: navigation is strictly sequential (no swipe/loop), so
- * plain index state is simpler than pulling in a dependency for it.
+ * Full-screen slide deck -- image + text + optional narration audio, linear
+ * prev/next only (no swipe/loop, so plain index state beats a carousel
+ * library). Desktop: image column fixed at 3/4 width, text column (1/4)
+ * scrolls independently with the audio bar pinned under it. Mobile: image
+ * runs edge-to-edge at the top, text scrolls below it, audio bar pins to the
+ * viewport bottom. Renders through a Radix Dialog (not the shared
+ * DialogContent, which is capped at 480px) so it gets focus-trap/Escape/
+ * portal handling without the small-dialog chrome.
  */
 export function CourseSlideViewer({
   slides,
   initialIndex = 0,
   onSlideChange,
+  onClose,
+  closeHref,
 }: {
   slides: CourseSlide[];
   initialIndex?: number;
   onSlideChange?: (index: number) => void;
+  onClose?: () => void;
+  /** Used when there's no onClose callback available (e.g. a server-rendered host page) -- navigates here instead. */
+  closeHref?: string;
 }) {
   const [index, setIndex] = useState(() => clampIndex(initialIndex, slides.length));
   const [playback, setPlayback] = useState<PlaybackState>('idle');
   const [audioProgress, setAudioProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const container = usePortalContainer();
+  const router = useRouter();
+
+  function handleClose() {
+    if (onClose) {
+      onClose();
+    } else if (closeHref) {
+      router.push(closeHref);
+    }
+  }
 
   const slide = slides[index];
   const isFirst = index === 0;
@@ -39,6 +62,19 @@ export function CourseSlideViewer({
     onSlideChange?.(index);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
+
+  // Arrow-key navigation -- a full-screen deck reads as its own surface, so
+  // left/right should move slides the same way Escape (handled by Radix)
+  // closes it.
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'ArrowRight') goTo(index + 1);
+      if (event.key === 'ArrowLeft') goTo(index - 1);
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, slides.length]);
 
   function goTo(next: number) {
     setIndex(clampIndex(next, slides.length));
@@ -61,74 +97,125 @@ export function CourseSlideViewer({
   if (!slide) return null;
 
   return (
-    <div className="grid gap-6">
-      <div className="grid gap-1 text-center text-sm font-bold text-muted">
-        Slide {index + 1} of {slides.length}
-      </div>
+    <RadixDialog.Root defaultOpen onOpenChange={(open) => !open && handleClose()}>
+      <RadixDialog.Portal container={container}>
+        <RadixDialog.Overlay className="fixed inset-0 z-40 bg-black" />
+        <RadixDialog.Content
+          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-black text-white focus:outline-none md:flex-row"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <RadixDialog.Title className="sr-only">{`Slide ${index + 1} of ${slides.length}`}</RadixDialog.Title>
 
-      <div className="mx-auto grid w-full max-w-2xl gap-5 rounded-lg border border-line bg-white p-5 md:p-7">
-        {slide.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            alt={slide.imageAlt || ''}
-            className="aspect-video w-full rounded-lg border border-line object-cover"
-            src={slide.imageUrl}
-          />
-        ) : (
-          <div className="grid aspect-video w-full place-items-center rounded-lg border border-dashed border-line bg-surface-muted text-sm text-muted">
-            No image for this slide
-          </div>
-        )}
+          {/* Image: edge-to-edge at top on mobile, fixed 3/4-width column on desktop. */}
+          <div className="relative w-full shrink-0 bg-black md:h-full md:w-3/4">
+            {slide.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt={slide.imageAlt || ''}
+                className="aspect-[4/3] w-full object-contain md:h-full md:w-full md:object-contain"
+                src={slide.imageUrl}
+              />
+            ) : (
+              <div className="grid aspect-[4/3] w-full place-items-center bg-[#111] text-sm text-white/50 md:h-full">
+                No image for this slide
+              </div>
+            )}
 
-        <div className="blog-prose text-lg leading-relaxed text-ink">
-          <BlogContent blocks={slide.text.blocks} />
-        </div>
-
-        {slide.audioUrl && (
-          <div className="flex items-center gap-3 rounded-lg border border-line bg-surface p-3">
-            <button
-              aria-label={playback === 'playing' ? 'Pause narration' : 'Play narration'}
-              className="grid size-11 shrink-0 place-items-center rounded-full bg-accent text-white hover:bg-accent-dark"
-              onClick={togglePlayback}
-              type="button"
-            >
-              {playback === 'playing' ? <Pause className="size-5 fill-current" aria-hidden="true" /> : <Play className="ml-0.5 size-5 fill-current" aria-hidden="true" />}
-            </button>
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
-              <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${progressPercent}%` }} />
+            <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent p-3 md:p-4">
+              <span className="rounded-full bg-black/50 px-3 py-1 text-xs font-bold backdrop-blur-sm">
+                {index + 1} / {slides.length}
+              </span>
+              <RadixDialog.Close
+                aria-label="Close"
+                className="grid size-9 place-items-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+              >
+                <X className="size-5" aria-hidden="true" />
+              </RadixDialog.Close>
             </div>
-            <audio
-              onEnded={() => setPlayback('idle')}
-              onTimeUpdate={(event) => {
-                const audio = event.currentTarget;
-                if (audio.duration) setAudioProgress(audio.currentTime / audio.duration);
-              }}
-              ref={audioRef}
-              src={slide.audioUrl}
-            />
-          </div>
-        )}
-      </div>
 
-      <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-3">
-        <button
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-45"
-          disabled={isFirst}
-          onClick={() => goTo(index - 1)}
-          type="button"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" /> Previous
-        </button>
-        <button
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45"
-          disabled={isLast}
-          onClick={() => goTo(index + 1)}
-          type="button"
-        >
-          Next <ArrowRight className="size-4" aria-hidden="true" />
-        </button>
-      </div>
-    </div>
+            {/* Desktop-only prev/next -- overlaid on the image column so the text column stays purely for reading + audio. */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden items-center justify-between p-4 md:flex">
+              <button
+                className="pointer-events-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-black/50 px-5 font-extrabold text-white backdrop-blur-sm transition-colors hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={isFirst}
+                onClick={() => goTo(index - 1)}
+                type="button"
+              >
+                <ArrowLeft className="size-4" aria-hidden="true" /> Previous
+              </button>
+              <button
+                className="pointer-events-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 font-extrabold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={isLast}
+                onClick={() => goTo(index + 1)}
+                type="button"
+              >
+                Next <ArrowRight className="size-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+
+          {/* Text column: independently scrollable. On mobile, prev/next + audio
+              stack together in one fixed bottom strip (in that order) so they
+              never overlap the scrolling text; on desktop only the audio bar
+              is pinned, under the (non-scrolling) text column, since prev/next
+              live over the image column instead. */}
+          <div className="flex min-h-0 flex-1 flex-col bg-white text-ink md:w-1/4">
+            <div className={`min-h-0 flex-1 overflow-y-auto p-5 md:p-6 ${slide.audioUrl ? 'pb-32 md:pb-6' : 'pb-20 md:pb-6'}`}>
+              <div className="blog-prose text-base leading-relaxed">
+                <BlogContent blocks={slide.text.blocks} />
+              </div>
+            </div>
+
+            <div className="fixed inset-x-0 bottom-0 z-10 bg-white md:static md:z-auto">
+              {/* Mobile-only prev/next -- desktop's equivalent controls are overlaid on the image column. */}
+              <div className="flex items-center justify-between gap-3 border-t border-line p-3 md:hidden">
+                <button
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-line bg-surface font-extrabold text-ink hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={isFirst}
+                  onClick={() => goTo(index - 1)}
+                  type="button"
+                >
+                  <ArrowLeft className="size-4" aria-hidden="true" /> Previous
+                </button>
+                <button
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-accent font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={isLast}
+                  onClick={() => goTo(index + 1)}
+                  type="button"
+                >
+                  Next <ArrowRight className="size-4" aria-hidden="true" />
+                </button>
+              </div>
+
+              {slide.audioUrl && (
+                <div className="flex items-center gap-3 border-t border-line p-3">
+                  <button
+                    aria-label={playback === 'playing' ? 'Pause narration' : 'Play narration'}
+                    className="grid size-11 shrink-0 place-items-center rounded-full bg-accent text-white hover:bg-accent-dark"
+                    onClick={togglePlayback}
+                    type="button"
+                  >
+                    {playback === 'playing' ? <Pause className="size-5 fill-current" aria-hidden="true" /> : <Play className="ml-0.5 size-5 fill-current" aria-hidden="true" />}
+                  </button>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+                    <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${progressPercent}%` }} />
+                  </div>
+                  <audio
+                    onEnded={() => setPlayback('idle')}
+                    onTimeUpdate={(event) => {
+                      const audio = event.currentTarget;
+                      if (audio.duration) setAudioProgress(audio.currentTime / audio.duration);
+                    }}
+                    ref={audioRef}
+                    src={slide.audioUrl}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </RadixDialog.Content>
+      </RadixDialog.Portal>
+    </RadixDialog.Root>
   );
 }
 

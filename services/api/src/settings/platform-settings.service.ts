@@ -229,6 +229,12 @@ export class PlatformSettingsService {
     return row.adminPayoutOtpEnabled;
   }
 
+  /** null/unset or <= 0 means the one-time signup bonus is off. */
+  async getStartupBonusAmount(): Promise<number> {
+    const row = await this.getRow();
+    return row.startupBonusAmount?.toNumber() ?? 0;
+  }
+
   async isCryptoWithdrawalsEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.cryptoWithdrawalsEnabled;
@@ -368,6 +374,7 @@ export class PlatformSettingsService {
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
+      startupBonusAmount: row.startupBonusAmount?.toString() ?? null,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,
@@ -429,6 +436,7 @@ export class PlatformSettingsService {
     taskTokenCost?: number | null;
     reverseWordTrainingEnabled?: boolean;
     adminPayoutOtpEnabled?: boolean;
+    startupBonusAmount?: number | null;
     wordStuckTimeoutMinutes?: number;
     scoringSlaMinutes?: number;
     noFailOnTrainEnabled?: boolean;
@@ -616,6 +624,7 @@ export class PlatformSettingsService {
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
+      startupBonusAmount: row.startupBonusAmount?.toString() ?? null,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,

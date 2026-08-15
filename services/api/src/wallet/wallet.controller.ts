@@ -35,6 +35,7 @@ import {
   SubscriptionPoolStatus,
   UserStatus,
   WithdrawalStatus,
+  creditAdminFunding,
   creditFundingReferralBonusesOps,
   creditTrainingPayout,
 } from '@dialectiva/db';
@@ -1449,19 +1450,19 @@ export class WalletController {
       });
     }
 
-    const result = await creditTrainingPayout(this.prisma, body.userId, body.tokenAmount, body.reference);
+    const result = await creditAdminFunding(this.prisma, body.userId, body.tokenAmount, body.reference);
 
-    // Best-effort -- the payout has already landed, so a failed/slow email
+    // Best-effort -- the credit has already landed, so a failed/slow email
     // must never fail this endpoint or roll back the credit. Fire-and-log
     // rather than await-and-throw, same treatment as any other
     // notification that isn't part of the transaction it's about.
     void this.prisma.user.findUnique({ where: { id: body.userId }, select: { email: true } })
       .then((trainer) => trainer && this.mail.sendTrainingPayoutCreditedEmail({
         trainerEmail: trainer.email,
-        tokenAmount: result.netAmount,
+        tokenAmount: result.amount,
         reference: body.reference,
       }))
-      .catch((err) => this.logger.error(`Failed to send training-payout email for user=${body.userId}: ${err instanceof Error ? err.message : String(err)}`));
+      .catch((err) => this.logger.error(`Failed to send admin-funding email for user=${body.userId}: ${err instanceof Error ? err.message : String(err)}`));
 
     return result;
   }

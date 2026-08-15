@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, randomUUID } from 'crypto';
-import { AuthProvider, OtpPurpose, Prisma, ReferralInviteStatus, Role, User, UserStatus } from '@dialectiva/db';
+import { AuthProvider, creditStartupBonus, OtpPurpose, Prisma, ReferralInviteStatus, Role, User, UserStatus } from '@dialectiva/db';
 import { isValidPhoneNumber } from 'libphonenumber-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
@@ -491,10 +491,23 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired verification token');
     }
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: record.userId }, data: { emailVerified: new Date() } }),
+    // updateMany's where clause (emailVerified: null) makes "was this the
+    // first verification" an atomic read of count, not a separate
+    // read-then-write -- closes the race where two still-valid tokens for
+    // the same account are verified concurrently and would otherwise both
+    // see emailVerified as null and double-grant the startup bonus.
+    const [{ count }] = await this.prisma.$transaction([
+      this.prisma.user.updateMany({ where: { id: record.userId, emailVerified: null }, data: { emailVerified: new Date() } }),
       this.prisma.emailVerificationToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
     ]);
+    const isFirstVerification = count > 0;
+
+    if (isFirstVerification) {
+      const bonusAmount = await this.platformSettings.getStartupBonusAmount();
+      if (bonusAmount > 0) {
+        await creditStartupBonus(this.prisma, record.userId, bonusAmount, 'signup-verification');
+      }
+    }
   }
 
   /** No-ops (rather than erroring) if already verified -- the caller (Profile/top-bar banner) just wants "send it" to always be safe to click. */

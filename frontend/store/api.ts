@@ -341,6 +341,8 @@ export type LedgerEntryType =
   | 'DISTRIBUTOR_BULK_ALLOCATION'
   | 'DISTRIBUTOR_FUNDING_BONUS'
   | 'DISTRIBUTOR_PAYOUT_BONUS'
+  | 'ADMIN_FUNDING'
+  | 'STARTUP_BONUS'
   | 'P2P_ESCROW_LOCK'
   | 'P2P_ESCROW_REFUND'
   | 'P2P_ESCROW_RELEASE'
@@ -630,6 +632,7 @@ export interface PlatformSettings {
   taskTokenCost: string | null;
   reverseWordTrainingEnabled: boolean;
   adminPayoutOtpEnabled: boolean;
+  startupBonusAmount: string | null;
   wordStuckTimeoutMinutes: number;
   scoringSlaMinutes: number;
   noFailOnTrainEnabled: boolean;
@@ -690,6 +693,7 @@ export interface PlatformSettingsInput {
   taskTokenCost?: number | null;
   reverseWordTrainingEnabled?: boolean;
   adminPayoutOtpEnabled?: boolean;
+  startupBonusAmount?: number | null;
   wordStuckTimeoutMinutes?: number;
   scoringSlaMinutes?: number;
   noFailOnTrainEnabled?: boolean;
@@ -1560,7 +1564,7 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/admin/training-payouts/otp', method: 'POST', body }),
     }),
     createTrainingPayout: builder.mutation<
-      { userId: string; netAmount: string },
+      { userId: string; reference: string; amount: string },
       { userId: string; tokenAmount: number; reference: string; otpRequestId?: string; code?: string }
     >({
       query: (body) => ({

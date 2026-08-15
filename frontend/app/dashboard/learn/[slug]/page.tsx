@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useRef } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { CourseSlideViewer, CourseSlideViewerLoading } from '@/components/courses/CourseSlideViewer';
@@ -9,6 +9,7 @@ import { useGetCourseToStudyQuery, useSaveCourseProgressMutation } from '@/store
 
 export default function StudyCoursePage() {
   const { slug } = useParams<{ slug: string }>();
+  const router = useRouter();
   const { data: course, isLoading, isError } = useGetCourseToStudyQuery(slug);
   const [saveProgress] = useSaveCourseProgressMutation();
 
@@ -51,6 +52,7 @@ export default function StudyCoursePage() {
           </header>
           <CourseSlideViewer
             initialIndex={course.progress?.lastSlideIndex ?? 0}
+            onClose={() => router.push('/dashboard?view=home')}
             onSlideChange={handleSlideChange}
             slides={course.slides}
           />

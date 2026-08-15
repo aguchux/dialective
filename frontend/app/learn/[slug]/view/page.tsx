@@ -40,7 +40,6 @@ export default async function PublicCourseViewPage({ params }: PublicCourseViewP
           <h1 className="text-3xl font-black">{course.title}</h1>
           <p className="leading-relaxed text-muted">{course.summary}</p>
         </header>
-        <CourseSlideViewer slides={course.slides} />
         <div>
           <Link className="inline-flex items-center gap-1.5 text-sm font-bold text-accent no-underline hover:text-accent-dark" href={`/learn/${course.slug}`}>
             <ArrowLeft className="size-4" aria-hidden="true" /> Back to course overview
@@ -48,6 +47,7 @@ export default async function PublicCourseViewPage({ params }: PublicCourseViewP
         </div>
       </div>
       <LandingFooter />
+      <CourseSlideViewer closeHref={`/learn/${course.slug}`} slides={course.slides} />
     </main>
   );
 }

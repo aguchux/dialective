@@ -74,6 +74,13 @@ export class UpdatePlatformSettingsDto {
   @IsBoolean()
   adminPayoutOtpEnabled?: boolean;
 
+  // One-time DL amount credited the first time a user verifies their email.
+  // 0 (or omitted, leaving it null) means the bonus is off.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  startupBonusAmount?: number;
+
   @IsOptional()
   @IsInt()
   @Min(1)

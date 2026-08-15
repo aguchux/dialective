@@ -274,7 +274,7 @@ function AddTokensDialog({ user, onClose }: { user: PublicUser; onClose: () => v
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         title={`Add DL to ${[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email}`}
-        description="Credits the trainer's wallet directly. This is recorded as a training payout on their earnings ledger."
+        description="Credits the trainer's wallet directly. Recorded as Admin Funding, separate from training payouts."
       >
         <form className="grid gap-3" onSubmit={handleSubmit}>
           <div className="grid gap-1">

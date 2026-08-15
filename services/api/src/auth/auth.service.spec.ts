@@ -1,3 +1,8 @@
+jest.mock('@dialectiva/db', () => ({
+  ...jest.requireActual('@dialectiva/db'),
+  creditStartupBonus: jest.fn(),
+}));
+import { creditStartupBonus } from '@dialectiva/db';
 import { AuthService } from './auth.service';
 import { AuthMaintenanceException } from './auth-maintenance.exception';
 
@@ -11,9 +16,10 @@ function setup(
   } = { enabled: false },
 ) {
   const prisma = {
-    user: { findUnique: jest.fn(), upsert: jest.fn(), create: jest.fn() },
+    user: { findUnique: jest.fn(), upsert: jest.fn(), create: jest.fn(), updateMany: jest.fn(), findUniqueOrThrow: jest.fn() },
     referralInvite: { findMany: jest.fn().mockResolvedValue([]) },
-    emailVerificationToken: { create: jest.fn() },
+    emailVerificationToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    $transaction: jest.fn(async (ops: unknown) => Promise.all(ops as Promise<unknown>[])),
   };
   const mail = { sendMagicLinkEmail: jest.fn(), sendEmailVerificationEmail: jest.fn() };
   const otp = { issueWithTicket: jest.fn().mockResolvedValue({ ticket: 'ticket-1', expiresInSeconds: 600 }) };
@@ -41,6 +47,7 @@ function setup(
             excludePartner: false,
           },
     ),
+    getStartupBonusAmount: jest.fn().mockResolvedValue(0),
   };
   const service = new AuthService(prisma as never, mail as never, otp as never, platformSettings as never);
   return { service, prisma, mail, otp, platformSettings };
@@ -89,5 +96,56 @@ describe('AuthService auth maintenance gate', () => {
 
     await service.register('a@b.com', 'password123', 'A', 'B');
     expect(prisma.user.findUnique).toHaveBeenCalled();
+  });
+});
+
+describe('AuthService verifyEmail startup bonus', () => {
+  function setupToken(prisma: ReturnType<typeof setup>['prisma']) {
+    prisma.emailVerificationToken.findUnique.mockResolvedValue({
+      id: 'token-1',
+      userId: 'user-1',
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    // updateMany's returned count is what verifyEmail uses to decide
+    // whether this was the first verification -- default to "1 row
+    // matched" (user.emailVerified was null), matching a normal first-time
+    // verify.
+    prisma.user.updateMany.mockResolvedValue({ count: 1 });
+  }
+
+  beforeEach(() => {
+    (creditStartupBonus as jest.Mock).mockReset().mockResolvedValue(undefined);
+  });
+
+  it('grants the startup bonus on a first-time verification when an amount is configured', async () => {
+    const { service, prisma, platformSettings } = setup();
+    setupToken(prisma);
+    platformSettings.getStartupBonusAmount.mockResolvedValue(25);
+
+    await service.verifyEmail('raw-token');
+
+    expect(creditStartupBonus).toHaveBeenCalledWith(prisma, 'user-1', 25, 'signup-verification');
+  });
+
+  it('does not grant a bonus when the configured amount is 0 (off)', async () => {
+    const { service, prisma, platformSettings } = setup();
+    setupToken(prisma);
+    platformSettings.getStartupBonusAmount.mockResolvedValue(0);
+
+    await service.verifyEmail('raw-token');
+
+    expect(creditStartupBonus).not.toHaveBeenCalled();
+  });
+
+  it('does not grant a bonus when updateMany matched no rows (already verified -- not a first-time verification)', async () => {
+    const { service, prisma, platformSettings } = setup();
+    setupToken(prisma);
+    prisma.user.updateMany.mockResolvedValue({ count: 0 });
+    platformSettings.getStartupBonusAmount.mockResolvedValue(25);
+
+    await service.verifyEmail('raw-token');
+
+    expect(creditStartupBonus).not.toHaveBeenCalled();
   });
 });

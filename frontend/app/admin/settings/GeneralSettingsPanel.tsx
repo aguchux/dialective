@@ -19,6 +19,7 @@ export function GeneralSettingsPanel() {
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
   const [sentenceRebuildEnabled, setSentenceRebuildEnabled] = useState(false);
   const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
+  const [startupBonusAmount, setStartupBonusAmount] = useState('');
   const [wordStuckTimeoutMinutes, setWordStuckTimeoutMinutes] = useState('');
   const [scoringSlaMinutes, setScoringSlaMinutes] = useState('');
   const [noFailOnTrainEnabled, setNoFailOnTrainEnabled] = useState(false);
@@ -36,6 +37,7 @@ export function GeneralSettingsPanel() {
     setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
     setSentenceRebuildEnabled(settings.sentenceRebuildEnabled);
     setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
+    setStartupBonusAmount(settings.startupBonusAmount ?? '');
     setWordStuckTimeoutMinutes(String(settings.wordStuckTimeoutMinutes));
     setScoringSlaMinutes(String(settings.scoringSlaMinutes));
     setNoFailOnTrainEnabled(settings.noFailOnTrainEnabled);
@@ -64,6 +66,7 @@ export function GeneralSettingsPanel() {
         reverseWordTrainingEnabled,
         sentenceRebuildEnabled,
         adminPayoutOtpEnabled,
+        ...(startupBonusAmount !== '' ? { startupBonusAmount: Number(startupBonusAmount) } : {}),
         ...(wordStuckTimeoutMinutes !== '' ? { wordStuckTimeoutMinutes: Number(wordStuckTimeoutMinutes) } : {}),
         ...(scoringSlaMinutes !== '' ? { scoringSlaMinutes: Number(scoringSlaMinutes) } : {}),
         noFailOnTrainEnabled,
@@ -136,6 +139,26 @@ export function GeneralSettingsPanel() {
               placeholder="Default"
               value={taskTokenCost}
               onChange={(e) => setTaskTokenCost(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="startup-bonus-amount">
+              Startup bonus (DL)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              One-time DL credit granted automatically the first time a user verifies their email. Leave blank or 0
+              to turn it off.
+            </p>
+            <input
+              className={inputClass}
+              id="startup-bonus-amount"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Off"
+              value={startupBonusAmount}
+              onChange={(e) => setStartupBonusAmount(e.target.value)}
             />
           </div>
 

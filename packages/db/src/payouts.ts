@@ -197,6 +197,66 @@ async function buildCreditTrainingPayoutOps(
   return { ops, result };
 }
 
+export interface CreditAdminFundingResult {
+  userId: string;
+  reference: string;
+  amount: string;
+}
+
+/**
+ * Credits a manual admin grant to a user's wallet as its own ledger type
+ * (ADMIN_FUNDING) -- distinct from TRAINING_PAYOUT (score-based training
+ * work) and STARTUP_BONUS (automatic one-time signup credit) so admins can
+ * tell the three apart on a wallet's activity feed. Unlike
+ * creditTrainingPayout, this never triggers referral/distributor bonus
+ * fan-out -- an admin manually funding one account isn't a training-payout
+ * or deposit event for referral-bonus purposes.
+ */
+export async function creditAdminFunding(
+  prisma: PrismaClient,
+  userId: string,
+  tokenAmount: Decimal | number | string,
+  reference: string,
+): Promise<CreditAdminFundingResult> {
+  const wallet = await getOrCreateWallet(prisma, userId);
+  const amount = new Decimal(tokenAmount);
+  await prisma.$transaction([
+    prisma.ledgerEntry.create({
+      data: { walletId: wallet.id, type: 'ADMIN_FUNDING', amount, reference },
+    }),
+    prisma.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { increment: amount } },
+    }),
+  ]);
+  return { userId, reference, amount: amount.toString() };
+}
+
+/**
+ * Credits the one-time startup bonus to a user's wallet as a STARTUP_BONUS
+ * ledger entry. Callers are responsible for idempotency (only calling this
+ * once per user) -- see AuthService.verifyEmail, which gates the call on the
+ * user's emailVerified column having been null before this request.
+ */
+export async function creditStartupBonus(
+  prisma: PrismaClient,
+  userId: string,
+  tokenAmount: Decimal | number | string,
+  reference: string,
+): Promise<void> {
+  const wallet = await getOrCreateWallet(prisma, userId);
+  const amount = new Decimal(tokenAmount);
+  await prisma.$transaction([
+    prisma.ledgerEntry.create({
+      data: { walletId: wallet.id, type: 'STARTUP_BONUS', amount, reference },
+    }),
+    prisma.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { increment: amount } },
+    }),
+  ]);
+}
+
 export async function creditFundingReferralBonusesOps(
   prisma: PrismaClient,
   userId: string,

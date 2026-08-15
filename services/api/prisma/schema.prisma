@@ -604,6 +604,8 @@ enum LedgerEntryType {
   DISTRIBUTOR_BULK_ALLOCATION
   DISTRIBUTOR_FUNDING_BONUS
   DISTRIBUTOR_PAYOUT_BONUS
+  ADMIN_FUNDING
+  STARTUP_BONUS
   P2P_ESCROW_LOCK
   P2P_ESCROW_REFUND
   P2P_ESCROW_RELEASE
@@ -999,6 +1001,7 @@ model PlatformSettings {
   taskTokenCost            Decimal? @db.Decimal(20, 8) // overrides TASK_TOKEN_COST when set; tokens debited from a trainer's wallet per submission
   reverseWordTrainingEnabled Boolean @default(false)
   adminPayoutOtpEnabled    Boolean @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
+  startupBonusAmount      Decimal? @db.Decimal(20, 8) // one-time DL amount credited (as a STARTUP_BONUS ledger entry) the first time a user verifies their email; null or 0 means the bonus is off
   wordStuckTimeoutMinutes  Int      @default(1440) // minutes an ENGLISH_TO_DIALECT WordRecording can stay PENDING (unmatched by reverse-validation) before settlement-job auto-refunds its locked tokens
   scoringSlaMinutes        Int      @default(60) // minutes a Submission/WordRecording can stay unscored before settlement-job resolves it via noFailOnTrainEnabled (synthetic score) or a plain refund
   noFailOnTrainEnabled     Boolean  @default(false) // when true, a task still unscored past scoringSlaMinutes is paid out at a random score in [minScoreRange, maxScoreRange] instead of just refunded -- guarantees payment for completed work even if consensus/reverse-validation never resolves it

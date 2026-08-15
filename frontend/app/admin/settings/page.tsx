@@ -17,7 +17,7 @@ import { DistributorSettingsPanel } from './DistributorSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
-  { key: 'maintenance', label: 'Login & Signup Maintenance' },
+  { key: 'maintenance', label: 'Site Maintenance' },
   { key: 'referrals', label: 'Referral Bonuses' },
   { key: 'distributors', label: 'Distributor Settings' },
   { key: 'trainingTasks', label: 'Training & Tasks' },
