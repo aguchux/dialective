@@ -3,7 +3,7 @@ import { Role } from '@dialectiva/db';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
-import { CreateDistributorAllocationDto, ListDistributorAllocationsDto, UpdateDistributorSettingsDto } from './dto/distributor.dto';
+import { CreateDistributorAllocationDto, ListDistributorActivityDto, ListDistributorAllocationsDto, UpdateDistributorSettingsDto } from './dto/distributor.dto';
 import { DistributorsService } from './distributors.service';
 
 @Controller()
@@ -45,5 +45,17 @@ export class DistributorsController {
   @Roles(Role.ADMIN)
   listAllocations(@Query() query: ListDistributorAllocationsDto) {
     return this.distributors.listAllocations(query);
+  }
+
+  @Get('admin/distributors')
+  @Roles(Role.ADMIN)
+  listAdmin() {
+    return this.distributors.listAdmin();
+  }
+
+  @Get('admin/distributors/:id/activity')
+  @Roles(Role.ADMIN)
+  getActivity(@Param('id') id: string, @Query() query: ListDistributorActivityDto) {
+    return this.distributors.getActivity(id, query);
   }
 }

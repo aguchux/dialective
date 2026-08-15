@@ -131,6 +131,91 @@ export class DistributorsService {
     };
   }
 
+  /**
+   * Admin-facing distributor roster: every DISTRIBUTOR-role user with their
+   * wallet balance plus lifetime credit/debit totals. LedgerEntry.amount is
+   * itself signed (positive = credit, negative = debit -- see e.g.
+   * TASK_LOCK/TASK_REFUND's doc comments on the LedgerEntryType enum), so
+   * summing positives vs summing negatives is correct regardless of which
+   * entry types exist today or get added later; no type-name allowlist to
+   * keep in sync.
+   */
+  async listAdmin() {
+    const distributors = await this.prisma.user.findMany({
+      where: { role: Role.DISTRIBUTOR },
+      include: { wallet: true },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }, { createdAt: 'desc' }],
+    });
+    if (distributors.length === 0) return [];
+
+    const walletIds = distributors.map((d) => d.wallet?.id).filter((id): id is string => Boolean(id));
+    const entries = walletIds.length
+      ? await this.prisma.ledgerEntry.findMany({
+          where: { walletId: { in: walletIds } },
+          select: { walletId: true, amount: true },
+        })
+      : [];
+    const totalsByWallet = new Map<string, { credit: Prisma.Decimal; debit: Prisma.Decimal }>();
+    for (const entry of entries) {
+      const totals = totalsByWallet.get(entry.walletId) ?? { credit: new Decimal(0), debit: new Decimal(0) };
+      if (entry.amount.gte(0)) totals.credit = totals.credit.add(entry.amount);
+      else totals.debit = totals.debit.add(entry.amount.abs());
+      totalsByWallet.set(entry.walletId, totals);
+    }
+
+    return distributors.map((user) => {
+      const totals = user.wallet ? totalsByWallet.get(user.wallet.id) : undefined;
+      return {
+        id: user.id,
+        name: displayName(user),
+        email: user.email,
+        status: user.status,
+        tokenBalance: user.wallet?.balance.toString() ?? '0',
+        lockedBalance: user.wallet?.lockedBalance.toString() ?? '0',
+        totalCredit: (totals?.credit ?? new Decimal(0)).toString(),
+        totalDebit: (totals?.debit ?? new Decimal(0)).toString(),
+        createdAt: user.createdAt,
+      };
+    });
+  }
+
+  /**
+   * Full transaction history for one distributor -- every ledger entry
+   * against their wallet (bulk allocations, referral bonuses at any level,
+   * P2P escrow activity, withdrawals, everything), newest first. This is
+   * the "operations to see all transactions and funding, and sales" view
+   * from the admin distributors table's per-row action.
+   */
+  async getActivity(distributorId: string, params: { page: number; pageSize: number }) {
+    const user = await this.prisma.user.findUnique({ where: { id: distributorId }, include: { wallet: true } });
+    if (!user || user.role !== Role.DISTRIBUTOR) {
+      throw new NotFoundException('Distributor not found');
+    }
+    if (!user.wallet) {
+      return { items: [], page: params.page, pageSize: params.pageSize, total: 0, totalPages: 1 };
+    }
+
+    const where = { walletId: user.wallet.id };
+    const [total, entries] = await this.prisma.$transaction([
+      this.prisma.ledgerEntry.count({ where }),
+      this.prisma.ledgerEntry.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (params.page - 1) * params.pageSize,
+        take: params.pageSize,
+        select: { id: true, type: true, amount: true, reference: true, createdAt: true },
+      }),
+    ]);
+
+    return {
+      items: entries.map((entry) => ({ ...entry, amount: entry.amount.toString() })),
+      page: params.page,
+      pageSize: params.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / params.pageSize)),
+    };
+  }
+
   async dashboard(userId: string) {
     const [settings, user, allocations, sellOffers, buyRequests, releasedTrades] = await Promise.all([
       this.settingsRow(),

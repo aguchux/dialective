@@ -17,6 +17,7 @@ import {
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: HomeIcon },
   { href: '/admin/users', label: 'Users', icon: UsersIcon },
+  { href: '/admin/distributors', label: 'Distributors', icon: DistributorsIcon },
   { href: '/admin/data-access', label: 'Data Access Leads', icon: LeadsIcon },
   { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
   { href: '/admin/words', label: 'Words', icon: WordsIcon },
@@ -213,6 +214,15 @@ function UsersIcon() {
       <path d="M2.5 20a6.5 6.5 0 0 1 13 0" strokeLinecap="round" />
       <path d="M15.5 5.5a3.25 3.25 0 0 1 0 6.4" strokeLinecap="round" />
       <path d="M17 14.2a6.5 6.5 0 0 1 4.5 5.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function DistributorsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" strokeLinecap="round" />
     </svg>
   );
 }

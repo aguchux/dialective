@@ -212,6 +212,35 @@ export interface DistributorAllocationsPage {
   totalPages: number;
 }
 
+/** Row on the admin Distributors list -- one per DISTRIBUTOR-role user, with lifetime credit/debit totals from their full ledger, not just bulk allocations. */
+export interface DistributorAdminSummary {
+  id: string;
+  name: string;
+  email: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
+  tokenBalance: string;
+  lockedBalance: string;
+  totalCredit: string;
+  totalDebit: string;
+  createdAt: string;
+}
+
+export interface DistributorActivityEntry {
+  id: string;
+  type: LedgerEntryType;
+  amount: string;
+  reference: string;
+  createdAt: string;
+}
+
+export interface DistributorActivityPage {
+  items: DistributorActivityEntry[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 // No `role` field -- the network view is deliberately name + balance only,
 // see DistributorsService.loadNetworkLevels' NetworkNode type on the backend.
 export interface DistributorNetworkNode {
@@ -309,6 +338,9 @@ export type LedgerEntryType =
   | 'REFERRAL_COMMISSION'
   | 'REFERRAL_FUNDING_BONUS'
   | 'REFERRAL_PAYOUT_BONUS'
+  | 'DISTRIBUTOR_BULK_ALLOCATION'
+  | 'DISTRIBUTOR_FUNDING_BONUS'
+  | 'DISTRIBUTOR_PAYOUT_BONUS'
   | 'P2P_ESCROW_LOCK'
   | 'P2P_ESCROW_REFUND'
   | 'P2P_ESCROW_RELEASE'
@@ -1082,7 +1114,7 @@ const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptio
 export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
   baseQuery: baseQueryWithMaintenanceSignal,
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -1429,11 +1461,19 @@ export const dialectivaApi = createApi({
         method: 'POST',
         body,
       }),
-      invalidatesTags: ['DistributorDashboard', 'DistributorAllocations', 'Wallet', 'Users'],
+      invalidatesTags: ['DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'Wallet', 'Users'],
     }),
     listDistributorAllocations: builder.query<DistributorAllocationsPage, { distributorId?: string; page?: number; pageSize?: number } | void>({
       query: (params) => ({ url: '/admin/distributors/allocations', params: params ?? undefined }),
       providesTags: ['DistributorAllocations'],
+    }),
+    listAdminDistributors: builder.query<DistributorAdminSummary[], void>({
+      query: () => '/admin/distributors',
+      providesTags: ['DistributorList'],
+    }),
+    getDistributorActivity: builder.query<DistributorActivityPage, { distributorId: string; page?: number; pageSize?: number }>({
+      query: ({ distributorId, ...params }) => ({ url: `/admin/distributors/${distributorId}/activity`, params }),
+      providesTags: ['DistributorActivity'],
     }),
     getDistributorDashboard: builder.query<DistributorDashboard, void>({
       query: () => '/distributors/dashboard',
@@ -1729,6 +1769,8 @@ export const {
   useUpdateDistributorSettingsMutation,
   useCreateDistributorAllocationMutation,
   useListDistributorAllocationsQuery,
+  useListAdminDistributorsQuery,
+  useGetDistributorActivityQuery,
   useGetDistributorDashboardQuery,
   useGetDistributorNetworkQuery,
   useGetPoolsSummaryQuery,

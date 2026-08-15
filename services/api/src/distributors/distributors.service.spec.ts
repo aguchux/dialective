@@ -42,6 +42,7 @@ function setup(settingsOverrides: Record<string, unknown> = {}) {
     ledgerEntry: {
       create: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
     },
     p2PTokenOffer: { count: jest.fn().mockResolvedValue(0) },
     p2PTokenTrade: { count: jest.fn().mockResolvedValue(0) },
@@ -56,7 +57,7 @@ function setup(settingsOverrides: Record<string, unknown> = {}) {
     user: { findUnique: jest.Mock; findMany: jest.Mock };
     wallet: { create: jest.Mock; update: jest.Mock };
     distributorAllocation: { create: jest.Mock; findMany: jest.Mock; count: jest.Mock };
-    ledgerEntry: { create: jest.Mock; findMany: jest.Mock };
+    ledgerEntry: { create: jest.Mock; findMany: jest.Mock; count: jest.Mock };
     p2PTokenOffer: { count: jest.Mock };
     p2PTokenTrade: { count: jest.Mock };
     $transaction: jest.Mock;
@@ -261,5 +262,78 @@ describe('DistributorsService.dashboard', () => {
       { level: 2, amount: '2' },
     ]);
     expect(result.metrics.referralBonuses).toBe('16');
+  });
+});
+
+describe('DistributorsService.listAdmin', () => {
+  it('returns an empty list without querying ledger entries when there are no distributors', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+
+    const result = await service.listAdmin();
+
+    expect(result).toEqual([]);
+    expect(prisma.ledgerEntry.findMany).not.toHaveBeenCalled();
+  });
+
+  it('sums positive ledger entries into totalCredit and negative ones (absolute value) into totalDebit, per wallet', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findMany.mockResolvedValue([
+      { id: 'd1', firstName: 'Ada', lastName: null, email: 'ada@x.com', status: 'ACTIVE', createdAt: new Date(), wallet: { id: 'w1', balance: new Decimal('120'), lockedBalance: new Decimal('0') } },
+      { id: 'd2', firstName: null, lastName: null, email: 'd2@x.com', status: 'ACTIVE', createdAt: new Date(), wallet: null },
+    ]);
+    prisma.ledgerEntry.findMany.mockResolvedValue([
+      { walletId: 'w1', amount: new Decimal('1000000') }, // bulk allocation credit
+      { walletId: 'w1', amount: new Decimal('50') }, // referral bonus credit
+      { walletId: 'w1', amount: new Decimal('-30') }, // P2P escrow lock / withdrawal debit
+    ]);
+
+    const result = await service.listAdmin();
+
+    expect(result).toEqual([
+      expect.objectContaining({ id: 'd1', name: 'Ada', tokenBalance: '120', totalCredit: '1000050', totalDebit: '30' }),
+      expect.objectContaining({ id: 'd2', name: 'Member', tokenBalance: '0', totalCredit: '0', totalDebit: '0' }),
+    ]);
+    // Wallet-less distributor never gets pulled into the walletId IN (...) query.
+    expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith({ where: { walletId: { in: ['w1'] } }, select: { walletId: true, amount: true } });
+  });
+});
+
+describe('DistributorsService.getActivity', () => {
+  it('404s when the target user is not a DISTRIBUTOR', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'trainer-1', role: 'TRAINER', wallet: null });
+    await expect(service.getActivity('trainer-1', { page: 1, pageSize: 25 })).rejects.toThrow(NotFoundException);
+  });
+
+  it('returns an empty page without querying ledger entries when the distributor has no wallet yet', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'dist-1', role: 'DISTRIBUTOR', wallet: null });
+
+    const result = await service.getActivity('dist-1', { page: 1, pageSize: 25 });
+
+    expect(result).toEqual({ items: [], page: 1, pageSize: 25, total: 0, totalPages: 1 });
+    expect(prisma.ledgerEntry.count).not.toHaveBeenCalled();
+  });
+
+  it('paginates the wallet\'s ledger entries newest first', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'dist-1', role: 'DISTRIBUTOR', wallet: { id: 'w1' } });
+    prisma.ledgerEntry.count.mockResolvedValue(42);
+    prisma.ledgerEntry.findMany.mockResolvedValue([
+      { id: 'e1', type: 'DISTRIBUTOR_BULK_ALLOCATION', amount: new Decimal('1000000'), reference: 'alloc-1', createdAt: new Date() },
+    ]);
+
+    const result = await service.getActivity('dist-1', { page: 2, pageSize: 10 });
+
+    expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { walletId: 'w1' },
+      skip: 10,
+      take: 10,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    }));
+    expect(result.items[0].amount).toBe('1000000');
+    expect(result.total).toBe(42);
+    expect(result.totalPages).toBe(5);
   });
 });

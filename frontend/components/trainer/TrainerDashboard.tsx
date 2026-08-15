@@ -102,7 +102,7 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
 // Reachable only from the account dropdown, not the main tab bar/mobile nav.
 const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'home', 'referrals', 'profile'];
 
-const activityLabels: Record<LedgerEntryType, string> = {
+export const activityLabels: Record<LedgerEntryType, string> = {
   DEPOSIT: 'DL funding',
   TRAINING_PAYOUT: 'Training payout',
   TASK_LOCK: 'DL held for task',
@@ -112,6 +112,9 @@ const activityLabels: Record<LedgerEntryType, string> = {
   REFERRAL_COMMISSION: 'Referral bonus',
   REFERRAL_FUNDING_BONUS: 'Funding referral bonus',
   REFERRAL_PAYOUT_BONUS: 'Training referral bonus',
+  DISTRIBUTOR_BULK_ALLOCATION: 'Bulk DL allocation',
+  DISTRIBUTOR_FUNDING_BONUS: 'Distributor funding bonus',
+  DISTRIBUTOR_PAYOUT_BONUS: 'Distributor payout bonus',
   P2P_ESCROW_LOCK: 'P2P escrow lock',
   P2P_ESCROW_REFUND: 'P2P escrow returned',
   P2P_ESCROW_RELEASE: 'P2P escrow released',
