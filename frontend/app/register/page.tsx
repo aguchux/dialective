@@ -10,40 +10,19 @@ import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { roleHomePath } from '@/lib/role-home';
 import { ActionButton } from '@/components/ui/ActionButton';
+import {
+  clearReferralCookie,
+  DEFAULT_REFERRAL_COOKIE_MAX_AGE_SECONDS,
+  normalizeReferralCode,
+  readReferralCookie,
+  writeReferralCookie,
+} from '@/lib/referral-cookie';
 
 const inputClass = 'min-h-10 min-w-0 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const secondaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-3.5 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
-const REFERRAL_COOKIE_KEY = 'dialectiva_ref';
-const DEFAULT_REFERRAL_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60;
-
-function normalizeReferralCode(value: string | null | undefined): string | undefined {
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  return /^[A-Za-z0-9_-]{4,64}$/.test(trimmed) ? trimmed : undefined;
-}
-
-function readReferralCookie(): string | undefined {
-  if (typeof document === 'undefined') return undefined;
-  const parts = document.cookie.split(';').map((part) => part.trim());
-  const entry = parts.find((part) => part.startsWith(`${REFERRAL_COOKIE_KEY}=`));
-  if (!entry) return undefined;
-  const rawValue = entry.slice(`${REFERRAL_COOKIE_KEY}=`.length);
-  try {
-    return normalizeReferralCode(decodeURIComponent(rawValue));
-  } catch {
-    return normalizeReferralCode(rawValue);
-  }
-}
-
-function writeReferralCookie(code: string, maxAgeSeconds: number): void {
-  if (typeof document === 'undefined') return;
-  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = `${REFERRAL_COOKIE_KEY}=${encodeURIComponent(code)}; Max-Age=${maxAgeSeconds}; Path=/; SameSite=Lax${secure}`;
-}
 
 function RegisterContent() {
   const { data: session, status } = useSession();
@@ -111,6 +90,7 @@ function RegisterContent() {
       if (result?.error) {
         setError('Invalid or expired code.');
       } else {
+        clearReferralCookie();
         const freshSession = await getSession();
         window.location.href = roleHomePath(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
       }

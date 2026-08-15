@@ -1,9 +1,38 @@
 import { getToken } from 'next-auth/jwt';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import {
+  DEFAULT_REFERRAL_COOKIE_MAX_AGE_SECONDS,
+  REFERRAL_COOKIE_KEY,
+  normalizeReferralCode,
+} from '@/lib/referral-cookie';
 import { postAuthPath, roleHomePath } from '@/lib/role-home';
 
 const AUTH_PAGES = new Set(['/login', '/register']);
+
+function withReferralCookie(request: NextRequest, response: NextResponse) {
+  const referralCode = normalizeReferralCode(
+    request.nextUrl.searchParams.get('ref') ??
+      request.nextUrl.searchParams.get('referral') ??
+      request.nextUrl.searchParams.get('referralCode'),
+  );
+
+  if (referralCode) {
+    response.cookies.set(REFERRAL_COOKIE_KEY, referralCode, {
+      httpOnly: false,
+      maxAge: DEFAULT_REFERRAL_COOKIE_MAX_AGE_SECONDS,
+      path: '/',
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+    });
+  }
+
+  return response;
+}
+
+function next(request: NextRequest) {
+  return withReferralCookie(request, NextResponse.next());
+}
 
 function redirect(request: NextRequest, pathname: string, includeCallback = false) {
   const url = request.nextUrl.clone();
@@ -15,15 +44,24 @@ function redirect(request: NextRequest, pathname: string, includeCallback = fals
     url.searchParams.set('callbackUrl', `${request.nextUrl.pathname}${request.nextUrl.search}`);
   }
 
-  return NextResponse.redirect(url);
+  return withReferralCookie(request, NextResponse.redirect(url));
 }
 
 export default async function proxy(request: NextRequest) {
-  const token = await getToken({ req: request });
   const pathname = request.nextUrl.pathname;
+  const isProtectedPath =
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/dashboard') ||
+    pathname === '/onboarding';
+
+  if (!AUTH_PAGES.has(pathname) && !isProtectedPath) {
+    return next(request);
+  }
+
+  const token = await getToken({ req: request });
 
   if (!token || token.authError === 'RefreshTokenInvalid') {
-    return AUTH_PAGES.has(pathname) ? NextResponse.next() : redirect(request, '/login', true);
+    return AUTH_PAGES.has(pathname) ? next(request) : redirect(request, '/login', true);
   }
 
   const role = typeof token.role === 'string' ? token.role : undefined;
@@ -35,16 +73,16 @@ export default async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith('/admin')) {
-    return role === 'ADMIN' ? NextResponse.next() : redirect(request, homePath);
+    return role === 'ADMIN' ? next(request) : redirect(request, homePath);
   }
 
   if (pathname === '/onboarding') {
-    return homePath === '/onboarding' ? NextResponse.next() : redirect(request, homePath);
+    return homePath === '/onboarding' ? next(request) : redirect(request, homePath);
   }
 
   if (pathname.startsWith('/dashboard') && homePath !== '/dashboard') {
     return redirect(request, homePath);
   }
 
-  return NextResponse.next();
+  return next(request);
 }

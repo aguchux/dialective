@@ -96,10 +96,6 @@ function generateReferralCode(): string {
   return randomBytes(6).toString('base64url');
 }
 
-function emailDomain(email: string): string {
-  return email.split('@')[1]?.toLowerCase() ?? email.toLowerCase();
-}
-
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -183,11 +179,9 @@ export class AuthService {
   /**
    * A typo'd/stale referral code shouldn't block signup -- registration
    * proceeds either way, just without attribution if the code doesn't
-   * resolve. Same-email-domain check is a minimal anti-abuse guard against
-   * the most obvious self-referral case (registering throwaway accounts on
-   * your own link to farm bonuses); it doesn't stop a determined abuser
-   * with multiple real domains, but that's an explicit, accepted tradeoff
-   * for v1 -- see plan "Anti-abuse scope".
+   * resolve. Public email domains are common among trainers, so attribution
+   * must not be rejected only because the inviter and invitee both use Gmail
+   * or another shared provider.
    */
   private async resolveReferrerId(referralCode: string | undefined, newUserEmail: string): Promise<string | undefined> {
     if (!referralCode) {
@@ -197,7 +191,7 @@ export class AuthService {
     if (!referrer) {
       return undefined;
     }
-    if (emailDomain(referrer.email) === emailDomain(newUserEmail)) {
+    if (referrer.email.toLowerCase() === newUserEmail.toLowerCase()) {
       return undefined;
     }
     return referrer.id;
