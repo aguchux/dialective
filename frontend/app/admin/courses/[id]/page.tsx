@@ -11,7 +11,7 @@ export default function EditCoursePage() {
   return (
     <AdminShell>
       {isLoading && <p className="text-muted">Loading course...</p>}
-      {error && <p className="text-[#a3242f]">Could not load this course.</p>}
+      {Boolean(error) && <p className="text-[#a3242f]">Could not load this course.</p>}
       {data && <CourseEditorForm course={data} />}
     </AdminShell>
   );

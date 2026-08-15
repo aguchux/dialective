@@ -922,7 +922,7 @@ export interface ApiErrorShape {
   timestamp?: string;
 }
 
-function normalizeErrorMessage(error: unknown, fallback: string) {
+function normalizeErrorMessage(error: unknown, fallback: string): string {
   if (typeof error === 'object' && error && 'data' in error) {
     const data = (error as { data?: ApiErrorShape }).data;
     if (Array.isArray(data?.message)) {

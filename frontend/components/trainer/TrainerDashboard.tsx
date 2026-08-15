@@ -1490,7 +1490,7 @@ function TraderProfileDialog({ userId, onOpenChange }: { userId: string | null; 
     <Dialog open={userId !== null} onOpenChange={onOpenChange}>
       <DialogContent title="Trader profile" description="Basic info shown to other traders in the market.">
         {isLoading && <p className="text-sm text-muted">Loading…</p>}
-        {!isLoading && error && <p className="text-sm text-danger">{normalizeErrorMessage(error, 'Could not load this trader profile')}</p>}
+        {!isLoading && Boolean(error) && <p className="text-sm text-danger">{normalizeErrorMessage(error, 'Could not load this trader profile')}</p>}
         {profile && (
           <div className="grid gap-4">
             <div className="flex items-center gap-3">

@@ -11,7 +11,7 @@ export default function EditBlogPostPage() {
   return (
     <AdminShell>
       {isLoading && <p className="text-muted">Loading post...</p>}
-      {error && <p className="text-[#a3242f]">Could not load this post.</p>}
+      {Boolean(error) && <p className="text-[#a3242f]">Could not load this post.</p>}
       {data && <BlogEditorForm post={data} />}
     </AdminShell>
   );
