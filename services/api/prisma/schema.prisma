@@ -268,6 +268,7 @@ enum OtpPurpose {
   ADMIN_PAYOUT
   P2P_PAYMENT_METHOD
   PHONE_VERIFICATION
+  P2P_TRADE
 }
 
 /// One-time email codes gating registration/login (2FA), wallet/admin-payout,
@@ -1035,6 +1036,7 @@ model PlatformSettings {
   taskTokenCost            Decimal? @db.Decimal(20, 8) // overrides TASK_TOKEN_COST when set; tokens debited from a trainer's wallet per submission
   reverseWordTrainingEnabled Boolean @default(false)
   adminPayoutOtpEnabled    Boolean @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
+  phoneVerificationRequired Boolean @default(true) // when false: phone numbers can be saved without SMS verification, the standing phoneVerifiedAt gate is skipped for withdrawals and P2P trading, and P2P offer create/accept require an emailed OTP instead (see P2pService.createOffer/acceptOffer) -- withdrawals already have their own per-transaction email OTP regardless of this flag
   startupBonusAmount      Decimal? @db.Decimal(20, 8) // one-time DL amount credited (as a STARTUP_BONUS ledger entry) the first time a user verifies their email; null or 0 means the bonus is off
   wordStuckTimeoutMinutes  Int      @default(1440) // minutes an ENGLISH_TO_DIALECT WordRecording can stay PENDING (unmatched by reverse-validation) before settlement-job auto-refunds its locked tokens
   scoringSlaMinutes        Int      @default(60) // minutes a Submission/WordRecording can stay unscored before settlement-job resolves it via noFailOnTrainEnabled (synthetic score) or a plain refund

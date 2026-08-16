@@ -19,6 +19,7 @@ export function GeneralSettingsPanel() {
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
   const [sentenceRebuildEnabled, setSentenceRebuildEnabled] = useState(false);
   const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
+  const [phoneVerificationRequired, setPhoneVerificationRequired] = useState(true);
   const [startupBonusAmount, setStartupBonusAmount] = useState('');
   const [wordStuckTimeoutMinutes, setWordStuckTimeoutMinutes] = useState('');
   const [scoringSlaMinutes, setScoringSlaMinutes] = useState('');
@@ -37,6 +38,7 @@ export function GeneralSettingsPanel() {
     setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
     setSentenceRebuildEnabled(settings.sentenceRebuildEnabled);
     setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
+    setPhoneVerificationRequired(settings.phoneVerificationRequired);
     setStartupBonusAmount(settings.startupBonusAmount ?? '');
     setWordStuckTimeoutMinutes(String(settings.wordStuckTimeoutMinutes));
     setScoringSlaMinutes(String(settings.scoringSlaMinutes));
@@ -66,6 +68,7 @@ export function GeneralSettingsPanel() {
         reverseWordTrainingEnabled,
         sentenceRebuildEnabled,
         adminPayoutOtpEnabled,
+        phoneVerificationRequired,
         ...(startupBonusAmount !== '' ? { startupBonusAmount: Number(startupBonusAmount) } : {}),
         ...(wordStuckTimeoutMinutes !== '' ? { wordStuckTimeoutMinutes: Number(wordStuckTimeoutMinutes) } : {}),
         ...(scoringSlaMinutes !== '' ? { scoringSlaMinutes: Number(scoringSlaMinutes) } : {}),
@@ -327,6 +330,27 @@ export function GeneralSettingsPanel() {
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   When on, issuing a training payout or marking a withdrawal paid requires the acting admin to verify
                   an emailed one-time code first.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="phone-verification-required">
+              <input
+                checked={phoneVerificationRequired}
+                className="mt-0.5 size-5 accent-accent"
+                id="phone-verification-required"
+                onChange={(event) => setPhoneVerificationRequired(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Require phone verification</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  When on (default), trainers must verify their phone by SMS before requesting a withdrawal or
+                  trading on the P2P market. When off, phone numbers can be saved without SMS verification, and
+                  withdrawals and P2P trading fall back to an emailed one-time code instead -- withdrawals already
+                  require this email code regardless of this setting.
                 </span>
               </span>
             </label>

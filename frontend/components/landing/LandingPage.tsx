@@ -53,13 +53,13 @@ export async function LandingPage() {
 
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-white text-[#050505]">
+      <LandingHeader />
       <div className="relative isolate overflow-hidden">
         <div
           className="pointer-events-none absolute inset-0 -z-10 bg-[#c9eff7] bg-cover bg-top bg-no-repeat"
           style={{ backgroundImage: "url('/landing-hero.png')" }}
           aria-hidden="true"
         />
-        <LandingHeader />
         <div className="px-4 md:px-[3.4rem]">
           <LandingHero />
           <LandingStats

@@ -11,6 +11,7 @@ import {
   ListOffersDto,
   ListTradesDto,
   RequestPaymentMethodOtpDto,
+  RequestP2pTradeOtpDto,
   RaiseDisputeDto,
   ResolveDisputeDto,
   UpdateP2PMarketSettingsDto,
@@ -65,6 +66,11 @@ export class P2PController {
   @Get('offers/mine')
   listMyOffers(@Req() req: AuthenticatedRequest) {
     return this.p2p.listMyOffers(req.user.sub);
+  }
+
+  @Post('offers/otp')
+  requestTradeOtp(@Req() req: AuthenticatedRequest, @Body() body: RequestP2pTradeOtpDto) {
+    return this.p2p.requestTradeOtp(req.user.sub, body);
   }
 
   @Post('offers')

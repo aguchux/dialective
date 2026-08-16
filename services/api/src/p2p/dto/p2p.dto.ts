@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Length, Matches, Max, Min } from 'class-validator';
 import { P2PDisputeStatus, P2POfferStatus, P2POfferType, P2PTradeStatus } from '@dialectiva/db';
 
 export class UpsertPaymentMethodDto {
@@ -109,6 +109,19 @@ export class CreateOfferDto {
   @Min(5)
   @Max(10080)
   expiresInMinutes?: number;
+
+  // Required only when PlatformSettings.phoneVerificationRequired is off
+  // (replacing the standing phone-verified gate) -- see
+  // P2pService.requireVerifiedForTrading.
+  @IsOptional()
+  @IsUUID()
+  otpRequestId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(6, 6)
+  @Matches(/^\d{6}$/)
+  code?: string;
 }
 
 export class ListOffersDto {
@@ -125,6 +138,47 @@ export class AcceptOfferDto {
   @IsOptional()
   @IsUUID()
   sellerPaymentMethodId?: string;
+
+  // Required only when PlatformSettings.phoneVerificationRequired is off --
+  // see CreateOfferDto's otpRequestId/code fields.
+  @IsOptional()
+  @IsUUID()
+  otpRequestId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(6, 6)
+  @Matches(/^\d{6}$/)
+  code?: string;
+}
+
+export class RequestP2pTradeOtpDto {
+  @IsIn(['create-offer', 'accept-offer'])
+  action!: 'create-offer' | 'accept-offer';
+
+  // create-offer context
+  @IsOptional()
+  @IsIn([P2POfferType.SELL, P2POfferType.BUY])
+  type?: P2POfferType;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.00000001)
+  tokenAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  fiatAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  fiatCurrency?: string;
+
+  // accept-offer context
+  @IsOptional()
+  @IsUUID()
+  offerId?: string;
 }
 
 export class RaiseDisputeDto {

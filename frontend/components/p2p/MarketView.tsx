@@ -17,12 +17,14 @@ import {
   useGetP2PReferenceRateQuery,
   useGetP2PSettingsQuery,
   useGetP2PTraderProfileQuery,
+  useGetPlatformSettingsQuery,
   useListMyP2PTradesQuery,
   useListP2POffersQuery,
   useMarkP2PTradePaidMutation,
   useRaiseP2PDisputeMutation,
   useReleaseP2PTradeMutation,
   useRequestP2PTradeCancelMutation,
+  useRequestP2PTradeOtpMutation,
 } from '@/store/api';
 
 /**
@@ -48,15 +50,24 @@ export function MarketView() {
   const { data: buyOffers = [] } = useListP2POffersQuery({ type: 'BUY' });
   const { data: trades = [] } = useListMyP2PTradesQuery();
   const { data: me } = useGetMeQuery();
+  const { data: platformSettings } = useGetPlatformSettingsQuery();
   const [createOffer, { isLoading: offerSaving }] = useCreateP2POfferMutation();
   const [acceptOffer, { isLoading: accepting }] = useAcceptP2POfferMutation();
+  const [requestTradeOtp, { isLoading: tradeOtpSending }] = useRequestP2PTradeOtpMutation();
   const [markPaid] = useMarkP2PTradePaidMutation();
   const [releaseTrade] = useReleaseP2PTradeMutation();
   const [requestCancel] = useRequestP2PTradeCancelMutation();
   const [raiseDispute] = useRaiseP2PDisputeMutation();
   const primaryMethod = methods.find((method) => method.enabled);
+  const phoneVerificationRequired = platformSettings?.phoneVerificationRequired ?? true;
   const phoneVerified = me?.phoneVerified ?? false;
-  const marketDisabled = !settings?.enabled || !phoneVerified;
+  // Trading is blocked on phone verification only while that requirement
+  // is on -- when it's off, createOffer/acceptOffer fall back to an
+  // emailed OTP instead (see submitOffer/accept and offerOtpRequestId below).
+  const marketDisabled = !settings?.enabled || (phoneVerificationRequired && !phoneVerified);
+  const [offerOtpRequestId, setOfferOtpRequestId] = useState<string | null>(null);
+  const [offerOtpCode, setOfferOtpCode] = useState('');
+  const [pendingAcceptOffer, setPendingAcceptOffer] = useState<P2POffer | null>(null);
 
   // Pre-fills the offer form's currency with the trainer's own country currency once known; the field stays editable.
   useEffect(() => {
@@ -88,6 +99,17 @@ export function MarketView() {
     event.preventDefault();
     setError('');
     try {
+      if (!phoneVerificationRequired && !offerOtpRequestId) {
+        const otp = await requestTradeOtp({
+          action: 'create-offer',
+          type: offerType,
+          tokenAmount: Number(tokenAmount),
+          fiatAmount: Number(fiatAmount),
+          fiatCurrency,
+        }).unwrap();
+        setOfferOtpRequestId(otp.otpRequestId);
+        return;
+      }
       await createOffer({
         type: offerType,
         tokenAmount: Number(tokenAmount),
@@ -95,20 +117,52 @@ export function MarketView() {
         fiatCurrency,
         paymentMethod: 'BANK_TRANSFER',
         paymentMethodId: offerType === 'SELL' ? primaryMethod?.id : undefined,
+        ...(offerOtpRequestId ? { otpRequestId: offerOtpRequestId, code: offerOtpCode.trim() } : {}),
       }).unwrap();
       setCreateOpen(false);
       setActiveTab(offerType);
+      setOfferOtpRequestId(null);
+      setOfferOtpCode('');
     } catch (err) {
-      setError(normalizeErrorMessage(err, 'Could not post market offer'));
+      setError(normalizeErrorMessage(err, offerOtpRequestId ? 'Could not verify this code' : 'Could not post market offer'));
     }
   }
 
   async function accept(offer: P2POffer) {
     setError('');
+    if (!phoneVerificationRequired) {
+      try {
+        const otp = await requestTradeOtp({ action: 'accept-offer', offerId: offer.id }).unwrap();
+        setOfferOtpRequestId(otp.otpRequestId);
+        setOfferOtpCode('');
+        setPendingAcceptOffer(offer);
+      } catch (err) {
+        setError(normalizeErrorMessage(err, 'Could not send verification code'));
+      }
+      return;
+    }
     try {
       await acceptOffer({ id: offer.id, sellerPaymentMethodId: offer.type === 'BUY' ? primaryMethod?.id : undefined }).unwrap();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not accept offer'));
+    }
+  }
+
+  async function confirmAcceptOffer() {
+    if (!pendingAcceptOffer || !offerOtpRequestId) return;
+    setError('');
+    try {
+      await acceptOffer({
+        id: pendingAcceptOffer.id,
+        sellerPaymentMethodId: pendingAcceptOffer.type === 'BUY' ? primaryMethod?.id : undefined,
+        otpRequestId: offerOtpRequestId,
+        code: offerOtpCode.trim(),
+      }).unwrap();
+      setPendingAcceptOffer(null);
+      setOfferOtpRequestId(null);
+      setOfferOtpCode('');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not verify this code'));
     }
   }
 
@@ -119,7 +173,16 @@ export function MarketView() {
           <h1 className="text-2xl font-black tracking-normal md:text-3xl">DL market</h1>
           <p className="mt-1 text-muted">Peer-to-peer DL escrow for sell offers and buy requests.</p>
         </div>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <Dialog
+          open={createOpen}
+          onOpenChange={(open) => {
+            setCreateOpen(open);
+            if (!open) {
+              setOfferOtpRequestId(null);
+              setOfferOtpCode('');
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <button
               className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-50"
@@ -173,14 +236,32 @@ export function MarketView() {
                   Add your bank details in Profile before posting a sell offer.
                 </p>
               )}
+              {!phoneVerificationRequired && offerOtpRequestId && (
+                <label className="grid gap-1.5 text-sm font-bold">
+                  Email verification code
+                  <input
+                    className="min-h-11 rounded-lg border border-line bg-bg px-3"
+                    inputMode="numeric"
+                    maxLength={6}
+                    onChange={(e) => setOfferOtpCode(e.target.value)}
+                    value={offerOtpCode}
+                  />
+                </label>
+              )}
               <ActionButton
                 className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={marketDisabled || (offerType === 'SELL' && !primaryMethod)}
-                pending={offerSaving}
-                pendingLabel="Posting"
+                disabled={marketDisabled || (offerType === 'SELL' && !primaryMethod) || (Boolean(offerOtpRequestId) && !offerOtpCode.trim())}
+                pending={offerSaving || tradeOtpSending}
+                pendingLabel={offerOtpRequestId ? 'Posting' : !phoneVerificationRequired ? 'Sending code' : 'Posting'}
                 type="submit"
               >
-                {offerType === 'SELL' ? 'Post sell offer' : 'Post buy request'}
+                {offerOtpRequestId
+                  ? 'Confirm'
+                  : !phoneVerificationRequired
+                    ? 'Send confirmation code'
+                    : offerType === 'SELL'
+                      ? 'Post sell offer'
+                      : 'Post buy request'}
               </ActionButton>
             </form>
           </DialogContent>
@@ -193,7 +274,7 @@ export function MarketView() {
           <p className="mt-1 text-sm text-muted">Admin must enable marketplace settings before trades can start.</p>
         </div>
       )}
-      {settings?.enabled && !phoneVerified && (
+      {settings?.enabled && phoneVerificationRequired && !phoneVerified && (
         <div className={`${cardClass} mb-5 p-5`}>
           <p className="font-black">Verify your phone number to trade.</p>
           <p className="mt-1 text-sm text-muted">Add and verify a phone number in Profile before buying or selling on the P2P market.</p>
@@ -241,6 +322,46 @@ export function MarketView() {
           )}
         </div>
       </section>
+
+      {pendingAcceptOffer && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setPendingAcceptOffer(null);
+              setOfferOtpRequestId(null);
+              setOfferOtpCode('');
+            }
+          }}
+        >
+          <DialogContent title="Confirm this trade" description="We emailed a 6-digit code to confirm this trade.">
+            <div className="grid gap-3">
+              <label className="grid gap-1.5 text-sm font-bold">
+                Email verification code
+                <input
+                  autoFocus
+                  className="min-h-11 rounded-lg border border-line bg-bg px-3"
+                  inputMode="numeric"
+                  maxLength={6}
+                  onChange={(e) => setOfferOtpCode(e.target.value)}
+                  value={offerOtpCode}
+                />
+              </label>
+              {error && <p className="text-sm font-bold text-danger">{error}</p>}
+              <ActionButton
+                className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!offerOtpCode.trim()}
+                onClick={() => void confirmAcceptOffer()}
+                pending={accepting}
+                pendingLabel="Confirming"
+                type="button"
+              >
+                Confirm
+              </ActionButton>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

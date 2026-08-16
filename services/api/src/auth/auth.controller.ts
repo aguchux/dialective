@@ -131,6 +131,14 @@ export class AuthController {
     return this.auth.verifyPhoneNumber(user.sub, dto.phoneNumber, dto.otpRequestId, dto.code);
   }
 
+  // Only reachable while PlatformSettings.phoneVerificationRequired is off
+  // -- see AuthService.savePhoneNumberUnverified.
+  @Patch('phone')
+  @UseGuards(JwtAuthGuard)
+  savePhoneUnverified(@CurrentUser() user: AccessTokenClaims, @Body() dto: RequestPhoneOtpDto) {
+    return this.auth.savePhoneNumberUnverified(user.sub, dto.phoneNumber);
+  }
+
   // --- Admin: user management ------------------------------------------------
 
   @Get('admin/users')

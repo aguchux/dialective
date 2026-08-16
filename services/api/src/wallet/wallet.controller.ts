@@ -705,7 +705,10 @@ export class WalletController {
     if (!user.emailVerified) {
       throw new UnprocessableEntityException('Verify your email before requesting a withdrawal');
     }
-    if (!user.phoneVerifiedAt) {
+    // Only enforced while phoneVerificationRequired is on -- when off,
+    // withdrawals still keep their own per-transaction WITHDRAWAL email OTP
+    // (requestWithdrawalOtp/createWithdrawal below), so there's no gap.
+    if ((await this.platformSettings.isPhoneVerificationRequired()) && !user.phoneVerifiedAt) {
       throw new UnprocessableEntityException('Verify your phone number before requesting a withdrawal');
     }
   }

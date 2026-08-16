@@ -688,6 +688,37 @@ export class AuthService {
     }
   }
 
+  /**
+   * Saves a phone number with no SMS OTP step at all -- only reachable
+   * while PlatformSettings.phoneVerificationRequired is off. phoneVerifiedAt
+   * is deliberately left null (not backfilled to "now"): this is an
+   * unverified number, and nothing should ever read it as verified just
+   * because the platform-wide requirement happens to be off today. A user
+   * can still use the normal request/verify OTP flow above to actually
+   * verify it at any time, on or off.
+   */
+  async savePhoneNumberUnverified(userId: string, phoneNumber: string): Promise<PublicUser> {
+    if (await this.platformSettings.isPhoneVerificationRequired()) {
+      throw new UnprocessableEntityException('Phone verification is required on this platform');
+    }
+    if (!isValidPhoneNumber(phoneNumber)) {
+      throw new UnprocessableEntityException('Enter a valid phone number in international format');
+    }
+    try {
+      const user = await this.prisma.user.update({
+        where: { id: userId },
+        data: { phoneNumber },
+        include: { dialect: true, dialectVariant: true },
+      });
+      return toPublicUser(user);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('This phone number is already in use on another account');
+      }
+      throw err;
+    }
+  }
+
   // --- Admin: user management ------------------------------------------------
 
   async listUsers(filters: { role?: Role; status?: UserStatus; search?: string }): Promise<PublicUser[]> {

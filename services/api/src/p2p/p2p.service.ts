@@ -27,12 +27,14 @@ import {
   ListOffersDto,
   ListTradesDto,
   RequestPaymentMethodOtpDto,
+  RequestP2pTradeOtpDto,
   RaiseDisputeDto,
   ResolveDisputeDto,
   UpdateP2PMarketSettingsDto,
   UpsertPaymentMethodDto,
 } from './dto/p2p.dto';
 import { paymentMethodContextHash } from './p2p-otp-context.util';
+import { p2pTradeOtpContextHash } from './p2p-trade-otp-context.util';
 
 const OPEN_OFFER_STATUSES = [P2POfferStatus.ACTIVE, P2POfferStatus.RESERVED];
 const OPEN_TRADE_STATUSES = [P2PTradeStatus.AWAITING_PAYMENT, P2PTradeStatus.PAID_MARKED, P2PTradeStatus.CANCEL_PENDING];
@@ -141,12 +143,53 @@ export class P2PService {
     return this.otp.issueForUser(userId, OtpPurpose.P2P_PAYMENT_METHOD, user.email, paymentMethodContextHash(dto));
   }
 
-  /** Verify-phone gate for payment methods and P2P trading -- see schema.prisma's User.phoneVerifiedAt doc. */
+  /** Verify-phone gate for payment methods -- see schema.prisma's User.phoneVerifiedAt doc. Unconditional: payment methods always require phone verification regardless of phoneVerificationRequired, since they're also stacked with their own email OTP. */
   private async requirePhoneVerified(userId: string, action: string) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { phoneVerifiedAt: true } });
     if (!user.phoneVerifiedAt) {
       throw new UnprocessableEntityException(`Verify your phone number before ${action}`);
     }
+  }
+
+  async requestTradeOtp(userId: string, dto: RequestP2pTradeOtpDto) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } });
+    const contextHash =
+      dto.action === 'create-offer'
+        ? p2pTradeOtpContextHash({
+            action: 'create-offer',
+            type: dto.type!,
+            tokenAmount: dto.tokenAmount!,
+            fiatAmount: dto.fiatAmount!,
+            fiatCurrency: dto.fiatCurrency!,
+          })
+        : p2pTradeOtpContextHash({ action: 'accept-offer', offerId: dto.offerId! });
+    return this.otp.issueForUser(userId, OtpPurpose.P2P_TRADE, user.email, contextHash);
+  }
+
+  /**
+   * Trading gate for offer create/accept: phoneVerifiedAt when
+   * phoneVerificationRequired is on (today's behavior, unchanged), or a
+   * one-time emailed OTP bound to the exact trade terms when it's off --
+   * see requestTradeOtp/p2pTradeOtpContextHash. Never both at once; a
+   * platform with phone verification off has no phone number to check.
+   */
+  private async requireVerifiedForTrading(
+    userId: string,
+    contextHash: string,
+    otpRequestId?: string,
+    code?: string,
+  ): Promise<void> {
+    if (await this.platformSettings.isPhoneVerificationRequired()) {
+      const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { phoneVerifiedAt: true } });
+      if (!user.phoneVerifiedAt) {
+        throw new UnprocessableEntityException('Verify your phone number before trading on the P2P market');
+      }
+      return;
+    }
+    if (!otpRequestId || !code) {
+      throw new UnprocessableEntityException('Email OTP verification is required to trade on the P2P market');
+    }
+    await this.otp.verify({ otpRequestId, userId, purpose: OtpPurpose.P2P_TRADE, code, contextHash });
   }
 
   /**
@@ -196,7 +239,12 @@ export class P2PService {
   }
 
   async createOffer(userId: string, dto: CreateOfferDto) {
-    await this.requirePhoneVerified(userId, 'trading on the P2P market');
+    await this.requireVerifiedForTrading(
+      userId,
+      p2pTradeOtpContextHash({ action: 'create-offer', type: dto.type, tokenAmount: dto.tokenAmount, fiatAmount: dto.fiatAmount, fiatCurrency: dto.fiatCurrency }),
+      dto.otpRequestId,
+      dto.code,
+    );
     const settings = await this.requireMarketEnabled(dto.type);
     this.validateTradeInput(settings, dto.tokenAmount, dto.fiatCurrency, dto.paymentMethod);
 
@@ -339,7 +387,7 @@ export class P2PService {
   }
 
   async acceptOffer(userId: string, offerId: string, dto: AcceptOfferDto) {
-    await this.requirePhoneVerified(userId, 'trading on the P2P market');
+    await this.requireVerifiedForTrading(userId, p2pTradeOtpContextHash({ action: 'accept-offer', offerId }), dto.otpRequestId, dto.code);
     await this.expireStaleRecords();
     const offer = await this.prisma.p2PTokenOffer.findUnique({ where: { id: offerId }, include: { paymentMethodRef: true } });
     if (!offer || offer.status !== P2POfferStatus.ACTIVE || offer.expiresAt <= new Date()) {

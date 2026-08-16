@@ -67,6 +67,8 @@ import {
   useResendEmailVerificationMutation,
   useRequestPhoneOtpMutation,
   useVerifyPhoneMutation,
+  useSavePhoneUnverifiedMutation,
+  useGetPlatformSettingsQuery,
   useRequestP2PPaymentMethodOtpMutation,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
@@ -1374,6 +1376,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const primaryMethod = methods.find((method) => method.enabled);
   const paymentSaving = paymentCreating || paymentUpdating;
   const { data: referenceRate } = useGetP2PReferenceRateQuery();
+  const { data: platformSettings } = useGetPlatformSettingsQuery();
+  const phoneVerificationRequired = platformSettings?.phoneVerificationRequired ?? true;
   const phoneVerified = me?.phoneVerified ?? false;
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneOtpRequestId, setPhoneOtpRequestId] = useState('');
@@ -1382,6 +1386,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [requestPhoneOtp, { isLoading: phoneOtpSending }] = useRequestPhoneOtpMutation();
   const [verifyPhone, { isLoading: phoneVerifying }] = useVerifyPhoneMutation();
+  const [savePhoneUnverified, { isLoading: phoneSaving }] = useSavePhoneUnverifiedMutation();
   const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
   const phoneValid = isValidPhoneNumber(normalizedPhoneNumber);
   const [notificationPrefs, setNotificationPrefs] = useState({
@@ -1461,8 +1466,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     }
   }
 
-  async function submitPhoneVerification(event: FormEvent) {
-    event.preventDefault();
+  async function confirmPhoneCode() {
     setPhoneMessage(null);
     setPhoneError(null);
     try {
@@ -1476,6 +1480,24 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       setPhoneMessage('Phone number verified.');
     } catch (err) {
       setPhoneError(normalizeErrorMessage(err, 'Could not verify phone number.'));
+    }
+  }
+
+  async function submitPhoneVerification(event: FormEvent) {
+    event.preventDefault();
+    await confirmPhoneCode();
+  }
+
+  /** Only reachable while phoneVerificationRequired is off -- see GeneralSettingsPanel's toggle. */
+  async function submitPhoneUnverified(event: FormEvent) {
+    event.preventDefault();
+    setPhoneMessage(null);
+    setPhoneError(null);
+    try {
+      await savePhoneUnverified({ phoneNumber: normalizedPhoneNumber }).unwrap();
+      setPhoneMessage('Phone number saved.');
+    } catch (err) {
+      setPhoneError(normalizeErrorMessage(err, 'Could not save phone number.'));
     }
   }
 
@@ -1598,10 +1620,16 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
 
         <EmailVerificationCard email={session.user.email ?? ''} emailVerified={me?.emailVerified ?? false} />
 
-        <form className={`${cardClass} grid gap-4 p-5`} onSubmit={submitPhoneVerification}>
+        <form className={`${cardClass} grid gap-4 p-5`} onSubmit={phoneVerificationRequired ? submitPhoneVerification : submitPhoneUnverified}>
           <SectionTitle
             title="Phone number"
-            subtitle={phoneVerified ? 'Verified. Required for payment methods and P2P trading.' : 'Verify by SMS before adding a payment method or trading on the P2P market.'}
+            subtitle={
+              phoneVerified
+                ? 'Verified. Required for payment methods and P2P trading.'
+                : phoneVerificationRequired
+                  ? 'Verify by SMS before adding a payment method or trading on the P2P market.'
+                  : 'Phone verification is optional right now. You can save a number without verifying it, or verify it for payment methods, which still require SMS verification.'
+            }
           />
           <label className="grid gap-1.5 text-sm font-bold">
             Phone number
@@ -1633,7 +1661,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               This number is verified.
             </p>
           )}
-          {!phoneVerified && phoneOtpRequestId ? (
+          {!phoneVerified && phoneVerificationRequired && phoneOtpRequestId ? (
             <label className="grid gap-1.5 text-sm font-bold">
               SMS verification code
               <input
@@ -1648,7 +1676,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
           ) : null}
           {phoneMessage && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{phoneMessage}</p>}
           {phoneError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{phoneError}</p>}
-          {!phoneVerified && (
+          {!phoneVerified && phoneVerificationRequired && (
             <div className="flex flex-wrap gap-2">
               <ActionButton
                 className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
@@ -1671,6 +1699,54 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               </ActionButton>
             </div>
           )}
+          {!phoneVerified && !phoneVerificationRequired && (
+            <div className="flex flex-wrap gap-2">
+              <ActionButton
+                className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!phoneValid}
+                pending={phoneSaving}
+                pendingLabel="Saving"
+                type="submit"
+              >
+                Save number
+              </ActionButton>
+              <ActionButton
+                className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!phoneValid}
+                onClick={() => void sendPhoneOtp()}
+                pending={phoneOtpSending}
+                pendingLabel="Sending"
+                type="button"
+              >
+                Verify instead
+              </ActionButton>
+            </div>
+          )}
+          {!phoneVerified && !phoneVerificationRequired && phoneOtpRequestId ? (
+            <div className="grid gap-3">
+              <label className="grid gap-1.5 text-sm font-bold">
+                SMS verification code
+                <input
+                  className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                  inputMode="numeric"
+                  maxLength={6}
+                  onChange={(event) => setPhoneOtpCode(event.target.value)}
+                  required
+                  value={phoneOtpCode}
+                />
+              </label>
+              <ActionButton
+                className="min-h-11 w-fit rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!phoneValid || !phoneOtpCode.trim()}
+                onClick={() => void confirmPhoneCode()}
+                pending={phoneVerifying}
+                pendingLabel="Verifying"
+                type="button"
+              >
+                Verify
+              </ActionButton>
+            </div>
+          ) : null}
         </form>
 
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={savePaymentMethod}>

@@ -170,6 +170,8 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
       // Always SMS-delivered in practice (see OtpService.deliver) -- this
       // case exists only so the switch stays exhaustive if ever called by mistake.
       return { subject: 'Verify your phone number', intro: 'Enter this code to verify your phone number.' };
+    case 'P2P_TRADE':
+      return { subject: 'Confirm your P2P trade', intro: 'Enter this code to confirm this P2P market action.' };
   }
 }
 

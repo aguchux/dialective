@@ -653,6 +653,7 @@ export interface PlatformSettings {
   taskTokenCost: string | null;
   reverseWordTrainingEnabled: boolean;
   adminPayoutOtpEnabled: boolean;
+  phoneVerificationRequired: boolean;
   startupBonusAmount: string | null;
   wordStuckTimeoutMinutes: number;
   scoringSlaMinutes: number;
@@ -714,6 +715,7 @@ export interface PlatformSettingsInput {
   taskTokenCost?: number | null;
   reverseWordTrainingEnabled?: boolean;
   adminPayoutOtpEnabled?: boolean;
+  phoneVerificationRequired?: boolean;
   startupBonusAmount?: number | null;
   wordStuckTimeoutMinutes?: number;
   scoringSlaMinutes?: number;
@@ -1203,15 +1205,32 @@ export const dialectivaApi = createApi({
     getP2PTraderProfile: builder.query<P2PTraderProfile, string>({
       query: (userId) => `/p2p/traders/${userId}`,
     }),
+    requestP2PTradeOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      | { action: 'create-offer'; type: P2POfferType; tokenAmount: number; fiatAmount: number; fiatCurrency: string }
+      | { action: 'accept-offer'; offerId: string }
+    >({
+      query: (body) => ({ url: '/p2p/offers/otp', method: 'POST', body }),
+    }),
     createP2POffer: builder.mutation<
       P2POffer,
-      { type: P2POfferType; tokenAmount: number; fiatAmount: number; fiatCurrency: string; paymentMethod: string; paymentMethodId?: string; expiresInMinutes?: number }
+      {
+        type: P2POfferType;
+        tokenAmount: number;
+        fiatAmount: number;
+        fiatCurrency: string;
+        paymentMethod: string;
+        paymentMethodId?: string;
+        expiresInMinutes?: number;
+        otpRequestId?: string;
+        code?: string;
+      }
     >({
       query: (body) => ({ url: '/p2p/offers', method: 'POST', body }),
       invalidatesTags: ['P2P', 'Wallet'],
     }),
-    acceptP2POffer: builder.mutation<P2PTrade, { id: string; sellerPaymentMethodId?: string }>({
-      query: ({ id, sellerPaymentMethodId }) => ({ url: `/p2p/offers/${id}/accept`, method: 'POST', body: { sellerPaymentMethodId } }),
+    acceptP2POffer: builder.mutation<P2PTrade, { id: string; sellerPaymentMethodId?: string; otpRequestId?: string; code?: string }>({
+      query: ({ id, ...body }) => ({ url: `/p2p/offers/${id}/accept`, method: 'POST', body }),
       invalidatesTags: ['P2P', 'Wallet'],
     }),
     cancelP2POffer: builder.mutation<P2POffer, string>({
@@ -1399,6 +1418,10 @@ export const dialectivaApi = createApi({
     }),
     verifyPhone: builder.mutation<PublicUser, { phoneNumber: string; otpRequestId: string; code: string }>({
       query: (body) => ({ url: '/auth/phone/verify', method: 'POST', body }),
+      invalidatesTags: ['Profile'],
+    }),
+    savePhoneUnverified: builder.mutation<PublicUser, { phoneNumber: string }>({
+      query: (body) => ({ url: '/auth/phone', method: 'PATCH', body }),
       invalidatesTags: ['Profile'],
     }),
     requestMagicLink: builder.mutation<void, { email: string }>({
@@ -1792,6 +1815,7 @@ export const {
   useListP2POffersQuery,
   useListMyP2POffersQuery,
   useGetP2PTraderProfileQuery,
+  useRequestP2PTradeOtpMutation,
   useCreateP2POfferMutation,
   useAcceptP2POfferMutation,
   useCancelP2POfferMutation,
@@ -1827,6 +1851,7 @@ export const {
   useUpdateProfileMutation,
   useRequestPhoneOtpMutation,
   useVerifyPhoneMutation,
+  useSavePhoneUnverifiedMutation,
   useCreateDataAccessLeadMutation,
   useGetAdminDataAccessLeadsQuery,
   useUpdateAdminDataAccessLeadContactMutation,
