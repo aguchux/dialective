@@ -11,6 +11,8 @@ import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
 import { CreateDialectDto } from './dto/create-dialect.dto';
 import { UpdateDialectDto } from './dto/update-dialect.dto';
+import { CreateDialectVariantDto } from './dto/create-dialect-variant.dto';
+import { UpdateDialectVariantDto } from './dto/update-dialect-variant.dto';
 
 const PRISMA_UNIQUE_VIOLATION = 'P2002';
 const PRISMA_FK_RESTRICT = 'P2003';
@@ -82,6 +84,25 @@ export class GeoController {
     }
     return this.prisma.dialect.findMany({
       where: { countryId: id },
+      select: { id: true, tag: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Feeds onboarding's optional "specific variety" dropdown -- only shown
+   * when a dialect actually has variants configured (see updateProfile's
+   * dialectVariantId validation, which re-checks this same relationship
+   * server-side rather than trusting the client).
+   */
+  @Get('dialects/:id/variants')
+  async getDialectVariants(@Param('id') id: string) {
+    const dialect = await this.prisma.dialect.findUnique({ where: { id } });
+    if (!dialect) {
+      throw new NotFoundException('Dialect not found');
+    }
+    return this.prisma.dialectVariant.findMany({
+      where: { dialectId: id },
       select: { id: true, tag: true, name: true },
       orderBy: { name: 'asc' },
     });
@@ -252,6 +273,71 @@ export class GeoController {
       return { id, deleted: true };
     } catch (err) {
       throw mapPrismaError(err, undefined, 'Dialect not found', 'Dialect still has users assigned to it');
+    }
+  }
+
+  // --- Admin: dialect variants ---------------------------------------------
+
+  /**
+   * Variant list with basic usage counts (users, recordings, submissions
+   * tagged with each variant) for the admin Coverage table's expandable
+   * dialect row -- see the dialect-variants plan's "Reporting" phase.
+   */
+  @Get('admin/dialects/:id/variants')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async listDialectVariantsForAdmin(@Param('id') id: string) {
+    const dialect = await this.prisma.dialect.findUnique({ where: { id } });
+    if (!dialect) {
+      throw new NotFoundException('Dialect not found');
+    }
+    return this.prisma.dialectVariant.findMany({
+      where: { dialectId: id },
+      include: { _count: { select: { users: true, wordRecordings: true, submissions: true } } },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  @Post('admin/dialects/:id/variants')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async createDialectVariant(@Param('id') id: string, @Body() dto: CreateDialectVariantDto) {
+    const dialect = await this.prisma.dialect.findUnique({ where: { id } });
+    if (!dialect) {
+      throw new NotFoundException('Dialect not found');
+    }
+    try {
+      return await this.prisma.dialectVariant.create({
+        data: { dialectId: id, tag: dto.tag, name: dto.name },
+      });
+    } catch (err) {
+      throw mapPrismaError(err, 'A variant with this tag already exists under this dialect');
+    }
+  }
+
+  @Patch('admin/dialect-variants/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async updateDialectVariant(@Param('id') id: string, @Body() dto: UpdateDialectVariantDto) {
+    try {
+      return await this.prisma.dialectVariant.update({
+        where: { id },
+        data: { tag: dto.tag, name: dto.name },
+      });
+    } catch (err) {
+      throw mapPrismaError(err, 'A variant with this tag already exists under this dialect', 'Variant not found');
+    }
+  }
+
+  @Delete('admin/dialect-variants/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async deleteDialectVariant(@Param('id') id: string) {
+    try {
+      await this.prisma.dialectVariant.delete({ where: { id } });
+      return { id, deleted: true };
+    } catch (err) {
+      throw mapPrismaError(err, undefined, 'Variant not found', 'Variant still has users or recordings assigned to it');
     }
   }
 }

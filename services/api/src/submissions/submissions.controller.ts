@@ -123,6 +123,18 @@ export class SubmissionsController {
 
     const taskTokenCost = await this.platformSettings.getTaskTokenCost();
 
+    // Server-resolved, never client-supplied -- same reasoning as every
+    // other identity-derived field here (userId, wallet). A trainer's
+    // dialectVariantId only ever comes from their own profile, and only
+    // counts here if it actually belongs to the dialect being submitted
+    // against (compared by tag, since that's what this submission is
+    // scoped by) -- a variant of a different dialect never gets stamped.
+    const trainer = await this.prisma.user.findUnique({
+      where: { id: req.user.sub },
+      select: { dialectVariantId: true, dialectVariant: { select: { dialect: { select: { tag: true } } } } },
+    });
+    const dialectVariantId = trainer?.dialectVariant?.dialect.tag === body.dialectTag ? trainer.dialectVariantId : null;
+
     // Ensure the wallet row exists first (brand-new trainers have none yet)
     // so the atomic debit below always has a row to match against.
     const wallet = await this.prisma.wallet.upsert({
@@ -164,6 +176,7 @@ export class SubmissionsController {
           userId: req.user.sub,
           promptId: body.promptId,
           dialectTag: body.dialectTag,
+          dialectVariantId,
           audioBucket: body.bucket,
           audioKey: body.audioKey,
           status: 'PENDING',

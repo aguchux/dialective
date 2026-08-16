@@ -65,6 +65,8 @@ model User {
   country       Country? @relation(fields: [countryId], references: [id])
   dialectId     String?
   dialect       Dialect? @relation(fields: [dialectId], references: [id])
+  dialectVariantId String? // optional sub-dialect (e.g. Izzi under Igbo) -- see DialectVariant. Never set without dialectId; enforced in AuthService.updateProfile, not at the schema level.
+  dialectVariant   DialectVariant? @relation(fields: [dialectVariantId], references: [id])
   referralCode  String   @unique // every user is a potential referrer; generated at registration
   referredById  String?
   referredBy    User?    @relation("Referrals", fields: [referredById], references: [id])
@@ -164,9 +166,37 @@ model Dialect {
   keyboardLayout       String? // space-separated dialect-specific characters/diacritics for the inline virtual keyboard on the word-training spelling input; admin-edited, optionally AI-drafted via POST /geo/admin/dialects/:id/generate-keyboard-layout
   country              Country @relation(fields: [countryId], references: [id])
   users                User[]
+  variants             DialectVariant[]
 
   @@index([countryId])
   @@map("dialects")
+}
+
+/// Optional sub-dialect tag under a Dialect -- e.g. Izzi/Ezza/Ezeagu under
+/// Igbo. Shares the parent dialect's entire content pool (prompts, words,
+/// keyboard layout, ASR model) -- training/scoring/prompt-selection stay
+/// scoped by Dialect.tag exactly as before. A variant exists purely to
+/// label which recordings/submissions came from a given sub-dialect
+/// speaker, for admin review and future variant-specific model training.
+/// tag is unique per dialect, not globally -- two different dialects may
+/// each have a variant tagged e.g. "standard", so any code deriving a
+/// storage path or cache key from variant tag MUST also include the parent
+/// dialect's tag (see WordsService's upload key builder).
+model DialectVariant {
+  id        String   @id @default(uuid())
+  dialectId String
+  dialect   Dialect  @relation(fields: [dialectId], references: [id], onDelete: Cascade)
+  tag       String
+  name      String
+  createdAt DateTime @default(now())
+
+  users           User[]
+  wordRecordings  WordRecording[]
+  submissions     Submission[]
+
+  @@unique([dialectId, tag])
+  @@index([dialectId])
+  @@map("dialect_variants")
 }
 
 /// One row per external identity provider linked to a user (Google, email/magic-link).
@@ -362,6 +392,8 @@ model Submission {
   promptId          String
   prompt            Prompt           @relation(fields: [promptId], references: [id], onDelete: Restrict)
   dialectTag        String
+  dialectVariantId  String? // optional sub-dialect label (see DialectVariant) -- never changes prompt selection or scoring, purely descriptive
+  dialectVariant    DialectVariant?  @relation(fields: [dialectVariantId], references: [id])
   audioBucket       String
   audioKey          String
   status            SubmissionStatus @default(PENDING)
@@ -557,6 +589,8 @@ model WordRecording {
   assignment        WordTrainingAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   direction         WordTrainingDirection @default(ENGLISH_TO_DIALECT)
   dialectTag        String
+  dialectVariantId  String? // optional sub-dialect label (see DialectVariant) -- never changes prompt selection or scoring, purely descriptive
+  dialectVariant    DialectVariant?  @relation(fields: [dialectVariantId], references: [id])
   translationText   String
   normalizedTranslationText String? // AI spelling-normalization of translationText (PlatformSettings.spellingNormalizationEnabled), ENGLISH_TO_DIALECT only -- informational only, never feeds validationScore/score
   audioBucket       String? // null for SENTENCE_REBUILD (no audio step)

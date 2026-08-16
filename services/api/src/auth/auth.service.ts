@@ -69,6 +69,8 @@ export interface PublicUser {
   countryId: string | null;
   dialectId: string | null;
   dialectTag: string | null;
+  dialectVariantId: string | null;
+  dialectVariantTag: string | null;
   onboardingComplete: boolean;
   referralCode: string;
   emailNotificationsEnabled: boolean;
@@ -77,7 +79,7 @@ export interface PublicUser {
   blogNewsNotificationsEnabled: boolean;
 }
 
-type UserWithDialect = User & { dialect?: { tag: string } | null };
+type UserWithDialect = User & { dialect?: { tag: string } | null; dialectVariant?: { id: string; tag: string } | null };
 
 function toPublicUser(user: UserWithDialect): PublicUser {
   return {
@@ -93,6 +95,8 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     countryId: user.countryId,
     dialectId: user.dialectId,
     dialectTag: user.dialect?.tag ?? null,
+    dialectVariantId: user.dialectVariant?.id ?? null,
+    dialectVariantTag: user.dialectVariant?.tag ?? null,
     onboardingComplete: user.role !== Role.TRAINER || (user.countryId !== null && user.dialectId !== null),
     referralCode: user.referralCode,
     emailNotificationsEnabled: user.emailNotificationsEnabled,
@@ -534,7 +538,7 @@ export class AuthService {
   // --- Profile / onboarding -------------------------------------------------
 
   async getProfile(userId: string): Promise<PublicUser> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { dialect: true } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { dialect: true, dialectVariant: true } });
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -546,6 +550,7 @@ export class AuthService {
     fields: {
       countryId?: string;
       dialectId?: string;
+      dialectVariantId?: string | null;
       firstName?: string;
       lastName?: string;
       emailNotificationsEnabled?: boolean;
@@ -557,6 +562,7 @@ export class AuthService {
     const {
       countryId,
       dialectId,
+      dialectVariantId,
       firstName,
       lastName,
       emailNotificationsEnabled,
@@ -575,10 +581,33 @@ export class AuthService {
       }
     }
 
+    // Optional: a null/undefined value leaves the current variant
+    // untouched unless dialectId is also changing (see below), an empty
+    // string or explicit null clears it, and any other value must belong
+    // to the dialect being set (or, if dialectId isn't changing, the
+    // trainer's existing dialect) -- self-reported sub-dialect, no
+    // verification, but it must at least point at a real variant of the
+    // right dialect.
+    if (dialectVariantId) {
+      const effectiveDialectId = dialectId ?? (await this.prisma.user.findUniqueOrThrow({ where: { id: userId } })).dialectId;
+      const variant = await this.prisma.dialectVariant.findUnique({ where: { id: dialectVariantId } });
+      if (!variant || variant.dialectId !== effectiveDialectId) {
+        throw new UnprocessableEntityException('Dialect variant does not belong to the given dialect');
+      }
+    }
+
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
         ...(countryId && dialectId ? { countryId, dialectId } : {}),
+        // Changing dialectId without an explicit variant clears the old
+        // one -- a variant of the previous dialect can never be valid for
+        // a different one.
+        ...(dialectVariantId !== undefined
+          ? { dialectVariantId: dialectVariantId || null }
+          : dialectId
+            ? { dialectVariantId: null }
+            : {}),
         ...(firstName !== undefined ? { firstName: firstName.trim() } : {}),
         ...(lastName !== undefined ? { lastName: lastName.trim() } : {}),
         ...(emailNotificationsEnabled !== undefined ? { emailNotificationsEnabled } : {}),
@@ -586,7 +615,7 @@ export class AuthService {
         ...(marketingNotificationsEnabled !== undefined ? { marketingNotificationsEnabled } : {}),
         ...(blogNewsNotificationsEnabled !== undefined ? { blogNewsNotificationsEnabled } : {}),
       },
-      include: { dialect: true },
+      include: { dialect: true, dialectVariant: true },
     });
 
     return toPublicUser(user);
@@ -648,7 +677,7 @@ export class AuthService {
       const user = await this.prisma.user.update({
         where: { id: userId },
         data: { phoneNumber, phoneVerifiedAt: new Date() },
-        include: { dialect: true },
+        include: { dialect: true, dialectVariant: true },
       });
       return toPublicUser(user);
     } catch (err) {
@@ -677,14 +706,14 @@ export class AuthService {
             }
           : {}),
       },
-      include: { dialect: true },
+      include: { dialect: true, dialectVariant: true },
       orderBy: { createdAt: 'desc' },
     });
     return users.map(toPublicUser);
   }
 
   async updateUserRole(userId: string, role: Role): Promise<PublicUser> {
-    const user = await this.prisma.user.update({ where: { id: userId }, data: { role }, include: { dialect: true } });
+    const user = await this.prisma.user.update({ where: { id: userId }, data: { role }, include: { dialect: true, dialectVariant: true } });
     return toPublicUser(user);
   }
 
@@ -695,7 +724,7 @@ export class AuthService {
    * again.
    */
   async updateUserStatus(userId: string, status: UserStatus): Promise<PublicUser> {
-    const user = await this.prisma.user.update({ where: { id: userId }, data: { status }, include: { dialect: true } });
+    const user = await this.prisma.user.update({ where: { id: userId }, data: { status }, include: { dialect: true, dialectVariant: true } });
 
     if (status !== UserStatus.ACTIVE) {
       await this.prisma.refreshToken.updateMany({
@@ -708,7 +737,7 @@ export class AuthService {
   }
 
   async getAdminUser(id: string): Promise<PublicUser> {
-    const user = await this.prisma.user.findUnique({ where: { id }, include: { dialect: true } });
+    const user = await this.prisma.user.findUnique({ where: { id }, include: { dialect: true, dialectVariant: true } });
     if (!user) throw new NotFoundException('User not found');
     return toPublicUser(user);
   }
@@ -784,7 +813,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { wallet: true, dialect: true } });
     if (!user) throw new NotFoundException('User not found');
 
-    const updated = await this.prisma.user.update({ where: { id: userId }, data: { status }, include: { dialect: true } });
+    const updated = await this.prisma.user.update({ where: { id: userId }, data: { status }, include: { dialect: true, dialectVariant: true } });
     await this.prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
 
     if (user.wallet) {

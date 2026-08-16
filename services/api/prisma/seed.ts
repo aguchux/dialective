@@ -109,6 +109,18 @@ const PROMPTS_BY_DIALECT: Record<string, string[]> = {
   ha: ['Yaya lafiya?', 'Sannu abokina.', 'Ina kwana?', 'Na gode sosai.'],
 };
 
+// Sub-dialect seed data (see DialectVariant in schema.prisma) -- keyed by
+// parent dialect tag, not country, since a variant belongs to a dialect.
+// Only Igbo has entries today; any dialect can gain its own list here later
+// without a schema change.
+const DIALECT_VARIANTS_BY_TAG: Record<string, { tag: string; name: string }[]> = {
+  ig: [
+    { tag: 'izzi', name: 'Izzi' },
+    { tag: 'ezza', name: 'Ezza' },
+    { tag: 'ezeagu', name: 'Ezeagu' },
+  ],
+};
+
 // Onboarding country/dialect list: all African Union member countries
 // (africa-countries-dialects.ts) plus the United States, kept for the
 // `en-us` tag already referenced by PROMPTS_BY_DIALECT. Nigeria's ig/yo/ha
@@ -144,7 +156,7 @@ async function main() {
       countryId: countryIds.get(country.code)!,
     })));
 
-    await Promise.all(
+    const dialectRows = await Promise.all(
       dialects.map((dialect) =>
         prisma.dialect.upsert({
           where: { tag: dialect.tag },
@@ -153,6 +165,24 @@ async function main() {
         }),
       ),
     );
+
+    // First real DialectVariant data (see the dialect-variants plan's
+    // Phase 2) -- Izzi/Ezza/Ezeagu are mutually-intelligible Igbo
+    // sub-dialects that share ig's entire prompt/word/keyboard/ASR setup;
+    // these rows only exist so trainers can optionally self-identify their
+    // specific variety, and so admin can see tagged activity per variant.
+    const igbo = dialectRows.find((d) => d.tag === 'ig');
+    if (igbo) {
+      await Promise.all(
+        DIALECT_VARIANTS_BY_TAG.ig.map((variant) =>
+          prisma.dialectVariant.upsert({
+            where: { dialectId_tag: { dialectId: igbo.id, tag: variant.tag } },
+            create: { dialectId: igbo.id, tag: variant.tag, name: variant.name },
+            update: { name: variant.name },
+          }),
+        ),
+      );
+    }
     const promptRows = Object.entries(PROMPTS_BY_DIALECT).flatMap(([dialectTag, texts]) =>
       texts.map((text) => ({ dialectTag, text })),
     );

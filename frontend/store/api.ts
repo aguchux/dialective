@@ -17,6 +17,8 @@ export interface PublicUser {
   countryId: string | null;
   dialectId: string | null;
   dialectTag: string | null;
+  dialectVariantId: string | null;
+  dialectVariantTag: string | null;
   onboardingComplete: boolean;
   referralCode: string;
   emailNotificationsEnabled: boolean;
@@ -46,6 +48,21 @@ export interface Country {
 
 export interface Dialect {
   id: string;
+  tag: string;
+  name: string;
+}
+
+export interface DialectVariant {
+  id: string;
+  tag: string;
+  name: string;
+}
+
+export interface AdminDialectVariant extends DialectVariant {
+  _count: { users: number; wordRecordings: number; submissions: number };
+}
+
+export interface DialectVariantInput {
   tag: string;
   name: string;
 }
@@ -1145,6 +1162,9 @@ export const dialectivaApi = createApi({
     getDialects: builder.query<Dialect[], string>({
       query: (countryId) => `/geo/countries/${countryId}/dialects`,
     }),
+    getDialectVariants: builder.query<DialectVariant[], string>({
+      query: (dialectId) => `/geo/dialects/${dialectId}/variants`,
+    }),
     getWallet: builder.query<Wallet, void>({
       query: () => '/wallet',
       providesTags: ['Wallet'],
@@ -1358,6 +1378,7 @@ export const dialectivaApi = createApi({
       {
         countryId?: string;
         dialectId?: string;
+        dialectVariantId?: string;
         firstName?: string;
         lastName?: string;
         emailNotificationsEnabled?: boolean;
@@ -1639,6 +1660,22 @@ export const dialectivaApi = createApi({
     generateDialectKeyboardLayout: builder.mutation<{ keyboardLayout: string }, string>({
       query: (id) => ({ url: `/geo/admin/dialects/${id}/generate-keyboard-layout`, method: 'POST' }),
     }),
+    getAdminDialectVariants: builder.query<AdminDialectVariant[], string>({
+      query: (dialectId) => `/geo/admin/dialects/${dialectId}/variants`,
+      providesTags: (_result, _error, dialectId) => [{ type: 'AdminDialects', id: `${dialectId}-variants` }],
+    }),
+    createDialectVariant: builder.mutation<AdminDialectVariant, { dialectId: string; body: DialectVariantInput }>({
+      query: ({ dialectId, body }) => ({ url: `/geo/admin/dialects/${dialectId}/variants`, method: 'POST', body }),
+      invalidatesTags: (_result, _error, { dialectId }) => [{ type: 'AdminDialects', id: `${dialectId}-variants` }],
+    }),
+    updateDialectVariant: builder.mutation<AdminDialectVariant, { id: string; dialectId: string; body: Partial<DialectVariantInput> }>({
+      query: ({ id, body }) => ({ url: `/geo/admin/dialect-variants/${id}`, method: 'PATCH', body }),
+      invalidatesTags: (_result, _error, { dialectId }) => [{ type: 'AdminDialects', id: `${dialectId}-variants` }],
+    }),
+    deleteDialectVariant: builder.mutation<{ id: string; deleted: boolean }, { id: string; dialectId: string }>({
+      query: ({ id }) => ({ url: `/geo/admin/dialect-variants/${id}`, method: 'DELETE' }),
+      invalidatesTags: (_result, _error, { dialectId }) => [{ type: 'AdminDialects', id: `${dialectId}-variants` }],
+    }),
     getPlatformSettings: builder.query<PlatformSettings, void>({
       query: () => '/admin/platform-settings',
       providesTags: ['PlatformSettings'],
@@ -1744,6 +1781,7 @@ export const {
   useResendEmailVerificationMutation,
   useGetCountriesQuery,
   useGetDialectsQuery,
+  useGetDialectVariantsQuery,
   useGetWalletQuery,
   useGetP2PSettingsQuery,
   useGetP2PReferenceRateQuery,
@@ -1832,6 +1870,10 @@ export const {
   useDeleteCountryMutation,
   useResetCountryExchangeRateMutation,
   useGetAdminDialectsQuery,
+  useGetAdminDialectVariantsQuery,
+  useCreateDialectVariantMutation,
+  useUpdateDialectVariantMutation,
+  useDeleteDialectVariantMutation,
   useCreateDialectMutation,
   useUpdateDialectMutation,
   useDeleteDialectMutation,

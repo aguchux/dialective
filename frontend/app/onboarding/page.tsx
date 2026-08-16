@@ -5,7 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { AuthPage, AuthPanel, Notice, Alert } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { normalizeErrorMessage, useGetCountriesQuery, useGetDialectsQuery, useUpdateProfileMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetCountriesQuery,
+  useGetDialectsQuery,
+  useGetDialectVariantsQuery,
+  useUpdateProfileMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
 const selectClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
@@ -17,10 +23,12 @@ export default function OnboardingPage() {
   const { data: session, status, update } = useSession();
   const [countryId, setCountryId] = useState('');
   const [dialectId, setDialectId] = useState('');
+  const [dialectVariantId, setDialectVariantId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
   const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(countryId, { skip: !countryId });
+  const { data: dialectVariants } = useGetDialectVariantsQuery(dialectId, { skip: !dialectId });
   const [updateProfile, { isLoading: isSubmitting }] = useUpdateProfileMutation();
 
   useEffect(() => {
@@ -35,6 +43,10 @@ export default function OnboardingPage() {
     setDialectId('');
   }, [countryId]);
 
+  useEffect(() => {
+    setDialectVariantId('');
+  }, [dialectId]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -43,7 +55,7 @@ export default function OnboardingPage() {
       return;
     }
     try {
-      const profile = await updateProfile({ countryId, dialectId }).unwrap();
+      const profile = await updateProfile({ countryId, dialectId, ...(dialectVariantId ? { dialectVariantId } : {}) }).unwrap();
       await update({ onboardingComplete: profile.onboardingComplete, dialectTag: profile.dialectTag, countryId: profile.countryId });
       window.location.href = '/dashboard';
     } catch (err) {
@@ -108,6 +120,25 @@ export default function OnboardingPage() {
               </option>
             ))}
           </select>
+
+          {dialectVariants && dialectVariants.length > 0 && (
+            <>
+              <label htmlFor="onboarding-dialect-variant">Specific variety (optional)</label>
+              <select
+                className={selectClass}
+                id="onboarding-dialect-variant"
+                value={dialectVariantId}
+                onChange={(e) => setDialectVariantId(e.target.value)}
+              >
+                <option value="">Not sure / general</option>
+                {dialectVariants.map((variant) => (
+                  <option key={variant.id} value={variant.id}>
+                    {variant.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
 
           <ActionButton className={primaryButtonClass} type="submit" pending={isSubmitting} pendingLabel="Saving profile">
             Continue

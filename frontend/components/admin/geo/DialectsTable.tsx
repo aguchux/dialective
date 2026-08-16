@@ -1,16 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { Keyboard } from 'lucide-react';
+import { Keyboard, Layers } from 'lucide-react';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
   AdminDialect,
+  AdminDialectVariant,
   normalizeErrorMessage,
+  useCreateDialectVariantMutation,
   useDeleteDialectMutation,
+  useDeleteDialectVariantMutation,
   useGenerateDialectKeyboardLayoutMutation,
+  useGetAdminDialectVariantsQuery,
   useUpdateDialectMutation,
+  useUpdateDialectVariantMutation,
 } from '@/store/api';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
@@ -34,6 +39,7 @@ export function DialectsTable({ dialects, isLoading }: { dialects: AdminDialect[
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [editingKeyboardFor, setEditingKeyboardFor] = useState<AdminDialect | null>(null);
+  const [editingVariantsFor, setEditingVariantsFor] = useState<AdminDialect | null>(null);
 
   async function handleDelete(id: string) {
     setError(null);
@@ -108,6 +114,10 @@ export function DialectsTable({ dialects, isLoading }: { dialects: AdminDialect[
             <Keyboard className="mr-1.5 inline size-4" aria-hidden="true" />
             Keyboard
           </button>
+          <button className={secondaryButtonClass} onClick={() => setEditingVariantsFor(d)} type="button">
+            <Layers className="mr-1.5 inline size-4" aria-hidden="true" />
+            Variants
+          </button>
           <ActionButton
             className={dangerButtonClass}
             onClick={() => handleDelete(d.id)}
@@ -143,6 +153,9 @@ export function DialectsTable({ dialects, isLoading }: { dialects: AdminDialect[
 
       {editingKeyboardFor && (
         <EditKeyboardLayoutDialog dialect={editingKeyboardFor} onClose={() => setEditingKeyboardFor(null)} />
+      )}
+      {editingVariantsFor && (
+        <DialectVariantsDialog dialect={editingVariantsFor} onClose={() => setEditingVariantsFor(null)} />
       )}
     </section>
   );
@@ -217,6 +230,175 @@ function EditKeyboardLayoutDialog({ dialect, onClose }: { dialect: AdminDialect;
             </ActionButton>
           </div>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Sub-dialects under one dialect (e.g. Izzi/Ezza/Ezeagu under Igbo) --
+ * shares the parent dialect's entire prompt/word/keyboard/ASR setup, so
+ * this dialog only manages the tag/name label and shows how much tagged
+ * activity each variant has (users onboarded under it, recordings,
+ * submissions), not a separate content pool.
+ */
+function DialectVariantsDialog({ dialect, onClose }: { dialect: AdminDialect; onClose: () => void }) {
+  const { data: variants, isLoading } = useGetAdminDialectVariantsQuery(dialect.id);
+  const [createVariant, { isLoading: isCreating }] = useCreateDialectVariantMutation();
+  const [updateVariant] = useUpdateDialectVariantMutation();
+  const [deleteVariant] = useDeleteDialectVariantMutation();
+
+  const [tag, setTag] = useState('');
+  const [name, setName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTag, setEditTag] = useState('');
+  const [editName, setEditName] = useState('');
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      await createVariant({ dialectId: dialect.id, body: { tag: tag.trim(), name: name.trim() } }).unwrap();
+      setTag('');
+      setName('');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to add this variant.'));
+    }
+  }
+
+  function startEdit(variant: AdminDialectVariant) {
+    setEditingId(variant.id);
+    setEditTag(variant.tag);
+    setEditName(variant.name);
+  }
+
+  async function handleSaveEdit(id: string) {
+    setError(null);
+    setSavingId(id);
+    try {
+      await updateVariant({ id, dialectId: dialect.id, body: { tag: editTag.trim(), name: editName.trim() } }).unwrap();
+      setEditingId(null);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to save this variant.'));
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setError(null);
+    setDeletingId(id);
+    try {
+      await deleteVariant({ id, dialectId: dialect.id }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to remove this variant.'));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        title={`${dialect.name} variants`}
+        description="Sub-dialects that share this dialect's prompts, words, and ASR model -- variant only labels which trainer/recording came from which variety."
+      >
+        <div className="grid gap-3">
+          {isLoading && <p className="text-sm text-muted">Loading...</p>}
+          {!isLoading && variants && variants.length === 0 && (
+            <p className="text-sm text-muted">No variants yet. Add one below.</p>
+          )}
+          {!isLoading && variants && variants.length > 0 && (
+            <ul className="grid gap-2">
+              {variants.map((variant) => (
+                <li className="rounded-lg border border-line bg-surface p-3" key={variant.id}>
+                  {editingId === variant.id ? (
+                    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-center">
+                      <input className={inputClass} onChange={(e) => setEditName(e.target.value)} placeholder="Name" value={editName} />
+                      <input className={`${inputClass} font-mono`} onChange={(e) => setEditTag(e.target.value)} placeholder="tag" value={editTag} />
+                      <ActionButton
+                        className={secondaryButtonClass}
+                        onClick={() => handleSaveEdit(variant.id)}
+                        pending={savingId === variant.id}
+                        pendingLabel="Saving"
+                        type="button"
+                      >
+                        Save
+                      </ActionButton>
+                      <button className={secondaryButtonClass} onClick={() => setEditingId(null)} type="button">
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-extrabold">
+                          {variant.name} <span className="font-mono text-muted">({variant.tag})</span>
+                        </p>
+                        <p className="text-sm text-muted">
+                          {variant._count.users} user{variant._count.users === 1 ? '' : 's'} &middot;{' '}
+                          {variant._count.wordRecordings} word recording{variant._count.wordRecordings === 1 ? '' : 's'} &middot;{' '}
+                          {variant._count.submissions} submission{variant._count.submissions === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button className={secondaryButtonClass} onClick={() => startEdit(variant)} type="button">
+                          Edit
+                        </button>
+                        <ActionButton
+                          className={dangerButtonClass}
+                          disabled={variant._count.users > 0 || variant._count.wordRecordings > 0 || variant._count.submissions > 0}
+                          onClick={() => handleDelete(variant.id)}
+                          pending={deletingId === variant.id}
+                          pendingLabel="Removing"
+                          title={
+                            variant._count.users > 0 || variant._count.wordRecordings > 0 || variant._count.submissions > 0
+                              ? 'This variant still has tagged activity'
+                              : undefined
+                          }
+                          type="button"
+                        >
+                          Remove
+                        </ActionButton>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <form className="grid gap-2 border-t border-line pt-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end" onSubmit={handleCreate}>
+            <div className="grid gap-1">
+              <label className="text-xs font-bold uppercase text-muted" htmlFor="variant-name">
+                Name
+              </label>
+              <input className={inputClass} id="variant-name" onChange={(e) => setName(e.target.value)} placeholder="e.g. Izzi" required value={name} />
+            </div>
+            <div className="grid gap-1">
+              <label className="text-xs font-bold uppercase text-muted" htmlFor="variant-tag">
+                Tag
+              </label>
+              <input className={`${inputClass} font-mono`} id="variant-tag" onChange={(e) => setTag(e.target.value)} placeholder="izzi" required value={tag} />
+            </div>
+            <ActionButton className={primaryButtonClass} pending={isCreating} pendingLabel="Adding" type="submit">
+              Add variant
+            </ActionButton>
+          </form>
+
+          {error && (
+            <p className="leading-relaxed text-danger" role="alert">
+              {error}
+            </p>
+          )}
+
+          <div className="flex justify-end">
+            <DialogClose className={secondaryButtonClass}>Close</DialogClose>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

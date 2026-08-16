@@ -152,7 +152,13 @@ export class WordsService {
     if (assignment.consumedAt) throw new ConflictException('This word has already been submitted');
 
     const extension = EXTENSION_BY_CONTENT_TYPE[body.contentType];
-    const key = `${assignment.session.user.dialect!.tag}/${assignment.direction.toLowerCase()}/${assignment.id}/${randomUUID()}.${extension}`;
+    // Variant tag is only unique per-dialect (see DialectVariant's doc
+    // comment), so it's always nested under the parent dialect segment
+    // here -- never used as a standalone path prefix.
+    const dialectPath = assignment.session.user.dialectVariant
+      ? `${assignment.session.user.dialect!.tag}/${assignment.session.user.dialectVariant.tag}`
+      : assignment.session.user.dialect!.tag;
+    const key = `${dialectPath}/${assignment.direction.toLowerCase()}/${assignment.id}/${randomUUID()}.${extension}`;
     const { url, expiresInSeconds } = await this.storage.createPresignedUploadUrl(
       RECORDINGS_BUCKET,
       key,
@@ -259,6 +265,7 @@ export class WordsService {
           assignmentId: assignment.id,
           direction: assignment.direction,
           dialectTag: assignment.session.user.dialect!.tag,
+          dialectVariantId: assignment.session.user.dialectVariantId,
           translationText: body.responseText!.trim(),
           audioBucket: body.bucket,
           audioKey: body.audioKey,
@@ -382,6 +389,7 @@ export class WordsService {
           assignmentId: assignment.id,
           direction: 'SENTENCE_REBUILD',
           dialectTag,
+          dialectVariantId: assignment.session.user.dialectVariantId,
           translationText: submittedText,
           submittedOrder: submitted,
           tokensSpent: taskTokenCost,
@@ -582,7 +590,7 @@ export class WordsService {
   private async getTrainer(userId: string) {
     const trainer = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { dialect: true },
+      include: { dialect: true, dialectVariant: true },
     });
     if (!trainer) throw new NotFoundException('Trainer not found');
     if (!trainer.dialect) throw new UnprocessableEntityException('Complete dialect onboarding before training');
@@ -602,7 +610,7 @@ export class WordsService {
       include: {
         word: true,
         prompt: { include: { words: { orderBy: { position: 'asc' } } } },
-        session: { include: { user: { include: { dialect: true } } } },
+        session: { include: { user: { include: { dialect: true, dialectVariant: true } } } },
       },
     });
     if (!assignment) throw new NotFoundException('Word assignment not found');
