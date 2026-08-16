@@ -25,6 +25,7 @@ export interface PublicUser {
   smsNotificationsEnabled: boolean;
   marketingNotificationsEnabled: boolean;
   blogNewsNotificationsEnabled: boolean;
+  walletBalance?: string;
 }
 
 export interface PendingOtp {
@@ -304,6 +305,23 @@ export interface DistributorDashboard {
   network: DistributorNetwork;
 }
 
+/** Row on a distributor's own "Sub-distributors" list -- same shape as DistributorAdminSummary, scoped to the caller's own promotedById tree. */
+export type SubDistributorSummary = DistributorAdminSummary;
+
+export interface PromotedSubDistributor {
+  id: string;
+  name: string;
+  email: string;
+  role: 'DISTRIBUTOR';
+}
+
+export interface SubDistributorAdjustment {
+  id: string;
+  amount: string;
+  reference: string;
+  createdAt: string;
+}
+
 export interface LocalCurrency {
   code: string;
   usdExchangeRate: string;
@@ -362,6 +380,7 @@ export type LedgerEntryType =
   | 'DISTRIBUTOR_BULK_ALLOCATION'
   | 'DISTRIBUTOR_FUNDING_BONUS'
   | 'DISTRIBUTOR_PAYOUT_BONUS'
+  | 'SUB_DISTRIBUTOR_ADJUSTMENT'
   | 'ADMIN_FUNDING'
   | 'STARTUP_BONUS'
   | 'P2P_ESCROW_LOCK'
@@ -778,6 +797,7 @@ export interface WordTrainingAssignment {
   wordId: string | null;
   direction: WordTrainingDirection;
   promptText: string | null;
+  sourceAudioUrl?: string | null;
   sourceLanguage: string;
   responseLanguage: string;
   dialectTag: string | null;
@@ -1141,7 +1161,7 @@ const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptio
 export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
   baseQuery: baseQueryWithMaintenanceSignal,
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -1535,6 +1555,37 @@ export const dialectivaApi = createApi({
       query: () => '/distributors/network',
       providesTags: ['DistributorDashboard'],
     }),
+    promoteSubDistributor: builder.mutation<PromotedSubDistributor, string>({
+      query: (userId) => ({ url: `/distributors/sub-distributors/${userId}/promote`, method: 'POST' }),
+      invalidatesTags: ['SubDistributorList', 'DistributorDashboard'],
+    }),
+    listSubDistributors: builder.query<SubDistributorSummary[], void>({
+      query: () => '/distributors/sub-distributors',
+      providesTags: ['SubDistributorList'],
+    }),
+    createSubDistributorAllocation: builder.mutation<DistributorAllocation, { subDistributorId: string; tokenAmount: number; discountRate?: number; note?: string }>({
+      query: ({ subDistributorId, ...body }) => ({
+        url: `/distributors/sub-distributors/${subDistributorId}/allocations`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['SubDistributorList', 'SubDistributorActivity', 'DistributorDashboard'],
+    }),
+    getSubDistributorActivity: builder.query<DistributorActivityPage, { subDistributorId: string; page?: number; pageSize?: number }>({
+      query: ({ subDistributorId, ...params }) => ({ url: `/distributors/sub-distributors/${subDistributorId}/activity`, params }),
+      providesTags: ['SubDistributorActivity'],
+    }),
+    updateSubDistributorStatus: builder.mutation<{ id: string; status: string }, { id: string; status: string }>({
+      query: ({ id, status }) => ({ url: `/distributors/sub-distributors/${id}/status`, method: 'PATCH', body: { status } }),
+      invalidatesTags: ['SubDistributorList'],
+    }),
+    requestSubDistributorAdjustmentOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { id: string; amount: number; reference: string }>({
+      query: ({ id, ...body }) => ({ url: `/distributors/sub-distributors/${id}/adjustments/otp`, method: 'POST', body }),
+    }),
+    adjustSubDistributorWallet: builder.mutation<SubDistributorAdjustment, { id: string; amount: number; reference: string; otpRequestId?: string; code?: string }>({
+      query: ({ id, ...body }) => ({ url: `/distributors/sub-distributors/${id}/adjustments`, method: 'POST', body }),
+      invalidatesTags: ['SubDistributorList', 'SubDistributorActivity'],
+    }),
     getPoolsSummary: builder.query<PoolsSummary, void>({
       query: () => '/admin/pools/summary',
       providesTags: ['Pools'],
@@ -1866,6 +1917,13 @@ export const {
   useGetDistributorActivityQuery,
   useGetDistributorDashboardQuery,
   useGetDistributorNetworkQuery,
+  usePromoteSubDistributorMutation,
+  useListSubDistributorsQuery,
+  useCreateSubDistributorAllocationMutation,
+  useGetSubDistributorActivityQuery,
+  useUpdateSubDistributorStatusMutation,
+  useRequestSubDistributorAdjustmentOtpMutation,
+  useAdjustSubDistributorWalletMutation,
   useGetPoolsSummaryQuery,
   useListSubscriptionPoolsQuery,
   useCreateSubscriptionPoolMutation,

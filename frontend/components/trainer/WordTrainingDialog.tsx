@@ -95,9 +95,10 @@ export function WordTrainingDialog({
   const [rebuildSubmitting, setRebuildSubmitting] = useState(false);
   const [rebuildSubmitted, setRebuildSubmitted] = useState(false);
   const [rebuildScore, setRebuildScore] = useState<number | null>(null);
+  const [sourcePlaying, setSourcePlaying] = useState(false);
 
   const [startSession, { isLoading: isStarting }] = useStartWordTrainingSessionMutation();
-  const [loadNext] = useLazyGetNextWordTrainingAssignmentQuery();
+  const [loadNext, { isFetching: isLoadingNext }] = useLazyGetNextWordTrainingAssignmentQuery();
   const [endSession] = useEndWordTrainingSessionMutation();
   const [createUpload] = useCreateWordRecordingUploadMutation();
   const [submitRecording] = useSubmitWordRecordingMutation();
@@ -132,6 +133,7 @@ export function WordTrainingDialog({
   const noiseSamplesRef = useRef(0);
   const lastNoiseRenderRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const sourceAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const releaseMicrophone = useCallback(() => {
     if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
@@ -177,6 +179,7 @@ export function WordTrainingDialog({
     setRebuildSubmitting(false);
     setRebuildSubmitted(false);
     setRebuildScore(null);
+    setSourcePlaying(false);
   }, [clearRecording, open, releaseMicrophone]);
 
   useEffect(() => {
@@ -236,6 +239,7 @@ export function WordTrainingDialog({
   async function nextWord() {
     if (!session) return;
     setError(null);
+    sourceAudioRef.current?.pause();
     clearRecording();
     setResponseText('');
     setAssignment(null);
@@ -246,6 +250,7 @@ export function WordTrainingDialog({
     setRebuildSubmitting(false);
     setRebuildSubmitted(false);
     setRebuildScore(null);
+    setSourcePlaying(false);
     try {
       setAssignment(await loadNext(session.sessionId, false).unwrap());
     } catch (err) {
@@ -256,6 +261,15 @@ export function WordTrainingDialog({
       setError(normalizeErrorMessage(err, 'Unable to load the next word.'));
     }
   }
+
+  const canSkipAssignment =
+    !!assignment &&
+    !isLoadingNext &&
+    !rebuildSubmitting &&
+    !rebuildSubmitted &&
+    recorderState !== 'recording' &&
+    recorderState !== 'submitting' &&
+    recorderState !== 'submitted';
 
   async function startRecording() {
     if (!assignment) return;
@@ -361,6 +375,16 @@ export function WordTrainingDialog({
     }
     void audio.play();
     setRecorderState('playing');
+  }
+
+  function toggleSourcePlayback() {
+    const audio = sourceAudioRef.current;
+    if (!audio) return;
+    if (sourcePlaying) {
+      audio.pause();
+      return;
+    }
+    void audio.play();
   }
 
   async function saveRecording() {
@@ -509,9 +533,12 @@ export function WordTrainingDialog({
                 {!assignment ? <LoadingState label="Generating next word" /> : assignment.direction === 'SENTENCE_REBUILD' ? (
                   <>
                     <div>
-                      <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
-                        {assignment.responseLanguage} sentence rebuild
-                      </span>
+                      <div className="flex flex-wrap items-center justify-center gap-3">
+                        <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
+                          {assignment.responseLanguage} sentence rebuild
+                        </span>
+                        <SkipAssignmentButton disabled={!canSkipAssignment} loading={isLoadingNext} onClick={() => void nextWord()} />
+                      </div>
                       <p className="mt-4 text-sm font-bold text-muted">Tap the fragments in the correct order</p>
                     </div>
 
@@ -576,15 +603,46 @@ export function WordTrainingDialog({
                 ) : (
                   <>
                     <div>
-                      <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
-                        {assignment.sourceLanguage} to {assignment.responseLanguage}
-                      </span>
-                      <p className="mt-4 text-sm font-bold text-muted">Translate and pronounce</p>
-                      <h2 className="mt-2 break-words text-4xl font-black md:text-6xl">{assignment.promptText}</h2>
+                      <div className="flex flex-wrap items-center justify-center gap-3">
+                        <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
+                          {assignment.sourceLanguage} to {assignment.responseLanguage}
+                        </span>
+                        <SkipAssignmentButton disabled={!canSkipAssignment} loading={isLoadingNext} onClick={() => void nextWord()} />
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-1 text-xs font-extrabold text-muted">
+                          <span aria-hidden="true">{assignment.direction === 'DIALECT_TO_ENGLISH' ? '🔊' : '💬'}</span>
+                          {assignment.direction === 'DIALECT_TO_ENGLISH' ? `Listen in ${assignment.sourceLanguage}` : `Shown in ${assignment.sourceLanguage}`}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
+                        <h2 className="break-words text-4xl font-black md:text-6xl">{assignment.promptText}</h2>
+                        {assignment.sourceAudioUrl && (
+                          <button
+                            aria-label={sourcePlaying ? 'Pause dialect recording' : 'Play dialect recording'}
+                            className="grid size-11 shrink-0 place-items-center rounded-full bg-accent text-white shadow-[0_8px_20px_rgba(126,34,206,0.3)] transition-transform hover:bg-accent-dark active:scale-95"
+                            onClick={toggleSourcePlayback}
+                            type="button"
+                          >
+                            {sourcePlaying ? <Pause className="size-5 fill-current" aria-hidden="true" /> : <Play className="ml-0.5 size-5 fill-current" aria-hidden="true" />}
+                          </button>
+                        )}
+                      </div>
+                      {assignment.sourceAudioUrl && (
+                        <audio
+                          onEnded={() => setSourcePlaying(false)}
+                          onPause={() => setSourcePlaying(false)}
+                          onPlay={() => setSourcePlaying(true)}
+                          ref={sourceAudioRef}
+                          src={assignment.sourceAudioUrl}
+                        />
+                      )}
                     </div>
 
                     <div className="mx-auto grid w-full max-w-md gap-2 text-left">
-                      <label className="text-sm font-extrabold" htmlFor="training-response">Spelling in {assignment.responseLanguage}</label>
+                      <label className="flex items-center gap-1.5 text-sm font-extrabold" htmlFor="training-response">
+                        <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-[11px] font-black text-accent">1</span>
+                        Type it in {assignment.responseLanguage}</label>
                       <RadixPopover.Root open={suggestionsOpen && suggestions.length > 0} onOpenChange={setSuggestionsOpen}>
                         <RadixPopover.Anchor asChild>
                           <div className="relative">
@@ -669,6 +727,16 @@ export function WordTrainingDialog({
                       )}
                     </div>
 
+                    <div className="mx-auto grid w-full max-w-md justify-items-center gap-1 text-center">
+                      <p className="flex items-center gap-1.5 text-sm font-extrabold">
+                        <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-[11px] font-black text-accent">2</span>
+                        Say it in {assignment.direction === 'DIALECT_TO_ENGLISH' ? assignment.sourceLanguage : assignment.responseLanguage}
+                      </p>
+                      {assignment.direction === 'DIALECT_TO_ENGLISH' && (
+                        <p className="text-xs font-bold text-muted">Your own {assignment.sourceLanguage} pronunciation of this word -- not the English you typed above.</p>
+                      )}
+                    </div>
+
                     <div className="relative mx-auto grid size-[248px] place-items-center md:size-[288px]">
                       <svg aria-hidden="true" className="absolute inset-0 size-full -rotate-90" viewBox="0 0 240 240">
                         <circle cx="120" cy="120" fill="none" r={RING_RADIUS} stroke="var(--line)" strokeWidth="12" />
@@ -736,6 +804,28 @@ export function WordTrainingDialog({
         </RadixDialog.Content>
       </RadixDialog.Portal>
     </RadixDialog.Root>
+  );
+}
+
+function SkipAssignmentButton({
+  disabled,
+  loading,
+  onClick,
+}: {
+  disabled: boolean;
+  loading: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border border-line bg-surface px-3 text-xs font-extrabold text-muted transition-colors hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-45"
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {loading ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <ArrowRight className="size-3.5" aria-hidden="true" />}
+      {loading ? 'Loading' : 'Skip / next'}
+    </button>
   );
 }
 

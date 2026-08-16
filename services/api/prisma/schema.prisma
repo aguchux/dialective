@@ -71,6 +71,18 @@ model User {
   referredById  String?
   referredBy    User?    @relation("Referrals", fields: [referredById], references: [id])
   referrals     User[]   @relation("Referrals")
+  // Set only when a DISTRIBUTOR promotes one of their own direct referrals
+  // (referredById === promotedById at promotion time) to role=DISTRIBUTOR via
+  // DistributorsService.promoteSubDistributor. Distinct from referredById: a
+  // distributor can appear anywhere in another distributor's referral chain
+  // without ever being promoted by them (buildDistributorReferralBonuses in
+  // packages/db/src/payouts.ts walks referredById regardless of this field),
+  // so promotedById is the actual ownership/authorization key for "may this
+  // distributor fund/block/credit/debit that sub-distributor," never
+  // referredById alone. Never cleared once set, even if status changes.
+  promotedById  String?
+  promotedBy    User?    @relation("SubDistributorPromotions", fields: [promotedById], references: [id])
+  subDistributors User[] @relation("SubDistributorPromotions")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -269,6 +281,7 @@ enum OtpPurpose {
   P2P_PAYMENT_METHOD
   PHONE_VERIFICATION
   P2P_TRADE
+  SUB_DISTRIBUTOR_ADJUSTMENT
 }
 
 /// One-time email codes gating registration/login (2FA), wallet/admin-payout,
@@ -639,6 +652,7 @@ enum LedgerEntryType {
   DISTRIBUTOR_BULK_ALLOCATION
   DISTRIBUTOR_FUNDING_BONUS
   DISTRIBUTOR_PAYOUT_BONUS
+  SUB_DISTRIBUTOR_ADJUSTMENT // signed: a parent distributor's manual credit (positive) or debit (negative) against their own sub-distributor's wallet, OTP-gated -- see DistributorsService.adjustSubDistributorWallet
   ADMIN_FUNDING
   STARTUP_BONUS
   P2P_ESCROW_LOCK

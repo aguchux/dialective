@@ -30,6 +30,10 @@ const statusStyles: Record<string, string> = {
   BLOCKED: 'bg-[#fde8e8] text-[#a3242f]',
 };
 
+function formatTokens(value: string | number) {
+  return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 export default function AdminUsersPage() {
   const { data: session } = useSession();
   const [roleFilter, setRoleFilter] = useState('');
@@ -102,6 +106,12 @@ export default function AdminUsersPage() {
       header: 'Status',
       sortValue: (u) => u.status,
       render: (u) => <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${statusStyles[u.status]}`}>{u.status}</span>,
+    },
+    {
+      key: 'walletBalance',
+      header: 'DL balance',
+      sortValue: (u) => Number(u.walletBalance ?? 0),
+      render: (u) => <span className="font-mono font-bold tabular-nums">{formatTokens(u.walletBalance ?? 0)} DL</span>,
     },
     {
       key: 'actions',

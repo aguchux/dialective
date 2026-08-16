@@ -116,6 +116,7 @@ export const activityLabels: Record<LedgerEntryType, string> = {
   DISTRIBUTOR_BULK_ALLOCATION: 'Credit Funding',
   DISTRIBUTOR_FUNDING_BONUS: 'Distributor funding bonus',
   DISTRIBUTOR_PAYOUT_BONUS: 'Distributor payout bonus',
+  SUB_DISTRIBUTOR_ADJUSTMENT: 'Sub-distributor adjustment',
   ADMIN_FUNDING: 'Admin Funding',
   STARTUP_BONUS: 'Startup Bonus',
   P2P_ESCROW_LOCK: 'P2P escrow lock',

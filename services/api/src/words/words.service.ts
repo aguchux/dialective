@@ -86,11 +86,16 @@ export class WordsService {
           sourceRecordingId: reverseSource.id,
         },
       });
+      const sourceAudioUrl =
+        reverseSource.audioBucket && reverseSource.audioKey
+          ? (await this.storage.createPresignedDownloadUrl(reverseSource.audioBucket, reverseSource.audioKey)).url
+          : null;
       return {
         assignmentId: assignment.id,
         wordId: reverseSource.wordId,
         direction: assignment.direction,
         promptText: reverseSource.translationText,
+        sourceAudioUrl,
         sourceLanguage: trainer.dialect!.name,
         responseLanguage: 'English',
         dialectTag: null as string | null,

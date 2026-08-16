@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
+import { OtpModule } from '../otp/otp.module';
 import { DistributorsController } from './distributors.controller';
 import { DistributorsService } from './distributors.service';
 
 @Module({
+  imports: [OtpModule],
   controllers: [DistributorsController],
   providers: [DistributorsService],
 })

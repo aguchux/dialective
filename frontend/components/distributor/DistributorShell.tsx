@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { LayoutDashboard, Network, WalletCards, Store, Menu, X, Home, LogOut, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, Network, WalletCards, Store, Users, Menu, X, Home, LogOut, ChevronDown } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import {
   DropdownMenu,
@@ -18,6 +18,7 @@ import {
 const navItems = [
   { href: '/distributor', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/distributor/network', label: 'Network', icon: Network },
+  { href: '/distributor/sub-distributors', label: 'Sub-distributors', icon: Users },
   { href: '/distributor/tokens', label: 'Tokens', icon: WalletCards },
   { href: '/distributor/market', label: 'Market', icon: Store },
 ];

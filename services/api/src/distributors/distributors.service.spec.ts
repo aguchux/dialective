@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { Prisma } from '@dialectiva/db';
 import { DistributorsService } from './distributors.service';
 
@@ -29,10 +29,16 @@ function setup(settingsOverrides: Record<string, unknown> = {}) {
     user: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+      update: jest.fn(),
     },
     wallet: {
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    refreshToken: {
+      updateMany: jest.fn(),
     },
     distributorAllocation: {
       create: jest.fn(),
@@ -51,17 +57,19 @@ function setup(settingsOverrides: Record<string, unknown> = {}) {
     if (typeof input === 'function') return (input as (tx: unknown) => unknown)(prisma);
     return Promise.all(input as Promise<unknown>[]);
   });
-  const service = new DistributorsService(prisma as never);
+  const otp = { issueForUser: jest.fn().mockResolvedValue({ otpRequestId: 'otp-1', expiresInSeconds: 600 }), verify: jest.fn() };
+  const service = new DistributorsService(prisma as never, otp as never);
   return { service, prisma: prisma as never as {
     distributorSettings: { upsert: jest.Mock };
-    user: { findUnique: jest.Mock; findMany: jest.Mock };
-    wallet: { create: jest.Mock; update: jest.Mock };
+    user: { findUnique: jest.Mock; findMany: jest.Mock; findUniqueOrThrow: jest.Mock; update: jest.Mock };
+    wallet: { create: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
+    refreshToken: { updateMany: jest.Mock };
     distributorAllocation: { create: jest.Mock; findMany: jest.Mock; count: jest.Mock };
     ledgerEntry: { create: jest.Mock; findMany: jest.Mock; count: jest.Mock };
     p2PTokenOffer: { count: jest.Mock };
     p2PTokenTrade: { count: jest.Mock };
     $transaction: jest.Mock;
-  }, settingsRow };
+  }, otp, settingsRow };
 }
 
 describe('DistributorsService.updateSettings', () => {
@@ -335,5 +343,154 @@ describe('DistributorsService.getActivity', () => {
     expect(result.items[0].amount).toBe('1000000');
     expect(result.total).toBe(42);
     expect(result.totalPages).toBe(5);
+  });
+});
+
+describe('DistributorsService.allocateTokens (admin) excludes sub-distributors', () => {
+  it('rejects funding a distributor that was promoted by another distributor', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', role: 'DISTRIBUTOR', promotedById: 'parent-1', wallet: null });
+    await expect(service.allocateTokens('admin-1', 'sub-1', { tokenAmount: 1000 })).rejects.toThrow(ForbiddenException);
+  });
+});
+
+describe('DistributorsService.promoteSubDistributor', () => {
+  it('rejects when the caller is not a DISTRIBUTOR', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
+      where.id === 'caller-1' ? { id: 'caller-1', role: 'TRAINER' } : { id: 'target-1', referredById: 'caller-1', role: 'TRAINER' },
+    );
+    await expect(service.promoteSubDistributor('caller-1', 'target-1')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('rejects when the target is not the caller\'s direct referral', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
+      where.id === 'caller-1' ? { id: 'caller-1', role: 'DISTRIBUTOR' } : { id: 'target-1', referredById: 'someone-else', role: 'TRAINER' },
+    );
+    await expect(service.promoteSubDistributor('caller-1', 'target-1')).rejects.toThrow(NotFoundException);
+  });
+
+  it('rejects promoting a non-TRAINER', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
+      where.id === 'caller-1' ? { id: 'caller-1', role: 'DISTRIBUTOR' } : { id: 'target-1', referredById: 'caller-1', role: 'DISTRIBUTOR' },
+    );
+    await expect(service.promoteSubDistributor('caller-1', 'target-1')).rejects.toThrow(BadRequestException);
+  });
+
+  it('promotes a direct trainer referral, setting role=DISTRIBUTOR and promotedById=caller', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
+      where.id === 'caller-1' ? { id: 'caller-1', role: 'DISTRIBUTOR' } : { id: 'target-1', referredById: 'caller-1', role: 'TRAINER' },
+    );
+    prisma.user.update.mockResolvedValue({ id: 'target-1', firstName: 'Ada', lastName: null, email: 'ada@x.com', role: 'DISTRIBUTOR' });
+
+    const result = await service.promoteSubDistributor('caller-1', 'target-1');
+
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'target-1' }, data: { role: 'DISTRIBUTOR', promotedById: 'caller-1' } });
+    expect(result).toEqual({ id: 'target-1', name: 'Ada', email: 'ada@x.com', role: 'DISTRIBUTOR' });
+  });
+});
+
+describe('DistributorsService.allocateToSubDistributor', () => {
+  it('404s when the target is not the caller\'s own sub-distributor', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', role: 'DISTRIBUTOR', promotedById: 'someone-else' });
+    await expect(service.allocateToSubDistributor('caller-1', 'sub-1', { tokenAmount: 1000 })).rejects.toThrow(NotFoundException);
+  });
+
+  it('allocates when the target is owned by the caller', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', role: 'DISTRIBUTOR', promotedById: 'caller-1', wallet: { id: 'wallet-1' } });
+    prisma.distributorAllocation.create.mockResolvedValue({
+      id: 'alloc-1', distributorId: 'sub-1', grantedById: 'caller-1',
+      tokenAmount: { toString: () => '500' }, discountRate: { toString: () => '0' }, note: null, createdAt: new Date(),
+    });
+
+    const result = await service.allocateToSubDistributor('caller-1', 'sub-1', { tokenAmount: 500 });
+
+    expect(prisma.distributorAllocation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ distributorId: 'sub-1', grantedById: 'caller-1' }),
+    }));
+    expect(result.tokenAmount).toBe('500');
+  });
+});
+
+describe('DistributorsService.updateSubDistributorStatus', () => {
+  it('404s when the target is not the caller\'s own sub-distributor', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', promotedById: 'someone-else' });
+    await expect(service.updateSubDistributorStatus('caller-1', 'sub-1', 'SUSPENDED' as never)).rejects.toThrow(NotFoundException);
+  });
+
+  it('revokes active refresh tokens when suspending', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', promotedById: 'caller-1' });
+    prisma.user.update.mockResolvedValue({ id: 'sub-1', status: 'SUSPENDED' });
+
+    await service.updateSubDistributorStatus('caller-1', 'sub-1', 'SUSPENDED' as never);
+
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'sub-1', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+
+  it('does not revoke refresh tokens when reactivating to ACTIVE', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', promotedById: 'caller-1' });
+    prisma.user.update.mockResolvedValue({ id: 'sub-1', status: 'ACTIVE' });
+
+    await service.updateSubDistributorStatus('caller-1', 'sub-1', 'ACTIVE' as never);
+
+    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('DistributorsService.adjustSubDistributorWallet', () => {
+  it('404s when the target is not the caller\'s own sub-distributor', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', promotedById: 'someone-else', wallet: null });
+    await expect(
+      service.adjustSubDistributorWallet('caller-1', 'sub-1', { amount: 100, reference: 'test', otpRequestId: 'otp-1', code: '123456' }),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('requires otpRequestId and code', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', promotedById: 'caller-1', wallet: { id: 'wallet-1' } });
+    await expect(
+      service.adjustSubDistributorWallet('caller-1', 'sub-1', { amount: 100, reference: 'test' }),
+    ).rejects.toThrow(UnprocessableEntityException);
+  });
+
+  it('rejects a debit that would take the balance below zero (atomic guard, no partial write)', async () => {
+    const { service, prisma, otp } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', promotedById: 'caller-1', wallet: { id: 'wallet-1' } });
+    prisma.wallet.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.adjustSubDistributorWallet('caller-1', 'sub-1', { amount: -100, reference: 'debit', otpRequestId: 'otp-1', code: '123456' }),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(otp.verify).toHaveBeenCalled();
+    expect(prisma.wallet.updateMany).toHaveBeenCalledWith({
+      where: { id: 'wallet-1', balance: { gte: expect.objectContaining({ d: expect.anything() }) } },
+      data: { balance: { increment: expect.objectContaining({ d: expect.anything() }) } },
+    });
+  });
+
+  it('credits a positive amount without a balance floor check', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', promotedById: 'caller-1', wallet: { id: 'wallet-1' } });
+    prisma.ledgerEntry.create.mockResolvedValue({ id: 'entry-1', reference: 'credit', createdAt: new Date() });
+
+    const result = await service.adjustSubDistributorWallet('caller-1', 'sub-1', { amount: 250, reference: 'credit', otpRequestId: 'otp-1', code: '123456' });
+
+    expect(prisma.wallet.updateMany).toHaveBeenCalledWith({
+      where: { id: 'wallet-1' },
+      data: { balance: { increment: expect.objectContaining({ d: expect.anything() }) } },
+    });
+    expect(result.amount).toBe('250');
   });
 });

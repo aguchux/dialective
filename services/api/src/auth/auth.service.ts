@@ -77,9 +77,14 @@ export interface PublicUser {
   smsNotificationsEnabled: boolean;
   marketingNotificationsEnabled: boolean;
   blogNewsNotificationsEnabled: boolean;
+  walletBalance?: string;
 }
 
-type UserWithDialect = User & { dialect?: { tag: string } | null; dialectVariant?: { id: string; tag: string } | null };
+type UserWithDialect = User & {
+  dialect?: { tag: string } | null;
+  dialectVariant?: { id: string; tag: string } | null;
+  wallet?: { balance: Prisma.Decimal } | null;
+};
 
 function toPublicUser(user: UserWithDialect): PublicUser {
   return {
@@ -103,6 +108,7 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     smsNotificationsEnabled: user.smsNotificationsEnabled,
     marketingNotificationsEnabled: user.marketingNotificationsEnabled,
     blogNewsNotificationsEnabled: user.blogNewsNotificationsEnabled,
+    ...(user.wallet ? { walletBalance: user.wallet.balance.toString() } : {}),
   };
 }
 
@@ -275,10 +281,24 @@ export class AuthService {
 
     if (purpose === OtpPurpose.REGISTRATION) {
       const row = await this.otp.verifyWithoutConsuming({ ticket, purpose, code });
-      const [, user] = await this.prisma.$transaction([
+      // updateMany's where clause (emailVerified: null) makes "was this the
+      // first verification" an atomic read of count, not a separate
+      // read-then-write -- same race guard as verifyEmail, since both flows
+      // can mark emailVerified and only the first one should grant the
+      // startup bonus.
+      const [, { count }] = await this.prisma.$transaction([
         this.prisma.otpCode.update({ where: { id: row.id }, data: { consumedAt: new Date() } }),
-        this.prisma.user.update({ where: { id: row.userId }, data: { emailVerified: new Date() } }),
+        this.prisma.user.updateMany({ where: { id: row.userId, emailVerified: null }, data: { emailVerified: new Date() } }),
       ]);
+      const user = await this.prisma.user.findUniqueOrThrow({ where: { id: row.userId } });
+      const isFirstVerification = count > 0;
+
+      if (isFirstVerification) {
+        const bonusAmount = await this.platformSettings.getStartupBonusAmount();
+        if (bonusAmount > 0) {
+          await creditStartupBonus(this.prisma, row.userId, bonusAmount, 'signup-verification');
+        }
+      }
 
       if (user.referredById) {
         const inviter = await this.prisma.user.findUnique({
@@ -737,7 +757,7 @@ export class AuthService {
             }
           : {}),
       },
-      include: { dialect: true, dialectVariant: true },
+      include: { dialect: true, dialectVariant: true, wallet: { select: { balance: true } } },
       orderBy: { createdAt: 'desc' },
     });
     return users.map(toPublicUser);
@@ -768,7 +788,10 @@ export class AuthService {
   }
 
   async getAdminUser(id: string): Promise<PublicUser> {
-    const user = await this.prisma.user.findUnique({ where: { id }, include: { dialect: true, dialectVariant: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { dialect: true, dialectVariant: true, wallet: { select: { balance: true } } },
+    });
     if (!user) throw new NotFoundException('User not found');
     return toPublicUser(user);
   }

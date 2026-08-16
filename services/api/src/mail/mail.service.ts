@@ -172,6 +172,8 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
       return { subject: 'Verify your phone number', intro: 'Enter this code to verify your phone number.' };
     case 'P2P_TRADE':
       return { subject: 'Confirm your P2P trade', intro: 'Enter this code to confirm this P2P market action.' };
+    case 'SUB_DISTRIBUTOR_ADJUSTMENT':
+      return { subject: 'Confirm this wallet adjustment', intro: 'Enter this code to confirm this sub-distributor wallet adjustment.' };
   }
 }
 

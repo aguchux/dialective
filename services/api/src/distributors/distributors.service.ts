@@ -1,14 +1,23 @@
-import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { LedgerEntryType, Prisma, Role } from '@dialectiva/db';
+import { LedgerEntryType, OtpPurpose, Prisma, Role, UserStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateDistributorAllocationDto, UpdateDistributorSettingsDto } from './dto/distributor.dto';
+import { OtpService } from '../otp/otp.service';
+import { adminActionContextHash } from '../wallet/otp-context.util';
+import {
+  AdjustSubDistributorWalletDto,
+  CreateDistributorAllocationDto,
+  UpdateDistributorSettingsDto,
+} from './dto/distributor.dto';
 
 const { Decimal } = Prisma;
 
 @Injectable()
 export class DistributorsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly otp: OtpService,
+  ) {}
 
   async getSettings() {
     return this.serializeSettings(await this.settingsRow());
@@ -49,7 +58,34 @@ export class DistributorsService {
     return this.serializeSettings(row);
   }
 
+  /**
+   * Admin-only bulk allocation. Deliberately excludes sub-distributors
+   * (promotedById set) -- per spec, only a sub-distributor's own promoting
+   * distributor may fund them (see allocateToSubDistributor); admin funds
+   * top-level distributors only.
+   */
   async allocateTokens(adminId: string, distributorId: string, dto: CreateDistributorAllocationDto) {
+    const distributor = await this.prisma.user.findUnique({ where: { id: distributorId } });
+    if (distributor?.promotedById) {
+      throw new ForbiddenException('This distributor was promoted by another distributor -- only they can fund this account');
+    }
+    return this.allocate(adminId, distributorId, dto);
+  }
+
+  /**
+   * Distributor-facing bulk allocation to their OWN sub-distributor only --
+   * ownership is `promotedById === callerId`, set once at promotion time
+   * (see promoteSubDistributor) and never touched here.
+   */
+  async allocateToSubDistributor(callerId: string, subDistributorId: string, dto: CreateDistributorAllocationDto) {
+    const subDistributor = await this.prisma.user.findUnique({ where: { id: subDistributorId } });
+    if (!subDistributor || subDistributor.promotedById !== callerId) {
+      throw new NotFoundException('Sub-distributor not found');
+    }
+    return this.allocate(callerId, subDistributorId, dto);
+  }
+
+  private async allocate(grantedById: string, distributorId: string, dto: CreateDistributorAllocationDto) {
     const settings = await this.settingsRow();
     if (!settings.enabled || !settings.bulkAllocationEnabled) {
       throw new UnprocessableEntityException('Distributor bulk allocation is disabled');
@@ -74,7 +110,7 @@ export class DistributorsService {
         data: {
           id: allocationId,
           distributorId: distributor.id,
-          grantedById: adminId,
+          grantedById,
           tokenAmount,
           discountRate,
           note: dto.note?.trim() || null,
@@ -93,6 +129,195 @@ export class DistributorsService {
     });
 
     return this.serializeAllocation(result);
+  }
+
+  /**
+   * Unilateral, distributor-only promotion of one of the caller's own DIRECT
+   * referrals (referredById === callerId) from TRAINER to DISTRIBUTOR. No
+   * admin approval step -- mirrors how admin promotes a distributor today
+   * (a plain role update with no approval workflow). promotedById is what
+   * makes this a "sub-distributor" for authorization purposes throughout
+   * this service; referredById alone is never sufficient (see User.
+   * promotedById's schema doc comment).
+   */
+  async promoteSubDistributor(callerId: string, targetUserId: string) {
+    const [caller, target] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: callerId } }),
+      this.prisma.user.findUnique({ where: { id: targetUserId } }),
+    ]);
+    if (!caller || caller.role !== Role.DISTRIBUTOR) {
+      throw new ForbiddenException('Only a distributor can promote a sub-distributor');
+    }
+    if (!target || target.referredById !== callerId) {
+      throw new NotFoundException('This user is not one of your direct referrals');
+    }
+    if (target.role !== Role.TRAINER) {
+      throw new BadRequestException('Only a trainer can be promoted to sub-distributor');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { role: Role.DISTRIBUTOR, promotedById: callerId },
+    });
+    return { id: updated.id, name: displayName(updated), email: updated.email, role: updated.role };
+  }
+
+  /**
+   * Distributor-facing roster of the caller's own sub-distributors --
+   * same shape as the admin distributor roster (listAdmin) but scoped to
+   * promotedById === callerId instead of every DISTRIBUTOR account.
+   */
+  async listSubDistributors(callerId: string) {
+    const subDistributors = await this.prisma.user.findMany({
+      where: { promotedById: callerId },
+      include: { wallet: true },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }, { createdAt: 'desc' }],
+    });
+    if (subDistributors.length === 0) return [];
+
+    const walletIds = subDistributors.map((d) => d.wallet?.id).filter((id): id is string => Boolean(id));
+    const entries = walletIds.length
+      ? await this.prisma.ledgerEntry.findMany({
+          where: { walletId: { in: walletIds } },
+          select: { walletId: true, amount: true },
+        })
+      : [];
+    const totalsByWallet = new Map<string, { credit: Prisma.Decimal; debit: Prisma.Decimal }>();
+    for (const entry of entries) {
+      const totals = totalsByWallet.get(entry.walletId) ?? { credit: new Decimal(0), debit: new Decimal(0) };
+      if (entry.amount.gte(0)) totals.credit = totals.credit.add(entry.amount);
+      else totals.debit = totals.debit.add(entry.amount.abs());
+      totalsByWallet.set(entry.walletId, totals);
+    }
+
+    return subDistributors.map((user) => {
+      const totals = user.wallet ? totalsByWallet.get(user.wallet.id) : undefined;
+      return {
+        id: user.id,
+        name: displayName(user),
+        email: user.email,
+        status: user.status,
+        tokenBalance: user.wallet?.balance.toString() ?? '0',
+        lockedBalance: user.wallet?.lockedBalance.toString() ?? '0',
+        totalCredit: (totals?.credit ?? new Decimal(0)).toString(),
+        totalDebit: (totals?.debit ?? new Decimal(0)).toString(),
+        createdAt: user.createdAt,
+      };
+    });
+  }
+
+  /** Ownership-scoped activity feed, mirrors getActivity but for a sub-distributor owned by the caller. */
+  async getSubDistributorActivity(callerId: string, subDistributorId: string, params: { page: number; pageSize: number }) {
+    const user = await this.prisma.user.findUnique({ where: { id: subDistributorId }, include: { wallet: true } });
+    if (!user || user.promotedById !== callerId) {
+      throw new NotFoundException('Sub-distributor not found');
+    }
+    if (!user.wallet) {
+      return { items: [], page: params.page, pageSize: params.pageSize, total: 0, totalPages: 1 };
+    }
+
+    const where = { walletId: user.wallet.id };
+    const [total, entries] = await this.prisma.$transaction([
+      this.prisma.ledgerEntry.count({ where }),
+      this.prisma.ledgerEntry.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (params.page - 1) * params.pageSize,
+        take: params.pageSize,
+        select: { id: true, type: true, amount: true, reference: true, createdAt: true },
+      }),
+    ]);
+
+    return {
+      items: entries.map((entry) => ({ ...entry, amount: entry.amount.toString() })),
+      page: params.page,
+      pageSize: params.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / params.pageSize)),
+    };
+  }
+
+  /** Block/suspend/reactivate the caller's own sub-distributor -- no OTP (mirrors admin's plain status route, not the stronger lock/delete kill switch). */
+  async updateSubDistributorStatus(callerId: string, subDistributorId: string, status: UserStatus) {
+    const target = await this.prisma.user.findUnique({ where: { id: subDistributorId } });
+    if (!target || target.promotedById !== callerId) {
+      throw new NotFoundException('Sub-distributor not found');
+    }
+
+    const updated = await this.prisma.user.update({ where: { id: subDistributorId }, data: { status } });
+    if (status !== UserStatus.ACTIVE) {
+      await this.prisma.refreshToken.updateMany({ where: { userId: subDistributorId, revokedAt: null }, data: { revokedAt: new Date() } });
+    }
+    return { id: updated.id, status: updated.status };
+  }
+
+  async requestSubDistributorAdjustmentOtp(callerId: string, subDistributorId: string, dto: AdjustSubDistributorWalletDto) {
+    const [caller, target] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({ where: { id: callerId } }),
+      this.prisma.user.findUnique({ where: { id: subDistributorId } }),
+    ]);
+    if (!target || target.promotedById !== callerId) {
+      throw new NotFoundException('Sub-distributor not found');
+    }
+    const contextHash = adminActionContextHash({
+      action: 'sub-distributor-adjustment',
+      userId: subDistributorId,
+      amount: dto.amount,
+      reference: dto.reference,
+    });
+    return this.otp.issueForUser(callerId, OtpPurpose.SUB_DISTRIBUTOR_ADJUSTMENT, caller.email, contextHash);
+  }
+
+  /**
+   * Credit (positive) or debit (negative) a sub-distributor's wallet,
+   * always OTP-gated (unlike admin/training-payouts, which only requires
+   * OTP when PlatformSettings.adminPayoutOtpEnabled is on) -- a distributor
+   * moving tokens in or out of another person's wallet gets no opt-out.
+   * A debit that would take the balance below 0 is rejected outright; the
+   * conditional updateMany's WHERE clause makes that check atomic with the
+   * write, same guard shape as the wallet-lock pattern used for TASK_LOCK.
+   */
+  async adjustSubDistributorWallet(callerId: string, subDistributorId: string, dto: AdjustSubDistributorWalletDto) {
+    const target = await this.prisma.user.findUnique({ where: { id: subDistributorId }, include: { wallet: true } });
+    if (!target || target.promotedById !== callerId) {
+      throw new NotFoundException('Sub-distributor not found');
+    }
+
+    const amount = new Decimal(dto.amount);
+    const contextHash = adminActionContextHash({
+      action: 'sub-distributor-adjustment',
+      userId: subDistributorId,
+      amount: dto.amount,
+      reference: dto.reference,
+    });
+    if (!dto.otpRequestId || !dto.code) {
+      throw new UnprocessableEntityException('OTP verification is required to adjust a sub-distributor wallet');
+    }
+    await this.otp.verify({
+      otpRequestId: dto.otpRequestId,
+      userId: callerId,
+      purpose: OtpPurpose.SUB_DISTRIBUTOR_ADJUSTMENT,
+      code: dto.code,
+      contextHash,
+    });
+
+    const wallet = target.wallet ?? (await this.prisma.wallet.create({ data: { userId: target.id } }));
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const entry = await tx.ledgerEntry.create({
+        data: { walletId: wallet.id, type: LedgerEntryType.SUB_DISTRIBUTOR_ADJUSTMENT, amount, reference: dto.reference.trim() },
+      });
+      const updated = await tx.wallet.updateMany({
+        where: amount.isNegative() ? { id: wallet.id, balance: { gte: amount.abs() } } : { id: wallet.id },
+        data: { balance: { increment: amount } },
+      });
+      if (updated.count === 0) {
+        throw new UnprocessableEntityException('This debit would take the sub-distributor below a zero balance');
+      }
+      return entry;
+    });
+
+    return { id: result.id, amount: amount.toString(), reference: result.reference, createdAt: result.createdAt };
   }
 
   /**

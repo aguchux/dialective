@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Length, Matches, Max, MaxLength, Min, NotEquals } from 'class-validator';
 
 // Sanity ceiling on a single bulk grant, well above any realistic real-world
 // allocation (the spec's own example is 1,000,000) but far under the
@@ -114,4 +114,31 @@ export class ListDistributorActivityDto {
   @Min(1)
   @Max(100)
   pageSize = 25;
+}
+
+export class AdjustSubDistributorWalletDto {
+  // Signed: positive credits, negative debits (rejected if it would take the
+  // sub-distributor's balance below 0) -- see
+  // DistributorsService.adjustSubDistributorWallet.
+  @IsNumber()
+  @NotEquals(0)
+  amount!: number;
+
+  @IsString()
+  @MaxLength(500)
+  reference!: string;
+
+  @IsOptional()
+  @IsUUID()
+  otpRequestId?: string;
+
+  @IsOptional()
+  @Length(6, 6)
+  @Matches(/^\d{6}$/)
+  code?: string;
+}
+
+export class UpdateSubDistributorStatusDto {
+  @IsIn(['ACTIVE', 'SUSPENDED', 'BLOCKED'])
+  status!: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
 }

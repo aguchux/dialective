@@ -65,6 +65,7 @@ export default function AdminUserDetailPage() {
             <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)] md:grid-cols-2 lg:grid-cols-3">
               <Field label="Role" value={user.role} />
               <Field label="Status" value={<span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${statusStyles[user.status]}`}>{user.status}</span>} />
+              <Field label="DL balance" value={<span className="font-mono text-lg text-accent-dark">{formatTokens(user.walletBalance ?? 0)} DL</span>} />
               <Field label="Email verified" value={user.emailVerified ? 'Yes' : 'No'} />
               <Field label="Phone" value={user.phoneNumber ?? 'Not set'} />
               <Field label="Phone verified" value={user.phoneVerified ? 'Yes' : 'No'} />
