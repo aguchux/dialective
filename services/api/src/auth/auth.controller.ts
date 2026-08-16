@@ -16,6 +16,9 @@ import { RequestPhoneOtpDto } from './dto/request-phone-otp.dto';
 import { VerifyPhoneOtpDto } from './dto/verify-phone-otp.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { LockUserDto } from './dto/lock-user.dto';
+import { DeleteUserDto } from './dto/delete-user.dto';
+import { ListUserActivityDto } from './dto/list-user-activity.dto';
 import { JwtAuthGuard } from './strategies/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
@@ -155,5 +158,56 @@ export class AuthController {
       throw new BadRequestException('You cannot suspend or block your own account');
     }
     return this.auth.updateUserStatus(id, dto.status);
+  }
+
+  @Get('admin/users/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  getAdminUser(@Param('id') id: string) {
+    return this.auth.getAdminUser(id);
+  }
+
+  @Get('admin/users/:id/activity')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  getUserActivity(@Param('id') id: string, @Query() query: ListUserActivityDto) {
+    return this.auth.getUserActivity(id, query);
+  }
+
+  // Kill switch, part 1: lock (SUSPENDED/BLOCKED), reversible via the plain
+  // status route above. OTP-gated (when PlatformSettings.adminPayoutOtpEnabled
+  // is on) because unlike a role change, this also rejects pending
+  // withdrawals and cancels open P2P trades -- see AuthService.lockUser.
+  @Post('admin/users/:id/lock/otp')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  requestUserLockOtp(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string, @Body() dto: LockUserDto) {
+    return this.auth.requestUserLockOtp(admin.sub, id, dto.status);
+  }
+
+  @Post('admin/users/:id/lock')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  lockUser(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string, @Body() dto: LockUserDto) {
+    return this.auth.lockUser(admin.sub, id, dto.status, dto.otpRequestId, dto.code);
+  }
+
+  // Kill switch, part 2: permanent delete. Always OTP-gated at the same
+  // flag as lock/payouts -- see AuthService.deleteUser for why this
+  // (deliberately) cannot be undone.
+  @Post('admin/users/:id/delete/otp')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  requestUserDeleteOtp(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string) {
+    return this.auth.requestUserDeleteOtp(admin.sub, id);
+  }
+
+  @Post('admin/users/:id/delete')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  deleteUser(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string, @Body() dto: DeleteUserDto) {
+    return this.auth.deleteUser(admin.sub, id, dto.otpRequestId, dto.code);
   }
 }

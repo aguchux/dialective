@@ -51,7 +51,9 @@ export function adminActionContextHash(
         destinationAddress: string;
         destinationNetwork: string;
       }
-    | { action: 'training-payout'; userId: string; tokenAmount: number; reference: string },
+    | { action: 'training-payout'; userId: string; tokenAmount: number; reference: string }
+    | { action: 'user-lock'; userId: string; status: string }
+    | { action: 'user-delete'; userId: string },
 ): string {
   return hashContext(input);
 }

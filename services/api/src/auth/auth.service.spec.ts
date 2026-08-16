@@ -49,7 +49,8 @@ function setup(
     ),
     getStartupBonusAmount: jest.fn().mockResolvedValue(0),
   };
-  const service = new AuthService(prisma as never, mail as never, otp as never, platformSettings as never);
+  const p2p = { adminCancelAllForUser: jest.fn() };
+  const service = new AuthService(prisma as never, mail as never, otp as never, platformSettings as never, p2p as never);
   return { service, prisma, mail, otp, platformSettings };
 }
 

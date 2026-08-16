@@ -241,6 +241,10 @@ export interface DistributorActivityPage {
   totalPages: number;
 }
 
+/** Same shape as DistributorActivityEntry/Page, for any user's wallet ledger (not just role=DISTRIBUTOR). */
+export type UserActivityEntry = DistributorActivityEntry;
+export type UserActivityPage = DistributorActivityPage;
+
 // No `role` field -- the network view is deliberately name + balance only,
 // see DistributorsService.loadNetworkLevels' NetworkNode type on the backend.
 export interface DistributorNetworkNode {
@@ -1557,6 +1561,28 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['Users'],
     }),
+    getAdminUser: builder.query<PublicUser, string>({
+      query: (id) => `/auth/admin/users/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'Users', id }],
+    }),
+    getUserActivity: builder.query<UserActivityPage, { userId: string; page?: number; pageSize?: number }>({
+      query: ({ userId, ...params }) => ({ url: `/auth/admin/users/${userId}/activity`, params }),
+      providesTags: (_result, _error, { userId }) => [{ type: 'Users', id: `${userId}-activity` }],
+    }),
+    requestUserLockOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { id: string; status: string }>({
+      query: ({ id, status }) => ({ url: `/auth/admin/users/${id}/lock/otp`, method: 'POST', body: { status } }),
+    }),
+    lockUser: builder.mutation<PublicUser, { id: string; status: string; otpRequestId?: string; code?: string }>({
+      query: ({ id, ...body }) => ({ url: `/auth/admin/users/${id}/lock`, method: 'POST', body }),
+      invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
+    }),
+    requestUserDeleteOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, string>({
+      query: (id) => ({ url: `/auth/admin/users/${id}/delete/otp`, method: 'POST' }),
+    }),
+    deleteUser: builder.mutation<{ id: string; deleted: boolean }, { id: string; otpRequestId?: string; code?: string }>({
+      query: ({ id, ...body }) => ({ url: `/auth/admin/users/${id}/delete`, method: 'POST', body }),
+      invalidatesTags: ['Users'],
+    }),
     requestTrainingPayoutOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
       { userId: string; tokenAmount: number; reference: string }
@@ -1792,6 +1818,12 @@ export const {
   useGetUsersQuery,
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,
+  useGetAdminUserQuery,
+  useGetUserActivityQuery,
+  useRequestUserLockOtpMutation,
+  useLockUserMutation,
+  useRequestUserDeleteOtpMutation,
+  useDeleteUserMutation,
   useRequestTrainingPayoutOtpMutation,
   useCreateTrainingPayoutMutation,
   useGetAdminCountriesQuery,

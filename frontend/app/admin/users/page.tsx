@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
@@ -79,7 +80,9 @@ export default function AdminUsersPage() {
       sortValue: (u) => `${u.firstName ?? ''} ${u.lastName ?? ''} ${u.email}`,
       render: (u) => (
         <>
-          <p className="font-extrabold">{[u.firstName, u.lastName].filter(Boolean).join(' ') || 'Name not provided'}</p>
+          <Link className="font-extrabold text-accent no-underline hover:text-accent-dark" href={`/admin/users/${u.id}`}>
+            {[u.firstName, u.lastName].filter(Boolean).join(' ') || 'Name not provided'}
+          </Link>
           <p className="text-sm text-muted">{u.email}</p>
           {u.id === selfId && <p className="text-xs text-muted">This is you</p>}
         </>

@@ -9,5 +9,6 @@ import { P2PService } from './p2p.service';
   imports: [OtpModule, SettingsModule, SmsModule],
   controllers: [P2PController],
   providers: [P2PService],
+  exports: [P2PService],
 })
 export class P2PModule {}

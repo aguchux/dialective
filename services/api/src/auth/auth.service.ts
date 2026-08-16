@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -8,17 +9,29 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, randomUUID } from 'crypto';
-import { AuthProvider, creditStartupBonus, OtpPurpose, Prisma, ReferralInviteStatus, Role, User, UserStatus } from '@dialectiva/db';
+import {
+  AuthProvider,
+  creditStartupBonus,
+  OtpPurpose,
+  Prisma,
+  ReferralInviteStatus,
+  Role,
+  User,
+  UserStatus,
+  WithdrawalStatus,
+} from '@dialectiva/db';
 import { isValidPhoneNumber } from 'libphonenumber-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { OtpService } from '../otp/otp.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { P2PService } from '../p2p/p2p.service';
 import { createSmslive247Otp, verifySmslive247Otp } from '../sms/smslive247-native-otp';
 import { generateOpaqueToken, hashToken } from './token.util';
 import { AuthMaintenanceException } from './auth-maintenance.exception';
 import { signAccessToken } from './jwt.util';
 import { phoneVerificationContextHash } from './phone-otp-context.util';
+import { adminActionContextHash } from '../wallet/otp-context.util';
 
 const SMSLIVE247_NATIVE_OTP_REQUEST_ID = 'smslive247-native';
 
@@ -106,6 +119,7 @@ export class AuthService {
     private readonly mail: MailService,
     private readonly otp: OtpService,
     private readonly platformSettings: PlatformSettingsService,
+    private readonly p2p: P2PService,
   ) {}
 
   /**
@@ -691,6 +705,162 @@ export class AuthService {
     }
 
     return toPublicUser(user);
+  }
+
+  async getAdminUser(id: string): Promise<PublicUser> {
+    const user = await this.prisma.user.findUnique({ where: { id }, include: { dialect: true } });
+    if (!user) throw new NotFoundException('User not found');
+    return toPublicUser(user);
+  }
+
+  /**
+   * Every ledger entry against this user's wallet, newest first -- the
+   * "smart table of all token transactions" on the admin user detail page.
+   * Same convention as DistributorsService.getActivity, but for any user
+   * (not just role=DISTRIBUTOR).
+   */
+  async getUserActivity(userId: string, params: { page: number; pageSize: number }) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { wallet: true } });
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.wallet) {
+      return { items: [], page: params.page, pageSize: params.pageSize, total: 0, totalPages: 1 };
+    }
+
+    const where = { walletId: user.wallet.id };
+    const [total, entries] = await this.prisma.$transaction([
+      this.prisma.ledgerEntry.count({ where }),
+      this.prisma.ledgerEntry.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (params.page - 1) * params.pageSize,
+        take: params.pageSize,
+        select: { id: true, type: true, amount: true, reference: true, createdAt: true },
+      }),
+    ]);
+
+    return {
+      items: entries.map((entry) => ({ ...entry, amount: entry.amount.toString() })),
+      page: params.page,
+      pageSize: params.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / params.pageSize)),
+    };
+  }
+
+  async requestUserLockOtp(adminId: string, userId: string, status: UserStatus) {
+    if (userId === adminId) throw new BadRequestException('You cannot suspend or block your own account');
+    const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
+    const contextHash = adminActionContextHash({ action: 'user-lock', userId, status });
+    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+  }
+
+  /**
+   * The "kill switch": locking a user (SUSPENDED/BLOCKED) does everything
+   * updateUserStatus already does (status flip + refresh-token revocation)
+   * plus unwinds their open money-movement -- rejects any pending/approved
+   * withdrawal (reversing the ledger debit, mirroring
+   * WalletController.resolveWithdrawal's reject path exactly) and cancels
+   * every open P2P offer/trade they're party to (refunding escrow via
+   * P2PService.adminCancelAllForUser). Re-activating (status=ACTIVE) does
+   * not go through this path -- see the controller's OTP gate, which only
+   * applies to the two disabling values.
+   */
+  async lockUser(adminId: string, userId: string, status: UserStatus, otpRequestId?: string, code?: string): Promise<PublicUser> {
+    if (userId === adminId) throw new BadRequestException('You cannot suspend or block your own account');
+
+    if (await this.platformSettings.isAdminPayoutOtpEnabled()) {
+      if (!otpRequestId || !code) {
+        throw new UnprocessableEntityException('OTP verification is required to lock this user');
+      }
+      await this.otp.verify({
+        otpRequestId,
+        userId: adminId,
+        purpose: OtpPurpose.ADMIN_PAYOUT,
+        code,
+        contextHash: adminActionContextHash({ action: 'user-lock', userId, status }),
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { wallet: true, dialect: true } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const updated = await this.prisma.user.update({ where: { id: userId }, data: { status }, include: { dialect: true } });
+    await this.prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+
+    if (user.wallet) {
+      const openWithdrawals = await this.prisma.withdrawalRequest.findMany({
+        where: { walletId: user.wallet.id, status: { in: [WithdrawalStatus.PENDING, WithdrawalStatus.APPROVED] } },
+      });
+      for (const withdrawal of openWithdrawals) {
+        await this.prisma.$transaction([
+          this.prisma.withdrawalRequest.update({
+            where: { id: withdrawal.id },
+            data: { status: WithdrawalStatus.REJECTED, resolvedAt: new Date(), adminNote: 'Auto-rejected: account locked by admin' },
+          }),
+          this.prisma.ledgerEntry.create({
+            data: { walletId: withdrawal.walletId, type: 'WITHDRAWAL_REVERSED', amount: withdrawal.tokenAmount, reference: withdrawal.id },
+          }),
+          this.prisma.wallet.update({ where: { id: withdrawal.walletId }, data: { balance: { increment: withdrawal.tokenAmount } } }),
+        ]);
+      }
+    }
+
+    await this.p2p.adminCancelAllForUser(userId);
+
+    this.logger.log(`User locked: admin=${adminId} user=${userId} status=${status}`);
+    return toPublicUser(updated);
+  }
+
+  async requestUserDeleteOtp(adminId: string, userId: string) {
+    if (userId === adminId) throw new BadRequestException('You cannot delete your own account');
+    const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
+    const contextHash = adminActionContextHash({ action: 'user-delete', userId });
+    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+  }
+
+  /**
+   * Permanent delete -- the user can sign up again afterward with the same
+   * email, but this specific account and all its cascading data (wallet,
+   * ledger, sessions, submissions, P2P history, etc. -- see the onDelete:
+   * Cascade relations on User in schema.prisma) is gone for good. Blocked
+   * (not reassigned) when the user authored content that the schema
+   * protects with onDelete: Restrict -- blog posts, courses, opened
+   * subscription pools -- so deleting a user can never silently orphan or
+   * relabel content someone else may be relying on the authorship of.
+   */
+  async deleteUser(adminId: string, userId: string, otpRequestId?: string, code?: string): Promise<{ id: string; deleted: boolean }> {
+    if (userId === adminId) throw new BadRequestException('You cannot delete your own account');
+
+    if (await this.platformSettings.isAdminPayoutOtpEnabled()) {
+      if (!otpRequestId || !code) {
+        throw new UnprocessableEntityException('OTP verification is required to delete this user');
+      }
+      await this.otp.verify({
+        otpRequestId,
+        userId: adminId,
+        purpose: OtpPurpose.ADMIN_PAYOUT,
+        code,
+        contextHash: adminActionContextHash({ action: 'user-delete', userId }),
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const [blogPostCount, courseCount, subscriptionPoolCount] = await Promise.all([
+      this.prisma.blogPost.count({ where: { authorId: userId } }),
+      this.prisma.course.count({ where: { authorId: userId } }),
+      this.prisma.subscriptionPool.count({ where: { openedByUserId: userId } }),
+    ]);
+    if (blogPostCount > 0 || courseCount > 0 || subscriptionPoolCount > 0) {
+      throw new UnprocessableEntityException(
+        'This user authored blog posts, courses, or opened subscription pools -- reassign or remove that content before deleting the account',
+      );
+    }
+
+    await this.prisma.user.delete({ where: { id: userId } });
+    this.logger.log(`User deleted: admin=${adminId} user=${userId}`);
+    return { id: userId, deleted: true };
   }
 
   // --- Shared token issuance ------------------------------------------------

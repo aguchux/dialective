@@ -305,6 +305,39 @@ export class P2PService {
     return this.getOfferForUser(userId, offer.id);
   }
 
+  /**
+   * Admin kill-switch support: cancels every open offer/trade this user is
+   * party to (as offerer, buyer, or seller), refunding escrow the same way
+   * cancelSellOffer/cancelTrade already do for their normal cancellation
+   * paths -- reused here rather than duplicated so the refund/ledger
+   * behavior can never drift between a user's own cancel and an admin's.
+   * Trades where the user is only the buyer (no escrow held on their
+   * wallet) still get cancelled so they stop being "open" from the other
+   * party's perspective; refundTradeToSeller is a no-op-safe refund of the
+   * seller's escrow regardless of which side triggered the cancellation.
+   */
+  async adminCancelAllForUser(userId: string): Promise<void> {
+    const offers = await this.prisma.p2PTokenOffer.findMany({
+      where: { userId, status: { in: OPEN_OFFER_STATUSES } },
+      select: { id: true, type: true, status: true },
+    });
+    for (const offer of offers) {
+      if (offer.status === P2POfferStatus.ACTIVE && offer.type === P2POfferType.SELL) {
+        await this.cancelSellOffer(offer.id, P2POfferStatus.CANCELLED);
+      } else if (offer.status === P2POfferStatus.ACTIVE) {
+        await this.prisma.p2PTokenOffer.update({ where: { id: offer.id }, data: { status: P2POfferStatus.CANCELLED, cancelledAt: new Date() } });
+      }
+    }
+
+    const trades = await this.prisma.p2PTokenTrade.findMany({
+      where: { OR: [{ buyerId: userId }, { sellerId: userId }], status: { in: OPEN_TRADE_STATUSES } },
+      select: { id: true },
+    });
+    for (const trade of trades) {
+      await this.refundTradeToSeller(trade.id);
+    }
+  }
+
   async acceptOffer(userId: string, offerId: string, dto: AcceptOfferDto) {
     await this.requirePhoneVerified(userId, 'trading on the P2P market');
     await this.expireStaleRecords();
