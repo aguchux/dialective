@@ -41,10 +41,10 @@ export default function DistributorTokensPage() {
       <div className="grid gap-6">
         <div className="grid gap-1">
           <h1 className="text-3xl font-black">Tokens</h1>
-          <p className="text-white/65">Wallet balance and admin bulk allocation history.</p>
+          <p className="text-muted">Wallet balance and admin bulk allocation history.</p>
         </div>
 
-        {isLoading && <p className="text-white/70">Loading token data...</p>}
+        {isLoading && <p className="text-muted">Loading token data...</p>}
 
         {data && (
           <>
@@ -72,9 +72,9 @@ export default function DistributorTokensPage() {
 
 function Metric({ icon: Icon, label, value }: { icon: typeof WalletCards; label: string; value: string }) {
   return (
-    <article className="rounded-lg border border-white/10 bg-[#121018] p-4">
-      <div className="mb-4 flex size-10 items-center justify-center rounded-lg bg-[#7b1ec9]/20 text-[#b989ff]"><Icon className="size-5" /></div>
-      <p className="text-sm font-bold text-white/60">{label}</p>
+    <article className="rounded-lg border border-line bg-surface p-4">
+      <div className="mb-4 flex size-10 items-center justify-center rounded-lg bg-accent-soft text-accent"><Icon className="size-5" /></div>
+      <p className="text-sm font-bold text-muted">{label}</p>
       <p className="mt-1 text-2xl font-black">{value}</p>
     </article>
   );

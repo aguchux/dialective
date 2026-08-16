@@ -9,10 +9,10 @@ export default function DistributorMarketPage() {
       <div className="grid gap-6">
         <div className="grid gap-1">
           <h1 className="text-3xl font-black">P2P Market</h1>
-          <p className="text-white/65">Buy and sell DL tokens directly with other members.</p>
+          <p className="text-muted">Buy and sell DL tokens directly with other members.</p>
         </div>
 
-        <section className="rounded-lg border border-white/10 bg-[#f7f1ff] p-3 text-[#12081d]">
+        <section className="rounded-lg border border-line bg-surface p-3 text-ink">
           <MarketView />
         </section>
       </div>

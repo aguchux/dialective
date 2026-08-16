@@ -40,7 +40,6 @@ import {
   WalletCards,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { formatCompactLocalCurrency, formatCompactNumber, formatCompactUsd } from '@/lib/format';
@@ -400,7 +399,6 @@ function DashboardHeader({
               <span className="hidden sm:inline">Dashboard</span>
             </Link>
           )}
-          <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-1.5 pr-2 text-left hover:bg-surface-muted" type="button">

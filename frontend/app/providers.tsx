@@ -13,9 +13,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AuthMaintenanceSessionHandler />
       <ThemeProvider
         attribute="class"
-        defaultTheme="dark"
+        defaultTheme="light"
         enableColorScheme={false}
         enableSystem={false}
+        forcedTheme="light"
         storageKey="trainer-dashboard-theme"
       >
         <StoreProvider>{children}</StoreProvider>

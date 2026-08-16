@@ -36,11 +36,11 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   return (
-    <div className="grid min-h-screen bg-[#0b0710] text-white md:grid-cols-[240px_1fr]">
+    <div className="dashboard-theme grid min-h-screen bg-bg text-ink md:grid-cols-[240px_1fr]">
       <DistributorSidebar pathname={pathname} router={router} />
 
       <div
-        className={`fixed inset-0 z-40 bg-black/60 transition-opacity md:hidden ${
+        className={`fixed inset-0 z-40 bg-black/45 transition-opacity md:hidden ${
           menuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         }`}
         aria-hidden="true"
@@ -55,10 +55,10 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="flex min-h-screen min-w-0 flex-col">
-        <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-white/10 bg-[#0b0710]/90 px-4 py-3 backdrop-blur md:px-6">
+        <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur md:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
-              className="grid size-10 place-items-center rounded-lg border border-white/15 text-white transition-colors hover:bg-white/10 md:hidden"
+              className="grid size-10 place-items-center rounded-lg border border-line text-ink transition-colors hover:bg-surface-muted md:hidden"
               type="button"
               aria-label="Open distributor menu"
               aria-expanded={menuOpen}
@@ -67,14 +67,14 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
               <Menu className="size-[18px]" />
             </button>
             <div className="md:hidden">
-              <BrandLogo size={28} className="text-white" textClassName="hidden text-sm font-black sm:inline" />
+              <BrandLogo size={28} textClassName="hidden text-sm font-black sm:inline" />
             </div>
             <span className="hidden text-lg font-black md:inline">Distributor Panel</span>
           </div>
 
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-white/15 py-1 pl-1 pr-2.5 transition-colors hover:bg-white/10">
-              <span className="grid size-7 place-items-center rounded-full bg-[#7b1ec9] text-sm font-black text-white">{initial}</span>
+            <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pl-1 pr-2.5 transition-colors hover:bg-surface-muted">
+              <span className="grid size-7 place-items-center rounded-full bg-accent text-sm font-black text-white">{initial}</span>
               <span className="hidden max-w-40 truncate text-sm font-bold sm:inline">{displayName}</span>
               <ChevronDown className="size-3.5" />
             </DropdownMenuTrigger>
@@ -112,11 +112,11 @@ function DistributorSidebar({
   onClose?: () => void;
 }) {
   return (
-    <aside className={`${mobile ? 'flex h-full' : 'hidden md:flex'} flex-col gap-1 border-r border-white/10 bg-[#151019] p-4 text-white`}>
+    <aside className={`${mobile ? 'flex h-full' : 'hidden md:flex'} flex-col gap-1 border-r border-line bg-surface p-4 text-ink`}>
       <div className="mb-4 flex items-center justify-between px-1">
-        <BrandLogo className="text-white" textClassName="text-base" size={32} />
+        <BrandLogo textClassName="text-base" size={32} />
         {mobile && (
-          <button className="grid size-9 place-items-center rounded-lg text-white/70 hover:bg-white/5 hover:text-white" onClick={onClose} type="button" aria-label="Close distributor menu">
+          <button className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-muted hover:text-ink" onClick={onClose} type="button" aria-label="Close distributor menu">
             <X className="size-[18px]" />
           </button>
         )}
@@ -129,7 +129,7 @@ function DistributorSidebar({
               key={item.href}
               href={item.href}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold no-underline transition-colors ${
-                active ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white'
+                active ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-surface-muted hover:text-ink'
               }`}
             >
               <item.icon className="size-[18px]" />
@@ -140,7 +140,7 @@ function DistributorSidebar({
       </nav>
 
       <button
-        className="mt-auto flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+        className="mt-auto flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold text-muted transition-colors hover:bg-surface-muted hover:text-ink"
         onClick={() => router.push('/')}
         type="button"
       >
@@ -149,7 +149,7 @@ function DistributorSidebar({
       </button>
 
       <button
-        className="flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+        className="flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold text-muted transition-colors hover:bg-surface-muted hover:text-ink"
         onClick={() => signOut({ callbackUrl: '/' })}
         type="button"
       >
