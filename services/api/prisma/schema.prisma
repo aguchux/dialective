@@ -111,6 +111,7 @@ model User {
   distributorAllocations DistributorAllocation[] @relation("DistributorAllocations")
   distributorAllocationsGranted DistributorAllocation[] @relation("DistributorAllocationsGranted")
 
+  @@index([promotedById])
   @@map("users")
 }
 
