@@ -406,6 +406,7 @@ function DashboardHeader({
             <DropdownMenuTrigger asChild>
               <button className="flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-1.5 pr-2 text-left hover:bg-surface-muted" type="button">
                 <Avatar email={email} image={image} />
+                <span className="hidden max-w-32 truncate text-sm font-bold text-ink sm:inline">{displayName}</span>
                 <ChevronDown className="hidden size-4 text-muted sm:block" aria-hidden="true" />
                 <span className="sr-only">Open account menu</span>
               </button>
