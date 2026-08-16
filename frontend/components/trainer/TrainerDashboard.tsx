@@ -1570,7 +1570,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   return (
     <div>
       <ViewHeading title="Profile" subtitle="Your account details." />
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={submit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="grid gap-1.5 text-sm font-bold">
