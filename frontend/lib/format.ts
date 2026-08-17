@@ -31,9 +31,14 @@ export function formatCompactNumber(value: number | string) {
   return compactNumberFormatter.format(Number(value));
 }
 
-/** e.g. 4682 -> "4.68K DL" -- "DL" ("Dial") is this platform's display name for its token unit, see AGENTS.md "Wallet / token pool" */
+const compactTokenFormatter = new Intl.NumberFormat('en-US', {
+  notation: 'compact',
+  maximumFractionDigits: 4,
+});
+
+/** e.g. 4682 -> "4.68K DL", 0.0025 -> "0.0025 DL" -- "DL" ("Dial") is this platform's display name for its token unit, see AGENTS.md "Wallet / token pool". 4 decimal places (vs. formatCompactNumber's 2) so small fractional balances/payouts don't round away to 0. */
 export function formatCompactTokens(value: number | string) {
-  return `${compactNumberFormatter.format(Number(value))} DL`;
+  return `${compactTokenFormatter.format(Number(value))} DL`;
 }
 
 const compactCurrencyFormatters = new Map<string, Intl.NumberFormat>();

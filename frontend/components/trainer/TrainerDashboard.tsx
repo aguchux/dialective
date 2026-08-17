@@ -2802,7 +2802,7 @@ function DashboardError({ retry }: { retry: () => void }) {
 }
 
 function formatTokens(value: string | number) {
-  return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
 function formatCompactTokensValue(value: string | number) {

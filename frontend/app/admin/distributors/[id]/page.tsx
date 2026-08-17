@@ -8,7 +8,7 @@ import { activityLabels } from '@/components/trainer/TrainerDashboard';
 import { DistributorActivityEntry, useGetDistributorActivityQuery, useListAdminDistributorsQuery } from '@/store/api';
 
 function formatTokens(value: string | number) {
-  return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
 export default function DistributorActivityPage() {
