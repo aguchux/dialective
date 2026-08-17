@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Role } from '@dialectiva/db';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -6,6 +6,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { AccessTokenClaims } from '../auth/jwt.util';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { CreateSystemUpdateDto } from './dto/create-system-update.dto';
+import { UpdateSystemUpdateDto } from './dto/update-system-update.dto';
 import { NotificationsService } from './notifications.service';
 
 @Controller('notifications')
@@ -43,5 +44,15 @@ export class NotificationsAdminController {
   @Post('updates')
   createUpdate(@CurrentUser() user: AccessTokenClaims, @Body() dto: CreateSystemUpdateDto) {
     return this.notifications.createManualUpdate(user.sub, dto);
+  }
+
+  @Patch('updates/:id')
+  editUpdate(@Param('id') id: string, @Body() dto: UpdateSystemUpdateDto) {
+    return this.notifications.updateUpdate(id, dto);
+  }
+
+  @Delete('updates/:id')
+  deleteUpdate(@Param('id') id: string) {
+    return this.notifications.deleteUpdate(id);
   }
 }

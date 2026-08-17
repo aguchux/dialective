@@ -73,6 +73,7 @@ export interface AdminSystemUpdate {
   createdAt: string;
   author: { email: string; firstName: string | null; lastName: string | null } | null;
   _count: { notifications: number };
+  readCount: number;
 }
 
 export interface AuthResult {
@@ -1502,6 +1503,17 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/notifications/admin/updates', method: 'POST', body }),
       invalidatesTags: ['Notifications'],
     }),
+    updateSystemUpdate: builder.mutation<
+      AdminSystemUpdate,
+      { id: string; title?: string; message?: string; href?: string }
+    >({
+      query: ({ id, ...body }) => ({ url: `/notifications/admin/updates/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Notifications'],
+    }),
+    deleteSystemUpdate: builder.mutation<{ id: string; deleted: true }, string>({
+      query: (id) => ({ url: `/notifications/admin/updates/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Notifications'],
+    }),
     requestPhoneOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { phoneNumber: string }>({
       query: (body) => ({ url: '/auth/phone/otp', method: 'POST', body }),
     }),
@@ -1987,6 +1999,8 @@ export const {
   useMarkAllNotificationsReadMutation,
   useGetAdminSystemUpdatesQuery,
   useCreateSystemUpdateMutation,
+  useUpdateSystemUpdateMutation,
+  useDeleteSystemUpdateMutation,
   useRequestPhoneOtpMutation,
   useVerifyPhoneMutation,
   useSavePhoneUnverifiedMutation,

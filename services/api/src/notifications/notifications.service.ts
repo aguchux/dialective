@@ -99,7 +99,7 @@ export class NotificationsService {
   }
 
   async listAdminUpdates() {
-    return this.prisma.systemUpdate.findMany({
+    const updates = await this.prisma.systemUpdate.findMany({
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: {
@@ -107,6 +107,44 @@ export class NotificationsService {
         _count: { select: { notifications: true } },
       },
     });
+    if (updates.length === 0) return [];
+
+    const readCounts = await this.prisma.userNotification.groupBy({
+      by: ['updateId'],
+      where: { updateId: { in: updates.map((u) => u.id) }, readAt: { not: null } },
+      _count: { _all: true },
+    });
+    const readCountByUpdateId = new Map(readCounts.map((row) => [row.updateId, row._count._all]));
+
+    return updates.map((update) => ({ ...update, readCount: readCountByUpdateId.get(update.id) ?? 0 }));
+  }
+
+  async updateUpdate(id: string, dto: { title?: string; message?: string; href?: string | null }) {
+    const existing = await this.prisma.systemUpdate.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) throw new NotFoundException('Update not found');
+
+    const title = dto.title?.trim();
+    const message = dto.message?.trim();
+    if (dto.title !== undefined && !title) throw new BadRequestException('Title cannot be empty');
+    if (dto.message !== undefined && !message) throw new BadRequestException('Message cannot be empty');
+
+    return this.prisma.systemUpdate.update({
+      where: { id },
+      data: {
+        ...(title !== undefined ? { title } : {}),
+        ...(message !== undefined ? { message } : {}),
+        ...(dto.href !== undefined ? { href: cleanHref(dto.href ?? undefined) } : {}),
+      },
+    });
+  }
+
+  async deleteUpdate(id: string) {
+    const existing = await this.prisma.systemUpdate.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) throw new NotFoundException('Update not found');
+    // userNotification rows cascade-delete via the updateId FK (see the
+    // system_notifications migration) -- deleting the update alone is enough.
+    await this.prisma.systemUpdate.delete({ where: { id } });
+    return { id, deleted: true };
   }
 
   async listForUser(userId: string, page = 1) {
