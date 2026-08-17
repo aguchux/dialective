@@ -78,12 +78,15 @@ export interface PublicUser {
   marketingNotificationsEnabled: boolean;
   blogNewsNotificationsEnabled: boolean;
   walletBalance?: string;
+  submissionsCount?: number;
+  wordRecordingsCount?: number;
 }
 
 type UserWithDialect = User & {
   dialect?: { tag: string } | null;
   dialectVariant?: { id: string; tag: string } | null;
   wallet?: { balance: Prisma.Decimal } | null;
+  _count?: { submissions: number; wordRecordings: number };
 };
 
 function toPublicUser(user: UserWithDialect): PublicUser {
@@ -109,6 +112,12 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     marketingNotificationsEnabled: user.marketingNotificationsEnabled,
     blogNewsNotificationsEnabled: user.blogNewsNotificationsEnabled,
     ...(user.wallet ? { walletBalance: user.wallet.balance.toString() } : {}),
+    ...(user._count
+      ? {
+          submissionsCount: user._count.submissions,
+          wordRecordingsCount: user._count.wordRecordings,
+        }
+      : {}),
   };
 }
 
@@ -757,7 +766,12 @@ export class AuthService {
             }
           : {}),
       },
-      include: { dialect: true, dialectVariant: true, wallet: { select: { balance: true } } },
+      include: {
+        dialect: true,
+        dialectVariant: true,
+        wallet: { select: { balance: true } },
+        _count: { select: { submissions: true, wordRecordings: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
     return users.map(toPublicUser);
@@ -790,7 +804,12 @@ export class AuthService {
   async getAdminUser(id: string): Promise<PublicUser> {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: { dialect: true, dialectVariant: true, wallet: { select: { balance: true } } },
+      include: {
+        dialect: true,
+        dialectVariant: true,
+        wallet: { select: { balance: true } },
+        _count: { select: { submissions: true, wordRecordings: true } },
+      },
     });
     if (!user) throw new NotFoundException('User not found');
     return toPublicUser(user);

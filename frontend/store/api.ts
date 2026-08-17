@@ -26,6 +26,8 @@ export interface PublicUser {
   marketingNotificationsEnabled: boolean;
   blogNewsNotificationsEnabled: boolean;
   walletBalance?: string;
+  submissionsCount?: number;
+  wordRecordingsCount?: number;
 }
 
 export interface PendingOtp {

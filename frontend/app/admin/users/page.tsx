@@ -34,6 +34,30 @@ function formatTokens(value: string | number) {
   return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+function userPerformanceState(user: PublicUser) {
+  const onboarded = user.onboardingComplete && !!user.dialectId;
+  const taskCount = (user.submissionsCount ?? 0) + (user.wordRecordingsCount ?? 0);
+  if (!onboarded) {
+    return {
+      label: 'Not onboarded',
+      className: 'bg-red-500',
+      detail: 'No dialect selected',
+    };
+  }
+  if (taskCount === 0) {
+    return {
+      label: 'Onboarded, no task yet',
+      className: 'bg-orange-400',
+      detail: '0 tasks submitted',
+    };
+  }
+  return {
+    label: 'Onboarded and active',
+    className: 'bg-emerald-500',
+    detail: `${taskCount.toLocaleString()} task${taskCount === 1 ? '' : 's'} submitted`,
+  };
+}
+
 export default function AdminUsersPage() {
   const { data: session } = useSession();
   const [roleFilter, setRoleFilter] = useState('');
@@ -83,13 +107,7 @@ export default function AdminUsersPage() {
       header: 'User',
       sortValue: (u) => `${u.firstName ?? ''} ${u.lastName ?? ''} ${u.email}`,
       render: (u) => (
-        <>
-          <Link className="font-extrabold text-accent no-underline hover:text-accent-dark" href={`/admin/users/${u.id}`}>
-            {[u.firstName, u.lastName].filter(Boolean).join(' ') || 'Name not provided'}
-          </Link>
-          <p className="text-sm text-muted">{u.email}</p>
-          {u.id === selfId && <p className="text-xs text-muted">This is you</p>}
-        </>
+        <UserIdentityCell selfId={selfId} user={u} />
       ),
     },
     {
@@ -201,6 +219,27 @@ export default function AdminUsersPage() {
 
       {fundingUser && <AddTokensDialog onClose={() => setFundingUser(null)} user={fundingUser} />}
     </AdminShell>
+  );
+}
+
+function UserIdentityCell({ user, selfId }: { user: PublicUser; selfId?: string }) {
+  const performance = userPerformanceState(user);
+  return (
+    <div className="flex min-w-0 items-start gap-3">
+      <span
+        aria-label={performance.label}
+        className={`mt-1 size-3.5 shrink-0 rounded-full ${performance.className} shadow-[0_0_0_3px_rgba(255,255,255,0.9)]`}
+        title={`${performance.label}: ${performance.detail}`}
+      />
+      <div className="min-w-0">
+        <Link className="font-extrabold text-accent no-underline hover:text-accent-dark" href={`/admin/users/${user.id}`}>
+          {[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Name not provided'}
+        </Link>
+        <p className="break-all text-sm text-muted">{user.email}</p>
+        <p className="text-xs font-bold text-muted">{performance.label} · {performance.detail}</p>
+        {user.id === selfId && <p className="text-xs text-muted">This is you</p>}
+      </div>
+    </div>
   );
 }
 

@@ -61,6 +61,9 @@ import {
   TrainerSubmissionSummary,
   normalizeErrorMessage,
   useCreateP2PPaymentMethodMutation,
+  useGetCountriesQuery,
+  useGetDialectsQuery,
+  useGetDialectVariantsQuery,
   useGetP2PPaymentMethodsQuery,
   useGetP2PReferenceRateQuery,
   useGetMeQuery,
@@ -1399,6 +1402,54 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   });
   const [notificationSaving, setNotificationSaving] = useState<NotificationPreferenceKey | null>(null);
 
+  const [countryId, setCountryId] = useState('');
+  const [dialectId, setDialectId] = useState('');
+  const [dialectVariantId, setDialectVariantId] = useState('');
+  const [dialectMessage, setDialectMessage] = useState<string | null>(null);
+  const [dialectError, setDialectError] = useState<string | null>(null);
+  const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
+  const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(countryId, { skip: !countryId });
+  const { data: dialectVariants } = useGetDialectVariantsQuery(dialectId, { skip: !dialectId });
+  const [updateDialectProfile, { isLoading: dialectSaving }] = useUpdateProfileMutation();
+
+  useEffect(() => {
+    if (!me) return;
+    setCountryId((current) => current || me.countryId || '');
+    setDialectId((current) => current || me.dialectId || '');
+    setDialectVariantId((current) => current || me.dialectVariantId || '');
+  }, [me]);
+
+  const dialectDirty =
+    countryId !== (me?.countryId ?? '') || dialectId !== (me?.dialectId ?? '') || dialectVariantId !== (me?.dialectVariantId ?? '');
+
+  function selectCountry(value: string) {
+    setCountryId(value);
+    setDialectId('');
+    setDialectVariantId('');
+  }
+
+  function selectDialect(value: string) {
+    setDialectId(value);
+    setDialectVariantId('');
+  }
+
+  async function saveDialect(event: FormEvent) {
+    event.preventDefault();
+    setDialectMessage(null);
+    setDialectError(null);
+    if (!countryId || !dialectId) {
+      setDialectError('Choose a country and a dialect.');
+      return;
+    }
+    try {
+      const profile = await updateDialectProfile({ countryId, dialectId, dialectVariantId: dialectVariantId || '' }).unwrap();
+      await update({ dialectTag: profile.dialectTag, countryId: profile.countryId });
+      setDialectMessage('Dialect updated.');
+    } catch (err) {
+      setDialectError(normalizeErrorMessage(err, 'Unable to update your dialect.'));
+    }
+  }
+
   const dirty = firstName.trim() !== (session.user.firstName ?? '') || lastName.trim() !== (session.user.lastName ?? '');
   const paymentPayload = {
     label: 'Bank transfer',
@@ -1831,6 +1882,74 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
             </ActionButton>
           </div>
           </fieldset>
+        </form>
+
+        <form className={`${cardClass} grid gap-4 p-5`} onSubmit={saveDialect}>
+          <SectionTitle title="Dialect" subtitle="The country and dialect you train in. Changing this switches which words and prompts you're assigned." />
+          <label className="grid gap-1.5 text-sm font-bold">
+            Country
+            <select
+              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+              disabled={isLoadingCountries}
+              onChange={(event) => selectCountry(event.target.value)}
+              required
+              value={countryId}
+            >
+              <option value="">{isLoadingCountries ? 'Loading...' : 'Select a country'}</option>
+              {countries?.map((country) => (
+                <option key={country.id} value={country.id}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1.5 text-sm font-bold">
+            Dialect
+            <select
+              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!countryId || isLoadingDialects}
+              onChange={(event) => selectDialect(event.target.value)}
+              required
+              value={dialectId}
+            >
+              <option value="">{!countryId ? 'Select a country first' : isLoadingDialects ? 'Loading...' : 'Select a dialect'}</option>
+              {dialects?.map((dialect) => (
+                <option key={dialect.id} value={dialect.id}>
+                  {dialect.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {dialectVariants && dialectVariants.length > 0 && (
+            <label className="grid gap-1.5 text-sm font-bold">
+              Specific variety <span className="font-normal text-muted">(optional)</span>
+              <select
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                onChange={(event) => setDialectVariantId(event.target.value)}
+                value={dialectVariantId}
+              >
+                <option value="">Not sure / general</option>
+                {dialectVariants.map((variant) => (
+                  <option key={variant.id} value={variant.id}>
+                    {variant.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {dialectMessage && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{dialectMessage}</p>}
+          {dialectError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{dialectError}</p>}
+          <div>
+            <ActionButton
+              className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!dialectDirty || !countryId || !dialectId}
+              pending={dialectSaving}
+              pendingLabel="Saving"
+              type="submit"
+            >
+              Save dialect
+            </ActionButton>
+          </div>
         </form>
 
         <div className={`${cardClass} grid content-start gap-4 p-5`}>
