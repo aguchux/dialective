@@ -25,13 +25,20 @@ import { Roles } from './decorators/roles.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { AccessTokenClaims } from './jwt.util';
 import { Role, UserStatus } from '@dialectiva/db';
+import { RegisterRateLimitGuard } from '../common/guards/register-rate-limit.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('register')
-  @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
+  @UseGuards(RegisterRateLimitGuard)
+  // ttl (window length) stays static; the enforced limit itself is read
+  // from PlatformSettings.registerRateLimitPerHour by RegisterRateLimitGuard
+  // (default 30/hour) so admin can retune it from Settings without a
+  // redeploy -- this decorator's limit is only the pre-DI-resolution
+  // fallback @nestjs/throttler needs at bootstrap.
+  @Throttle({ default: { limit: 30, ttl: 60 * 60 * 1000 } })
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto.email, dto.password, dto.firstName, dto.lastName, dto.referralCode);
   }

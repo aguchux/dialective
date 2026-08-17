@@ -717,6 +717,7 @@ export interface PlatformSettings {
   authMaintenanceBlockSessions: boolean;
   authMaintenanceExcludeAdmin: boolean;
   authMaintenanceExcludePartner: boolean;
+  registerRateLimitPerHour: number;
   updatedAt: string;
   createdAt: string;
 }
@@ -779,6 +780,7 @@ export interface PlatformSettingsInput {
   authMaintenanceBlockSessions?: boolean;
   authMaintenanceExcludeAdmin?: boolean;
   authMaintenanceExcludePartner?: boolean;
+  registerRateLimitPerHour?: number;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD';

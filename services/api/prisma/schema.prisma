@@ -1096,6 +1096,7 @@ model PlatformSettings {
   authMaintenanceBlockSessions Boolean @default(false) // when true, JwtAuthGuard rejects already-authenticated requests too (not just new login/signup), logging every active session out until the window ends -- subject to the role excludes below
   authMaintenanceExcludeAdmin   Boolean @default(true) // when authMaintenanceBlockSessions is on, ADMIN-role sessions are still exempted by default so an admin can reach Settings to end maintenance early
   authMaintenanceExcludePartner Boolean @default(false) // when authMaintenanceBlockSessions is on, whether PARTNER-role sessions are exempted too
+  registerRateLimitPerHour Int? // overrides REGISTER_RATE_LIMIT_PER_HOUR when set; max POST /auth/register requests per IP per rolling hour (see PlatformRateLimitGuard)
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 

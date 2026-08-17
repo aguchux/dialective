@@ -143,6 +143,15 @@ export class PlatformSettingsService {
     return min;
   }
 
+  /** Reads fresh (not cached) -- see PlatformRateLimitGuard, which calls this on every /auth/register request and needs an admin's change to take effect without waiting out ROW_CACHE_TTL_MS. */
+  async getRegisterRateLimitPerHour(): Promise<number> {
+    const row = await this.fetchRow();
+    if (row.registerRateLimitPerHour) {
+      return row.registerRateLimitPerHour;
+    }
+    return this.parsePositiveInt(process.env.REGISTER_RATE_LIMIT_PER_HOUR, 30, 'REGISTER_RATE_LIMIT_PER_HOUR');
+  }
+
   async getTrainingPayoutBonusCapMultiple(): Promise<number> {
     const row = await this.getRow();
     if (row.trainingPayoutBonusCapMultiple) {
@@ -424,6 +433,9 @@ export class PlatformSettingsService {
       authMaintenanceBlockSessions: row.authMaintenanceBlockSessions,
       authMaintenanceExcludeAdmin: row.authMaintenanceExcludeAdmin,
       authMaintenanceExcludePartner: row.authMaintenanceExcludePartner,
+      registerRateLimitPerHour:
+        row.registerRateLimitPerHour ??
+        this.parsePositiveInt(process.env.REGISTER_RATE_LIMIT_PER_HOUR, 30, 'REGISTER_RATE_LIMIT_PER_HOUR'),
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -487,6 +499,7 @@ export class PlatformSettingsService {
     authMaintenanceBlockSessions?: boolean;
     authMaintenanceExcludeAdmin?: boolean;
     authMaintenanceExcludePartner?: boolean;
+    registerRateLimitPerHour?: number | null;
   }) {
     if (data.authMaintenanceEnabled) {
       // Turning it on (or extending it) always needs a concrete end time --
@@ -676,6 +689,9 @@ export class PlatformSettingsService {
       authMaintenanceBlockSessions: row.authMaintenanceBlockSessions,
       authMaintenanceExcludeAdmin: row.authMaintenanceExcludeAdmin,
       authMaintenanceExcludePartner: row.authMaintenanceExcludePartner,
+      registerRateLimitPerHour:
+        row.registerRateLimitPerHour ??
+        this.parsePositiveInt(process.env.REGISTER_RATE_LIMIT_PER_HOUR, 30, 'REGISTER_RATE_LIMIT_PER_HOUR'),
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

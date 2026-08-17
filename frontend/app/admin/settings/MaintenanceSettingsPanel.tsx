@@ -31,6 +31,7 @@ export function MaintenanceSettingsPanel() {
   const [blockSessions, setBlockSessions] = useState(false);
   const [excludeAdmin, setExcludeAdmin] = useState(true);
   const [excludePartner, setExcludePartner] = useState(false);
+  const [registerRateLimitPerHour, setRegisterRateLimitPerHour] = useState('30');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,6 +48,7 @@ export function MaintenanceSettingsPanel() {
     setBlockSessions(platformSettings.authMaintenanceBlockSessions);
     setExcludeAdmin(platformSettings.authMaintenanceExcludeAdmin);
     setExcludePartner(platformSettings.authMaintenanceExcludePartner);
+    setRegisterRateLimitPerHour(String(platformSettings.registerRateLimitPerHour));
   }, [platformSettings]);
 
   const liveUntil = platformSettings?.authMaintenanceEnabled ? platformSettings.authMaintenanceUntil : null;
@@ -81,6 +83,23 @@ export function MaintenanceSettingsPanel() {
       setMessage(enabled ? 'Maintenance mode is on for the scopes checked below.' : 'Maintenance mode turned off.');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to save maintenance settings.'));
+    }
+  }
+
+  async function handleSaveRateLimit(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    setError(null);
+    const limit = Number(registerRateLimitPerHour);
+    if (!Number.isInteger(limit) || limit < 1) {
+      setError('Enter a whole number of at least 1.');
+      return;
+    }
+    try {
+      await updatePlatformSettings({ registerRateLimitPerHour: limit }).unwrap();
+      setMessage('Sign-up rate limit updated.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to save the sign-up rate limit.'));
     }
   }
 
@@ -257,6 +276,32 @@ export function MaintenanceSettingsPanel() {
             <div>
               <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
                 Save settings
+              </ActionButton>
+            </div>
+          </form>
+
+          <form className="grid gap-3 border-t border-line pt-4 md:max-w-xl" onSubmit={handleSaveRateLimit}>
+            <div className="grid gap-1">
+              <label htmlFor="register-rate-limit">Sign-up rate limit</label>
+              <input
+                className={`${inputClass} max-w-40`}
+                id="register-rate-limit"
+                inputMode="numeric"
+                min={1}
+                onChange={(e) => setRegisterRateLimitPerHour(e.target.value)}
+                type="number"
+                value={registerRateLimitPerHour}
+              />
+              <p className="text-sm leading-relaxed text-muted">
+                Max registration attempts allowed per hour from the same IP address, before that IP sees
+                &ldquo;Too many requests&rdquo;. A shared office/carrier network can trip a low limit during normal
+                sign-up retries -- raise this if trainers report being blocked. Takes effect immediately, no
+                deploy needed.
+              </p>
+            </div>
+            <div>
+              <ActionButton className={primaryButtonClass} pending={isSaving} pendingLabel="Saving" type="submit">
+                Save rate limit
               </ActionButton>
             </div>
           </form>

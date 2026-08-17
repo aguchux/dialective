@@ -315,4 +315,10 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsBoolean()
   authMaintenanceExcludePartner?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10_000)
+  registerRateLimitPerHour?: number;
 }
