@@ -83,6 +83,27 @@
   }
 }
 
+/*
+ * Popover-style scale-in (dropdowns, popovers): unlike Dialog's scaleIn
+ * above, Radix already applies its own position transform (translate(Xpx,
+ * Ypx) from Floating UI) to these via inline style, anchored at
+ * --radix-dropdown-menu-content-transform-origin. Animating a *second*,
+ * unrelated translate(-50%,-50%) on top of that (as scaleIn does) fights
+ * Radix's own transform during the transition, so the menu briefly jumps to
+ * the wrong position before settling -- the "wobble" bug. This keyframe only
+ * touches scale/opacity so it composes cleanly with Radix's own transform.
+ */
+@keyframes popIn {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
 @keyframes flag-marquee {
   from {
     transform: translateX(0);

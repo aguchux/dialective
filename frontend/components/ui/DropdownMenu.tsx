@@ -21,7 +21,8 @@ export function DropdownMenuContent({
       <RadixDropdown.Content
         align={align}
         sideOffset={8}
-        className={`z-50 grid min-w-48 gap-0.5 rounded-lg border border-line bg-white p-1.5 shadow-[0_16px_40px_rgba(27,31,27,0.18)] focus:outline-none data-[state=open]:animate-[scaleIn_120ms_ease-out] dark:bg-surface ${className}`}
+        style={{ transformOrigin: 'var(--radix-dropdown-menu-content-transform-origin)' }}
+        className={`z-50 grid min-w-48 gap-0.5 rounded-lg border border-line bg-white p-1.5 shadow-[0_16px_40px_rgba(27,31,27,0.18)] focus:outline-none data-[state=open]:animate-[popIn_120ms_ease-out] dark:bg-surface ${className}`}
       >
         {children}
       </RadixDropdown.Content>
