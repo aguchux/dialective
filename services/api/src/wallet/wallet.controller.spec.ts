@@ -4,8 +4,9 @@ jest.mock('@dialectiva/db', () => ({
   ...jest.requireActual('@dialectiva/db'),
   creditTrainingPayout: jest.fn(),
   creditAdminFunding: jest.fn(),
+  adjustAdminWallet: jest.fn(),
 }));
-import { creditAdminFunding, creditTrainingPayout } from '@dialectiva/db';
+import { adjustAdminWallet, creditAdminFunding, creditTrainingPayout } from '@dialectiva/db';
 
 describe('WalletController NOWPayments IPN', () => {
   const finishedBody = {
@@ -406,5 +407,49 @@ describe('WalletController admin training payouts', () => {
     )).resolves.toEqual(expect.objectContaining({ amount: '10' }));
     await new Promise((resolve) => setImmediate(resolve));
     expect(mail.sendTrainingPayoutCreditedEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('WalletController admin wallet adjustments', () => {
+  function setup() {
+    (adjustAdminWallet as jest.Mock).mockReset().mockResolvedValue({
+      userId: 'trainer-1',
+      reference: 'duplicate bonus correction',
+      amount: '-5',
+      balance: '15',
+    });
+    const prisma = {
+      user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'admin-1', email: 'admin@x.com' }) },
+    };
+    const platformSettings = { isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false) };
+    const otp = { verify: jest.fn(), issueForUser: jest.fn() };
+    const mail = { sendTrainingPayoutCreditedEmail: jest.fn() };
+    const controller = new WalletController(prisma as never, {} as never, platformSettings as never, otp as never, mail as never);
+    return { controller, prisma, mail };
+  }
+
+  it('silently debits a user wallet without sending payout email', async () => {
+    const { controller, prisma, mail } = setup();
+
+    const result = await controller.createAdminWalletAdjustment(
+      { user: { sub: 'admin-1' } } as never,
+      { userId: 'trainer-1', tokenAmount: -5, reference: 'duplicate bonus correction' } as never,
+    );
+
+    expect(result).toEqual(expect.objectContaining({ amount: '-5', balance: '15' }));
+    expect(adjustAdminWallet).toHaveBeenCalledWith(prisma, 'trainer-1', -5, 'duplicate bonus correction');
+    expect(mail.sendTrainingPayoutCreditedEmail).not.toHaveBeenCalled();
+  });
+
+  it('maps insufficient balance to a validation error', async () => {
+    const { controller } = setup();
+    (adjustAdminWallet as jest.Mock).mockRejectedValue(new Error('Insufficient wallet balance for this debit'));
+
+    await expect(
+      controller.createAdminWalletAdjustment(
+        { user: { sub: 'admin-1' } } as never,
+        { userId: 'trainer-1', tokenAmount: -500, reference: 'too much' } as never,
+      ),
+    ).rejects.toThrow('Insufficient wallet balance for this debit');
   });
 });

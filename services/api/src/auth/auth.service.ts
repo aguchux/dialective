@@ -303,10 +303,7 @@ export class AuthService {
       const isFirstVerification = count > 0;
 
       if (isFirstVerification) {
-        const bonusAmount = await this.platformSettings.getStartupBonusAmount();
-        if (bonusAmount > 0) {
-          await creditStartupBonus(this.prisma, row.userId, bonusAmount, 'signup-verification');
-        }
+        await this.grantStartupBonus(row.userId);
       }
 
       if (user.referredById) {
@@ -389,18 +386,19 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired magic link');
     }
 
-    const [user] = await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: record.userId },
-        data: { emailVerified: new Date() },
-      }),
+    const [{ count }] = await this.prisma.$transaction([
+      this.prisma.user.updateMany({ where: { id: record.userId, emailVerified: null }, data: { emailVerified: new Date() } }),
       this.prisma.emailVerificationToken.update({
         where: { id: record.id },
         data: { usedAt: new Date() },
       }),
     ]);
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: record.userId } });
 
     this.assertActive(user);
+    if (count > 0) {
+      await this.grantStartupBonus(record.userId);
+    }
 
     let account = await this.prisma.linkedAccount.findUnique({
       where: { provider_providerAccountId: { provider: AuthProvider.EMAIL, providerAccountId: user.email } },
@@ -412,6 +410,13 @@ export class AuthService {
     }
 
     return this.issueAuthResult(user);
+  }
+
+  private async grantStartupBonus(userId: string): Promise<void> {
+    const bonusAmount = await this.platformSettings.getStartupBonusAmount();
+    if (bonusAmount > 0) {
+      await creditStartupBonus(this.prisma, userId, bonusAmount, 'signup-verification');
+    }
   }
 
   // --- Refresh / logout ---------------------------------------------------
@@ -550,10 +555,7 @@ export class AuthService {
     const isFirstVerification = count > 0;
 
     if (isFirstVerification) {
-      const bonusAmount = await this.platformSettings.getStartupBonusAmount();
-      if (bonusAmount > 0) {
-        await creditStartupBonus(this.prisma, record.userId, bonusAmount, 'signup-verification');
-      }
+      await this.grantStartupBonus(record.userId);
     }
   }
 

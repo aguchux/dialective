@@ -35,6 +35,7 @@ import {
   SubscriptionPoolStatus,
   UserStatus,
   WithdrawalStatus,
+  adjustAdminWallet,
   creditAdminFunding,
   creditFundingReferralBonusesOps,
   creditTrainingPayout,
@@ -52,6 +53,7 @@ import { SubmitWithdrawalPayoutDto } from './dto/submit-withdrawal-payout.dto';
 import { VerifyWithdrawalPayoutDto } from './dto/verify-withdrawal-payout.dto';
 import { UpdateReferralSettingsDto } from './dto/update-referral-settings.dto';
 import { CreateTrainingPayoutDto } from './dto/create-training-payout.dto';
+import { AdminWalletAdjustmentDto } from './dto/admin-wallet-adjustment.dto';
 import { ListEarningsDto } from './dto/list-earnings.dto';
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { CreateReferralInviteDto } from './dto/create-referral-invite.dto';
@@ -1239,6 +1241,9 @@ export class WalletController {
       subscriptionPoolsCount,
       activeSubscriptionPools,
       subscriptionPoolAgg,
+      settledSubmissionPayoutAgg,
+      settledWordRecordingPayoutAgg,
+      tokenUsdRate,
       blogPostsCount,
       publishedBlogPostsCount,
       draftBlogPostsCount,
@@ -1306,6 +1311,15 @@ export class WalletController {
         where: { status: SubscriptionPoolStatus.ACTIVE },
         _sum: { usdAmount: true },
       }),
+      this.prisma.submission.aggregate({
+        where: { settledAt: { not: null } },
+        _sum: { payoutTokenAmount: true },
+      }),
+      this.prisma.wordRecording.aggregate({
+        where: { settledAt: { not: null } },
+        _sum: { payoutTokenAmount: true },
+      }),
+      this.platformSettings.getTokenUsdRate(),
       this.prisma.blogPost.count(),
       this.prisma.blogPost.count({ where: { status: BlogPostStatus.PUBLISHED } }),
       this.prisma.blogPost.count({ where: { status: BlogPostStatus.DRAFT } }),
@@ -1361,6 +1375,17 @@ export class WalletController {
       subscriptionPoolsCount,
       activeSubscriptionPools,
       activeSubscriptionPoolUsd: subscriptionPoolAgg._sum.usdAmount?.toString() ?? '0',
+      // Reward Pool available: SUM(active SubscriptionPool.usdAmount) converted to
+      // tokens via getTokenUsdRate, minus tokens already settled -- same formula
+      // settlement-job's getRewardPoolAvailableTokens uses (informational only,
+      // never gates a payout; see computeTrainingPayout's no-loss guarantee).
+      // Can legitimately go negative -- that's the signal more pools need opening.
+      rewardPoolAvailableTokens: (
+        new Prisma.Decimal(subscriptionPoolAgg._sum.usdAmount ?? 0)
+          .div(tokenUsdRate)
+          .sub(settledSubmissionPayoutAgg._sum.payoutTokenAmount ?? 0)
+          .sub(settledWordRecordingPayoutAgg._sum.payoutTokenAmount ?? 0)
+      ).toString(),
       blogPostsCount,
       publishedBlogPostsCount,
       draftBlogPostsCount,
@@ -1468,6 +1493,61 @@ export class WalletController {
       .catch((err) => this.logger.error(`Failed to send admin-funding email for user=${body.userId}: ${err instanceof Error ? err.message : String(err)}`));
 
     return result;
+  }
+
+  @Post('admin/wallet-adjustments/otp')
+  @UseGuards(JwtAuthGuard, RolesGuard, UserThrottlerGuard)
+  @Roles(Role.ADMIN)
+  @Throttle({ default: { limit: 20, ttl: 60 * 60 * 1000 } })
+  async requestAdminWalletAdjustmentOtp(@Req() req: AuthenticatedRequest, @Body() body: AdminWalletAdjustmentDto) {
+    if (body.tokenAmount >= 0) {
+      throw new UnprocessableEntityException('Debit amount must be negative');
+    }
+    const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    const contextHash = adminActionContextHash({
+      action: 'admin-wallet-adjustment',
+      userId: body.userId,
+      tokenAmount: body.tokenAmount,
+      reference: body.reference,
+    });
+    return this.otp.issueForUser(req.user.sub, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+  }
+
+  @Post('admin/wallet-adjustments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async createAdminWalletAdjustment(@Req() req: AuthenticatedRequest, @Body() body: AdminWalletAdjustmentDto) {
+    if (body.tokenAmount >= 0) {
+      throw new UnprocessableEntityException('Debit amount must be negative');
+    }
+    if (await this.platformSettings.isAdminPayoutOtpEnabled()) {
+      if (!body.otpRequestId || !body.code) {
+        throw new UnprocessableEntityException('OTP verification is required to adjust this wallet');
+      }
+      await this.otp.verify({
+        otpRequestId: body.otpRequestId,
+        userId: req.user.sub,
+        purpose: OtpPurpose.ADMIN_PAYOUT,
+        code: body.code,
+        contextHash: adminActionContextHash({
+          action: 'admin-wallet-adjustment',
+          userId: body.userId,
+          tokenAmount: body.tokenAmount,
+          reference: body.reference,
+        }),
+      });
+    }
+
+    try {
+      const result = await adjustAdminWallet(this.prisma, body.userId, body.tokenAmount, body.reference);
+      this.logger.log(`Admin wallet adjusted: admin=${req.user.sub} user=${body.userId} amount=${result.amount}`);
+      return result;
+    } catch (err) {
+      if (err instanceof Error && err.message === 'Insufficient wallet balance for this debit') {
+        throw new UnprocessableEntityException(err.message);
+      }
+      throw err;
+    }
   }
 
   /**

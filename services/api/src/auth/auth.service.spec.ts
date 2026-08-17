@@ -19,6 +19,7 @@ function setup(
 ) {
   const prisma = {
     user: { findUnique: jest.fn(), upsert: jest.fn(), create: jest.fn(), updateMany: jest.fn(), findUniqueOrThrow: jest.fn() },
+    linkedAccount: { findUnique: jest.fn(), create: jest.fn() },
     referralInvite: { findMany: jest.fn().mockResolvedValue([]) },
     emailVerificationToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     otpCode: { findUnique: jest.fn(), update: jest.fn() },
@@ -200,6 +201,65 @@ describe('AuthService verifyOtp (registration) startup bonus', () => {
     platformSettings.getStartupBonusAmount.mockResolvedValue(25);
 
     await service.verifyOtp('ticket-1', '123456');
+
+    expect(creditStartupBonus).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService consumeMagicLink startup bonus', () => {
+  function setupMagicLink(prisma: ReturnType<typeof setup>['prisma']) {
+    prisma.emailVerificationToken.findUnique.mockResolvedValue({
+      id: 'token-1',
+      userId: 'user-1',
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.user.updateMany.mockResolvedValue({ count: 1 });
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      role: 'TRAINER',
+      status: 'ACTIVE',
+      firstName: null,
+      lastName: null,
+      emailVerified: new Date(),
+      phoneNumber: null,
+      phoneVerifiedAt: null,
+      countryId: null,
+      dialectId: null,
+      dialectVariantId: null,
+      referralCode: 'ref1',
+      emailNotificationsEnabled: true,
+      smsNotificationsEnabled: true,
+      marketingNotificationsEnabled: false,
+      blogNewsNotificationsEnabled: false,
+    });
+    prisma.linkedAccount.findUnique.mockResolvedValue(null);
+    prisma.linkedAccount.create.mockResolvedValue({ id: 'linked-1' });
+    prisma.refreshToken.create.mockResolvedValue({ id: 'refresh-1' });
+  }
+
+  beforeEach(() => {
+    (creditStartupBonus as jest.Mock).mockReset().mockResolvedValue(undefined);
+  });
+
+  it('grants the startup bonus when a magic-link signup verifies email for the first time', async () => {
+    const { service, prisma, platformSettings } = setup();
+    setupMagicLink(prisma);
+    platformSettings.getStartupBonusAmount.mockResolvedValue(25);
+
+    await service.consumeMagicLink('raw-token');
+
+    expect(creditStartupBonus).toHaveBeenCalledWith(prisma, 'user-1', 25, 'signup-verification');
+  });
+
+  it('does not grant a startup bonus when the magic-link user was already verified', async () => {
+    const { service, prisma, platformSettings } = setup();
+    setupMagicLink(prisma);
+    prisma.user.updateMany.mockResolvedValue({ count: 0 });
+    platformSettings.getStartupBonusAmount.mockResolvedValue(25);
+
+    await service.consumeMagicLink('raw-token');
 
     expect(creditStartupBonus).not.toHaveBeenCalled();
   });

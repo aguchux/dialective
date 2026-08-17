@@ -203,6 +203,13 @@ export interface CreditAdminFundingResult {
   amount: string;
 }
 
+export interface AdminWalletAdjustmentResult {
+  userId: string;
+  reference: string;
+  amount: string;
+  balance: string;
+}
+
 /**
  * Credits a manual admin grant to a user's wallet as its own ledger type
  * (ADMIN_FUNDING) -- distinct from TRAINING_PAYOUT (score-based training
@@ -233,10 +240,53 @@ export async function creditAdminFunding(
 }
 
 /**
+ * Signed admin correction against a user's available wallet balance. Positive
+ * values credit; negative values debit. This intentionally does not send any
+ * user notification and is meant for correcting mistaken credits.
+ */
+export async function adjustAdminWallet(
+  prisma: PrismaClient,
+  userId: string,
+  tokenAmount: Decimal | number | string,
+  reference: string,
+): Promise<AdminWalletAdjustmentResult> {
+  const wallet = await getOrCreateWallet(prisma, userId);
+  const amount = new Decimal(tokenAmount);
+  if (amount.isZero()) {
+    throw new Error('Admin wallet adjustment amount must not be zero');
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    if (amount.isNegative()) {
+      const debitAmount = amount.abs();
+      const claim = await tx.wallet.updateMany({
+        where: { id: wallet.id, balance: { gte: debitAmount } },
+        data: { balance: { decrement: debitAmount } },
+      });
+      if (claim.count !== 1) {
+        throw new Error('Insufficient wallet balance for this debit');
+      }
+    } else {
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: { increment: amount } },
+      });
+    }
+
+    await tx.ledgerEntry.create({
+      data: { walletId: wallet.id, type: 'ADMIN_ADJUSTMENT', amount, reference },
+    });
+    const updated = await tx.wallet.findUniqueOrThrow({ where: { id: wallet.id } });
+    return updated.balance;
+  });
+
+  return { userId, reference, amount: amount.toString(), balance: result.toString() };
+}
+
+/**
  * Credits the one-time startup bonus to a user's wallet as a STARTUP_BONUS
- * ledger entry. Callers are responsible for idempotency (only calling this
- * once per user) -- see AuthService.verifyEmail, which gates the call on the
- * user's emailVerified column having been null before this request.
+ * ledger entry. This helper is intentionally idempotent at the wallet ledger
+ * level so every signup/auth verification path can call it safely.
  */
 export async function creditStartupBonus(
   prisma: PrismaClient,
@@ -246,15 +296,28 @@ export async function creditStartupBonus(
 ): Promise<void> {
   const wallet = await getOrCreateWallet(prisma, userId);
   const amount = new Decimal(tokenAmount);
-  await prisma.$transaction([
-    prisma.ledgerEntry.create({
-      data: { walletId: wallet.id, type: 'STARTUP_BONUS', amount, reference },
-    }),
-    prisma.wallet.update({
-      where: { id: wallet.id },
-      data: { balance: { increment: amount } },
-    }),
-  ]);
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.ledgerEntry.findFirst({
+        where: { walletId: wallet.id, type: 'STARTUP_BONUS' },
+        select: { id: true },
+      });
+      if (existing) return;
+
+      await tx.ledgerEntry.create({
+        data: { walletId: wallet.id, type: 'STARTUP_BONUS', amount, reference },
+      });
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: { increment: amount } },
+      });
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function creditFundingReferralBonusesOps(
@@ -413,5 +476,12 @@ async function getOrCreateWallet(prisma: PrismaClient, userId: string) {
   if (existing) {
     return existing;
   }
-  return prisma.wallet.create({ data: { userId } });
+  try {
+    return await prisma.wallet.create({ data: { userId } });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return prisma.wallet.findUniqueOrThrow({ where: { userId } });
+    }
+    throw err;
+  }
 }

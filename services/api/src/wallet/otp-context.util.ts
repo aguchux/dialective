@@ -52,6 +52,7 @@ export function adminActionContextHash(
         destinationNetwork: string;
       }
     | { action: 'training-payout'; userId: string; tokenAmount: number; reference: string }
+    | { action: 'admin-wallet-adjustment'; userId: string; tokenAmount: number; reference: string }
     | { action: 'user-lock'; userId: string; status: string }
     | { action: 'user-delete'; userId: string }
     | { action: 'sub-distributor-adjustment'; userId: string; amount: number; reference: string },

@@ -10,9 +10,11 @@ import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
 import {
   normalizeErrorMessage,
   PublicUser,
+  useCreateAdminWalletAdjustmentMutation,
   useCreateTrainingPayoutMutation,
   useGetPlatformSettingsQuery,
   useGetUsersQuery,
+  useRequestAdminWalletAdjustmentOtpMutation,
   useRequestTrainingPayoutOtpMutation,
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,
@@ -66,6 +68,7 @@ export default function AdminUsersPage() {
   const [pendingField, setPendingField] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fundingUser, setFundingUser] = useState<PublicUser | null>(null);
+  const [debitingUser, setDebitingUser] = useState<PublicUser | null>(null);
 
   const { data: users, isLoading } = useGetUsersQuery({
     role: roleFilter || undefined,
@@ -149,6 +152,13 @@ export default function AdminUsersPage() {
                 + Add DL
               </button>
             )}
+            <button
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-bold text-danger transition-colors hover:bg-red-100"
+              onClick={() => setDebitingUser(u)}
+              type="button"
+            >
+              - Debit DL
+            </button>
           </div>
         );
       },
@@ -218,6 +228,7 @@ export default function AdminUsersPage() {
       </div>
 
       {fundingUser && <AddTokensDialog onClose={() => setFundingUser(null)} user={fundingUser} />}
+      {debitingUser && <DebitTokensDialog onClose={() => setDebitingUser(null)} user={debitingUser} />}
     </AdminShell>
   );
 }
@@ -240,6 +251,144 @@ function UserIdentityCell({ user, selfId }: { user: PublicUser; selfId?: string 
         {user.id === selfId && <p className="text-xs text-muted">This is you</p>}
       </div>
     </div>
+  );
+}
+
+function DebitTokensDialog({ user, onClose }: { user: PublicUser; onClose: () => void }) {
+  const { data: platformSettings } = useGetPlatformSettingsQuery();
+  const otpRequired = platformSettings?.adminPayoutOtpEnabled ?? false;
+
+  const [tokenAmount, setTokenAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [code, setCode] = useState('');
+  const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [requestOtp, { isLoading: isRequestingOtp }] = useRequestAdminWalletAdjustmentOtpMutation();
+  const [adjustWallet, { isLoading: isSubmitting }] = useCreateAdminWalletAdjustmentMutation();
+
+  const availableBalance = Number(user.walletBalance ?? 0);
+  const effectiveReference = reference || 'Admin silent debit correction';
+  const debitAmount = Number(tokenAmount || 0);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const signedAmount = -Math.abs(debitAmount);
+    try {
+      if (otpRequired && !otpRequestId) {
+        const result = await requestOtp({
+          userId: user.id,
+          tokenAmount: signedAmount,
+          reference: effectiveReference,
+        }).unwrap();
+        setOtpRequestId(result.otpRequestId);
+        return;
+      }
+      await adjustWallet({
+        userId: user.id,
+        tokenAmount: signedAmount,
+        reference: effectiveReference,
+        ...(otpRequestId ? { otpRequestId, code } : {}),
+      }).unwrap();
+      onClose();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, otpRequestId ? 'Unable to verify this code.' : 'Unable to debit this wallet.'));
+    }
+  }
+
+  if (otpRequestId) {
+    return (
+      <Dialog open onOpenChange={(open) => !open && onClose()}>
+        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this silent wallet debit.">
+          <form className="grid gap-3" onSubmit={handleSubmit}>
+            <input
+              autoFocus
+              className={`${inputClass} text-center text-lg font-bold tracking-[0.3em]`}
+              inputMode="numeric"
+              maxLength={6}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              placeholder="000000"
+              required
+              value={code}
+            />
+            {error && <p className="leading-relaxed text-danger" role="alert">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60">
+                Cancel
+              </DialogClose>
+              <ActionButton
+                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-danger bg-danger px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={code.length !== 6}
+                pending={isSubmitting}
+                pendingLabel="Debiting"
+                type="submit"
+              >
+                Confirm debit
+              </ActionButton>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        title={`Debit DL from ${[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email}`}
+        description="Silently removes DL from the user's available balance for correction of mistaken credits. No user notification is sent."
+      >
+        <form className="grid gap-3" onSubmit={handleSubmit}>
+          <p className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold text-muted">
+            Available balance: {formatTokens(availableBalance)} DL
+          </p>
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="debit-token-amount">
+              DL amount to debit
+            </label>
+            <input
+              className={inputClass}
+              id="debit-token-amount"
+              max={availableBalance || undefined}
+              min="0.00000001"
+              onChange={(e) => setTokenAmount(e.target.value)}
+              required
+              step="any"
+              type="number"
+              value={tokenAmount}
+            />
+          </div>
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="debit-reference">
+              Reference / reason
+            </label>
+            <input
+              className={inputClass}
+              id="debit-reference"
+              maxLength={120}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="e.g. Correction for duplicate signup bonus"
+              value={reference}
+            />
+          </div>
+          {error && <p className="leading-relaxed text-danger" role="alert">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60">
+              Cancel
+            </DialogClose>
+            <ActionButton
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-danger bg-danger px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={debitAmount <= 0 || debitAmount > availableBalance}
+              pending={isRequestingOtp || isSubmitting}
+              pendingLabel={otpRequired ? 'Sending code' : 'Debiting'}
+              type="submit"
+            >
+              {otpRequired ? 'Send confirmation code' : 'Debit DL silently'}
+            </ActionButton>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

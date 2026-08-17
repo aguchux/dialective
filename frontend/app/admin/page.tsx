@@ -258,6 +258,17 @@ export default function AdminDashboardPage() {
       tone: 'blue',
     },
     {
+      key: 'rewardPoolAvailable',
+      label: 'Reward pool available',
+      value: stats ? formatCompactTokens(stats.rewardPoolAvailableTokens) : loadingValue,
+      hint:
+        stats && Number(stats.rewardPoolAvailableTokens) < 0
+          ? 'Negative -- settled payouts exceed client funding. Open more pools.'
+          : 'Client funding minus settled trainer payouts',
+      icon: PiggyBank,
+      tone: stats && Number(stats.rewardPoolAvailableTokens) < 0 ? 'rose' : 'green',
+    },
+    {
       key: 'ipnEvents',
       label: 'NOWPayments IPNs',
       value: stats ? formatCount(stats.ipnEventsCount) : loadingValue,

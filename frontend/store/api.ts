@@ -384,6 +384,7 @@ export type LedgerEntryType =
   | 'DISTRIBUTOR_PAYOUT_BONUS'
   | 'SUB_DISTRIBUTOR_ADJUSTMENT'
   | 'ADMIN_FUNDING'
+  | 'ADMIN_ADJUSTMENT'
   | 'STARTUP_BONUS'
   | 'P2P_ESCROW_LOCK'
   | 'P2P_ESCROW_REFUND'
@@ -656,6 +657,7 @@ export interface AdminStats {
   subscriptionPoolsCount: number;
   activeSubscriptionPools: number;
   activeSubscriptionPoolUsd: string;
+  rewardPoolAvailableTokens: string;
   blogPostsCount: number;
   publishedBlogPostsCount: number;
   draftBlogPostsCount: number;
@@ -1697,7 +1699,20 @@ export const dialectivaApi = createApi({
         method: 'POST',
         body,
       }),
-      invalidatesTags: ['Wallet'],
+      invalidatesTags: ['Wallet', 'Users'],
+    }),
+    requestAdminWalletAdjustmentOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { userId: string; tokenAmount: number; reference: string }
+    >({
+      query: (body) => ({ url: '/admin/wallet-adjustments/otp', method: 'POST', body }),
+    }),
+    createAdminWalletAdjustment: builder.mutation<
+      { userId: string; reference: string; amount: string; balance: string },
+      { userId: string; tokenAmount: number; reference: string; otpRequestId?: string; code?: string }
+    >({
+      query: (body) => ({ url: '/admin/wallet-adjustments', method: 'POST', body }),
+      invalidatesTags: ['Wallet', 'Users'],
     }),
     getAdminCountries: builder.query<AdminCountry[], void>({
       query: () => '/geo/admin/countries',
@@ -1949,6 +1964,8 @@ export const {
   useLockUserMutation,
   useRequestUserDeleteOtpMutation,
   useDeleteUserMutation,
+  useRequestAdminWalletAdjustmentOtpMutation,
+  useCreateAdminWalletAdjustmentMutation,
   useRequestTrainingPayoutOtpMutation,
   useCreateTrainingPayoutMutation,
   useGetAdminCountriesQuery,

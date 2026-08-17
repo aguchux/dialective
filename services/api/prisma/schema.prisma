@@ -655,6 +655,7 @@ enum LedgerEntryType {
   DISTRIBUTOR_PAYOUT_BONUS
   SUB_DISTRIBUTOR_ADJUSTMENT // signed: a parent distributor's manual credit (positive) or debit (negative) against their own sub-distributor's wallet, OTP-gated -- see DistributorsService.adjustSubDistributorWallet
   ADMIN_FUNDING
+  ADMIN_ADJUSTMENT // signed: admin correction against any user's wallet; negative values are silent debit corrections
   STARTUP_BONUS
   P2P_ESCROW_LOCK
   P2P_ESCROW_REFUND
