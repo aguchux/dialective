@@ -69,14 +69,27 @@ export class SettlementService {
     this.logger.log('Settlement run starting');
 
     const bonusCapMultiple = await this.getTrainingPayoutBonusCapMultiple();
-    const [qualityGateEnabled, qualityWeights, scoreRange] = await Promise.all([
+    const [qualityGateEnabled, qualityWeights, scoreRange, settlementDelayMinutes] = await Promise.all([
       this.isQualityGateEnabled(),
       this.getQualityWeights(),
       this.getScoreRange(),
+      this.getSettlementDelayMinutes(),
     ]);
 
-    const submissionResult = await this.settleSubmissions(bonusCapMultiple, qualityGateEnabled, qualityWeights, scoreRange);
-    const wordRecordingResult = await this.settleWordRecordings(bonusCapMultiple, qualityGateEnabled, qualityWeights, scoreRange);
+    const submissionResult = await this.settleSubmissions(
+      bonusCapMultiple,
+      qualityGateEnabled,
+      qualityWeights,
+      scoreRange,
+      settlementDelayMinutes,
+    );
+    const wordRecordingResult = await this.settleWordRecordings(
+      bonusCapMultiple,
+      qualityGateEnabled,
+      qualityWeights,
+      scoreRange,
+      settlementDelayMinutes,
+    );
     const rejectedRefundCount = await this.refundRejectedSubmissions();
     const stuckRefundCount = await this.refundStuckWordRecordings();
     const timeoutResult = await this.resolveTimedOutScoring(bonusCapMultiple);
@@ -112,9 +125,16 @@ export class SettlementService {
     qualityGateEnabled: boolean,
     qualityWeights: QualityWeights,
     scoreRange: { min: number; max: number },
+    settlementDelayMinutes: number,
   ) {
     const submissions = await this.prisma.submission.findMany({
-      where: { status: 'SCORED', settledAt: null },
+      where: {
+        status: 'SCORED',
+        settledAt: null,
+        ...(settlementDelayMinutes > 0
+          ? { scoredAt: { lte: new Date(Date.now() - settlementDelayMinutes * 60_000) } }
+          : {}),
+      },
       select: {
         id: true,
         userId: true,
@@ -200,9 +220,17 @@ export class SettlementService {
     qualityGateEnabled: boolean,
     qualityWeights: QualityWeights,
     scoreRange: { min: number; max: number },
+    settlementDelayMinutes: number,
   ) {
     const recordings = await this.prisma.wordRecording.findMany({
-      where: { status: 'SCORED', settledAt: null, userId: { not: null } },
+      where: {
+        status: 'SCORED',
+        settledAt: null,
+        userId: { not: null },
+        ...(settlementDelayMinutes > 0
+          ? { scoredAt: { lte: new Date(Date.now() - settlementDelayMinutes * 60_000) } }
+          : {}),
+      },
       select: {
         id: true,
         userId: true,
@@ -555,6 +583,21 @@ export class SettlementService {
       create: { id: 'default' },
     });
     return row.noFailOnTrainEnabled;
+  }
+
+  /**
+   * Mirrors PlatformSettingsService.getSettlementDelayMinutes -- see
+   * getTrainingPayoutBonusCapMultiple above for why this is a duplicated
+   * read, not duplicated business logic. 0 (the default) settles a SCORED
+   * row as soon as the next run sees it, matching today's behavior exactly.
+   */
+  private async getSettlementDelayMinutes(): Promise<number> {
+    const row = await this.prisma.platformSettings.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    });
+    return row.settlementDelayMinutes || 0;
   }
 
   private async getScoreRange(): Promise<{ min: number; max: number }> {

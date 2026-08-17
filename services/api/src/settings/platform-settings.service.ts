@@ -300,6 +300,11 @@ export class PlatformSettingsService {
     return row.scoringSlaMinutes;
   }
 
+  async getSettlementDelayMinutes(): Promise<number> {
+    const row = await this.getRow();
+    return row.settlementDelayMinutes;
+  }
+
   async isNoFailOnTrainEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.noFailOnTrainEnabled;
@@ -402,6 +407,7 @@ export class PlatformSettingsService {
       tawkToWidgetId: row.tawkToWidgetId,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
+      settlementDelayMinutes: row.settlementDelayMinutes,
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,
       minScoreRange: row.minScoreRange.toString(),
       maxScoreRange: row.maxScoreRange.toString(),
@@ -471,6 +477,7 @@ export class PlatformSettingsService {
     tawkToWidgetId?: string | null;
     wordStuckTimeoutMinutes?: number;
     scoringSlaMinutes?: number;
+    settlementDelayMinutes?: number;
     noFailOnTrainEnabled?: boolean;
     minScoreRange?: number;
     maxScoreRange?: number;
@@ -664,6 +671,7 @@ export class PlatformSettingsService {
       tawkToWidgetId: row.tawkToWidgetId,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
+      settlementDelayMinutes: row.settlementDelayMinutes,
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,
       minScoreRange: row.minScoreRange.toString(),
       maxScoreRange: row.maxScoreRange.toString(),

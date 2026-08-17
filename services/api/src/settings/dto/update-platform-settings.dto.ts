@@ -110,6 +110,11 @@ export class UpdatePlatformSettingsDto {
   scoringSlaMinutes?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  settlementDelayMinutes?: number;
+
+  @IsOptional()
   @IsBoolean()
   noFailOnTrainEnabled?: boolean;
 

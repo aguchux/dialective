@@ -23,6 +23,7 @@ export function GeneralSettingsPanel() {
   const [startupBonusAmount, setStartupBonusAmount] = useState('');
   const [wordStuckTimeoutMinutes, setWordStuckTimeoutMinutes] = useState('');
   const [scoringSlaMinutes, setScoringSlaMinutes] = useState('');
+  const [settlementDelayMinutes, setSettlementDelayMinutes] = useState('');
   const [noFailOnTrainEnabled, setNoFailOnTrainEnabled] = useState(false);
   const [minScoreRange, setMinScoreRange] = useState('');
   const [maxScoreRange, setMaxScoreRange] = useState('');
@@ -42,6 +43,7 @@ export function GeneralSettingsPanel() {
     setStartupBonusAmount(settings.startupBonusAmount ?? '');
     setWordStuckTimeoutMinutes(String(settings.wordStuckTimeoutMinutes));
     setScoringSlaMinutes(String(settings.scoringSlaMinutes));
+    setSettlementDelayMinutes(String(settings.settlementDelayMinutes));
     setNoFailOnTrainEnabled(settings.noFailOnTrainEnabled);
     setMinScoreRange(settings.minScoreRange);
     setMaxScoreRange(settings.maxScoreRange);
@@ -72,6 +74,7 @@ export function GeneralSettingsPanel() {
         ...(startupBonusAmount !== '' ? { startupBonusAmount: Number(startupBonusAmount) } : {}),
         ...(wordStuckTimeoutMinutes !== '' ? { wordStuckTimeoutMinutes: Number(wordStuckTimeoutMinutes) } : {}),
         ...(scoringSlaMinutes !== '' ? { scoringSlaMinutes: Number(scoringSlaMinutes) } : {}),
+        ...(settlementDelayMinutes !== '' ? { settlementDelayMinutes: Number(settlementDelayMinutes) } : {}),
         noFailOnTrainEnabled,
         ...(minScoreRange !== '' ? { minScoreRange: Number(minScoreRange) } : {}),
         ...(maxScoreRange !== '' ? { maxScoreRange: Number(maxScoreRange) } : {}),
@@ -220,6 +223,26 @@ export function GeneralSettingsPanel() {
               min="1"
               value={scoringSlaMinutes}
               onChange={(e) => setScoringSlaMinutes(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="settlement-delay-minutes">
+              Settlement delay (minutes)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              How long to wait after a task is scored before crediting the payout to the trainer's balance -- a
+              review window for catching issues before DL moves. 0 settles as soon as scoring completes; set well
+              past 1440 (24 hours) for a longer hold.
+            </p>
+            <input
+              className={inputClass}
+              id="settlement-delay-minutes"
+              type="number"
+              step="1"
+              min="0"
+              value={settlementDelayMinutes}
+              onChange={(e) => setSettlementDelayMinutes(e.target.value)}
             />
           </div>
 

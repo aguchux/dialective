@@ -731,6 +731,7 @@ export interface PlatformSettings {
   tawkToWidgetId: string | null;
   wordStuckTimeoutMinutes: number;
   scoringSlaMinutes: number;
+  settlementDelayMinutes: number;
   noFailOnTrainEnabled: boolean;
   minScoreRange: string;
   maxScoreRange: string;
@@ -797,6 +798,7 @@ export interface PlatformSettingsInput {
   tawkToWidgetId?: string;
   wordStuckTimeoutMinutes?: number;
   scoringSlaMinutes?: number;
+  settlementDelayMinutes?: number;
   noFailOnTrainEnabled?: boolean;
   minScoreRange?: number;
   maxScoreRange?: number;
