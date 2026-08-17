@@ -106,7 +106,9 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     dialectTag: user.dialect?.tag ?? null,
     dialectVariantId: user.dialectVariant?.id ?? null,
     dialectVariantTag: user.dialectVariant?.tag ?? null,
-    onboardingComplete: user.role !== Role.TRAINER || (user.countryId !== null && user.dialectId !== null),
+    onboardingComplete:
+      user.role !== Role.TRAINER ||
+      (user.countryId !== null && user.dialectId !== null && !!user.firstName && !!user.lastName),
     referralCode: user.referralCode,
     emailNotificationsEnabled: user.emailNotificationsEnabled,
     smsNotificationsEnabled: user.smsNotificationsEnabled,

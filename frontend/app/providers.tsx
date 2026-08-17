@@ -6,6 +6,7 @@ import { ThemeProvider } from 'next-themes';
 import { StoreProvider } from '@/store/Providers';
 import { onAuthMaintenance } from '@/lib/auth-maintenance-signal';
 import { TawkToWidget } from '@/components/TawkToWidget';
+import { RequireNameDialog } from '@/components/RequireNameDialog';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -22,6 +23,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       >
         <StoreProvider>
           <TawkToWidget />
+          <RequireNameDialog />
           {children}
         </StoreProvider>
       </ThemeProvider>
