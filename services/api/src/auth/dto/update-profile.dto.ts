@@ -40,4 +40,8 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsBoolean()
   blogNewsNotificationsEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  courseNotificationsEnabled?: boolean;
 }

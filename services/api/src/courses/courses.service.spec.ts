@@ -22,7 +22,7 @@ describe('CoursesService', () => {
       },
       $transaction: jest.fn(),
     };
-    service = new CoursesService(prisma);
+    service = new CoursesService(prisma, { notifyCoursePublished: jest.fn() } as any);
   });
 
   describe('getPublishedPreview', () => {

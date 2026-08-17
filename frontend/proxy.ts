@@ -53,6 +53,7 @@ export default async function proxy(request: NextRequest) {
     pathname.startsWith('/admin') ||
     pathname.startsWith('/distributor') ||
     pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/notifications') ||
     pathname === '/onboarding';
 
   if (!AUTH_PAGES.has(pathname) && !isProtectedPath) {

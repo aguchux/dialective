@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { randomUUID } from 'crypto';
 import { BlogPostStatus, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateBlogPostDto } from './dto/create-blog-post.dto';
 import { UpdateBlogPostDto } from './dto/update-blog-post.dto';
 import { ReorderBlogPostsDto } from './dto/reorder-blog-posts.dto';
@@ -19,7 +20,7 @@ function slugFor(title: string, id: string): string {
 
 @Injectable()
 export class BlogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
 
   async listPublished() {
     const posts = await this.prisma.blogPost.findMany({
@@ -77,7 +78,7 @@ export class BlogService {
       throw new BadRequestException('Published posts require a non-empty first paragraph');
     }
 
-    return this.prisma.blogPost.create({
+    const post = await this.prisma.blogPost.create({
       data: {
         id,
         title,
@@ -94,6 +95,10 @@ export class BlogService {
       },
       include: { author: { select: authorSelect } },
     });
+    if (status === BlogPostStatus.PUBLISHED) {
+      await this.notifications.notifyBlogPublished(authorId, post);
+    }
+    return post;
   }
 
   async update(id: string, dto: UpdateBlogPostDto) {
@@ -106,7 +111,7 @@ export class BlogService {
       throw new BadRequestException('Published posts require a non-empty first paragraph');
     }
 
-    return this.prisma.blogPost.update({
+    const post = await this.prisma.blogPost.update({
       where: { id },
       data: {
         ...(title !== undefined && { title, slug: slugFor(title, id) }),
@@ -124,6 +129,10 @@ export class BlogService {
       },
       include: { author: { select: authorSelect } },
     });
+    if (current.status !== BlogPostStatus.PUBLISHED && nextStatus === BlogPostStatus.PUBLISHED) {
+      await this.notifications.notifyBlogPublished(current.authorId, post);
+    }
+    return post;
   }
 
   async reorder(dto: ReorderBlogPostsDto) {

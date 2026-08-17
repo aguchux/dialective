@@ -19,6 +19,7 @@ import { CoursesModule } from "./courses/courses.module";
 import { PoolsModule } from "./pools/pools.module";
 import { P2PModule } from "./p2p/p2p.module";
 import { DistributorsModule } from "./distributors/distributors.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { DistributorsModule } from "./distributors/distributors.module";
     PoolsModule,
     P2PModule,
     DistributorsModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

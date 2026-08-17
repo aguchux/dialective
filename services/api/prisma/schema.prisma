@@ -61,6 +61,7 @@ model User {
   smsNotificationsEnabled   Boolean @default(true)
   marketingNotificationsEnabled Boolean @default(false)
   blogNewsNotificationsEnabled  Boolean @default(false)
+  courseNotificationsEnabled    Boolean @default(false)
   countryId     String?
   country       Country? @relation(fields: [countryId], references: [id])
   dialectId     String?
@@ -110,9 +111,56 @@ model User {
   referralInviteJoined ReferralInvite[] @relation("ReferralInviteJoined")
   distributorAllocations DistributorAllocation[] @relation("DistributorAllocations")
   distributorAllocationsGranted DistributorAllocation[] @relation("DistributorAllocationsGranted")
+  notifications UserNotification[]
+  authoredSystemUpdates SystemUpdate[] @relation("SystemUpdateAuthor")
 
   @@index([promotedById])
   @@map("users")
+}
+
+enum SystemUpdateKind {
+  MAINTENANCE
+  COURSE
+  BLOG
+  MESSAGE
+}
+
+enum SystemUpdateSourceType {
+  MANUAL
+  BLOG_POST
+  COURSE
+}
+
+model SystemUpdate {
+  id          String                 @id @default(uuid())
+  kind        SystemUpdateKind
+  sourceType  SystemUpdateSourceType @default(MANUAL)
+  sourceId    String?
+  title       String
+  message     String
+  href        String?
+  authorId    String?
+  author      User?                  @relation("SystemUpdateAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime               @default(now())
+  notifications UserNotification[]
+
+  @@unique([sourceType, sourceId])
+  @@index([kind, createdAt])
+  @@map("system_updates")
+}
+
+model UserNotification {
+  id        String       @id @default(uuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updateId  String
+  update    SystemUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+  readAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  @@unique([userId, updateId])
+  @@index([userId, readAt, createdAt])
+  @@map("user_notifications")
 }
 
 /// One pending/resolved invite an inviter sent to an email via the explicit

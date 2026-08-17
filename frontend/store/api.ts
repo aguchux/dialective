@@ -25,6 +25,7 @@ export interface PublicUser {
   smsNotificationsEnabled: boolean;
   marketingNotificationsEnabled: boolean;
   blogNewsNotificationsEnabled: boolean;
+  courseNotificationsEnabled: boolean;
   walletBalance?: string;
   submissionsCount?: number;
   wordRecordingsCount?: number;
@@ -34,6 +35,44 @@ export interface PendingOtp {
   otpRequired: true;
   ticket: string;
   expiresInSeconds: number;
+}
+
+export type SystemUpdateKind = 'MAINTENANCE' | 'COURSE' | 'BLOG' | 'MESSAGE';
+
+export interface UserNotification {
+  id: string;
+  readAt: string | null;
+  createdAt: string;
+  update: {
+    id: string;
+    kind: SystemUpdateKind;
+    title: string;
+    message: string;
+    href: string | null;
+    createdAt: string;
+  };
+}
+
+export interface NotificationsPage {
+  items: UserNotification[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  unreadCount: number;
+}
+
+export interface AdminSystemUpdate {
+  id: string;
+  kind: SystemUpdateKind;
+  sourceType: 'MANUAL' | 'BLOG_POST' | 'COURSE';
+  sourceId: string | null;
+  title: string;
+  message: string;
+  href: string | null;
+  createdAt: string;
+  author: { email: string; firstName: string | null; lastName: string | null } | null;
+  _count: { notifications: number };
 }
 
 export interface AuthResult {
@@ -1167,7 +1206,7 @@ const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptio
 export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
   baseQuery: baseQueryWithMaintenanceSignal,
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile', 'Notifications'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -1430,6 +1469,7 @@ export const dialectivaApi = createApi({
         smsNotificationsEnabled?: boolean;
         marketingNotificationsEnabled?: boolean;
         blogNewsNotificationsEnabled?: boolean;
+        courseNotificationsEnabled?: boolean;
       }
     >({
       query: (body) => ({
@@ -1438,6 +1478,29 @@ export const dialectivaApi = createApi({
         body,
       }),
       invalidatesTags: ['Profile'],
+    }),
+    getNotifications: builder.query<NotificationsPage, { page?: number } | void>({
+      query: (params) => ({ url: '/notifications', params: params ?? undefined }),
+      providesTags: ['Notifications'],
+    }),
+    markNotificationRead: builder.mutation<{ id: string; read: true }, string>({
+      query: (id) => ({ url: `/notifications/${id}/read`, method: 'PATCH' }),
+      invalidatesTags: ['Notifications'],
+    }),
+    markAllNotificationsRead: builder.mutation<{ updated: number }, void>({
+      query: () => ({ url: '/notifications/read-all', method: 'POST' }),
+      invalidatesTags: ['Notifications'],
+    }),
+    getAdminSystemUpdates: builder.query<AdminSystemUpdate[], void>({
+      query: () => '/notifications/admin/updates',
+      providesTags: ['Notifications'],
+    }),
+    createSystemUpdate: builder.mutation<
+      { updateId: string; recipients: number; duplicate: boolean },
+      { kind: SystemUpdateKind; title: string; message: string; href?: string }
+    >({
+      query: (body) => ({ url: '/notifications/admin/updates', method: 'POST', body }),
+      invalidatesTags: ['Notifications'],
     }),
     requestPhoneOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { phoneNumber: string }>({
       query: (body) => ({ url: '/auth/phone/otp', method: 'POST', body }),
@@ -1919,6 +1982,11 @@ export const {
   useResolveWithdrawalMutation,
   useGetMeQuery,
   useUpdateProfileMutation,
+  useGetNotificationsQuery,
+  useMarkNotificationReadMutation,
+  useMarkAllNotificationsReadMutation,
+  useGetAdminSystemUpdatesQuery,
+  useCreateSystemUpdateMutation,
   useRequestPhoneOtpMutation,
   useVerifyPhoneMutation,
   useSavePhoneUnverifiedMutation,

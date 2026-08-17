@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { BrandLogo } from '@/components/BrandLogo';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/admin/pools', label: 'Reward Pool', icon: PoolIcon },
   { href: '/admin/blog', label: 'Blog', icon: BlogIcon },
   { href: '/admin/courses', label: 'Courses', icon: CoursesIcon },
+  { href: '/admin/updates', label: 'Updates', icon: BellIcon },
   { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
@@ -81,13 +83,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink transition-colors hover:bg-surface-muted"
-              type="button"
-              aria-label="Notifications"
-            >
-              <BellIcon />
-            </button>
+            <NotificationBell />
 
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pl-1 pr-2.5 transition-colors hover:bg-surface-muted">

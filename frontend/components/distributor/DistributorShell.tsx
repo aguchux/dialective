@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { LayoutDashboard, Network, WalletCards, Store, Users, Menu, X, Home, LogOut, ChevronDown } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,26 +74,29 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
             <span className="hidden text-lg font-black md:inline">Distributor Panel</span>
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pl-1 pr-2.5 transition-colors hover:bg-surface-muted">
-              <span className="grid size-7 place-items-center rounded-full bg-accent text-sm font-black text-white">{initial}</span>
-              <span className="hidden max-w-40 truncate text-sm font-bold sm:inline">{displayName}</span>
-              <ChevronDown className="size-3.5" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => router.push('/')}>
-                <Home className="size-4" />
-                Back to site
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>
-                <LogOut className="size-4" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pl-1 pr-2.5 transition-colors hover:bg-surface-muted">
+                <span className="grid size-7 place-items-center rounded-full bg-accent text-sm font-black text-white">{initial}</span>
+                <span className="hidden max-w-40 truncate text-sm font-bold sm:inline">{displayName}</span>
+                <ChevronDown className="size-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => router.push('/')}>
+                  <Home className="size-4" />
+                  Back to site
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>
+                  <LogOut className="size-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
 
         <main className="min-w-0 flex-1 px-4 py-6 md:px-8">{children}</main>

@@ -77,6 +77,7 @@ export interface PublicUser {
   smsNotificationsEnabled: boolean;
   marketingNotificationsEnabled: boolean;
   blogNewsNotificationsEnabled: boolean;
+  courseNotificationsEnabled: boolean;
   walletBalance?: string;
   submissionsCount?: number;
   wordRecordingsCount?: number;
@@ -111,6 +112,7 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     smsNotificationsEnabled: user.smsNotificationsEnabled,
     marketingNotificationsEnabled: user.marketingNotificationsEnabled,
     blogNewsNotificationsEnabled: user.blogNewsNotificationsEnabled,
+    courseNotificationsEnabled: user.courseNotificationsEnabled,
     ...(user.wallet ? { walletBalance: user.wallet.balance.toString() } : {}),
     ...(user._count
       ? {
@@ -588,6 +590,7 @@ export class AuthService {
       smsNotificationsEnabled?: boolean;
       marketingNotificationsEnabled?: boolean;
       blogNewsNotificationsEnabled?: boolean;
+      courseNotificationsEnabled?: boolean;
     },
   ): Promise<PublicUser> {
     const {
@@ -600,6 +603,7 @@ export class AuthService {
       smsNotificationsEnabled,
       marketingNotificationsEnabled,
       blogNewsNotificationsEnabled,
+      courseNotificationsEnabled,
     } = fields;
 
     if (countryId || dialectId) {
@@ -645,6 +649,7 @@ export class AuthService {
         ...(smsNotificationsEnabled !== undefined ? { smsNotificationsEnabled } : {}),
         ...(marketingNotificationsEnabled !== undefined ? { marketingNotificationsEnabled } : {}),
         ...(blogNewsNotificationsEnabled !== undefined ? { blogNewsNotificationsEnabled } : {}),
+        ...(courseNotificationsEnabled !== undefined ? { courseNotificationsEnabled } : {}),
       },
       include: { dialect: true, dialectVariant: true },
     });

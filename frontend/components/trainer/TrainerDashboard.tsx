@@ -45,6 +45,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { formatCompactLocalCurrency, formatCompactNumber, formatCompactUsd } from '@/lib/format';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
 import { MarketView } from '@/components/p2p/MarketView';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Avatar, cardClass, EmptyPanel, formatDate, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
 import {
   DropdownMenu,
@@ -493,6 +494,7 @@ function DashboardHeader({
               <span className="hidden sm:inline">Dashboard</span>
             </Link>
           )}
+          <NotificationBell />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-1.5 pr-2 text-left hover:bg-surface-muted" type="button">
@@ -1487,6 +1489,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     smsNotificationsEnabled: true,
     marketingNotificationsEnabled: false,
     blogNewsNotificationsEnabled: false,
+    courseNotificationsEnabled: false,
   });
   const [notificationSaving, setNotificationSaving] = useState<NotificationPreferenceKey | null>(null);
 
@@ -1580,12 +1583,14 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       smsNotificationsEnabled: me.smsNotificationsEnabled,
       marketingNotificationsEnabled: me.marketingNotificationsEnabled,
       blogNewsNotificationsEnabled: me.blogNewsNotificationsEnabled,
+      courseNotificationsEnabled: me.courseNotificationsEnabled,
     });
   }, [
     me?.emailNotificationsEnabled,
     me?.smsNotificationsEnabled,
     me?.marketingNotificationsEnabled,
     me?.blogNewsNotificationsEnabled,
+    me?.courseNotificationsEnabled,
   ]);
 
   function updatePhoneField(value: string) {
@@ -2073,7 +2078,15 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               label="Blog & News"
               loading={notificationSaving === 'blogNewsNotificationsEnabled'}
               onChange={(checked) => void toggleNotificationPreference('blogNewsNotificationsEnabled', checked)}
-              subtitle="New articles, platform news, and learning content."
+              subtitle="New articles and platform news."
+            />
+            <NotificationToggleRow
+              checked={notificationPrefs.courseNotificationsEnabled}
+              disabled={notificationSaving !== null}
+              label="Courses"
+              loading={notificationSaving === 'courseNotificationsEnabled'}
+              onChange={(checked) => void toggleNotificationPreference('courseNotificationsEnabled', checked)}
+              subtitle="New learning courses and training guides."
             />
           </div>
         </div>
@@ -2086,7 +2099,8 @@ type NotificationPreferenceKey =
   | 'emailNotificationsEnabled'
   | 'smsNotificationsEnabled'
   | 'marketingNotificationsEnabled'
-  | 'blogNewsNotificationsEnabled';
+  | 'blogNewsNotificationsEnabled'
+  | 'courseNotificationsEnabled';
 
 function NotificationToggleRow({
   checked,

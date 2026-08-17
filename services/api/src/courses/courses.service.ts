@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { randomUUID } from 'crypto';
 import { BlogPostStatus, CourseVisibility, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { ReorderCoursesDto } from './dto/reorder-courses.dto';
@@ -18,7 +19,7 @@ function slugFor(title: string, id: string): string {
 
 @Injectable()
 export class CoursesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
 
   async listPublished() {
     return this.prisma.course.findMany({
@@ -147,7 +148,7 @@ export class CoursesService {
     const lastCourse = await this.prisma.course.findFirst({ orderBy: { sortOrder: 'desc' }, select: { sortOrder: true } });
     const status = dto.status ?? BlogPostStatus.DRAFT;
 
-    return this.prisma.course.create({
+    const course = await this.prisma.course.create({
       data: {
         id,
         title,
@@ -165,6 +166,10 @@ export class CoursesService {
       },
       include: { author: { select: authorSelect } },
     });
+    if (status === BlogPostStatus.PUBLISHED) {
+      await this.notifications.notifyCoursePublished(authorId, course);
+    }
+    return course;
   }
 
   async update(id: string, dto: UpdateCourseDto) {
@@ -179,7 +184,7 @@ export class CoursesService {
       throw new BadRequestException('Published courses require at least one slide');
     }
 
-    return this.prisma.course.update({
+    const course = await this.prisma.course.update({
       where: { id },
       data: {
         ...(title !== undefined && { title, slug: slugFor(title, id) }),
@@ -196,6 +201,10 @@ export class CoursesService {
       },
       include: { author: { select: authorSelect } },
     });
+    if (current.status !== BlogPostStatus.PUBLISHED && nextStatus === BlogPostStatus.PUBLISHED) {
+      await this.notifications.notifyCoursePublished(current.authorId, course);
+    }
+    return course;
   }
 
   async reorder(dto: ReorderCoursesDto) {
