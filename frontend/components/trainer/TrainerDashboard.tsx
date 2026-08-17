@@ -47,6 +47,7 @@ import { resolveDialectName, useDialectName } from '@/lib/dialect-name';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
 import { MarketView } from '@/components/p2p/MarketView';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { NotificationListPanel } from '@/components/notifications/NotificationListPanel';
 import { Avatar, cardClass, EmptyPanel, formatDate, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
 import {
   DropdownMenu,
@@ -96,7 +97,7 @@ import type { Session } from 'next-auth';
 
 type SessionUpdateFn = (data?: Record<string, unknown>) => Promise<Session | null>;
 
-type DashboardView = 'home' | 'tokens' | 'earnings' | 'training' | 'market' | 'referrals' | 'scores' | 'profile';
+type DashboardView = 'home' | 'tokens' | 'earnings' | 'training' | 'market' | 'referrals' | 'scores' | 'profile' | 'notifications';
 
 const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = [
   { id: 'tokens', label: 'Tokens', icon: WalletCards },
@@ -106,8 +107,8 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
   { id: 'scores', label: 'My Scores', icon: Star },
 ];
 
-// Reachable only from the account dropdown, not the main tab bar/mobile nav.
-const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'home', 'referrals', 'profile'];
+// Reachable only from the account dropdown/bell, not the main tab bar/mobile nav.
+const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'home', 'referrals', 'profile', 'notifications'];
 
 export const activityLabels: Record<LedgerEntryType, string> = {
   DEPOSIT: 'DL funding',
@@ -227,6 +228,8 @@ export function TrainerDashboard() {
 
           {activeView === 'profile' ? (
             <ProfileView session={session} update={update} />
+          ) : activeView === 'notifications' ? (
+            <NotificationListPanel />
           ) : error ? (
             <DashboardError retry={() => void refetch()} />
           ) : isLoading || !data ? (

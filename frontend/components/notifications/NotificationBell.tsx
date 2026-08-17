@@ -2,6 +2,7 @@
 
 import { Bell, CheckCheck, Inbox, MoveUpRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,11 +21,14 @@ import {
 
 export function NotificationBell() {
   const router = useRouter();
+  const { data: session } = useSession();
   const { data } = useGetNotificationsQuery({ page: 1 }, { pollingInterval: 60000 });
   const [markRead] = useMarkNotificationReadMutation();
   const [markAllRead, { isLoading: markingAll }] = useMarkAllNotificationsReadMutation();
   const unreadCount = data?.unreadCount ?? 0;
   const items = data?.items.slice(0, 6) ?? [];
+  const role = session?.user?.role;
+  const inboxHref = role === 'TRAINER' || role === 'PARTNER' ? '/dashboard?view=notifications' : '/notifications';
 
   async function openNotification(notification: UserNotification) {
     if (!notification.readAt) {
@@ -32,7 +36,7 @@ export function NotificationBell() {
     }
     const href = notification.update.href;
     if (!href) {
-      router.push('/notifications');
+      router.push(inboxHref);
       return;
     }
     if (/^https?:\/\//i.test(href)) {
@@ -111,7 +115,7 @@ export function NotificationBell() {
           </div>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => router.push('/notifications')}>
+        <DropdownMenuItem onSelect={() => router.push(inboxHref)}>
           <Inbox className="size-4" aria-hidden="true" />
           View all notifications
         </DropdownMenuItem>
