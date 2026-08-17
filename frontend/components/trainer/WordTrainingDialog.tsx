@@ -36,6 +36,7 @@ import {
   useSubmitWordRecordingMutation,
 } from '@/store/api';
 
+const MIC_PERMISSION_ERROR = 'Microphone permission is required to record.';
 const DEFAULT_SECONDS_PER_WORD = 5;
 const DEFAULT_MAX_RECORDING_MS = 180_000;
 const RING_RADIUS = 104;
@@ -315,7 +316,7 @@ export function WordTrainingDialog({
     } catch (err) {
       releaseMicrophone();
       setError(err instanceof DOMException && err.name === 'NotAllowedError'
-        ? 'Microphone permission is required to record.'
+        ? MIC_PERMISSION_ERROR
         : 'The microphone could not be started.');
     }
   }
@@ -764,7 +765,16 @@ export function WordTrainingDialog({
                     </div>
 
                     {audioUrl && <audio onEnded={() => setRecorderState('recorded')} ref={audioRef} src={audioUrl} />}
-                    {error && <p className="text-sm font-bold text-danger" role="alert">{error}</p>}
+                    {error && (
+                      <div className="grid justify-items-center gap-1">
+                        <p className="text-sm font-bold text-danger" role="alert">{error}</p>
+                        {error === MIC_PERMISSION_ERROR && (
+                          <button className="text-sm font-extrabold text-accent underline hover:no-underline" onClick={() => void startRecording()} type="button">
+                            Click here to give permission
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     {(recorderState === 'recorded' || recorderState === 'paused' || recorderState === 'playing') && (
                       <div className="flex flex-wrap items-center justify-center gap-3">

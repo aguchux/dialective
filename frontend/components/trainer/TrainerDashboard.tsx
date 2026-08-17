@@ -197,6 +197,7 @@ export function TrainerDashboard() {
         />
 
         {me && !me.emailVerified && <EmailVerificationBanner />}
+        <MicrophonePermissionBanner activeView={activeView} />
 
         <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
           {activeView === 'home' && (
@@ -319,6 +320,92 @@ function EmailVerificationBanner() {
             type="button"
           >
             Manage in Profile
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type MicPermissionState = 'unknown' | 'granted' | 'prompt' | 'denied';
+
+/**
+ * Checked on every login (mount) and every time the trainer switches to the
+ * Training tab, since that's the moment recording is actually about to
+ * happen. Uses the Permissions API to watch live state changes (e.g. the
+ * trainer flips the browser padlock mid-session) where supported, falling
+ * back to a plain getUserMedia probe on browsers without navigator.permissions
+ * microphone support (notably Safari). The banner itself never records --
+ * "Enable" just triggers the same browser permission prompt WordTrainingDialog's
+ * startRecording would, then immediately releases the resulting stream.
+ */
+function MicrophonePermissionBanner({ activeView }: { activeView: DashboardView }) {
+  const [state, setState] = useState<MicPermissionState>('unknown');
+  const [requesting, setRequesting] = useState(false);
+
+  async function checkPermission() {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+    if (navigator.permissions?.query) {
+      try {
+        const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        setState(status.state as MicPermissionState);
+        status.onchange = () => setState(status.state as MicPermissionState);
+        return;
+      } catch {
+        // Some browsers (Safari) support navigator.permissions but reject the
+        // "microphone" descriptor -- fall through to the probe below.
+      }
+    }
+    setState('prompt');
+  }
+
+  useEffect(() => {
+    void checkPermission();
+  }, []);
+
+  useEffect(() => {
+    if (activeView === 'training') void checkPermission();
+  }, [activeView]);
+
+  async function requestAccess() {
+    setRequesting(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      setState('granted');
+    } catch {
+      setState('denied');
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  if (state === 'unknown' || state === 'granted') return null;
+
+  const denied = state === 'denied';
+
+  return (
+    <div
+      className={`border-b px-4 py-2.5 text-sm ${
+        denied
+          ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950'
+          : 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950'
+      }`}
+    >
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 md:px-2">
+        <p className={`font-bold ${denied ? 'text-danger dark:text-red-200' : 'text-amber-800 dark:text-amber-200'}`}>
+          {denied
+            ? 'Your microphone is disabled — allow access in your browser settings to contribute recordings.'
+            : 'Enable microphone access to contribute recordings.'}
+        </p>
+        {!denied && (
+          <button
+            className="shrink-0 font-extrabold text-amber-800 underline hover:no-underline disabled:cursor-not-allowed disabled:opacity-60 dark:text-amber-200"
+            disabled={requesting}
+            onClick={() => void requestAccess()}
+            type="button"
+          >
+            {requesting ? 'Requesting…' : 'Enable microphone'}
           </button>
         )}
       </div>
