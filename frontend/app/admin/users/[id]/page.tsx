@@ -8,6 +8,7 @@ import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
 import { activityLabels } from '@/components/trainer/TrainerDashboard';
+import { useDialectName } from '@/lib/dialect-name';
 import {
   normalizeErrorMessage,
   useDeleteUserMutation,
@@ -48,6 +49,7 @@ export default function AdminUserDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const displayName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Name not provided' : '';
+  const dialectName = useDialectName(user?.dialectTag);
 
   return (
     <AdminShell>
@@ -71,7 +73,7 @@ export default function AdminUserDetailPage() {
               <Field label="Phone verified" value={user.phoneVerified ? 'Yes' : 'No'} />
               <Field label="Onboarding complete" value={user.onboardingComplete ? 'Yes' : 'No'} />
               <Field label="Referral code" value={user.referralCode} />
-              <Field label="Dialect" value={user.dialectTag ?? 'Not set'} />
+              <Field label="Dialect" value={dialectName ?? 'Not set'} />
               <Field label="User ID" value={<span className="break-all font-mono text-xs">{user.id}</span>} />
             </section>
 

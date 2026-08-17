@@ -14,6 +14,7 @@ export class RegisterDto {
   @MaxLength(80)
   lastName!: string;
 
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsEmail()
   email!: string;
 

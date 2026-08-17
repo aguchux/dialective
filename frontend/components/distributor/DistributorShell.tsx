@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { LayoutDashboard, Network, WalletCards, Store, Users, Menu, X, Home, LogOut, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, Network, WalletCards, Store, Users, Menu, X, Home, LogOut, ChevronDown, UserCircle } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import {
@@ -22,6 +22,7 @@ const navItems = [
   { href: '/distributor/sub-distributors', label: 'Sub-distributors', icon: Users },
   { href: '/distributor/tokens', label: 'Tokens', icon: WalletCards },
   { href: '/distributor/market', label: 'Market', icon: Store },
+  { href: '/distributor/profile', label: 'Profile', icon: UserCircle },
 ];
 
 export function DistributorShell({ children }: { children: React.ReactNode }) {
@@ -85,6 +86,10 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
               <DropdownMenuContent>
                 <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => router.push('/distributor/profile')}>
+                  <UserCircle className="size-4" />
+                  Profile
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => router.push('/')}>
                   <Home className="size-4" />
                   Back to site

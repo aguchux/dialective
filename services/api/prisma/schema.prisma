@@ -1102,6 +1102,9 @@ model PlatformSettings {
   adminPayoutOtpEnabled    Boolean @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
   phoneVerificationRequired Boolean @default(true) // when false: phone numbers can be saved without SMS verification, the standing phoneVerifiedAt gate is skipped for withdrawals and P2P trading, and P2P offer create/accept require an emailed OTP instead (see P2pService.createOffer/acceptOffer) -- withdrawals already have their own per-transaction email OTP regardless of this flag
   startupBonusAmount      Decimal? @db.Decimal(20, 8) // one-time DL amount credited (as a STARTUP_BONUS ledger entry) the first time a user verifies their email; null or 0 means the bonus is off
+  tawkToEnabled            Boolean  @default(false) // master switch for the Tawk.to live-chat widget; the frontend only loads the widget script when this is true AND both IDs below are set
+  tawkToPropertyId         String? // Tawk.to "Property ID" from the widget's embed snippet -- the first path segment of https://embed.tawk.to/<propertyId>/<widgetId>
+  tawkToWidgetId           String? // Tawk.to "Widget ID" from the same embed snippet -- the second path segment
   wordStuckTimeoutMinutes  Int      @default(1440) // minutes an ENGLISH_TO_DIALECT WordRecording can stay PENDING (unmatched by reverse-validation) before settlement-job auto-refunds its locked tokens
   scoringSlaMinutes        Int      @default(60) // minutes a Submission/WordRecording can stay unscored before settlement-job resolves it via noFailOnTrainEnabled (synthetic score) or a plain refund
   noFailOnTrainEnabled     Boolean  @default(false) // when true, a task still unscored past scoringSlaMinutes is paid out at a random score in [minScoreRange, maxScoreRange] instead of just refunded -- guarantees payment for completed work even if consensus/reverse-validation never resolves it

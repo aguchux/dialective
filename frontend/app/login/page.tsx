@@ -190,6 +190,7 @@ export default function LoginPage() {
 
         <form className="grid gap-2.5" onSubmit={handleCredentialsSubmit}>
           <input
+            autoComplete="email"
             className={inputClass}
             type="email"
             placeholder="Email"
@@ -198,6 +199,7 @@ export default function LoginPage() {
             required
           />
           <input
+            autoComplete="current-password"
             className={inputClass}
             type="password"
             placeholder="Password"
@@ -205,6 +207,9 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+          <Link className="justify-self-end text-sm font-bold text-accent hover:text-accent-dark" href="/forgot-password">
+            Forgot password?
+          </Link>
           <ActionButton className={primaryButtonClass} type="submit" pending={isLoggingIn} pendingLabel="Logging in">
             Log in
           </ActionButton>

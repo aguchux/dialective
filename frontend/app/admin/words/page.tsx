@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { resolveDialectName } from '@/lib/dialect-name';
 import {
   PART_OF_SPEECH_VALUES,
   PartOfSpeech,
@@ -11,6 +12,7 @@ import {
   useDeleteWordMutation,
   useGetAdminPromptsQuery,
   useGetAdminWordsQuery,
+  useGetAllDialectsQuery,
   useUpdatePromptMutation,
 } from '@/store/api';
 
@@ -108,6 +110,7 @@ function WordsTab() {
   const [deleteWord] = useDeleteWordMutation();
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { data: dialects } = useGetAllDialectsQuery();
 
   useEffect(() => {
     setPage(1);
@@ -185,7 +188,7 @@ function WordsTab() {
                     <td className="px-5 py-3.5 text-muted">
                       {word.translations.length === 0
                         ? '—'
-                        : word.translations.map((t) => `${t.dialectTag}: ${t.text}`).join(', ')}
+                        : word.translations.map((t) => `${resolveDialectName(t.dialectTag, dialects)}: ${t.text}`).join(', ')}
                     </td>
                     <td className="px-5 py-3.5 text-muted">{new Date(word.createdAt).toLocaleDateString()}</td>
                     <td className="px-5 py-3.5">
@@ -226,7 +229,7 @@ function WordsTab() {
                 <p className="text-sm text-muted">
                   {word.translations.length === 0
                     ? 'No translations yet'
-                    : word.translations.map((t) => `${t.dialectTag}: ${t.text}`).join(', ')}
+                    : word.translations.map((t) => `${resolveDialectName(t.dialectTag, dialects)}: ${t.text}`).join(', ')}
                 </p>
                 <p className="text-xs text-muted">Added {new Date(word.createdAt).toLocaleDateString()}</p>
               </article>
@@ -259,6 +262,7 @@ function PromptsTab() {
   const [updatePrompt] = useUpdatePromptMutation();
   const [error, setError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const { data: dialects } = useGetAllDialectsQuery();
 
   useEffect(() => {
     setPage(1);
@@ -284,13 +288,17 @@ function PromptsTab() {
           <label className="text-sm font-bold" htmlFor="prompt-dialect-filter">
             Dialect
           </label>
-          <input
-            className="min-h-9 w-32 rounded-lg border border-line bg-white px-3 text-sm"
+          <select
+            className="min-h-9 rounded-lg border border-line bg-white px-3 text-sm"
             id="prompt-dialect-filter"
-            placeholder="e.g. en-us"
             value={dialectTag}
             onChange={(e) => setDialectTag(e.target.value)}
-          />
+          >
+            <option value="">All dialects</option>
+            {dialects?.map((d) => (
+              <option key={d.tag} value={d.tag}>{d.name}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -324,7 +332,7 @@ function PromptsTab() {
               <tbody className="divide-y divide-line">
                 {data.items.map((prompt) => (
                   <tr key={prompt.id}>
-                    <td className="px-5 py-3.5 font-extrabold">{prompt.dialectTag}</td>
+                    <td className="px-5 py-3.5 font-extrabold">{resolveDialectName(prompt.dialectTag, dialects)}</td>
                     <td className="px-5 py-3.5">{prompt.text}</td>
                     <td className="px-5 py-3.5 text-muted">{new Date(prompt.createdAt).toLocaleDateString()}</td>
                     <td className="px-5 py-3.5">
@@ -350,7 +358,7 @@ function PromptsTab() {
               <article className="grid gap-3 p-4" key={prompt.id}>
                 <div className="flex items-start justify-between gap-3">
                   <span className="shrink-0 rounded-md bg-surface-muted px-2.5 py-1 text-xs font-extrabold text-muted">
-                    {prompt.dialectTag}
+                    {resolveDialectName(prompt.dialectTag, dialects)}
                   </span>
                   <label className="flex items-center gap-2 text-sm font-bold">
                     <input

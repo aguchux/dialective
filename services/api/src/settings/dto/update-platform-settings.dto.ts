@@ -86,6 +86,20 @@ export class UpdatePlatformSettingsDto {
   startupBonusAmount?: number;
 
   @IsOptional()
+  @IsBoolean()
+  tawkToEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  tawkToPropertyId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  tawkToWidgetId?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   wordStuckTimeoutMinutes?: number;

@@ -5,6 +5,7 @@ import { SessionProvider, signOut, useSession } from 'next-auth/react';
 import { ThemeProvider } from 'next-themes';
 import { StoreProvider } from '@/store/Providers';
 import { onAuthMaintenance } from '@/lib/auth-maintenance-signal';
+import { TawkToWidget } from '@/components/TawkToWidget';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -19,7 +20,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
         forcedTheme="light"
         storageKey="trainer-dashboard-theme"
       >
-        <StoreProvider>{children}</StoreProvider>
+        <StoreProvider>
+          <TawkToWidget />
+          {children}
+        </StoreProvider>
       </ThemeProvider>
     </SessionProvider>
   );

@@ -95,6 +95,11 @@ export interface Dialect {
   name: string;
 }
 
+export interface DialectSummary {
+  tag: string;
+  name: string;
+}
+
 export interface DialectVariant {
   id: string;
   tag: string;
@@ -607,6 +612,9 @@ export interface PublicClientSettings {
   authMaintenanceBlocksSignup: boolean;
   authMaintenanceUntil: string | null;
   authMaintenanceMessage: string | null;
+  tawkToEnabled: boolean;
+  tawkToPropertyId: string | null;
+  tawkToWidgetId: string | null;
 }
 
 export type EarningsChartRange = 'week' | 'month' | 'year';
@@ -718,6 +726,9 @@ export interface PlatformSettings {
   adminPayoutOtpEnabled: boolean;
   phoneVerificationRequired: boolean;
   startupBonusAmount: string | null;
+  tawkToEnabled: boolean;
+  tawkToPropertyId: string | null;
+  tawkToWidgetId: string | null;
   wordStuckTimeoutMinutes: number;
   scoringSlaMinutes: number;
   noFailOnTrainEnabled: boolean;
@@ -781,6 +792,9 @@ export interface PlatformSettingsInput {
   adminPayoutOtpEnabled?: boolean;
   phoneVerificationRequired?: boolean;
   startupBonusAmount?: number | null;
+  tawkToEnabled?: boolean;
+  tawkToPropertyId?: string;
+  tawkToWidgetId?: string;
   wordStuckTimeoutMinutes?: number;
   scoringSlaMinutes?: number;
   noFailOnTrainEnabled?: boolean;
@@ -1229,6 +1243,9 @@ export const dialectivaApi = createApi({
     }),
     getDialects: builder.query<Dialect[], string>({
       query: (countryId) => `/geo/countries/${countryId}/dialects`,
+    }),
+    getAllDialects: builder.query<DialectSummary[], void>({
+      query: () => '/geo/dialects',
     }),
     getDialectVariants: builder.query<DialectVariant[], string>({
       query: (dialectId) => `/geo/dialects/${dialectId}/variants`,
@@ -1949,6 +1966,7 @@ export const {
   useResendEmailVerificationMutation,
   useGetCountriesQuery,
   useGetDialectsQuery,
+  useGetAllDialectsQuery,
   useGetDialectVariantsQuery,
   useGetWalletQuery,
   useGetP2PSettingsQuery,

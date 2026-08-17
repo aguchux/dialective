@@ -78,12 +78,14 @@ export class AuthController {
 
   @Post('password-reset/request')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { limit: 3, ttl: 10 * 60 * 1000 } })
   async requestPasswordReset(@Body() dto: RequestPasswordResetDto): Promise<void> {
     await this.auth.requestPasswordReset(dto.email);
   }
 
   @Post('password-reset/confirm')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { limit: 10, ttl: 10 * 60 * 1000 } })
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<void> {
     await this.auth.resetPassword(dto.token, dto.newPassword);
   }
@@ -104,6 +106,7 @@ export class AuthController {
 
   @Post('magic-link/request')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { limit: 3, ttl: 10 * 60 * 1000 } })
   async requestMagicLink(@Body() dto: RequestMagicLinkDto): Promise<void> {
     await this.auth.requestMagicLink(dto.email);
   }

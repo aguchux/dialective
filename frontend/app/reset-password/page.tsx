@@ -16,6 +16,7 @@ function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [status, setStatus] = useState<'idle' | 'success'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [resetPassword, { isLoading }] = useResetPasswordMutation();
@@ -26,6 +27,11 @@ function ResetPasswordContent() {
 
     if (!token) {
       setError('Missing reset token.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
 
@@ -54,6 +60,21 @@ function ResetPasswordContent() {
     );
   }
 
+  if (!token) {
+    return (
+      <AuthPage>
+        <AuthPanel>
+          <Breadcrumbs items={[{ href: '/login', label: 'Login' }, { label: 'Reset password' }]} />
+          <h1 className="text-center text-[1.75rem] leading-tight">Reset link missing</h1>
+          <Alert>This password reset link is missing its token. Request a new reset link to continue.</Alert>
+          <Link className={primaryButtonClass} href="/forgot-password">
+            Request reset link
+          </Link>
+        </AuthPanel>
+      </AuthPage>
+    );
+  }
+
   return (
     <AuthPage>
       <AuthPanel>
@@ -61,6 +82,7 @@ function ResetPasswordContent() {
         <h1 className="text-center text-[1.75rem] leading-tight">Reset your password</h1>
         <form className="grid gap-2.5" onSubmit={handleSubmit}>
           <input
+            autoComplete="new-password"
             className={inputClass}
             type="password"
             placeholder="New password (min 8 characters)"
@@ -68,6 +90,16 @@ function ResetPasswordContent() {
             onChange={(e) => setPassword(e.target.value)}
             minLength={8}
             required
+          />
+          <input
+            autoComplete="new-password"
+            className={inputClass}
+            minLength={8}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Confirm new password"
+            required
+            type="password"
+            value={confirmPassword}
           />
           <ActionButton className={primaryButtonClass} type="submit" pending={isLoading} pendingLabel="Resetting">
             Reset password

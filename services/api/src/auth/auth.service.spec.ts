@@ -5,8 +5,10 @@ jest.mock('@dialectiva/db', () => ({
   creditStartupBonus: jest.fn(),
 }));
 import { creditStartupBonus } from '@dialectiva/db';
+import { UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthMaintenanceException } from './auth-maintenance.exception';
+import { hashToken } from './token.util';
 
 function setup(
   maintenance: {
@@ -18,15 +20,16 @@ function setup(
   } = { enabled: false },
 ) {
   const prisma = {
-    user: { findUnique: jest.fn(), upsert: jest.fn(), create: jest.fn(), updateMany: jest.fn(), findUniqueOrThrow: jest.fn() },
+    user: { findUnique: jest.fn(), upsert: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findUniqueOrThrow: jest.fn() },
     linkedAccount: { findUnique: jest.fn(), create: jest.fn() },
     referralInvite: { findMany: jest.fn().mockResolvedValue([]) },
     emailVerificationToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    passwordResetToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     otpCode: { findUnique: jest.fn(), update: jest.fn() },
-    refreshToken: { create: jest.fn() },
+    refreshToken: { create: jest.fn(), updateMany: jest.fn() },
     $transaction: jest.fn(async (ops: unknown) => Promise.all(ops as Promise<unknown>[])),
   };
-  const mail = { sendMagicLinkEmail: jest.fn(), sendEmailVerificationEmail: jest.fn(), sendReferralJoinNotification: jest.fn() };
+  const mail = { sendMagicLinkEmail: jest.fn(), sendEmailVerificationEmail: jest.fn(), sendReferralJoinNotification: jest.fn(), sendPasswordResetEmail: jest.fn() };
   const otp = {
     issueWithTicket: jest.fn().mockResolvedValue({ ticket: 'ticket-1', expiresInSeconds: 600 }),
     verifyWithoutConsuming: jest.fn(),
@@ -262,5 +265,90 @@ describe('AuthService consumeMagicLink startup bonus', () => {
     await service.consumeMagicLink('raw-token');
 
     expect(creditStartupBonus).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.requestPasswordReset', () => {
+  it('creates a token and emails the user when the email matches an account', async () => {
+    const { service, prisma, mail } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@b.com' });
+
+    await service.requestPasswordReset('a@b.com');
+
+    expect(prisma.passwordResetToken.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ userId: 'user-1' }) }),
+    );
+    expect(mail.sendPasswordResetEmail).toHaveBeenCalledWith('a@b.com', expect.any(String));
+  });
+
+  it('does not reveal whether the email exists -- no token, no email, no error', async () => {
+    const { service, prisma, mail } = setup();
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    await expect(service.requestPasswordReset('nobody@b.com')).resolves.toBeUndefined();
+
+    expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
+    expect(mail.sendPasswordResetEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.resetPassword', () => {
+  function setupToken(prisma: ReturnType<typeof setup>['prisma'], overrides: Partial<{ usedAt: Date | null; expiresAt: Date }> = {}) {
+    prisma.passwordResetToken.findUnique.mockResolvedValue({
+      id: 'token-1',
+      userId: 'user-1',
+      usedAt: overrides.usedAt ?? null,
+      expiresAt: overrides.expiresAt ?? new Date(Date.now() + 60_000),
+    });
+  }
+
+  it('hashes the new password, marks the token used, and revokes existing sessions', async () => {
+    const { service, prisma } = setup();
+    setupToken(prisma);
+
+    await service.resetPassword('raw-token', 'new-password-123');
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'user-1' }, data: expect.objectContaining({ passwordHash: expect.any(String) }) }),
+    );
+    expect(prisma.passwordResetToken.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'token-1' }, data: expect.objectContaining({ usedAt: expect.any(Date) }) }),
+    );
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', revokedAt: null }, data: expect.objectContaining({ revokedAt: expect.any(Date) }) }),
+    );
+  });
+
+  it('looks the token up by its sha256 hash, not the raw token', async () => {
+    const { service, prisma } = setup();
+    setupToken(prisma);
+
+    await service.resetPassword('raw-token', 'new-password-123');
+
+    expect(prisma.passwordResetToken.findUnique).toHaveBeenCalledWith({ where: { tokenHash: hashToken('raw-token') } });
+  });
+
+  it('rejects an unknown token', async () => {
+    const { service, prisma } = setup();
+    prisma.passwordResetToken.findUnique.mockResolvedValue(null);
+
+    await expect(service.resetPassword('raw-token', 'new-password-123')).rejects.toThrow(UnauthorizedException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects an already-used token', async () => {
+    const { service, prisma } = setup();
+    setupToken(prisma, { usedAt: new Date() });
+
+    await expect(service.resetPassword('raw-token', 'new-password-123')).rejects.toThrow(UnauthorizedException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects an expired token', async () => {
+    const { service, prisma } = setup();
+    setupToken(prisma, { expiresAt: new Date(Date.now() - 1000) });
+
+    await expect(service.resetPassword('raw-token', 'new-password-123')).rejects.toThrow(UnauthorizedException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });

@@ -14,6 +14,7 @@ import { SmsSettingsPanel } from './SmsSettingsPanel';
 import { WithdrawalSettingsPanel } from './WithdrawalSettingsPanel';
 import { MaintenanceSettingsPanel } from './MaintenanceSettingsPanel';
 import { DistributorSettingsPanel } from './DistributorSettingsPanel';
+import { LiveChatSettingsPanel } from './LiveChatSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
@@ -22,6 +23,7 @@ const groups = [
   { key: 'distributors', label: 'Distributor Settings' },
   { key: 'trainingTasks', label: 'Training & Tasks' },
   { key: 'notifications', label: 'Notification Settings' },
+  { key: 'liveChat', label: 'Live Chat' },
   { key: 'wordGeneration', label: 'Word Generation' },
   { key: 'qualityGate', label: 'Voice Quality Gate' },
   { key: 'spellingNormalization', label: 'Spelling Normalization' },
@@ -69,6 +71,7 @@ export default function AdminSettingsPage() {
             {active === 'distributors' && <DistributorSettingsPanel />}
             {active === 'trainingTasks' && <TrainingTasksSettingsPanel />}
             {active === 'notifications' && <NotificationSettingsPanel />}
+            {active === 'liveChat' && <LiveChatSettingsPanel />}
             {active === 'wordGeneration' && <WordGenerationSettingsPanel />}
             {active === 'qualityGate' && <QualityGateSettingsPanel />}
             {active === 'spellingNormalization' && <SpellingNormalizationSettingsPanel />}

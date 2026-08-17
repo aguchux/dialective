@@ -249,6 +249,13 @@ export class PlatformSettingsService {
     return row.startupBonusAmount?.toNumber() ?? 0;
   }
 
+  /** Widget only actually loads when enabled AND both IDs are set -- a half-configured row (e.g. enabled toggled on before saving IDs) must not leak an empty embed. */
+  async getTawkToWidget(): Promise<{ enabled: boolean; propertyId: string | null; widgetId: string | null }> {
+    const row = await this.getRow();
+    const enabled = row.tawkToEnabled && Boolean(row.tawkToPropertyId) && Boolean(row.tawkToWidgetId);
+    return { enabled, propertyId: enabled ? row.tawkToPropertyId : null, widgetId: enabled ? row.tawkToWidgetId : null };
+  }
+
   async isCryptoWithdrawalsEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.cryptoWithdrawalsEnabled;
@@ -390,6 +397,9 @@ export class PlatformSettingsService {
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       phoneVerificationRequired: row.phoneVerificationRequired,
       startupBonusAmount: row.startupBonusAmount?.toString() ?? null,
+      tawkToEnabled: row.tawkToEnabled,
+      tawkToPropertyId: row.tawkToPropertyId,
+      tawkToWidgetId: row.tawkToWidgetId,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,
@@ -456,6 +466,9 @@ export class PlatformSettingsService {
     adminPayoutOtpEnabled?: boolean;
     phoneVerificationRequired?: boolean;
     startupBonusAmount?: number | null;
+    tawkToEnabled?: boolean;
+    tawkToPropertyId?: string | null;
+    tawkToWidgetId?: string | null;
     wordStuckTimeoutMinutes?: number;
     scoringSlaMinutes?: number;
     noFailOnTrainEnabled?: boolean;
@@ -646,6 +659,9 @@ export class PlatformSettingsService {
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       phoneVerificationRequired: row.phoneVerificationRequired,
       startupBonusAmount: row.startupBonusAmount?.toString() ?? null,
+      tawkToEnabled: row.tawkToEnabled,
+      tawkToPropertyId: row.tawkToPropertyId,
+      tawkToWidgetId: row.tawkToWidgetId,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,
@@ -704,12 +720,14 @@ export class PlatformSettingsService {
       wordTrainingRecordingTimeoutSeconds,
       wordTrainingRecordingMaxTimeoutSeconds,
       authMaintenance,
+      tawkTo,
     ] = await Promise.all([
       this.getReferralCookiePersistSeconds(),
       this.getReferralInviteExpirySeconds(),
       this.getWordTrainingRecordingTimeoutSeconds(),
       this.getWordTrainingRecordingMaxTimeoutSeconds(),
       this.getAuthMaintenanceStatus(),
+      this.getTawkToWidget(),
     ]);
     return {
       referralCookiePersistSeconds,
@@ -725,6 +743,9 @@ export class PlatformSettingsService {
       authMaintenanceBlocksSignup: authMaintenance.enabled && authMaintenance.blockSignup,
       authMaintenanceUntil: authMaintenance.until,
       authMaintenanceMessage: authMaintenance.message,
+      tawkToEnabled: tawkTo.enabled,
+      tawkToPropertyId: tawkTo.propertyId,
+      tawkToWidgetId: tawkTo.widgetId,
     };
   }
 }

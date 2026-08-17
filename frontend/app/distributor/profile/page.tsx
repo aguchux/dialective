@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AdminShell } from '@/components/admin/AdminShell';
+import { DistributorShell } from '@/components/distributor/DistributorShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { NotificationPreferencesPanel } from '@/components/notifications/NotificationPreferencesPanel';
 import { normalizeErrorMessage, useGetMeQuery, useUpdateProfileMutation } from '@/store/api';
@@ -10,7 +10,7 @@ const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
-export default function AdminProfilePage() {
+export default function DistributorProfilePage() {
   const { data: me, isLoading } = useGetMeQuery();
   const [updateProfile, { isLoading: isSaving }] = useUpdateProfileMutation();
 
@@ -42,11 +42,11 @@ export default function AdminProfilePage() {
   }
 
   return (
-    <AdminShell>
+    <DistributorShell>
       <div className="grid gap-6">
         <div>
           <h1 className="text-3xl font-black">Profile</h1>
-          <p className="mt-2 max-w-4xl text-muted">Your admin account details.</p>
+          <p className="mt-2 max-w-4xl text-muted">Your distributor account details.</p>
         </div>
 
         <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -54,19 +54,19 @@ export default function AdminProfilePage() {
           {!isLoading && (
             <form className="grid gap-4 md:max-w-md" onSubmit={handleSave}>
               <div className="grid gap-1">
-                <label className="font-bold" htmlFor="admin-email">
+                <label className="font-bold" htmlFor="distributor-email">
                   Email
                 </label>
-                <input className={inputClass} id="admin-email" value={me?.email ?? ''} disabled readOnly />
+                <input className={inputClass} id="distributor-email" value={me?.email ?? ''} disabled readOnly />
               </div>
 
               <div className="grid gap-1">
-                <label className="font-bold" htmlFor="admin-first-name">
+                <label className="font-bold" htmlFor="distributor-first-name">
                   First name
                 </label>
                 <input
                   className={inputClass}
-                  id="admin-first-name"
+                  id="distributor-first-name"
                   maxLength={80}
                   onChange={(e) => setFirstName(e.target.value)}
                   value={firstName}
@@ -74,12 +74,12 @@ export default function AdminProfilePage() {
               </div>
 
               <div className="grid gap-1">
-                <label className="font-bold" htmlFor="admin-last-name">
+                <label className="font-bold" htmlFor="distributor-last-name">
                   Last name
                 </label>
                 <input
                   className={inputClass}
-                  id="admin-last-name"
+                  id="distributor-last-name"
                   maxLength={80}
                   onChange={(e) => setLastName(e.target.value)}
                   value={lastName}
@@ -104,6 +104,6 @@ export default function AdminProfilePage() {
 
         <NotificationPreferencesPanel />
       </div>
-    </AdminShell>
+    </DistributorShell>
   );
 }

@@ -43,6 +43,7 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { formatCompactLocalCurrency, formatCompactNumber, formatCompactUsd } from '@/lib/format';
+import { resolveDialectName, useDialectName } from '@/lib/dialect-name';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
 import { MarketView } from '@/components/p2p/MarketView';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -62,6 +63,7 @@ import {
   TrainerSubmissionSummary,
   normalizeErrorMessage,
   useCreateP2PPaymentMethodMutation,
+  useGetAllDialectsQuery,
   useGetCountriesQuery,
   useGetDialectsQuery,
   useGetDialectVariantsQuery,
@@ -145,6 +147,7 @@ export function TrainerDashboard() {
     skip: status !== 'authenticated' || session?.user.role === 'ADMIN' || session?.user.role === 'DISTRIBUTOR',
   });
   const { data: me } = useGetMeQuery(undefined, { skip: status !== 'authenticated' || session?.user.role === 'ADMIN' || session?.user.role === 'DISTRIBUTOR' });
+  const dialectName = useDialectName(session?.user.dialectTag);
 
   // Pre-check affordability client-side so a trainer sees an actionable
   // "fund your account" prompt instead of only discovering insufficient
@@ -209,7 +212,7 @@ export function TrainerDashboard() {
                 <h1 className="truncate text-2xl font-black md:text-3xl">{displayName || emailName(session.user.email)}</h1>
                 <div className="mt-1 flex items-center gap-2 text-sm text-muted">
                   <BadgeCheck className="size-4 text-emerald-600" aria-hidden="true" />
-                  <span>{session.user.dialectTag ? `${session.user.dialectTag.toUpperCase()} trainer` : 'Dialect trainer'}</span>
+                  <span>{dialectName ? `${dialectName} trainer` : 'Dialect trainer'}</span>
                 </div>
               </div>
               <button
@@ -889,6 +892,7 @@ type TrainingTab = 'training' | 'tasks';
 
 function TrainingView({ dialectTag, onStartTask }: { dialectTag: string | null; onStartTask: () => void }) {
   const [tab, setTab] = useState<TrainingTab>('tasks');
+  const dialectName = useDialectName(dialectTag);
 
   return (
     <div>
@@ -939,7 +943,7 @@ function TrainingView({ dialectTag, onStartTask }: { dialectTag: string | null; 
           <div>
             <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
               <span className="rounded-md bg-surface-muted px-2 py-1">Translation + voice</span>
-              <span className="rounded-md bg-surface-muted px-2 py-1">{dialectTag?.toUpperCase() ?? 'Your dialect'}</span>
+              <span className="rounded-md bg-surface-muted px-2 py-1">{dialectName ?? 'Your dialect'}</span>
             </div>
             <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" onClick={onStartTask} type="button">
               Start task <ArrowRight className="size-4" aria-hidden="true" />
@@ -1250,6 +1254,7 @@ function TaskAudioButton({ audioUrl, label }: { audioUrl: string | null; label: 
 
 function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; now: number }) {
   const displayStatus = deriveTaskStatus(submission, now, useScoringSlaMs());
+  const dialectName = useDialectName(submission.dialectTag);
   return (
     <tr className="hover:bg-surface-muted/60">
       <td className="max-w-64 px-5 py-4" title={submission.promptText}>
@@ -1258,7 +1263,7 @@ function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; no
           <span className="min-w-0 truncate font-bold">{submission.promptText}</span>
         </div>
       </td>
-      <td className="px-5 py-4 text-muted">{submission.dialectTag.toUpperCase()}</td>
+      <td className="px-5 py-4 text-muted">{dialectName}</td>
       <td className="px-5 py-4">
         <span className={`w-fit rounded-md px-2.5 py-1 text-xs font-extrabold ${taskStatusTones[displayStatus]}`}>
           {taskStatusLabels[displayStatus]}
@@ -1277,6 +1282,7 @@ function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; no
 
 function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; now: number }) {
   const displayStatus = deriveTaskStatus(submission, now, useScoringSlaMs());
+  const dialectName = useDialectName(submission.dialectTag);
   const finalized = submission.status === 'SCORED' || submission.status === 'SETTLED' || submission.status === 'REJECTED';
   return (
     <article className="grid gap-3 p-4">
@@ -1291,7 +1297,7 @@ function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; n
       </div>
       <div className="flex items-end justify-between gap-3 text-sm">
         <div className="min-w-0">
-          <p className="text-muted">{submission.dialectTag.toUpperCase()} &middot; {formatDateTime(submission.createdAt)}</p>
+          <p className="text-muted">{dialectName} &middot; {formatDateTime(submission.createdAt)}</p>
           {!finalized && (
             <p className="font-bold">
               Time to scoring: <TaskCountdownCell submission={submission} />
@@ -2173,6 +2179,7 @@ function ScoresView() {
     pageSize,
     10000,
   );
+  const { data: dialects } = useGetAllDialectsQuery();
 
   return (
     <div>
@@ -2217,7 +2224,7 @@ function ScoresView() {
                   {items.map((submission) => (
                     <tr className="hover:bg-surface-muted/60" key={submission.id}>
                       <td className="max-w-64 truncate px-5 py-4 font-bold" title={submission.promptText}>{submission.promptText}</td>
-                      <td className="px-5 py-4 text-muted">{submission.dialectTag.toUpperCase()}</td>
+                      <td className="px-5 py-4 text-muted">{resolveDialectName(submission.dialectTag, dialects)}</td>
                       <td className="px-5 py-4">
                         <span className={`w-fit rounded-md px-2.5 py-1 text-xs font-extrabold ${submissionStatusTones[submission.status]}`}>
                           {submissionStatusLabels[submission.status]}
@@ -2254,7 +2261,7 @@ function ScoresView() {
                   </div>
                   <div className="flex items-end justify-between gap-3 text-sm">
                     <div className="min-w-0">
-                      <p className="text-muted">{submission.dialectTag.toUpperCase()} &middot; {formatDateTime(submission.createdAt)}</p>
+                      <p className="text-muted">{resolveDialectName(submission.dialectTag, dialects)} &middot; {formatDateTime(submission.createdAt)}</p>
                       {submission.score !== null && (
                         <p className="font-bold" title={qualityBreakdownTitle(submission)}>
                           Score: {Number(submission.score).toFixed(1)}%

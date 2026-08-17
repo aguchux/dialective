@@ -76,6 +76,21 @@ export class GeoController {
     return { countryCount, dialectCount, totalTrainers, poolVolumeUsd, totalPayoutUsd };
   }
 
+  /**
+   * Flat tag -> full-name lookup for every dialect, regardless of country --
+   * backs the frontend's shared dialect-name display helper so trainer-facing
+   * UI can show "Igbo" instead of the raw "ig" tag without needing a
+   * country-scoped fetch first. No auth, same reasoning as the rest of this
+   * controller: needed before a session exists, and carries no sensitive data.
+   */
+  @Get('dialects')
+  getAllDialects() {
+    return this.prisma.dialect.findMany({
+      select: { tag: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   @Get('countries/:id/dialects')
   async getDialects(@Param('id') id: string) {
     const country = await this.prisma.country.findUnique({ where: { id } });
