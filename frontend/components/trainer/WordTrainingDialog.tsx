@@ -22,6 +22,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { usePortalContainer } from '@/components/ui/PortalContainer';
+import { notifyRecordingSession } from '@/lib/recording-signal';
 import {
   ApiErrorShape,
   RecordingNoiseRating,
@@ -182,6 +183,17 @@ export function WordTrainingDialog({
     setRebuildScore(null);
     setSourcePlaying(false);
   }, [clearRecording, open, releaseMicrophone]);
+
+  // Tawk.to's chat bubble sits bottom-right, the same corner this dialog's
+  // record button and audio controls occupy -- hide it for the whole
+  // training session (not just the exact recording moment) so it can't
+  // overlap or steal taps. See lib/recording-signal.ts for why this is a
+  // pub/sub signal rather than a prop: TawkToWidget is mounted globally in
+  // providers.tsx and has no reference to this dialog.
+  useEffect(() => {
+    notifyRecordingSession(open);
+    return () => notifyRecordingSession(false);
+  }, [open]);
 
   useEffect(() => {
     if (!assignment || assignment.direction !== 'ENGLISH_TO_DIALECT' || !assignment.dialectTag || !assignment.wordId) {
