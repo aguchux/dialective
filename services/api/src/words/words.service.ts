@@ -135,17 +135,15 @@ export class WordsService {
       };
     }
 
-    const count = await this.prisma.word.count();
-    if (count === 0) {
+    const totalWords = await this.prisma.word.count();
+    if (totalWords === 0) {
       // Distinct, stable message the frontend matches on to show a "check
       // back later" empty state instead of a generic error banner -- see
-      // WordTrainingDialog.tsx. There is no per-word usage cap: the same
-      // word can be (and is expected to be) assigned to the same trainer
-      // again in a future session, so an empty pool only ever means the
-      // word bank itself has zero rows, not "this trainer used them all."
+      // WordTrainingDialog.tsx.
       throw new NotFoundException('NO_WORDS_AVAILABLE');
     }
-    const [word] = await this.prisma.word.findMany({ take: 1, skip: Math.floor(Math.random() * count) });
+    const word = await this.pickEnglishToDialectWord(userId, totalWords);
+    if (!word) throw new NotFoundException('NO_WORDS_AVAILABLE');
     const assignment = await this.prisma.wordTrainingAssignment.create({
       data: { sessionId, wordId: word.id, direction: 'ENGLISH_TO_DIALECT' },
     });
@@ -631,6 +629,32 @@ export class WordsService {
     if (!assignment) throw new NotFoundException('Word assignment not found');
     if (assignment.session.userId !== userId) throw new ForbiddenException('Word assignment does not belong to you');
     return assignment;
+  }
+
+  /**
+   * Spreads ENGLISH_TO_DIALECT assignments across the whole word bank
+   * instead of pure `random()` sampling, which -- given a large bank and a
+   * trainer doing many short sessions -- lets a small subset of words get
+   * picked repeatedly by chance while others are never touched. Prefers
+   * words this trainer has never recorded yet; only once the trainer has
+   * attempted every word does the pool widen back to the full bank (a
+   * word can still be re-assigned across sessions by design, just not
+   * before every other word has had a turn).
+   */
+  private async pickEnglishToDialectWord(userId: string, totalWords: number) {
+    const attempted = await this.prisma.wordRecording.findMany({
+      where: { userId, direction: 'ENGLISH_TO_DIALECT', wordId: { not: null } },
+      select: { wordId: true },
+      distinct: ['wordId'],
+    });
+    const attemptedIds = attempted.flatMap(({ wordId }) => (wordId ? [wordId] : []));
+
+    const unattemptedCount = await this.prisma.word.count({ where: { id: { notIn: attemptedIds } } });
+    const where = unattemptedCount > 0 ? { id: { notIn: attemptedIds } } : {};
+    const count = unattemptedCount > 0 ? unattemptedCount : totalWords;
+
+    const [word] = await this.prisma.word.findMany({ where, take: 1, skip: Math.floor(Math.random() * count) });
+    return word;
   }
 
   private async pickSentenceRebuildSource(dialectTag: string): Promise<{ promptId: string; fragments: string[] } | null> {

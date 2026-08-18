@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { CheckCircle2, PlayCircle, Search, XCircle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { CheckCircle2, ClipboardCheck, Pause, Play, Search, XCircle } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { RecordingDetailDialog } from '@/components/admin/RecordingAuditDialog';
 import {
@@ -38,6 +38,39 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
     return () => clearTimeout(timer);
   }, [value, delayMs]);
   return debounced;
+}
+
+function PlayButton({ audioUrl }: { audioUrl: string | null }) {
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  if (!audioUrl) {
+    return <span className="text-xs text-muted">No audio</span>;
+  }
+
+  function toggle() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playing) {
+      audio.pause();
+    } else {
+      void audio.play();
+    }
+  }
+
+  return (
+    <>
+      <button
+        aria-label={playing ? 'Pause recording' : 'Play recording'}
+        className="grid size-9 place-items-center rounded-full bg-accent/10 text-accent transition-colors hover:bg-accent/20"
+        onClick={toggle}
+        type="button"
+      >
+        {playing ? <Pause className="size-4 fill-current" aria-hidden="true" /> : <Play className="ml-0.5 size-4 fill-current" aria-hidden="true" />}
+      </button>
+      <audio onEnded={() => setPlaying(false)} onPause={() => setPlaying(false)} onPlay={() => setPlaying(true)} ref={audioRef} src={audioUrl} />
+    </>
+  );
 }
 
 function trainerLabel(trainer: AdminRecordingSummary['trainer']): string {
@@ -210,39 +243,49 @@ export default function AdminRecordingsPage() {
           ) : data && data.items.length > 0 ? (
             <>
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[980px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
                   <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                     <tr>
+                      <th className="px-5 py-3.5" scope="col">Play</th>
                       <th className="px-5 py-3.5" scope="col">Trainer</th>
                       <th className="px-5 py-3.5" scope="col">{kind === 'word' ? 'Word' : 'Prompt'}</th>
                       <th className="px-5 py-3.5" scope="col">Dialect</th>
                       <th className="px-5 py-3.5" scope="col">Status</th>
                       <SortableHeader field="score" label="Score" active={sortBy} onClick={toggleSort} dir={sortDir} />
-                      <SortableHeader field="compositeScore" label="Composite" active={sortBy} onClick={toggleSort} dir={sortDir} />
+                      <th className="px-5 py-3.5" scope="col">Noise</th>
+                      <th className="px-5 py-3.5" scope="col">Quality</th>
+                      <th className="px-5 py-3.5" scope="col">Liveness</th>
                       <SortableHeader field="payoutTokenAmount" label="Payout" active={sortBy} onClick={toggleSort} dir={sortDir} />
                       <th className="px-5 py-3.5" scope="col">Audit</th>
-                      <th className="px-5 py-3.5" scope="col">Play</th>
+                      <th className="px-5 py-3.5" scope="col"><span className="sr-only">Actions</span></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
                     {data.items.map((rec) => (
-                      <tr className="cursor-pointer hover:bg-surface-muted" key={rec.id} onClick={() => setSelected(rec)}>
+                      <tr key={rec.id}>
+                        <td className="px-5 py-3.5">
+                          <PlayButton audioUrl={rec.audioUrl} />
+                        </td>
                         <td className="px-5 py-3.5 font-bold">{trainerLabel(rec.trainer)}</td>
                         <td className="max-w-xs truncate px-5 py-3.5" title={rec.promptText}>{rec.promptText}</td>
                         <td className="px-5 py-3.5 text-muted">{resolveDialectName(rec.dialectTag, dialects)}</td>
                         <td className="px-5 py-3.5 text-muted">{rec.status}</td>
                         <td className="px-5 py-3.5 font-black tabular-nums">{scoreCell(rec.score)}</td>
-                        <td className="px-5 py-3.5 font-black tabular-nums">{scoreCell(rec.compositeScore)}</td>
+                        <td className="px-5 py-3.5 tabular-nums text-muted">{scoreCell(rec.noiseScore)}</td>
+                        <td className="px-5 py-3.5 tabular-nums text-muted">{scoreCell(rec.qualityScore)}</td>
+                        <td className="px-5 py-3.5 tabular-nums text-muted">{scoreCell(rec.livenessScore)}</td>
                         <td className="px-5 py-3.5 tabular-nums text-muted">{rec.payoutTokenAmount ? `${rec.payoutTokenAmount} DL` : '—'}</td>
                         <td className="px-5 py-3.5">
                           <AuditBadge status={rec.adminAuditStatus} />
                         </td>
-                        <td className="px-5 py-3.5">
-                          {rec.audioUrl ? (
-                            <PlayCircle className="size-5 text-accent" aria-hidden="true" />
-                          ) : (
-                            <span className="text-xs text-muted">No audio</span>
-                          )}
+                        <td className="px-5 py-3.5 text-right">
+                          <button
+                            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-extrabold text-white transition-colors hover:bg-accent-dark"
+                            onClick={() => setSelected(rec)}
+                            type="button"
+                          >
+                            <ClipboardCheck className="size-4" aria-hidden="true" /> Audit
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -252,17 +295,14 @@ export default function AdminRecordingsPage() {
 
               <div className="divide-y divide-line md:hidden">
                 {data.items.map((rec) => (
-                  <article
-                    className="grid cursor-pointer gap-2 p-4"
-                    key={rec.id}
-                    onClick={() => setSelected(rec)}
-                    role="button"
-                    tabIndex={0}
-                  >
+                  <article className="grid gap-2 p-4" key={rec.id}>
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-extrabold">{trainerLabel(rec.trainer)}</p>
-                        <p className="truncate text-sm text-muted">{rec.promptText}</p>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <PlayButton audioUrl={rec.audioUrl} />
+                        <div className="min-w-0">
+                          <p className="truncate font-extrabold">{trainerLabel(rec.trainer)}</p>
+                          <p className="truncate text-sm text-muted">{rec.promptText}</p>
+                        </div>
                       </div>
                       <AuditBadge status={rec.adminAuditStatus} />
                     </div>
@@ -270,8 +310,18 @@ export default function AdminRecordingsPage() {
                       <span>{resolveDialectName(rec.dialectTag, dialects)}</span>
                       <span>{rec.status}</span>
                       <span>Score: {scoreCell(rec.score)}</span>
+                      <span>Noise: {scoreCell(rec.noiseScore)}</span>
+                      <span>Quality: {scoreCell(rec.qualityScore)}</span>
+                      <span>Liveness: {scoreCell(rec.livenessScore)}</span>
                       {rec.payoutTokenAmount && <span>{rec.payoutTokenAmount} DL</span>}
                     </div>
+                    <button
+                      className="inline-flex min-h-9 w-fit items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-extrabold text-white transition-colors hover:bg-accent-dark"
+                      onClick={() => setSelected(rec)}
+                      type="button"
+                    >
+                      <ClipboardCheck className="size-4" aria-hidden="true" /> Audit
+                    </button>
                   </article>
                 ))}
               </div>

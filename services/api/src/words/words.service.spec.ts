@@ -28,7 +28,7 @@ describe('WordsService', () => {
         findMany: jest.fn().mockResolvedValue([{ id: 'word-1', text: 'welcome' }]),
       },
       wallet: { upsert: jest.fn().mockResolvedValue({ id: 'wallet-1', balance: 10 }) },
-      wordRecording: { count: jest.fn(), findMany: jest.fn() },
+      wordRecording: { count: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       wordTrainingAssignment: { create: jest.fn(), findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       prompt: { findMany: jest.fn().mockResolvedValue([]) },
       promptWord: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
@@ -73,6 +73,40 @@ describe('WordsService', () => {
       fragments: null,
     });
     expect(prisma.wordRecording.count).not.toHaveBeenCalled();
+  });
+
+  it('excludes words the trainer has already recorded when picking an ENGLISH_TO_DIALECT word', async () => {
+    settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+    settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+    prisma.word.count
+      .mockResolvedValueOnce(3) // totalWords
+      .mockResolvedValueOnce(1); // unattemptedCount, after excluding word-1/word-2
+    prisma.wordRecording.findMany.mockResolvedValue([{ wordId: 'word-1' }, { wordId: 'word-2' }]);
+    prisma.word.findMany.mockResolvedValue([{ id: 'word-3', text: 'river' }]);
+    prisma.wordTrainingAssignment.create.mockResolvedValue({ id: 'assignment-3', direction: 'ENGLISH_TO_DIALECT' });
+
+    await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
+      wordId: 'word-3',
+      promptText: 'river',
+    });
+    expect(prisma.word.count).toHaveBeenNthCalledWith(2, { where: { id: { notIn: ['word-1', 'word-2'] } } });
+    expect(prisma.word.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: { notIn: ['word-1', 'word-2'] } },
+    }));
+  });
+
+  it('widens back to the full word bank once the trainer has attempted every word', async () => {
+    settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+    settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+    prisma.word.count
+      .mockResolvedValueOnce(2) // totalWords
+      .mockResolvedValueOnce(0); // unattemptedCount -- trainer has done both
+    prisma.wordRecording.findMany.mockResolvedValue([{ wordId: 'word-1' }, { wordId: 'word-2' }]);
+    prisma.word.findMany.mockResolvedValue([{ id: 'word-1', text: 'welcome' }]);
+    prisma.wordTrainingAssignment.create.mockResolvedValue({ id: 'assignment-4', direction: 'ENGLISH_TO_DIALECT' });
+
+    await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({ wordId: 'word-1' });
+    expect(prisma.word.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
   });
 
   it('uses another trainer submission for reverse validation when enabled', async () => {
