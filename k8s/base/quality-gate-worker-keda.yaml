@@ -5,6 +5,16 @@ metadata:
 spec:
   scaleTargetRef:
     name: quality-gate-worker
+  # Do NOT set this to 1 again until services/quality-gate-worker's
+  # liveness_classifier.joblib is retrained/re-pickled against the image's
+  # installed scikit-learn version (or requirements.txt is pinned to match
+  # the artifact) -- every job currently crashes in liveness.py's
+  # predict_proba call with "'LogisticRegression' object has no attribute
+  # 'multi_class'" (sklearn version skew between training-time and
+  # deploy-time), so running the worker only burns through the
+  # quality-gate-jobs backlog via 3x-retry into the -dead stream without
+  # writing a single score. Confirmed 2026-08-18: 0 WordRecording/Submission
+  # rows have ever had qualityGateCheckedAt set.
   minReplicaCount: 0
   maxReplicaCount: 15
   cooldownPeriod: 120
