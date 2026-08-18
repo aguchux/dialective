@@ -55,6 +55,7 @@ import { UpdateReferralSettingsDto } from './dto/update-referral-settings.dto';
 import { CreateTrainingPayoutDto } from './dto/create-training-payout.dto';
 import { AdminWalletAdjustmentDto } from './dto/admin-wallet-adjustment.dto';
 import { ListEarningsDto } from './dto/list-earnings.dto';
+import { ListLeaderboardDto } from './dto/list-leaderboard.dto';
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { CreateReferralInviteDto } from './dto/create-referral-invite.dto';
 import { tokensToUsdt, usdToTokens } from './token-rate.util';
@@ -71,6 +72,17 @@ const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
 
 const NOWPAYMENTS_PAYOUT_FINISHED_STATUSES = new Set(['finished', 'paid', 'complete', 'completed', 'success']);
 const NOWPAYMENTS_PAYOUT_FAILED_STATUSES = new Set(['failed', 'rejected', 'expired', 'cancelled', 'canceled']);
+
+// How many top-ranked rows the dedicated /admin/leaderboard page ranks and
+// paginates through -- see buildEarnersRanking's doc comment for why a
+// leaderboard trades an exact full-table total for a fast bounded one.
+const LEADERBOARD_MAX_ROWS = 200;
+
+function paginateInMemory<T>(rows: T[], page: number, pageSize: number, total: number) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const start = (page - 1) * pageSize;
+  return { items: rows.slice(start, start + pageSize), page, pageSize, total, totalPages };
+}
 
 /**
  * Wallet / Utility Token Pool: users fund their token balance with
@@ -1396,30 +1408,84 @@ export class WalletController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async getAdminLeaderboard() {
-    const [sortedEarners, wordContributorTotals, submissionContributorTotals] = await Promise.all([
-      // Sorted/limited by Postgres, not in JS -- groupBy supports orderBy on
-      // the same aggregate it computes, so this stays a single indexed scan
-      // even once ledger_entries has millions of rows, unlike pulling every
-      // wallet's total into memory just to keep the top 10.
-      this.prisma.ledgerEntry.groupBy({
-        by: ['walletId'],
-        where: { type: LedgerEntryType.TRAINING_PAYOUT, amount: { gt: 0 } },
-        _sum: { amount: true },
-        _count: { _all: true },
-        orderBy: { _sum: { amount: 'desc' } },
-        take: 10,
-      }),
-      this.prisma.wordRecording.groupBy({
-        by: ['userId'],
-        _count: { _all: true },
-      }),
-      this.prisma.submission.groupBy({
-        by: ['userId'],
-        _count: { _all: true },
-      }),
+    const [topEarners, topContributors] = await Promise.all([
+      this.buildEarnersRanking(10),
+      this.buildContributorsRanking(10),
     ]);
+    return { topEarners: topEarners.rows, topContributors: topContributors.rows };
+  }
 
-    const earnerWalletIds = sortedEarners.map((entry) => entry.walletId);
+  /**
+   * Full paginated earners leaderboard behind a dedicated admin page/route
+   * (frontend/app/admin/leaderboard) -- same ranking as admin/leaderboard's
+   * topEarners, just not capped at 10. See LEADERBOARD_MAX_ROWS's comment on
+   * buildEarnersRanking for why "paginated" here means "paginated within a
+   * bounded top-N", not a true full-table scan.
+   */
+  @Get('admin/leaderboard/earners')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getAdminLeaderboardEarners(@Query() query: ListLeaderboardDto) {
+    const { rows, total } = await this.buildEarnersRanking(LEADERBOARD_MAX_ROWS);
+    return paginateInMemory(rows, query.page, query.pageSize, total);
+  }
+
+  /** Full paginated contributors leaderboard -- see getAdminLeaderboardEarners. */
+  @Get('admin/leaderboard/contributors')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getAdminLeaderboardContributors(@Query() query: ListLeaderboardDto) {
+    const { rows, total } = await this.buildContributorsRanking(LEADERBOARD_MAX_ROWS);
+    return paginateInMemory(rows, query.page, query.pageSize, total);
+  }
+
+  /**
+   * Sorted/limited by Postgres, not in JS -- groupBy supports orderBy on the
+   * same aggregate it computes, so this stays a single indexed scan even
+   * once ledger_entries has millions of rows, unlike pulling every wallet's
+   * total into memory just to rank them. `limit` bounds how many top rows
+   * are ranked at all (10 for the dashboard overview cards,
+   * LEADERBOARD_MAX_ROWS for the dedicated paginated page) -- a leaderboard
+   * is inherently "top N", so this trades an exact full-table total for a
+   * fast, honestly-bounded one instead of a second expensive distinct-count
+   * query nobody browsing a leaderboard needs past the first few pages.
+   */
+  private async buildEarnersRanking(limit: number) {
+    const sortedEarners = await this.prisma.ledgerEntry.groupBy({
+      by: ['walletId'],
+      where: { type: LedgerEntryType.TRAINING_PAYOUT, amount: { gt: 0 } },
+      _sum: { amount: true },
+      _count: { _all: true },
+      orderBy: { _sum: { amount: 'desc' } },
+      take: limit,
+    });
+
+    const earnerWallets = await this.prisma.wallet.findMany({
+      where: { id: { in: sortedEarners.map((entry) => entry.walletId) } },
+      include: { user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } },
+    });
+    const walletById = new Map(earnerWallets.map((wallet) => [wallet.id, wallet]));
+
+    const rows = sortedEarners.flatMap((entry) => {
+      const wallet = walletById.get(entry.walletId);
+      if (!wallet) return [];
+      return [
+        {
+          user: wallet.user,
+          totalEarned: entry._sum.amount?.toString() ?? '0',
+          payoutCount: entry._count._all,
+        },
+      ];
+    });
+    return { rows, total: rows.length };
+  }
+
+  /** Same bounded-ranking shape as buildEarnersRanking, ranked by word recordings + submissions instead of DL earned. */
+  private async buildContributorsRanking(limit: number) {
+    const [wordContributorTotals, submissionContributorTotals] = await Promise.all([
+      this.prisma.wordRecording.groupBy({ by: ['userId'], _count: { _all: true } }),
+      this.prisma.submission.groupBy({ by: ['userId'], _count: { _all: true } }),
+    ]);
 
     const contributorCounts = new Map<string, { wordRecordings: number; submissions: number }>();
     for (const entry of wordContributorTotals) {
@@ -1439,49 +1505,29 @@ export class WalletController {
 
     const sortedContributorIds = [...contributorCounts.entries()]
       .sort(([, a], [, b]) => b.wordRecordings + b.submissions - (a.wordRecordings + a.submissions))
-      .slice(0, 10)
+      .slice(0, limit)
       .map(([userId]) => userId);
 
-    const [earnerWallets, contributorUsers] = await Promise.all([
-      this.prisma.wallet.findMany({
-        where: { id: { in: earnerWalletIds } },
-        include: { user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } },
-      }),
-      this.prisma.user.findMany({
-        where: { id: { in: sortedContributorIds } },
-        select: { id: true, firstName: true, lastName: true, email: true, role: true },
-      }),
-    ]);
-
-    const walletById = new Map(earnerWallets.map((wallet) => [wallet.id, wallet]));
+    const contributorUsers = await this.prisma.user.findMany({
+      where: { id: { in: sortedContributorIds } },
+      select: { id: true, firstName: true, lastName: true, email: true, role: true },
+    });
     const userById = new Map(contributorUsers.map((user) => [user.id, user]));
 
-    return {
-      topEarners: sortedEarners.flatMap((entry) => {
-        const wallet = walletById.get(entry.walletId);
-        if (!wallet) return [];
-        return [
-          {
-            user: wallet.user,
-            totalEarned: entry._sum.amount?.toString() ?? '0',
-            payoutCount: entry._count._all,
-          },
-        ];
-      }),
-      topContributors: sortedContributorIds.flatMap((userId) => {
-        const user = userById.get(userId);
-        const counts = contributorCounts.get(userId);
-        if (!user || !counts) return [];
-        return [
-          {
-            user,
-            totalTasks: counts.wordRecordings + counts.submissions,
-            wordRecordings: counts.wordRecordings,
-            submissions: counts.submissions,
-          },
-        ];
-      }),
-    };
+    const rows = sortedContributorIds.flatMap((userId) => {
+      const user = userById.get(userId);
+      const counts = contributorCounts.get(userId);
+      if (!user || !counts) return [];
+      return [
+        {
+          user,
+          totalTasks: counts.wordRecordings + counts.submissions,
+          wordRecordings: counts.wordRecordings,
+          submissions: counts.submissions,
+        },
+      ];
+    });
+    return { rows, total: rows.length };
   }
 
   // --- Referral settings / payouts (admin) ---------------------------------

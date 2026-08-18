@@ -436,6 +436,77 @@ describe('WalletController admin leaderboard', () => {
   });
 });
 
+describe('WalletController paginated leaderboard', () => {
+  function setup() {
+    const prisma = {
+      ledgerEntry: {
+        groupBy: jest.fn().mockResolvedValue([
+          { walletId: 'wallet-1', _sum: { amount: 30 }, _count: { _all: 2 } },
+          { walletId: 'wallet-2', _sum: { amount: 20 }, _count: { _all: 1 } },
+          { walletId: 'wallet-3', _sum: { amount: 10 }, _count: { _all: 1 } },
+        ]),
+      },
+      wordRecording: {
+        groupBy: jest.fn().mockResolvedValue([{ userId: 'user-1', _count: { _all: 3 } }]),
+      },
+      submission: {
+        groupBy: jest.fn().mockResolvedValue([{ userId: 'user-2', _count: { _all: 5 } }]),
+      },
+      wallet: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'wallet-1', user: { id: 'user-1', firstName: 'A', lastName: 'One', email: 'a@example.com', role: 'TRAINER' } },
+          { id: 'wallet-2', user: { id: 'user-2', firstName: 'B', lastName: 'Two', email: 'b@example.com', role: 'TRAINER' } },
+          { id: 'wallet-3', user: { id: 'user-3', firstName: 'C', lastName: 'Three', email: 'c@example.com', role: 'TRAINER' } },
+        ]),
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'user-1', firstName: 'A', lastName: 'One', email: 'a@example.com', role: 'TRAINER' },
+          { id: 'user-2', firstName: 'B', lastName: 'Two', email: 'b@example.com', role: 'TRAINER' },
+        ]),
+      },
+    };
+    const controller = new WalletController(prisma as never, {} as never, {} as never, {} as never, {} as never);
+    return { controller, prisma };
+  }
+
+  it('paginates earners, ranking against LEADERBOARD_MAX_ROWS not just the top 10', async () => {
+    const { controller, prisma } = setup();
+
+    const page1 = await controller.getAdminLeaderboardEarners({ page: 1, pageSize: 2 });
+    expect(page1).toEqual({
+      items: [
+        { user: expect.objectContaining({ id: 'user-1' }), totalEarned: '30', payoutCount: 2 },
+        { user: expect.objectContaining({ id: 'user-2' }), totalEarned: '20', payoutCount: 1 },
+      ],
+      page: 1,
+      pageSize: 2,
+      total: 3,
+      totalPages: 2,
+    });
+    expect(prisma.ledgerEntry.groupBy).toHaveBeenCalledWith(expect.objectContaining({ take: 200 }));
+
+    const page2 = await controller.getAdminLeaderboardEarners({ page: 2, pageSize: 2 });
+    expect(page2.items).toEqual([{ user: expect.objectContaining({ id: 'user-3' }), totalEarned: '10', payoutCount: 1 }]);
+  });
+
+  it('paginates contributors ranked by word recordings + submissions', async () => {
+    const { controller } = setup();
+
+    const page1 = await controller.getAdminLeaderboardContributors({ page: 1, pageSize: 1 });
+    expect(page1).toEqual({
+      items: [{ user: expect.objectContaining({ id: 'user-2' }), totalTasks: 5, wordRecordings: 0, submissions: 5 }],
+      page: 1,
+      pageSize: 1,
+      total: 2,
+      totalPages: 2,
+    });
+
+    const page2 = await controller.getAdminLeaderboardContributors({ page: 2, pageSize: 1 });
+    expect(page2.items).toEqual([{ user: expect.objectContaining({ id: 'user-1' }), totalTasks: 3, wordRecordings: 3, submissions: 0 }]);
+  });
+});
+
 describe('WalletController admin training payouts', () => {
   function setup() {
     (creditAdminFunding as jest.Mock).mockReset().mockResolvedValue({

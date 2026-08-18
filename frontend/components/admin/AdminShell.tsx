@@ -22,6 +22,7 @@ const navItems = [
   { href: '/admin/data-access', label: 'Data Access Leads', icon: LeadsIcon },
   { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
   { href: '/admin/words', label: 'Words', icon: WordsIcon },
+  { href: '/admin/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
   { href: '/admin/referrals', label: 'Referrals', icon: ReferralIcon },
   { href: '/admin/p2p', label: 'P2P Market', icon: P2PIcon },
   { href: '/admin/withdrawals', label: 'Withdrawals', icon: WithdrawalsIcon },
@@ -304,6 +305,18 @@ function WithdrawalsIcon() {
       <path d="M12 3v14" strokeLinecap="round" />
       <path d="m6 11 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M4 21h16" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function TrophyIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M8 21h8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 17v4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 4h10v6a5 5 0 0 1-10 0V4z" strokeLinejoin="round" />
+      <path d="M7 5H4a1 1 0 0 0-1 1v1a4 4 0 0 0 4 4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M17 5h3a1 1 0 0 1 1 1v1a4 4 0 0 1-4 4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

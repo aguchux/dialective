@@ -23,6 +23,7 @@ import {
   WalletCards,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import Link from 'next/link';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { formatCompactTokens, formatCompactUsd } from '@/lib/format';
 import { useGetAdminLeaderboardQuery, useGetAdminStatsQuery, useGetReferralsQuery } from '@/store/api';
@@ -309,6 +310,7 @@ export default function AdminDashboardPage() {
               valueLabel: 'DL earned',
             }))}
             title="Top earners"
+            viewAllHref="/admin/leaderboard?tab=earners"
           />
           <LeaderboardPanel
             emptyLabel="No submitted tasks yet."
@@ -323,6 +325,7 @@ export default function AdminDashboardPage() {
               valueLabel: 'tasks',
             }))}
             title="Top contributors"
+            viewAllHref="/admin/leaderboard?tab=contributors"
           />
         </section>
 
@@ -404,6 +407,7 @@ function LeaderboardPanel({
   loading,
   rows,
   title,
+  viewAllHref,
 }: {
   emptyLabel: string;
   icon: LucideIcon;
@@ -419,14 +423,20 @@ function LeaderboardPanel({
       }[]
     | undefined;
   title: string;
+  viewAllHref: string;
 }) {
   return (
     <div className="grid content-start gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-black">{title}</h2>
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#efe8fe] text-[#7B3BF0]">
-          <Icon className="size-4" aria-hidden="true" />
-        </span>
+        <div className="flex items-center gap-3">
+          <Link className="text-sm font-bold text-accent no-underline hover:text-accent-dark" href={viewAllHref}>
+            View all
+          </Link>
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#efe8fe] text-[#7B3BF0]">
+            <Icon className="size-4" aria-hidden="true" />
+          </span>
+        </div>
       </div>
       <div className="grid gap-3">
         {loading && <p className="text-muted">Loading...</p>}

@@ -719,18 +719,30 @@ export interface AdminLeaderboardUser {
   role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR';
 }
 
+export interface LeaderboardEarnerRow {
+  user: AdminLeaderboardUser;
+  totalEarned: string;
+  payoutCount: number;
+}
+
+export interface LeaderboardContributorRow {
+  user: AdminLeaderboardUser;
+  totalTasks: number;
+  wordRecordings: number;
+  submissions: number;
+}
+
 export interface AdminLeaderboard {
-  topEarners: {
-    user: AdminLeaderboardUser;
-    totalEarned: string;
-    payoutCount: number;
-  }[];
-  topContributors: {
-    user: AdminLeaderboardUser;
-    totalTasks: number;
-    wordRecordings: number;
-    submissions: number;
-  }[];
+  topEarners: LeaderboardEarnerRow[];
+  topContributors: LeaderboardContributorRow[];
+}
+
+export interface LeaderboardPage<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 }
 
 export interface PlatformSettings {
@@ -1749,6 +1761,12 @@ export const dialectivaApi = createApi({
     getAdminLeaderboard: builder.query<AdminLeaderboard, void>({
       query: () => '/admin/leaderboard',
     }),
+    getAdminLeaderboardEarners: builder.query<LeaderboardPage<LeaderboardEarnerRow>, { page: number; pageSize: number }>({
+      query: ({ page, pageSize }) => ({ url: '/admin/leaderboard/earners', params: { page, pageSize } }),
+    }),
+    getAdminLeaderboardContributors: builder.query<LeaderboardPage<LeaderboardContributorRow>, { page: number; pageSize: number }>({
+      query: ({ page, pageSize }) => ({ url: '/admin/leaderboard/contributors', params: { page, pageSize } }),
+    }),
     getAdminP2PSettings: builder.query<P2PMarketSettings, void>({
       query: () => '/p2p/admin/settings',
       providesTags: ['P2P'],
@@ -2096,6 +2114,8 @@ export const {
   useDeleteSubscriptionPoolMutation,
   useGetAdminStatsQuery,
   useGetAdminLeaderboardQuery,
+  useGetAdminLeaderboardEarnersQuery,
+  useGetAdminLeaderboardContributorsQuery,
   useGetAdminP2PSettingsQuery,
   useUpdateAdminP2PSettingsMutation,
   useListAdminP2PTradesQuery,
