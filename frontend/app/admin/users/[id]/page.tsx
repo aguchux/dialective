@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { AdminShell } from '@/components/admin/AdminShell';
+import { RecordingAuditDialog } from '@/components/admin/RecordingAuditDialog';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
 import { activityLabels } from '@/components/trainer/TrainerDashboard';
@@ -47,6 +48,7 @@ export default function AdminUserDetailPage() {
 
   const [lockDialogOpen, setLockDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [auditDialogOpen, setAuditDialogOpen] = useState(false);
 
   const displayName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Name not provided' : '';
   const dialectName = useDialectName(user?.dialectTag);
@@ -105,6 +107,25 @@ export default function AdminUserDetailPage() {
                 again afterward as a brand-new account.
               </p>
             </section>
+
+            {user.role === 'TRAINER' && (
+              <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+                <h2 className="text-lg font-black">Recording audit</h2>
+                <p className="text-sm leading-relaxed text-muted">
+                  Play through this trainer&rsquo;s recordings one at a time and mark each as valid or invalid. Marking a paid-out
+                  recording invalid can optionally claw back its DL payout.
+                </p>
+                <div>
+                  <button
+                    className="inline-flex min-h-10 items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-extrabold text-white transition-colors hover:bg-accent-dark"
+                    onClick={() => setAuditDialogOpen(true)}
+                    type="button"
+                  >
+                    Audit recordings
+                  </button>
+                </div>
+              </section>
+            )}
 
             <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
               <h2 className="text-lg font-black">Token transactions</h2>
@@ -166,6 +187,14 @@ export default function AdminUserDetailPage() {
           user={user}
           onClose={() => setDeleteDialogOpen(false)}
           onDeleted={() => router.push('/admin/users')}
+        />
+      )}
+      {user && (
+        <RecordingAuditDialog
+          onOpenChange={setAuditDialogOpen}
+          open={auditDialogOpen}
+          trainerId={user.id}
+          trainerName={displayName || user.email}
         />
       )}
     </AdminShell>

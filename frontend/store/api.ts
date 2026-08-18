@@ -979,6 +979,50 @@ export interface SubmissionsPage {
   totalPages: number;
 }
 
+export type AdminAuditStatus = 'VALID' | 'INVALID';
+export type RecordingKind = 'word' | 'submission';
+
+export interface AdminRecordingSummary {
+  id: string;
+  kind: RecordingKind;
+  direction: 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD' | null;
+  promptText: string;
+  responseText: string | null;
+  dialectTag: string;
+  status: 'PENDING' | 'TRANSCRIBED' | 'REJECTED' | 'SCORED' | 'SETTLED' | 'EXPIRED';
+  tokensSpent: string;
+  rawScore: string | null;
+  score: string | null;
+  noiseScore: string | null;
+  qualityScore: string | null;
+  livenessScore: string | null;
+  compositeScore: string | null;
+  payoutTokenAmount: string | null;
+  audioUrl: string | null;
+  rejectionReason: string | null;
+  adminAuditStatus: AdminAuditStatus | null;
+  adminAuditedAt: string | null;
+  createdAt: string;
+  scoredAt: string | null;
+  settledAt: string | null;
+}
+
+export interface AdminRecordingsPage {
+  items: AdminRecordingSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface AuditRecordingResult {
+  id: string;
+  kind: RecordingKind;
+  adminAuditStatus: AdminAuditStatus;
+  adminAuditedAt: string;
+  clawedBack: boolean;
+}
+
 export type PartOfSpeech =
   | 'NOUN'
   | 'VERB'
@@ -1268,7 +1312,7 @@ const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptio
 export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
   baseQuery: baseQueryWithMaintenanceSignal,
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'RequiredCourses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile', 'Notifications'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'RequiredCourses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'AdminRecordings', 'DataAccessLeads', 'P2P', 'Profile', 'Notifications'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -1862,6 +1906,23 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/admin/wallet-adjustments', method: 'POST', body }),
       invalidatesTags: ['Wallet', 'Users'],
     }),
+    getAdminTrainerRecordings: builder.query<AdminRecordingsPage, { trainerId: string; page: number; pageSize: number }>({
+      query: ({ trainerId, page, pageSize }) => ({ url: `/admin-recordings/trainers/${trainerId}`, params: { page, pageSize } }),
+      providesTags: (_result, _error, { trainerId }) => [{ type: 'AdminRecordings', id: trainerId }],
+    }),
+    requestRecordingAuditClawbackOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { kind: RecordingKind; id: string }
+    >({
+      query: ({ kind, id }) => ({ url: `/admin-recordings/${kind}/${id}/audit/otp`, method: 'POST' }),
+    }),
+    auditRecording: builder.mutation<
+      AuditRecordingResult,
+      { kind: RecordingKind; id: string; status: AdminAuditStatus; clawback?: boolean; otpRequestId?: string; code?: string; trainerId: string }
+    >({
+      query: ({ kind, id, trainerId: _trainerId, ...body }) => ({ url: `/admin-recordings/${kind}/${id}/audit`, method: 'POST', body }),
+      invalidatesTags: (_result, _error, { trainerId }) => [{ type: 'AdminRecordings', id: trainerId }, 'Wallet', 'Users'],
+    }),
     getAdminCountries: builder.query<AdminCountry[], void>({
       query: () => '/geo/admin/countries',
       providesTags: ['AdminCountries'],
@@ -2132,6 +2193,9 @@ export const {
   useDeleteUserMutation,
   useRequestAdminWalletAdjustmentOtpMutation,
   useCreateAdminWalletAdjustmentMutation,
+  useGetAdminTrainerRecordingsQuery,
+  useRequestRecordingAuditClawbackOtpMutation,
+  useAuditRecordingMutation,
   useRequestTrainingPayoutOtpMutation,
   useCreateTrainingPayoutMutation,
   useGetAdminCountriesQuery,

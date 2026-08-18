@@ -477,6 +477,8 @@ model Submission {
   scoredAt          DateTime?
   settledAt         DateTime?
   refundedAt        DateTime?        // set once settlement-job has released a REJECTED submission's lock back to balance
+  adminAuditStatus  AdminAuditStatus? // null = not yet reviewed; see AdminAuditStatus doc comment
+  adminAuditedAt    DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
@@ -583,6 +585,17 @@ enum RecordingNoiseRating {
   QUIET
 }
 
+/// Admin manual audit outcome for a Submission/WordRecording -- distinct from
+/// isOutlier (Submission-only, machine-set by consensus-scorer as a QA hint)
+/// and rejectionReason (machine-set ASR prefilter). Null means not yet
+/// reviewed. Set via WalletController's admin recording-audit routes, which
+/// call adjustAdminWallet for a payout clawback when an admin marks an
+/// already-paid-out recording INVALID and opts into reclaiming it.
+enum AdminAuditStatus {
+  VALID
+  INVALID
+}
+
 model TrainingSession {
   id             String   @id @default(uuid())
   userId         String
@@ -675,6 +688,8 @@ model WordRecording {
   scoredAt          DateTime?
   settledAt         DateTime?
   refundedAt        DateTime? // set once settlement-job releases a stuck-timeout ENGLISH_TO_DIALECT recording's lock back to balance
+  adminAuditStatus  AdminAuditStatus? // null = not yet reviewed; see AdminAuditStatus doc comment
+  adminAuditedAt    DateTime?
   createdAt         DateTime @default(now())
 
   @@index([wordId])
