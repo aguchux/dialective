@@ -982,9 +982,17 @@ export interface SubmissionsPage {
 export type AdminAuditStatus = 'VALID' | 'INVALID';
 export type RecordingKind = 'word' | 'submission';
 
+export interface AdminRecordingTrainer {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+}
+
 export interface AdminRecordingSummary {
   id: string;
   kind: RecordingKind;
+  trainer?: AdminRecordingTrainer | null;
   direction: 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD' | null;
   promptText: string;
   responseText: string | null;
@@ -1021,6 +1029,23 @@ export interface AuditRecordingResult {
   adminAuditStatus: AdminAuditStatus;
   adminAuditedAt: string;
   clawedBack: boolean;
+}
+
+export type RecordingSortField = 'createdAt' | 'score' | 'compositeScore' | 'rawScore' | 'payoutTokenAmount';
+
+export interface ListAllRecordingsParams {
+  kind: RecordingKind;
+  page: number;
+  pageSize: number;
+  sortBy?: RecordingSortField;
+  sortDir?: 'asc' | 'desc';
+  search?: string;
+  dialectTag?: string;
+  status?: AdminRecordingSummary['status'];
+  adminAuditStatus?: AdminAuditStatus;
+  reviewState?: 'unreviewed';
+  minScore?: number;
+  maxScore?: number;
 }
 
 export type PartOfSpeech =
@@ -1910,6 +1935,10 @@ export const dialectivaApi = createApi({
       query: ({ trainerId, page, pageSize }) => ({ url: `/admin-recordings/trainers/${trainerId}`, params: { page, pageSize } }),
       providesTags: (_result, _error, { trainerId }) => [{ type: 'AdminRecordings', id: trainerId }],
     }),
+    getAdminAllRecordings: builder.query<AdminRecordingsPage, ListAllRecordingsParams>({
+      query: (params) => ({ url: '/admin-recordings', params }),
+      providesTags: ['AdminRecordings'],
+    }),
     requestRecordingAuditClawbackOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
       { kind: RecordingKind; id: string }
@@ -1918,10 +1947,11 @@ export const dialectivaApi = createApi({
     }),
     auditRecording: builder.mutation<
       AuditRecordingResult,
-      { kind: RecordingKind; id: string; status: AdminAuditStatus; clawback?: boolean; otpRequestId?: string; code?: string; trainerId: string }
+      { kind: RecordingKind; id: string; status: AdminAuditStatus; clawback?: boolean; otpRequestId?: string; code?: string; trainerId?: string }
     >({
       query: ({ kind, id, trainerId: _trainerId, ...body }) => ({ url: `/admin-recordings/${kind}/${id}/audit`, method: 'POST', body }),
-      invalidatesTags: (_result, _error, { trainerId }) => [{ type: 'AdminRecordings', id: trainerId }, 'Wallet', 'Users'],
+      invalidatesTags: (_result, _error, { trainerId }) =>
+        trainerId ? [{ type: 'AdminRecordings', id: trainerId }, 'AdminRecordings', 'Wallet', 'Users'] : ['AdminRecordings', 'Wallet', 'Users'],
     }),
     getAdminCountries: builder.query<AdminCountry[], void>({
       query: () => '/geo/admin/countries',
@@ -2194,6 +2224,7 @@ export const {
   useRequestAdminWalletAdjustmentOtpMutation,
   useCreateAdminWalletAdjustmentMutation,
   useGetAdminTrainerRecordingsQuery,
+  useGetAdminAllRecordingsQuery,
   useRequestRecordingAuditClawbackOtpMutation,
   useAuditRecordingMutation,
   useRequestTrainingPayoutOtpMutation,

@@ -125,7 +125,7 @@ export function RecordingAuditDialog({
   );
 }
 
-function RecordingCard({ recording, trainerId }: { recording: AdminRecordingSummary; trainerId: string }) {
+export function RecordingCard({ recording, trainerId }: { recording: AdminRecordingSummary; trainerId?: string }) {
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -309,6 +309,52 @@ function RecordingCard({ recording, trainerId }: { recording: AdminRecordingSumm
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Single-record counterpart to RecordingAuditDialog's carousel -- used by
+ * the platform-wide "all recordings" datatable, where a row action opens
+ * just that one recording (no trainer-scoped pagination) for instant
+ * playback + audit.
+ */
+export function RecordingDetailDialog({
+  recording,
+  onOpenChange,
+  open,
+}: {
+  recording: AdminRecordingSummary | null;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  if (!open || !recording) return null;
+
+  return (
+    <RadixDialog.Root open onOpenChange={onOpenChange}>
+      <RadixDialog.Portal>
+        <RadixDialog.Overlay className="fixed inset-0 z-[950] bg-black/90" />
+        <RadixDialog.Content
+          className="fixed inset-0 z-[960] flex flex-col overflow-hidden bg-[#111] text-white focus:outline-none"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <RadixDialog.Title className="sr-only">Audit recording</RadixDialog.Title>
+
+          <header className="flex items-center justify-between gap-3 border-b border-white/10 p-4">
+            <p className="truncate text-lg font-black">Recording audit</p>
+            <RadixDialog.Close
+              aria-label="Close"
+              className="grid size-9 place-items-center rounded-full bg-white/10 transition-colors hover:bg-white/20"
+            >
+              <X className="size-5" aria-hidden="true" />
+            </RadixDialog.Close>
+          </header>
+
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-4 md:p-8">
+            <RecordingCard key={recording.id} recording={recording} trainerId={recording.trainer?.id} />
+          </div>
+        </RadixDialog.Content>
+      </RadixDialog.Portal>
+    </RadixDialog.Root>
   );
 }
 

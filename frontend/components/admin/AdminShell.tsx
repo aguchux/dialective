@@ -22,6 +22,7 @@ const navItems = [
   { href: '/admin/data-access', label: 'Data Access Leads', icon: LeadsIcon },
   { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
   { href: '/admin/words', label: 'Words', icon: WordsIcon },
+  { href: '/admin/recordings', label: 'Recordings', icon: RecordingsIcon },
   { href: '/admin/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
   { href: '/admin/referrals', label: 'Referrals', icon: ReferralIcon },
   { href: '/admin/p2p', label: 'P2P Market', icon: P2PIcon },
@@ -305,6 +306,17 @@ function WithdrawalsIcon() {
       <path d="M12 3v14" strokeLinecap="round" />
       <path d="m6 11 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M4 21h16" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function RecordingsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 10a7 7 0 0 0 14 0" strokeLinecap="round" />
+      <path d="M12 17v4" strokeLinecap="round" />
+      <path d="M8 21h8" strokeLinecap="round" />
     </svg>
   );
 }

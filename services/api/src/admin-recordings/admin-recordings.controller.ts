@@ -5,6 +5,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AdminRecordingsService, RecordingKind } from './admin-recordings.service';
 import { ListTrainerRecordingsDto } from './dto/list-trainer-recordings.dto';
+import { ListAllRecordingsDto } from './dto/list-all-recordings.dto';
 import { AuditRecordingDto } from './dto/audit-recording.dto';
 
 const RECORDING_KINDS: RecordingKind[] = ['word', 'submission'];
@@ -14,6 +15,11 @@ const RECORDING_KINDS: RecordingKind[] = ['word', 'submission'];
 @Roles(Role.ADMIN)
 export class AdminRecordingsController {
   constructor(private readonly recordings: AdminRecordingsService) {}
+
+  @Get()
+  listAll(@Query() query: ListAllRecordingsDto) {
+    return this.recordings.listAll(query);
+  }
 
   @Get('trainers/:trainerId')
   listForTrainer(@Param('trainerId') trainerId: string, @Query() query: ListTrainerRecordingsDto) {

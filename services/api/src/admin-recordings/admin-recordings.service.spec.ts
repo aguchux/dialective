@@ -16,8 +16,18 @@ describe('AdminRecordingsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma = {
-      wordRecording: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn(), update: jest.fn() },
-      submission: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn(), update: jest.fn() },
+      wordRecording: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      submission: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+      },
       user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'admin-1', email: 'admin@example.com' }) },
     };
     storage = { createPresignedDownloadUrl: jest.fn().mockResolvedValue({ url: 'https://signed.example/audio' }) };
@@ -73,6 +83,64 @@ describe('AdminRecordingsService', () => {
 
       const page2 = await service.listForTrainer('trainer-1', { page: 2, pageSize: 2 });
       expect(page2.items).toHaveLength(1);
+    });
+  });
+
+  describe('listAll', () => {
+    it('queries word recordings with DB-level pagination, sort, and where filters', async () => {
+      prisma.wordRecording.findMany.mockResolvedValue([]);
+      prisma.wordRecording.count.mockResolvedValue(0);
+
+      await service.listAll({
+        kind: 'word',
+        page: 2,
+        pageSize: 10,
+        sortBy: 'score',
+        sortDir: 'asc',
+        dialectTag: 'ig',
+        minScore: 50,
+      } as never);
+
+      expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ dialectTag: 'ig', score: { gte: 50 } }),
+          orderBy: { score: 'asc' },
+          skip: 10,
+          take: 10,
+        }),
+      );
+      expect(prisma.submission.findMany).not.toHaveBeenCalled();
+    });
+
+    it('queries submissions when kind is submission and applies the unreviewed filter', async () => {
+      prisma.submission.findMany.mockResolvedValue([]);
+      prisma.submission.count.mockResolvedValue(0);
+
+      await service.listAll({ kind: 'submission', page: 1, pageSize: 20, sortBy: 'createdAt', sortDir: 'desc', reviewState: 'unreviewed' } as never);
+
+      expect(prisma.submission.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ adminAuditStatus: null }) }),
+      );
+    });
+
+    it('maps rows to summaries including the trainer info and reports total/totalPages', async () => {
+      prisma.submission.findMany.mockResolvedValue([
+        {
+          id: 'sub-1', createdAt: new Date('2026-01-01'), dialectTag: 'ig', transcript: 'hi',
+          prompt: { text: 'Say hi' }, audioBucket: 'b', audioKey: 'k', status: 'SETTLED',
+          tokensSpent: { toString: () => '1' }, rawScore: null, score: null, noiseScore: null, qualityScore: null,
+          livenessScore: null, compositeScore: null, payoutTokenAmount: null, rejectionReason: null,
+          adminAuditStatus: null, adminAuditedAt: null, scoredAt: null, settledAt: null,
+          user: { id: 'trainer-1', email: 't@example.com', firstName: 'A', lastName: 'B' },
+        },
+      ]);
+      prisma.submission.count.mockResolvedValue(1);
+
+      const result = await service.listAll({ kind: 'submission', page: 1, pageSize: 20, sortBy: 'createdAt', sortDir: 'desc' } as never);
+
+      expect(result.total).toBe(1);
+      expect(result.totalPages).toBe(1);
+      expect(result.items[0].trainer).toEqual({ id: 'trainer-1', email: 't@example.com', firstName: 'A', lastName: 'B' });
     });
   });
 

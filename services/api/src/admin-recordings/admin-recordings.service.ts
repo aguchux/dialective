@@ -6,6 +6,7 @@ import { OtpService } from '../otp/otp.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { adminActionContextHash } from '../wallet/otp-context.util';
 import { ListTrainerRecordingsDto } from './dto/list-trainer-recordings.dto';
+import { ListAllRecordingsDto } from './dto/list-all-recordings.dto';
 import { AuditRecordingDto } from './dto/audit-recording.dto';
 
 export type RecordingKind = 'word' | 'submission';
@@ -68,6 +69,121 @@ export class AdminRecordingsService {
       pageSize: query.pageSize,
       total,
       totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+    };
+  }
+
+  /**
+   * Platform-wide recording list for the "all recordings" admin datatable --
+   * unlike listForTrainer, this queries potentially the whole table, so it
+   * uses real DB-level where/orderBy/skip/take rather than an in-memory
+   * merge+slice. Scoped to a single kind per request (word or submission):
+   * the two models have different filterable fields (direction vs none,
+   * word vs prompt text), so a combined view would need a UNION and a
+   * lowest-common-denominator filter set for little benefit -- the frontend
+   * tab switches kind instead.
+   */
+  async listAll(query: ListAllRecordingsDto) {
+    const skip = (query.page - 1) * query.pageSize;
+    const orderBy = { [query.sortBy]: query.sortDir };
+
+    if (query.kind === 'word') {
+      const where = this.buildWordRecordingWhere(query);
+      const [rows, total] = await Promise.all([
+        this.prisma.wordRecording.findMany({
+          where,
+          orderBy,
+          skip,
+          take: query.pageSize,
+          include: {
+            word: { select: { text: true } },
+            prompt: { select: { text: true } },
+            user: { select: { id: true, email: true, firstName: true, lastName: true } },
+          },
+        }),
+        this.prisma.wordRecording.count({ where }),
+      ]);
+      const items = await Promise.all(rows.map((row) => this.toWordRecordingSummary(row, row.user)));
+      return this.paginated(items, query, total);
+    }
+
+    const where = this.buildSubmissionWhere(query);
+    const [rows, total] = await Promise.all([
+      this.prisma.submission.findMany({
+        where,
+        orderBy,
+        skip,
+        take: query.pageSize,
+        include: {
+          prompt: { select: { text: true } },
+          user: { select: { id: true, email: true, firstName: true, lastName: true } },
+        },
+      }),
+      this.prisma.submission.count({ where }),
+    ]);
+    const items = await Promise.all(rows.map((row) => this.toSubmissionSummary(row, row.user)));
+    return this.paginated(items, query, total);
+  }
+
+  private paginated<T>(items: T[], query: ListAllRecordingsDto, total: number) {
+    return {
+      items,
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+    };
+  }
+
+  private buildScoreRange(query: ListAllRecordingsDto) {
+    if (query.minScore === undefined && query.maxScore === undefined) return undefined;
+    const range: { gte?: number; lte?: number } = {};
+    if (query.minScore !== undefined) range.gte = query.minScore;
+    if (query.maxScore !== undefined) range.lte = query.maxScore;
+    return range;
+  }
+
+  private buildAuditFilter(query: ListAllRecordingsDto) {
+    if (query.reviewState === 'unreviewed') return null;
+    if (query.adminAuditStatus) return query.adminAuditStatus;
+    return undefined;
+  }
+
+  private buildWordRecordingWhere(query: ListAllRecordingsDto) {
+    const scoreRange = this.buildScoreRange(query);
+    const auditFilter = this.buildAuditFilter(query);
+    return {
+      ...(query.dialectTag ? { dialectTag: query.dialectTag } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(auditFilter !== undefined ? { adminAuditStatus: auditFilter } : {}),
+      ...(scoreRange ? { score: scoreRange } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { word: { text: { contains: query.search, mode: 'insensitive' as const } } },
+              { prompt: { text: { contains: query.search, mode: 'insensitive' as const } } },
+              { translationText: { contains: query.search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+  }
+
+  private buildSubmissionWhere(query: ListAllRecordingsDto) {
+    const scoreRange = this.buildScoreRange(query);
+    const auditFilter = this.buildAuditFilter(query);
+    return {
+      ...(query.dialectTag ? { dialectTag: query.dialectTag } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(auditFilter !== undefined ? { adminAuditStatus: auditFilter } : {}),
+      ...(scoreRange ? { score: scoreRange } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { prompt: { text: { contains: query.search, mode: 'insensitive' as const } } },
+              { transcript: { contains: query.search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
     };
   }
 
@@ -140,10 +256,12 @@ export class AdminRecordingsService {
       word: { text: string } | null;
       prompt: { text: string } | null;
     },
+    trainer?: { id: string; email: string; firstName: string | null; lastName: string | null } | null,
   ) {
     return {
       id: recording.id,
       kind: 'word' as const,
+      trainer: trainer ? { id: trainer.id, email: trainer.email, firstName: trainer.firstName, lastName: trainer.lastName } : null,
       direction: recording.direction,
       promptText:
         recording.direction === 'SENTENCE_REBUILD'
@@ -179,10 +297,12 @@ export class AdminRecordingsService {
     submission: Awaited<ReturnType<AdminRecordingsService['prisma']['submission']['findMany']>>[number] & {
       prompt: { text: string };
     },
+    trainer?: { id: string; email: string; firstName: string | null; lastName: string | null } | null,
   ) {
     return {
       id: submission.id,
       kind: 'submission' as const,
+      trainer: trainer ? { id: trainer.id, email: trainer.email, firstName: trainer.firstName, lastName: trainer.lastName } : null,
       direction: null,
       promptText: submission.prompt.text,
       responseText: submission.transcript,
