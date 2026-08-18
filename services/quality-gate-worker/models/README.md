@@ -28,3 +28,16 @@ split) before `PlatformSettings.qualityGateEnabled` is ever turned on in
 production, per the plan's phased rollout (Phase 0 ships with the gate
 disabled specifically to allow this to happen without blocking the rest
 of the pipeline).
+
+**Regenerated 2026-08-18**: the committed artifact had been pickled
+against an older scikit-learn than the `scikit-learn==1.5.1` pinned in
+`requirements.txt`, so every `predict_proba` call in production crashed
+with `AttributeError: 'LogisticRegression' object has no attribute
+'multi_class'` — meaning noise/quality/liveness scores were never
+successfully written for any WordRecording or Submission row. Re-ran
+`train_placeholder.py` against the exact deployed image's Python/sklearn
+environment to produce a fresh, load-compatible placeholder. If this
+happens again after a `scikit-learn` version bump in `requirements.txt`,
+re-run this script the same way (inside a pod built from the updated
+image, not a local environment) rather than assuming the pinned version
+alone guarantees pickle compatibility.
