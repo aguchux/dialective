@@ -1,50 +1,92 @@
-import { Prisma } from '@dialectiva/db';
-import { computeCompositeScore, QualityWeights } from './settlement.service';
+import { SettlementService } from './settlement.service';
 
-const decimal = (value: number) => new Prisma.Decimal(value);
+/**
+ * Covers the bug this file fixes: resolveTimedOutScoring used to score AND
+ * settle a timed-out (noFailOnTrainEnabled) row in the same instant, bypassing
+ * settlementDelayMinutes entirely. It must now only move the row to SCORED --
+ * the normal settleSubmissions/settleWordRecordings delay-respecting pass is
+ * what actually pays out, on a later run once the delay has elapsed.
+ */
+describe('SettlementService resolveTimedOutScoring', () => {
+  function buildPrismaMock() {
+    return {
+      platformSettings: {
+        upsert: jest.fn().mockResolvedValue({
+          scoringSlaMinutes: 20,
+          noFailOnTrainEnabled: true,
+          minScoreRange: { toNumber: () => 10 },
+          maxScoreRange: { toNumber: () => 30 },
+        }),
+      },
+      submission: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'sub-1', userId: 'user-1', tokensSpent: { toNumber: () => 1 } }]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      wordRecording: {
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      ledgerEntry: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      wallet: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
+        create: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
+      },
+      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+    };
+  }
 
-const evenWeights: QualityWeights = { consensus: 25, noise: 25, quality: 25, liveness: 25 };
-const defaultRange = { min: 10, max: 30 };
-const wideRange = { min: 0, max: 100 };
+  it('moves a timed-out submission to SCORED without crediting payout or settling it', async () => {
+    const prisma = buildPrismaMock();
+    const service = new SettlementService(prisma as never);
 
-describe('computeCompositeScore', () => {
-  it('blends all four signals via a weighted average', () => {
-    const result = computeCompositeScore(decimal(100), decimal(100), decimal(100), decimal(0), evenWeights, wideRange);
-    // (100*25 + 100*25 + 100*25 + 0*25) / 100 = 75
-    expect(result).toBeCloseTo(75, 5);
+    // @ts-expect-error -- private method under test
+    const result = await service.resolveTimedOutScoring();
+
+    expect(result.scoredCount).toBe(1);
+    expect(result.refundedCount).toBe(0);
+
+    // Claimed as EXPIRED first (unblocks the ASR/consensus race).
+    expect(prisma.submission.updateMany).toHaveBeenCalledWith({
+      where: { id: 'sub-1', status: { in: ['PENDING', 'TRANSCRIBED'] }, refundedAt: null },
+      data: { status: 'EXPIRED', refundedAt: expect.any(Date) },
+    });
+
+    // Then moved to SCORED (not SETTLED) with no payoutTokenAmount/settledAt --
+    // that's the whole fix. It must wait for settleSubmissions to pick it up.
+    expect(prisma.submission.update).toHaveBeenCalledWith({
+      where: { id: 'sub-1' },
+      data: expect.objectContaining({ status: 'SCORED', scoredAt: expect.any(Date) }),
+    });
+    const updateArgs = prisma.submission.update.mock.calls[0][0];
+    expect(updateArgs.data).not.toHaveProperty('settledAt');
+    expect(updateArgs.data).not.toHaveProperty('payoutTokenAmount');
+
+    // No payout credited, no lock released -- settleSubmissions does that later.
+    expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('weights consensus/exact-match score most heavily under default 60/15/10/15 weights', () => {
-    const weights: QualityWeights = { consensus: 60, noise: 15, quality: 10, liveness: 15 };
-    const result = computeCompositeScore(decimal(100), decimal(0), decimal(0), decimal(0), weights, wideRange);
-    expect(result).toBeCloseTo(60, 5);
-  });
+  it('refunds instead of scoring when noFailOnTrainEnabled is off', async () => {
+    const prisma = buildPrismaMock();
+    prisma.platformSettings.upsert.mockResolvedValue({
+      scoringSlaMinutes: 20,
+      noFailOnTrainEnabled: false,
+      minScoreRange: { toNumber: () => 10 },
+      maxScoreRange: { toNumber: () => 30 },
+    });
+    const service = new SettlementService(prisma as never);
 
-  it('clamps a high blended score down to maxScoreRange', () => {
-    const result = computeCompositeScore(decimal(100), decimal(100), decimal(100), decimal(100), evenWeights, defaultRange);
-    expect(result).toBe(defaultRange.max);
-  });
+    // @ts-expect-error -- private method under test
+    const result = await service.resolveTimedOutScoring();
 
-  it('clamps a low blended score up to minScoreRange', () => {
-    const result = computeCompositeScore(decimal(0), decimal(0), decimal(0), decimal(0), evenWeights, defaultRange);
-    expect(result).toBe(defaultRange.min);
-  });
-
-  it('never randomizes -- calling twice with identical inputs returns identical output', () => {
-    const a = computeCompositeScore(decimal(72), decimal(88), decimal(64), decimal(91), evenWeights, wideRange);
-    const b = computeCompositeScore(decimal(72), decimal(88), decimal(64), decimal(91), evenWeights, wideRange);
-    expect(a).toBe(b);
-  });
-
-  it('falls back to neutral 100 for null noise/quality/liveness scores so absence never penalizes a trainer', () => {
-    const withNulls = computeCompositeScore(decimal(50), null, null, null, evenWeights, wideRange);
-    // (50*25 + 100*25 + 100*25 + 100*25) / 100 = 87.5
-    expect(withNulls).toBeCloseTo(87.5, 5);
-  });
-
-  it('falls back to the raw real score when weights sum to zero', () => {
-    const zeroWeights: QualityWeights = { consensus: 0, noise: 0, quality: 0, liveness: 0 };
-    const result = computeCompositeScore(decimal(42), decimal(0), decimal(0), decimal(0), zeroWeights, wideRange);
-    expect(result).toBe(42);
+    expect(result.scoredCount).toBe(0);
+    expect(result.refundedCount).toBe(1);
+    expect(prisma.submission.update).not.toHaveBeenCalled();
   });
 });

@@ -360,6 +360,82 @@ describe('WalletController earning history', () => {
   });
 });
 
+describe('WalletController admin leaderboard', () => {
+  it('ranks earners by task payout ledger totals and contributors by submitted task count', async () => {
+    const prisma = {
+      ledgerEntry: {
+        // Already in the order Postgres's orderBy: { _sum: { amount: 'desc' } }
+        // would return -- the controller no longer re-sorts this in JS.
+        groupBy: jest.fn().mockResolvedValue([
+          { walletId: 'wallet-high', _sum: { amount: 30 }, _count: { _all: 2 } },
+          { walletId: 'wallet-low', _sum: { amount: 12 }, _count: { _all: 1 } },
+        ]),
+      },
+      wordRecording: {
+        groupBy: jest.fn().mockResolvedValue([
+          { userId: 'user-a', _count: { _all: 2 } },
+          { userId: 'user-b', _count: { _all: 4 } },
+        ]),
+      },
+      submission: {
+        groupBy: jest.fn().mockResolvedValue([
+          { userId: 'user-a', _count: { _all: 5 } },
+          { userId: null, _count: { _all: 99 } },
+        ]),
+      },
+      wallet: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'wallet-high', user: { id: 'earner-high', firstName: 'High', lastName: 'Earner', email: 'high@example.com', role: 'TRAINER' } },
+          { id: 'wallet-low', user: { id: 'earner-low', firstName: 'Low', lastName: 'Earner', email: 'low@example.com', role: 'TRAINER' } },
+        ]),
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'user-a', firstName: 'Ada', lastName: 'Tasks', email: 'ada@example.com', role: 'TRAINER' },
+          { id: 'user-b', firstName: 'Ben', lastName: 'Words', email: 'ben@example.com', role: 'TRAINER' },
+        ]),
+      },
+    };
+    const controller = new WalletController(prisma as never, {} as never, {} as never, {} as never, {} as never);
+
+    await expect(controller.getAdminLeaderboard()).resolves.toEqual({
+      topEarners: [
+        {
+          user: { id: 'earner-high', firstName: 'High', lastName: 'Earner', email: 'high@example.com', role: 'TRAINER' },
+          totalEarned: '30',
+          payoutCount: 2,
+        },
+        {
+          user: { id: 'earner-low', firstName: 'Low', lastName: 'Earner', email: 'low@example.com', role: 'TRAINER' },
+          totalEarned: '12',
+          payoutCount: 1,
+        },
+      ],
+      topContributors: [
+        {
+          user: { id: 'user-a', firstName: 'Ada', lastName: 'Tasks', email: 'ada@example.com', role: 'TRAINER' },
+          totalTasks: 7,
+          wordRecordings: 2,
+          submissions: 5,
+        },
+        {
+          user: { id: 'user-b', firstName: 'Ben', lastName: 'Words', email: 'ben@example.com', role: 'TRAINER' },
+          totalTasks: 4,
+          wordRecordings: 4,
+          submissions: 0,
+        },
+      ],
+    });
+    expect(prisma.ledgerEntry.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { type: 'TRAINING_PAYOUT', amount: { gt: 0 } },
+        orderBy: { _sum: { amount: 'desc' } },
+        take: 10,
+      }),
+    );
+  });
+});
+
 describe('WalletController admin training payouts', () => {
   function setup() {
     (creditAdminFunding as jest.Mock).mockReset().mockResolvedValue({

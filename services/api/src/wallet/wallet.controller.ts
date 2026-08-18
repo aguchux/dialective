@@ -1392,6 +1392,98 @@ export class WalletController {
     };
   }
 
+  @Get('admin/leaderboard')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getAdminLeaderboard() {
+    const [sortedEarners, wordContributorTotals, submissionContributorTotals] = await Promise.all([
+      // Sorted/limited by Postgres, not in JS -- groupBy supports orderBy on
+      // the same aggregate it computes, so this stays a single indexed scan
+      // even once ledger_entries has millions of rows, unlike pulling every
+      // wallet's total into memory just to keep the top 10.
+      this.prisma.ledgerEntry.groupBy({
+        by: ['walletId'],
+        where: { type: LedgerEntryType.TRAINING_PAYOUT, amount: { gt: 0 } },
+        _sum: { amount: true },
+        _count: { _all: true },
+        orderBy: { _sum: { amount: 'desc' } },
+        take: 10,
+      }),
+      this.prisma.wordRecording.groupBy({
+        by: ['userId'],
+        _count: { _all: true },
+      }),
+      this.prisma.submission.groupBy({
+        by: ['userId'],
+        _count: { _all: true },
+      }),
+    ]);
+
+    const earnerWalletIds = sortedEarners.map((entry) => entry.walletId);
+
+    const contributorCounts = new Map<string, { wordRecordings: number; submissions: number }>();
+    for (const entry of wordContributorTotals) {
+      if (!entry.userId) continue;
+      contributorCounts.set(entry.userId, {
+        wordRecordings: entry._count._all,
+        submissions: contributorCounts.get(entry.userId)?.submissions ?? 0,
+      });
+    }
+    for (const entry of submissionContributorTotals) {
+      if (!entry.userId) continue;
+      contributorCounts.set(entry.userId, {
+        wordRecordings: contributorCounts.get(entry.userId)?.wordRecordings ?? 0,
+        submissions: entry._count._all,
+      });
+    }
+
+    const sortedContributorIds = [...contributorCounts.entries()]
+      .sort(([, a], [, b]) => b.wordRecordings + b.submissions - (a.wordRecordings + a.submissions))
+      .slice(0, 10)
+      .map(([userId]) => userId);
+
+    const [earnerWallets, contributorUsers] = await Promise.all([
+      this.prisma.wallet.findMany({
+        where: { id: { in: earnerWalletIds } },
+        include: { user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } },
+      }),
+      this.prisma.user.findMany({
+        where: { id: { in: sortedContributorIds } },
+        select: { id: true, firstName: true, lastName: true, email: true, role: true },
+      }),
+    ]);
+
+    const walletById = new Map(earnerWallets.map((wallet) => [wallet.id, wallet]));
+    const userById = new Map(contributorUsers.map((user) => [user.id, user]));
+
+    return {
+      topEarners: sortedEarners.flatMap((entry) => {
+        const wallet = walletById.get(entry.walletId);
+        if (!wallet) return [];
+        return [
+          {
+            user: wallet.user,
+            totalEarned: entry._sum.amount?.toString() ?? '0',
+            payoutCount: entry._count._all,
+          },
+        ];
+      }),
+      topContributors: sortedContributorIds.flatMap((userId) => {
+        const user = userById.get(userId);
+        const counts = contributorCounts.get(userId);
+        if (!user || !counts) return [];
+        return [
+          {
+            user,
+            totalTasks: counts.wordRecordings + counts.submissions,
+            wordRecordings: counts.wordRecordings,
+            submissions: counts.submissions,
+          },
+        ];
+      }),
+    };
+  }
+
   // --- Referral settings / payouts (admin) ---------------------------------
 
   @Get('admin/referral-settings')

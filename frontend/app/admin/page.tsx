@@ -18,13 +18,14 @@ import {
   PiggyBank,
   ShieldCheck,
   Sparkles,
+  Trophy,
   Users,
   WalletCards,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { formatCompactTokens, formatCompactUsd } from '@/lib/format';
-import { useGetAdminStatsQuery, useGetReferralsQuery } from '@/store/api';
+import { useGetAdminLeaderboardQuery, useGetAdminStatsQuery, useGetReferralsQuery } from '@/store/api';
 
 type StatTone = 'blue' | 'purple' | 'green' | 'amber' | 'cyan' | 'rose';
 
@@ -48,6 +49,7 @@ const toneClass: Record<StatTone, string> = {
 
 export default function AdminDashboardPage() {
   const { data: stats, isLoading } = useGetAdminStatsQuery();
+  const { data: leaderboard, isLoading: isLeaderboardLoading } = useGetAdminLeaderboardQuery();
   const { data: referrals } = useGetReferralsQuery();
   const loadingValue = isLoading ? '...' : '-';
 
@@ -293,6 +295,37 @@ export default function AdminDashboardPage() {
         <MetricSection cards={trainingCards} title="Training pipeline" />
         <MetricSection cards={economyCards} title="DL economy" />
 
+        <section className="grid gap-4 lg:grid-cols-2" aria-label="Earning leaderboard">
+          <LeaderboardPanel
+            emptyLabel="No task payouts yet."
+            icon={BadgeDollarSign}
+            loading={isLeaderboardLoading}
+            rows={leaderboard?.topEarners.map((entry) => ({
+              id: entry.user.id,
+              name: displayName(entry.user),
+              email: entry.user.email,
+              meta: `${entry.payoutCount.toLocaleString()} payout${entry.payoutCount === 1 ? '' : 's'}`,
+              value: formatCompactTokens(entry.totalEarned),
+              valueLabel: 'DL earned',
+            }))}
+            title="Top earners"
+          />
+          <LeaderboardPanel
+            emptyLabel="No submitted tasks yet."
+            icon={Trophy}
+            loading={isLeaderboardLoading}
+            rows={leaderboard?.topContributors.map((entry) => ({
+              id: entry.user.id,
+              name: displayName(entry.user),
+              email: entry.user.email,
+              meta: `${entry.wordRecordings.toLocaleString()} words, ${entry.submissions.toLocaleString()} sentences`,
+              value: entry.totalTasks.toLocaleString(),
+              valueLabel: 'tasks',
+            }))}
+            title="Top contributors"
+          />
+        </section>
+
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="grid content-start gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
             <h2 className="text-lg font-black">Operations queue</h2>
@@ -363,6 +396,65 @@ function QueueItem({ label, value }: { label: string; value: string }) {
       <p className="mt-2 text-2xl font-black">{value}</p>
     </div>
   );
+}
+
+function LeaderboardPanel({
+  emptyLabel,
+  icon: Icon,
+  loading,
+  rows,
+  title,
+}: {
+  emptyLabel: string;
+  icon: LucideIcon;
+  loading: boolean;
+  rows:
+    | {
+        id: string;
+        name: string;
+        email: string;
+        meta: string;
+        value: string;
+        valueLabel: string;
+      }[]
+    | undefined;
+  title: string;
+}) {
+  return (
+    <div className="grid content-start gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-black">{title}</h2>
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#efe8fe] text-[#7B3BF0]">
+          <Icon className="size-4" aria-hidden="true" />
+        </span>
+      </div>
+      <div className="grid gap-3">
+        {loading && <p className="text-muted">Loading...</p>}
+        {!loading && rows?.length === 0 && <p className="text-muted">{emptyLabel}</p>}
+        {rows?.map((row, index) => (
+          <div className="grid gap-3 rounded-lg border border-line bg-surface p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center" key={row.id}>
+            <div className="grid size-9 place-items-center rounded-full bg-white text-sm font-black text-accent shadow-sm">
+              {index + 1}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate font-extrabold">{row.name}</p>
+              <p className="truncate text-sm text-muted">{row.email}</p>
+              <p className="text-xs font-bold text-muted">{row.meta}</p>
+            </div>
+            <div className="text-left sm:text-right">
+              <p className="text-lg font-black">{row.value}</p>
+              <p className="text-xs font-bold text-muted">{row.valueLabel}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function displayName(user: { firstName: string | null; lastName: string | null; email: string }) {
+  const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+  return name || user.email;
 }
 
 function formatCount(value: number): string {

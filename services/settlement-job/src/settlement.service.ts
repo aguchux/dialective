@@ -20,7 +20,7 @@ export interface QualityWeights {
  * three signals (weighted average, admin-configurable weights), then clamps
  * the result into [minScoreRange, maxScoreRange] -- the same range the
  * no-fail-on-train synthetic-timeout path already respects (see
- * settleWithSyntheticScore's randomInRange). Unlike that path, this is a
+ * scoreWithSyntheticScore's randomInRange). Unlike that path, this is a
  * deterministic computation from real signals, never a random draw. Missing
  * noise/quality/liveness scores (gate disabled when the row was created, or
  * the async worker hasn't written them yet) fall back to a neutral 100 so
@@ -92,11 +92,11 @@ export class SettlementService {
     );
     const rejectedRefundCount = await this.refundRejectedSubmissions();
     const stuckRefundCount = await this.refundStuckWordRecordings();
-    const timeoutResult = await this.resolveTimedOutScoring(bonusCapMultiple);
+    const timeoutResult = await this.resolveTimedOutScoring();
 
-    const settledCount = submissionResult.settledCount + wordRecordingResult.settledCount + timeoutResult.settledCount;
+    const settledCount = submissionResult.settledCount + wordRecordingResult.settledCount;
     const eligibleCount = submissionResult.eligibleCount + wordRecordingResult.eligibleCount;
-    const totalPayout = submissionResult.totalPayout + wordRecordingResult.totalPayout + timeoutResult.totalPayout;
+    const totalPayout = submissionResult.totalPayout + wordRecordingResult.totalPayout;
 
     if (rejectedRefundCount > 0 || stuckRefundCount > 0 || timeoutResult.refundedCount > 0) {
       this.logger.log(
@@ -104,8 +104,11 @@ export class SettlementService {
           `scoringTimeout=${timeoutResult.refundedCount}`,
       );
     }
-    if (timeoutResult.settledCount > 0) {
-      this.logger.log(`Synthetic-scored ${timeoutResult.settledCount} timed-out task(s) via noFailOnTrain`);
+    if (timeoutResult.scoredCount > 0) {
+      this.logger.log(
+        `Synthetic-scored ${timeoutResult.scoredCount} timed-out task(s) via noFailOnTrain -- ` +
+          `will settle after settlementDelayMinutes on a future run`,
+      );
     }
 
     if (eligibleCount === 0) {
@@ -405,13 +408,14 @@ export class SettlementService {
    * noFailOnTrainEnabled is off, this is a plain refund (same shape as
    * refundRejectedSubmissions/refundStuckWordRecordings -- stake back, no
    * bonus). When on, the trainer did complete and submit real work, so
-   * instead of a bare refund they're paid via the *same* no-loss formula
-   * every other scored task uses (computeTrainingPayout, same
-   * bonusCapMultiple), fed a synthetic score drawn uniformly from
-   * [minScoreRange, maxScoreRange] -- this guarantees payment without
-   * requiring a real consensus/exact-match/reverse-validation result.
+   * instead of a bare refund it's given a synthetic score drawn uniformly
+   * from [minScoreRange, maxScoreRange] and moved to SCORED (not straight to
+   * SETTLED) -- this hands it to the normal settleSubmissions/
+   * settleWordRecordings pass above, so it still waits out
+   * settlementDelayMinutes like every other scored row instead of paying out
+   * in the same instant it's scored.
    */
-  private async resolveTimedOutScoring(bonusCapMultiple: number) {
+  private async resolveTimedOutScoring() {
     const [slaMinutes, noFailEnabled, scoreRange] = await Promise.all([
       this.getScoringSlaMinutes(),
       this.isNoFailOnTrainEnabled(),
@@ -430,9 +434,8 @@ export class SettlementService {
       }),
     ]);
 
-    let settledCount = 0;
+    let scoredCount = 0;
     let refundedCount = 0;
-    let totalPayout = 0;
 
     for (const submission of timedOutSubmissions) {
       try {
@@ -450,16 +453,8 @@ export class SettlementService {
         if (claim.count === 0) continue;
 
         if (noFailEnabled) {
-          const payout = await this.settleWithSyntheticScore(
-            'submission',
-            submission.id,
-            submission.userId,
-            submission.tokensSpent,
-            scoreRange,
-            bonusCapMultiple,
-          );
-          settledCount += 1;
-          totalPayout += payout;
+          await this.scoreWithSyntheticScore('submission', submission.id, scoreRange);
+          scoredCount += 1;
         } else {
           await this.refundTokens(submission.userId, submission.tokensSpent, submission.id);
           refundedCount += 1;
@@ -482,16 +477,8 @@ export class SettlementService {
         if (claim.count === 0) continue;
 
         if (noFailEnabled) {
-          const payout = await this.settleWithSyntheticScore(
-            'wordRecording',
-            recording.id,
-            recording.userId,
-            recording.tokensSpent,
-            scoreRange,
-            bonusCapMultiple,
-          );
-          settledCount += 1;
-          totalPayout += payout;
+          await this.scoreWithSyntheticScore('wordRecording', recording.id, scoreRange);
+          scoredCount += 1;
         } else {
           await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
           refundedCount += 1;
@@ -503,39 +490,35 @@ export class SettlementService {
       }
     }
 
-    return { settledCount, refundedCount, totalPayout };
+    return { scoredCount, refundedCount };
   }
 
-  private async settleWithSyntheticScore(
+  /**
+   * Moves a timed-out (EXPIRED, noFailOnTrainEnabled) row to SCORED with a
+   * synthetic score -- it does NOT credit payout or touch locked tokens.
+   * That happens later, in settleSubmissions/settleWordRecordings, once
+   * settlementDelayMinutes has elapsed since this scoredAt -- the same path
+   * every real consensus/exact-match score goes through. See
+   * resolveTimedOutScoring's doc comment for why this was split out of what
+   * used to be a single score+settle step.
+   */
+  private async scoreWithSyntheticScore(
     kind: 'submission' | 'wordRecording',
     id: string,
-    userId: string,
-    tokensSpent: Prisma.Decimal,
     scoreRange: { min: number; max: number },
-    bonusCapMultiple: number,
-  ): Promise<number> {
+  ): Promise<void> {
     const score = randomInRange(scoreRange.min, scoreRange.max);
-    const payout = computeTrainingPayout(tokensSpent, score, bonusCapMultiple);
-    const { ops } = await creditTrainingPayoutOps(this.prisma, userId, payout, id);
-
-    const modelUpdate =
-      kind === 'submission'
-        ? this.prisma.submission.update({
-            where: { id },
-            data: { rawScore: score, score, status: 'SETTLED', scoredAt: new Date(), payoutTokenAmount: payout, settledAt: new Date() },
-          })
-        : this.prisma.wordRecording.update({
-            where: { id },
-            data: { rawScore: score, score, status: 'SETTLED', scoredAt: new Date(), payoutTokenAmount: payout, settledAt: new Date() },
-          });
-
-    // Legacy (pre-locking) rows never locked anything -- skip that decrement for them.
-    const lockOps = (await this.wasLocked(id))
-      ? [this.prisma.wallet.updateMany({ where: { userId }, data: { lockedBalance: { decrement: tokensSpent } } })]
-      : [];
-    await this.prisma.$transaction([...lockOps, ...ops, modelUpdate]);
-
-    return payout.toNumber();
+    if (kind === 'submission') {
+      await this.prisma.submission.update({
+        where: { id },
+        data: { rawScore: score, score, status: 'SCORED', scoredAt: new Date() },
+      });
+    } else {
+      await this.prisma.wordRecording.update({
+        where: { id },
+        data: { rawScore: score, score, status: 'SCORED', scoredAt: new Date() },
+      });
+    }
   }
 
   private async refundTokens(userId: string, tokensSpent: Prisma.Decimal, reference: string): Promise<void> {

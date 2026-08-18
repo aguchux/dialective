@@ -711,6 +711,28 @@ export interface AdminStats {
   draftBlogPostsCount: number;
 }
 
+export interface AdminLeaderboardUser {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR';
+}
+
+export interface AdminLeaderboard {
+  topEarners: {
+    user: AdminLeaderboardUser;
+    totalEarned: string;
+    payoutCount: number;
+  }[];
+  topContributors: {
+    user: AdminLeaderboardUser;
+    totalTasks: number;
+    wordRecordings: number;
+    submissions: number;
+  }[];
+}
+
 export interface PlatformSettings {
   tokenUsdRate: string | null;
   minWithdrawalTokens: string | null;
@@ -1713,6 +1735,9 @@ export const dialectivaApi = createApi({
     getAdminStats: builder.query<AdminStats, void>({
       query: () => '/admin/stats',
     }),
+    getAdminLeaderboard: builder.query<AdminLeaderboard, void>({
+      query: () => '/admin/leaderboard',
+    }),
     getAdminP2PSettings: builder.query<P2PMarketSettings, void>({
       query: () => '/p2p/admin/settings',
       providesTags: ['P2P'],
@@ -2052,6 +2077,7 @@ export const {
   useUpdateSubscriptionPoolMutation,
   useDeleteSubscriptionPoolMutation,
   useGetAdminStatsQuery,
+  useGetAdminLeaderboardQuery,
   useGetAdminP2PSettingsQuery,
   useUpdateAdminP2PSettingsMutation,
   useListAdminP2PTradesQuery,
