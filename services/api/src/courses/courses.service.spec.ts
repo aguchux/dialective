@@ -21,15 +21,39 @@ describe('CoursesService', () => {
       courseProgress: {
         findUnique: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
+        groupBy: jest.fn().mockResolvedValue([]),
         upsert: jest.fn(),
       },
       user: {
         findUnique: jest.fn().mockResolvedValue({ email: 'trainer@example.com' }),
+        count: jest.fn().mockResolvedValue(0),
       },
       $transaction: jest.fn(),
     };
     mail = { sendCourseCompletedEmail: jest.fn().mockResolvedValue(undefined) };
     service = new CoursesService(prisma, { notifyCoursePublished: jest.fn() } as any, mail as any);
+  });
+
+  describe('listAdmin', () => {
+    it('attaches completed/total trainer counts per course from a single groupBy, not N+1 queries', async () => {
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'course-1', title: 'Safety' },
+        { id: 'course-2', title: 'Optional' },
+      ]);
+      prisma.user.count.mockResolvedValue(10);
+      prisma.courseProgress.groupBy.mockResolvedValue([{ courseId: 'course-1', _count: { _all: 6 } }]);
+
+      const result = await service.listAdmin();
+
+      expect(result).toEqual([
+        { id: 'course-1', title: 'Safety', completedTrainerCount: 6, totalTrainerCount: 10 },
+        { id: 'course-2', title: 'Optional', completedTrainerCount: 0, totalTrainerCount: 10 },
+      ]);
+      expect(prisma.user.count).toHaveBeenCalledWith({ where: { role: 'TRAINER' } });
+      expect(prisma.courseProgress.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({ by: ['courseId'], where: { completedAt: { not: null } } }),
+      );
+    });
   });
 
   describe('getPublishedPreview', () => {

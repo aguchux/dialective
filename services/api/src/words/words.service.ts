@@ -78,6 +78,21 @@ export class WordsService {
     const session = await this.getOwnedSession(userId, sessionId);
     if (session.endedAt) throw new ConflictException('This training session has ended');
 
+    // startSession only checks once, at session creation -- sessions have no
+    // server-side TTL (see TrainingSession schema), so a trainer who was
+    // compliant when the session started, or whose session predates a
+    // course being marked required, could otherwise keep pulling new
+    // assignments indefinitely without the required-course gate ever firing
+    // again. Re-check here, the actual per-task chokepoint, not just at
+    // session start.
+    const incompleteRequired = await this.courses.getIncompleteRequiredCourses(userId);
+    if (incompleteRequired.length > 0) {
+      throw new ForbiddenException({
+        message: 'Complete the required course(s) below before you can continue training.',
+        requiredCourses: incompleteRequired,
+      });
+    }
+
     const trainer = await this.getTrainer(userId);
     const reverseEnabled = await this.settings.isReverseWordTrainingEnabled();
     const sentenceRebuildEnabled = await this.settings.isSentenceRebuildEnabled();

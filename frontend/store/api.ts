@@ -1207,6 +1207,11 @@ export interface Course {
   author: { email: string };
 }
 
+export interface AdminCourseListItem extends Course {
+  completedTrainerCount: number;
+  totalTrainerCount: number;
+}
+
 export interface CourseInput {
   title: string;
   summary: string;
@@ -1288,6 +1293,7 @@ export interface ApiErrorShape {
   error?: string;
   path?: string;
   timestamp?: string;
+  requiredCourses?: IncompleteRequiredCourse[];
 }
 
 function normalizeErrorMessage(error: unknown, fallback: string): string {
@@ -2066,7 +2072,7 @@ export const dialectivaApi = createApi({
     createBlogMediaUpload: builder.mutation<BlogMediaUpload, { fileName: string; contentType: string; kind: 'IMAGE' | 'VIDEO' }>({
       query: (body) => ({ url: '/blog/admin/media/upload-url', method: 'POST', body }),
     }),
-    getAdminCourses: builder.query<Course[], void>({
+    getAdminCourses: builder.query<AdminCourseListItem[], void>({
       query: () => '/courses/admin/courses',
       providesTags: ['Courses'],
     }),

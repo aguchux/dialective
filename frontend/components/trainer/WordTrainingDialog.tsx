@@ -61,6 +61,16 @@ function isNoWordsAvailable(err: unknown): boolean {
   return text === 'NO_WORDS_AVAILABLE';
 }
 
+// A course can be marked required (or a session can simply outlive the
+// moment startSession first checked -- sessions have no server-side TTL)
+// after this dialog was already open, so nextAssignment re-checks on every
+// call and 403s with this shape when it finds newly-incomplete required
+// courses -- see WordsService.nextAssignment.
+function extractRequiredCourses(err: unknown): { id: string; slug: string; title: string }[] | null {
+  const data = (err as { data?: ApiErrorShape } | undefined)?.data;
+  return data?.requiredCourses && data.requiredCourses.length > 0 ? data.requiredCourses : null;
+}
+
 type FlowStep = 'select' | 'terms' | 'loading' | 'training' | 'unavailable';
 type RecorderState = 'ready' | 'recording' | 'recorded' | 'playing' | 'paused' | 'submitting' | 'submitted';
 
@@ -69,6 +79,7 @@ export function WordTrainingDialog({
   onOpenChange,
   recordingTimeoutSeconds,
   recordingMaxTimeoutSeconds,
+  onRequiredCourses,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -76,6 +87,13 @@ export function WordTrainingDialog({
   recordingTimeoutSeconds?: number;
   /** Absolute ceiling on the round's total countdown after the per-word multiplication. */
   recordingMaxTimeoutSeconds?: number;
+  /**
+   * Fires when the server finds newly-incomplete required courses mid-
+   * session (nextAssignment re-checks on every call, not just at
+   * startSession) -- lets the parent close this dialog and reuse its own
+   * RequiredCoursesDialog instead of duplicating that UI here.
+   */
+  onRequiredCourses?: (courses: { id: string; slug: string; title: string }[]) => void;
 }) {
   const portalContainer = usePortalContainer();
   const [step, setStep] = useState<FlowStep>('select');
@@ -98,6 +116,7 @@ export function WordTrainingDialog({
   const [rebuildSubmitted, setRebuildSubmitted] = useState(false);
   const [rebuildScore, setRebuildScore] = useState<number | null>(null);
   const [sourcePlaying, setSourcePlaying] = useState(false);
+  const submittingRef = useRef(false);
 
   const [startSession, { isLoading: isStarting }] = useStartWordTrainingSessionMutation();
   const [loadNext, { isFetching: isLoadingNext }] = useLazyGetNextWordTrainingAssignmentQuery();
@@ -244,6 +263,12 @@ export function WordTrainingDialog({
         throw err;
       }
     } catch (err) {
+      const requiredCourses = extractRequiredCourses(err);
+      if (requiredCourses && onRequiredCourses) {
+        onOpenChange(false);
+        onRequiredCourses(requiredCourses);
+        return;
+      }
       setError(normalizeErrorMessage(err, 'Unable to start a training session.'));
       setStep('terms');
     }
@@ -269,6 +294,14 @@ export function WordTrainingDialog({
     } catch (err) {
       if (isNoWordsAvailable(err)) {
         setStep('unavailable');
+        return;
+      }
+      const requiredCourses = extractRequiredCourses(err);
+      if (requiredCourses && onRequiredCourses) {
+        void endSession(session.sessionId);
+        setSession(null);
+        onOpenChange(false);
+        onRequiredCourses(requiredCourses);
         return;
       }
       setError(normalizeErrorMessage(err, 'Unable to load the next word.'));
@@ -405,6 +438,16 @@ export function WordTrainingDialog({
       setError('Enter the spelling and record the word before submitting.');
       return;
     }
+    // A fast double-tap on mobile can fire this handler twice before React
+    // re-renders the disabled/hidden submit button, racing two
+    // createUpload+submit sequences for the same assignment -- the second
+    // createUpload overwrites the assignment's uploadKey in the DB before
+    // the first submit's audioKey reaches the backend, which then 403s with
+    // "does not belong to this assignment". This ref-based guard closes
+    // that same-tick race; the state-based disabled check below only
+    // protects against subsequent renders.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setError(null);
     setRecorderState('submitting');
     try {
@@ -430,6 +473,8 @@ export function WordTrainingDialog({
     } catch (err) {
       setError(normalizeErrorMessage(err, err instanceof Error ? err.message : 'Unable to submit the recording.'));
       setRecorderState('recorded');
+    } finally {
+      submittingRef.current = false;
     }
   }
 

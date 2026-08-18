@@ -8,7 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
-  type Course,
+  type AdminCourseListItem,
   normalizeErrorMessage,
   useDeleteCourseMutation,
   useGetAdminCoursesQuery,
@@ -18,7 +18,7 @@ import {
 
 export default function AdminCoursesPage() {
   const { data, isLoading } = useGetAdminCoursesQuery();
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [courses, setCourses] = useState<AdminCourseListItem[]>([]);
   const [filter, setFilter] = useState<'ALL' | 'DRAFT' | 'PUBLISHED'>('ALL');
   const [error, setError] = useState<string | null>(null);
   const [deleteCourse] = useDeleteCourseMutation();
@@ -58,8 +58,8 @@ export default function AdminCoursesPage() {
         {error && <p className="leading-relaxed text-danger" role="alert">{error}</p>}
 
         <section className="overflow-hidden rounded-lg border border-line bg-white" aria-label="Courses">
-          <div className="hidden grid-cols-[40px_minmax(0,1fr)_130px_150px_180px] gap-3 border-b border-line bg-surface-muted px-4 py-3 text-xs font-extrabold uppercase text-muted md:grid">
-            <span /><span>Course</span><span>Status</span><span>Updated</span><span>Actions</span>
+          <div className="hidden grid-cols-[40px_minmax(0,1fr)_130px_140px_150px_180px] gap-3 border-b border-line bg-surface-muted px-4 py-3 text-xs font-extrabold uppercase text-muted md:grid">
+            <span /><span>Course</span><span>Status</span><span>Completion</span><span>Updated</span><span>Actions</span>
           </div>
           {isLoading && <p className="p-5 text-muted">Loading courses...</p>}
           {!isLoading && visible.length === 0 && <p className="p-8 text-center text-muted">No courses in this view.</p>}
@@ -97,7 +97,7 @@ export default function AdminCoursesPage() {
   );
 }
 
-function SortableCourseRow({ course, dragDisabled, onDelete, onToggle }: { course: Course; dragDisabled: boolean; onDelete: () => Promise<void>; onToggle: () => Promise<void> }) {
+function SortableCourseRow({ course, dragDisabled, onDelete, onToggle }: { course: AdminCourseListItem; dragDisabled: boolean; onDelete: () => Promise<void>; onToggle: () => Promise<void> }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: course.id, disabled: dragDisabled });
   const [pendingAction, setPendingAction] = useState<'toggle' | 'delete' | null>(null);
 
@@ -109,11 +109,20 @@ function SortableCourseRow({ course, dragDisabled, onDelete, onToggle }: { cours
       setPendingAction(null);
     }
   };
+  const completionPct = course.totalTrainerCount > 0 ? Math.round((course.completedTrainerCount / course.totalTrainerCount) * 100) : 0;
   return (
-    <article ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={`grid gap-3 border-b border-line px-4 py-4 last:border-0 md:grid-cols-[40px_minmax(0,1fr)_130px_150px_180px] md:items-center ${isDragging ? 'relative z-10 bg-white shadow-lg' : ''}`}>
+    <article ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={`grid gap-3 border-b border-line px-4 py-4 last:border-0 md:grid-cols-[40px_minmax(0,1fr)_130px_140px_150px_180px] md:items-center ${isDragging ? 'relative z-10 bg-white shadow-lg' : ''}`}>
       <button className="hidden size-8 cursor-grab place-items-center rounded-md text-muted hover:bg-surface-muted disabled:cursor-default disabled:opacity-30 md:grid" disabled={dragDisabled} type="button" title="Drag to reorder" {...attributes} {...listeners}><DragIcon /></button>
-      <div className="min-w-0"><Link className="font-extrabold text-ink no-underline hover:text-accent" href={`/admin/courses/${course.id}`}>{course.title}</Link><p className="mt-1 truncate text-sm text-muted">/{course.slug} &middot; {course.slides.slides.length} {course.slides.slides.length === 1 ? 'slide' : 'slides'}</p></div>
+      <div className="min-w-0">
+        <Link className="font-extrabold text-ink no-underline hover:text-accent" href={`/admin/courses/${course.id}`}>{course.title}</Link>
+        <p className="mt-1 truncate text-sm text-muted">/{course.slug} &middot; {course.slides.slides.length} {course.slides.slides.length === 1 ? 'slide' : 'slides'}{course.required ? ' · Required' : ''}</p>
+      </div>
       <span className={`w-fit rounded-md px-2.5 py-1 text-xs font-extrabold ${course.status === 'PUBLISHED' ? 'bg-accent-soft text-accent-dark' : 'bg-surface-muted text-muted'}`}>{course.status === 'PUBLISHED' ? 'Published' : 'Draft'}</span>
+      <div className="text-sm">
+        <span className="font-extrabold text-ink">{course.completedTrainerCount}</span>
+        <span className="text-muted"> / {course.totalTrainerCount}</span>
+        {course.totalTrainerCount > 0 && <span className="ml-1 text-xs text-muted">({completionPct}%)</span>}
+      </div>
       <time className="text-sm text-muted" dateTime={course.updatedAt}>{new Date(course.updatedAt).toLocaleDateString()}</time>
       <div className="flex items-center gap-2">
         <Link className="rounded-md border border-line px-3 py-1.5 text-sm font-bold text-ink no-underline hover:bg-surface-muted" href={`/admin/courses/${course.id}`}>Edit</Link>

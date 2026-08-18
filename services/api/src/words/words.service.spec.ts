@@ -75,6 +75,15 @@ describe('WordsService', () => {
     expect(prisma.wordRecording.count).not.toHaveBeenCalled();
   });
 
+  it('blocks nextAssignment when a required course becomes incomplete mid-session', async () => {
+    settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+    settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+    courses.getIncompleteRequiredCourses.mockResolvedValue([{ id: 'c1', slug: 'safety', title: 'Safety' }]);
+
+    await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow('Complete the required course');
+    expect(prisma.wordTrainingAssignment.create).not.toHaveBeenCalled();
+  });
+
   it('excludes words the trainer has already recorded when picking an ENGLISH_TO_DIALECT word', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
     settings.isSentenceRebuildEnabled.mockResolvedValue(false);

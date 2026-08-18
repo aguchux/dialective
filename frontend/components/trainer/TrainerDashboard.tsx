@@ -143,6 +143,7 @@ export function TrainerDashboard() {
   const [trainingOpen, setTrainingOpen] = useState(false);
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
   const [requiredCoursesOpen, setRequiredCoursesOpen] = useState(false);
+  const [midSessionRequiredCourses, setMidSessionRequiredCourses] = useState<{ id: string; slug: string; title: string }[] | null>(null);
   const requestedView = searchParams.get('view');
   const displayName = [session?.user.firstName, session?.user.lastName].filter(Boolean).join(' ');
   const activeView = allViewIds.includes(requestedView as DashboardView) ? (requestedView as DashboardView) : 'home';
@@ -264,6 +265,10 @@ export function TrainerDashboard() {
           open={trainingOpen}
           recordingTimeoutSeconds={data?.recordingRoundTimeoutSeconds}
           recordingMaxTimeoutSeconds={data?.recordingRoundMaxTimeoutSeconds}
+          onRequiredCourses={(courses) => {
+            setMidSessionRequiredCourses(courses);
+            setRequiredCoursesOpen(true);
+          }}
         />
         <LowBalanceDialog
           onOpenChange={setLowBalanceOpen}
@@ -271,8 +276,11 @@ export function TrainerDashboard() {
           taskTokenCost={data?.taskTokenCost ?? '0'}
         />
         <RequiredCoursesDialog
-          courses={incompleteRequiredCourses ?? []}
-          onOpenChange={setRequiredCoursesOpen}
+          courses={midSessionRequiredCourses ?? incompleteRequiredCourses ?? []}
+          onOpenChange={(open) => {
+            setRequiredCoursesOpen(open);
+            if (!open) setMidSessionRequiredCourses(null);
+          }}
           open={requiredCoursesOpen}
         />
       </PortalContainerProvider>

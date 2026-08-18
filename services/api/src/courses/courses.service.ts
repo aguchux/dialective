@@ -178,11 +178,29 @@ export class CoursesService {
     }
   }
 
-  listAdmin() {
-    return this.prisma.course.findMany({
-      orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }],
-      include: { author: { select: authorSelect } },
-    });
+  async listAdmin() {
+    const [courses, totalTrainers, completions] = await Promise.all([
+      this.prisma.course.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }],
+        include: { author: { select: authorSelect } },
+      }),
+      this.prisma.user.count({ where: { role: 'TRAINER' } }),
+      // One row per (userId, courseId) thanks to CourseProgress's unique
+      // constraint, so counting completedAt-not-null rows per courseId is
+      // an exact per-trainer completion count, not an over-count from
+      // multiple saves of the same course.
+      this.prisma.courseProgress.groupBy({
+        by: ['courseId'],
+        where: { completedAt: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+    const completedByCourseId = new Map(completions.map((row) => [row.courseId, row._count._all]));
+    return courses.map((course) => ({
+      ...course,
+      completedTrainerCount: completedByCourseId.get(course.id) ?? 0,
+      totalTrainerCount: totalTrainers,
+    }));
   }
 
   async getAdmin(id: string) {
