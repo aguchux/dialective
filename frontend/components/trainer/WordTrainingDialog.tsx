@@ -22,7 +22,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { usePortalContainer } from '@/components/ui/PortalContainer';
-import { notifyRecordingSession } from '@/lib/recording-signal';
+import { notifyFullScreenOverlay } from '@/lib/recording-signal';
 import {
   ApiErrorShape,
   RecordingNoiseRating,
@@ -191,8 +191,8 @@ export function WordTrainingDialog({
   // pub/sub signal rather than a prop: TawkToWidget is mounted globally in
   // providers.tsx and has no reference to this dialog.
   useEffect(() => {
-    notifyRecordingSession(open);
-    return () => notifyRecordingSession(false);
+    notifyFullScreenOverlay(open);
+    return () => notifyFullScreenOverlay(false);
   }, [open]);
 
   useEffect(() => {

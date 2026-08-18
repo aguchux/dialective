@@ -6,6 +6,7 @@ import * as RadixDialog from '@radix-ui/react-dialog';
 import { ArrowLeft, ArrowRight, LoaderCircle, Pause, Play, X } from 'lucide-react';
 import { BlogContent } from '@/components/blog/BlogContent';
 import { usePortalContainer } from '@/components/ui/PortalContainer';
+import { notifyFullScreenOverlay } from '@/lib/recording-signal';
 import type { CourseSlide } from '@/store/api';
 
 type PlaybackState = 'idle' | 'playing' | 'paused';
@@ -53,6 +54,15 @@ export function CourseSlideViewer({
   const slide = slides[index];
   const isFirst = index === 0;
   const isLast = index === slides.length - 1;
+
+  // This viewer is always full-screen while mounted -- hides Tawk.to's
+  // floating chat bubble for as long as it's open, same as
+  // WordTrainingDialog does for the same bottom-right overlap. See
+  // lib/recording-signal.ts.
+  useEffect(() => {
+    notifyFullScreenOverlay(true);
+    return () => notifyFullScreenOverlay(false);
+  }, []);
 
   // Stop narration from bleeding across slides, and reset the play button
   // back to idle for the newly-shown slide's (possibly absent) audio.

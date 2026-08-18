@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useGetPublicClientSettingsQuery } from '@/store/api';
-import { onRecordingSession } from '@/lib/recording-signal';
+import { onFullScreenOverlay } from '@/lib/recording-signal';
 
 const SCRIPT_ID = 'tawkto-widget-script';
 
@@ -93,14 +93,14 @@ export function TawkToWidget() {
   }, [enabled, status, session?.user]);
 
   // Hides the floating bubble for the duration of a WordTrainingDialog
-  // session -- it sits in the same bottom-right corner as the record
-  // button/audio controls and would otherwise overlap them. See
-  // lib/recording-signal.ts.
+  // session or an open CourseSlideViewer -- both are full-screen overlays
+  // that use the same bottom-right corner the bubble floats in and would
+  // otherwise overlap/steal taps. See lib/recording-signal.ts.
   useEffect(() => {
     if (!enabled) return;
     let cancelWait: (() => void) | undefined;
     let hidden = false;
-    const unsubscribe = onRecordingSession((active) => {
+    const unsubscribe = onFullScreenOverlay((active) => {
       cancelWait?.();
       hidden = active;
       cancelWait = whenTawkReady((api) => (active ? api.hideWidget?.() : api.showWidget?.()));
@@ -108,9 +108,9 @@ export function TawkToWidget() {
     return () => {
       cancelWait?.();
       unsubscribe();
-      // If a session was mid-recording when this unmounted/disabled (e.g.
-      // an admin flips tawkToEnabled off while a dialog is open), don't
-      // leave the widget permanently hidden -- restore it.
+      // If an overlay was still open when this unmounted/disabled (e.g. an
+      // admin flips tawkToEnabled off while a dialog is open), don't leave
+      // the widget permanently hidden -- restore it.
       if (hidden) whenTawkReady((api) => api.showWidget?.());
     };
   }, [enabled]);
