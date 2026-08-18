@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { BlogPostStatus, CourseVisibility, Prisma } from '@dialectiva/db';
+import { BlogPostStatus, CourseVisibility, creditCourseCompletionReward, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { MailService } from '../mail/mail.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { ReorderCoursesDto } from './dto/reorder-courses.dto';
@@ -19,7 +20,11 @@ function slugFor(title: string, id: string): string {
 
 @Injectable()
 export class CoursesService {
-  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+    private readonly mail: MailService,
+  ) {}
 
   async listPublished() {
     return this.prisma.course.findMany({
@@ -103,9 +108,15 @@ export class CoursesService {
   async saveProgress(userId: string, slug: string, lastSlideIndex: number, totalSlides: number) {
     const course = await this.prisma.course.findFirst({
       where: { slug, status: BlogPostStatus.PUBLISHED },
-      select: { id: true },
+      select: { id: true, title: true, completionRewardTokens: true },
     });
     if (!course) throw new NotFoundException('Course not found');
+
+    const existingProgress = await this.prisma.courseProgress.findUnique({
+      where: { userId_courseId: { userId, courseId: course.id } },
+      select: { completedAt: true },
+    });
+    const wasAlreadyComplete = existingProgress?.completedAt != null;
 
     const clampedIndex = Math.min(Math.max(0, lastSlideIndex), Math.max(0, totalSlides - 1));
     const completedAt = clampedIndex >= totalSlides - 1 ? new Date() : null;
@@ -122,7 +133,49 @@ export class CoursesService {
       },
     });
 
+    // Reward credit + completion email fire once, the instant this trainer's
+    // completedAt is first set for this course -- never on a later re-save
+    // (already-complete rows never null out completedAt, so
+    // wasAlreadyComplete alone is enough to detect the transition without a
+    // separate "just completed" flag).
+    if (progress.completedAt && !wasAlreadyComplete) {
+      await this.creditCompletionAndNotify(userId, course);
+    }
+
     return { lastSlideIndex: progress.lastSlideIndex, completedAt: progress.completedAt };
+  }
+
+  /**
+   * Best-effort: a reward/email failure must never make saveProgress itself
+   * fail and re-block the trainer's already-recorded completion, so both
+   * steps are individually caught and logged rather than left to bubble.
+   */
+  private async creditCompletionAndNotify(
+    userId: string,
+    course: { id: string; title: string; completionRewardTokens: Prisma.Decimal | null },
+  ) {
+    const hasReward = course.completionRewardTokens != null && course.completionRewardTokens.gt(0);
+    let rewardTokens: string | null = null;
+
+    if (hasReward) {
+      try {
+        const credited = await creditCourseCompletionReward(this.prisma, userId, course.id, course.completionRewardTokens!);
+        if (credited) rewardTokens = course.completionRewardTokens!.toString();
+      } catch {
+        // Reward credit failure shouldn't block the completion email below,
+        // or the saveProgress response itself -- admin can see/fix via the
+        // ledger; the trainer's completion is already recorded regardless.
+      }
+    }
+
+    try {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+      if (user) {
+        await this.mail.sendCourseCompletedEmail({ trainerEmail: user.email, courseTitle: course.title, rewardTokens });
+      }
+    } catch {
+      // Best-effort, same as every other post-completion side effect here.
+    }
   }
 
   listAdmin() {
@@ -160,6 +213,8 @@ export class CoursesService {
         coverImageAlt: cleanOptional(dto.coverImageAlt),
         status,
         visibility: dto.visibility ?? CourseVisibility.PRIVATE,
+        required: dto.required ?? false,
+        completionRewardTokens: dto.completionRewardTokens ?? null,
         sortOrder: (lastCourse?.sortOrder ?? -1) + 1,
         authorId,
         publishedAt: status === BlogPostStatus.PUBLISHED ? new Date() : null,
@@ -194,6 +249,8 @@ export class CoursesService {
         ...(dto.coverImageKey !== undefined && { coverImageKey: cleanOptional(dto.coverImageKey) }),
         ...(dto.coverImageAlt !== undefined && { coverImageAlt: cleanOptional(dto.coverImageAlt) }),
         ...(dto.visibility !== undefined && { visibility: dto.visibility }),
+        ...(dto.required !== undefined && { required: dto.required }),
+        ...(dto.completionRewardTokens !== undefined && { completionRewardTokens: dto.completionRewardTokens ?? null }),
         ...(dto.status !== undefined && {
           status: dto.status,
           publishedAt: nextStatus === BlogPostStatus.PUBLISHED ? current.publishedAt ?? new Date() : null,
@@ -223,6 +280,34 @@ export class CoursesService {
     await this.getAdmin(id);
     await this.prisma.course.delete({ where: { id } });
     return { id, deleted: true };
+  }
+
+  /**
+   * Compliance gate: every PUBLISHED course with required=true that this
+   * trainer hasn't completed yet (no CourseProgress row, or one with
+   * completedAt: null). Called from both WordsService.startSession and
+   * SubmissionsController.create before any task is handed out or accepted
+   * -- a trainer who becomes non-compliant mid-session (admin marks a new
+   * course required while they're already training) is still blocked on
+   * their *next* task, since this re-checks on every call rather than once
+   * per session. Ordered by createdAt so the oldest still-outstanding
+   * requirement surfaces first, matching how it was likely assigned.
+   */
+  async getIncompleteRequiredCourses(userId: string) {
+    const required = await this.prisma.course.findMany({
+      where: { status: BlogPostStatus.PUBLISHED, required: true },
+      select: { id: true, slug: true, title: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (required.length === 0) return [];
+
+    const completedRows = await this.prisma.courseProgress.findMany({
+      where: { userId, courseId: { in: required.map((c) => c.id) }, completedAt: { not: null } },
+      select: { courseId: true },
+    });
+    const completedIds = new Set(completedRows.map((row) => row.courseId));
+
+    return required.filter((course) => !completedIds.has(course.id));
   }
 }
 

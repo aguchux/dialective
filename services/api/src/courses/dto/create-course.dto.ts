@@ -1,4 +1,4 @@
-import { IsEnum, IsObject, IsOptional, IsString, IsUrl, Length, MaxLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsNumber, IsObject, IsOptional, IsString, IsUrl, Length, Max, MaxLength, Min } from 'class-validator';
 import { BlogPostStatus, CourseVisibility } from '@dialectiva/db';
 
 export class CreateCourseDto {
@@ -38,4 +38,19 @@ export class CreateCourseDto {
   @IsOptional()
   @IsEnum(CourseVisibility)
   visibility?: CourseVisibility;
+
+  // When true (and status is PUBLISHED), trainers must complete this course
+  // before starting a word-training session or submitting a sentence -- see
+  // CoursesService.getIncompleteRequiredCourses.
+  @IsOptional()
+  @IsBoolean()
+  required?: boolean;
+
+  // One-time DL credited the first time a trainer completes this course.
+  // Omitted or 0 means no reward.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1_000_000)
+  completionRewardTokens?: number;
 }

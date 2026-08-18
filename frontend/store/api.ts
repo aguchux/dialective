@@ -1117,6 +1117,8 @@ export interface Course {
   slides: CourseDocument;
   status: BlogPostStatus;
   visibility: CourseVisibility;
+  required: boolean;
+  completionRewardTokens: string | null;
   sortOrder: number;
   publishedAt: string | null;
   createdAt: string;
@@ -1133,6 +1135,15 @@ export interface CourseInput {
   coverImageAlt?: string;
   status?: BlogPostStatus;
   visibility?: CourseVisibility;
+  required?: boolean;
+  completionRewardTokens?: number;
+}
+
+/** A required, published course this trainer hasn't completed yet -- blocks training when non-empty. */
+export interface IncompleteRequiredCourse {
+  id: string;
+  slug: string;
+  title: string;
 }
 
 /** Public catalog card -- no slide content, safe to serve unauthenticated. */
@@ -1245,7 +1256,7 @@ const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptio
 export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
   baseQuery: baseQueryWithMaintenanceSignal,
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile', 'Notifications'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'RequiredCourses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'DataAccessLeads', 'P2P', 'Profile', 'Notifications'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -1979,6 +1990,13 @@ export const dialectivaApi = createApi({
     }),
     saveCourseProgress: builder.mutation<CourseProgress, { slug: string; lastSlideIndex: number; totalSlides: number }>({
       query: ({ slug, ...body }) => ({ url: `/courses/study/${slug}/progress`, method: 'PUT', body }),
+      // Completing a required course changes whether the trainer is still
+      // gated from training -- refetch that check right after saving.
+      invalidatesTags: ['RequiredCourses'],
+    }),
+    getIncompleteRequiredCourses: builder.query<IncompleteRequiredCourse[], void>({
+      query: () => '/courses/study/required/incomplete',
+      providesTags: ['RequiredCourses'],
     }),
   }),
 });
@@ -2133,6 +2151,7 @@ export const {
   useCreateCourseMediaUploadMutation,
   useGetCourseToStudyQuery,
   useSaveCourseProgressMutation,
+  useGetIncompleteRequiredCoursesQuery,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

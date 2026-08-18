@@ -705,6 +705,7 @@ enum LedgerEntryType {
   ADMIN_FUNDING
   ADMIN_ADJUSTMENT // signed: admin correction against any user's wallet; negative values are silent debit corrections
   STARTUP_BONUS
+  COURSE_COMPLETION_REWARD // one-time per (wallet, courseId reference); see Course.completionRewardTokens
   P2P_ESCROW_LOCK
   P2P_ESCROW_REFUND
   P2P_ESCROW_RELEASE
@@ -1229,6 +1230,8 @@ model Course {
   slides        Json
   status        BlogPostStatus   @default(DRAFT)
   visibility    CourseVisibility @default(PRIVATE) // PUBLIC courses skip the login wall entirely -- see CourseVisibility doc comment
+  required      Boolean          @default(false) // when true (and PUBLISHED), every trainer must complete this course (CourseProgress.completedAt set) before starting a word-training session or submitting a sentence -- see CoursesService.getIncompleteRequiredCourses and its call sites in WordsService.startSession / SubmissionsController.create
+  completionRewardTokens Decimal? @db.Decimal(20, 8) // one-time DL credited on first completion; null/0 means no reward -- see CoursesService.saveProgress's COURSE_COMPLETION_REWARD credit
   sortOrder     Int              @default(0)
   authorId      String
   author        User             @relation(fields: [authorId], references: [id], onDelete: Restrict)
@@ -1238,6 +1241,7 @@ model Course {
   progress      CourseProgress[]
 
   @@index([status, sortOrder])
+  @@index([status, required])
   @@map("courses")
 }
 

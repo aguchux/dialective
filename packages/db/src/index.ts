@@ -4,6 +4,7 @@ export {
   computeTrainingPayout,
   adjustAdminWallet,
   creditAdminFunding,
+  creditCourseCompletionReward,
   creditFundingReferralBonusesOps,
   creditStartupBonus,
   creditTrainingPayout,

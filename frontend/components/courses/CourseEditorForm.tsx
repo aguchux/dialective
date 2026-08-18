@@ -83,6 +83,8 @@ export function CourseEditorForm({ course }: { course?: Course }) {
   const [summary, setSummary] = useState(course?.summary ?? '');
   const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>(course?.status ?? 'DRAFT');
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>(course?.visibility ?? 'PRIVATE');
+  const [required, setRequired] = useState(course?.required ?? false);
+  const [completionRewardTokens, setCompletionRewardTokens] = useState(course?.completionRewardTokens ?? '');
   const [coverImageUrl, setCoverImageUrl] = useState(course?.coverImageUrl ?? '');
   const [coverImageKey, setCoverImageKey] = useState(course?.coverImageKey ?? '');
   const [coverImageAlt, setCoverImageAlt] = useState(course?.coverImageAlt ?? '');
@@ -222,6 +224,10 @@ export function CourseEditorForm({ course }: { course?: Course }) {
     setError('');
     if (!title.trim()) return setError('Title is required');
     if (!summary.trim()) return setError('Summary is required');
+    const rewardValue = completionRewardTokens.trim();
+    if (rewardValue && (Number.isNaN(Number(rewardValue)) || Number(rewardValue) < 0)) {
+      return setError('Completion reward must be a positive number of DL, or left blank');
+    }
 
     setIsSaving(true);
     try {
@@ -242,6 +248,8 @@ export function CourseEditorForm({ course }: { course?: Course }) {
         coverImageAlt: coverImageAlt || undefined,
         status,
         visibility,
+        required,
+        completionRewardTokens: rewardValue ? Number(rewardValue) : undefined,
       };
       if (course) {
         const saved = await updateCourse({ id: course.id, body }).unwrap();
@@ -395,6 +403,36 @@ export function CourseEditorForm({ course }: { course?: Course }) {
                   : 'Trainers must log in to view this course.'}
               </p>
             </div>
+          </section>
+
+          <section className="grid gap-3 rounded-lg border border-line bg-white p-4">
+            <h2 className="text-base font-black">Compliance & reward</h2>
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3">
+              <input checked={required} className="mt-0.5 size-5 accent-accent" onChange={(event) => setRequired(event.target.checked)} type="checkbox" />
+              <span>
+                <span className="block text-sm font-extrabold">Required to train</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-muted">
+                  Trainers must complete this course before they can start a training session or submit a task. Only enforced once this course is Published.
+                </span>
+              </span>
+            </label>
+
+            <label className="grid gap-1.5 text-sm font-bold">
+              Completion reward (DL, optional)
+              <input
+                className={fieldClass}
+                inputMode="decimal"
+                min={0}
+                onChange={(event) => setCompletionRewardTokens(event.target.value)}
+                placeholder="e.g. 5"
+                step="any"
+                type="number"
+                value={completionRewardTokens}
+              />
+              <span className="text-xs font-normal leading-relaxed text-muted">
+                Credited once to a trainer&rsquo;s DL balance the first time they complete this course. Leave blank for no reward -- trainers still get a completion email either way.
+              </span>
+            </label>
           </section>
 
           <section className="grid gap-3 rounded-lg border border-line bg-white p-4">

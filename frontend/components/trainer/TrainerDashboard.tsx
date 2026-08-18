@@ -70,6 +70,7 @@ import {
   useGetDialectVariantsQuery,
   useGetP2PPaymentMethodsQuery,
   useGetP2PReferenceRateQuery,
+  useGetIncompleteRequiredCoursesQuery,
   useGetMeQuery,
   useResendEmailVerificationMutation,
   useRequestPhoneOtpMutation,
@@ -141,6 +142,7 @@ export function TrainerDashboard() {
   const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);
   const [trainingOpen, setTrainingOpen] = useState(false);
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
+  const [requiredCoursesOpen, setRequiredCoursesOpen] = useState(false);
   const requestedView = searchParams.get('view');
   const displayName = [session?.user.firstName, session?.user.lastName].filter(Boolean).join(' ');
   const activeView = allViewIds.includes(requestedView as DashboardView) ? (requestedView as DashboardView) : 'home';
@@ -149,13 +151,20 @@ export function TrainerDashboard() {
   });
   const { data: me } = useGetMeQuery(undefined, { skip: status !== 'authenticated' || session?.user.role === 'ADMIN' || session?.user.role === 'DISTRIBUTOR' });
   const dialectName = useDialectName(session?.user.dialectTag);
+  const { data: incompleteRequiredCourses } = useGetIncompleteRequiredCoursesQuery(undefined, {
+    skip: status !== 'authenticated' || session?.user.role === 'ADMIN' || session?.user.role === 'DISTRIBUTOR',
+  });
 
-  // Pre-check affordability client-side so a trainer sees an actionable
-  // "fund your account" prompt instead of only discovering insufficient
-  // balance after WordTrainingDialog's submissions.controller.ts/
-  // words.service.ts 422 -- that server-side guard stays the authoritative
-  // backstop, this just moves the failure earlier.
+  // Same "check client-side first, server is still the authoritative
+  // backstop" pattern as the balance check below -- WordsService.startSession/
+  // SubmissionsController.create both 403 on an incomplete required course
+  // regardless, this just surfaces it before opening the recording dialog
+  // instead of after.
   function handleStartTask() {
+    if (incompleteRequiredCourses && incompleteRequiredCourses.length > 0) {
+      setRequiredCoursesOpen(true);
+      return;
+    }
     if (data && Number(data.balance) < Number(data.taskTokenCost)) {
       setLowBalanceOpen(true);
       return;
@@ -202,6 +211,9 @@ export function TrainerDashboard() {
         />
 
         {me && !me.emailVerified && <EmailVerificationBanner />}
+        {incompleteRequiredCourses && incompleteRequiredCourses.length > 0 && (
+          <RequiredCoursesBanner courses={incompleteRequiredCourses} />
+        )}
         <MicrophonePermissionBanner activeView={activeView} />
 
         <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
@@ -258,6 +270,11 @@ export function TrainerDashboard() {
           open={lowBalanceOpen}
           taskTokenCost={data?.taskTokenCost ?? '0'}
         />
+        <RequiredCoursesDialog
+          courses={incompleteRequiredCourses ?? []}
+          onOpenChange={setRequiredCoursesOpen}
+          open={requiredCoursesOpen}
+        />
       </PortalContainerProvider>
     </div>
   );
@@ -281,6 +298,60 @@ function LowBalanceDialog({
         <FundTokensDialog />
       </DialogContent>
     </Dialog>
+  );
+}
+
+function RequiredCoursesDialog({
+  courses,
+  onOpenChange,
+  open,
+}: {
+  courses: { id: string; slug: string; title: string }[];
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent
+        title="Complete required training first"
+        description="These courses are required before you can start a task -- they help keep submission quality high across the platform."
+      >
+        <div className="grid gap-2">
+          {courses.map((course) => (
+            <Link
+              className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 font-bold text-ink no-underline hover:bg-surface-muted"
+              href={`/dashboard/learn/${course.slug}`}
+              key={course.id}
+              onClick={() => onOpenChange(false)}
+            >
+              {course.title}
+              <ArrowRight className="size-4 shrink-0 text-accent" aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RequiredCoursesBanner({ courses }: { courses: { id: string; slug: string; title: string }[] }) {
+  const first = courses[0];
+  return (
+    <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm dark:border-amber-900 dark:bg-amber-950">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 md:px-2">
+        <p className="font-bold text-amber-800 dark:text-amber-200">
+          {courses.length === 1
+            ? `Complete "${first.title}" before you can start training.`
+            : `Complete ${courses.length} required courses before you can start training.`}
+        </p>
+        <Link
+          className="shrink-0 font-extrabold text-amber-800 underline hover:no-underline dark:text-amber-200"
+          href={`/dashboard/learn/${first.slug}`}
+        >
+          Start now
+        </Link>
+      </div>
+    </div>
   );
 }
 

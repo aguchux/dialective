@@ -19,6 +19,7 @@ import { RedisStreamsService } from '../redis-streams/redis-streams.service';
 import { AsrRegistryService } from '../asr-registry/asr-registry.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { CoursesService } from '../courses/courses.service';
 import { CreateUploadUrlDto } from './dto/create-upload-url.dto';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { ListSubmissionsDto } from './dto/list-submissions.dto';
@@ -41,6 +42,7 @@ export class SubmissionsController {
     private readonly asrRegistry: AsrRegistryService,
     private readonly prisma: PrismaService,
     private readonly platformSettings: PlatformSettingsService,
+    private readonly courses: CoursesService,
   ) {}
 
   /**
@@ -101,6 +103,17 @@ export class SubmissionsController {
   @Post('create')
   @UseGuards(JwtAuthGuard)
   async create(@Req() req: AuthenticatedRequest, @Body() body: CreateSubmissionDto) {
+    // Same compliance gate as WordsService.startSession -- checked here too
+    // since sentence submissions are a separate task-entry point that
+    // doesn't go through a words session at all.
+    const incompleteRequired = await this.courses.getIncompleteRequiredCourses(req.user.sub);
+    if (incompleteRequired.length > 0) {
+      throw new ForbiddenException({
+        message: 'Complete the required course(s) below before you can submit training tasks.',
+        requiredCourses: incompleteRequired,
+      });
+    }
+
     if (body.bucket !== SUBMISSIONS_BUCKET || !SUBMISSION_KEY_PATTERN.test(body.audioKey)) {
       throw new ForbiddenException('Submission upload does not match an issued upload target');
     }

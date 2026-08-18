@@ -1,4 +1,4 @@
-import { IsEnum, IsObject, IsOptional, IsString, IsUrl, Length, MaxLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsNumber, IsObject, IsOptional, IsString, IsUrl, Length, Max, MaxLength, Min } from 'class-validator';
 import { BlogPostStatus, CourseVisibility } from '@dialectiva/db';
 
 export class UpdateCourseDto {
@@ -37,4 +37,16 @@ export class UpdateCourseDto {
   @IsOptional()
   @IsEnum(CourseVisibility)
   visibility?: CourseVisibility;
+
+  @IsOptional()
+  @IsBoolean()
+  required?: boolean;
+
+  // Omitted leaves the current value untouched; 0 (or a future "clear"
+  // affordance) sets no-reward -- see CreateCourseDto's field for the shape.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1_000_000)
+  completionRewardTokens?: number;
 }

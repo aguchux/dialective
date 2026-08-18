@@ -32,6 +32,12 @@ interface TrainingPayoutCreditedNotification {
   reference: string | null;
 }
 
+interface CourseCompletedNotification {
+  trainerEmail: string;
+  courseTitle: string;
+  rewardTokens: string | null; // null when the course carries no completion reward
+}
+
 function frontendUrl(): string {
   return process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
 }
@@ -122,6 +128,23 @@ export class MailService {
       `You received ${payload.tokenAmount} DL`,
       trainingPayoutCreditedHtml(payload.tokenAmount, payload.reference, dashboardUrl),
       trainingPayoutCreditedText(payload.tokenAmount, payload.reference, dashboardUrl),
+    );
+  }
+
+  /**
+   * Fired from CoursesService.saveProgress the first time a trainer's
+   * CourseProgress.completedAt is set for a given course -- always sent,
+   * whether or not the course carries a completionRewardTokens reward, so a
+   * trainer always gets confirmation of finishing a required course, not
+   * just the ones that pay out.
+   */
+  async sendCourseCompletedEmail(payload: CourseCompletedNotification): Promise<void> {
+    const coursesUrl = `${frontendUrl()}/dashboard?view=training`;
+    await this.send(
+      payload.trainerEmail,
+      payload.rewardTokens ? `Course complete: ${payload.courseTitle} (+${payload.rewardTokens} DL)` : `Course complete: ${payload.courseTitle}`,
+      courseCompletedHtml(payload.courseTitle, payload.rewardTokens, coursesUrl),
+      courseCompletedText(payload.courseTitle, payload.rewardTokens, coursesUrl),
     );
   }
 
@@ -254,4 +277,15 @@ ${reference ? `<p>Reason: ${escapeHtml(reference)}</p>` : ''}
 function trainingPayoutCreditedText(tokenAmount: string, reference: string | null, dashboardUrl: string): string {
   return `${tokenAmount} DL has been added to your Dialect Library wallet.
 ${reference ? `Reason: ${reference}\n` : ''}View your balance: ${dashboardUrl}`;
+}
+
+function courseCompletedHtml(courseTitle: string, rewardTokens: string | null, coursesUrl: string): string {
+  return `<p>You've completed <strong>${escapeHtml(courseTitle)}</strong>.</p>
+${rewardTokens ? `<p><strong>${escapeHtml(rewardTokens)} DL</strong> has been added to your Dialect Library wallet for completing this course.</p>` : ''}
+<p><a href="${coursesUrl}">Continue training</a></p>`;
+}
+
+function courseCompletedText(courseTitle: string, rewardTokens: string | null, coursesUrl: string): string {
+  return `You've completed ${courseTitle}.
+${rewardTokens ? `${rewardTokens} DL has been added to your Dialect Library wallet for completing this course.\n` : ''}Continue training: ${coursesUrl}`;
 }

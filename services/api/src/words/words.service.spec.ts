@@ -15,13 +15,14 @@ describe('WordsService', () => {
   const storage = { createPresignedDownloadUrl: jest.fn(), createPresignedUploadUrl: jest.fn() };
   const streams = { publish: jest.fn() };
   const llm = { normalize: jest.fn() };
+  const courses = { getIncompleteRequiredCourses: jest.fn().mockResolvedValue([]) };
   let prisma: any;
   let service: WordsService;
 
   beforeEach(() => {
     prisma = {
       user: { findUnique: jest.fn().mockResolvedValue(trainer) },
-      trainingSession: { findUnique: jest.fn().mockResolvedValue(session) },
+      trainingSession: { findUnique: jest.fn().mockResolvedValue(session), create: jest.fn().mockResolvedValue(session) },
       word: {
         count: jest.fn().mockResolvedValue(1),
         findMany: jest.fn().mockResolvedValue([{ id: 'word-1', text: 'welcome' }]),
@@ -37,7 +38,22 @@ describe('WordsService', () => {
     settings.isReverseWordTrainingEnabled.mockReset();
     settings.isSentenceRebuildEnabled.mockReset().mockResolvedValue(false);
     settings.isSpellingNormalizationEnabled.mockResolvedValue(false);
-    service = new WordsService(prisma, storage as any, settings as any, streams as any, llm as any);
+    courses.getIncompleteRequiredCourses.mockReset().mockResolvedValue([]);
+    service = new WordsService(prisma, storage as any, settings as any, streams as any, llm as any, courses as any);
+  });
+
+  describe('startSession', () => {
+    it('starts a session when there are no incomplete required courses', async () => {
+      const result = await service.startSession(trainer.id);
+      expect(result.sessionId).toBe(session.id);
+      expect(prisma.trainingSession.create).toHaveBeenCalled();
+    });
+
+    it('blocks the session and never creates one when a required course is incomplete', async () => {
+      courses.getIncompleteRequiredCourses.mockResolvedValue([{ id: 'c1', slug: 'safety', title: 'Safety' }]);
+      await expect(service.startSession(trainer.id)).rejects.toThrow('Complete the required course');
+      expect(prisma.trainingSession.create).not.toHaveBeenCalled();
+    });
   });
 
   it('only issues English-to-dialect assignments when reverse training and sentence-rebuild are disabled', async () => {

@@ -1,8 +1,10 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@dialectiva/db';
 import { CoursesService } from './courses.service';
 
 describe('CoursesService', () => {
   let prisma: any;
+  let mail: any;
   let service: CoursesService;
 
   beforeEach(() => {
@@ -17,12 +19,17 @@ describe('CoursesService', () => {
         count: jest.fn(),
       },
       courseProgress: {
-        findUnique: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
         upsert: jest.fn(),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ email: 'trainer@example.com' }),
       },
       $transaction: jest.fn(),
     };
-    service = new CoursesService(prisma, { notifyCoursePublished: jest.fn() } as any);
+    mail = { sendCourseCompletedEmail: jest.fn().mockResolvedValue(undefined) };
+    service = new CoursesService(prisma, { notifyCoursePublished: jest.fn() } as any, mail as any);
   });
 
   describe('getPublishedPreview', () => {
@@ -110,11 +117,52 @@ describe('CoursesService', () => {
 
     it('never clears an existing completedAt on a later, earlier-index save', async () => {
       prisma.course.findFirst.mockResolvedValue({ id: 'c1' });
+      prisma.courseProgress.findUnique.mockResolvedValue({ completedAt: new Date('2026-01-01') });
       prisma.courseProgress.upsert.mockImplementation(({ update }: any) => Promise.resolve({ lastSlideIndex: update.lastSlideIndex, completedAt: update.completedAt ?? 'unchanged' }));
 
       await service.saveProgress('user-1', 'intro', 0, 5);
       const call = prisma.courseProgress.upsert.mock.calls[0][0];
       expect(call.update).not.toHaveProperty('completedAt');
+    });
+
+    it('does not re-credit or re-email on a save that keeps an already-completed course completed', async () => {
+      prisma.course.findFirst.mockResolvedValue({ id: 'c1', title: 'Intro', completionRewardTokens: new Prisma.Decimal(5) });
+      prisma.courseProgress.findUnique.mockResolvedValue({ completedAt: new Date('2026-01-01') });
+      prisma.courseProgress.upsert.mockResolvedValue({ lastSlideIndex: 4, completedAt: new Date('2026-01-01') });
+
+      await service.saveProgress('user-1', 'intro', 4, 5);
+      expect(mail.sendCourseCompletedEmail).not.toHaveBeenCalled();
+    });
+
+    it('credits the completion reward and emails once, the first time a course is completed', async () => {
+      const completionRewardTokens = new Prisma.Decimal(5);
+      prisma.course.findFirst.mockResolvedValue({ id: 'c1', title: 'Intro', completionRewardTokens });
+      prisma.courseProgress.findUnique.mockResolvedValue(null);
+      prisma.courseProgress.upsert.mockResolvedValue({ lastSlideIndex: 4, completedAt: new Date() });
+      prisma.ledgerEntry = { create: jest.fn().mockResolvedValue({}) };
+      prisma.wallet = { findUnique: jest.fn().mockResolvedValue({ id: 'w1' }), create: jest.fn(), update: jest.fn().mockResolvedValue({}) };
+      prisma.$transaction.mockImplementation((fn: any) => fn(prisma));
+
+      await service.saveProgress('user-1', 'intro', 4, 5);
+
+      expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ type: 'COURSE_COMPLETION_REWARD', reference: 'c1' }),
+      }));
+      expect(mail.sendCourseCompletedEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ trainerEmail: 'trainer@example.com', courseTitle: 'Intro', rewardTokens: '5' }),
+      );
+    });
+
+    it('still emails completion with no reward when the course has none', async () => {
+      prisma.course.findFirst.mockResolvedValue({ id: 'c1', title: 'Intro', completionRewardTokens: null });
+      prisma.courseProgress.findUnique.mockResolvedValue(null);
+      prisma.courseProgress.upsert.mockResolvedValue({ lastSlideIndex: 4, completedAt: new Date() });
+
+      await service.saveProgress('user-1', 'intro', 4, 5);
+
+      expect(mail.sendCourseCompletedEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ trainerEmail: 'trainer@example.com', courseTitle: 'Intro', rewardTokens: null }),
+      );
     });
   });
 
@@ -155,6 +203,26 @@ describe('CoursesService', () => {
     it('rejects when an id does not exist', async () => {
       prisma.course.count.mockResolvedValue(1);
       await expect(service.reorder({ items: [{ id: 'a', sortOrder: 0 }, { id: 'b', sortOrder: 1 }] } as any)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getIncompleteRequiredCourses', () => {
+    it('returns [] with no extra queries when no course is required', async () => {
+      prisma.course.findMany.mockResolvedValue([]);
+      const result = await service.getIncompleteRequiredCourses('user-1');
+      expect(result).toEqual([]);
+      expect(prisma.courseProgress.findMany).not.toHaveBeenCalled();
+    });
+
+    it('excludes courses this trainer has already completed', async () => {
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'c1', slug: 'intro', title: 'Intro' },
+        { id: 'c2', slug: 'safety', title: 'Safety' },
+      ]);
+      prisma.courseProgress.findMany.mockResolvedValue([{ courseId: 'c1' }]);
+
+      const result = await service.getIncompleteRequiredCourses('user-1');
+      expect(result).toEqual([{ id: 'c2', slug: 'safety', title: 'Safety' }]);
     });
   });
 });

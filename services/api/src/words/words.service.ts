@@ -12,6 +12,7 @@ import { StorageService } from '../storage/storage.service';
 import { RedisStreamsService } from '../redis-streams/redis-streams.service';
 import { LlmNormalizerService } from '../llm/llm-normalizer.service';
 import { parseProviderOrder } from '../llm/llm-provider.interface';
+import { CoursesService } from '../courses/courses.service';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
 import { GetSpellingSuggestionsDto } from './dto/get-spelling-suggestions.dto';
@@ -35,9 +36,18 @@ export class WordsService {
     private readonly settings: PlatformSettingsService,
     private readonly streams: RedisStreamsService,
     private readonly llm: LlmNormalizerService,
+    private readonly courses: CoursesService,
   ) {}
 
   async startSession(userId: string) {
+    const incompleteRequired = await this.courses.getIncompleteRequiredCourses(userId);
+    if (incompleteRequired.length > 0) {
+      throw new ForbiddenException({
+        message: 'Complete the required course(s) below before you can start training.',
+        requiredCourses: incompleteRequired,
+      });
+    }
+
     const trainer = await this.getTrainer(userId);
     const session = await this.prisma.trainingSession.create({
       data: {

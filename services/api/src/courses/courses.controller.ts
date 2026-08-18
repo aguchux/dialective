@@ -45,6 +45,15 @@ export class CoursesPublicController {
 export class CoursesProtectedController {
   constructor(private readonly courses: CoursesService) {}
 
+  // Lets the dashboard show a "complete these courses to train" gate
+  // proactively, instead of only surfacing it after a 403 from
+  // words.startSession/submissions.create. Registered before the :slug
+  // wildcard route below so "required" is never captured as a slug param.
+  @Get('required/incomplete')
+  getIncompleteRequired(@CurrentUser() user: AccessTokenClaims) {
+    return this.courses.getIncompleteRequiredCourses(user.sub);
+  }
+
   @Get(':slug')
   get(@CurrentUser() user: AccessTokenClaims, @Param('slug') slug: string) {
     return this.courses.getForStudy(user.sub, slug);

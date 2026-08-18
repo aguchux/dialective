@@ -320,6 +320,43 @@ export async function creditStartupBonus(
   }
 }
 
+/**
+ * Credits a course's one-time completion reward to a trainer's wallet as a
+ * COURSE_COMPLETION_REWARD ledger entry, keyed by courseId as the reference
+ * so the LedgerEntry(walletId, type, reference) unique constraint makes this
+ * naturally idempotent per (wallet, course) -- same P2002-swallow pattern as
+ * creditStartupBonus, just scoped to one course instead of being wallet-wide.
+ * Returns true if a credit was actually written, false if this trainer
+ * already had one for this course (lets the caller pick "with reward" vs
+ * "without reward" completion-email copy without a separate read).
+ */
+export async function creditCourseCompletionReward(
+  prisma: PrismaClient,
+  userId: string,
+  courseId: string,
+  tokenAmount: Decimal | number | string,
+): Promise<boolean> {
+  const wallet = await getOrCreateWallet(prisma, userId);
+  const amount = new Decimal(tokenAmount);
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.ledgerEntry.create({
+        data: { walletId: wallet.id, type: 'COURSE_COMPLETION_REWARD', amount, reference: courseId },
+      });
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: { increment: amount } },
+      });
+    });
+    return true;
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return false;
+    }
+    throw err;
+  }
+}
+
 export async function creditFundingReferralBonusesOps(
   prisma: PrismaClient,
   userId: string,

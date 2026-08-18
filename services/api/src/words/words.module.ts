@@ -4,10 +4,11 @@ import { WordsController } from './words.controller';
 import { SettingsModule } from '../settings/settings.module';
 import { RedisStreamsModule } from '../redis-streams/redis-streams.module';
 import { LlmModule } from '../llm/llm.module';
+import { CoursesModule } from '../courses/courses.module';
 import { WordsService } from './words.service';
 
 @Module({
-  imports: [StorageModule, SettingsModule, RedisStreamsModule, LlmModule],
+  imports: [StorageModule, SettingsModule, RedisStreamsModule, LlmModule, CoursesModule],
   controllers: [WordsController],
   providers: [WordsService],
 })
