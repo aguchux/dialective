@@ -29,3 +29,4 @@ ha:
   engine: whisper
   stream: asr-jobs-whisper
   checkpoint: NCAIR1/Hausa-ASR
+
