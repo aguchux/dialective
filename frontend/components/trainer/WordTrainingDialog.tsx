@@ -223,12 +223,31 @@ export function WordTrainingDialog({
     const dialectTag = assignment.dialectTag;
     const query = responseText.trim();
     if (suggestionsDebounceRef.current !== null) window.clearTimeout(suggestionsDebounceRef.current);
-    suggestionsDebounceRef.current = window.setTimeout(() => {
+
+    function fetchSuggestions() {
       loadSuggestions({ wordId, dialectTag, query })
         .unwrap()
-        .then((result) => setSuggestions(result.suggestions))
+        .then((result) => {
+          setSuggestions(result.suggestions);
+          // The very first load (before the trainer has typed anything) has
+          // nothing to react to yet -- surface it proactively instead of
+          // waiting for a focus/keystroke that may never come if they just
+          // pick straight from the list. Once they're actively typing,
+          // onChange already opens it explicitly, so this only fires once.
+          if (!query && result.suggestions.length > 0) setSuggestionsOpen(true);
+        })
         .catch(() => setSuggestions([]));
-    }, 250);
+    }
+
+    // No debounce for the query-less initial load (nothing to wait for --
+    // this fires once per assignment, not per keystroke). Real keystrokes
+    // still debounce briefly so suggestions update live as the trainer
+    // types without spamming a request per character.
+    if (!query) {
+      fetchSuggestions();
+    } else {
+      suggestionsDebounceRef.current = window.setTimeout(fetchSuggestions, 150);
+    }
     return () => {
       if (suggestionsDebounceRef.current !== null) window.clearTimeout(suggestionsDebounceRef.current);
     };
