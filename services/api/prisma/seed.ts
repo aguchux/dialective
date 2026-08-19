@@ -184,7 +184,7 @@ async function main() {
       );
     }
     const promptRows = Object.entries(PROMPTS_BY_DIALECT).flatMap(([dialectTag, texts]) =>
-      texts.map((text) => ({ dialectTag, text })),
+      texts.map((text) => ({ dialectTag, text, origin: 'SEED' as const })),
     );
     let promptsSeeded = 0;
     for (const prompt of promptRows) {

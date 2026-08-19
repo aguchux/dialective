@@ -129,17 +129,42 @@ export class WordGeneratorService {
         }
       }
     } else {
-      const prompt = this.buildGenerationPrompt(wordsPerItem, effectiveItemsPerRun);
-      const { items: rawItems, provider: englishProvider } = await this.chain.generate(prompt, providerOrder);
-      const { accepted: englishItems, filteredCount } = this.filterAndValidate(rawItems, wordsPerItem);
-      this.logger.log(`Generation run starting: provider=${englishProvider} generated=${rawItems.length} filteredOut=${filteredCount}`);
+      const wordSets = await this.selectWordsForComposition(wordsPerItem, effectiveItemsPerRun);
+      if (wordSets.length < effectiveItemsPerRun) {
+        this.logger.warn(
+          `Composition requested ${effectiveItemsPerRun} item(s) but only found enough classified Word rows for ${wordSets.length} -- ` +
+            'run llmWordsPerItem=1 generation (or the backfillClassification script) to grow the classified single-word pool first.',
+        );
+      }
 
-      const result = await this.insertPrompts(englishItems);
+      const composed: { text: string; wordSet: { id: string; text: string }[] }[] = [];
+      let filteredCount = 0;
+      for (const wordSet of wordSets) {
+        try {
+          const prompt = this.buildCompositionPrompt(wordSet);
+          const { items } = await this.chain.generate(prompt, providerOrder);
+          const text = items[0]?.trim();
+          if (!text) continue;
+          if (isFlaggedContent(text)) {
+            filteredCount += 1;
+            continue;
+          }
+          composed.push({ text, wordSet });
+        } catch (err) {
+          this.logger.warn(`Composition failed for word set [${wordSet.map((w) => w.text).join(', ')}]: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      this.logger.log(`Generation run starting: composed=${composed.length}/${wordSets.length} filteredOut=${filteredCount}`);
+
+      const { accepted, filteredCount: lengthFilteredCount } = this.filterAndValidateComposed(composed);
+      filteredCount += lengthFilteredCount;
+
+      const result = await this.insertComposedPrompts(accepted);
       inserted = result.inserted;
       skippedDuplicate = result.skippedDuplicate;
 
       for (const promptRow of result.insertedRows) {
-        promptWordFailures += await this.segmentAndLinkPromptWords(promptRow.id, promptRow.text, 'en-us', providerOrder);
+        promptWordFailures += await this.segmentAndLinkPromptWords(promptRow.id, promptRow.text, 'en-us', providerOrder, promptRow.wordSet);
 
         for (const dialectTag of dialectTags) {
           const outcome = await this.translateAndLinkPrompt(promptRow.id, promptRow.text, dialectTag, providerOrder);
@@ -245,16 +270,25 @@ export class WordGeneratorService {
     ].join(' ');
   }
 
-  private buildGenerationPrompt(wordsPerItem: number, itemsPerRun: number): string {
-    const lengthInstruction = `exactly ${wordsPerItem} words each (a short natural phrase or sentence, exactly ${wordsPerItem} words when split on whitespace)`;
-
+  /**
+   * Composes ONE phrase/sentence per call, constrained to a specific,
+   * caller-selected set of existing classified Word rows -- replaces the
+   * retired buildGenerationPrompt, which let the LLM invent its own
+   * vocabulary. The LLM still owns grammar/word order (no code here
+   * validates dialect-specific sentence structure -- see AGENTS.md "Word
+   * composition"), but the vocabulary source is fixed to what was selected,
+   * not free choice, so the resulting Prompt is genuinely built FROM the
+   * word bank rather than generated alongside it.
+   */
+  private buildCompositionPrompt(words: { text: string; partOfSpeech: string }[]): string {
+    const wordList = words.map((w) => `"${w.text}" (${w.partOfSpeech})`).join(', ');
     return [
-      `Generate exactly ${itemsPerRun} distinct items for a language-learning dictation/vocabulary app used by adult learners.`,
-      `Each item must be ${lengthInstruction}.`,
-      'Use common, everyday English vocabulary that an ordinary adult would recognize -- plain words are fine even if their origin is Latin or Greek (e.g. "family", "photograph"), but avoid rare, obscure, archaic, overly technical, or academic vocabulary.',
+      'You are composing one short sentence or phrase for a language-learning dictation app used by adult learners.',
+      `Using ONLY these words: ${wordList}.`,
+      'You may inflect or conjugate them as needed for correct grammar (e.g. "run" -> "runs", "walk" -> "walked"), and add ordinary function words (articles, prepositions, pronouns) if the sentence needs them to read naturally, but do NOT introduce any new content words (nouns, verbs, adjectives, adverbs) beyond the list above.',
+      'Use every word from the list at least once. Produce one natural, grammatically correct English sentence or short phrase.',
       'Do not include profanity, slurs, sexual content, violence, or anything inappropriate for a general audience.',
-      'Do not repeat any item.',
-      `Respond with ONLY a JSON object of the exact shape {"items": ["...", "..."]} containing exactly ${itemsPerRun} strings. No other text.`,
+      'Respond with ONLY a JSON object of the exact shape {"items": ["<sentence>"]} containing exactly one string. No other text.',
     ].join(' ');
   }
 
@@ -286,22 +320,28 @@ export class WordGeneratorService {
     ].join(' ');
   }
 
-  private filterAndValidate(rawItems: string[], wordsPerItem: number): { accepted: string[]; filteredCount: number } {
+  /**
+   * Dedup pass for composed sentences -- content filtering and per-item
+   * validity already happened inline in run() (each composition is its own
+   * LLM call, unlike the old batched buildGenerationPrompt), so this only
+   * needs to drop exact-text duplicates across the batch (e.g. two
+   * different word sets composing to the same short phrase by chance).
+   */
+  private filterAndValidateComposed(
+    items: { text: string; wordSet: { id: string; text: string }[] }[],
+  ): { accepted: { text: string; wordSet: { id: string; text: string }[] }[]; filteredCount: number } {
     const seen = new Set<string>();
-    const accepted: string[] = [];
+    const accepted: { text: string; wordSet: { id: string; text: string }[] }[] = [];
     let filteredCount = 0;
 
-    for (const raw of rawItems) {
-      const text = raw.trim();
-      const key = text.toLowerCase();
-      if (!text || seen.has(key)) continue;
-      if (text.split(/\s+/).length !== wordsPerItem) continue;
-      if (isFlaggedContent(text)) {
+    for (const item of items) {
+      const key = item.text.toLowerCase();
+      if (seen.has(key)) {
         filteredCount += 1;
         continue;
       }
       seen.add(key);
-      accepted.push(text);
+      accepted.push(item);
     }
 
     return { accepted, filteredCount };
@@ -357,26 +397,34 @@ export class WordGeneratorService {
     return { inserted: insertedRows.length, skippedDuplicate: items.length - newItems.length, insertedRows };
   }
 
-  private async insertPrompts(texts: string[]): Promise<{ inserted: number; skippedDuplicate: number; insertedRows: { id: string; text: string }[] }> {
-    if (texts.length === 0) return { inserted: 0, skippedDuplicate: 0, insertedRows: [] };
+  /**
+   * Inserts composed sentences as origin: WORD_COMPOSED Prompt rows,
+   * carrying each row's source word set through to the caller so
+   * segmentAndLinkPromptWords can set PromptWord.sourceWordId on the
+   * English fragments that came from a selected Word.
+   */
+  private async insertComposedPrompts(
+    items: { text: string; wordSet: { id: string; text: string }[] }[],
+  ): Promise<{ inserted: number; skippedDuplicate: number; insertedRows: { id: string; text: string; wordSet: { id: string; text: string }[] }[] }> {
+    if (items.length === 0) return { inserted: 0, skippedDuplicate: 0, insertedRows: [] };
 
     const existing = await this.prisma.prompt.findMany({
       where: { dialectTag: 'en-us' },
       select: { text: true },
     });
     const existingSet = new Set(existing.map((row) => row.text.trim().toLowerCase()));
-    const newTexts = texts.filter((text) => !existingSet.has(text.toLowerCase()));
+    const newItems = items.filter((item) => !existingSet.has(item.text.toLowerCase()));
 
-    const insertedRows: { id: string; text: string }[] = [];
-    for (const text of newTexts) {
+    const insertedRows: { id: string; text: string; wordSet: { id: string; text: string }[] }[] = [];
+    for (const item of newItems) {
       const row = await this.prisma.prompt.create({
-        data: { dialectTag: 'en-us', text, active: true },
+        data: { dialectTag: 'en-us', text: item.text, active: true, origin: 'WORD_COMPOSED' },
         select: { id: true, text: true },
       });
-      insertedRows.push(row);
+      insertedRows.push({ ...row, wordSet: item.wordSet });
     }
 
-    return { inserted: insertedRows.length, skippedDuplicate: texts.length - newTexts.length, insertedRows };
+    return { inserted: insertedRows.length, skippedDuplicate: items.length - newItems.length, insertedRows };
   }
 
   // --- Translations ---------------------------------------------------------
@@ -461,12 +509,22 @@ export class WordGeneratorService {
    * logging only; a partial segmentation still leaves a usable, just
    * shorter, exercise -- WordsService.nextAssignment requires >=2
    * PromptWord rows to offer an assignment).
+   *
+   * `sourceWordSet`, when given (WORD_COMPOSED English pass only -- see
+   * insertComposedPrompts), lets each resulting fragment be matched back to
+   * the Word it was originally selected from (case-insensitive text match
+   * against the fragment as segmented, which may be inflected -- a
+   * same-stem match is good enough for audit purposes, an exact-form match
+   * isn't required). Fragments that don't match any selected word (e.g. an
+   * added function word like "the") simply leave sourceWordId null, same as
+   * every non-composed PromptWord already does.
    */
   private async segmentAndLinkPromptWords(
     promptId: string,
     sentence: string,
     dialectTag: string,
     providerOrder: LlmProviderKey[],
+    sourceWordSet?: { id: string; text: string }[],
   ): Promise<number> {
     try {
       const existingCount = await this.prisma.promptWord.count({ where: { promptId, dialectTag } });
@@ -479,6 +537,8 @@ export class WordGeneratorService {
       const { items } = await this.chain.generateStructured(prompt, providerOrder, parsePosItemArray);
       if (items.length < 2) return 1;
 
+      const sourceWordByText = new Map((sourceWordSet ?? []).map((w) => [w.text.toLowerCase(), w.id] as const));
+
       let failures = 0;
       let position = 0;
       for (const item of items) {
@@ -489,7 +549,14 @@ export class WordGeneratorService {
             continue;
           }
           await this.prisma.promptWord.create({
-            data: { promptId, dialectTag, position, wordId: word.id, text: item.text },
+            data: {
+              promptId,
+              dialectTag,
+              position,
+              wordId: word.id,
+              text: item.text,
+              sourceWordId: sourceWordByText.get(item.text.toLowerCase()) ?? null,
+            },
           });
           position += 1;
         } catch {
@@ -545,6 +612,64 @@ export class WordGeneratorService {
       data: { wordId: englishWord.id, dialectTag, text: item.text, partOfSpeech: item.partOfSpeech },
     });
     return englishWord;
+  }
+
+  // --- Composition ---------------------------------------------------------
+
+  /**
+   * Picks `count` distinct sets of `wordsPerItem` existing classified Word
+   * rows each (no repeated word within a single set), for
+   * buildCompositionPrompt to compose a sentence from. Only classified
+   * words (partOfSpeech IS NOT NULL) are eligible -- an unclassified word
+   * carries no signal for what role it can play in a sentence. When at
+   * least one NOUN and one VERB are available, every set is biased to
+   * include one of each (a bare list of e.g. three adjectives has no verb
+   * to build a real sentence around) -- the remaining slots are filled from
+   * the full classified pool at random. Returns fewer than `count` sets
+   * (down to zero) if the classified pool is too small to fill them all;
+   * callers must handle a short result rather than assuming exactly `count`
+   * comes back -- see the warning logged in run() when this happens.
+   */
+  private async selectWordsForComposition(
+    wordsPerItem: number,
+    count: number,
+  ): Promise<{ id: string; text: string; partOfSpeech: string }[][]> {
+    if (count <= 0) return [];
+
+    const classified = await this.prisma.word.findMany({
+      where: { partOfSpeech: { not: null } },
+      select: { id: true, text: true, partOfSpeech: true },
+    });
+    if (classified.length < wordsPerItem) return [];
+
+    const nouns = classified.filter((w) => w.partOfSpeech === 'NOUN');
+    const verbs = classified.filter((w) => w.partOfSpeech === 'VERB');
+
+    const sets: { id: string; text: string; partOfSpeech: string }[][] = [];
+    for (let i = 0; i < count; i++) {
+      const chosen = new Map<string, { id: string; text: string; partOfSpeech: string }>();
+
+      if (wordsPerItem >= 2 && nouns.length > 0) {
+        const noun = nouns[Math.floor(Math.random() * nouns.length)];
+        chosen.set(noun.id, noun as { id: string; text: string; partOfSpeech: string });
+      }
+      if (wordsPerItem >= 2 && verbs.length > 0 && chosen.size < wordsPerItem) {
+        const verb = verbs[Math.floor(Math.random() * verbs.length)];
+        chosen.set(verb.id, verb as { id: string; text: string; partOfSpeech: string });
+      }
+
+      const remaining = classified.filter((w) => !chosen.has(w.id));
+      while (chosen.size < wordsPerItem && remaining.length > 0) {
+        const idx = Math.floor(Math.random() * remaining.length);
+        const word = remaining.splice(idx, 1)[0];
+        chosen.set(word.id, word as { id: string; text: string; partOfSpeech: string });
+      }
+
+      if (chosen.size < wordsPerItem) break; // pool exhausted -- return what we could build
+      sets.push(Array.from(chosen.values()));
+    }
+
+    return sets;
   }
 
   // --- Settings / coverage --------------------------------------------------

@@ -305,4 +305,46 @@ describe('WordsService', () => {
       submittedOrder: [2, 0, 1],
     })).resolves.toMatchObject({ validationScore: 0 });
   });
+
+  describe('getSpellingSuggestions', () => {
+    it('orders community (score:100) rows by compositeScore, filling remaining slots with AI translations', async () => {
+      // The mocked findMany stands in for Prisma's own ORDER BY + client-side
+      // distinct behavior -- returning rows already in the order a real
+      // query (compositeScore desc nulls last, then scoredAt desc) would
+      // produce, since we're unit-testing WordsService's assembly logic
+      // here, not Prisma's query engine (verified separately).
+      prisma.wordRecording.findMany.mockResolvedValue([
+        { translationText: 'nnọọ' }, // highest compositeScore
+        { translationText: 'ndeewo' }, // lower compositeScore
+      ]);
+      prisma.wordTranslation = { findMany: jest.fn().mockResolvedValue([{ text: 'daalu' }]) };
+
+      const result = await service.getSpellingSuggestions({ wordId: 'word-1', dialectTag: 'ig' } as any);
+
+      expect(result.suggestions).toEqual([
+        { text: 'nnọọ', source: 'community' },
+        { text: 'ndeewo', source: 'community' },
+        { text: 'daalu', source: 'ai' },
+      ]);
+      expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ direction: 'ENGLISH_TO_DIALECT', status: 'SCORED', score: 100 }),
+          orderBy: [{ compositeScore: { sort: 'desc', nulls: 'last' } }, { scoredAt: 'desc' }],
+        }),
+      );
+    });
+
+    it('skips the AI lookup entirely once community suggestions already fill all 8 slots', async () => {
+      prisma.wordRecording.findMany.mockResolvedValue(
+        Array.from({ length: 8 }, (_, i) => ({ translationText: `text-${i}` })),
+      );
+      prisma.wordTranslation = { findMany: jest.fn() };
+
+      const result = await service.getSpellingSuggestions({ wordId: 'word-1', dialectTag: 'ig' } as any);
+
+      expect(result.suggestions).toHaveLength(8);
+      expect(result.suggestions.every((s: any) => s.source === 'community')).toBe(true);
+      expect(prisma.wordTranslation.findMany).not.toHaveBeenCalled();
+    });
+  });
 });

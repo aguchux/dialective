@@ -431,17 +431,38 @@ enum SubmissionStatus {
   EXPIRED     // settlement-job's scoring SLA elapsed with no quorum reached; tokens refunded, terminal state
 }
 
+/// Where a Prompt's text came from -- SEED (hand-picked services/api/prisma/
+/// seed.ts phrasebook entries), LLM_FREEFORM (the retired free-vocabulary
+/// generation mode -- the LLM invented its own words), or WORD_COMPOSED (the
+/// current mode: the LLM composed a sentence using only a given set of
+/// existing, classified Word rows -- see word-generator-job's
+/// selectWordsForComposition/buildCompositionPrompt and AGENTS.md "Word
+/// composition"). Purely descriptive/auditable -- no code branches on this
+/// today, but it's what lets an admin (or a future feature) tell composed
+/// content apart from the two other sources.
+enum PromptOrigin {
+  SEED
+  LLM_FREEFORM
+  WORD_COMPOSED
+}
+
 /// Seeded (services/api/prisma/seed.ts), stable sentence prompts for the
 /// dictation flow -- replaces PromptsController's old in-memory bank, which
 /// minted a fresh promptId on every call and meant a prompt/dialect cluster
 /// could never reach quorum. `active` lets admin retire a bad prompt without
-/// deleting the Submission history that references it.
+/// deleting the Submission history that references it. Every Prompt is
+/// stored once and reused across every trainer who is offered it (never
+/// regenerated per-trainer) -- this is what lets a prompt/dialect cluster
+/// accumulate enough independent submissions to reach consensus-scorer's
+/// MIN_QUORUM; see "Word composition" in AGENTS.md for why this matters for
+/// WORD_COMPOSED rows specifically.
 model Prompt {
-  id         String   @id @default(uuid())
+  id         String       @id @default(uuid())
   dialectTag String
   text       String
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  active     Boolean      @default(true)
+  origin     PromptOrigin @default(LLM_FREEFORM) // default matches every pre-existing generated row's actual origin; SEED/WORD_COMPOSED are set explicitly by their respective insert call sites
+  createdAt  DateTime     @default(now())
 
   submissions  Submission[]
   translations PromptTranslation[]
@@ -462,16 +483,24 @@ model Prompt {
 /// still links it to the classified Word for POS display/filtering.
 /// Populated by word-generator-job in the same run that creates the
 /// Prompt (or by the one-off backfill script for pre-existing prompts).
+/// `sourceWordId` is the audit trail back to the ORIGINALLY-SELECTED Word
+/// a composed fragment came from (see Prompt.origin WORD_COMPOSED) -- only
+/// ever set on the English source Prompt's own fragments (a dialect
+/// translation's fragments are derived from a WordTranslation, not the
+/// same Word row, so they leave this null); always null for SEED/
+/// LLM_FREEFORM origin, where the fragment was derived by segmenting an
+/// already-complete sentence, not chosen beforehand.
 model PromptWord {
-  id         String   @id @default(uuid())
-  promptId   String
-  prompt     Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
-  dialectTag String
-  position   Int
-  wordId     String
-  word       Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
-  text       String
-  createdAt  DateTime @default(now())
+  id           String   @id @default(uuid())
+  promptId     String
+  prompt       Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  dialectTag   String
+  position     Int
+  wordId       String
+  word         Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  text         String
+  sourceWordId String?
+  createdAt    DateTime @default(now())
 
   @@unique([promptId, dialectTag, position])
   @@index([promptId, dialectTag])

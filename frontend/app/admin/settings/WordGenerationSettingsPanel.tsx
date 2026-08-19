@@ -149,8 +149,12 @@ export function WordGenerationSettingsPanel() {
               Words per item
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              1 = single words (added to the word-training bank). 2-5 = short phrases (added to the dictation bank,
-              English source only).
+              1 = single words (added to the word-training bank, each classified by part of speech). 2-5 = short
+              phrases <strong>composed from existing classified words</strong> (not freely invented) -- the system
+              picks that many words from the word bank (favoring a noun + verb pair when available) and asks the LLM
+              to build a natural sentence using only those words, then stores it for the dictation and
+              sentence-rebuild exercises. Composition needs a classified word bank to draw from, so run "words per
+              item = 1" (or the classification backfill) first for a dialect before switching this to 2-5.
             </p>
             <input
               className={inputClass}

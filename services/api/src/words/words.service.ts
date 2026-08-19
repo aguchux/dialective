@@ -550,6 +550,16 @@ export class WordsService {
    * LLM WordTranslation rows fill in the remainder when peer-validated
    * coverage is thin, tagged distinctly so the frontend can show trainers
    * which is which.
+   *
+   * ENGLISH_TO_DIALECT's `score` is binary (100, or never SCORED at all --
+   * see scoreReverseValidatedSource's early return below 1) so every
+   * candidate row here is already tied at the same score; `compositeScore`
+   * (quality-gate's noise/clipping/liveness blend, still real-valued even
+   * for a perfect-match recording) is what actually ranks "best" among
+   * them. Rows the quality gate hasn't scored yet (compositeScore null,
+   * e.g. gate disabled or not yet run) sort after every gated row rather
+   * than being excluded -- a peer-validated text with no quality signal
+   * yet is still better than falling back to an AI-only suggestion.
    */
   async getSpellingSuggestions(query: GetSpellingSuggestionsDto) {
     const search = query.query?.trim();
@@ -564,7 +574,15 @@ export class WordsService {
         score: 100,
         ...(textFilter ? { translationText: textFilter } : {}),
       },
+      // `distinct` here runs client-side over the ordered result set (Prisma
+      // 7's query-compiler engine, no `nativeDistinct`/DISTINCT ON pushdown
+      // for this shape), keeping the first row per translationText in the
+      // order below -- so orderBy leading with compositeScore, not
+      // translationText, is deliberate and correct, not a Postgres
+      // "DISTINCT ON expressions must match ORDER BY" violation. Don't
+      // reorder this to put translationText first to "fix" it.
       distinct: ['translationText'],
+      orderBy: [{ compositeScore: { sort: 'desc', nulls: 'last' } }, { scoredAt: 'desc' }],
       select: { translationText: true },
       take: 8,
     });
