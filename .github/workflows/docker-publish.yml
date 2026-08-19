@@ -16,7 +16,9 @@ on:
       - "packages/db/**"
       - "package.json"
       - "package-lock.json"
-      - "models/**"
+      - "models/registry.yaml"
+      - "models/asr-registry.yaml"
+      - "models/tts-registry.yaml"
       - ".github/workflows/docker-publish.yml"
   workflow_dispatch:
 

@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 
@@ -16,6 +17,7 @@ SET status = %(status)s,
     transcript = %(transcript)s,
     "asrConfidence" = %(asr_confidence)s,
     "asrEngine" = %(asr_engine)s,
+    "asrWordDetail" = %(asr_word_detail)s,
     "rejectionReason" = %(rejection_reason)s,
     "updatedAt" = now()
 WHERE id = %(submission_id)s AND status = 'PENDING'
@@ -40,6 +42,7 @@ def update_submission_result(
     transcript: str | None = None,
     asr_confidence: float | None = None,
     asr_engine: str | None = None,
+    asr_word_detail: list | None = None,
     rejection_reason: str | None = None,
 ) -> None:
     """
@@ -62,6 +65,7 @@ def update_submission_result(
                 "transcript": transcript,
                 "asr_confidence": asr_confidence,
                 "asr_engine": asr_engine,
+                "asr_word_detail": json.dumps(asr_word_detail) if asr_word_detail is not None else None,
                 "rejection_reason": rejection_reason,
             },
         )

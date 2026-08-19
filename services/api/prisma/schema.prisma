@@ -498,6 +498,7 @@ model Submission {
   transcript        String?
   asrConfidence     Decimal?         @db.Decimal(5, 4) // mean per-word confidence, 0-1; null when the engine has none (Whisper)
   asrEngine         String?          // "vosk" | "whisper"
+  asrWordDetail     Json?            // [{word, start, end, conf}], seconds; conf is null for Whisper-origin rows (no per-word confidence signal), populated for Vosk
   rejectionReason   String?          // duration_out_of_range | mostly_silence | unreadable_audio | unsupported_dialect
   tokensSpent       Decimal          @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
   rawScore          Decimal?         @db.Decimal(5, 2) // 0.00-100.00 original consensus agreement before any admin score-range weighting/clamp; used for partner data queries

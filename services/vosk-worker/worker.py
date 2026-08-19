@@ -94,6 +94,7 @@ def write_submission_row(db_conn, submission_id: str, status: str, **fields) -> 
         transcript=fields.get("transcript"),
         asr_confidence=mean_confidence(word_conf) if word_conf is not None else None,
         asr_engine="vosk" if status != "unsupported_dialect" else None,
+        asr_word_detail=word_conf if word_conf else None,
         rejection_reason=fields.get("reason") or ("unsupported_dialect" if status == "unsupported_dialect" else None),
     )
 

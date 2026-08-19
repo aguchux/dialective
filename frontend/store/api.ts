@@ -1045,6 +1045,13 @@ export interface AdminRecordingTrainer {
   lastName: string | null;
 }
 
+export interface WordDetail {
+  word: string;
+  start: number;
+  end: number;
+  conf: number | null;
+}
+
 export interface AdminRecordingSummary {
   id: string;
   kind: RecordingKind;
@@ -1063,6 +1070,7 @@ export interface AdminRecordingSummary {
   compositeScore: string | null;
   payoutTokenAmount: string | null;
   audioUrl: string | null;
+  asrWordDetail: WordDetail[] | null;
   rejectionReason: string | null;
   adminAuditStatus: AdminAuditStatus | null;
   adminAuditedAt: string | null;

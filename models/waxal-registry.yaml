@@ -1,0 +1,36 @@
+# WAXAL ASR language registry, read only by datasets/waxal/scripts/*.py and
+# tools/asr-benchmark/. This is NOT the production dialect_tag -> engine
+# routing table (see models/asr-registry.yaml for that) and is never read by
+# vosk-worker or whisper-worker -- keeping this file structurally separate is
+# deliberate, since WAXAL is an offline benchmark dataset, not a production
+# ASR source.
+#
+# None of the languages below currently overlap Dialect Library's own
+# supported dialects (en-us, ig, yo, ha -- see models/asr-registry.yaml).
+# Yoruba/Hausa/Igbo do exist in the real WAXAL release, but only in its TTS
+# portion, not ASR -- there is no WAXAL ASR audio for those languages to
+# benchmark against today. This registry exists for general WAXAL-language
+# benchmarking and future overlap, not a current production comparison. See
+# datasets/waxal/README.md for the full language list and license details.
+#
+# `configName` is the exact Hugging Face dataset config string for
+# datasets.load_dataset("google/WaxalNLP", configName) -- download.py always
+# resolves through this field, never hardcodes a config name inline.
+#
+# Only add a language here once it's confirmed present in the actual WAXAL
+# release being used -- do not pre-populate the full language list
+# speculatively.
+
+sna:
+  name: Shona
+  configName: sna_asr
+  dataset: waxal
+  license: CC-BY-SA-4.0
+  enabled: true
+
+amh:
+  name: Amharic
+  configName: amh_asr
+  dataset: waxal
+  license: CC-BY-SA-4.0
+  enabled: true

@@ -1,0 +1,24 @@
+[
+  {
+    "dataset": "waxal",
+    "language": "Shona",
+    "languageTag": "sna",
+    "dialectTag": null,
+    "audioPath": "datasets/waxal/data/sna/raw/0001.wav",
+    "transcript": "ndinofara kukuona",
+    "durationSeconds": 2.35,
+    "speakerId": "spk-01",
+    "split": "test"
+  },
+  {
+    "dataset": "waxal",
+    "language": "Shona",
+    "languageTag": "sna",
+    "dialectTag": null,
+    "audioPath": "datasets/waxal/data/sna/raw/0002.wav",
+    "transcript": "mangwanani akanaka",
+    "durationSeconds": 1.87,
+    "speakerId": "spk-02",
+    "split": "test"
+  }
+]

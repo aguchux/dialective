@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Pause, Play, X, XCir
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
   AdminRecordingSummary,
+  WordDetail,
   normalizeErrorMessage,
   useAuditRecordingMutation,
   useGetAdminTrainerRecordingsQuery,
@@ -127,6 +128,7 @@ export function RecordingAuditDialog({
 
 export function RecordingCard({ recording, trainerId }: { recording: AdminRecordingSummary; trainerId?: string }) {
   const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [clawback, setClawback] = useState(false);
@@ -143,6 +145,13 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
     } else {
       void audio.play();
     }
+  }
+
+  function seekTo(seconds: number) {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = seconds;
+    setCurrentTime(seconds);
   }
 
   async function handleMark(status: 'VALID' | 'INVALID') {
@@ -198,7 +207,11 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
       {recording.responseText && (
         <div className="grid gap-1 text-center">
           <p className="text-sm font-bold text-white/60">Trainer&rsquo;s response</p>
-          <p className="break-words text-lg font-bold">{recording.responseText}</p>
+          {recording.asrWordDetail && recording.asrWordDetail.length > 0 ? (
+            <TranscriptWords words={recording.asrWordDetail} currentTime={currentTime} onSeek={seekTo} />
+          ) : (
+            <p className="break-words text-lg font-bold">{recording.responseText}</p>
+          )}
         </div>
       )}
 
@@ -217,6 +230,7 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
               onEnded={() => setPlaying(false)}
               onPause={() => setPlaying(false)}
               onPlay={() => setPlaying(true)}
+              onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
               ref={audioRef}
               src={recording.audioUrl}
             />
@@ -355,6 +369,48 @@ export function RecordingDetailDialog({
         </RadixDialog.Content>
       </RadixDialog.Portal>
     </RadixDialog.Root>
+  );
+}
+
+/**
+ * Per-word transcript rendering: color-bands each word by confidence when
+ * the engine provides one (Vosk; Whisper words always have conf: null and
+ * render neutral), and highlights whichever word is under the audio
+ * element's current playback position. Clicking a word seeks the audio
+ * there via the same audioRef the play/pause button already controls.
+ */
+function TranscriptWords({
+  words,
+  currentTime,
+  onSeek,
+}: {
+  words: WordDetail[];
+  currentTime: number;
+  onSeek: (seconds: number) => void;
+}) {
+  function confidenceClass(conf: number | null) {
+    if (conf === null) return 'text-white';
+    if (conf < 0.5) return 'text-red-400';
+    if (conf < 0.8) return 'text-amber-300';
+    return 'text-emerald-300';
+  }
+
+  return (
+    <p className="break-words text-lg font-bold">
+      {words.map((w, i) => {
+        const active = currentTime >= w.start && currentTime < w.end;
+        return (
+          <button
+            className={`mx-0.5 rounded transition-colors ${confidenceClass(w.conf)} ${active ? 'bg-white/20' : 'hover:bg-white/10'}`}
+            key={`${w.word}-${i}`}
+            onClick={() => onSeek(w.start)}
+            type="button"
+          >
+            {w.word}
+          </button>
+        );
+      })}
+    </p>
   );
 }
 

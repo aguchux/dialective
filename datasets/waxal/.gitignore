@@ -1,0 +1,4 @@
+# Raw/downloaded WAXAL audio and generated manifests -- never committed, same
+# convention as Vosk model weights / Whisper checkpoints elsewhere in this repo.
+# See README.md.
+data/

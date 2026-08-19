@@ -42,6 +42,7 @@ def get_pipeline(dialect_tag: str):
             model=checkpoint,
             device=_DEVICE,
             model_kwargs={"cache_dir": _MODEL_CACHE_DIR},
+            return_timestamps="word",
         )
     return _pipeline_cache[dialect_tag]
 
@@ -58,6 +59,20 @@ def transcode_to_wav(src_path: str, dst_path: str, sr: int = 16000) -> None:
         check=True,
         capture_output=True,
     )
+
+
+def word_detail_from_chunks(chunks: list) -> list:
+    """
+    HF's ASR pipeline, called with return_timestamps="word", returns
+    {"text": ..., "chunks": [{"text": word, "timestamp": (start, end)}, ...]}.
+    Reshape to the same {word, start, end, conf} shape vosk-worker persists,
+    with conf always None -- Whisper has no per-word confidence signal.
+    """
+    return [
+        {"word": chunk["text"].strip(), "start": chunk["timestamp"][0], "end": chunk["timestamp"][1], "conf": None}
+        for chunk in chunks
+        if chunk.get("timestamp") and chunk["timestamp"][0] is not None and chunk["timestamp"][1] is not None
+    ]
 
 
 RESULT_TTL_S = 24 * 60 * 60
@@ -79,6 +94,7 @@ def write_submission_row(db_conn, submission_id: str, status: str, **fields) -> 
     # Whisper's HF pipeline never returns per-word confidence -- asr_confidence
     # stays None (not 0) to distinguish "no confidence data" from "zero
     # confidence", matching vosk-worker's mean_confidence(None) behavior.
+    word_detail = fields.get("word_detail")
     update_submission_result(
         db_conn,
         submission_id,
@@ -86,6 +102,7 @@ def write_submission_row(db_conn, submission_id: str, status: str, **fields) -> 
         transcript=fields.get("transcript"),
         asr_confidence=None,
         asr_engine="whisper" if status != "unsupported_dialect" else None,
+        asr_word_detail=word_detail if word_detail else None,
         rejection_reason=fields.get("reason") or ("unsupported_dialect" if status == "unsupported_dialect" else None),
     )
 
@@ -117,8 +134,9 @@ def make_handler(s3, redis_client: redis.Redis, db_conn):
 
             result = asr(wav_path)
             text = result.get("text", "").strip()
-            write_result(redis_client, submission_id, status="ok", transcript=text, word_confidences=[])
-            write_submission_row(db_conn, submission_id, "ok", transcript=text)
+            word_detail = word_detail_from_chunks(result.get("chunks", []))
+            write_result(redis_client, submission_id, status="ok", transcript=text, word_confidences=word_detail)
+            write_submission_row(db_conn, submission_id, "ok", transcript=text, word_detail=word_detail)
 
             publish(
                 redis_client,

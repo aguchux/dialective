@@ -1,0 +1,14 @@
+# Standalone requirements for this offline tool -- not merged into any
+# service's requirements.txt. No redis/boto3/psycopg2 needed here: this is
+# local/offline tooling reading local files only, no Streams, no S3, no
+# Postgres. Versions pinned to match the existing workers where they
+# overlap, so benchmark results are representative of what production
+# would actually produce.
+transformers==4.44.2
+torch==2.4.0
+vosk==0.3.45
+soundfile==0.12.1
+numpy==1.26.4
+PyYAML==6.0.2
+jiwer==3.0.4
+datasets==2.21.0

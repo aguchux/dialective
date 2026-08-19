@@ -11,6 +11,8 @@ import { AuditRecordingDto } from './dto/audit-recording.dto';
 
 export type RecordingKind = 'word' | 'submission';
 
+export type WordDetail = { word: string; start: number; end: number; conf: number | null };
+
 /**
  * Admin-facing recording audit: lets an admin page through one trainer's
  * WordRecording + Submission rows (merged into a single chronological
@@ -284,6 +286,7 @@ export class AdminRecordingsService {
         recording.audioBucket && recording.audioKey
           ? (await this.storage.createPresignedDownloadUrl(recording.audioBucket, recording.audioKey)).url
           : null,
+      asrWordDetail: null, // WordRecording has no ASR step -- see schema.prisma comment on WordRecording
       rejectionReason: null as string | null,
       adminAuditStatus: recording.adminAuditStatus,
       adminAuditedAt: recording.adminAuditedAt,
@@ -317,6 +320,7 @@ export class AdminRecordingsService {
       compositeScore: submission.compositeScore?.toString() ?? null,
       payoutTokenAmount: submission.payoutTokenAmount?.toString() ?? null,
       audioUrl: (await this.storage.createPresignedDownloadUrl(submission.audioBucket, submission.audioKey)).url,
+      asrWordDetail: submission.asrWordDetail as WordDetail[] | null,
       rejectionReason: submission.rejectionReason,
       adminAuditStatus: submission.adminAuditStatus,
       adminAuditedAt: submission.adminAuditedAt,

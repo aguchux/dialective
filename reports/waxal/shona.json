@@ -1,0 +1,11 @@
+{
+  "dataset": "waxal",
+  "languageTag": "sna",
+  "language": "Shona",
+  "results": [
+    {
+      "engine": "vosk",
+      "supported": false
+    }
+  ]
+}
