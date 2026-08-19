@@ -1000,6 +1000,17 @@ export class AuthService {
         verifiedByAdmin: { select: { id: true, email: true, firstName: true, lastName: true } },
       },
     });
+
+    // Best-effort: the verification itself already landed above (fee
+    // debited, phoneVerifiedAt set) -- a Resend failure here must not unwind
+    // or fail the admin's confirming action, same tolerance as
+    // sendTrainingPayoutCreditedEmail's call site.
+    try {
+      await this.mail.sendPhoneVerifiedEmail(item.user.email, item.phoneNumber);
+    } catch (err) {
+      this.logger.warn(`Failed to send phone-verified email to ${item.user.email}: ${err}`);
+    }
+
     return {
       id: item.id,
       phoneNumber: item.phoneNumber,

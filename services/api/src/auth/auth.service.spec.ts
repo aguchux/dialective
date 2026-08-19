@@ -53,7 +53,13 @@ function setup(
     if (typeof ops === 'function') return (ops as (tx: unknown) => unknown)(prisma);
     return Promise.all(ops as Promise<unknown>[]);
   });
-  const mail = { sendMagicLinkEmail: jest.fn(), sendEmailVerificationEmail: jest.fn(), sendReferralJoinNotification: jest.fn(), sendPasswordResetEmail: jest.fn() };
+  const mail = {
+    sendMagicLinkEmail: jest.fn(),
+    sendEmailVerificationEmail: jest.fn(),
+    sendReferralJoinNotification: jest.fn(),
+    sendPasswordResetEmail: jest.fn(),
+    sendPhoneVerifiedEmail: jest.fn(),
+  };
   const otp = {
     issueWithTicket: jest.fn().mockResolvedValue({ ticket: 'ticket-1', expiresInSeconds: 600 }),
     verifyWithoutConsuming: jest.fn(),
@@ -419,7 +425,7 @@ describe('AuthService.verifyManualPhoneVerificationRequest', () => {
   }
 
   it('verifies on a correct code, charges the fee, and marks the user phoneVerified', async () => {
-    const { service, prisma } = setup();
+    const { service, prisma, mail } = setup();
     const request = pendingRequest();
     prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 1 }); // the claim inside $transaction
     prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(request);
@@ -444,6 +450,7 @@ describe('AuthService.verifyManualPhoneVerificationRequest', () => {
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'user-1' }, data: expect.objectContaining({ phoneNumber: '+1234567890' }) }),
     );
+    expect(mail.sendPhoneVerifiedEmail).toHaveBeenCalledWith('a@b.com', '+1234567890');
   });
 
   it('blocks verification when the trainer has insufficient DL for the fee, leaving the request PENDING', async () => {

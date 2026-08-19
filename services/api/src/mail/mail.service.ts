@@ -148,6 +148,24 @@ export class MailService {
     );
   }
 
+  /**
+   * Fired from AuthService.verifyManualPhoneVerificationRequest once an
+   * admin confirms a trainer's WhatsApp-submitted code -- best-effort, same
+   * as sendTrainingPayoutCreditedEmail: the verification itself has already
+   * landed (phoneVerifiedAt set, fee debited) by the time this is called, so
+   * the caller catches a failure here separately rather than letting it
+   * unwind an already-successful verification.
+   */
+  async sendPhoneVerifiedEmail(email: string, phoneNumber: string): Promise<void> {
+    const dashboardUrl = `${frontendUrl()}/dashboard`;
+    await this.send(
+      email,
+      'Your phone number is verified',
+      phoneVerifiedHtml(phoneNumber, dashboardUrl),
+      phoneVerifiedText(phoneNumber, dashboardUrl),
+    );
+  }
+
   private async send(to: string, subject: string, html: string, text: string): Promise<void> {
     if (!this.resend) {
       this.logger.log(`[STUB] ${subject} for ${to}: ${text}`);
@@ -288,4 +306,16 @@ ${rewardTokens ? `<p><strong>${escapeHtml(rewardTokens)} DL</strong> has been ad
 function courseCompletedText(courseTitle: string, rewardTokens: string | null, coursesUrl: string): string {
   return `You've completed ${courseTitle}.
 ${rewardTokens ? `${rewardTokens} DL has been added to your Dialect Library wallet for completing this course.\n` : ''}Continue training: ${coursesUrl}`;
+}
+
+function phoneVerifiedHtml(phoneNumber: string, dashboardUrl: string): string {
+  return `<p>Your phone number <strong>${escapeHtml(phoneNumber)}</strong> has been verified.</p>
+<p>You can now request withdrawals and trade on the P2P market.</p>
+<p><a href="${dashboardUrl}">Go to your dashboard</a></p>`;
+}
+
+function phoneVerifiedText(phoneNumber: string, dashboardUrl: string): string {
+  return `Your phone number ${phoneNumber} has been verified.
+You can now request withdrawals and trade on the P2P market.
+Go to your dashboard: ${dashboardUrl}`;
 }
