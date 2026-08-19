@@ -138,6 +138,24 @@ export interface AdminDialect {
   _count: { users: number };
 }
 
+export interface AudioRetentionRule {
+  id: string;
+  enabled: boolean;
+  countryId: string | null;
+  country: { id: string; name: string; code: string } | null;
+  dialectTag: string | null;
+  retentionDays: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AudioRetentionRuleInput {
+  enabled?: boolean;
+  countryId?: string | null;
+  dialectTag?: string | null;
+  retentionDays: number;
+}
+
 export interface CountryInput {
   code: string;
   name: string;
@@ -1407,7 +1425,7 @@ const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptio
 export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
   baseQuery: baseQueryWithMaintenanceSignal,
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'RequiredCourses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'AdminRecordings', 'DataAccessLeads', 'P2P', 'Profile', 'Notifications'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'RequiredCourses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'AdminRecordings', 'AudioRetentionRules', 'DataAccessLeads', 'P2P', 'Profile', 'Notifications'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -2045,6 +2063,22 @@ export const dialectivaApi = createApi({
       invalidatesTags: (_result, _error, { trainerId }) =>
         trainerId ? [{ type: 'AdminRecordings', id: trainerId }, 'AdminRecordings', 'Wallet', 'Users'] : ['AdminRecordings', 'Wallet', 'Users'],
     }),
+    getAudioRetentionRules: builder.query<AudioRetentionRule[], void>({
+      query: () => '/admin/dataset-storage/rules',
+      providesTags: ['AudioRetentionRules'],
+    }),
+    createAudioRetentionRule: builder.mutation<AudioRetentionRule, AudioRetentionRuleInput>({
+      query: (body) => ({ url: '/admin/dataset-storage/rules', method: 'POST', body }),
+      invalidatesTags: ['AudioRetentionRules'],
+    }),
+    updateAudioRetentionRule: builder.mutation<AudioRetentionRule, { id: string; body: Partial<AudioRetentionRuleInput> }>({
+      query: ({ id, body }) => ({ url: `/admin/dataset-storage/rules/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['AudioRetentionRules'],
+    }),
+    deleteAudioRetentionRule: builder.mutation<{ id: string }, string>({
+      query: (id) => ({ url: `/admin/dataset-storage/rules/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['AudioRetentionRules'],
+    }),
     getAdminCountries: builder.query<AdminCountry[], void>({
       query: () => '/geo/admin/countries',
       providesTags: ['AdminCountries'],
@@ -2326,6 +2360,10 @@ export const {
   useAuditRecordingMutation,
   useRequestTrainingPayoutOtpMutation,
   useCreateTrainingPayoutMutation,
+  useGetAudioRetentionRulesQuery,
+  useCreateAudioRetentionRuleMutation,
+  useUpdateAudioRetentionRuleMutation,
+  useDeleteAudioRetentionRuleMutation,
   useGetAdminCountriesQuery,
   useCreateCountryMutation,
   useUpdateCountryMutation,

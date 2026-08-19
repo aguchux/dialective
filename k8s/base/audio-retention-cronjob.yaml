@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: audio-retention-job
+spec:
+  # Staggered off settlement-job ("0 */12 * * *"), fx-rate-job ("30 3 * * *"),
+  # and word-generator-job ("15 */1 * * *") so scheduled jobs don't hit the DB
+  # in the same instant. Retention is day-granularity, so daily is plenty.
+  schedule: "0 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: audio-retention-job
+              image: golojan/dialect-audio-retention-job:latest
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-creds
+                      key: connection_string
+                - name: SPACES_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: spaces-creds
+                      key: endpoint
+                - name: SPACES_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: spaces-creds
+                      key: access_key
+                - name: SPACES_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: spaces-creds
+                      key: secret_key

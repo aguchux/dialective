@@ -89,8 +89,9 @@ function setup(
       .mockResolvedValue({ enabled: true, feeTokens: 1, whatsappNumber: '1234567890' }),
   };
   const p2p = { adminCancelAllForUser: jest.fn() };
-  const service = new AuthService(prisma as never, mail as never, otp as never, platformSettings as never, p2p as never);
-  return { service, prisma, mail, otp, platformSettings };
+  const storage = { deleteObject: jest.fn() };
+  const service = new AuthService(prisma as never, mail as never, otp as never, platformSettings as never, p2p as never, storage as never);
+  return { service, prisma, mail, otp, platformSettings, storage };
 }
 
 describe('AuthService auth maintenance gate', () => {

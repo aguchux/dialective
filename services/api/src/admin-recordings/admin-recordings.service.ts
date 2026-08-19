@@ -319,7 +319,10 @@ export class AdminRecordingsService {
       livenessScore: submission.livenessScore?.toString() ?? null,
       compositeScore: submission.compositeScore?.toString() ?? null,
       payoutTokenAmount: submission.payoutTokenAmount?.toString() ?? null,
-      audioUrl: (await this.storage.createPresignedDownloadUrl(submission.audioBucket, submission.audioKey)).url,
+      audioUrl:
+        submission.audioBucket && submission.audioKey
+          ? (await this.storage.createPresignedDownloadUrl(submission.audioBucket, submission.audioKey)).url
+          : null,
       asrWordDetail: submission.asrWordDetail as WordDetail[] | null,
       rejectionReason: submission.rejectionReason,
       adminAuditStatus: submission.adminAuditStatus,

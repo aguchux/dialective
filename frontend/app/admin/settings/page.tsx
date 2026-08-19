@@ -15,6 +15,7 @@ import { WithdrawalSettingsPanel } from './WithdrawalSettingsPanel';
 import { MaintenanceSettingsPanel } from './MaintenanceSettingsPanel';
 import { DistributorSettingsPanel } from './DistributorSettingsPanel';
 import { LiveChatSettingsPanel } from './LiveChatSettingsPanel';
+import { DatasetStorageSettingsPanel } from './DatasetStorageSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
@@ -30,6 +31,7 @@ const groups = [
   { key: 'p2pMarket', label: 'P2P Market' },
   { key: 'sms', label: 'SMS Providers' },
   { key: 'withdrawals', label: 'Crypto Withdrawals' },
+  { key: 'datasetStorage', label: 'Dataset & Storage' },
 ] as const;
 
 type GroupKey = (typeof groups)[number]['key'];
@@ -78,6 +80,7 @@ export default function AdminSettingsPage() {
             {active === 'p2pMarket' && <P2PMarketSettingsPanel />}
             {active === 'sms' && <SmsSettingsPanel />}
             {active === 'withdrawals' && <WithdrawalSettingsPanel />}
+            {active === 'datasetStorage' && <DatasetStorageSettingsPanel />}
           </div>
         </div>
       </div>

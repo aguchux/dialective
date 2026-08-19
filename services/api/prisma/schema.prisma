@@ -212,8 +212,33 @@ model Country {
   exchangeRateUpdatedAt DateTime? // last time usdExchangeRate changed (live fetch or admin edit) -- shown in UI so a stale rate is visible, not silently trusted
   dialects             Dialect[]
   users                User[]
+  audioRetentionRules  AudioRetentionRule[]
 
   @@map("countries")
+}
+
+/// Admin-configured audio-purge rule (see "Dataset & Storage" admin settings
+/// tab). Scoping is optional in both dimensions: null countryId/dialectTag
+/// means "applies to all countries/dialects". audio-retention-job resolves,
+/// per terminal Submission/WordRecording row, the MOST SPECIFIC enabled rule
+/// matching its dialectTag (and that dialect's country) -- country+dialect
+/// beats dialect-only beats country-only beats the fully-unscoped catch-all.
+/// No matching enabled rule at all = that row's audio is never purged (safe
+/// default, matches pre-feature "keep forever" behavior). This only ever
+/// deletes the Spaces audio object and nulls audioBucket/audioKey -- it never
+/// deletes the row, transcript, asrWordDetail, or any score.
+model AudioRetentionRule {
+  id            String   @id @default(uuid())
+  enabled       Boolean  @default(true)
+  countryId     String?
+  country       Country? @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  dialectTag    String? // free-text, matches Dialect.tag/Submission.dialectTag convention -- not an FK since those already aren't FKs either
+  retentionDays Int // days after a row reaches terminal state (settledAt or refundedAt set) before its audio is purged
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([countryId, dialectTag])
+  @@map("audio_retention_rules")
 }
 
 /// Onboarding dialect choice. `tag` matches the free-text dialectTag values
@@ -492,8 +517,9 @@ model Submission {
   dialectTag        String
   dialectVariantId  String? // optional sub-dialect label (see DialectVariant) -- never changes prompt selection or scoring, purely descriptive
   dialectVariant    DialectVariant?  @relation(fields: [dialectVariantId], references: [id])
-  audioBucket       String
-  audioKey          String
+  audioBucket       String?
+  audioKey          String?
+  audioDeletedAt    DateTime? // set by audio-retention-job when it purges the Spaces object per an AudioRetentionRule; audioBucket/audioKey are nulled at the same time. Transcript/scores/asrWordDetail are never touched -- this only ever removes the replayable audio.
   status            SubmissionStatus @default(PENDING)
   transcript        String?
   asrConfidence     Decimal?         @db.Decimal(5, 4) // mean per-word confidence, 0-1; null when the engine has none (Whisper)
@@ -705,8 +731,9 @@ model WordRecording {
   dialectVariant    DialectVariant?  @relation(fields: [dialectVariantId], references: [id])
   translationText   String
   normalizedTranslationText String? // AI spelling-normalization of translationText (PlatformSettings.spellingNormalizationEnabled), ENGLISH_TO_DIALECT only -- informational only, never feeds validationScore/score
-  audioBucket       String? // null for SENTENCE_REBUILD (no audio step)
-  audioKey          String? // null for SENTENCE_REBUILD
+  audioBucket       String? // null for SENTENCE_REBUILD (no audio step) or after audio-retention-job purges it
+  audioKey          String? // null for SENTENCE_REBUILD (no audio step) or after audio-retention-job purges it
+  audioDeletedAt    DateTime? // set by audio-retention-job when it purges the Spaces object per an AudioRetentionRule; audioBucket/audioKey are nulled at the same time. translationText/scores are never touched.
   submittedOrder    Int[]    @default([]) // SENTENCE_REBUILD only: PromptWord.position values in the order the trainer tapped them, compared against the natural 0..n-1 order for exact-match scoring
   durationMs        Int?
   noiseRating       RecordingNoiseRating?

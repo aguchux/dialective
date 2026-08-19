@@ -28,6 +28,7 @@ import { MailService } from '../mail/mail.service';
 import { OtpService } from '../otp/otp.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { P2PService } from '../p2p/p2p.service';
+import { StorageService } from '../storage/storage.service';
 import { createSmslive247Otp, verifySmslive247Otp } from '../sms/smslive247-native-otp';
 import { generateOpaqueToken, hashToken } from './token.util';
 import { AuthMaintenanceException } from './auth-maintenance.exception';
@@ -147,6 +148,7 @@ export class AuthService {
     private readonly otp: OtpService,
     private readonly platformSettings: PlatformSettingsService,
     private readonly p2p: P2PService,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -1279,9 +1281,41 @@ export class AuthService {
       );
     }
 
+    await this.deleteUserAudio(userId);
     await this.prisma.user.delete({ where: { id: userId } });
     this.logger.log(`User deleted: admin=${adminId} user=${userId}`);
     return { id: userId, deleted: true };
+  }
+
+  /**
+   * Best-effort Spaces cleanup ahead of the cascading Prisma delete --
+   * without this, a deleted user's recording audio was previously orphaned
+   * in Spaces forever (the row disappears via onDelete: Cascade, but nothing
+   * ever deleted the actual object). A Spaces API failure here is logged and
+   * swallowed, not thrown -- account deletion must not be blockable by an
+   * unrelated storage-provider hiccup, matching this codebase's existing
+   * tolerance for non-critical cleanup steps.
+   */
+  private async deleteUserAudio(userId: string): Promise<void> {
+    const [submissions, wordRecordings] = await Promise.all([
+      this.prisma.submission.findMany({
+        where: { userId, audioBucket: { not: null }, audioKey: { not: null } },
+        select: { audioBucket: true, audioKey: true },
+      }),
+      this.prisma.wordRecording.findMany({
+        where: { userId, audioBucket: { not: null }, audioKey: { not: null } },
+        select: { audioBucket: true, audioKey: true },
+      }),
+    ]);
+
+    for (const { audioBucket, audioKey } of [...submissions, ...wordRecordings]) {
+      if (!audioBucket || !audioKey) continue;
+      try {
+        await this.storage.deleteObject(audioBucket, audioKey);
+      } catch (err) {
+        this.logger.warn(`Failed to delete audio object during user deletion: bucket=${audioBucket} key=${audioKey} err=${err}`);
+      }
+    }
   }
 
   // --- Shared token issuance ------------------------------------------------

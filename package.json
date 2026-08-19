@@ -4,6 +4,7 @@
   "workspaces": [
     "packages/*",
     "services/api",
+    "services/audio-retention-job",
     "services/consensus-scorer",
     "services/fx-rate-job",
     "services/settlement-job",

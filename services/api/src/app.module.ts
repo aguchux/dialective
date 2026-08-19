@@ -21,6 +21,7 @@ import { P2PModule } from "./p2p/p2p.module";
 import { DistributorsModule } from "./distributors/distributors.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { AdminRecordingsModule } from "./admin-recordings/admin-recordings.module";
+import { DatasetStorageModule } from "./dataset-storage/dataset-storage.module";
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { AdminRecordingsModule } from "./admin-recordings/admin-recordings.modul
     DistributorsModule,
     NotificationsModule,
     AdminRecordingsModule,
+    DatasetStorageModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
