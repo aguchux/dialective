@@ -799,26 +799,16 @@ export class AuthService {
     const { code, hash } = generateOtpCode();
     const expiresAt = new Date(now.getTime() + MANUAL_PHONE_VERIFICATION_TTL_MS);
 
+    // No charge here -- the fee is only ever collected when an admin
+    // actually confirms the OTP (see verifyManualPhoneVerificationRequest),
+    // so a request that's later rejected or left to expire never cost the
+    // trainer anything and there's nothing to refund. feeTokenAmount is
+    // still recorded now (the fee admin has configured at request time) so
+    // the trainer-facing confirmation copy and the admin list both show a
+    // stable amount even if the setting changes before this gets reviewed.
     try {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.wallet.upsert({
-          where: { userId },
-          create: { userId },
-          update: {},
-        });
-
-        if (fee.gt(0)) {
-          const { count } = await tx.wallet.updateMany({
-            where: { userId, balance: { gte: fee } },
-            data: { balance: { decrement: fee } },
-          });
-          if (count === 0) {
-            throw new UnprocessableEntityException(`You need at least ${fee.toString()} DL for manual verification`);
-          }
-        }
-
-        const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId }, select: { id: true } });
-        await tx.manualPhoneVerificationRequest.create({
+      await this.prisma.$transaction([
+        this.prisma.manualPhoneVerificationRequest.create({
           data: {
             id: requestId,
             userId,
@@ -827,20 +817,9 @@ export class AuthService {
             feeTokenAmount: fee,
             expiresAt,
           },
-        });
-        await tx.user.update({ where: { id: userId }, data: { phoneNumber, phoneVerifiedAt: null } });
-
-        if (fee.gt(0)) {
-          await tx.ledgerEntry.create({
-            data: {
-              walletId: wallet.id,
-              type: LedgerEntryType.PHONE_VERIFICATION_FEE,
-              amount: fee.mul(-1),
-              reference: requestId,
-            },
-          });
-        }
-      });
+        }),
+        this.prisma.user.update({ where: { id: userId }, data: { phoneNumber, phoneVerifiedAt: null } }),
+      ]);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException('This phone number is already in use on another account');
@@ -955,27 +934,56 @@ export class AuthService {
     }
 
     try {
-      // where: { status: PENDING } makes this claim atomic: if two verify
-      // calls (or a verify racing a reject) land concurrently, only one
-      // update actually matches a still-PENDING row -- count === 0 means
-      // this call lost the race, not that anything is wrong with the code.
-      const [claim] = await this.prisma.$transaction([
-        this.prisma.manualPhoneVerificationRequest.updateMany({
+      await this.prisma.$transaction(async (tx) => {
+        // where: { status: PENDING } makes this claim atomic: if two verify
+        // calls (or a verify racing a reject) land concurrently, only one
+        // update actually matches a still-PENDING row -- count === 0 means
+        // this call lost the race, not that anything is wrong with the code.
+        const claim = await tx.manualPhoneVerificationRequest.updateMany({
           where: { id: requestId, status: ManualPhoneVerificationStatus.PENDING },
           data: {
             status: ManualPhoneVerificationStatus.VERIFIED,
             verifiedByAdminId: adminId,
             verifiedAt: new Date(),
           },
-        }),
-        this.prisma.user.update({
+        });
+        if (claim.count === 0) {
+          throw new UnprocessableEntityException('This verification request is no longer pending');
+        }
+
+        // The fee is only ever collected here, on the admin's confirming
+        // action -- not at request time (see requestManualPhoneVerification).
+        // Gated on the trainer's CURRENT balance, which may have changed
+        // since the request was created; insufficient funds rolls back the
+        // whole transaction (claim included) so the request stays PENDING
+        // for the admin to retry once the trainer tops up, rather than
+        // silently verifying for free or leaving a half-applied state.
+        if (request.feeTokenAmount.gt(0)) {
+          const wallet = await tx.wallet.upsert({ where: { userId: request.userId }, create: { userId: request.userId }, update: {} });
+          const debited = await tx.wallet.updateMany({
+            where: { userId: request.userId, balance: { gte: request.feeTokenAmount } },
+            data: { balance: { decrement: request.feeTokenAmount } },
+          });
+          if (debited.count === 0) {
+            throw new UnprocessableEntityException(
+              `Trainer has insufficient DL for the ${request.feeTokenAmount.toString()} DL verification fee`,
+            );
+          }
+          await tx.ledgerEntry.create({
+            data: {
+              walletId: wallet.id,
+              type: LedgerEntryType.PHONE_VERIFICATION_FEE,
+              amount: request.feeTokenAmount.mul(-1),
+              reference: requestId,
+            },
+          });
+        }
+
+        await tx.user.update({
           where: { id: request.userId },
           data: { phoneNumber: request.phoneNumber, phoneVerifiedAt: new Date() },
-        }),
-      ]);
-      if (claim.count === 0) {
-        throw new UnprocessableEntityException('This verification request is no longer pending');
-      }
+        });
+      });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException('This phone number is already in use on another account');
@@ -1024,7 +1032,9 @@ export class AuthService {
     if (claim.count === 0) {
       throw new UnprocessableEntityException('This verification request is no longer pending');
     }
-    await this.refundManualPhoneVerificationFee(request.userId, request.id, request.feeTokenAmount);
+    // No refund needed on reject -- the fee is only ever collected on
+    // successful admin verification (see verifyManualPhoneVerificationRequest),
+    // so a rejected request never charged the trainer anything.
     const item = await this.prisma.manualPhoneVerificationRequest.findUniqueOrThrow({
       where: { id: requestId },
       include: {
@@ -1048,49 +1058,13 @@ export class AuthService {
   }
 
   private async expireManualPhoneVerificationRequests(now = new Date()): Promise<void> {
-    // Claim-then-refund per row (not a blind updateMany) so a request that
-    // never collected its fee (feeTokenAmount 0, or the kill switch was
-    // toggled off mid-flow) doesn't get a spurious refund, and so this stays
-    // correct however many rows expire in one sweep.
-    const expiring = await this.prisma.manualPhoneVerificationRequest.findMany({
+    // Same reasoning as rejectManualPhoneVerificationRequest -- an expired,
+    // never-reviewed request never charged the trainer, so there's nothing
+    // to refund here either.
+    await this.prisma.manualPhoneVerificationRequest.updateMany({
       where: { status: ManualPhoneVerificationStatus.PENDING, expiresAt: { lt: now } },
-      select: { id: true, userId: true, feeTokenAmount: true },
+      data: { status: ManualPhoneVerificationStatus.EXPIRED },
     });
-    for (const request of expiring) {
-      const claim = await this.prisma.manualPhoneVerificationRequest.updateMany({
-        where: { id: request.id, status: ManualPhoneVerificationStatus.PENDING },
-        data: { status: ManualPhoneVerificationStatus.EXPIRED },
-      });
-      if (claim.count > 0) {
-        await this.refundManualPhoneVerificationFee(request.userId, request.id, request.feeTokenAmount);
-      }
-    }
-  }
-
-  /**
-   * Reverses the PHONE_VERIFICATION_FEE charged at request time when a
-   * manual verification request is rejected or expires unused -- the
-   * trainer paid to have their number reviewed, not for a guaranteed
-   * outcome, but an unreviewed/declined request shouldn't cost DL. No-op
-   * for legacy/free (0 DL) requests. Mirrors lockUser's WITHDRAWAL_REVERSED
-   * handling above: a real ledger entry plus a balance increment, not a
-   * silent adjustment.
-   */
-  private async refundManualPhoneVerificationFee(userId: string, requestId: string, feeTokenAmount: Prisma.Decimal): Promise<void> {
-    if (feeTokenAmount.lte(0)) return;
-    const wallet = await this.prisma.wallet.findUnique({ where: { userId }, select: { id: true } });
-    if (!wallet) return;
-    await this.prisma.$transaction([
-      this.prisma.ledgerEntry.create({
-        data: {
-          walletId: wallet.id,
-          type: LedgerEntryType.PHONE_VERIFICATION_FEE_REFUND,
-          amount: feeTokenAmount,
-          reference: requestId,
-        },
-      }),
-      this.prisma.wallet.update({ where: { id: wallet.id }, data: { balance: { increment: feeTokenAmount } } }),
-    ]);
   }
 
   // --- Admin: user management ------------------------------------------------

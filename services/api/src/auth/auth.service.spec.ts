@@ -417,12 +417,15 @@ describe('AuthService.verifyManualPhoneVerificationRequest', () => {
     };
   }
 
-  it('verifies on a correct code and marks the user phoneVerified', async () => {
+  it('verifies on a correct code, charges the fee, and marks the user phoneVerified', async () => {
     const { service, prisma } = setup();
+    const request = pendingRequest();
     prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 1 }); // the claim inside $transaction
-    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(pendingRequest());
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(request);
+    prisma.wallet.upsert.mockResolvedValue({ id: 'wallet-1' });
+    prisma.wallet.updateMany.mockResolvedValue({ count: 1 }); // fee debit succeeds
     prisma.manualPhoneVerificationRequest.findUniqueOrThrow.mockResolvedValue({
-      ...pendingRequest(),
+      ...request,
       status: 'VERIFIED',
       user: { id: 'user-1', email: 'a@b.com', firstName: null, lastName: null, phoneNumber: '+1234567890', phoneVerifiedAt: new Date() },
       verifiedByAdmin: { id: 'admin-1', email: 'admin@b.com', firstName: null, lastName: null },
@@ -431,9 +434,31 @@ describe('AuthService.verifyManualPhoneVerificationRequest', () => {
     const result = await service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456');
 
     expect(result.status).toBe('VERIFIED');
+    expect(prisma.wallet.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', balance: { gte: request.feeTokenAmount } } }),
+    );
+    expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ walletId: 'wallet-1', type: 'PHONE_VERIFICATION_FEE' }) }),
+    );
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'user-1' }, data: expect.objectContaining({ phoneNumber: '+1234567890' }) }),
     );
+  });
+
+  it('blocks verification when the trainer has insufficient DL for the fee, leaving the request PENDING', async () => {
+    const { service, prisma } = setup();
+    const request = pendingRequest();
+    prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 1 }); // the claim itself still succeeds
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(request);
+    prisma.wallet.upsert.mockResolvedValue({ id: 'wallet-1' });
+    prisma.wallet.updateMany.mockResolvedValue({ count: 0 }); // insufficient balance
+
+    await expect(service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456')).rejects.toThrow(
+      UnprocessableEntityException,
+    );
+
+    expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it('rejects a wrong code and increments attempts without changing status', async () => {
@@ -472,8 +497,8 @@ describe('AuthService.verifyManualPhoneVerificationRequest', () => {
   });
 });
 
-describe('AuthService.rejectManualPhoneVerificationRequest refunds the fee', () => {
-  it('refunds the fee via a ledger entry and wallet increment on reject', async () => {
+describe('AuthService.rejectManualPhoneVerificationRequest', () => {
+  it('rejects the request without touching the wallet -- the fee was never charged', async () => {
     const { service, prisma } = setup();
     const request = {
       id: 'request-1',
@@ -484,7 +509,6 @@ describe('AuthService.rejectManualPhoneVerificationRequest refunds the fee', () 
     };
     prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(request);
     prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 1 });
-    prisma.wallet.findUnique.mockResolvedValue({ id: 'wallet-1' });
     prisma.manualPhoneVerificationRequest.findUniqueOrThrow.mockResolvedValue({
       ...request,
       status: 'REJECTED',
@@ -492,33 +516,11 @@ describe('AuthService.rejectManualPhoneVerificationRequest refunds the fee', () 
       verifiedByAdmin: { id: 'admin-1', email: 'admin@b.com', firstName: null, lastName: null },
     });
 
-    await service.rejectManualPhoneVerificationRequest('admin-1', 'request-1');
+    const result = await service.rejectManualPhoneVerificationRequest('admin-1', 'request-1');
 
-    expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ walletId: 'wallet-1', type: 'PHONE_VERIFICATION_FEE_REFUND' }),
-      }),
-    );
-    expect(prisma.wallet.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'wallet-1' }, data: { balance: { increment: request.feeTokenAmount } } }),
-    );
-  });
-
-  it('does not refund a free (0 DL) request', async () => {
-    const { service, prisma } = setup();
-    const request = { id: 'request-1', userId: 'user-1', phoneNumber: '+1234567890', status: 'PENDING', feeTokenAmount: new Prisma.Decimal(0) };
-    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(request);
-    prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 1 });
-    prisma.manualPhoneVerificationRequest.findUniqueOrThrow.mockResolvedValue({
-      ...request,
-      status: 'REJECTED',
-      user: { id: 'user-1', email: 'a@b.com', firstName: null, lastName: null, phoneNumber: '+1234567890', phoneVerifiedAt: null },
-      verifiedByAdmin: null,
-    });
-
-    await service.rejectManualPhoneVerificationRequest('admin-1', 'request-1');
-
-    expect(prisma.wallet.findUnique).not.toHaveBeenCalled();
+    expect(result.status).toBe('REJECTED');
+    expect(prisma.wallet.update).not.toHaveBeenCalled();
+    expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
     expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
   });
 });

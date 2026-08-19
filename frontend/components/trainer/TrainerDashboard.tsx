@@ -1740,7 +1740,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       const result = await requestManualPhoneVerification({ phoneNumber: normalizedPhoneNumber }).unwrap();
       setManualPhoneRequest(result);
       setPhoneVerificationMode('WHATSAPP');
-      setPhoneMessage(`Manual verification started. ${result.feeTokenAmount} DL was deducted.`);
+      setPhoneMessage(`Manual verification started. ${result.feeTokenAmount} DL will be charged once verified.`);
     } catch (err) {
       setPhoneError(normalizeErrorMessage(err, 'Could not start manual verification.'));
     }
@@ -1989,7 +1989,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                         >
                           <span className="font-black">WhatsApp Method</span>
                           <span className="text-sm leading-relaxed text-muted">
-                            Deduct {manualPhoneVerificationFeeTokens} DL and send a shown code to WhatsApp for admin review.
+                            Get a code to send to WhatsApp for admin review -- {manualPhoneVerificationFeeTokens} DL is charged once
+                            verified.
                           </span>
                         </button>
                       </div>
@@ -2035,7 +2036,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                         {!manualPhoneRequest ? (
                           <>
                             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
-                              This method deducts {manualPhoneVerificationFeeTokens} DL before showing your WhatsApp code.
+                              {manualPhoneVerificationFeeTokens} DL will be charged from your balance once an admin verifies your
+                              code -- make sure you have enough DL before sending your WhatsApp message.
                             </div>
                             <ActionButton
                               className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
