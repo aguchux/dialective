@@ -431,6 +431,8 @@ export type LedgerEntryType =
   | 'ADMIN_FUNDING'
   | 'ADMIN_ADJUSTMENT'
   | 'STARTUP_BONUS'
+  | 'PHONE_VERIFICATION_FEE'
+  | 'PHONE_VERIFICATION_FEE_REFUND'
   | 'P2P_ESCROW_LOCK'
   | 'P2P_ESCROW_REFUND'
   | 'P2P_ESCROW_RELEASE'
@@ -605,6 +607,10 @@ export interface PublicClientSettings {
   referralInviteExpirySeconds: number;
   wordTrainingRecordingTimeoutSeconds: number;
   wordTrainingRecordingMaxTimeoutSeconds: number;
+  phoneVerificationRequired: boolean;
+  manualPhoneVerificationEnabled: boolean;
+  manualPhoneVerificationFeeTokens: string;
+  manualPhoneVerificationWhatsappNumber: string;
   // enabled = login OR signup is blocked; the two flags below let each page
   // (login vs register) show the notice only when it actually applies to it.
   authMaintenanceEnabled: boolean;
@@ -618,6 +624,50 @@ export interface PublicClientSettings {
 }
 
 export type EarningsChartRange = 'week' | 'month' | 'year';
+
+export type ManualPhoneVerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
+
+export interface ManualPhoneVerificationRequestResult {
+  requestId: string;
+  code: string;
+  whatsappNumber: string;
+  feeTokenAmount: string;
+  expiresAt: string;
+}
+
+export interface ManualPhoneVerificationRow {
+  id: string;
+  phoneNumber: string;
+  status: ManualPhoneVerificationStatus;
+  feeTokenAmount: string;
+  sentAt: string | null;
+  verifiedAt: string | null;
+  rejectedAt: string | null;
+  expiresAt: string;
+  createdAt: string;
+  user: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    phoneNumber: string | null;
+    phoneVerified: boolean;
+  };
+  verifiedByAdmin: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
+}
+
+export interface ManualPhoneVerificationPage {
+  items: ManualPhoneVerificationRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
 
 export interface EarningsChart {
   range: EarningsChartRange;
@@ -759,6 +809,9 @@ export interface PlatformSettings {
   reverseWordTrainingEnabled: boolean;
   adminPayoutOtpEnabled: boolean;
   phoneVerificationRequired: boolean;
+  manualPhoneVerificationEnabled: boolean;
+  manualPhoneVerificationFeeTokens: string;
+  manualPhoneVerificationWhatsappNumber: string;
   startupBonusAmount: string | null;
   tawkToEnabled: boolean;
   tawkToPropertyId: string | null;
@@ -826,6 +879,9 @@ export interface PlatformSettingsInput {
   reverseWordTrainingEnabled?: boolean;
   adminPayoutOtpEnabled?: boolean;
   phoneVerificationRequired?: boolean;
+  manualPhoneVerificationEnabled?: boolean;
+  manualPhoneVerificationFeeTokens?: number;
+  manualPhoneVerificationWhatsappNumber?: string;
   startupBonusAmount?: number | null;
   tawkToEnabled?: boolean;
   tawkToPropertyId?: string;
@@ -1664,6 +1720,13 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/auth/phone', method: 'PATCH', body }),
       invalidatesTags: ['Profile'],
     }),
+    requestManualPhoneVerification: builder.mutation<ManualPhoneVerificationRequestResult, { phoneNumber: string }>({
+      query: (body) => ({ url: '/auth/phone/manual/request', method: 'POST', body }),
+      invalidatesTags: ['Profile', 'Wallet'],
+    }),
+    markManualPhoneVerificationSent: builder.mutation<{ id: string; status: ManualPhoneVerificationStatus; sentAt: string }, string>({
+      query: (id) => ({ url: `/auth/phone/manual/${id}/sent`, method: 'POST' }),
+    }),
     requestMagicLink: builder.mutation<void, { email: string }>({
       query: (body) => ({
         url: '/auth/magic-link/request',
@@ -1868,6 +1931,21 @@ export const dialectivaApi = createApi({
         params: params ?? undefined,
       }),
       providesTags: ['Users'],
+    }),
+    listAdminManualPhoneVerifications: builder.query<
+      ManualPhoneVerificationPage,
+      { status?: ManualPhoneVerificationStatus; page?: number; pageSize?: number } | void
+    >({
+      query: (params) => ({ url: '/auth/admin/phone-verifications', params: params ?? undefined }),
+      providesTags: ['Users'],
+    }),
+    verifyAdminManualPhoneVerification: builder.mutation<ManualPhoneVerificationRow, { id: string; code: string }>({
+      query: ({ id, code }) => ({ url: `/auth/admin/phone-verifications/${id}/verify`, method: 'POST', body: { code } }),
+      invalidatesTags: ['Users'],
+    }),
+    rejectAdminManualPhoneVerification: builder.mutation<ManualPhoneVerificationRow, string>({
+      query: (id) => ({ url: `/auth/admin/phone-verifications/${id}/reject`, method: 'POST' }),
+      invalidatesTags: ['Users'],
     }),
     updateUserRole: builder.mutation<PublicUser, { id: string; role: string }>({
       query: ({ id, role }) => ({
@@ -2182,6 +2260,8 @@ export const {
   useRequestPhoneOtpMutation,
   useVerifyPhoneMutation,
   useSavePhoneUnverifiedMutation,
+  useRequestManualPhoneVerificationMutation,
+  useMarkManualPhoneVerificationSentMutation,
   useCreateDataAccessLeadMutation,
   useGetAdminDataAccessLeadsQuery,
   useUpdateAdminDataAccessLeadContactMutation,
@@ -2219,6 +2299,9 @@ export const {
   useListAdminP2PDisputesQuery,
   useResolveP2PDisputeMutation,
   useGetUsersQuery,
+  useListAdminManualPhoneVerificationsQuery,
+  useVerifyAdminManualPhoneVerificationMutation,
+  useRejectAdminManualPhoneVerificationMutation,
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,
   useGetAdminUserQuery,

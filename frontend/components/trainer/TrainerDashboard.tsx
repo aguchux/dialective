@@ -76,7 +76,10 @@ import {
   useRequestPhoneOtpMutation,
   useVerifyPhoneMutation,
   useSavePhoneUnverifiedMutation,
-  useGetPlatformSettingsQuery,
+  useRequestManualPhoneVerificationMutation,
+  useMarkManualPhoneVerificationSentMutation,
+  useGetPublicClientSettingsQuery,
+  ManualPhoneVerificationRequestResult,
   useRequestP2PPaymentMethodOtpMutation,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
@@ -128,6 +131,8 @@ export const activityLabels: Record<LedgerEntryType, string> = {
   ADMIN_FUNDING: 'Admin Funding',
   ADMIN_ADJUSTMENT: 'Wallet correction',
   STARTUP_BONUS: 'Startup Bonus',
+  PHONE_VERIFICATION_FEE: 'Phone verification fee',
+  PHONE_VERIFICATION_FEE_REFUND: 'Phone verification fee refunded',
   P2P_ESCROW_LOCK: 'P2P escrow lock',
   P2P_ESCROW_REFUND: 'P2P escrow returned',
   P2P_ESCROW_RELEASE: 'P2P escrow released',
@@ -1559,17 +1564,25 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const primaryMethod = methods.find((method) => method.enabled);
   const paymentSaving = paymentCreating || paymentUpdating;
   const { data: referenceRate } = useGetP2PReferenceRateQuery();
-  const { data: platformSettings } = useGetPlatformSettingsQuery();
-  const phoneVerificationRequired = platformSettings?.phoneVerificationRequired ?? true;
+  const { data: publicSettings } = useGetPublicClientSettingsQuery();
+  const phoneVerificationRequired = publicSettings?.phoneVerificationRequired ?? true;
+  const manualPhoneVerificationEnabled = publicSettings?.manualPhoneVerificationEnabled ?? false;
+  const manualPhoneVerificationFeeTokens = publicSettings?.manualPhoneVerificationFeeTokens ?? '1';
+  const manualPhoneVerificationWhatsappNumber = publicSettings?.manualPhoneVerificationWhatsappNumber ?? '';
   const phoneVerified = me?.phoneVerified ?? false;
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneOtpRequestId, setPhoneOtpRequestId] = useState('');
   const [phoneOtpCode, setPhoneOtpCode] = useState('');
+  const [phoneVerificationDialogOpen, setPhoneVerificationDialogOpen] = useState(false);
+  const [phoneVerificationMode, setPhoneVerificationMode] = useState<'SMS' | 'WHATSAPP' | null>(null);
+  const [manualPhoneRequest, setManualPhoneRequest] = useState<ManualPhoneVerificationRequestResult | null>(null);
   const [phoneMessage, setPhoneMessage] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [requestPhoneOtp, { isLoading: phoneOtpSending }] = useRequestPhoneOtpMutation();
   const [verifyPhone, { isLoading: phoneVerifying }] = useVerifyPhoneMutation();
   const [savePhoneUnverified, { isLoading: phoneSaving }] = useSavePhoneUnverifiedMutation();
+  const [requestManualPhoneVerification, { isLoading: manualPhoneRequesting }] = useRequestManualPhoneVerificationMutation();
+  const [markManualPhoneVerificationSent, { isLoading: manualPhoneMarkingSent }] = useMarkManualPhoneVerificationSentMutation();
   const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
   const phoneValid = isValidPhoneNumber(normalizedPhoneNumber);
   const [notificationPrefs, setNotificationPrefs] = useState({
@@ -1685,6 +1698,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     setPhoneNumber(normalizePhoneNumber(value));
     setPhoneOtpRequestId('');
     setPhoneOtpCode('');
+    setManualPhoneRequest(null);
+    setPhoneVerificationMode(null);
   }
 
   async function sendPhoneOtp() {
@@ -1712,19 +1727,40 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       setPhoneOtpRequestId('');
       setPhoneOtpCode('');
       setPhoneMessage('Phone number verified.');
+      setPhoneVerificationDialogOpen(false);
     } catch (err) {
       setPhoneError(normalizeErrorMessage(err, 'Could not verify phone number.'));
     }
   }
 
-  async function submitPhoneVerification(event: FormEvent) {
-    event.preventDefault();
-    await confirmPhoneCode();
+  async function startManualPhoneVerification() {
+    setPhoneMessage(null);
+    setPhoneError(null);
+    try {
+      const result = await requestManualPhoneVerification({ phoneNumber: normalizedPhoneNumber }).unwrap();
+      setManualPhoneRequest(result);
+      setPhoneVerificationMode('WHATSAPP');
+      setPhoneMessage(`Manual verification started. ${result.feeTokenAmount} DL was deducted.`);
+    } catch (err) {
+      setPhoneError(normalizeErrorMessage(err, 'Could not start manual verification.'));
+    }
+  }
+
+  async function confirmManualPhoneSent() {
+    if (!manualPhoneRequest) return;
+    setPhoneMessage(null);
+    setPhoneError(null);
+    try {
+      await markManualPhoneVerificationSent(manualPhoneRequest.requestId).unwrap();
+      setPhoneMessage('Manual verification is pending admin review.');
+      setPhoneVerificationDialogOpen(false);
+    } catch (err) {
+      setPhoneError(normalizeErrorMessage(err, 'Could not mark this request as sent.'));
+    }
   }
 
   /** Only reachable while phoneVerificationRequired is off -- see GeneralSettingsPanel's toggle. */
-  async function submitPhoneUnverified(event: FormEvent) {
-    event.preventDefault();
+  async function savePhoneNumberWithoutVerification() {
     setPhoneMessage(null);
     setPhoneError(null);
     try {
@@ -1854,7 +1890,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
 
         <EmailVerificationCard email={session.user.email ?? ''} emailVerified={me?.emailVerified ?? false} />
 
-        <form className={`${cardClass} grid gap-4 p-5`} onSubmit={phoneVerificationRequired ? submitPhoneVerification : submitPhoneUnverified}>
+        <form className={`${cardClass} grid gap-4 p-5`} onSubmit={(event) => event.preventDefault()}>
           <SectionTitle
             title="Phone number"
             subtitle={
@@ -1895,92 +1931,150 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               This number is verified.
             </p>
           )}
-          {!phoneVerified && phoneVerificationRequired && phoneOtpRequestId ? (
-            <label className="grid gap-1.5 text-sm font-bold">
-              SMS verification code
-              <input
-                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                inputMode="numeric"
-                maxLength={6}
-                onChange={(event) => setPhoneOtpCode(event.target.value)}
-                required
-                value={phoneOtpCode}
-              />
-            </label>
-          ) : null}
           {phoneMessage && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{phoneMessage}</p>}
           {phoneError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{phoneError}</p>}
-          {!phoneVerified && phoneVerificationRequired && (
+          {!phoneVerified && (
             <div className="flex flex-wrap gap-2">
-              <ActionButton
-                className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!phoneValid}
-                onClick={() => void sendPhoneOtp()}
-                pending={phoneOtpSending}
-                pendingLabel="Sending"
-                type="button"
+              {!phoneVerificationRequired && (
+                <ActionButton
+                  className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!phoneValid}
+                  onClick={() => void savePhoneNumberWithoutVerification()}
+                  pending={phoneSaving}
+                  pendingLabel="Saving"
+                  type="button"
+                >
+                  Save number
+                </ActionButton>
+              )}
+              <Dialog
+                open={phoneVerificationDialogOpen}
+                onOpenChange={(open) => {
+                  setPhoneVerificationDialogOpen(open);
+                  if (!open) {
+                    setPhoneVerificationMode(null);
+                    setManualPhoneRequest(null);
+                  }
+                }}
               >
-                Send code
-              </ActionButton>
-              <ActionButton
-                className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!phoneValid || !phoneOtpRequestId || !phoneOtpCode.trim()}
-                pending={phoneVerifying}
-                pendingLabel="Verifying"
-                type="submit"
-              >
-                Verify
-              </ActionButton>
+                <DialogTrigger asChild>
+                  <ActionButton
+                    className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!phoneValid}
+                    type="button"
+                  >
+                    Verify mobile
+                  </ActionButton>
+                </DialogTrigger>
+                <DialogContent title="Verify mobile" description="Choose how you want to verify this number.">
+                  <div className="grid gap-4">
+                    <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold text-muted">
+                      {normalizedPhoneNumber}
+                    </div>
+                    {!phoneVerificationMode && (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <button
+                          className="grid min-h-28 gap-2 rounded-lg border border-line bg-surface p-4 text-left transition-colors hover:border-accent hover:bg-surface-muted"
+                          onClick={() => setPhoneVerificationMode('SMS')}
+                          type="button"
+                        >
+                          <span className="font-black">SMS OTP Method</span>
+                          <span className="text-sm leading-relaxed text-muted">Receive the normal one-time code by SMS.</span>
+                        </button>
+                        <button
+                          className="grid min-h-28 gap-2 rounded-lg border border-line bg-surface p-4 text-left transition-colors hover:border-accent hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={!manualPhoneVerificationEnabled}
+                          onClick={() => setPhoneVerificationMode('WHATSAPP')}
+                          type="button"
+                        >
+                          <span className="font-black">WhatsApp Method</span>
+                          <span className="text-sm leading-relaxed text-muted">
+                            Deduct {manualPhoneVerificationFeeTokens} DL and send a shown code to WhatsApp for admin review.
+                          </span>
+                        </button>
+                      </div>
+                    )}
+                    {phoneVerificationMode === 'SMS' && (
+                      <div className="grid gap-3">
+                        <ActionButton
+                          className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={!phoneValid}
+                          onClick={() => void sendPhoneOtp()}
+                          pending={phoneOtpSending}
+                          pendingLabel="Sending"
+                          type="button"
+                        >
+                          {phoneOtpRequestId ? 'Resend code' : 'Send code'}
+                        </ActionButton>
+                        {phoneOtpRequestId && (
+                          <label className="grid gap-1.5 text-sm font-bold">
+                            SMS verification code
+                            <input
+                              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                              inputMode="numeric"
+                              maxLength={6}
+                              onChange={(event) => setPhoneOtpCode(event.target.value)}
+                              value={phoneOtpCode}
+                            />
+                          </label>
+                        )}
+                        <ActionButton
+                          className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={!phoneValid || !phoneOtpRequestId || !phoneOtpCode.trim()}
+                          onClick={() => void confirmPhoneCode()}
+                          pending={phoneVerifying}
+                          pendingLabel="Verifying"
+                          type="button"
+                        >
+                          Verify
+                        </ActionButton>
+                      </div>
+                    )}
+                    {phoneVerificationMode === 'WHATSAPP' && (
+                      <div className="grid gap-3">
+                        {!manualPhoneRequest ? (
+                          <>
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+                              This method deducts {manualPhoneVerificationFeeTokens} DL before showing your WhatsApp code.
+                            </div>
+                            <ActionButton
+                              className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={!phoneValid || !manualPhoneVerificationEnabled}
+                              onClick={() => void startManualPhoneVerification()}
+                              pending={manualPhoneRequesting}
+                              pendingLabel="Starting"
+                              type="button"
+                            >
+                              Confirm and show code
+                            </ActionButton>
+                          </>
+                        ) : (
+                          <>
+                            <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-4">
+                              <span className="text-xs font-bold uppercase text-muted">Send this code to WhatsApp</span>
+                              <span className="text-3xl font-black tracking-widest text-ink">{manualPhoneRequest.code}</span>
+                              <span className="text-sm text-muted">
+                                Text {manualPhoneRequest.code} to {manualPhoneRequest.whatsappNumber || manualPhoneVerificationWhatsappNumber}.
+                              </span>
+                            </div>
+                            <ActionButton
+                              className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                              onClick={() => void confirmManualPhoneSent()}
+                              pending={manualPhoneMarkingSent}
+                              pendingLabel="Submitting"
+                              type="button"
+                            >
+                              I have sent the WhatsApp message
+                            </ActionButton>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           )}
-          {!phoneVerified && !phoneVerificationRequired && (
-            <div className="flex flex-wrap gap-2">
-              <ActionButton
-                className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!phoneValid}
-                pending={phoneSaving}
-                pendingLabel="Saving"
-                type="submit"
-              >
-                Save number
-              </ActionButton>
-              <ActionButton
-                className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!phoneValid}
-                onClick={() => void sendPhoneOtp()}
-                pending={phoneOtpSending}
-                pendingLabel="Sending"
-                type="button"
-              >
-                Verify instead
-              </ActionButton>
-            </div>
-          )}
-          {!phoneVerified && !phoneVerificationRequired && phoneOtpRequestId ? (
-            <div className="grid gap-3">
-              <label className="grid gap-1.5 text-sm font-bold">
-                SMS verification code
-                <input
-                  className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                  inputMode="numeric"
-                  maxLength={6}
-                  onChange={(event) => setPhoneOtpCode(event.target.value)}
-                  required
-                  value={phoneOtpCode}
-                />
-              </label>
-              <ActionButton
-                className="min-h-11 w-fit rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!phoneValid || !phoneOtpCode.trim()}
-                onClick={() => void confirmPhoneCode()}
-                pending={phoneVerifying}
-                pendingLabel="Verifying"
-                type="button"
-              >
-                Verify
-              </ActionButton>
-            </div>
-          ) : null}
         </form>
 
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={savePaymentMethod}>

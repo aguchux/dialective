@@ -14,6 +14,9 @@ import { ResendOtpDto } from './dto/resend-otp.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { RequestPhoneOtpDto } from './dto/request-phone-otp.dto';
 import { VerifyPhoneOtpDto } from './dto/verify-phone-otp.dto';
+import { RequestManualPhoneVerificationDto } from './dto/request-manual-phone-verification.dto';
+import { ListManualPhoneVerificationsDto } from './dto/list-manual-phone-verifications.dto';
+import { VerifyManualPhoneVerificationDto } from './dto/verify-manual-phone-verification.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { LockUserDto } from './dto/lock-user.dto';
@@ -149,7 +152,48 @@ export class AuthController {
     return this.auth.savePhoneNumberUnverified(user.sub, dto.phoneNumber);
   }
 
+  @Post('phone/manual/request')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 3, ttl: 10 * 60 * 1000 } })
+  requestManualPhoneVerification(@CurrentUser() user: AccessTokenClaims, @Body() dto: RequestManualPhoneVerificationDto) {
+    return this.auth.requestManualPhoneVerification(user.sub, dto.phoneNumber);
+  }
+
+  @Post('phone/manual/:id/sent')
+  @UseGuards(JwtAuthGuard)
+  markManualPhoneVerificationSent(@CurrentUser() user: AccessTokenClaims, @Param('id') id: string) {
+    return this.auth.markManualPhoneVerificationSent(user.sub, id);
+  }
+
   // --- Admin: user management ------------------------------------------------
+
+  @Get('admin/phone-verifications')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  listManualPhoneVerifications(@Query() query: ListManualPhoneVerificationsDto) {
+    return this.auth.listManualPhoneVerificationRequests(query);
+  }
+
+  @Post('admin/phone-verifications/:id/verify')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Throttle({ default: { limit: 10, ttl: 60 * 1000 } })
+  verifyManualPhoneVerification(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: VerifyManualPhoneVerificationDto,
+  ) {
+    return this.auth.verifyManualPhoneVerificationRequest(admin.sub, id, dto.code);
+  }
+
+  @Post('admin/phone-verifications/:id/reject')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  rejectManualPhoneVerification(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string) {
+    return this.auth.rejectManualPhoneVerificationRequest(admin.sub, id);
+  }
 
   @Get('admin/users')
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -78,6 +78,20 @@ export class UpdatePlatformSettingsDto {
   @IsBoolean()
   phoneVerificationRequired?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  manualPhoneVerificationEnabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  manualPhoneVerificationFeeTokens?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  manualPhoneVerificationWhatsappNumber?: string;
+
   // One-time DL amount credited the first time a user verifies their email.
   // 0 (or omitted, leaving it null) means the bonus is off.
   @IsOptional()

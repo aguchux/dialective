@@ -92,6 +92,8 @@ model User {
   passwordResets PasswordResetToken[]
   emailVerifications EmailVerificationToken[]
   otpCodes       OtpCode[]
+  manualPhoneVerificationRequests ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationUser")
+  manualPhoneVerificationsReviewed ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationAdmin")
   wallet         Wallet?
   blogPosts      BlogPost[]
   authoredCourses Course[]
@@ -333,6 +335,13 @@ enum OtpPurpose {
   SUB_DISTRIBUTOR_ADJUSTMENT
 }
 
+enum ManualPhoneVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
 /// One-time email codes gating registration/login (2FA), wallet/admin-payout,
 /// and P2P payment-method edits. purpose discriminates all flows in one table -- same
 /// shape/mechanics throughout (generate, hash, TTL, attempts, consume-once),
@@ -360,6 +369,32 @@ model OtpCode {
   @@index([userId, purpose])
   @@index([expiresAt])
   @@map("otp_codes")
+}
+
+model ManualPhoneVerificationRequest {
+  id                String                        @id @default(uuid())
+  userId            String
+  user              User                          @relation("ManualPhoneVerificationUser", fields: [userId], references: [id], onDelete: Cascade)
+  phoneNumber       String
+  otpHash           String
+  status            ManualPhoneVerificationStatus @default(PENDING)
+  feeTokenAmount    Decimal                       @default(1) @db.Decimal(20, 8)
+  attempts          Int                           @default(0) // wrong-OTP guesses by the reviewing admin; mirrors OtpCode's attempts/maxAttempts lockout pattern
+  maxAttempts       Int                           @default(5)
+  sentAt            DateTime?
+  verifiedByAdminId String?
+  verifiedByAdmin   User?                         @relation("ManualPhoneVerificationAdmin", fields: [verifiedByAdminId], references: [id], onDelete: SetNull)
+  verifiedAt        DateTime?
+  rejectedAt        DateTime?
+  expiresAt         DateTime
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+
+  @@index([status, createdAt])
+  @@index([userId, status])
+  @@index([phoneNumber, status])
+  @@index([verifiedByAdminId])
+  @@map("manual_phone_verification_requests")
 }
 
 enum SubmissionStatus {
@@ -721,6 +756,8 @@ enum LedgerEntryType {
   ADMIN_ADJUSTMENT // signed: admin correction against any user's wallet; negative values are silent debit corrections
   STARTUP_BONUS
   COURSE_COMPLETION_REWARD // one-time per (wallet, courseId reference); see Course.completionRewardTokens
+  PHONE_VERIFICATION_FEE
+  PHONE_VERIFICATION_FEE_REFUND // reverses PHONE_VERIFICATION_FEE when a manual verification request is rejected or expires unused -- see AuthService.refundManualPhoneVerificationFee
   P2P_ESCROW_LOCK
   P2P_ESCROW_REFUND
   P2P_ESCROW_RELEASE
@@ -1117,6 +1154,9 @@ model PlatformSettings {
   reverseWordTrainingEnabled Boolean @default(false)
   adminPayoutOtpEnabled    Boolean @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
   phoneVerificationRequired Boolean @default(true) // when false: phone numbers can be saved without SMS verification, the standing phoneVerifiedAt gate is skipped for withdrawals and P2P trading, and P2P offer create/accept require an emailed OTP instead (see P2pService.createOffer/acceptOffer) -- withdrawals already have their own per-transaction email OTP regardless of this flag
+  manualPhoneVerificationEnabled Boolean @default(true) // lets trainers request admin-assisted WhatsApp phone verification when SMS delivery is unreliable
+  manualPhoneVerificationFeeTokens Decimal @default(1) @db.Decimal(20, 8) // DL fee charged when a trainer creates a manual WhatsApp verification request
+  manualPhoneVerificationWhatsappNumber String @default("1234567890") // admin-operated WhatsApp number trainers are instructed to message with their generated code
   startupBonusAmount      Decimal? @db.Decimal(20, 8) // one-time DL amount credited (as a STARTUP_BONUS ledger entry) the first time a user verifies their email; null or 0 means the bonus is off
   tawkToEnabled            Boolean  @default(false) // master switch for the Tawk.to live-chat widget; the frontend only loads the widget script when this is true AND both IDs below are set
   tawkToPropertyId         String? // Tawk.to "Property ID" from the widget's embed snippet -- the first path segment of https://embed.tawk.to/<propertyId>/<widgetId>

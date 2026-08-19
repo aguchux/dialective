@@ -23,6 +23,7 @@ const navItems = [
   { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
   { href: '/admin/words', label: 'Words', icon: WordsIcon },
   { href: '/admin/recordings', label: 'Recordings', icon: RecordingsIcon },
+  { href: '/admin/phone-verifications', label: 'Phone Verifications', icon: PhoneIcon },
   { href: '/admin/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
   { href: '/admin/referrals', label: 'Referrals', icon: ReferralIcon },
   { href: '/admin/p2p', label: 'P2P Market', icon: P2PIcon },
@@ -317,6 +318,14 @@ function RecordingsIcon() {
       <path d="M5 10a7 7 0 0 0 14 0" strokeLinecap="round" />
       <path d="M12 17v4" strokeLinecap="round" />
       <path d="M8 21h8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 5.2 2 2 0 0 1 5.1 3h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L9 10.6a16 16 0 0 0 4.4 4.4l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2Z" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

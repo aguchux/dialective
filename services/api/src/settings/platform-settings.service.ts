@@ -243,6 +243,15 @@ export class PlatformSettingsService {
     return row.phoneVerificationRequired;
   }
 
+  async getManualPhoneVerificationSettings(): Promise<{ enabled: boolean; feeTokens: number; whatsappNumber: string }> {
+    const row = await this.getRow();
+    return {
+      enabled: row.manualPhoneVerificationEnabled,
+      feeTokens: row.manualPhoneVerificationFeeTokens.toNumber(),
+      whatsappNumber: row.manualPhoneVerificationWhatsappNumber,
+    };
+  }
+
   /** null/unset or <= 0 means the one-time signup bonus is off. */
   async getStartupBonusAmount(): Promise<number> {
     const row = await this.getRow();
@@ -401,6 +410,9 @@ export class PlatformSettingsService {
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       phoneVerificationRequired: row.phoneVerificationRequired,
+      manualPhoneVerificationEnabled: row.manualPhoneVerificationEnabled,
+      manualPhoneVerificationFeeTokens: row.manualPhoneVerificationFeeTokens.toString(),
+      manualPhoneVerificationWhatsappNumber: row.manualPhoneVerificationWhatsappNumber,
       startupBonusAmount: row.startupBonusAmount?.toString() ?? null,
       tawkToEnabled: row.tawkToEnabled,
       tawkToPropertyId: row.tawkToPropertyId,
@@ -471,6 +483,9 @@ export class PlatformSettingsService {
     reverseWordTrainingEnabled?: boolean;
     adminPayoutOtpEnabled?: boolean;
     phoneVerificationRequired?: boolean;
+    manualPhoneVerificationEnabled?: boolean;
+    manualPhoneVerificationFeeTokens?: number;
+    manualPhoneVerificationWhatsappNumber?: string;
     startupBonusAmount?: number | null;
     tawkToEnabled?: boolean;
     tawkToPropertyId?: string | null;
@@ -604,6 +619,13 @@ export class PlatformSettingsService {
       throw new BadRequestException('withdrawalFeeMode must be "platform" or "user"');
     }
 
+    if (data.manualPhoneVerificationWhatsappNumber !== undefined) {
+      data.manualPhoneVerificationWhatsappNumber = data.manualPhoneVerificationWhatsappNumber.trim();
+    }
+    if (data.manualPhoneVerificationEnabled && data.manualPhoneVerificationWhatsappNumber === '') {
+      throw new BadRequestException('manualPhoneVerificationWhatsappNumber is required when manual verification is enabled');
+    }
+
     const anyWeightProvided =
       data.qualityWeightConsensus !== undefined ||
       data.qualityWeightNoise !== undefined ||
@@ -665,6 +687,9 @@ export class PlatformSettingsService {
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       phoneVerificationRequired: row.phoneVerificationRequired,
+      manualPhoneVerificationEnabled: row.manualPhoneVerificationEnabled,
+      manualPhoneVerificationFeeTokens: row.manualPhoneVerificationFeeTokens.toString(),
+      manualPhoneVerificationWhatsappNumber: row.manualPhoneVerificationWhatsappNumber,
       startupBonusAmount: row.startupBonusAmount?.toString() ?? null,
       tawkToEnabled: row.tawkToEnabled,
       tawkToPropertyId: row.tawkToPropertyId,
@@ -729,6 +754,8 @@ export class PlatformSettingsService {
       wordTrainingRecordingMaxTimeoutSeconds,
       authMaintenance,
       tawkTo,
+      manualPhone,
+      phoneVerificationRequired,
     ] = await Promise.all([
       this.getReferralCookiePersistSeconds(),
       this.getReferralInviteExpirySeconds(),
@@ -736,12 +763,18 @@ export class PlatformSettingsService {
       this.getWordTrainingRecordingMaxTimeoutSeconds(),
       this.getAuthMaintenanceStatus(),
       this.getTawkToWidget(),
+      this.getManualPhoneVerificationSettings(),
+      this.isPhoneVerificationRequired(),
     ]);
     return {
       referralCookiePersistSeconds,
       referralInviteExpirySeconds,
       wordTrainingRecordingTimeoutSeconds,
       wordTrainingRecordingMaxTimeoutSeconds,
+      phoneVerificationRequired,
+      manualPhoneVerificationEnabled: manualPhone.enabled,
+      manualPhoneVerificationFeeTokens: manualPhone.feeTokens.toString(),
+      manualPhoneVerificationWhatsappNumber: manualPhone.whatsappNumber,
       // Login page shows the notice if either login or signup is blocked
       // (magic-link request is a signup path -- see requestMagicLink);
       // register page shows it only if signup is blocked, so both are

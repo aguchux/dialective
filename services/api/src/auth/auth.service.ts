@@ -12,6 +12,8 @@ import { randomBytes, randomUUID } from 'crypto';
 import {
   AuthProvider,
   creditStartupBonus,
+  LedgerEntryType,
+  ManualPhoneVerificationStatus,
   OtpPurpose,
   Prisma,
   ReferralInviteStatus,
@@ -32,6 +34,7 @@ import { AuthMaintenanceException } from './auth-maintenance.exception';
 import { signAccessToken } from './jwt.util';
 import { phoneVerificationContextHash } from './phone-otp-context.util';
 import { adminActionContextHash } from '../wallet/otp-context.util';
+import { generateOtpCode, hashOtpCode } from '../otp/otp.util';
 
 const SMSLIVE247_NATIVE_OTP_REQUEST_ID = 'smslive247-native';
 
@@ -40,6 +43,7 @@ const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const MANUAL_PHONE_VERIFICATION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 export interface AuthTokens {
   accessToken: string;
@@ -755,6 +759,338 @@ export class AuthService {
       }
       throw err;
     }
+  }
+
+  async requestManualPhoneVerification(userId: string, phoneNumber: string) {
+    const settings = await this.platformSettings.getManualPhoneVerificationSettings();
+    if (!settings.enabled) {
+      throw new UnprocessableEntityException('Manual phone verification is currently disabled');
+    }
+    if (!isValidPhoneNumber(phoneNumber)) {
+      throw new UnprocessableEntityException('Enter a valid phone number in international format');
+    }
+
+    const existingPhoneOwner = await this.prisma.user.findFirst({
+      where: { phoneNumber, id: { not: userId }, phoneVerifiedAt: { not: null } },
+      select: { id: true },
+    });
+    if (existingPhoneOwner) {
+      throw new ConflictException('This phone number is already verified on another account');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, phoneVerifiedAt: true } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.phoneVerifiedAt) {
+      throw new ConflictException('Your phone number is already verified');
+    }
+
+    const now = new Date();
+    await this.expireManualPhoneVerificationRequests(now);
+    const pending = await this.prisma.manualPhoneVerificationRequest.findFirst({
+      where: { userId, status: ManualPhoneVerificationStatus.PENDING, expiresAt: { gt: now } },
+      select: { id: true },
+    });
+    if (pending) {
+      throw new ConflictException('You already have a pending manual phone verification request');
+    }
+
+    const fee = new Prisma.Decimal(settings.feeTokens);
+    const requestId = randomUUID();
+    const { code, hash } = generateOtpCode();
+    const expiresAt = new Date(now.getTime() + MANUAL_PHONE_VERIFICATION_TTL_MS);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.wallet.upsert({
+          where: { userId },
+          create: { userId },
+          update: {},
+        });
+
+        if (fee.gt(0)) {
+          const { count } = await tx.wallet.updateMany({
+            where: { userId, balance: { gte: fee } },
+            data: { balance: { decrement: fee } },
+          });
+          if (count === 0) {
+            throw new UnprocessableEntityException(`You need at least ${fee.toString()} DL for manual verification`);
+          }
+        }
+
+        const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId }, select: { id: true } });
+        await tx.manualPhoneVerificationRequest.create({
+          data: {
+            id: requestId,
+            userId,
+            phoneNumber,
+            otpHash: hash,
+            feeTokenAmount: fee,
+            expiresAt,
+          },
+        });
+        await tx.user.update({ where: { id: userId }, data: { phoneNumber, phoneVerifiedAt: null } });
+
+        if (fee.gt(0)) {
+          await tx.ledgerEntry.create({
+            data: {
+              walletId: wallet.id,
+              type: LedgerEntryType.PHONE_VERIFICATION_FEE,
+              amount: fee.mul(-1),
+              reference: requestId,
+            },
+          });
+        }
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('This phone number is already in use on another account');
+      }
+      throw err;
+    }
+
+    return {
+      requestId,
+      code,
+      whatsappNumber: settings.whatsappNumber,
+      feeTokenAmount: fee.toString(),
+      expiresAt,
+    };
+  }
+
+  async markManualPhoneVerificationSent(userId: string, requestId: string) {
+    await this.expireManualPhoneVerificationRequests();
+    const request = await this.prisma.manualPhoneVerificationRequest.findFirst({
+      where: { id: requestId, userId, status: ManualPhoneVerificationStatus.PENDING, expiresAt: { gt: new Date() } },
+      select: { id: true },
+    });
+    if (!request) {
+      throw new NotFoundException('Pending manual verification request not found');
+    }
+    return this.prisma.manualPhoneVerificationRequest.update({
+      where: { id: requestId },
+      data: { sentAt: new Date() },
+      select: { id: true, status: true, sentAt: true },
+    });
+  }
+
+  async listManualPhoneVerificationRequests(params: {
+    status?: ManualPhoneVerificationStatus;
+    page: number;
+    pageSize: number;
+  }) {
+    await this.expireManualPhoneVerificationRequests();
+    const where = { ...(params.status ? { status: params.status } : {}) };
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.manualPhoneVerificationRequest.count({ where }),
+      this.prisma.manualPhoneVerificationRequest.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (params.page - 1) * params.pageSize,
+        take: params.pageSize,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              phoneNumber: true,
+              phoneVerifiedAt: true,
+            },
+          },
+          verifiedByAdmin: { select: { id: true, email: true, firstName: true, lastName: true } },
+        },
+      }),
+    ]);
+
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        phoneNumber: item.phoneNumber,
+        status: item.status,
+        feeTokenAmount: item.feeTokenAmount.toString(),
+        sentAt: item.sentAt,
+        verifiedAt: item.verifiedAt,
+        rejectedAt: item.rejectedAt,
+        expiresAt: item.expiresAt,
+        createdAt: item.createdAt,
+        user: {
+          ...item.user,
+          phoneVerified: item.user.phoneVerifiedAt !== null,
+        },
+        verifiedByAdmin: item.verifiedByAdmin,
+      })),
+      page: params.page,
+      pageSize: params.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / params.pageSize)),
+    };
+  }
+
+  async verifyManualPhoneVerificationRequest(adminId: string, requestId: string, code: string) {
+    await this.expireManualPhoneVerificationRequests();
+    const request = await this.prisma.manualPhoneVerificationRequest.findUnique({ where: { id: requestId } });
+    if (!request) throw new NotFoundException('Manual verification request not found');
+    if (request.status !== ManualPhoneVerificationStatus.PENDING) {
+      throw new UnprocessableEntityException('This verification request is no longer pending');
+    }
+    if (request.expiresAt < new Date()) {
+      await this.expireManualPhoneVerificationRequests();
+      throw new UnprocessableEntityException('This verification request has expired');
+    }
+    if (request.attempts >= request.maxAttempts) {
+      throw new UnauthorizedException('Too many incorrect attempts -- reject this request and ask the trainer to try again');
+    }
+
+    if (hashOtpCode(code) !== request.otpHash) {
+      // Same increment-then-reject pattern as OtpService.verify -- a wrong
+      // guess is recorded even though the request stays PENDING, so repeated
+      // wrong codes eventually trip maxAttempts above instead of allowing
+      // unlimited brute-force against the 6-digit code.
+      await this.prisma.manualPhoneVerificationRequest.updateMany({
+        where: { id: requestId, status: ManualPhoneVerificationStatus.PENDING },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new UnauthorizedException('Invalid verification code');
+    }
+
+    try {
+      // where: { status: PENDING } makes this claim atomic: if two verify
+      // calls (or a verify racing a reject) land concurrently, only one
+      // update actually matches a still-PENDING row -- count === 0 means
+      // this call lost the race, not that anything is wrong with the code.
+      const [claim] = await this.prisma.$transaction([
+        this.prisma.manualPhoneVerificationRequest.updateMany({
+          where: { id: requestId, status: ManualPhoneVerificationStatus.PENDING },
+          data: {
+            status: ManualPhoneVerificationStatus.VERIFIED,
+            verifiedByAdminId: adminId,
+            verifiedAt: new Date(),
+          },
+        }),
+        this.prisma.user.update({
+          where: { id: request.userId },
+          data: { phoneNumber: request.phoneNumber, phoneVerifiedAt: new Date() },
+        }),
+      ]);
+      if (claim.count === 0) {
+        throw new UnprocessableEntityException('This verification request is no longer pending');
+      }
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('This phone number is already in use on another account');
+      }
+      throw err;
+    }
+
+    const item = await this.prisma.manualPhoneVerificationRequest.findUniqueOrThrow({
+      where: { id: requestId },
+      include: {
+        user: { select: { id: true, email: true, firstName: true, lastName: true, phoneNumber: true, phoneVerifiedAt: true } },
+        verifiedByAdmin: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+    });
+    return {
+      id: item.id,
+      phoneNumber: item.phoneNumber,
+      status: item.status,
+      feeTokenAmount: item.feeTokenAmount.toString(),
+      sentAt: item.sentAt,
+      verifiedAt: item.verifiedAt,
+      rejectedAt: item.rejectedAt,
+      expiresAt: item.expiresAt,
+      createdAt: item.createdAt,
+      user: { ...item.user, phoneVerified: item.user.phoneVerifiedAt !== null },
+      verifiedByAdmin: item.verifiedByAdmin,
+    };
+  }
+
+  async rejectManualPhoneVerificationRequest(adminId: string, requestId: string) {
+    const request = await this.prisma.manualPhoneVerificationRequest.findUnique({ where: { id: requestId } });
+    if (!request) throw new NotFoundException('Manual verification request not found');
+    if (request.status !== ManualPhoneVerificationStatus.PENDING) {
+      throw new UnprocessableEntityException('This verification request is no longer pending');
+    }
+    const [claim] = await this.prisma.$transaction([
+      this.prisma.manualPhoneVerificationRequest.updateMany({
+        where: { id: requestId, status: ManualPhoneVerificationStatus.PENDING },
+        data: {
+          status: ManualPhoneVerificationStatus.REJECTED,
+          verifiedByAdminId: adminId,
+          rejectedAt: new Date(),
+        },
+      }),
+    ]);
+    if (claim.count === 0) {
+      throw new UnprocessableEntityException('This verification request is no longer pending');
+    }
+    await this.refundManualPhoneVerificationFee(request.userId, request.id, request.feeTokenAmount);
+    const item = await this.prisma.manualPhoneVerificationRequest.findUniqueOrThrow({
+      where: { id: requestId },
+      include: {
+        user: { select: { id: true, email: true, firstName: true, lastName: true, phoneNumber: true, phoneVerifiedAt: true } },
+        verifiedByAdmin: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+    });
+    return {
+      id: item.id,
+      phoneNumber: item.phoneNumber,
+      status: item.status,
+      feeTokenAmount: item.feeTokenAmount.toString(),
+      sentAt: item.sentAt,
+      verifiedAt: item.verifiedAt,
+      rejectedAt: item.rejectedAt,
+      expiresAt: item.expiresAt,
+      createdAt: item.createdAt,
+      user: { ...item.user, phoneVerified: item.user.phoneVerifiedAt !== null },
+      verifiedByAdmin: item.verifiedByAdmin,
+    };
+  }
+
+  private async expireManualPhoneVerificationRequests(now = new Date()): Promise<void> {
+    // Claim-then-refund per row (not a blind updateMany) so a request that
+    // never collected its fee (feeTokenAmount 0, or the kill switch was
+    // toggled off mid-flow) doesn't get a spurious refund, and so this stays
+    // correct however many rows expire in one sweep.
+    const expiring = await this.prisma.manualPhoneVerificationRequest.findMany({
+      where: { status: ManualPhoneVerificationStatus.PENDING, expiresAt: { lt: now } },
+      select: { id: true, userId: true, feeTokenAmount: true },
+    });
+    for (const request of expiring) {
+      const claim = await this.prisma.manualPhoneVerificationRequest.updateMany({
+        where: { id: request.id, status: ManualPhoneVerificationStatus.PENDING },
+        data: { status: ManualPhoneVerificationStatus.EXPIRED },
+      });
+      if (claim.count > 0) {
+        await this.refundManualPhoneVerificationFee(request.userId, request.id, request.feeTokenAmount);
+      }
+    }
+  }
+
+  /**
+   * Reverses the PHONE_VERIFICATION_FEE charged at request time when a
+   * manual verification request is rejected or expires unused -- the
+   * trainer paid to have their number reviewed, not for a guaranteed
+   * outcome, but an unreviewed/declined request shouldn't cost DL. No-op
+   * for legacy/free (0 DL) requests. Mirrors lockUser's WITHDRAWAL_REVERSED
+   * handling above: a real ledger entry plus a balance increment, not a
+   * silent adjustment.
+   */
+  private async refundManualPhoneVerificationFee(userId: string, requestId: string, feeTokenAmount: Prisma.Decimal): Promise<void> {
+    if (feeTokenAmount.lte(0)) return;
+    const wallet = await this.prisma.wallet.findUnique({ where: { userId }, select: { id: true } });
+    if (!wallet) return;
+    await this.prisma.$transaction([
+      this.prisma.ledgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          type: LedgerEntryType.PHONE_VERIFICATION_FEE_REFUND,
+          amount: feeTokenAmount,
+          reference: requestId,
+        },
+      }),
+      this.prisma.wallet.update({ where: { id: wallet.id }, data: { balance: { increment: feeTokenAmount } } }),
+    ]);
   }
 
   // --- Admin: user management ------------------------------------------------

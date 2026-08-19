@@ -4,11 +4,12 @@ jest.mock('@dialectiva/db', () => ({
   ...jest.requireActual('@dialectiva/db'),
   creditStartupBonus: jest.fn(),
 }));
-import { creditStartupBonus } from '@dialectiva/db';
-import { UnauthorizedException } from '@nestjs/common';
+import { creditStartupBonus, Prisma } from '@dialectiva/db';
+import { ConflictException, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthMaintenanceException } from './auth-maintenance.exception';
 import { hashToken } from './token.util';
+import { hashOtpCode } from '../otp/otp.util';
 
 function setup(
   maintenance: {
@@ -20,15 +21,38 @@ function setup(
   } = { enabled: false },
 ) {
   const prisma = {
-    user: { findUnique: jest.fn(), upsert: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findUniqueOrThrow: jest.fn() },
+    user: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      upsert: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+    },
     linkedAccount: { findUnique: jest.fn(), create: jest.fn() },
     referralInvite: { findMany: jest.fn().mockResolvedValue([]) },
     emailVerificationToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     passwordResetToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     otpCode: { findUnique: jest.fn(), update: jest.fn() },
     refreshToken: { create: jest.fn(), updateMany: jest.fn() },
-    $transaction: jest.fn(async (ops: unknown) => Promise.all(ops as Promise<unknown>[])),
+    manualPhoneVerificationRequest: {
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    wallet: { findUnique: jest.fn(), findUniqueOrThrow: jest.fn(), upsert: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+    ledgerEntry: { create: jest.fn() },
+    $transaction: undefined as unknown as jest.Mock,
   };
+  prisma.$transaction = jest.fn(async (ops: unknown) => {
+    if (typeof ops === 'function') return (ops as (tx: unknown) => unknown)(prisma);
+    return Promise.all(ops as Promise<unknown>[]);
+  });
   const mail = { sendMagicLinkEmail: jest.fn(), sendEmailVerificationEmail: jest.fn(), sendReferralJoinNotification: jest.fn(), sendPasswordResetEmail: jest.fn() };
   const otp = {
     issueWithTicket: jest.fn().mockResolvedValue({ ticket: 'ticket-1', expiresInSeconds: 600 }),
@@ -60,6 +84,9 @@ function setup(
           },
     ),
     getStartupBonusAmount: jest.fn().mockResolvedValue(0),
+    getManualPhoneVerificationSettings: jest
+      .fn()
+      .mockResolvedValue({ enabled: true, feeTokens: 1, whatsappNumber: '1234567890' }),
   };
   const p2p = { adminCancelAllForUser: jest.fn() };
   const service = new AuthService(prisma as never, mail as never, otp as never, platformSettings as never, p2p as never);
@@ -350,5 +377,148 @@ describe('AuthService.resetPassword', () => {
 
     await expect(service.resetPassword('raw-token', 'new-password-123')).rejects.toThrow(UnauthorizedException);
     expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.requestManualPhoneVerification', () => {
+  it('rejects a user whose phone is already verified', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', phoneVerifiedAt: new Date() });
+
+    await expect(service.requestManualPhoneVerification('user-1', '+2348012345678')).rejects.toThrow(ConflictException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a second request while one is already pending', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', phoneVerifiedAt: null });
+    prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 0 });
+    prisma.manualPhoneVerificationRequest.findFirst.mockResolvedValue({ id: 'existing-request' });
+
+    await expect(service.requestManualPhoneVerification('user-1', '+2348012345678')).rejects.toThrow(ConflictException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.verifyManualPhoneVerificationRequest', () => {
+  function pendingRequest(overrides: Partial<{ attempts: number; maxAttempts: number; expiresAt: Date; otpHash: string }> = {}) {
+    return {
+      id: 'request-1',
+      userId: 'user-1',
+      phoneNumber: '+1234567890',
+      otpHash: overrides.otpHash ?? hashOtpCode('123456'),
+      status: 'PENDING',
+      feeTokenAmount: new Prisma.Decimal(1),
+      attempts: overrides.attempts ?? 0,
+      maxAttempts: overrides.maxAttempts ?? 5,
+      expiresAt: overrides.expiresAt ?? new Date(Date.now() + 60_000),
+    };
+  }
+
+  it('verifies on a correct code and marks the user phoneVerified', async () => {
+    const { service, prisma } = setup();
+    prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 1 }); // the claim inside $transaction
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(pendingRequest());
+    prisma.manualPhoneVerificationRequest.findUniqueOrThrow.mockResolvedValue({
+      ...pendingRequest(),
+      status: 'VERIFIED',
+      user: { id: 'user-1', email: 'a@b.com', firstName: null, lastName: null, phoneNumber: '+1234567890', phoneVerifiedAt: new Date() },
+      verifiedByAdmin: { id: 'admin-1', email: 'admin@b.com', firstName: null, lastName: null },
+    });
+
+    const result = await service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456');
+
+    expect(result.status).toBe('VERIFIED');
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'user-1' }, data: expect.objectContaining({ phoneNumber: '+1234567890' }) }),
+    );
+  });
+
+  it('rejects a wrong code and increments attempts without changing status', async () => {
+    const { service, prisma } = setup();
+    prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 0 });
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(pendingRequest());
+
+    await expect(service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '000000')).rejects.toThrow(UnauthorizedException);
+
+    expect(prisma.manualPhoneVerificationRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'request-1', status: 'PENDING' },
+        data: { attempts: { increment: 1 } },
+      }),
+    );
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('locks out further attempts once maxAttempts is reached, even with the correct code', async () => {
+    const { service, prisma } = setup();
+    prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 0 });
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(pendingRequest({ attempts: 5, maxAttempts: 5 }));
+
+    await expect(service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456')).rejects.toThrow(UnauthorizedException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('loses the race cleanly when the request was already resolved concurrently (TOCTOU guard)', async () => {
+    const { service, prisma } = setup();
+    prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 0 }); // claim fails: another call already resolved it
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(pendingRequest());
+
+    await expect(service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456')).rejects.toThrow(
+      UnprocessableEntityException,
+    );
+  });
+});
+
+describe('AuthService.rejectManualPhoneVerificationRequest refunds the fee', () => {
+  it('refunds the fee via a ledger entry and wallet increment on reject', async () => {
+    const { service, prisma } = setup();
+    const request = {
+      id: 'request-1',
+      userId: 'user-1',
+      phoneNumber: '+1234567890',
+      status: 'PENDING',
+      feeTokenAmount: new Prisma.Decimal(1),
+    };
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(request);
+    prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 1 });
+    prisma.wallet.findUnique.mockResolvedValue({ id: 'wallet-1' });
+    prisma.manualPhoneVerificationRequest.findUniqueOrThrow.mockResolvedValue({
+      ...request,
+      status: 'REJECTED',
+      user: { id: 'user-1', email: 'a@b.com', firstName: null, lastName: null, phoneNumber: '+1234567890', phoneVerifiedAt: null },
+      verifiedByAdmin: { id: 'admin-1', email: 'admin@b.com', firstName: null, lastName: null },
+    });
+
+    await service.rejectManualPhoneVerificationRequest('admin-1', 'request-1');
+
+    expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ walletId: 'wallet-1', type: 'PHONE_VERIFICATION_FEE_REFUND' }),
+      }),
+    );
+    expect(prisma.wallet.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'wallet-1' }, data: { balance: { increment: request.feeTokenAmount } } }),
+    );
+  });
+
+  it('does not refund a free (0 DL) request', async () => {
+    const { service, prisma } = setup();
+    const request = { id: 'request-1', userId: 'user-1', phoneNumber: '+1234567890', status: 'PENDING', feeTokenAmount: new Prisma.Decimal(0) };
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(request);
+    prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 1 });
+    prisma.manualPhoneVerificationRequest.findUniqueOrThrow.mockResolvedValue({
+      ...request,
+      status: 'REJECTED',
+      user: { id: 'user-1', email: 'a@b.com', firstName: null, lastName: null, phoneNumber: '+1234567890', phoneVerifiedAt: null },
+      verifiedByAdmin: null,
+    });
+
+    await service.rejectManualPhoneVerificationRequest('admin-1', 'request-1');
+
+    expect(prisma.wallet.findUnique).not.toHaveBeenCalled();
+    expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
   });
 });
