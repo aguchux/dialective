@@ -243,12 +243,13 @@ export default function AdminRecordingsPage() {
           ) : data && data.items.length > 0 ? (
             <>
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[1360px] border-collapse text-left text-sm">
                   <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                     <tr>
                       <th className="px-5 py-3.5" scope="col">Play</th>
                       <th className="px-5 py-3.5" scope="col">Trainer</th>
                       <th className="px-5 py-3.5" scope="col">{kind === 'word' ? 'Word' : 'Prompt'}</th>
+                      <th className="px-5 py-3.5" scope="col">{kind === 'word' ? 'Response' : 'Transcript'}</th>
                       <th className="px-5 py-3.5" scope="col">Dialect</th>
                       <th className="px-5 py-3.5" scope="col">Status</th>
                       <SortableHeader field="score" label="Score" active={sortBy} onClick={toggleSort} dir={sortDir} />
@@ -268,6 +269,7 @@ export default function AdminRecordingsPage() {
                         </td>
                         <td className="px-5 py-3.5 font-bold">{trainerLabel(rec.trainer)}</td>
                         <td className="max-w-xs truncate px-5 py-3.5" title={rec.promptText}>{rec.promptText}</td>
+                        <td className="max-w-xs truncate px-5 py-3.5" title={rec.responseText ?? undefined}>{rec.responseText || '—'}</td>
                         <td className="px-5 py-3.5 text-muted">{resolveDialectName(rec.dialectTag, dialects)}</td>
                         <td className="px-5 py-3.5 text-muted">{rec.status}</td>
                         <td className="px-5 py-3.5 font-black tabular-nums">{scoreCell(rec.score)}</td>
@@ -302,6 +304,7 @@ export default function AdminRecordingsPage() {
                         <div className="min-w-0">
                           <p className="truncate font-extrabold">{trainerLabel(rec.trainer)}</p>
                           <p className="truncate text-sm text-muted">{rec.promptText}</p>
+                          {rec.responseText && <p className="truncate text-sm text-ink">&rarr; {rec.responseText}</p>}
                         </div>
                       </div>
                       <AuditBadge status={rec.adminAuditStatus} />
