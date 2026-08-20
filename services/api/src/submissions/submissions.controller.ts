@@ -225,6 +225,13 @@ export class SubmissionsController {
    * my ASR done yet", separate from the Submission row's longer-lived
    * consensus/settlement lifecycle. Returns 404 while the job is still in
    * flight -- callers poll this until it resolves.
+   *
+   * The raw Redis payload includes `transcript`/`word_confidences` (see
+   * vosk-worker/whisper-worker's write_result) -- deliberately stripped
+   * before returning to the trainer. The transcribed text is
+   * admin-visible-only (see admin-recordings.service.ts's toSubmissionSummary);
+   * a trainer only ever needs to know whether/how their submission resolved,
+   * not what ASR heard.
    */
   @Get(':submissionId/result')
   @UseGuards(JwtAuthGuard)
@@ -241,7 +248,8 @@ export class SubmissionsController {
     if (!raw) {
       throw new NotFoundException('Result not ready yet');
     }
-    return JSON.parse(raw);
+    const { transcript: _transcript, word_confidences: _wordConfidences, ...rest } = JSON.parse(raw);
+    return rest;
   }
 
   /**
