@@ -16,9 +16,11 @@ import { MaintenanceSettingsPanel } from './MaintenanceSettingsPanel';
 import { DistributorSettingsPanel } from './DistributorSettingsPanel';
 import { LiveChatSettingsPanel } from './LiveChatSettingsPanel';
 import { DatasetStorageSettingsPanel } from './DatasetStorageSettingsPanel';
+import { LandingPageSettingsPanel } from './LandingPageSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
+  { key: 'landingPage', label: 'Landing Page' },
   { key: 'maintenance', label: 'Site Maintenance' },
   { key: 'referrals', label: 'Referral Bonuses' },
   { key: 'distributors', label: 'Distributor Settings' },
@@ -68,6 +70,7 @@ export default function AdminSettingsPage() {
 
           <div>
             {active === 'general' && <GeneralSettingsPanel />}
+            {active === 'landingPage' && <LandingPageSettingsPanel />}
             {active === 'maintenance' && <MaintenanceSettingsPanel />}
             {active === 'referrals' && <ReferralBonusSettingsPanel />}
             {active === 'distributors' && <DistributorSettingsPanel />}

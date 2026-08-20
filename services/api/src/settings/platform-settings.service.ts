@@ -183,6 +183,18 @@ export class PlatformSettingsService {
     return row.reverseWordTrainingEnabled;
   }
 
+  /** Per-card visibility for the landing page's 5-stat row -- consumed by GeoController.getStats. */
+  async getLandingVisibility() {
+    const row = await this.getRow();
+    return {
+      countries: row.landingShowCountries,
+      dialects: row.landingShowDialects,
+      trainers: row.landingShowTrainers,
+      poolVolume: row.landingShowPoolVolume,
+      payout: row.landingShowPayout,
+    };
+  }
+
   async isSpellingNormalizationEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.spellingNormalizationEnabled;
@@ -512,6 +524,11 @@ export class PlatformSettingsService {
       registerRateLimitPerHour:
         row.registerRateLimitPerHour ??
         this.parsePositiveInt(process.env.REGISTER_RATE_LIMIT_PER_HOUR, 30, 'REGISTER_RATE_LIMIT_PER_HOUR'),
+      landingShowCountries: row.landingShowCountries,
+      landingShowDialects: row.landingShowDialects,
+      landingShowTrainers: row.landingShowTrainers,
+      landingShowPoolVolume: row.landingShowPoolVolume,
+      landingShowPayout: row.landingShowPayout,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -586,6 +603,11 @@ export class PlatformSettingsService {
     authMaintenanceExcludeAdmin?: boolean;
     authMaintenanceExcludePartner?: boolean;
     registerRateLimitPerHour?: number | null;
+    landingShowCountries?: boolean;
+    landingShowDialects?: boolean;
+    landingShowTrainers?: boolean;
+    landingShowPoolVolume?: boolean;
+    landingShowPayout?: boolean;
   }) {
     if (data.authMaintenanceEnabled) {
       // Turning it on (or extending it) always needs a concrete end time --
@@ -814,6 +836,11 @@ export class PlatformSettingsService {
       registerRateLimitPerHour:
         row.registerRateLimitPerHour ??
         this.parsePositiveInt(process.env.REGISTER_RATE_LIMIT_PER_HOUR, 30, 'REGISTER_RATE_LIMIT_PER_HOUR'),
+      landingShowCountries: row.landingShowCountries,
+      landingShowDialects: row.landingShowDialects,
+      landingShowTrainers: row.landingShowTrainers,
+      landingShowPoolVolume: row.landingShowPoolVolume,
+      landingShowPayout: row.landingShowPayout,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };

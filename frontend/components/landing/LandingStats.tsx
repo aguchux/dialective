@@ -1,33 +1,54 @@
 import { landingStats } from './data';
 import { formatCompactUsd } from '@/lib/format';
 
+interface StatsVisibility {
+  countries: boolean;
+  dialects: boolean;
+  trainers: boolean;
+  poolVolume: boolean;
+  payout: boolean;
+}
+
 interface LandingStatsProps {
   dialectCount: number | null;
   countryCount: number | null;
   poolVolumeUsd: number | null;
   totalTrainers: number | null;
   totalPayoutUsd: number | null;
+  visibility: StatsVisibility;
 }
 
-export function LandingStats({ dialectCount, countryCount, poolVolumeUsd, totalTrainers, totalPayoutUsd }: LandingStatsProps) {
-  const stats = landingStats.map((stat) => {
-    if (stat.label === 'Dialects' && dialectCount !== null) {
-      return { ...stat, value: String(dialectCount) };
-    }
-    if (stat.label === 'Countries' && countryCount !== null) {
-      return { ...stat, value: String(countryCount) };
-    }
-    if (stat.label === 'Pool Volume' && poolVolumeUsd !== null) {
-      return { ...stat, value: formatCompactUsd(poolVolumeUsd) };
-    }
-    if (stat.label === 'Trainers' && totalTrainers !== null) {
-      return { ...stat, value: String(totalTrainers) };
-    }
-    if (stat.label === 'Payout' && totalPayoutUsd !== null) {
-      return { ...stat, value: formatCompactUsd(totalPayoutUsd) };
-    }
-    return stat;
-  });
+const VISIBILITY_KEY_BY_LABEL: Record<string, keyof StatsVisibility> = {
+  Dialects: 'dialects',
+  Countries: 'countries',
+  'Pool Volume': 'poolVolume',
+  Trainers: 'trainers',
+  Payout: 'payout',
+};
+
+export function LandingStats({ dialectCount, countryCount, poolVolumeUsd, totalTrainers, totalPayoutUsd, visibility }: LandingStatsProps) {
+  const stats = landingStats
+    .filter((stat) => visibility[VISIBILITY_KEY_BY_LABEL[stat.label]] ?? true)
+    .map((stat) => {
+      if (stat.label === 'Dialects' && dialectCount !== null) {
+        return { ...stat, value: String(dialectCount) };
+      }
+      if (stat.label === 'Countries' && countryCount !== null) {
+        return { ...stat, value: String(countryCount) };
+      }
+      if (stat.label === 'Pool Volume' && poolVolumeUsd !== null) {
+        return { ...stat, value: formatCompactUsd(poolVolumeUsd) };
+      }
+      if (stat.label === 'Trainers' && totalTrainers !== null) {
+        return { ...stat, value: String(totalTrainers) };
+      }
+      if (stat.label === 'Payout' && totalPayoutUsd !== null) {
+        return { ...stat, value: formatCompactUsd(totalPayoutUsd) };
+      }
+      return stat;
+    });
+
+  if (stats.length === 0) return null;
 
   return (
     <section className="mx-auto grid max-w-[980px] gap-3 py-4 sm:grid-cols-2 lg:grid-cols-5" aria-label="Dialect Library platform metrics">

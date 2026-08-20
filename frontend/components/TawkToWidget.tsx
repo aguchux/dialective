@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { usePathname } from 'next/navigation';
 import { useGetPublicClientSettingsQuery } from '@/store/api';
 import { onFullScreenOverlay } from '@/lib/recording-signal';
 
@@ -61,14 +62,35 @@ function whenTawkReady(run: (api: TawkApi) => void): () => void {
  * an anonymous "Visitor" -- guests keep the default anonymous widget.
  */
 export function TawkToWidget() {
+  const pathname = usePathname();
   const { data: settings } = useGetPublicClientSettingsQuery();
   const { data: session, status } = useSession();
   const enabled = settings?.tawkToEnabled ?? false;
   const propertyId = settings?.tawkToPropertyId ?? null;
   const widgetId = settings?.tawkToWidgetId ?? null;
+  const isDashboardRoute =
+    pathname === '/dashboard' ||
+    pathname.startsWith('/dashboard/') ||
+    pathname === '/admin' ||
+    pathname.startsWith('/admin/') ||
+    pathname === '/distributor' ||
+    pathname.startsWith('/distributor/') ||
+    pathname === '/notifications';
+  const shouldShowWidget = enabled && !isDashboardRoute;
+
+  // The embed is global so it can persist after client-side navigation. Hide
+  // an already-loaded widget immediately when a user enters any role dashboard.
+  useEffect(() => {
+    if (!enabled) return;
+    if (shouldShowWidget) {
+      return whenTawkReady((api) => api.showWidget?.());
+    }
+
+    return whenTawkReady((api) => api.hideWidget?.());
+  }, [enabled, shouldShowWidget]);
 
   useEffect(() => {
-    if (!enabled || !propertyId || !widgetId) return;
+    if (!shouldShowWidget || !propertyId || !widgetId) return;
     if (document.getElementById(SCRIPT_ID)) return;
 
     const script = document.createElement('script');
@@ -78,10 +100,10 @@ export function TawkToWidget() {
     script.charset = 'UTF-8';
     script.setAttribute('crossorigin', '*');
     document.body.appendChild(script);
-  }, [enabled, propertyId, widgetId]);
+  }, [propertyId, shouldShowWidget, widgetId]);
 
   useEffect(() => {
-    if (!enabled || status !== 'authenticated' || !session.user) return;
+    if (!shouldShowWidget || status !== 'authenticated' || !session.user) return;
 
     const name = [session.user.firstName, session.user.lastName].filter(Boolean).join(' ') || session.user.email || undefined;
     const email = session.user.email ?? undefined;
@@ -90,14 +112,14 @@ export function TawkToWidget() {
     return whenTawkReady((api) => {
       api.setAttributes?.({ ...(name ? { name } : {}), ...(email ? { email } : {}) }, () => {});
     });
-  }, [enabled, status, session?.user]);
+  }, [shouldShowWidget, status, session?.user]);
 
   // Hides the floating bubble for the duration of a WordTrainingDialog
   // session or an open CourseSlideViewer -- both are full-screen overlays
   // that use the same bottom-right corner the bubble floats in and would
   // otherwise overlap/steal taps. See lib/recording-signal.ts.
   useEffect(() => {
-    if (!enabled) return;
+    if (!shouldShowWidget) return;
     let cancelWait: (() => void) | undefined;
     let hidden = false;
     const unsubscribe = onFullScreenOverlay((active) => {
@@ -113,7 +135,7 @@ export function TawkToWidget() {
       // the widget permanently hidden -- restore it.
       if (hidden) whenTawkReady((api) => api.showWidget?.());
     };
-  }, [enabled]);
+  }, [shouldShowWidget]);
 
   return null;
 }

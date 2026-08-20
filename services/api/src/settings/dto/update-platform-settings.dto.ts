@@ -372,4 +372,24 @@ export class UpdatePlatformSettingsDto {
   @Min(1)
   @Max(10_000)
   registerRateLimitPerHour?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  landingShowCountries?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  landingShowDialects?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  landingShowTrainers?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  landingShowPoolVolume?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  landingShowPayout?: boolean;
 }

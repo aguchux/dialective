@@ -1271,6 +1271,11 @@ model PlatformSettings {
   authMaintenanceExcludeAdmin   Boolean @default(true) // when authMaintenanceBlockSessions is on, ADMIN-role sessions are still exempted by default so an admin can reach Settings to end maintenance early
   authMaintenanceExcludePartner Boolean @default(false) // when authMaintenanceBlockSessions is on, whether PARTNER-role sessions are exempted too
   registerRateLimitPerHour Int? // overrides REGISTER_RATE_LIMIT_PER_HOUR when set; max POST /auth/register requests per IP per rolling hour (see PlatformRateLimitGuard)
+  landingShowCountries     Boolean  @default(true) // per-card visibility toggles for the landing page's 5-stat row (GeoController.getStats/LandingStats) -- hiding a stat only affects display, never stops it being computed
+  landingShowDialects      Boolean  @default(true)
+  landingShowTrainers      Boolean  @default(true)
+  landingShowPoolVolume    Boolean  @default(true)
+  landingShowPayout        Boolean  @default(true)
   updatedAt                DateTime @updatedAt
   createdAt                DateTime @default(now())
 

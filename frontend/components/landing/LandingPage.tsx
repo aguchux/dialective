@@ -8,13 +8,24 @@ import { LandingHero } from './LandingHero';
 import { LandingStats } from './LandingStats';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 
+interface GeoStatsVisibility {
+  countries: boolean;
+  dialects: boolean;
+  trainers: boolean;
+  poolVolume: boolean;
+  payout: boolean;
+}
+
 interface GeoStats {
   countryCount: number;
   dialectCount: number;
   totalTrainers: number;
   poolVolumeUsd: number;
   totalPayoutUsd: number;
+  visibility: GeoStatsVisibility;
 }
+
+const DEFAULT_VISIBILITY: GeoStatsVisibility = { countries: true, dialects: true, trainers: true, poolVolume: true, payout: true };
 
 interface Country {
   id: string;
@@ -50,6 +61,7 @@ export async function LandingPage() {
   const totalTrainers = geoStats?.totalTrainers ?? null;
   const poolVolumeUsd = geoStats?.poolVolumeUsd ?? null;
   const totalPayoutUsd = geoStats?.totalPayoutUsd ?? null;
+  const visibility = geoStats?.visibility ?? DEFAULT_VISIBILITY;
 
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-white text-[#050505]">
@@ -68,6 +80,7 @@ export async function LandingPage() {
             poolVolumeUsd={poolVolumeUsd}
             totalTrainers={totalTrainers}
             totalPayoutUsd={totalPayoutUsd}
+            visibility={visibility}
           />
         </div>
       </div>

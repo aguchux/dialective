@@ -35,3 +35,23 @@ describe('PlatformSettingsService.getTawkToWidget', () => {
     await expect(service.getTawkToWidget()).resolves.toEqual({ enabled: true, propertyId: 'prop-1', widgetId: 'widget-1' });
   });
 });
+
+describe('PlatformSettingsService.getLandingVisibility', () => {
+  it('maps each landingShow* column to its stat key', async () => {
+    const { service } = setup({
+      landingShowCountries: true,
+      landingShowDialects: false,
+      landingShowTrainers: true,
+      landingShowPoolVolume: false,
+      landingShowPayout: true,
+    });
+
+    await expect(service.getLandingVisibility()).resolves.toEqual({
+      countries: true,
+      dialects: false,
+      trainers: true,
+      poolVolume: false,
+      payout: true,
+    });
+  });
+});

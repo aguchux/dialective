@@ -49,7 +49,7 @@ export class GeoController {
    */
   @Get('stats')
   async getStats() {
-    const [countryCount, dialectCount, totalTrainers, activeAgg, settledSubmissionAgg, settledWordAgg, rate] = await Promise.all([
+    const [countryCount, dialectCount, totalTrainers, activeAgg, settledSubmissionAgg, settledWordAgg, rate, visibility] = await Promise.all([
       this.prisma.country.count(),
       this.prisma.dialect.count(),
       this.prisma.user.count({ where: { role: Role.TRAINER } }),
@@ -66,6 +66,7 @@ export class GeoController {
         _sum: { payoutTokenAmount: true },
       }),
       this.platformSettings.getTokenUsdRate(),
+      this.platformSettings.getLandingVisibility(),
     ]);
 
     const poolVolumeUsd = Number(activeAgg._sum.usdAmount ?? 0);
@@ -73,7 +74,10 @@ export class GeoController {
       Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) + Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
     const totalPayoutUsd = totalSettledTokens * rate;
 
-    return { countryCount, dialectCount, totalTrainers, poolVolumeUsd, totalPayoutUsd };
+    // Every figure is still computed regardless of visibility -- these flags
+    // only tell the landing page which cards to render, they're not a
+    // shortcut to skip the underlying aggregate reads.
+    return { countryCount, dialectCount, totalTrainers, poolVolumeUsd, totalPayoutUsd, visibility };
   }
 
   /**

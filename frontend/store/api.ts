@@ -880,6 +880,11 @@ export interface PlatformSettings {
   authMaintenanceExcludeAdmin: boolean;
   authMaintenanceExcludePartner: boolean;
   registerRateLimitPerHour: number;
+  landingShowCountries: boolean;
+  landingShowDialects: boolean;
+  landingShowTrainers: boolean;
+  landingShowPoolVolume: boolean;
+  landingShowPayout: boolean;
   updatedAt: string;
   createdAt: string;
 }
@@ -951,6 +956,11 @@ export interface PlatformSettingsInput {
   authMaintenanceExcludeAdmin?: boolean;
   authMaintenanceExcludePartner?: boolean;
   registerRateLimitPerHour?: number;
+  landingShowCountries?: boolean;
+  landingShowDialects?: boolean;
+  landingShowTrainers?: boolean;
+  landingShowPoolVolume?: boolean;
+  landingShowPayout?: boolean;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD';
