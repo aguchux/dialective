@@ -852,6 +852,7 @@ export interface PlatformSettings {
   qualityWeightNoise: string;
   qualityWeightQuality: string;
   qualityWeightLiveness: string;
+  qualityWeightAsrMatch: string;
   spellingNormalizationEnabled: boolean;
   spellingNormalizationProviderOrder: string;
   sentenceRebuildEnabled: boolean;
@@ -922,6 +923,7 @@ export interface PlatformSettingsInput {
   qualityWeightNoise?: number;
   qualityWeightQuality?: number;
   qualityWeightLiveness?: number;
+  qualityWeightAsrMatch?: number;
   spellingNormalizationEnabled?: boolean;
   spellingNormalizationProviderOrder?: string;
   sentenceRebuildEnabled?: boolean;
@@ -985,6 +987,31 @@ export interface WordRecordingUpload {
   key: string;
   bucket: string;
   expiresInSeconds: number;
+}
+
+export interface NextPrompt {
+  promptId: string;
+  dialectTag: string;
+  text: string;
+  wordCount: number;
+  /** Per-prompt recording countdown (perWordSeconds x wordCount, clamped) -- the same value the server passes to quality-gate-worker's prefilter, see PromptsController.getNext. */
+  maxRecordingSeconds: number;
+}
+
+export interface SubmissionUploadUrl {
+  submissionId: string;
+  uploadUrl: string;
+  key: string;
+  bucket: string;
+  expiresInSeconds: number;
+  maxRecordingSeconds: number;
+}
+
+/** GET /submissions/:id/result -- transcript/word_confidences are deliberately stripped server-side before this reaches a trainer (see submissions.controller.ts getResult). */
+export interface SubmissionResult {
+  status: 'ok' | 'rejected' | 'unsupported_dialect';
+  reason?: string;
+  dialect_tag?: string;
 }
 
 export interface SubscriptionPool {
@@ -1559,6 +1586,25 @@ export const dialectivaApi = createApi({
     getEarningsChart: builder.query<EarningsChart, { range: EarningsChartRange }>({
       query: ({ range }) => ({ url: '/wallet/earnings-chart', params: { range } }),
       providesTags: ['Wallet'],
+    }),
+    getNextPrompt: builder.query<NextPrompt, void>({
+      query: () => '/prompts/next',
+    }),
+    createSubmissionUploadUrl: builder.mutation<
+      SubmissionUploadUrl,
+      { promptId: string; dialectTag: string; contentType: string }
+    >({
+      query: (body) => ({ url: '/submissions/upload-url', method: 'POST', body }),
+    }),
+    createSubmission: builder.mutation<
+      { submissionId: string; status: string; tokensSpent: string },
+      { submissionId: string; promptId: string; dialectTag: string; bucket: string; audioKey: string }
+    >({
+      query: (body) => ({ url: '/submissions/create', method: 'POST', body }),
+      invalidatesTags: ['Wallet', 'Submissions'],
+    }),
+    getSubmissionResult: builder.query<SubmissionResult, string>({
+      query: (submissionId) => `/submissions/${submissionId}/result`,
     }),
     getMySubmissions: builder.query<SubmissionsPage, { page: number; pageSize: number; status?: TrainerSubmissionSummary['status'][] }>({
       query: ({ page, pageSize, status }) => ({
@@ -2273,6 +2319,10 @@ export const {
   useGetEarningsChartQuery,
   useGetMySubmissionsQuery,
   useGetMyWordRecordingsQuery,
+  useLazyGetNextPromptQuery,
+  useCreateSubmissionUploadUrlMutation,
+  useCreateSubmissionMutation,
+  useLazyGetSubmissionResultQuery,
   useStartWordTrainingSessionMutation,
   useLazyGetNextWordTrainingAssignmentQuery,
   useLazyGetSpellingSuggestionsQuery,

@@ -767,14 +767,19 @@ model WordRecording {
   durationMs        Int?
   noiseRating       RecordingNoiseRating?
   validationScore   Decimal? @db.Decimal(5, 4) // 0-1 exact-match score, DIALECT_TO_ENGLISH only
-  status            SubmissionStatus @default(PENDING) // PENDING|SCORED|SETTLED only -- no ASR step, TRANSCRIBED/REJECTED unused here
+  status            SubmissionStatus @default(PENDING) // PENDING|SCORED|SETTLED only -- no consensus/quorum concept, TRANSCRIBED/REJECTED unused here. ASR (below) never gates or delays reaching SCORED -- it's an async annotation, same posture as noise/quality/livenessScore.
   tokensSpent       Decimal  @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
   rawScore          Decimal? @db.Decimal(5, 2) // 0.00-100.00 original exact-match/reverse-validation score before any admin score-range weighting/clamp; used for partner data queries
   score             Decimal? @db.Decimal(5, 2) // 0.00-100.00 platform score, same scale as Submission.score; null until SCORED
+  transcript        String? // ASR transcript of the spoken audio (ENGLISH_TO_DIALECT/DIALECT_TO_ENGLISH only -- SENTENCE_REBUILD has no audio step); null until vosk-worker/whisper-worker's ASR pass completes, may remain null forever for an unsupported dialect
+  asrEngine         String? // "vosk" | "whisper", whichever transcribed this row -- see models/asr-registry.yaml
+  asrConfidence     Decimal? @db.Decimal(5, 4) // mean per-word confidence, 0-1; null when the engine has none (Whisper) -- same semantics as Submission.asrConfidence
+  asrWordDetail     Json? // [{word, start, end, conf}], seconds; conf null for Whisper-origin rows -- same shape as Submission.asrWordDetail
+  asrMatchScore     Decimal? @db.Decimal(5, 2) // 0-100, how closely the ASR transcript matches translationText (normalized comparison, computed by the worker at ASR-write time) -- feeds computeWordRecordingCompositeScore via PlatformSettings.qualityWeightAsrMatch (default 0, opt-in); never affects validationScore/score/status directly
   noiseScore        Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's SNR-derived estimate; null until the gate has run
   qualityScore      Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's clipping/artifact composite; null until the gate has run
   livenessScore     Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's live-human-voice classifier confidence; null until the gate has run
-  compositeScore    Decimal? @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore (PlatformSettings.qualityWeight*), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled
+  compositeScore    Decimal? @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore+asrMatchScore (PlatformSettings.qualityWeight*, computeWordRecordingCompositeScore), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled
   qualityGateCheckedAt DateTime? // when quality-gate-worker last wrote noise/quality/livenessScore
   payoutTokenAmount Decimal? @db.Decimal(20, 8) // computed at settlement, null until SETTLED
   scoredAt          DateTime?
@@ -1206,6 +1211,8 @@ model PlatformSettings {
   referralInviteExpirySeconds Int? // overrides REFERRAL_INVITE_EXPIRY_SECONDS when set; pending invite lifetime before lazy deletion
   wordTrainingRecordingTimeoutSeconds Int? // overrides WORD_TRAINING_RECORDING_TIMEOUT_SECONDS when set; per-WORD recording seconds in the trainer live recording flow -- the frontend multiplies this by the assignment's word count (splitting promptText on whitespace) to get the round's total countdown, so a 5s/word setting gives a 1-word assignment 5s and a 5-word sentence 25s
   wordTrainingRecordingMaxTimeoutSeconds Int? // overrides WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS when set; hard ceiling on the total per-round countdown after the per-word multiplication, so an unusually long prompt can't produce a runaway timer
+  dictationRecordingTimeoutSeconds Int? // overrides DICTATION_RECORDING_TIMEOUT_SECONDS when set; per-WORD recording seconds in the dictation (Submission) flow -- same per-word x wordCount pattern as wordTrainingRecordingTimeoutSeconds, computed server-side (submissions/prompts controllers) since the resulting max_duration_s also gates quality-gate-worker's prefilter, not just the frontend countdown
+  dictationRecordingMaxTimeoutSeconds Int? // overrides DICTATION_RECORDING_MAX_TIMEOUT_SECONDS when set; hard ceiling on the dictation round's total countdown/duration gate after the per-word multiplication, so a paragraph-length prompt can't produce an unbounded recording window
   trainingPayoutBonusCapMultiple Decimal? @db.Decimal(5, 2) // overrides TRAINING_PAYOUT_BONUS_CAP_MULTIPLE when set; caps the score-scaled bonus at this multiple of tokensSpent (see computeTrainingPayout)
   taskTokenCost            Decimal? @db.Decimal(20, 8) // overrides TASK_TOKEN_COST when set; tokens debited from a trainer's wallet per submission
   reverseWordTrainingEnabled Boolean @default(false)
@@ -1236,6 +1243,7 @@ model PlatformSettings {
   qualityWeightNoise       Decimal  @default(15) @db.Decimal(5, 2) // weight (%) given to noiseScore in compositeScore's blend
   qualityWeightQuality     Decimal  @default(10) @db.Decimal(5, 2) // weight (%) given to qualityScore in compositeScore's blend
   qualityWeightLiveness    Decimal  @default(15) @db.Decimal(5, 2) // weight (%) given to livenessScore in compositeScore's blend -- the four qualityWeight* fields must sum to 100, validated in PlatformSettingsService.update
+  qualityWeightAsrMatch    Decimal  @default(0) @db.Decimal(5, 2) // weight (%) given to WordRecording.asrMatchScore in computeWordRecordingCompositeScore's blend -- WordRecording-only signal (Submission's ASR IS its consensus signal already, so this never applies there). Deliberately NOT part of the four qualityWeight*'s sum-to-100 group: defaults to 0 so this feature ships inert until an admin opts in, additive rather than carved out of the existing four's budget. Validated independently (>= 0) in PlatformSettingsService.update
   spellingNormalizationEnabled Boolean @default(false) // master kill switch for AI spelling normalization on ENGLISH_TO_DIALECT word recordings; writes WordRecording.normalizedTranslationText only, never affects scoring
   spellingNormalizationProviderOrder String @default("openai,deepseek,anthropic") // CSV fallback-try order for spelling normalization, same permutation rules as llmProviderOrder
   sentenceRebuildEnabled   Boolean  @default(false) // master kill switch for the SENTENCE_REBUILD word-training exercise; WordsService.nextAssignment never offers it when false

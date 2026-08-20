@@ -40,10 +40,21 @@ def transcode_to_wav(src_path: str, dst_path: str, sr: int = 16000) -> None:
     )
 
 
-def prefilter_ok(audio_path: str) -> tuple[bool, str | None]:
+def prefilter_ok(audio_path: str, max_duration_s: float | None = None) -> tuple[bool, str | None]:
+    """
+    max_duration_s, when given, overrides the module-level MAX_DURATION_S --
+    submissions.controller.ts computes and passes this per-prompt (see its
+    quality-gate-jobs publish comment) so a paragraph-length dictation
+    Prompt gets a realistic recording window instead of the flat 15s
+    default. word_recording jobs never set this field, so they keep using
+    the module constant unchanged. MIN_DURATION_S is never overridden --
+    audio is never too short because a prompt is long, only potentially too
+    long, so there's no equivalent per-prompt floor to compute.
+    """
     data, sr = sf.read(audio_path)
     duration = len(data) / sr
-    if duration < MIN_DURATION_S or duration > MAX_DURATION_S:
+    effective_max = max_duration_s if max_duration_s is not None else MAX_DURATION_S
+    if duration < MIN_DURATION_S or duration > effective_max:
         return False, "duration_out_of_range"
     silence_ratio = (abs(data) < 0.01).mean()
     if silence_ratio > MAX_SILENCE_RATIO:
@@ -85,7 +96,8 @@ def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model):
                     logger.warning("Unreadable audio for word_recording=%s; leaving scores unset", record_id)
                 return
 
-            ok, reason = prefilter_ok(wav_path)
+            max_duration_s = float(job["max_duration_s"]) if job.get("max_duration_s") else None
+            ok, reason = prefilter_ok(wav_path, max_duration_s)
             if not ok:
                 if record_kind == "submission":
                     reject_submission(db_conn, record_id, reason)
@@ -105,17 +117,34 @@ def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model):
 
             asr_stream = job.get("asr_stream")
             if asr_stream:
-                publish(
-                    redis_client,
-                    asr_stream,
-                    {
+                if record_kind == "submission":
+                    asr_payload = {
                         "submission_id": record_id,
                         "prompt_id": job["prompt_id"],
                         "dialect_tag": job["dialect_tag"],
                         "bucket": job["bucket"],
                         "audio_key": job["audio_key"],
-                    },
-                )
+                    }
+                    if job.get("max_duration_s"):
+                        # Forwarded so vosk-worker's own (redundant but
+                        # present) prefilter doesn't reject audio this
+                        # worker's prefilter already accepted against the
+                        # same per-prompt duration allowance.
+                        asr_payload["max_duration_s"] = job["max_duration_s"]
+                else:
+                    # word_recording jobs have no prompt_id/consensus concept
+                    # -- expected_text (the trainer's own typed answer) is
+                    # what vosk-worker/whisper-worker compares the transcript
+                    # against for asr_match_score. See words.service.ts's
+                    # quality-gate-jobs publish, the origin of this field.
+                    asr_payload = {
+                        "word_recording_id": record_id,
+                        "dialect_tag": job["dialect_tag"],
+                        "expected_text": job["expected_text"],
+                        "bucket": job["bucket"],
+                        "audio_key": job["audio_key"],
+                    }
+                publish(redis_client, asr_stream, asr_payload)
         finally:
             for path in (raw_path, wav_path):
                 if os.path.exists(path):

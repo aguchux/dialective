@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 
 import psycopg2
 
@@ -23,6 +24,22 @@ SET status = %(status)s,
 WHERE id = %(submission_id)s AND status = 'PENDING'
 """
 
+# No WHERE-clause status guard here, unlike UPDATE_SUBMISSION_SQL -- ASR is a
+# pure annotation for word recordings (never gates/delays reaching SCORED,
+# see schema.prisma's WordRecording.status comment), so there's no PENDING
+# window this needs to race against; a WordRecording can legitimately already
+# be SCORED (or even SETTLED) by the time this lands, and that's fine to
+# annotate regardless.
+UPDATE_WORD_RECORDING_ASR_SQL = """
+UPDATE word_recordings
+SET transcript = %(transcript)s,
+    "asrConfidence" = %(asr_confidence)s,
+    "asrEngine" = %(asr_engine)s,
+    "asrWordDetail" = %(asr_word_detail)s,
+    "asrMatchScore" = %(asr_match_score)s
+WHERE id = %(word_recording_id)s
+"""
+
 
 def build_db_connection():
     return psycopg2.connect(os.environ["DATABASE_URL"])
@@ -32,6 +49,41 @@ def mean_confidence(word_confidences: list) -> float | None:
     if not word_confidences:
         return None
     return sum(w["conf"] for w in word_confidences) / len(word_confidences)
+
+
+def normalize_for_match(text: str) -> str:
+    """
+    Lowercases and strips whitespace/punctuation, but deliberately keeps
+    every non-ASCII character (diacritics are meaningful in dialect text --
+    mirrors consensus-scorer's normalizeTranscript, which preserves them for
+    the same reason; unlike words.service.ts's normalizeAnswer, which is
+    English-only and safe to strip to ASCII since it only ever compares
+    against a known English word).
+    """
+    return re.sub(r"[.,!?;:\"'()\[\]{}]", "", text.strip().lower())
+
+
+def char_similarity(a: str, b: str) -> float:
+    """1 - (character-level edit distance / longer string length), in [0, 1]. Word recordings are typically 1-2 words, so character-level is more forgiving of ASR mis-segmentation than consensus-scorer's word-level tokenSimilarity."""
+    if not a and not b:
+        return 1.0
+    max_len = max(len(a), len(b), 1)
+    rows, cols = len(a) + 1, len(b) + 1
+    dist = [[0] * cols for _ in range(rows)]
+    for i in range(rows):
+        dist[i][0] = i
+    for j in range(cols):
+        dist[0][j] = j
+    for i in range(1, rows):
+        for j in range(1, cols):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            dist[i][j] = min(dist[i - 1][j] + 1, dist[i][j - 1] + 1, dist[i - 1][j - 1] + cost)
+    return 1 - dist[rows - 1][cols - 1] / max_len
+
+
+def compute_asr_match_score(transcript: str, expected_text: str) -> float:
+    """0-100 similarity between the ASR transcript and the trainer's typed answer -- see WordRecording.asrMatchScore's schema comment."""
+    return round(char_similarity(normalize_for_match(transcript), normalize_for_match(expected_text)) * 100, 2)
 
 
 def update_submission_result(
@@ -76,4 +128,37 @@ def update_submission_result(
                 "row was never inserted before this job was published?",
                 submission_id,
             )
+    conn.commit()
+
+
+def update_word_recording_result(
+    conn,
+    word_recording_id: str,
+    *,
+    transcript: str,
+    expected_text: str,
+    word_detail: list,
+) -> None:
+    """
+    Annotates a WordRecording with ASR output -- always unconditional (see
+    UPDATE_WORD_RECORDING_ASR_SQL's comment), never touches status/score.
+    asr_confidence stays None -- Whisper's HF pipeline never returns
+    per-word confidence, same as write_submission_row's existing posture.
+    0 rows matched means the row was deleted or never existed; logged, not
+    raised, same tolerance as update_submission_result.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            UPDATE_WORD_RECORDING_ASR_SQL,
+            {
+                "word_recording_id": word_recording_id,
+                "transcript": transcript,
+                "asr_confidence": None,
+                "asr_engine": "whisper",
+                "asr_word_detail": json.dumps(word_detail) if word_detail else None,
+                "asr_match_score": compute_asr_match_score(transcript, expected_text),
+            },
+        )
+        if cur.rowcount == 0:
+            logger.warning("update_word_recording_result matched 0 rows for word_recording=%s", word_recording_id)
     conn.commit()

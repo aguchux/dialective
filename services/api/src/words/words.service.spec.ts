@@ -16,6 +16,7 @@ describe('WordsService', () => {
   const streams = { publish: jest.fn() };
   const llm = { normalize: jest.fn() };
   const courses = { getIncompleteRequiredCourses: jest.fn().mockResolvedValue([]) };
+  const asrRegistry = { resolve: jest.fn().mockReturnValue(undefined) };
   let prisma: any;
   let service: WordsService;
 
@@ -39,7 +40,7 @@ describe('WordsService', () => {
     settings.isSentenceRebuildEnabled.mockReset().mockResolvedValue(false);
     settings.isSpellingNormalizationEnabled.mockResolvedValue(false);
     courses.getIncompleteRequiredCourses.mockReset().mockResolvedValue([]);
-    service = new WordsService(prisma, storage as any, settings as any, streams as any, llm as any, courses as any);
+    service = new WordsService(prisma, storage as any, settings as any, streams as any, llm as any, courses as any, asrRegistry as any);
   });
 
   describe('startSession', () => {

@@ -374,6 +374,41 @@ export class PlatformSettingsService {
     );
   }
 
+  async getDictationRecordingTimeoutSeconds(): Promise<number> {
+    const row = await this.getRow();
+    if (row.dictationRecordingTimeoutSeconds !== null) {
+      return row.dictationRecordingTimeoutSeconds;
+    }
+    return this.parsePositiveInt(process.env.DICTATION_RECORDING_TIMEOUT_SECONDS, 5, 'DICTATION_RECORDING_TIMEOUT_SECONDS');
+  }
+
+  async getDictationRecordingMaxTimeoutSeconds(): Promise<number> {
+    const row = await this.getRow();
+    if (row.dictationRecordingMaxTimeoutSeconds !== null) {
+      return row.dictationRecordingMaxTimeoutSeconds;
+    }
+    return this.parsePositiveInt(
+      process.env.DICTATION_RECORDING_MAX_TIMEOUT_SECONDS,
+      180,
+      'DICTATION_RECORDING_MAX_TIMEOUT_SECONDS',
+    );
+  }
+
+  /**
+   * Both settings blended into a single seconds-per-word x wordCount,
+   * clamped value -- the one number both the frontend countdown and
+   * quality-gate-worker's prefilter gate need. Shared by
+   * SubmissionsController and PromptsController so the two controllers
+   * never compute this independently and drift.
+   */
+  async getDictationMaxRecordingSeconds(wordCount: number): Promise<number> {
+    const [perWordSeconds, maxTotalSeconds] = await Promise.all([
+      this.getDictationRecordingTimeoutSeconds(),
+      this.getDictationRecordingMaxTimeoutSeconds(),
+    ]);
+    return Math.min(perWordSeconds * Math.max(1, wordCount), maxTotalSeconds);
+  }
+
   async getForAdmin() {
     const row = await this.getRow();
     const referralCookiePersistSeconds =
@@ -396,6 +431,16 @@ export class PlatformSettingsService {
         180,
         'WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS',
       );
+    const dictationRecordingTimeoutSeconds =
+      row.dictationRecordingTimeoutSeconds ??
+      this.parsePositiveInt(process.env.DICTATION_RECORDING_TIMEOUT_SECONDS, 5, 'DICTATION_RECORDING_TIMEOUT_SECONDS');
+    const dictationRecordingMaxTimeoutSeconds =
+      row.dictationRecordingMaxTimeoutSeconds ??
+      this.parsePositiveInt(
+        process.env.DICTATION_RECORDING_MAX_TIMEOUT_SECONDS,
+        180,
+        'DICTATION_RECORDING_MAX_TIMEOUT_SECONDS',
+      );
     return {
       tokenUsdRate: row.tokenUsdRate?.toString() ?? null,
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
@@ -405,6 +450,8 @@ export class PlatformSettingsService {
       referralInviteExpirySeconds,
       wordTrainingRecordingTimeoutSeconds,
       wordTrainingRecordingMaxTimeoutSeconds,
+      dictationRecordingTimeoutSeconds,
+      dictationRecordingMaxTimeoutSeconds,
       trainingPayoutBonusCapMultiple: row.trainingPayoutBonusCapMultiple?.toString() ?? null,
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
@@ -435,6 +482,7 @@ export class PlatformSettingsService {
       qualityWeightNoise: row.qualityWeightNoise.toString(),
       qualityWeightQuality: row.qualityWeightQuality.toString(),
       qualityWeightLiveness: row.qualityWeightLiveness.toString(),
+      qualityWeightAsrMatch: row.qualityWeightAsrMatch.toString(),
       spellingNormalizationEnabled: row.spellingNormalizationEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
@@ -478,6 +526,8 @@ export class PlatformSettingsService {
     referralInviteExpirySeconds?: number;
     wordTrainingRecordingTimeoutSeconds?: number;
     wordTrainingRecordingMaxTimeoutSeconds?: number;
+    dictationRecordingTimeoutSeconds?: number;
+    dictationRecordingMaxTimeoutSeconds?: number;
     trainingPayoutBonusCapMultiple?: number | null;
     taskTokenCost?: number | null;
     reverseWordTrainingEnabled?: boolean;
@@ -508,6 +558,7 @@ export class PlatformSettingsService {
     qualityWeightNoise?: number;
     qualityWeightQuality?: number;
     qualityWeightLiveness?: number;
+    qualityWeightAsrMatch?: number;
     spellingNormalizationEnabled?: boolean;
     spellingNormalizationProviderOrder?: string;
     sentenceRebuildEnabled?: boolean;
@@ -646,6 +697,15 @@ export class PlatformSettingsService {
       }
     }
 
+    // qualityWeightAsrMatch is deliberately NOT part of the sum-to-100 group
+    // above -- it's WordRecording-only, additive/opt-in (default 0), not a
+    // slice carved out of the other four's budget (see
+    // computeWordRecordingCompositeScore's doc comment). Only needs its own
+    // non-negative check.
+    if (data.qualityWeightAsrMatch !== undefined && data.qualityWeightAsrMatch < 0) {
+      throw new BadRequestException('qualityWeightAsrMatch must be >= 0');
+    }
+
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
       create: { id: 'default', ...data },
@@ -673,6 +733,16 @@ export class PlatformSettingsService {
         180,
         'WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS',
       );
+    const dictationRecordingTimeoutSeconds =
+      row.dictationRecordingTimeoutSeconds ??
+      this.parsePositiveInt(process.env.DICTATION_RECORDING_TIMEOUT_SECONDS, 5, 'DICTATION_RECORDING_TIMEOUT_SECONDS');
+    const dictationRecordingMaxTimeoutSeconds =
+      row.dictationRecordingMaxTimeoutSeconds ??
+      this.parsePositiveInt(
+        process.env.DICTATION_RECORDING_MAX_TIMEOUT_SECONDS,
+        180,
+        'DICTATION_RECORDING_MAX_TIMEOUT_SECONDS',
+      );
     return {
       tokenUsdRate: row.tokenUsdRate?.toString() ?? null,
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
@@ -682,6 +752,8 @@ export class PlatformSettingsService {
       referralInviteExpirySeconds,
       wordTrainingRecordingTimeoutSeconds,
       wordTrainingRecordingMaxTimeoutSeconds,
+      dictationRecordingTimeoutSeconds,
+      dictationRecordingMaxTimeoutSeconds,
       trainingPayoutBonusCapMultiple: row.trainingPayoutBonusCapMultiple?.toString() ?? null,
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
@@ -712,6 +784,7 @@ export class PlatformSettingsService {
       qualityWeightNoise: row.qualityWeightNoise.toString(),
       qualityWeightQuality: row.qualityWeightQuality.toString(),
       qualityWeightLiveness: row.qualityWeightLiveness.toString(),
+      qualityWeightAsrMatch: row.qualityWeightAsrMatch.toString(),
       spellingNormalizationEnabled: row.spellingNormalizationEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
@@ -752,6 +825,8 @@ export class PlatformSettingsService {
       referralInviteExpirySeconds,
       wordTrainingRecordingTimeoutSeconds,
       wordTrainingRecordingMaxTimeoutSeconds,
+      dictationRecordingTimeoutSeconds,
+      dictationRecordingMaxTimeoutSeconds,
       authMaintenance,
       tawkTo,
       manualPhone,
@@ -761,6 +836,8 @@ export class PlatformSettingsService {
       this.getReferralInviteExpirySeconds(),
       this.getWordTrainingRecordingTimeoutSeconds(),
       this.getWordTrainingRecordingMaxTimeoutSeconds(),
+      this.getDictationRecordingTimeoutSeconds(),
+      this.getDictationRecordingMaxTimeoutSeconds(),
       this.getAuthMaintenanceStatus(),
       this.getTawkToWidget(),
       this.getManualPhoneVerificationSettings(),
@@ -771,6 +848,8 @@ export class PlatformSettingsService {
       referralInviteExpirySeconds,
       wordTrainingRecordingTimeoutSeconds,
       wordTrainingRecordingMaxTimeoutSeconds,
+      dictationRecordingTimeoutSeconds,
+      dictationRecordingMaxTimeoutSeconds,
       phoneVerificationRequired,
       manualPhoneVerificationEnabled: manualPhone.enabled,
       manualPhoneVerificationFeeTokens: manualPhone.feeTokens.toString(),

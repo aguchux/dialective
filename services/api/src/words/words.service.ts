@@ -13,6 +13,7 @@ import { RedisStreamsService } from '../redis-streams/redis-streams.service';
 import { LlmNormalizerService } from '../llm/llm-normalizer.service';
 import { parseProviderOrder } from '../llm/llm-provider.interface';
 import { CoursesService } from '../courses/courses.service';
+import { AsrRegistryService } from '../asr-registry/asr-registry.service';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
 import { GetSpellingSuggestionsDto } from './dto/get-spelling-suggestions.dto';
@@ -37,6 +38,7 @@ export class WordsService {
     private readonly streams: RedisStreamsService,
     private readonly llm: LlmNormalizerService,
     private readonly courses: CoursesService,
+    private readonly asrRegistry: AsrRegistryService,
   ) {}
 
   async startSession(userId: string) {
@@ -329,16 +331,23 @@ export class WordsService {
     }
 
     // Same quality-gate-jobs stream Submissions publish to (see
-    // SubmissionsController.create) -- no asr_stream field here since word
-    // recordings have no ASR step to forward to; the worker only writes
-    // noise/quality/livenessScore onto this row. No prefilter-reject path
-    // either (no equivalent "duration_out_of_range"/"mostly_silence" gate
-    // exists for word recordings today), so this is purely score annotation.
+    // SubmissionsController.create). Unlike Submissions, an unsupported
+    // dialect here is NOT a rejection -- ASR is an optional annotation for
+    // word recordings, never a gate on recording creation (there's no
+    // equivalent "duration_out_of_range"/"mostly_silence" prefilter-reject
+    // path for this model either). asr_stream is simply omitted when the
+    // dialect has no registered engine; quality-gate-worker's existing
+    // asr_stream-forwarding branch (see quality-gate-worker/worker.py) only
+    // fires when the field is present.
+    const asrRoute = this.asrRegistry.resolve(assignment.session.user.dialect!.tag);
     await this.streams.publish('quality-gate-jobs', {
       record_kind: 'word_recording',
       word_recording_id: recording.id,
       bucket: body.bucket,
       audio_key: body.audioKey,
+      dialect_tag: assignment.session.user.dialect!.tag,
+      expected_text: body.responseText!.trim(),
+      ...(asrRoute ? { asr_stream: asrRoute.stream } : {}),
     });
 
     return {

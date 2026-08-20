@@ -17,6 +17,7 @@ export function QualityGateSettingsPanel() {
   const [weightNoise, setWeightNoise] = useState('15');
   const [weightQuality, setWeightQuality] = useState('10');
   const [weightLiveness, setWeightLiveness] = useState('15');
+  const [weightAsrMatch, setWeightAsrMatch] = useState('0');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +28,7 @@ export function QualityGateSettingsPanel() {
     setWeightNoise(settings.qualityWeightNoise);
     setWeightQuality(settings.qualityWeightQuality);
     setWeightLiveness(settings.qualityWeightLiveness);
+    setWeightAsrMatch(settings.qualityWeightAsrMatch);
   }, [settings]);
 
   const weightSum =
@@ -50,6 +52,7 @@ export function QualityGateSettingsPanel() {
         qualityWeightNoise: Number(weightNoise),
         qualityWeightQuality: Number(weightQuality),
         qualityWeightLiveness: Number(weightLiveness),
+        qualityWeightAsrMatch: Number(weightAsrMatch),
       }).unwrap();
       setMessage('Quality gate settings saved.');
     } catch (err) {
@@ -163,6 +166,29 @@ export function QualityGateSettingsPanel() {
             <p className={`text-sm font-bold ${weightSumValid ? 'text-accent-dark' : 'text-danger'}`}>
               Sums to: {weightSum}% {weightSumValid ? '' : '(must equal 100%)'}
             </p>
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="weight-asr-match">
+              Spoken/typed match (word training only)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              How closely a word-training recording&rsquo;s spoken audio (ASR-transcribed) matches what the trainer
+              typed, catching a correct typed answer paired with a different spoken word. Separate from the weights
+              above &mdash; it&rsquo;s additive, not part of that 100% budget, and defaults to 0 (off) so this never
+              affects payout until you raise it. Doesn&rsquo;t apply to sentence submissions, which already use the
+              transcript as their primary score.
+            </p>
+            <input
+              className={`${inputClass} max-w-40`}
+              id="weight-asr-match"
+              type="number"
+              step="1"
+              min="0"
+              max="100"
+              value={weightAsrMatch}
+              onChange={(e) => setWeightAsrMatch(e.target.value)}
+            />
           </div>
 
           <div>

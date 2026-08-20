@@ -6,7 +6,7 @@ import subprocess
 import redis
 from transformers import pipeline
 
-from db import build_db_connection, update_submission_result
+from db import build_db_connection, update_submission_result, update_word_recording_result
 from model_registry import UnsupportedDialectError, load_registry, resolve_checkpoint
 from spaces import build_spaces_client
 from streams import StreamConsumer, publish
@@ -107,9 +107,59 @@ def write_submission_row(db_conn, submission_id: str, status: str, **fields) -> 
     )
 
 
+def handle_word_recording_job(s3, db_conn, job: dict) -> None:
+    """
+    ASR for a WordRecording -- pure annotation, no status/scoring gate, no
+    consensus forwarding (WordRecording has no quorum concept). Silently
+    does nothing on transcode/unsupported-dialect failure, same
+    graceful-absence posture quality-gate-worker already established for
+    this model (no REJECTED-equivalent path exists here, and no separate
+    prefilter -- the Whisper submission path doesn't run one either).
+    """
+    word_recording_id = job["word_recording_id"]
+    dialect_tag = job["dialect_tag"]
+    raw_path = f"/tmp/word-{word_recording_id}.raw"
+    wav_path = f"/tmp/word-{word_recording_id}.wav"
+
+    try:
+        s3.download_file(job["bucket"], job["audio_key"], raw_path)
+
+        try:
+            transcode_to_wav(raw_path, wav_path)
+        except subprocess.CalledProcessError:
+            logger.warning("Unreadable audio for word_recording=%s; skipping ASR", word_recording_id)
+            return
+
+        try:
+            asr = get_pipeline(dialect_tag)
+        except UnsupportedDialectError:
+            logger.info("No whisper checkpoint for dialect=%s; skipping ASR for word_recording=%s", dialect_tag, word_recording_id)
+            return
+
+        result = asr(wav_path)
+        text = result.get("text", "").strip()
+        word_detail = word_detail_from_chunks(result.get("chunks", []))
+        update_word_recording_result(
+            db_conn,
+            word_recording_id,
+            transcript=text,
+            expected_text=job["expected_text"],
+            word_detail=word_detail,
+        )
+    finally:
+        for path in (raw_path, wav_path):
+            if os.path.exists(path):
+                os.remove(path)
+
+
 def make_handler(s3, redis_client: redis.Redis, db_conn):
     def handle(_msg_id: str, fields: dict) -> None:
         job = fields if not fields.get("data") else json.loads(fields["data"])
+
+        if "word_recording_id" in job:
+            handle_word_recording_job(s3, db_conn, job)
+            return
+
         submission_id = job["submission_id"]
         dialect_tag = job["dialect_tag"]
         raw_path = f"/tmp/{submission_id}.raw"

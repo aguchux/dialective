@@ -59,6 +59,18 @@ export class UpdatePlatformSettingsDto {
   wordTrainingRecordingMaxTimeoutSeconds?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(120)
+  dictationRecordingTimeoutSeconds?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(1800)
+  dictationRecordingMaxTimeoutSeconds?: number;
+
+  @IsOptional()
   @IsPositive()
   trainingPayoutBonusCapMultiple?: number;
 
@@ -216,6 +228,12 @@ export class UpdatePlatformSettingsDto {
   @Min(0)
   @Max(100)
   qualityWeightLiveness?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  qualityWeightAsrMatch?: number;
 
   @IsOptional()
   @IsBoolean()

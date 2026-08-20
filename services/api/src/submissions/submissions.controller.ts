@@ -23,6 +23,7 @@ import { CoursesService } from '../courses/courses.service';
 import { CreateUploadUrlDto } from './dto/create-upload-url.dto';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { ListSubmissionsDto } from './dto/list-submissions.dto';
+import { countPromptWords } from '../common/prompt-length.util';
 
 const SUBMISSIONS_BUCKET = process.env.SPACES_SUBMISSIONS_BUCKET ?? 'dialectiva-submissions';
 
@@ -63,7 +64,7 @@ export class SubmissionsController {
 
     const prompt = await this.prisma.prompt.findFirst({
       where: { id: body.promptId, dialectTag: body.dialectTag, active: true },
-      select: { id: true },
+      select: { id: true, text: true },
     });
     if (!prompt) {
       throw new NotFoundException('Prompt not found');
@@ -79,7 +80,14 @@ export class SubmissionsController {
       body.contentType,
     );
 
-    return { submissionId, uploadUrl: url, key, bucket: SUBMISSIONS_BUCKET, expiresInSeconds };
+    // Returned so the trainer's client sets its recording countdown to the
+    // SAME value create() below will pass to quality-gate-worker's
+    // prefilter (max_duration_s) -- see getDictationMaxRecordingSeconds.
+    // Computed here (not just at create time) so the UI can show the
+    // countdown before the trainer starts recording, not only after.
+    const maxRecordingSeconds = await this.platformSettings.getDictationMaxRecordingSeconds(countPromptWords(prompt.text));
+
+    return { submissionId, uploadUrl: url, key, bucket: SUBMISSIONS_BUCKET, expiresInSeconds, maxRecordingSeconds };
   }
 
   /**
@@ -206,6 +214,15 @@ export class SubmissionsController {
     // prefilter plus noise/quality/liveness scoring, then forwards to
     // asr_stream (the same route.stream resolved above) only once the
     // clip clears the prefilter. See AGENTS.md/quality-gate-worker docs.
+    //
+    // max_duration_s is the SAME value createUploadUrl returned to the
+    // client for its recording countdown -- this is what makes the
+    // server-side prefilter gate actually flex per-prompt (a paragraph-
+    // length Prompt gets a longer allowance) rather than trusting only the
+    // frontend countdown, which a malicious/buggy client could ignore.
+    // quality-gate-worker falls back to its own MAX_DURATION_S constant
+    // when this field is absent (e.g. word_recording jobs never set it).
+    const maxDurationSeconds = await this.platformSettings.getDictationMaxRecordingSeconds(countPromptWords(prompt.text));
     await this.streams.publish('quality-gate-jobs', {
       record_kind: 'submission',
       submission_id: body.submissionId,
@@ -214,6 +231,7 @@ export class SubmissionsController {
       bucket: body.bucket,
       audio_key: body.audioKey,
       asr_stream: route.stream,
+      max_duration_s: String(maxDurationSeconds),
     });
 
     return { submissionId: body.submissionId, status: 'queued', tokensSpent: taskTokenCost };

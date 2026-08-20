@@ -7,7 +7,7 @@ import redis
 import soundfile as sf
 from vosk import KaldiRecognizer, Model
 
-from db import build_db_connection, mean_confidence, update_submission_result
+from db import build_db_connection, mean_confidence, update_submission_result, update_word_recording_result
 from model_registry import UnsupportedDialectError, load_registry, resolve_model_path
 from spaces import build_spaces_client
 from streams import StreamConsumer, publish
@@ -52,11 +52,19 @@ def transcode_to_wav(src_path: str, dst_path: str, sr: int = 16000) -> None:
     )
 
 
-def prefilter_ok(audio_path: str) -> tuple[bool, str | None]:
-    """Duration/silence check before spending ASR time (design doc §5.1)."""
+def prefilter_ok(audio_path: str, max_duration_s: float | None = None) -> tuple[bool, str | None]:
+    """
+    Duration/silence check before spending ASR time (design doc §5.1).
+    max_duration_s, when given (submission jobs forwarded from
+    quality-gate-worker with a per-prompt allowance -- see that worker's
+    prefilter_ok comment), overrides the module-level MAX_DURATION_S so this
+    redundant-but-present check doesn't reject audio quality-gate-worker's
+    own prefilter already accepted for a paragraph-length dictation prompt.
+    """
     data, sr = sf.read(audio_path)
     duration = len(data) / sr
-    if duration < MIN_DURATION_S or duration > MAX_DURATION_S:
+    effective_max = max_duration_s if max_duration_s is not None else MAX_DURATION_S
+    if duration < MIN_DURATION_S or duration > effective_max:
         return False, "duration_out_of_range"
     silence_ratio = (abs(data) < 0.01).mean()
     if silence_ratio > MAX_SILENCE_RATIO:
@@ -99,9 +107,62 @@ def write_submission_row(db_conn, submission_id: str, status: str, **fields) -> 
     )
 
 
+def handle_word_recording_job(s3, db_conn, job: dict) -> None:
+    """
+    ASR for a WordRecording -- pure annotation, no status/scoring gate, no
+    consensus forwarding (WordRecording has no quorum concept). Silently
+    does nothing on transcode/prefilter/unsupported-dialect failure, same
+    graceful-absence posture quality-gate-worker already established for
+    this model (no REJECTED-equivalent path exists here).
+    """
+    word_recording_id = job["word_recording_id"]
+    dialect_tag = job["dialect_tag"]
+    raw_path = f"/tmp/word-{word_recording_id}.raw"
+    wav_path = f"/tmp/word-{word_recording_id}.wav"
+
+    try:
+        s3.download_file(job["bucket"], job["audio_key"], raw_path)
+
+        try:
+            transcode_to_wav(raw_path, wav_path)
+        except subprocess.CalledProcessError:
+            logger.warning("Unreadable audio for word_recording=%s; skipping ASR", word_recording_id)
+            return
+
+        ok, reason = prefilter_ok(wav_path)
+        if not ok:
+            logger.warning("word_recording=%s failed prefilter (%s); skipping ASR", word_recording_id, reason)
+            return
+
+        try:
+            model = get_model(dialect_tag)
+        except UnsupportedDialectError:
+            logger.info("No vosk model for dialect=%s; skipping ASR for word_recording=%s", dialect_tag, word_recording_id)
+            return
+
+        text, word_conf = transcribe(wav_path, model)
+        update_word_recording_result(
+            db_conn,
+            word_recording_id,
+            transcript=text,
+            expected_text=job["expected_text"],
+            word_confidences=word_conf,
+            engine="vosk",
+        )
+    finally:
+        for path in (raw_path, wav_path):
+            if os.path.exists(path):
+                os.remove(path)
+
+
 def make_handler(s3, redis_client: redis.Redis, db_conn):
     def handle(_msg_id: str, fields: dict) -> None:
         job = fields if not fields.get("data") else json.loads(fields["data"])
+
+        if "word_recording_id" in job:
+            handle_word_recording_job(s3, db_conn, job)
+            return
+
         submission_id = job["submission_id"]
         dialect_tag = job["dialect_tag"]
         raw_path = f"/tmp/{submission_id}.raw"
@@ -117,7 +178,8 @@ def make_handler(s3, redis_client: redis.Redis, db_conn):
                 write_submission_row(db_conn, submission_id, "rejected", reason="unreadable_audio")
                 return
 
-            ok, reason = prefilter_ok(wav_path)
+            max_duration_s = float(job["max_duration_s"]) if job.get("max_duration_s") else None
+            ok, reason = prefilter_ok(wav_path, max_duration_s)
             if not ok:
                 write_result(redis_client, submission_id, status="rejected", reason=reason)
                 write_submission_row(db_conn, submission_id, "rejected", reason=reason)

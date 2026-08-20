@@ -49,6 +49,40 @@ export function computeCompositeScore(
 }
 
 /**
+ * WordRecording-only variant of computeCompositeScore, adding a 5th
+ * asrMatchScore term (how closely the ASR transcript matches the trainer's
+ * typed answer -- see WordRecording.asrMatchScore's schema comment).
+ * Deliberately a separate function rather than a 5th parameter bolted onto
+ * computeCompositeScore: Submission's ASR pipeline IS its consensus signal
+ * already, so Submission settlement has no equivalent value to pass here,
+ * and every Submission call site would otherwise need a dummy always-null
+ * argument. qualityWeightAsrMatch defaults to 0, so until an admin opts in,
+ * this produces the identical result computeCompositeScore always did.
+ */
+export function computeWordRecordingCompositeScore(
+  realScore: Prisma.Decimal,
+  noiseScore: Prisma.Decimal | null,
+  qualityScore: Prisma.Decimal | null,
+  livenessScore: Prisma.Decimal | null,
+  asrMatchScore: Prisma.Decimal | null,
+  weights: QualityWeights & { asrMatch: number },
+  scoreRange: { min: number; max: number },
+): number {
+  const weightSum = weights.consensus + weights.noise + weights.quality + weights.liveness + weights.asrMatch;
+  const blended =
+    weightSum <= 0
+      ? realScore.toNumber()
+      : (realScore.toNumber() * weights.consensus +
+          (noiseScore?.toNumber() ?? 100) * weights.noise +
+          (qualityScore?.toNumber() ?? 100) * weights.quality +
+          (livenessScore?.toNumber() ?? 100) * weights.liveness +
+          (asrMatchScore?.toNumber() ?? 100) * weights.asrMatch) /
+        weightSum;
+
+  return Math.max(scoreRange.min, Math.min(scoreRange.max, blended));
+}
+
+/**
  * Reads scored-but-unsettled submissions from Postgres, computes each
  * payout via the shared no-loss formula (computeTrainingPayout in
  * @dialectiva/db -- same math api's manual admin/training-payouts route
@@ -69,9 +103,10 @@ export class SettlementService {
     this.logger.log('Settlement run starting');
 
     const bonusCapMultiple = await this.getTrainingPayoutBonusCapMultiple();
-    const [qualityGateEnabled, qualityWeights, scoreRange, settlementDelayMinutes] = await Promise.all([
+    const [qualityGateEnabled, qualityWeights, asrMatchWeight, scoreRange, settlementDelayMinutes] = await Promise.all([
       this.isQualityGateEnabled(),
       this.getQualityWeights(),
+      this.getAsrMatchWeight(),
       this.getScoreRange(),
       this.getSettlementDelayMinutes(),
     ]);
@@ -87,6 +122,7 @@ export class SettlementService {
       bonusCapMultiple,
       qualityGateEnabled,
       qualityWeights,
+      asrMatchWeight,
       scoreRange,
       settlementDelayMinutes,
     );
@@ -222,6 +258,7 @@ export class SettlementService {
     bonusCapMultiple: number,
     qualityGateEnabled: boolean,
     qualityWeights: QualityWeights,
+    asrMatchWeight: number,
     scoreRange: { min: number; max: number },
     settlementDelayMinutes: number,
   ) {
@@ -243,6 +280,7 @@ export class SettlementService {
         noiseScore: true,
         qualityScore: true,
         livenessScore: true,
+        asrMatchScore: true,
       },
     });
 
@@ -257,12 +295,13 @@ export class SettlementService {
 
       try {
         const realScore = recording.rawScore ?? recording.score;
-        const compositeScore = computeCompositeScore(
+        const compositeScore = computeWordRecordingCompositeScore(
           realScore,
           recording.noiseScore,
           recording.qualityScore,
           recording.livenessScore,
-          qualityWeights,
+          recording.asrMatchScore,
+          { ...qualityWeights, asrMatch: asrMatchWeight },
           scoreRange,
         );
         const payoutScore = qualityGateEnabled ? compositeScore : recording.score;
@@ -620,6 +659,16 @@ export class SettlementService {
       quality: row.qualityWeightQuality.toNumber(),
       liveness: row.qualityWeightLiveness.toNumber(),
     };
+  }
+
+  /** WordRecording-only weight (see computeWordRecordingCompositeScore) -- kept separate from getQualityWeights since Submission's blend has no equivalent term. Defaults to 0 (opt-in, additive, not part of the other four's sum-to-100 group). */
+  private async getAsrMatchWeight(): Promise<number> {
+    const row = await this.prisma.platformSettings.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    });
+    return row.qualityWeightAsrMatch.toNumber();
   }
 
   private async getOrCreateWallet(userId: string) {

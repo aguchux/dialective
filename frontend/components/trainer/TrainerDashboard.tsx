@@ -45,6 +45,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { formatCompactLocalCurrency, formatCompactNumber, formatCompactUsd } from '@/lib/format';
 import { resolveDialectName, useDialectName } from '@/lib/dialect-name';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
+import { DictationDialog } from '@/components/trainer/DictationDialog';
 import { MarketView } from '@/components/p2p/MarketView';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationListPanel } from '@/components/notifications/NotificationListPanel';
@@ -146,6 +147,7 @@ export function TrainerDashboard() {
   const searchParams = useSearchParams();
   const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);
   const [trainingOpen, setTrainingOpen] = useState(false);
+  const [dictationOpen, setDictationOpen] = useState(false);
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
   const [requiredCoursesOpen, setRequiredCoursesOpen] = useState(false);
   const [midSessionRequiredCourses, setMidSessionRequiredCourses] = useState<{ id: string; slug: string; title: string }[] | null>(null);
@@ -176,6 +178,21 @@ export function TrainerDashboard() {
       return;
     }
     setTrainingOpen(true);
+  }
+
+  // Same client-side-first, server-is-still-authoritative gating as
+  // handleStartTask above -- SubmissionsController.create 403s on an
+  // incomplete required course regardless.
+  function handleStartDictation() {
+    if (incompleteRequiredCourses && incompleteRequiredCourses.length > 0) {
+      setRequiredCoursesOpen(true);
+      return;
+    }
+    if (data && Number(data.balance) < Number(data.taskTokenCost)) {
+      setLowBalanceOpen(true);
+      return;
+    }
+    setDictationOpen(true);
   }
 
   useEffect(() => {
@@ -260,11 +277,13 @@ export function TrainerDashboard() {
               email={session.user.email ?? ''}
               refreshing={isFetching}
               onStartTask={handleStartTask}
+              onStartDictation={handleStartDictation}
             />
           )}
         </main>
 
         <MobileNavigation activeView={activeView} />
+        <DictationDialog onOpenChange={setDictationOpen} open={dictationOpen} />
         <WordTrainingDialog
           onOpenChange={setTrainingOpen}
           open={trainingOpen}
@@ -673,6 +692,7 @@ function DashboardViewContent({
   email,
   refreshing,
   onStartTask,
+  onStartDictation,
 }: {
   activeView: DashboardView;
   data: TrainerDashboardSummary;
@@ -680,9 +700,10 @@ function DashboardViewContent({
   email: string;
   refreshing: boolean;
   onStartTask: () => void;
+  onStartDictation: () => void;
 }) {
   if (activeView === 'earnings') return <EarningsView data={data} refreshing={refreshing} />;
-  if (activeView === 'training') return <TrainingView dialectTag={dialectTag} onStartTask={onStartTask} />;
+  if (activeView === 'training') return <TrainingView dialectTag={dialectTag} onStartTask={onStartTask} onStartDictation={onStartDictation} />;
   if (activeView === 'market') return <MarketView />;
   if (activeView === 'referrals') return <ReferralsView data={data} email={email} />;
   if (activeView === 'scores') return <ScoresView />;
@@ -977,7 +998,15 @@ function formatDurationLabel(ms: number): string {
 
 type TrainingTab = 'training' | 'tasks';
 
-function TrainingView({ dialectTag, onStartTask }: { dialectTag: string | null; onStartTask: () => void }) {
+function TrainingView({
+  dialectTag,
+  onStartTask,
+  onStartDictation,
+}: {
+  dialectTag: string | null;
+  onStartTask: () => void;
+  onStartDictation: () => void;
+}) {
   const [tab, setTab] = useState<TrainingTab>('tasks');
   const dialectName = useDialectName(dialectTag);
 
@@ -1016,27 +1045,51 @@ function TrainingView({ dialectTag, onStartTask }: { dialectTag: string | null; 
       </div>
 
       {tab === 'training' ? (
-        <article className={`${cardClass} grid min-h-64 max-w-2xl content-between gap-6 p-5 md:p-6`}>
-          <div>
-            <div className="mb-5 flex items-start justify-between gap-3">
-              <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent"><Mic2 className="size-5" aria-hidden="true" /></span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                <span className="size-1.5 rounded-full bg-emerald-500" /> Available
-              </span>
+        <div className="grid gap-5 md:grid-cols-2">
+          <article className={`${cardClass} grid min-h-64 content-between gap-6 p-5 md:p-6`}>
+            <div>
+              <div className="mb-5 flex items-start justify-between gap-3">
+                <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent"><Mic2 className="size-5" aria-hidden="true" /></span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                  <span className="size-1.5 rounded-full bg-emerald-500" /> Available
+                </span>
+              </div>
+              <h3 className="text-xl font-black">Word training</h3>
+              <p className="mt-2 leading-relaxed text-muted">Translate individual words, record their pronunciation, and validate dialect submissions.</p>
             </div>
-            <h3 className="text-xl font-black">Word training</h3>
-            <p className="mt-2 leading-relaxed text-muted">Translate individual words, record their pronunciation, and validate dialect submissions.</p>
-          </div>
-          <div>
-            <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
-              <span className="rounded-md bg-surface-muted px-2 py-1">Translation + voice</span>
-              <span className="rounded-md bg-surface-muted px-2 py-1">{dialectName ?? 'Your dialect'}</span>
+            <div>
+              <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
+                <span className="rounded-md bg-surface-muted px-2 py-1">Translation + voice</span>
+                <span className="rounded-md bg-surface-muted px-2 py-1">{dialectName ?? 'Your dialect'}</span>
+              </div>
+              <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" onClick={onStartTask} type="button">
+                Start task <ArrowRight className="size-4" aria-hidden="true" />
+              </button>
             </div>
-            <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" onClick={onStartTask} type="button">
-              Start task <ArrowRight className="size-4" aria-hidden="true" />
-            </button>
-          </div>
-        </article>
+          </article>
+
+          <article className={`${cardClass} grid min-h-64 content-between gap-6 p-5 md:p-6`}>
+            <div>
+              <div className="mb-5 flex items-start justify-between gap-3">
+                <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent"><Headphones className="size-5" aria-hidden="true" /></span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                  <span className="size-1.5 rounded-full bg-emerald-500" /> Available
+                </span>
+              </div>
+              <h3 className="text-xl font-black">Dictation</h3>
+              <p className="mt-2 leading-relaxed text-muted">Read a prompt aloud, from a single word to a full sentence -- your recording is transcribed and cross-checked with other trainers.</p>
+            </div>
+            <div>
+              <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
+                <span className="rounded-md bg-surface-muted px-2 py-1">Reading + voice</span>
+                <span className="rounded-md bg-surface-muted px-2 py-1">{dialectName ?? 'Your dialect'}</span>
+              </div>
+              <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" onClick={onStartDictation} type="button">
+                Start dictation <ArrowRight className="size-4" aria-hidden="true" />
+              </button>
+            </div>
+          </article>
+        </div>
       ) : (
         <MyTasksView />
       )}

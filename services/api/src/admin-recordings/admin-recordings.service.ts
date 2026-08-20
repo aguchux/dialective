@@ -286,7 +286,8 @@ export class AdminRecordingsService {
         recording.audioBucket && recording.audioKey
           ? (await this.storage.createPresignedDownloadUrl(recording.audioBucket, recording.audioKey)).url
           : null,
-      asrWordDetail: null, // WordRecording has no ASR step -- see schema.prisma comment on WordRecording
+      asrWordDetail: recording.asrWordDetail as WordDetail[] | null,
+      asrMatchScore: recording.asrMatchScore?.toString() ?? null,
       rejectionReason: null as string | null,
       adminAuditStatus: recording.adminAuditStatus,
       adminAuditedAt: recording.adminAuditedAt,
