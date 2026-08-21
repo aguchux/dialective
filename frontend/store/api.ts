@@ -29,6 +29,9 @@ export interface PublicUser {
   walletBalance?: string;
   submissionsCount?: number;
   wordRecordingsCount?: number;
+  auditHoldAt: string | null;
+  auditHoldReleasedAt: string | null;
+  onAuditHold: boolean;
 }
 
 export interface PendingOtp {
@@ -836,6 +839,7 @@ export interface PlatformSettings {
   tawkToWidgetId: string | null;
   wordStuckTimeoutMinutes: number;
   scoringSlaMinutes: number;
+  auditHoldEveryNSubmissions: number;
   settlementDelayMinutes: number;
   noFailOnTrainEnabled: boolean;
   minScoreRange: string;
@@ -912,6 +916,7 @@ export interface PlatformSettingsInput {
   tawkToWidgetId?: string;
   wordStuckTimeoutMinutes?: number;
   scoringSlaMinutes?: number;
+  auditHoldEveryNSubmissions?: number;
   settlementDelayMinutes?: number;
   noFailOnTrainEnabled?: boolean;
   minScoreRange?: number;
@@ -2063,6 +2068,13 @@ export const dialectivaApi = createApi({
     requestUserDeleteOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, string>({
       query: (id) => ({ url: `/auth/admin/users/${id}/delete/otp`, method: 'POST' }),
     }),
+    requestAuditHoldReleaseOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, string>({
+      query: (id) => ({ url: `/auth/admin/users/${id}/audit-hold/release/otp`, method: 'POST' }),
+    }),
+    releaseAuditHold: builder.mutation<PublicUser, { id: string; otpRequestId?: string; code?: string }>({
+      query: ({ id, ...body }) => ({ url: `/auth/admin/users/${id}/audit-hold/release`, method: 'POST', body }),
+      invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
+    }),
     deleteUser: builder.mutation<{ id: string; deleted: boolean }, { id: string; otpRequestId?: string; code?: string }>({
       query: ({ id, ...body }) => ({ url: `/auth/admin/users/${id}/delete`, method: 'POST', body }),
       invalidatesTags: ['Users'],
@@ -2412,6 +2424,8 @@ export const {
   useLockUserMutation,
   useRequestUserDeleteOtpMutation,
   useDeleteUserMutation,
+  useRequestAuditHoldReleaseOtpMutation,
+  useReleaseAuditHoldMutation,
   useRequestAdminWalletAdjustmentOtpMutation,
   useCreateAdminWalletAdjustmentMutation,
   useGetAdminTrainerRecordingsQuery,

@@ -138,6 +138,11 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  auditHoldEveryNSubmissions?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
   settlementDelayMinutes?: number;
 
   @IsOptional()

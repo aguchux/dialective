@@ -321,6 +321,11 @@ export class PlatformSettingsService {
     return row.scoringSlaMinutes;
   }
 
+  async getAuditHoldEveryNSubmissions(): Promise<number> {
+    const row = await this.getRow();
+    return row.auditHoldEveryNSubmissions;
+  }
+
   async getSettlementDelayMinutes(): Promise<number> {
     const row = await this.getRow();
     return row.settlementDelayMinutes;
@@ -478,6 +483,7 @@ export class PlatformSettingsService {
       tawkToWidgetId: row.tawkToWidgetId,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
+      auditHoldEveryNSubmissions: row.auditHoldEveryNSubmissions,
       settlementDelayMinutes: row.settlementDelayMinutes,
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,
       minScoreRange: row.minScoreRange.toString(),
@@ -559,6 +565,7 @@ export class PlatformSettingsService {
     tawkToWidgetId?: string | null;
     wordStuckTimeoutMinutes?: number;
     scoringSlaMinutes?: number;
+    auditHoldEveryNSubmissions?: number;
     settlementDelayMinutes?: number;
     noFailOnTrainEnabled?: boolean;
     minScoreRange?: number;
@@ -728,6 +735,12 @@ export class PlatformSettingsService {
       throw new BadRequestException('qualityWeightAsrMatch must be >= 0');
     }
 
+    // 0 is the explicit "feature off" value (see schema doc comment) --
+    // only negative values are actually invalid.
+    if (data.auditHoldEveryNSubmissions !== undefined && data.auditHoldEveryNSubmissions < 0) {
+      throw new BadRequestException('auditHoldEveryNSubmissions must be >= 0');
+    }
+
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
       create: { id: 'default', ...data },
@@ -790,6 +803,7 @@ export class PlatformSettingsService {
       tawkToWidgetId: row.tawkToWidgetId,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
+      auditHoldEveryNSubmissions: row.auditHoldEveryNSubmissions,
       settlementDelayMinutes: row.settlementDelayMinutes,
       noFailOnTrainEnabled: row.noFailOnTrainEnabled,
       minScoreRange: row.minScoreRange.toString(),

@@ -43,3 +43,45 @@ describe('SubmissionsController.getResult', () => {
     await expect(controller.getResult({ user: { sub: 'someone-else' } } as any, 'sub-1')).rejects.toThrow('Submission not found');
   });
 });
+
+describe('SubmissionsController.create audit-hold gate', () => {
+  function setup() {
+    const prisma: any = {
+      user: { findUnique: jest.fn() },
+      prompt: { findFirst: jest.fn() },
+    };
+    const streams: any = { publish: jest.fn() };
+    const storage: any = {};
+    const asrRegistry: any = { resolve: jest.fn().mockReturnValue({ stream: 'asr-jobs-vosk' }) };
+    const platformSettings: any = { getTaskTokenCost: jest.fn(), getDictationMaxRecordingSeconds: jest.fn() };
+    const courses: any = { getIncompleteRequiredCourses: jest.fn().mockResolvedValue([]) };
+    const controller = new SubmissionsController(storage, streams, asrRegistry, prisma, platformSettings, courses);
+    return { controller, prisma };
+  }
+
+  const submissionId = '11111111-1111-1111-1111-111111111111';
+  const promptId = '22222222-2222-2222-2222-222222222222';
+  const body = {
+    submissionId,
+    dialectTag: 'ig',
+    promptId,
+    bucket: 'dialectiva-submissions',
+    audioKey: `ig/${promptId}/${submissionId}.wav`,
+  } as any;
+
+  it('rejects before any prompt/token lookup when the trainer is on an active audit hold', async () => {
+    const { controller, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: null });
+
+    await expect(controller.create({ user: { sub: 'user-1' } } as any, body)).rejects.toThrow('temporarily on hold');
+    expect(prisma.prompt.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('does not block a trainer whose hold was already released', async () => {
+    const { controller, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: new Date('2026-01-02') });
+    prisma.prompt.findFirst.mockResolvedValue(null); // short-circuits with NotFoundException, proving the hold gate itself passed
+
+    await expect(controller.create({ user: { sub: 'user-1' } } as any, body)).rejects.toThrow('Prompt not found');
+  });
+});

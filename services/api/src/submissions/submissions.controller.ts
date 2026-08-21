@@ -24,6 +24,7 @@ import { CreateUploadUrlDto } from './dto/create-upload-url.dto';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { ListSubmissionsDto } from './dto/list-submissions.dto';
 import { countPromptWords } from '../common/prompt-length.util';
+import { AUDIT_HOLD_MESSAGE, isOnAuditHold } from '../common/audit-hold.util';
 
 const SUBMISSIONS_BUCKET = process.env.SPACES_SUBMISSIONS_BUCKET ?? 'dialectiva-submissions';
 
@@ -111,6 +112,21 @@ export class SubmissionsController {
   @Post('create')
   @UseGuards(JwtAuthGuard)
   async create(@Req() req: AuthenticatedRequest, @Body() body: CreateSubmissionDto) {
+    // Same audit-hold gate as WordsService.nextAssignment -- checked here
+    // too since sentence submissions are a separate task-entry point that
+    // never goes through a words session. Sentence submissions don't
+    // themselves count toward the audit-hold threshold (WordRecording-only,
+    // per PlatformSettings.auditHoldEveryNSubmissions), but a held trainer
+    // still can't use this path to route around the hold.
+    const trainerHoldCheck = await this.prisma.user.findUnique({
+      where: { id: req.user.sub },
+      select: { auditHoldAt: true, auditHoldReleasedAt: true },
+    });
+    if (!trainerHoldCheck) throw new NotFoundException('Trainer not found');
+    if (isOnAuditHold(trainerHoldCheck)) {
+      throw new ForbiddenException(AUDIT_HOLD_MESSAGE);
+    }
+
     // Same compliance gate as WordsService.startSession -- checked here too
     // since sentence submissions are a separate task-entry point that
     // doesn't go through a words session at all.

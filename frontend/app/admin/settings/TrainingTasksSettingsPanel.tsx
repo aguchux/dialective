@@ -11,6 +11,7 @@ const primaryButtonClass =
 export function TrainingTasksSettingsPanel() {
   const [recordingTimeoutSeconds, setRecordingTimeoutSeconds] = useState('5');
   const [recordingMaxTimeoutSeconds, setRecordingMaxTimeoutSeconds] = useState('180');
+  const [auditHoldEveryN, setAuditHoldEveryN] = useState('500');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,6 +22,7 @@ export function TrainingTasksSettingsPanel() {
     if (!platformSettings) return;
     setRecordingTimeoutSeconds(String(platformSettings.wordTrainingRecordingTimeoutSeconds));
     setRecordingMaxTimeoutSeconds(String(platformSettings.wordTrainingRecordingMaxTimeoutSeconds));
+    setAuditHoldEveryN(String(platformSettings.auditHoldEveryNSubmissions));
   }, [platformSettings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -32,6 +34,7 @@ export function TrainingTasksSettingsPanel() {
       await updatePlatformSettings({
         wordTrainingRecordingTimeoutSeconds: Number(recordingTimeoutSeconds),
         wordTrainingRecordingMaxTimeoutSeconds: Number(recordingMaxTimeoutSeconds),
+        auditHoldEveryNSubmissions: Number(auditHoldEveryN),
       }).unwrap();
       setMessage('Training & tasks settings saved.');
     } catch (err) {
@@ -82,6 +85,28 @@ export function TrainingTasksSettingsPanel() {
               max="1800"
               value={recordingMaxTimeoutSeconds}
               onChange={(e) => setRecordingMaxTimeoutSeconds(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
+            <p className="font-bold">Automatic audit hold</p>
+            <p className="leading-relaxed text-muted">
+              A trainer&rsquo;s account is automatically put on hold for review every time their lifetime word
+              recording count reaches a multiple of this number, blocking new training tasks until an admin releases
+              the hold (Users &rarr; a trainer&rsquo;s page &rarr; Audit hold). This is separate from suspending or
+              blocking an account. Set to 0 to turn the feature off.
+            </p>
+
+            <label htmlFor="audit-hold-every-n">Put on hold every N submissions</label>
+            <input
+              className={`${inputClass} max-w-40`}
+              id="audit-hold-every-n"
+              type="number"
+              step="1"
+              min="0"
+              value={auditHoldEveryN}
+              onChange={(e) => setAuditHoldEveryN(e.target.value)}
               required
             />
           </div>

@@ -38,6 +38,11 @@ interface CourseCompletedNotification {
   rewardTokens: string | null; // null when the course carries no completion reward
 }
 
+interface AuditHoldNotification {
+  trainerEmail: string;
+  submissionCount: number;
+}
+
 function frontendUrl(): string {
   return process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
 }
@@ -156,6 +161,36 @@ export class MailService {
    * the caller catches a failure here separately rather than letting it
    * unwind an already-successful verification.
    */
+  /**
+   * Fired from WordsService.createRecording the moment a trainer's lifetime
+   * WordRecording count crosses a multiple of
+   * PlatformSettings.auditHoldEveryNSubmissions -- best-effort, same
+   * reasoning as the other post-action emails here: the hold has already
+   * been applied by the time this is called.
+   */
+  async sendAuditHoldStartedEmail(payload: AuditHoldNotification): Promise<void> {
+    await this.send(
+      payload.trainerEmail,
+      'Your account is on hold for a routine review',
+      auditHoldStartedHtml(payload.submissionCount),
+      auditHoldStartedText(payload.submissionCount),
+    );
+  }
+
+  /**
+   * Fired from AuthService.releaseAuditHold once an admin reviews the
+   * trainer's recent work and clears the hold.
+   */
+  async sendAuditHoldReleasedEmail(email: string): Promise<void> {
+    const dashboardUrl = `${frontendUrl()}/dashboard`;
+    await this.send(
+      email,
+      'Your account is back in good standing',
+      auditHoldReleasedHtml(dashboardUrl),
+      auditHoldReleasedText(dashboardUrl),
+    );
+  }
+
   async sendPhoneVerifiedEmail(email: string, phoneNumber: string): Promise<void> {
     const dashboardUrl = `${frontendUrl()}/dashboard`;
     await this.send(
@@ -306,6 +341,30 @@ ${rewardTokens ? `<p><strong>${escapeHtml(rewardTokens)} DL</strong> has been ad
 function courseCompletedText(courseTitle: string, rewardTokens: string | null, coursesUrl: string): string {
   return `You've completed ${courseTitle}.
 ${rewardTokens ? `${rewardTokens} DL has been added to your Dialect Library wallet for completing this course.\n` : ''}Continue training: ${coursesUrl}`;
+}
+
+function auditHoldStartedHtml(submissionCount: number): string {
+  return `<p>Thanks for your work on Dialect Library &mdash; you&rsquo;ve now submitted <strong>${submissionCount}</strong> recordings.</p>
+<p>As part of our routine quality process, your account is temporarily on hold while a member of our team reviews your recent submissions. This is a standard check, not a penalty.</p>
+<p>You won&rsquo;t be able to start new training tasks until the review is complete. We&rsquo;ll email you as soon as your account is released &mdash; this usually doesn&rsquo;t take long.</p>`;
+}
+
+function auditHoldStartedText(submissionCount: number): string {
+  return `Thanks for your work on Dialect Library -- you've now submitted ${submissionCount} recordings.
+As part of our routine quality process, your account is temporarily on hold while a member of our team reviews your recent submissions. This is a standard check, not a penalty.
+You won't be able to start new training tasks until the review is complete. We'll email you as soon as your account is released -- this usually doesn't take long.`;
+}
+
+function auditHoldReleasedHtml(dashboardUrl: string): string {
+  return `<p>Good news &mdash; your account review is complete and your account is back in good standing.</p>
+<p>You can resume training right away.</p>
+<p><a href="${dashboardUrl}">Go to your dashboard</a></p>`;
+}
+
+function auditHoldReleasedText(dashboardUrl: string): string {
+  return `Good news -- your account review is complete and your account is back in good standing.
+You can resume training right away.
+Go to your dashboard: ${dashboardUrl}`;
 }
 
 function phoneVerifiedHtml(phoneNumber: string, dashboardUrl: string): string {

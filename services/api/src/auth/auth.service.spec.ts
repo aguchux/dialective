@@ -59,6 +59,7 @@ function setup(
     sendReferralJoinNotification: jest.fn(),
     sendPasswordResetEmail: jest.fn(),
     sendPhoneVerifiedEmail: jest.fn(),
+    sendAuditHoldReleasedEmail: jest.fn().mockResolvedValue(undefined),
   };
   const otp = {
     issueWithTicket: jest.fn().mockResolvedValue({ ticket: 'ticket-1', expiresInSeconds: 600 }),
@@ -93,6 +94,7 @@ function setup(
     getManualPhoneVerificationSettings: jest
       .fn()
       .mockResolvedValue({ enabled: true, feeTokens: 1, whatsappNumber: '1234567890' }),
+    isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false),
   };
   const p2p = { adminCancelAllForUser: jest.fn() };
   const storage = { deleteObject: jest.fn() };
@@ -530,5 +532,49 @@ describe('AuthService.rejectManualPhoneVerificationRequest', () => {
     expect(prisma.wallet.update).not.toHaveBeenCalled();
     expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
     expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.releaseAuditHold', () => {
+  it('rejects when the account is not currently on an audit hold', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@b.com', auditHoldAt: null, auditHoldReleasedAt: null });
+
+    await expect(service.releaseAuditHold('admin-1', 'user-1')).rejects.toThrow('not currently on an audit hold');
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('clears the hold, emails the trainer, and never touches status', async () => {
+    const { service, prisma, mail } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@b.com', auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: null });
+    prisma.user.update.mockResolvedValue({ id: 'user-1', email: 'a@b.com', status: 'ACTIVE', auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: new Date() });
+
+    const result = await service.releaseAuditHold('admin-1', 'user-1');
+
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'user-1' },
+      data: expect.objectContaining({ auditHoldReleasedById: 'admin-1' }),
+    }));
+    expect(prisma.user.update.mock.calls[0][0].data).not.toHaveProperty('status');
+    expect(mail.sendAuditHoldReleasedEmail).toHaveBeenCalledWith('a@b.com');
+    expect(result.onAuditHold).toBe(false);
+  });
+
+  it('requires OTP when adminPayoutOtpEnabled is on', async () => {
+    const { service, prisma, platformSettings } = setup();
+    platformSettings.isAdminPayoutOtpEnabled.mockResolvedValue(true);
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@b.com', auditHoldAt: new Date(), auditHoldReleasedAt: null });
+
+    await expect(service.releaseAuditHold('admin-1', 'user-1')).rejects.toThrow('OTP verification is required');
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('does not fail the release if the notification email throws', async () => {
+    const { service, prisma, mail } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@b.com', auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: null });
+    prisma.user.update.mockResolvedValue({ id: 'user-1', email: 'a@b.com', status: 'ACTIVE', auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: new Date() });
+    mail.sendAuditHoldReleasedEmail.mockRejectedValue(new Error('resend down'));
+
+    await expect(service.releaseAuditHold('admin-1', 'user-1')).resolves.toMatchObject({ id: 'user-1' });
   });
 });

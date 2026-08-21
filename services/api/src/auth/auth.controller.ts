@@ -272,4 +272,22 @@ export class AuthController {
   deleteUser(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string, @Body() dto: DeleteUserDto) {
     return this.auth.deleteUser(admin.sub, id, dto.otpRequestId, dto.code);
   }
+
+  // Manual release of the automatic audit hold -- see
+  // WordsService.createRecording (sets it) / AuthService.releaseAuditHold
+  // (clears it). Distinct from lock/unlock: never touches `status`.
+  @Post('admin/users/:id/audit-hold/release/otp')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  requestAuditHoldReleaseOtp(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string) {
+    return this.auth.requestAuditHoldReleaseOtp(admin.sub, id);
+  }
+
+  @Post('admin/users/:id/audit-hold/release')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  releaseAuditHold(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string, @Body() dto: DeleteUserDto) {
+    return this.auth.releaseAuditHold(admin.sub, id, dto.otpRequestId, dto.code);
+  }
 }

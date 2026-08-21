@@ -11,12 +11,14 @@ describe('WordsService', () => {
     getSpellingNormalizationProviderOrder: jest.fn().mockResolvedValue('openai,deepseek,anthropic'),
     getWordTrainingRecordingTimeoutSeconds: jest.fn().mockResolvedValue(5),
     getWordTrainingRecordingMaxTimeoutSeconds: jest.fn().mockResolvedValue(180),
+    getAuditHoldEveryNSubmissions: jest.fn().mockResolvedValue(0),
   };
   const storage = { createPresignedDownloadUrl: jest.fn(), createPresignedUploadUrl: jest.fn() };
   const streams = { publish: jest.fn() };
   const llm = { normalize: jest.fn() };
   const courses = { getIncompleteRequiredCourses: jest.fn().mockResolvedValue([]) };
   const asrRegistry = { resolve: jest.fn().mockReturnValue(undefined) };
+  const mail = { sendAuditHoldStartedEmail: jest.fn().mockResolvedValue(undefined) };
   let prisma: any;
   let service: WordsService;
 
@@ -40,7 +42,9 @@ describe('WordsService', () => {
     settings.isSentenceRebuildEnabled.mockReset().mockResolvedValue(false);
     settings.isSpellingNormalizationEnabled.mockResolvedValue(false);
     courses.getIncompleteRequiredCourses.mockReset().mockResolvedValue([]);
-    service = new WordsService(prisma, storage as any, settings as any, streams as any, llm as any, courses as any, asrRegistry as any);
+    settings.getAuditHoldEveryNSubmissions.mockReset().mockResolvedValue(0);
+    mail.sendAuditHoldStartedEmail.mockReset().mockResolvedValue(undefined);
+    service = new WordsService(prisma, storage as any, settings as any, streams as any, llm as any, courses as any, asrRegistry as any, mail as any);
   });
 
   describe('startSession', () => {
@@ -54,6 +58,87 @@ describe('WordsService', () => {
       courses.getIncompleteRequiredCourses.mockResolvedValue([{ id: 'c1', slug: 'safety', title: 'Safety' }]);
       await expect(service.startSession(trainer.id)).rejects.toThrow('Complete the required course');
       expect(prisma.trainingSession.create).not.toHaveBeenCalled();
+    });
+
+    it('blocks the session when the trainer is on an active audit hold', async () => {
+      prisma.user.findUnique.mockResolvedValueOnce({ auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: null });
+      await expect(service.startSession(trainer.id)).rejects.toThrow('temporarily on hold');
+      expect(prisma.trainingSession.create).not.toHaveBeenCalled();
+    });
+
+    it('allows the session once a hold has been released after it was set', async () => {
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: new Date('2026-01-02') })
+        .mockResolvedValueOnce(trainer);
+      const result = await service.startSession(trainer.id);
+      expect(result.sessionId).toBe(session.id);
+    });
+  });
+
+  describe('audit hold threshold (checkAuditHoldThreshold via createRecording)', () => {
+    const assignment = {
+      id: 'assignment-1',
+      consumedAt: null,
+      direction: 'DIALECT_TO_ENGLISH',
+      uploadBucket: 'b',
+      uploadKey: 'k',
+      word: { text: 'welcome' },
+      wordId: 'word-1',
+      sourceRecordingId: null,
+      session: { id: session.id, userId: trainer.id, user: trainer },
+    };
+    const recordingBody = { bucket: 'b', audioKey: 'k', responseText: 'welcome', durationMs: 1000, noiseRating: 'QUIET' };
+
+    beforeEach(() => {
+      prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+      prisma.$transaction.mockImplementation(async (fn: any) => fn({
+        wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        wordRecording: { create: jest.fn().mockResolvedValue({ id: 'recording-1', direction: 'DIALECT_TO_ENGLISH', validationScore: { toNumber: () => 1 } }) },
+        ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
+      }));
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.user.update = jest.fn().mockResolvedValue({ email: 'trainer@example.com' });
+    });
+
+    it('does nothing when the feature is disabled (everyN=0)', async () => {
+      settings.getAuditHoldEveryNSubmissions.mockResolvedValue(0);
+      prisma.wordRecording.count.mockResolvedValue(500);
+      await service.createRecording(trainer.id, recordingBody as any);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(mail.sendAuditHoldStartedEmail).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the count is not a multiple of the threshold', async () => {
+      settings.getAuditHoldEveryNSubmissions.mockResolvedValue(500);
+      prisma.wordRecording.count.mockResolvedValue(499);
+      await service.createRecording(trainer.id, recordingBody as any);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('sets the hold and emails the trainer when the count crosses a multiple of the threshold', async () => {
+      settings.getAuditHoldEveryNSubmissions.mockResolvedValue(500);
+      prisma.wordRecording.count.mockResolvedValue(500);
+      await service.createRecording(trainer.id, recordingBody as any);
+      expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: trainer.id },
+        data: { auditHoldAt: expect.any(Date) },
+      }));
+      expect(mail.sendAuditHoldStartedEmail).toHaveBeenCalledWith({ trainerEmail: 'trainer@example.com', submissionCount: 500 });
+    });
+
+    it('re-triggers at the next multiple (1000) without needing a separate since-release counter', async () => {
+      settings.getAuditHoldEveryNSubmissions.mockResolvedValue(500);
+      prisma.wordRecording.count.mockResolvedValue(1000);
+      await service.createRecording(trainer.id, recordingBody as any);
+      expect(mail.sendAuditHoldStartedEmail).toHaveBeenCalledWith({ trainerEmail: 'trainer@example.com', submissionCount: 1000 });
+    });
+
+    it('does not fail the request if the notification email throws', async () => {
+      settings.getAuditHoldEveryNSubmissions.mockResolvedValue(500);
+      prisma.wordRecording.count.mockResolvedValue(500);
+      mail.sendAuditHoldStartedEmail.mockRejectedValue(new Error('resend down'));
+      await expect(service.createRecording(trainer.id, recordingBody as any)).resolves.toMatchObject({ recordingId: 'recording-1' });
     });
   });
 

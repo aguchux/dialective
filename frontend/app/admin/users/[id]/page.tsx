@@ -17,6 +17,8 @@ import {
   useGetPlatformSettingsQuery,
   useGetUserActivityQuery,
   useLockUserMutation,
+  useReleaseAuditHoldMutation,
+  useRequestAuditHoldReleaseOtpMutation,
   useRequestUserDeleteOtpMutation,
   useRequestUserLockOtpMutation,
   type UserActivityEntry,
@@ -49,6 +51,7 @@ export default function AdminUserDetailPage() {
   const [lockDialogOpen, setLockDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
+  const [releaseHoldDialogOpen, setReleaseHoldDialogOpen] = useState(false);
 
   const displayName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Name not provided' : '';
   const dialectName = useDialectName(user?.dialectTag);
@@ -69,6 +72,12 @@ export default function AdminUserDetailPage() {
             <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)] md:grid-cols-2 lg:grid-cols-3">
               <Field label="Role" value={user.role} />
               <Field label="Status" value={<span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${statusStyles[user.status]}`}>{user.status}</span>} />
+              {user.onAuditHold && (
+                <Field
+                  label="Audit hold"
+                  value={<span className="rounded-lg bg-[#fff3e0] px-2.5 py-1 text-xs font-bold text-[#8a4b0f]">On hold since {new Date(user.auditHoldAt!).toLocaleDateString()}</span>}
+                />
+              )}
               <Field label="DL balance" value={<span className="font-mono text-lg text-accent-dark">{formatTokens(user.walletBalance ?? 0)} DL</span>} />
               <Field label="Email verified" value={user.emailVerified ? 'Yes' : 'No'} />
               <Field label="Phone" value={user.phoneNumber ?? 'Not set'} />
@@ -107,6 +116,27 @@ export default function AdminUserDetailPage() {
                 again afterward as a brand-new account.
               </p>
             </section>
+
+            {user.role === 'TRAINER' && user.onAuditHold && (
+              <section className="grid gap-3 rounded-lg border border-[#f5c78e] bg-[#fff8ef] p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+                <h2 className="text-lg font-black text-[#8a4b0f]">Account on automatic audit hold</h2>
+                <p className="text-sm leading-relaxed text-[#8a4b0f]">
+                  This trainer&rsquo;s submission count reached the platform&rsquo;s audit-hold threshold on{' '}
+                  {new Date(user.auditHoldAt!).toLocaleString()}. They cannot start new training tasks until this
+                  hold is released. This is separate from account lock status &mdash; releasing it does not change
+                  ACTIVE/SUSPENDED/BLOCKED.
+                </p>
+                <div>
+                  <button
+                    className="inline-flex min-h-10 items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-extrabold text-white transition-colors hover:bg-accent-dark"
+                    onClick={() => setReleaseHoldDialogOpen(true)}
+                    type="button"
+                  >
+                    Release audit hold
+                  </button>
+                </div>
+              </section>
+            )}
 
             {user.role === 'TRAINER' && (
               <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -181,6 +211,9 @@ export default function AdminUserDetailPage() {
 
       {user && lockDialogOpen && (
         <LockUserDialog user={user} onClose={() => setLockDialogOpen(false)} />
+      )}
+      {user && releaseHoldDialogOpen && (
+        <ReleaseAuditHoldDialog user={user} onClose={() => setReleaseHoldDialogOpen(false)} />
       )}
       {user && deleteDialogOpen && (
         <DeleteUserDialog
@@ -327,6 +360,103 @@ function LockUserDialog({ user, onClose }: { user: { id: string; status: string 
               type="submit"
             >
               {otpRequired ? 'Send confirmation code' : 'Confirm'}
+            </ActionButton>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ReleaseAuditHoldDialog({ user, onClose }: { user: { id: string }; onClose: () => void }) {
+  const { data: platformSettings } = useGetPlatformSettingsQuery();
+  const otpRequired = platformSettings?.adminPayoutOtpEnabled ?? false;
+
+  const [code, setCode] = useState('');
+  const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [requestOtp, { isLoading: isRequestingOtp }] = useRequestAuditHoldReleaseOtpMutation();
+  const [releaseHold, { isLoading: isSubmitting }] = useReleaseAuditHoldMutation();
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      if (otpRequired && !otpRequestId) {
+        const result = await requestOtp(user.id).unwrap();
+        setOtpRequestId(result.otpRequestId);
+        return;
+      }
+      await releaseHold({ id: user.id, ...(otpRequestId ? { otpRequestId, code } : {}) }).unwrap();
+      onClose();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, otpRequestId ? 'Unable to verify this code.' : 'Unable to release this audit hold.'));
+    }
+  }
+
+  if (otpRequestId) {
+    return (
+      <Dialog open onOpenChange={(open) => !open && onClose()}>
+        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this release.">
+          <form className="grid gap-3" onSubmit={handleSubmit}>
+            <input
+              autoFocus
+              className={`${inputClass} text-center text-lg font-bold tracking-[0.3em]`}
+              inputMode="numeric"
+              maxLength={6}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              placeholder="000000"
+              required
+              value={code}
+            />
+            {error && (
+              <p className="leading-relaxed text-danger" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60">
+                Cancel
+              </DialogClose>
+              <ActionButton
+                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={code.length !== 6}
+                pending={isSubmitting}
+                pendingLabel="Confirming"
+                type="submit"
+              >
+                Confirm
+              </ActionButton>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        title="Release this audit hold"
+        description="The trainer will be able to start new training tasks again immediately, and will get an email letting them know."
+      >
+        <form className="grid gap-3" onSubmit={handleSubmit}>
+          {error && (
+            <p className="leading-relaxed text-danger" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60">
+              Cancel
+            </DialogClose>
+            <ActionButton
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+              pending={isRequestingOtp || isSubmitting}
+              pendingLabel={otpRequired ? 'Sending code' : 'Releasing'}
+              type="submit"
+            >
+              {otpRequired ? 'Send confirmation code' : 'Release hold'}
             </ActionButton>
           </div>
         </form>

@@ -56,7 +56,8 @@ export function adminActionContextHash(
     | { action: 'user-lock'; userId: string; status: string }
     | { action: 'user-delete'; userId: string }
     | { action: 'sub-distributor-adjustment'; userId: string; amount: number; reference: string }
-    | { action: 'recording-audit-clawback'; kind: 'word' | 'submission'; recordingId: string; tokenAmount: number },
+    | { action: 'recording-audit-clawback'; kind: 'word' | 'submission'; recordingId: string; tokenAmount: number }
+    | { action: 'audit-hold-release'; userId: string },
 ): string {
   return hashContext(input);
 }

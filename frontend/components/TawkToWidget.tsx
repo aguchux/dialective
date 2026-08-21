@@ -7,6 +7,15 @@ import { useGetPublicClientSettingsQuery } from '@/store/api';
 import { onFullScreenOverlay } from '@/lib/recording-signal';
 
 const SCRIPT_ID = 'tawkto-widget-script';
+const AUTHENTICATION_SHELL_PATHS = new Set([
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-email',
+  '/magic-link',
+  '/onboarding',
+]);
 
 interface TawkApi {
   onLoad?: () => void;
@@ -76,7 +85,8 @@ export function TawkToWidget() {
     pathname === '/distributor' ||
     pathname.startsWith('/distributor/') ||
     pathname === '/notifications';
-  const shouldShowWidget = enabled && !isDashboardRoute;
+  const isAuthenticationShellRoute = AUTHENTICATION_SHELL_PATHS.has(pathname);
+  const shouldShowWidget = enabled && !isDashboardRoute && !isAuthenticationShellRoute;
 
   // The embed is global so it can persist after client-side navigation. Hide
   // an already-loaded widget immediately when a user enters any role dashboard.

@@ -36,6 +36,7 @@ import { signAccessToken } from './jwt.util';
 import { phoneVerificationContextHash } from './phone-otp-context.util';
 import { adminActionContextHash } from '../wallet/otp-context.util';
 import { generateOtpCode, hashOtpCode } from '../otp/otp.util';
+import { isOnAuditHold } from '../common/audit-hold.util';
 
 const SMSLIVE247_NATIVE_OTP_REQUEST_ID = 'smslive247-native';
 
@@ -86,6 +87,9 @@ export interface PublicUser {
   walletBalance?: string;
   submissionsCount?: number;
   wordRecordingsCount?: number;
+  auditHoldAt: string | null;
+  auditHoldReleasedAt: string | null;
+  onAuditHold: boolean;
 }
 
 type UserWithDialect = User & {
@@ -127,6 +131,9 @@ function toPublicUser(user: UserWithDialect): PublicUser {
           wordRecordingsCount: user._count.wordRecordings,
         }
       : {}),
+    auditHoldAt: user.auditHoldAt?.toISOString() ?? null,
+    auditHoldReleasedAt: user.auditHoldReleasedAt?.toISOString() ?? null,
+    onAuditHold: isOnAuditHold(user),
   };
 }
 
@@ -1242,6 +1249,56 @@ export class AuthService {
     await this.p2p.adminCancelAllForUser(userId);
 
     this.logger.log(`User locked: admin=${adminId} user=${userId} status=${status}`);
+    return toPublicUser(updated);
+  }
+
+  async requestAuditHoldReleaseOtp(adminId: string, userId: string) {
+    const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
+    const contextHash = adminActionContextHash({ action: 'audit-hold-release', userId });
+    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+  }
+
+  /**
+   * Clears an automatic audit hold (see WordsService.createRecording) once
+   * an admin has reviewed the trainer's recent submissions. Distinct from
+   * lockUser/updateUserStatus -- this never touches `status`, only the
+   * auditHold* fields, so a trainer who was independently SUSPENDED/BLOCKED
+   * stays that way even after their audit hold is released.
+   */
+  async releaseAuditHold(adminId: string, userId: string, otpRequestId?: string, code?: string): Promise<PublicUser> {
+    if (await this.platformSettings.isAdminPayoutOtpEnabled()) {
+      if (!otpRequestId || !code) {
+        throw new UnprocessableEntityException('OTP verification is required to release this audit hold');
+      }
+      await this.otp.verify({
+        otpRequestId,
+        userId: adminId,
+        purpose: OtpPurpose.ADMIN_PAYOUT,
+        code,
+        contextHash: adminActionContextHash({ action: 'audit-hold-release', userId }),
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (!isOnAuditHold(user)) {
+      throw new BadRequestException('This account is not currently on an audit hold');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { auditHoldReleasedAt: new Date(), auditHoldReleasedById: adminId },
+      include: { dialect: true, dialectVariant: true },
+    });
+
+    this.logger.log(`Audit hold released: admin=${adminId} user=${userId}`);
+
+    try {
+      await this.mail.sendAuditHoldReleasedEmail(user.email);
+    } catch (err) {
+      this.logger.error(`Failed to send audit-hold-released email for user=${userId}: ${(err as Error).message}`);
+    }
+
     return toPublicUser(updated);
   }
 

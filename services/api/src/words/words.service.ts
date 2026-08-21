@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -14,6 +15,8 @@ import { LlmNormalizerService } from '../llm/llm-normalizer.service';
 import { parseProviderOrder } from '../llm/llm-provider.interface';
 import { CoursesService } from '../courses/courses.service';
 import { AsrRegistryService } from '../asr-registry/asr-registry.service';
+import { MailService } from '../mail/mail.service';
+import { AUDIT_HOLD_MESSAGE, isOnAuditHold } from '../common/audit-hold.util';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
 import { GetSpellingSuggestionsDto } from './dto/get-spelling-suggestions.dto';
@@ -31,6 +34,8 @@ const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
 
 @Injectable()
 export class WordsService {
+  private readonly logger = new Logger(WordsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
@@ -39,9 +44,12 @@ export class WordsService {
     private readonly llm: LlmNormalizerService,
     private readonly courses: CoursesService,
     private readonly asrRegistry: AsrRegistryService,
+    private readonly mail: MailService,
   ) {}
 
   async startSession(userId: string) {
+    await this.assertNotOnAuditHold(userId);
+
     const incompleteRequired = await this.courses.getIncompleteRequiredCourses(userId);
     if (incompleteRequired.length > 0) {
       throw new ForbiddenException({
@@ -79,6 +87,8 @@ export class WordsService {
   async nextAssignment(userId: string, sessionId: string) {
     const session = await this.getOwnedSession(userId, sessionId);
     if (session.endedAt) throw new ConflictException('This training session has ended');
+
+    await this.assertNotOnAuditHold(userId);
 
     // startSession only checks once, at session creation -- sessions have no
     // server-side TTL (see TrainingSession schema), so a trainer who was
@@ -350,6 +360,8 @@ export class WordsService {
       ...(asrRoute ? { asr_stream: asrRoute.stream } : {}),
     });
 
+    await this.checkAuditHoldThreshold(userId);
+
     return {
       recordingId: recording.id,
       status: 'saved',
@@ -449,6 +461,8 @@ export class WordsService {
 
       return created;
     });
+
+    await this.checkAuditHoldThreshold(userId);
 
     return {
       recordingId: recording.id,
@@ -640,6 +654,59 @@ export class WordsService {
       where: { id: sourceRecordingId, status: 'PENDING' },
       data: { rawScore: 100, score: 100, status: 'SCORED', scoredAt: new Date() },
     });
+  }
+
+  /**
+   * Distinct from status (SUSPENDED/BLOCKED, enforced only at re-auth --
+   * see AuthService.assertActive) -- this blocks the submission endpoints
+   * directly, since an automatic audit hold needs to take effect
+   * immediately on an already-issued access token, not just on next login.
+   */
+  private async assertNotOnAuditHold(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { auditHoldAt: true, auditHoldReleasedAt: true },
+    });
+    if (!user) throw new NotFoundException('Trainer not found');
+    if (isOnAuditHold(user)) {
+      throw new ForbiddenException(AUDIT_HOLD_MESSAGE);
+    }
+  }
+
+  /**
+   * Fires after every successful WordRecording creation (word-training AND
+   * SENTENCE_REBUILD -- both increment the same count). Auto-puts the
+   * trainer on an audit hold the instant their lifetime WordRecording count
+   * crosses a multiple of PlatformSettings.auditHoldEveryNSubmissions --
+   * pure `count % N === 0` on the lifetime total, so this re-triggers at
+   * every next multiple (500, 1000, 1500, ...) regardless of how many holds
+   * happened in between; there is no separate "since last release" counter.
+   * The triggering submission itself is never blocked -- only the NEXT
+   * nextAssignment/create call hits assertNotOnAuditHold. 0 disables the
+   * feature outright (see schema doc comment).
+   */
+  private async checkAuditHoldThreshold(userId: string): Promise<void> {
+    const everyN = await this.settings.getAuditHoldEveryNSubmissions();
+    if (everyN <= 0) return;
+
+    const count = await this.prisma.wordRecording.count({ where: { userId } });
+    if (count === 0 || count % everyN !== 0) return;
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { auditHoldAt: new Date() },
+      select: { email: true },
+    });
+
+    try {
+      await this.mail.sendAuditHoldStartedEmail({ trainerEmail: user.email, submissionCount: count });
+    } catch (err) {
+      // Best-effort, same as every other post-action email in this codebase
+      // -- the hold has already been applied by the time this runs, and a
+      // failed notification shouldn't unwind it or fail the request that
+      // triggered it (that request's own recording already succeeded).
+      this.logger.error(`Failed to send audit-hold-started email for user=${userId}: ${(err as Error).message}`);
+    }
   }
 
   private async getTrainer(userId: string) {
