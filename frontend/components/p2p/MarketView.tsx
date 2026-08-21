@@ -54,10 +54,10 @@ export function MarketView() {
   const [createOffer, { isLoading: offerSaving }] = useCreateP2POfferMutation();
   const [acceptOffer, { isLoading: accepting }] = useAcceptP2POfferMutation();
   const [requestTradeOtp, { isLoading: tradeOtpSending }] = useRequestP2PTradeOtpMutation();
-  const [markPaid] = useMarkP2PTradePaidMutation();
-  const [releaseTrade] = useReleaseP2PTradeMutation();
-  const [requestCancel] = useRequestP2PTradeCancelMutation();
-  const [raiseDispute] = useRaiseP2PDisputeMutation();
+  const [markPaid, { isLoading: markingPaid, originalArgs: markingPaidId }] = useMarkP2PTradePaidMutation();
+  const [releaseTrade, { isLoading: releasing, originalArgs: releasingId }] = useReleaseP2PTradeMutation();
+  const [requestCancel, { isLoading: cancelling, originalArgs: cancellingId }] = useRequestP2PTradeCancelMutation();
+  const [raiseDispute, { isLoading: disputing, originalArgs: disputingArgs }] = useRaiseP2PDisputeMutation();
   const primaryMethod = methods.find((method) => method.enabled);
   const phoneVerificationRequired = platformSettings?.phoneVerificationRequired ?? true;
   const phoneVerified = me?.phoneVerified ?? false;
@@ -311,10 +311,15 @@ export function MarketView() {
                 <TradeCard
                   key={trade.id}
                   trade={trade}
-                  onCancel={(id) => requestCancel(id)}
-                  onDispute={(id) => raiseDispute({ id, reason: 'Payment/escrow issue requires admin review' })}
-                  onMarkPaid={(id) => markPaid(id)}
-                  onRelease={(id) => releaseTrade(id)}
+                  viewerId={me?.id}
+                  markingPaid={markingPaid && markingPaidId === trade.id}
+                  releasing={releasing && releasingId === trade.id}
+                  cancelling={cancelling && cancellingId === trade.id}
+                  disputing={disputing && disputingArgs?.id === trade.id}
+                  onCancel={(id) => requestCancel(id).unwrap()}
+                  onDispute={(id) => raiseDispute({ id, reason: 'Payment/escrow issue requires admin review' }).unwrap()}
+                  onMarkPaid={(id) => markPaid(id).unwrap()}
+                  onRelease={(id) => releaseTrade(id).unwrap()}
                 />
               ))}
             </div>
@@ -462,27 +467,70 @@ function formatResponseTime(seconds: number | null) {
   return `${Math.round(seconds / 3600)}h`;
 }
 
+const STATUS_LABELS: Record<P2PTrade['status'], string> = {
+  AWAITING_PAYMENT: 'Awaiting payment',
+  PAID_MARKED: 'Marked as paid',
+  RELEASED: 'Released',
+  CANCEL_PENDING: 'Cancel pending',
+  CANCELLED: 'Cancelled',
+  DISPUTED: 'Disputed',
+  EXPIRED: 'Expired',
+};
+
+const OPEN_TRADE_STATUSES = new Set(['AWAITING_PAYMENT', 'PAID_MARKED', 'CANCEL_PENDING']);
+
 function TradeCard({
   trade,
+  viewerId,
+  markingPaid,
+  releasing,
+  cancelling,
+  disputing,
   onMarkPaid,
   onRelease,
   onCancel,
   onDispute,
 }: {
   trade: P2PTrade;
-  onMarkPaid: (id: string) => void;
-  onRelease: (id: string) => void;
-  onCancel: (id: string) => void;
-  onDispute: (id: string) => void;
+  viewerId: string | undefined;
+  markingPaid: boolean;
+  releasing: boolean;
+  cancelling: boolean;
+  disputing: boolean;
+  onMarkPaid: (id: string) => Promise<unknown>;
+  onRelease: (id: string) => Promise<unknown>;
+  onCancel: (id: string) => Promise<unknown>;
+  onDispute: (id: string) => Promise<unknown>;
 }) {
+  const [actionError, setActionError] = useState('');
+  const isBuyer = trade.buyerId === viewerId;
+  const isSeller = trade.sellerId === viewerId;
+  const isOpen = OPEN_TRADE_STATUSES.has(trade.status);
+
+  const canMarkPaid = isBuyer && (trade.status === 'AWAITING_PAYMENT' || trade.status === 'CANCEL_PENDING');
+  const canRelease = isSeller && trade.status === 'PAID_MARKED';
+  const canRequestCancel = isOpen && trade.status !== 'PAID_MARKED';
+  const canDispute = isOpen;
+
+  async function run(action: (id: string) => Promise<unknown>) {
+    setActionError('');
+    try {
+      await action(trade.id);
+    } catch (err) {
+      setActionError(normalizeErrorMessage(err, 'Action failed'));
+    }
+  }
+
   return (
     <div className={`${cardClass} grid gap-3 p-4`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-bold text-muted">{trade.offerType === 'SELL' ? 'Sell offer trade' : 'Buy request trade'}</p>
+          <p className="text-sm font-bold text-muted">
+            {trade.offerType === 'SELL' ? 'Sell offer trade' : 'Buy request trade'} · You are the {isBuyer ? 'buyer' : 'seller'}
+          </p>
           <p className="text-xl font-black">{formatCompactNumber(trade.tokenAmount)} · {Number(trade.fiatAmount).toLocaleString()} {trade.fiatCurrency}</p>
         </div>
-        <span className="rounded-full bg-bg px-2.5 py-1 text-xs font-black">{trade.status}</span>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(trade.status)}`}>{STATUS_LABELS[trade.status]}</span>
       </div>
       {trade.sellerPaymentMethod && (
         <div className="rounded-lg border border-line bg-bg p-3 text-sm">
@@ -490,13 +538,86 @@ function TradeCard({
           <p>{trade.sellerPaymentMethod.bankName} · {trade.sellerPaymentMethod.accountName} · {trade.sellerPaymentMethod.accountNumber}</p>
         </div>
       )}
-      <p className="text-sm text-muted">Payment deadline: {formatDateTime(trade.paymentDeadlineAt)}</p>
+      {trade.status === 'AWAITING_PAYMENT' && (
+        <p className="text-sm text-muted">Payment deadline: {formatDateTime(trade.paymentDeadlineAt)}</p>
+      )}
+      {trade.status === 'PAID_MARKED' && trade.paidAt && (
+        <p className="text-sm text-muted">Buyer marked paid {formatDateTime(trade.paidAt)}{isSeller ? ' — confirm and release when you have received payment.' : ' — waiting for the seller to release.'}</p>
+      )}
+      {trade.status === 'RELEASED' && trade.releasedAt && <p className="text-sm text-muted">Released {formatDateTime(trade.releasedAt)}.</p>}
+      {trade.status === 'CANCELLED' && trade.cancelledAt && <p className="text-sm text-muted">Cancelled {formatDateTime(trade.cancelledAt)}.</p>}
+      {trade.status === 'CANCEL_PENDING' && trade.cancelAvailableAt && (
+        <p className="text-sm text-muted">
+          {trade.cancelRequestedByUserId === viewerId ? 'You requested' : 'The other party requested'} cancellation — finalizes {formatDateTime(trade.cancelAvailableAt)} unless the buyer pays first.
+        </p>
+      )}
+      {trade.status === 'DISPUTED' && <p className="text-sm text-muted">An admin is reviewing this trade.</p>}
+      {actionError && <p className="text-sm font-bold text-danger">{actionError}</p>}
       <div className="flex flex-wrap gap-2">
-        <button className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white" onClick={() => onMarkPaid(trade.id)} type="button">I have paid</button>
-        <button className="min-h-10 rounded-lg border border-line px-3 font-extrabold" onClick={() => onRelease(trade.id)} type="button">Release DL</button>
-        <button className="min-h-10 rounded-lg border border-line px-3 font-extrabold" onClick={() => onCancel(trade.id)} type="button">Request cancel</button>
-        <button className="min-h-10 rounded-lg border border-red-200 px-3 font-extrabold text-red-700" onClick={() => onDispute(trade.id)} type="button">Dispute</button>
+        {canMarkPaid && (
+          <ActionButton
+            className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => run(onMarkPaid)}
+            pending={markingPaid}
+            pendingLabel="Marking paid"
+            type="button"
+          >
+            I have paid
+          </ActionButton>
+        )}
+        {canRelease && (
+          <ActionButton
+            className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => run(onRelease)}
+            pending={releasing}
+            pendingLabel="Releasing"
+            type="button"
+          >
+            Release DL
+          </ActionButton>
+        )}
+        {canRequestCancel && (
+          <ActionButton
+            className="min-h-10 rounded-lg border border-line px-3 font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => run(onCancel)}
+            pending={cancelling}
+            pendingLabel="Requesting"
+            type="button"
+          >
+            Request cancel
+          </ActionButton>
+        )}
+        {canDispute && (
+          <ActionButton
+            className="min-h-10 rounded-lg border border-red-200 px-3 font-extrabold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => run(onDispute)}
+            pending={disputing}
+            pendingLabel="Raising"
+            type="button"
+          >
+            Dispute
+          </ActionButton>
+        )}
+        {!canMarkPaid && !canRelease && !canRequestCancel && !canDispute && (
+          <p className="text-sm text-muted">No actions available -- this trade is {STATUS_LABELS[trade.status].toLowerCase()}.</p>
+        )}
       </div>
     </div>
   );
+}
+
+function statusBadgeClass(status: P2PTrade['status']): string {
+  switch (status) {
+    case 'RELEASED':
+      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200';
+    case 'CANCELLED':
+    case 'EXPIRED':
+      return 'bg-bg text-muted';
+    case 'DISPUTED':
+      return 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200';
+    case 'PAID_MARKED':
+      return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200';
+    default:
+      return 'bg-accent-soft text-accent';
+  }
 }

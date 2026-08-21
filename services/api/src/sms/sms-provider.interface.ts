@@ -24,7 +24,8 @@ export const SMS_OTP_FALLBACK_PROVIDER_KEYS: SmsProviderKey[] = ['termii', 'twil
  */
 export interface SmsProvider {
   readonly key: SmsProviderKey;
-  send(toE164: string, body: string): Promise<void>;
+  /** senderIdOverride is the admin-configured PlatformSettings.smsSenderId -- providers fall back to their own env var when it's undefined. Twilio ignores it (sends from a purchased phone number, not a named sender ID). */
+  send(toE164: string, body: string, senderIdOverride?: string): Promise<void>;
 }
 
 const DEFAULT_PROVIDER_ORDER: SmsProviderKey[] = SMS_OTP_FALLBACK_PROVIDER_KEYS;

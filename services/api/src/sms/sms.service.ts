@@ -30,13 +30,18 @@ export class SmsService {
   async sendOtp(toE164: string, code: string): Promise<void> {
     const settings = await this.platformSettings.getForAdmin();
     const order = parseSmsProviderOrder(settings.smsProviderOrder);
-    await this.chain.send(toE164, `Your Dialect Library verification code is ${code}. It expires in 10 minutes.`, order);
+    await this.chain.send(
+      toE164,
+      `Your Dialect Library verification code is ${code}. It expires in 10 minutes.`,
+      order,
+      settings.smsSenderId ?? undefined,
+    );
   }
 
   /** Plain transactional/notification SMS (e.g. P2P trade updates) -- not OTP, uses its own provider order (smsTransactionalProviderOrder), which includes smslive247. */
   async sendTransactional(toE164: string, body: string): Promise<void> {
     const settings = await this.platformSettings.getForAdmin();
     const order = parseSmsTransactionalProviderOrder(settings.smsTransactionalProviderOrder);
-    await this.chain.send(toE164, body, order);
+    await this.chain.send(toE164, body, order, settings.smsSenderId ?? undefined);
   }
 }

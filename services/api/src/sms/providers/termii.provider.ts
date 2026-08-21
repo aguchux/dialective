@@ -9,9 +9,9 @@ const DEFAULT_BASE_URL = 'https://v4.api.termii.com';
 export class TermiiProvider implements SmsProvider {
   readonly key = 'termii' as const;
 
-  async send(toE164: string, body: string): Promise<void> {
+  async send(toE164: string, body: string, senderIdOverride?: string): Promise<void> {
     const apiKey = process.env.TERMII_API_KEY;
-    const senderId = process.env.TERMII_SENDER_ID;
+    const senderId = senderIdOverride || process.env.TERMII_SENDER_ID;
     if (!apiKey || !senderId) throw new Error('Termii credentials not set');
 
     const baseUrl = process.env.TERMII_BASE_URL ?? DEFAULT_BASE_URL;

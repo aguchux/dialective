@@ -254,6 +254,15 @@ export class UpdatePlatformSettingsDto {
   @IsBoolean()
   sentenceRebuildEnabled?: boolean;
 
+  // Sender ID/name shown to recipients, overrides TERMII_SENDER_ID/
+  // SMSLIVE247_SENDER_ID/AFRICASTALKING_SENDER_ID for every provider that
+  // has one (Twilio has no equivalent). Empty string clears the override
+  // back to each provider's own env var -- see PlatformSettingsService.update.
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  smsSenderId?: string;
+
   // 3 comma-separated tokens from {termii,twilio,africastalking}; exact
   // permutation validated in PlatformSettingsService.update, same shape as
   // llmProviderOrder. smslive247 is not a fallback-chain member -- see

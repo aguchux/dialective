@@ -212,10 +212,12 @@ export class P2PService {
     }
   }
 
+  /** Buyer and seller need different instructions -- only the buyer owes a payment, so only the buyer gets a payment deadline. The seller is told a trade started and to wait for payment. */
   private async notifyTradeCreated(buyerId: string, sellerId: string, tokenAmount: string, paymentDeadlineAt: Date): Promise<void> {
     const enabled = await this.platformSettings.isP2pSmsTradeCreatedEnabled();
-    const body = `Dialect Library: Your P2P trade for ${tokenAmount} tokens has started. Pay before ${paymentDeadlineAt.toISOString()}.`;
-    await Promise.all([this.notify(buyerId, enabled, body), this.notify(sellerId, enabled, body)]);
+    const buyerBody = `Dialect Library: Your P2P trade for ${tokenAmount} tokens has started. Pay before ${paymentDeadlineAt.toISOString()}.`;
+    const sellerBody = `Dialect Library: A buyer accepted your P2P offer for ${tokenAmount} tokens. Waiting for their payment.`;
+    await Promise.all([this.notify(buyerId, enabled, buyerBody), this.notify(sellerId, enabled, sellerBody)]);
   }
 
   async createPaymentMethod(userId: string, dto: UpsertPaymentMethodDto) {

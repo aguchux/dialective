@@ -692,7 +692,8 @@ export class AuthService {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
 
     if (await this.platformSettings.isSmslive247NativeOtpEnabled()) {
-      const { expiresAt } = await createSmslive247Otp(phoneNumber);
+      const smsSenderId = await this.platformSettings.getSmsSenderId();
+      const { expiresAt } = await createSmslive247Otp(phoneNumber, smsSenderId ?? undefined);
       const expiresInSeconds = Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000));
       return { otpRequestId: SMSLIVE247_NATIVE_OTP_REQUEST_ID, expiresInSeconds };
     }

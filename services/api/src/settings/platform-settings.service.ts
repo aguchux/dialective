@@ -215,6 +215,12 @@ export class PlatformSettingsService {
     return row.smsProviderOrder;
   }
 
+  /** Admin-configured sender ID override for Termii/SMSLive247/Africa's Talking (and SMSLive247's native-OTP route); null means each provider uses its own env var. */
+  async getSmsSenderId(): Promise<string | null> {
+    const row = await this.getRow();
+    return row.smsSenderId;
+  }
+
   async isSmslive247NativeOtpEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.smslive247NativeOtpEnabled;
@@ -504,6 +510,7 @@ export class PlatformSettingsService {
       spellingNormalizationEnabled: row.spellingNormalizationEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
+      smsSenderId: row.smsSenderId,
       smsProviderOrder: row.smsProviderOrder,
       smslive247NativeOtpEnabled: row.smslive247NativeOtpEnabled,
       smsTransactionalProviderOrder: row.smsTransactionalProviderOrder,
@@ -586,6 +593,7 @@ export class PlatformSettingsService {
     spellingNormalizationEnabled?: boolean;
     spellingNormalizationProviderOrder?: string;
     sentenceRebuildEnabled?: boolean;
+    smsSenderId?: string | null;
     smsProviderOrder?: string;
     smslive247NativeOtpEnabled?: boolean;
     smsTransactionalProviderOrder?: string;
@@ -706,6 +714,11 @@ export class PlatformSettingsService {
       throw new BadRequestException('manualPhoneVerificationWhatsappNumber is required when manual verification is enabled');
     }
 
+    if (data.smsSenderId !== undefined) {
+      const trimmed = data.smsSenderId?.trim() ?? null;
+      data.smsSenderId = trimmed === '' ? null : trimmed;
+    }
+
     const anyWeightProvided =
       data.qualityWeightConsensus !== undefined ||
       data.qualityWeightNoise !== undefined ||
@@ -824,6 +837,7 @@ export class PlatformSettingsService {
       spellingNormalizationEnabled: row.spellingNormalizationEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
+      smsSenderId: row.smsSenderId,
       smsProviderOrder: row.smsProviderOrder,
       smslive247NativeOtpEnabled: row.smslive247NativeOtpEnabled,
       smsTransactionalProviderOrder: row.smsTransactionalProviderOrder,

@@ -4,6 +4,9 @@ export class TwilioProvider implements SmsProvider {
   readonly key = 'twilio' as const;
 
   async send(toE164: string, body: string): Promise<void> {
+    // Twilio has no sender-ID concept (it sends from a purchased phone
+    // number, not a named sender ID), so it never reads a 3rd argument --
+    // PlatformSettings.smsSenderId simply doesn't apply here.
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const fromNumber = process.env.TWILIO_FROM_NUMBER;

@@ -8,9 +8,9 @@ const BASE_URL = 'https://api.smslive247.com';
 export class Smslive247Provider implements SmsProvider {
   readonly key = 'smslive247' as const;
 
-  async send(toE164: string, body: string): Promise<void> {
+  async send(toE164: string, body: string, senderIdOverride?: string): Promise<void> {
     const apiKey = process.env.SMSLIVE247_API_KEY;
-    const senderId = process.env.SMSLIVE247_SENDER_ID;
+    const senderId = senderIdOverride || process.env.SMSLIVE247_SENDER_ID;
     if (!apiKey || !senderId) throw new Error('SMSLive247 credentials not set');
 
     // SMSLive247 rejects E.164's leading "+" on destination numbers ("None

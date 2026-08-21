@@ -43,6 +43,7 @@ export function SmsSettingsPanel() {
   const { data: settings, isLoading } = useGetPlatformSettingsQuery();
   const [updateSettings, { isLoading: isSaving }] = useUpdatePlatformSettingsMutation();
 
+  const [smsSenderId, setSmsSenderId] = useState('');
   const [order, setOrder] = useState<SmsProviderKey[]>(DEFAULT_ORDER);
   const [smslive247NativeOtpEnabled, setSmslive247NativeOtpEnabled] = useState(false);
   const [transactionalOrder, setTransactionalOrder] = useState<SmsTransactionalProviderKey[]>(DEFAULT_TRANSACTIONAL_ORDER);
@@ -55,6 +56,7 @@ export function SmsSettingsPanel() {
 
   useEffect(() => {
     if (!settings) return;
+    setSmsSenderId(settings.smsSenderId ?? '');
     setOrder(parseOrder(settings.smsProviderOrder));
     setSmslive247NativeOtpEnabled(settings.smslive247NativeOtpEnabled);
     setTransactionalOrder(parseTransactionalOrder(settings.smsTransactionalProviderOrder));
@@ -96,6 +98,7 @@ export function SmsSettingsPanel() {
 
     try {
       await updateSettings({
+        smsSenderId: smsSenderId.trim(),
         smsProviderOrder: order.join(','),
         smslive247NativeOtpEnabled,
         smsTransactionalProviderOrder: transactionalOrder.join(','),
@@ -123,6 +126,27 @@ export function SmsSettingsPanel() {
       {isLoading && <p className="text-muted">Loading...</p>}
       {!isLoading && (
         <form className="grid gap-5 md:max-w-md" onSubmit={handleSave}>
+          <div className="grid gap-2">
+            <label className="font-bold" htmlFor="sms-sender-id">
+              Sender ID
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              The name shown to recipients as the SMS sender (e.g. &quot;Dialect&quot;), used by Termii, SMSLive247,
+              and Africa&apos;s Talking, including SMSLive247&apos;s native OTP flow below. Twilio ignores this --
+              it sends from a purchased phone number instead. Leave blank to use each provider&apos;s configured
+              default.
+            </p>
+            <input
+              className={`${inputClass} max-w-60`}
+              id="sms-sender-id"
+              maxLength={20}
+              onChange={(e) => setSmsSenderId(e.target.value)}
+              placeholder="e.g. Dialect"
+              type="text"
+              value={smsSenderId}
+            />
+          </div>
+
           <div className="grid gap-2">
             <span className="font-bold">Provider order (fallback chain)</span>
             <p className="text-sm leading-relaxed text-muted">

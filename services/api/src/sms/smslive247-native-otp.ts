@@ -12,9 +12,9 @@ function authHeaders(apiKey: string): Record<string, string> {
   return { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
 }
 
-function credentials(): { apiKey: string; senderId: string } {
+function credentials(senderIdOverride?: string): { apiKey: string; senderId: string } {
   const apiKey = process.env.SMSLIVE247_API_KEY;
-  const senderId = process.env.SMSLIVE247_SENDER_ID;
+  const senderId = senderIdOverride || process.env.SMSLIVE247_SENDER_ID;
   if (!apiKey || !senderId) throw new Error('SMSLive247 credentials not set');
   return { apiKey, senderId };
 }
@@ -26,8 +26,8 @@ function toSmslive247Msisdn(phoneNumberE164: string): string {
   return phoneNumberE164.replace(/^\+/, '');
 }
 
-export async function createSmslive247Otp(phoneNumber: string): Promise<{ expiresAt: string }> {
-  const { apiKey, senderId } = credentials();
+export async function createSmslive247Otp(phoneNumber: string, senderIdOverride?: string): Promise<{ expiresAt: string }> {
+  const { apiKey, senderId } = credentials(senderIdOverride);
 
   const res = await fetch(`${BASE_URL}/api/v5/tokens/sms`, {
     method: 'POST',

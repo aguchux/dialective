@@ -860,6 +860,7 @@ export interface PlatformSettings {
   spellingNormalizationEnabled: boolean;
   spellingNormalizationProviderOrder: string;
   sentenceRebuildEnabled: boolean;
+  smsSenderId: string | null;
   smsProviderOrder: string;
   smslive247NativeOtpEnabled: boolean;
   smsTransactionalProviderOrder: string;
@@ -937,6 +938,7 @@ export interface PlatformSettingsInput {
   spellingNormalizationEnabled?: boolean;
   spellingNormalizationProviderOrder?: string;
   sentenceRebuildEnabled?: boolean;
+  smsSenderId?: string;
   smsProviderOrder?: string;
   smslive247NativeOtpEnabled?: boolean;
   smsTransactionalProviderOrder?: string;

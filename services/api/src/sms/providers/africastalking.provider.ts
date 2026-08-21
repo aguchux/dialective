@@ -3,10 +3,10 @@ import { SmsProvider } from '../sms-provider.interface';
 export class AfricasTalkingProvider implements SmsProvider {
   readonly key = 'africastalking' as const;
 
-  async send(toE164: string, body: string): Promise<void> {
+  async send(toE164: string, body: string, senderIdOverride?: string): Promise<void> {
     const apiKey = process.env.AFRICASTALKING_API_KEY;
     const username = process.env.AFRICASTALKING_USERNAME;
-    const senderId = process.env.AFRICASTALKING_SENDER_ID;
+    const senderId = senderIdOverride || process.env.AFRICASTALKING_SENDER_ID;
     if (!apiKey || !username) throw new Error('Africa\'s Talking credentials not set');
 
     const params = new URLSearchParams({ username, to: toE164, message: body });
