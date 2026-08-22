@@ -61,12 +61,10 @@ describe('smslive247-native-otp', () => {
 
   describe('verifySmslive247Otp', () => {
     it('sends a DELETE with the code and phone number, returns true on isValid', async () => {
-      global.fetch = jest
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          json: async () => ({ isValid: true, message: 'ok' }),
-        }) as any;
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ isValid: true, message: 'ok' }),
+      }) as any;
 
       const result = await verifySmslive247Otp('+2348012345678', '123456');
 
@@ -81,12 +79,10 @@ describe('smslive247-native-otp', () => {
     });
 
     it('returns false when isValid is false', async () => {
-      global.fetch = jest
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          json: async () => ({ isValid: false, message: 'expired' }),
-        }) as any;
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ isValid: false, message: 'expired' }),
+      }) as any;
       expect(await verifySmslive247Otp('+2348012345678', '000000')).toBe(false);
     });
 

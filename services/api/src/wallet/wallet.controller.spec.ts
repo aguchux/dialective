@@ -55,13 +55,11 @@ describe('WalletController NOWPayments IPN', () => {
       // enabled: false short-circuits it to an empty bonus list, matching
       // this fixture's intent of "no referral bonus of any kind applies".
       distributorSettings: {
-        upsert: jest
-          .fn()
-          .mockResolvedValue({
-            enabled: false,
-            multiLevelReferralEnabled: false,
-            maxReferralDepth: 0,
-          }),
+        upsert: jest.fn().mockResolvedValue({
+          enabled: false,
+          multiLevelReferralEnabled: false,
+          maxReferralDepth: 0,
+        }),
       },
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 'user-1', referredById: null }),

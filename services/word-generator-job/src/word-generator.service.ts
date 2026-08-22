@@ -454,9 +454,7 @@ export class WordGeneratorService {
 
   // --- Insert (English source) --------------------------------------------
 
-  private async insertWords(
-    items: PosItem[],
-  ): Promise<{
+  private async insertWords(items: PosItem[]): Promise<{
     inserted: number;
     skippedDuplicate: number;
     insertedRows: { id: string; text: string }[];

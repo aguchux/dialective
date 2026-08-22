@@ -23,12 +23,10 @@ describe('WordGeneratorService backfillDialectTranslations', () => {
     // call chain.generateStructured/chain.generate, so a minimal mock chain
     // is enough to unit-test backfill's row-selection logic in isolation.
     (service as any).chain = {
-      generateStructured: jest
-        .fn()
-        .mockResolvedValue({
-          items: [{ text: 'nnukwu', partOfSpeech: 'ADJECTIVE' }],
-          provider: 'openai',
-        }),
+      generateStructured: jest.fn().mockResolvedValue({
+        items: [{ text: 'nnukwu', partOfSpeech: 'ADJECTIVE' }],
+        provider: 'openai',
+      }),
       generate: jest.fn().mockResolvedValue({ items: ['nnukwu'], provider: 'openai' }),
     };
     return { service, prisma };

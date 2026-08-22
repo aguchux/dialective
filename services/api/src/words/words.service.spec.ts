@@ -131,13 +131,11 @@ describe('WordsService', () => {
           wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
           wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
           wordRecording: {
-            create: jest
-              .fn()
-              .mockResolvedValue({
-                id: 'recording-1',
-                direction: 'DIALECT_TO_ENGLISH',
-                validationScore: { toNumber: () => 1 },
-              }),
+            create: jest.fn().mockResolvedValue({
+              id: 'recording-1',
+              direction: 'DIALECT_TO_ENGLISH',
+              validationScore: { toNumber: () => 1 },
+            }),
           },
           ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
         }),
