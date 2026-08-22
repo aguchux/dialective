@@ -227,14 +227,7 @@ Keep avatar animation logic isolated from AI-provider logic.
 ```ts
 type ConversationSession = {
   id: string;
-  status:
-    | "connecting"
-    | "idle"
-    | "listening"
-    | "thinking"
-    | "speaking"
-    | "error"
-    | "ended";
+  status: 'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error' | 'ended';
   language?: string;
   dialect?: string;
 };
@@ -245,8 +238,8 @@ type ConversationSession = {
 ```ts
 type ConversationMessage = {
   id: string;
-  role: "user" | "assistant";
-  source: "voice" | "text";
+  role: 'user' | 'assistant';
+  source: 'voice' | 'text';
   text: string;
   createdAt: string;
 };
@@ -255,22 +248,13 @@ type ConversationMessage = {
 ### AvatarState
 
 ```ts
-type AvatarState =
-  | "idle"
-  | "listening"
-  | "thinking"
-  | "speaking"
-  | "error";
+type AvatarState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 ```
 
 ### AvatarEmotion
 
 ```ts
-type AvatarEmotion =
-  | "neutral"
-  | "happy"
-  | "concerned"
-  | "confused";
+type AvatarEmotion = 'neutral' | 'happy' | 'concerned' | 'confused';
 ```
 
 ### AvatarFrame/Event
@@ -454,13 +438,13 @@ Example internal mapping:
 
 ```ts
 const visemeMap = {
-  SIL: ["mouthClose"],
-  A: ["viseme_aa"],
-  E: ["viseme_E"],
-  I: ["viseme_I"],
-  O: ["viseme_O"],
-  U: ["viseme_U"],
-  M: ["viseme_PP"],
+  SIL: ['mouthClose'],
+  A: ['viseme_aa'],
+  E: ['viseme_E'],
+  I: ['viseme_I'],
+  O: ['viseme_O'],
+  U: ['viseme_U'],
+  M: ['viseme_PP'],
 };
 ```
 
@@ -966,10 +950,7 @@ Build a lightweight integration surface.
 Target usage:
 
 ```html
-<script
-  src="https://cdn.chatdialect.example/widget.js"
-  data-agent="demo"
-></script>
+<script src="https://cdn.chatdialect.example/widget.js" data-agent="demo"></script>
 ```
 
 MVP widget behavior:

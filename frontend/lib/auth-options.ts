@@ -78,7 +78,8 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async jwt({ token, user, trigger, session }) {
-      const apiResult = (user as unknown as { __apiAuthResult?: AuthResult } | undefined)?.__apiAuthResult;
+      const apiResult = (user as unknown as { __apiAuthResult?: AuthResult } | undefined)
+        ?.__apiAuthResult;
       if (apiResult) {
         applyTokens(token, apiResult);
         token.role = apiResult.user.role;
@@ -95,7 +96,8 @@ export const authOptions: NextAuthOptions = {
       // profile is edited mid-session, since the JWT otherwise only
       // refreshes these fields on sign-in.
       if (trigger === 'update' && session) {
-        if (session.onboardingComplete !== undefined) token.onboardingComplete = session.onboardingComplete;
+        if (session.onboardingComplete !== undefined)
+          token.onboardingComplete = session.onboardingComplete;
         if (session.dialectTag !== undefined) token.dialectTag = session.dialectTag;
         if (session.countryId !== undefined) token.countryId = session.countryId;
         if (session.firstName !== undefined) token.firstName = session.firstName;
@@ -179,7 +181,9 @@ function applyTokens(token: JWT, tokens: AuthTokens): void {
 
 function getAccessTokenExpiration(accessToken: string): number {
   try {
-    const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64url').toString('utf8')) as { exp?: number };
+    const payload = JSON.parse(
+      Buffer.from(accessToken.split('.')[1], 'base64url').toString('utf8'),
+    ) as { exp?: number };
     return typeof payload.exp === 'number' ? payload.exp * 1000 : 0;
   } catch {
     return 0;

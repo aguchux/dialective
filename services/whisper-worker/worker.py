@@ -6,7 +6,12 @@ import subprocess
 import redis
 from transformers import pipeline
 
-from db import build_db_connection, get_hf_token, update_submission_result, update_word_recording_result
+from db import (
+    build_db_connection,
+    get_hf_token,
+    update_submission_result,
+    update_word_recording_result,
+)
 from model_registry import UnsupportedDialectError, load_registry, resolve_checkpoint
 from spaces import build_spaces_client
 from streams import StreamConsumer, publish
@@ -66,7 +71,11 @@ def get_pipeline(dialect_tag: str, db_conn):
             # should be alerted on, since every job for this dialect will
             # keep failing identically until the token is fixed -- unlike a
             # one-off transient error, retrying does not help.
-            if "gated repo" in str(exc).lower() or "401" in str(exc) or "403" in str(exc):
+            if (
+                "gated repo" in str(exc).lower()
+                or "401" in str(exc)
+                or "403" in str(exc)
+            ):
                 logger.error(
                     "ASR_CHECKPOINT_AUTH_FAILURE dialect=%s checkpoint=%s -- Hugging Face rejected the request "
                     "(gated repo or missing/invalid token). Every ASR job for this dialect will keep failing until "
@@ -87,7 +96,19 @@ def transcode_to_wav(src_path: str, dst_path: str, sr: int = 16000) -> None:
     format sniffing for every possible browser output.
     """
     subprocess.run(
-        ["ffmpeg", "-y", "-i", src_path, "-ar", str(sr), "-ac", "1", "-f", "wav", dst_path],
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            src_path,
+            "-ar",
+            str(sr),
+            "-ac",
+            "1",
+            "-f",
+            "wav",
+            dst_path,
+        ],
         check=True,
         capture_output=True,
     )
@@ -101,9 +122,16 @@ def word_detail_from_chunks(chunks: list) -> list:
     with conf always None -- Whisper has no per-word confidence signal.
     """
     return [
-        {"word": chunk["text"].strip(), "start": chunk["timestamp"][0], "end": chunk["timestamp"][1], "conf": None}
+        {
+            "word": chunk["text"].strip(),
+            "start": chunk["timestamp"][0],
+            "end": chunk["timestamp"][1],
+            "conf": None,
+        }
         for chunk in chunks
-        if chunk.get("timestamp") and chunk["timestamp"][0] is not None and chunk["timestamp"][1] is not None
+        if chunk.get("timestamp")
+        and chunk["timestamp"][0] is not None
+        and chunk["timestamp"][1] is not None
     ]
 
 
@@ -122,7 +150,11 @@ def write_result(redis_client: redis.Redis, submission_id: str, **fields) -> Non
 
 
 def write_submission_row(db_conn, submission_id: str, status: str, **fields) -> None:
-    status_map = {"rejected": "REJECTED", "unsupported_dialect": "REJECTED", "ok": "TRANSCRIBED"}
+    status_map = {
+        "rejected": "REJECTED",
+        "unsupported_dialect": "REJECTED",
+        "ok": "TRANSCRIBED",
+    }
     # Whisper's HF pipeline never returns per-word confidence -- asr_confidence
     # stays None (not 0) to distinguish "no confidence data" from "zero
     # confidence", matching vosk-worker's mean_confidence(None) behavior.
@@ -135,7 +167,8 @@ def write_submission_row(db_conn, submission_id: str, status: str, **fields) -> 
         asr_confidence=None,
         asr_engine="whisper" if status != "unsupported_dialect" else None,
         asr_word_detail=word_detail if word_detail else None,
-        rejection_reason=fields.get("reason") or ("unsupported_dialect" if status == "unsupported_dialect" else None),
+        rejection_reason=fields.get("reason")
+        or ("unsupported_dialect" if status == "unsupported_dialect" else None),
     )
 
 
@@ -159,13 +192,20 @@ def handle_word_recording_job(s3, db_conn, job: dict) -> None:
         try:
             transcode_to_wav(raw_path, wav_path)
         except subprocess.CalledProcessError:
-            logger.warning("Unreadable audio for word_recording=%s; skipping ASR", word_recording_id)
+            logger.warning(
+                "Unreadable audio for word_recording=%s; skipping ASR",
+                word_recording_id,
+            )
             return
 
         try:
             asr = get_pipeline(dialect_tag, db_conn)
         except UnsupportedDialectError:
-            logger.info("No whisper checkpoint for dialect=%s; skipping ASR for word_recording=%s", dialect_tag, word_recording_id)
+            logger.info(
+                "No whisper checkpoint for dialect=%s; skipping ASR for word_recording=%s",
+                dialect_tag,
+                word_recording_id,
+            )
             return
 
         result = asr(wav_path)
@@ -203,22 +243,42 @@ def make_handler(s3, redis_client: redis.Redis, db_conn):
             try:
                 transcode_to_wav(raw_path, wav_path)
             except subprocess.CalledProcessError:
-                write_result(redis_client, submission_id, status="rejected", reason="unreadable_audio")
-                write_submission_row(db_conn, submission_id, "rejected", reason="unreadable_audio")
+                write_result(
+                    redis_client,
+                    submission_id,
+                    status="rejected",
+                    reason="unreadable_audio",
+                )
+                write_submission_row(
+                    db_conn, submission_id, "rejected", reason="unreadable_audio"
+                )
                 return
 
             try:
                 asr = get_pipeline(dialect_tag, db_conn)
             except UnsupportedDialectError:
-                write_result(redis_client, submission_id, status="unsupported_dialect", dialect_tag=dialect_tag)
+                write_result(
+                    redis_client,
+                    submission_id,
+                    status="unsupported_dialect",
+                    dialect_tag=dialect_tag,
+                )
                 write_submission_row(db_conn, submission_id, "unsupported_dialect")
                 return
 
             result = asr(wav_path)
             text = result.get("text", "").strip()
             word_detail = word_detail_from_chunks(result.get("chunks", []))
-            write_result(redis_client, submission_id, status="ok", transcript=text, word_confidences=word_detail)
-            write_submission_row(db_conn, submission_id, "ok", transcript=text, word_detail=word_detail)
+            write_result(
+                redis_client,
+                submission_id,
+                status="ok",
+                transcript=text,
+                word_confidences=word_detail,
+            )
+            write_submission_row(
+                db_conn, submission_id, "ok", transcript=text, word_detail=word_detail
+            )
 
             publish(
                 redis_client,
@@ -243,7 +303,9 @@ def main() -> None:
     db_conn = build_db_connection()
 
     consumer = StreamConsumer(redis_client, ASR_STREAM, CONSUMER_GROUP, CONSUMER_NAME)
-    logger.info("whisper-worker consuming stream=%s group=%s", ASR_STREAM, CONSUMER_GROUP)
+    logger.info(
+        "whisper-worker consuming stream=%s group=%s", ASR_STREAM, CONSUMER_GROUP
+    )
     consumer.run(make_handler(s3, redis_client, db_conn))
 
 

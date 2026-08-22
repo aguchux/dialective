@@ -60,7 +60,11 @@ export class CoursesProtectedController {
   }
 
   @Put(':slug/progress')
-  saveProgress(@CurrentUser() user: AccessTokenClaims, @Param('slug') slug: string, @Body() dto: SaveCourseProgressDto) {
+  saveProgress(
+    @CurrentUser() user: AccessTokenClaims,
+    @Param('slug') slug: string,
+    @Body() dto: SaveCourseProgressDto,
+  ) {
     return this.courses.saveProgress(user.sub, slug, dto.lastSlideIndex, dto.totalSlides);
   }
 }
@@ -69,7 +73,10 @@ export class CoursesProtectedController {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 export class CoursesAdminController {
-  constructor(private readonly courses: CoursesService, private readonly storage: StorageService) {}
+  constructor(
+    private readonly courses: CoursesService,
+    private readonly storage: StorageService,
+  ) {}
 
   @Get('courses')
   list() {
@@ -114,8 +121,16 @@ export class CoursesAdminController {
 
 function safeExtension(contentType: string): string {
   const fallbacks: Record<string, string> = {
-    'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif',
-    'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/ogg': 'ogg', 'audio/webm': 'weba',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/avif': 'avif',
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/wav': 'wav',
+    'audio/ogg': 'ogg',
+    'audio/webm': 'weba',
   };
   return fallbacks[contentType] ?? 'bin';
 }

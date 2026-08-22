@@ -1,4 +1,15 @@
-import { Body, Controller, Get, NotFoundException, Param, Patch, Query, Req, UnprocessableEntityException, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Patch,
+  Query,
+  Req,
+  UnprocessableEntityException,
+  UseGuards,
+} from '@nestjs/common';
 import { Prisma, Role } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
@@ -59,7 +70,8 @@ export class PromptsController {
     });
 
     const wordCount = countPromptWords(prompt.text);
-    const maxRecordingSeconds = await this.platformSettings.getDictationMaxRecordingSeconds(wordCount);
+    const maxRecordingSeconds =
+      await this.platformSettings.getDictationMaxRecordingSeconds(wordCount);
 
     return { promptId: prompt.id, dialectTag, text: prompt.text, wordCount, maxRecordingSeconds };
   }

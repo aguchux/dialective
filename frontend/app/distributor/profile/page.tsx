@@ -6,7 +6,8 @@ import { ActionButton } from '@/components/ui/ActionButton';
 import { NotificationPreferencesPanel } from '@/components/notifications/NotificationPreferencesPanel';
 import { normalizeErrorMessage, useGetMeQuery, useUpdateProfileMutation } from '@/store/api';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -57,7 +58,13 @@ export default function DistributorProfilePage() {
                 <label className="font-bold" htmlFor="distributor-email">
                   Email
                 </label>
-                <input className={inputClass} id="distributor-email" value={me?.email ?? ''} disabled readOnly />
+                <input
+                  className={inputClass}
+                  id="distributor-email"
+                  value={me?.email ?? ''}
+                  disabled
+                  readOnly
+                />
               </div>
 
               <div className="grid gap-1">
@@ -87,7 +94,12 @@ export default function DistributorProfilePage() {
               </div>
 
               <div>
-                <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+                <ActionButton
+                  className={primaryButtonClass}
+                  type="submit"
+                  pending={isSaving}
+                  pendingLabel="Saving"
+                >
                   Save profile
                 </ActionButton>
               </div>

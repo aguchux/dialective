@@ -70,7 +70,11 @@ export default async function proxy(request: NextRequest) {
   const homePath = roleHomePath(role, token.onboardingComplete === true);
 
   if (AUTH_PAGES.has(pathname)) {
-    const destination = postAuthPath(role, token.onboardingComplete === true, request.nextUrl.searchParams.get('callbackUrl'));
+    const destination = postAuthPath(
+      role,
+      token.onboardingComplete === true,
+      request.nextUrl.searchParams.get('callbackUrl'),
+    );
     return redirect(request, destination);
   }
 

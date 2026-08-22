@@ -20,7 +20,9 @@ from token_crypto import _derive_key, decrypt_token
 PASSPHRASE = "test-passphrase-do-not-use-in-prod"
 
 
-def _encrypt_like_node(plaintext: str, passphrase: str = PASSPHRASE) -> tuple[str, str, str]:
+def _encrypt_like_node(
+    plaintext: str, passphrase: str = PASSPHRASE
+) -> tuple[str, str, str]:
     """Re-implements token-crypto.util.ts's encryptToken() using this module's own _derive_key, so a round-trip test here doesn't depend on Node being available."""
     key = _derive_key(passphrase)
     iv = b"\x01" * 12
@@ -35,7 +37,10 @@ def _encrypt_like_node(plaintext: str, passphrase: str = PASSPHRASE) -> tuple[st
 
 def test_round_trips_a_plaintext_value():
     encrypted_value, iv, auth_tag = _encrypt_like_node("hf_super_secret_token_value")
-    assert decrypt_token(encrypted_value, iv, auth_tag, PASSPHRASE) == "hf_super_secret_token_value"
+    assert (
+        decrypt_token(encrypted_value, iv, auth_tag, PASSPHRASE)
+        == "hf_super_secret_token_value"
+    )
 
 
 def test_derives_the_same_key_as_nodes_scryptsync_for_a_known_input():
@@ -49,7 +54,9 @@ def test_derives_the_same_key_as_nodes_scryptsync_for_a_known_input():
     becomes undecryptable.
     """
     key = _derive_key(PASSPHRASE)
-    assert key.hex() == "88030257cd26eea6242b6fb7b70549eb9b1c2c1fc4d29fb7e86a561dfef6b144"
+    assert (
+        key.hex() == "88030257cd26eea6242b6fb7b70549eb9b1c2c1fc4d29fb7e86a561dfef6b144"
+    )
 
 
 def test_raises_when_the_auth_tag_is_tampered_with():
@@ -62,4 +69,6 @@ def test_raises_when_the_auth_tag_is_tampered_with():
 def test_raises_when_the_passphrase_is_wrong():
     encrypted_value, iv, auth_tag = _encrypt_like_node("hf_super_secret_token_value")
     with pytest.raises(InvalidTag):
-        decrypt_token(encrypted_value, iv, auth_tag, "a-completely-different-passphrase")
+        decrypt_token(
+            encrypted_value, iv, auth_tag, "a-completely-different-passphrase"
+        )

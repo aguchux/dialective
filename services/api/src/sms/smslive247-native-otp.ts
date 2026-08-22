@@ -26,7 +26,10 @@ function toSmslive247Msisdn(phoneNumberE164: string): string {
   return phoneNumberE164.replace(/^\+/, '');
 }
 
-export async function createSmslive247Otp(phoneNumber: string, senderIdOverride?: string): Promise<{ expiresAt: string }> {
+export async function createSmslive247Otp(
+  phoneNumber: string,
+  senderIdOverride?: string,
+): Promise<{ expiresAt: string }> {
   const { apiKey, senderId } = credentials(senderIdOverride);
 
   const res = await fetch(`${BASE_URL}/api/v5/tokens/sms`, {

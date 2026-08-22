@@ -18,7 +18,7 @@ compute_liveness_score` reads `predict_proba(...)[0][1]` directly.
 
 `train_placeholder.py` in this directory generates a trivial stand-in
 model (trained on synthetic sine-wave-vs-noise-burst examples, not real
-speech) purely so the pipeline has *a* model to load end-to-end before a
+speech) purely so the pipeline has _a_ model to load end-to-end before a
 real ASVspoof-trained artifact is produced. **Do not treat its output
 scores as meaningful anti-spoofing accuracy** — it exists only to keep
 `services/quality-gate-worker` runnable and testable. Replace
@@ -65,7 +65,7 @@ argmaxes it for the label, and uses the max probability as confidence.
 
 `train_emotion_placeholder.py` in this directory generates a trivial
 stand-in model (trained on synthetic per-label tone variations, not real
-emotional speech) purely so the pipeline has *a* model to load end-to-end
+emotional speech) purely so the pipeline has _a_ model to load end-to-end
 before a real RAVDESS/CREMA-D-trained artifact is produced. **Do not treat
 its output scores as meaningful emotion-classification accuracy** — it
 exists only to keep `services/quality-gate-worker` runnable and testable

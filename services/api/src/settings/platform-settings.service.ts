@@ -149,7 +149,11 @@ export class PlatformSettingsService {
     if (row.registerRateLimitPerHour) {
       return row.registerRateLimitPerHour;
     }
-    return this.parsePositiveInt(process.env.REGISTER_RATE_LIMIT_PER_HOUR, 30, 'REGISTER_RATE_LIMIT_PER_HOUR');
+    return this.parsePositiveInt(
+      process.env.REGISTER_RATE_LIMIT_PER_HOUR,
+      30,
+      'REGISTER_RATE_LIMIT_PER_HOUR',
+    );
   }
 
   async getTrainingPayoutBonusCapMultiple(): Promise<number> {
@@ -267,7 +271,11 @@ export class PlatformSettingsService {
     return row.phoneVerificationRequired;
   }
 
-  async getManualPhoneVerificationSettings(): Promise<{ enabled: boolean; feeTokens: number; whatsappNumber: string }> {
+  async getManualPhoneVerificationSettings(): Promise<{
+    enabled: boolean;
+    feeTokens: number;
+    whatsappNumber: string;
+  }> {
     const row = await this.getRow();
     return {
       enabled: row.manualPhoneVerificationEnabled,
@@ -283,10 +291,19 @@ export class PlatformSettingsService {
   }
 
   /** Widget only actually loads when enabled AND both IDs are set -- a half-configured row (e.g. enabled toggled on before saving IDs) must not leak an empty embed. */
-  async getTawkToWidget(): Promise<{ enabled: boolean; propertyId: string | null; widgetId: string | null }> {
+  async getTawkToWidget(): Promise<{
+    enabled: boolean;
+    propertyId: string | null;
+    widgetId: string | null;
+  }> {
     const row = await this.getRow();
-    const enabled = row.tawkToEnabled && Boolean(row.tawkToPropertyId) && Boolean(row.tawkToWidgetId);
-    return { enabled, propertyId: enabled ? row.tawkToPropertyId : null, widgetId: enabled ? row.tawkToWidgetId : null };
+    const enabled =
+      row.tawkToEnabled && Boolean(row.tawkToPropertyId) && Boolean(row.tawkToWidgetId);
+    return {
+      enabled,
+      propertyId: enabled ? row.tawkToPropertyId : null,
+      widgetId: enabled ? row.tawkToWidgetId : null,
+    };
   }
 
   async isCryptoWithdrawalsEnabled(): Promise<boolean> {
@@ -301,15 +318,25 @@ export class PlatformSettingsService {
 
   async getAllowedWithdrawalCurrencies(): Promise<string[]> {
     const row = await this.getRow();
-    return row.allowedWithdrawalCurrencies.split(',').map((v) => v.trim().toUpperCase()).filter(Boolean);
+    return row.allowedWithdrawalCurrencies
+      .split(',')
+      .map((v) => v.trim().toUpperCase())
+      .filter(Boolean);
   }
 
   async getAllowedWithdrawalNetworks(): Promise<string[]> {
     const row = await this.getRow();
-    return row.allowedWithdrawalNetworks.split(',').map((v) => v.trim().toUpperCase()).filter(Boolean);
+    return row.allowedWithdrawalNetworks
+      .split(',')
+      .map((v) => v.trim().toUpperCase())
+      .filter(Boolean);
   }
 
-  async getWithdrawalFeeSettings(): Promise<{ mode: string; tokenAmount: number; percent: number }> {
+  async getWithdrawalFeeSettings(): Promise<{
+    mode: string;
+    tokenAmount: number;
+    percent: number;
+  }> {
     const row = await this.getRow();
     return {
       mode: row.withdrawalFeeMode,
@@ -355,12 +382,20 @@ export class PlatformSettingsService {
 
   async getResendFromAddress(): Promise<string> {
     const row = await this.getRow();
-    return row.resendFromAddress ?? process.env.RESEND_FROM_ADDRESS ?? 'Dialect Library <noreply@dialectlibrary.com>';
+    return (
+      row.resendFromAddress ??
+      process.env.RESEND_FROM_ADDRESS ??
+      'Dialect Library <noreply@dialectlibrary.com>'
+    );
   }
 
   async getLeadsNotificationAddress(): Promise<string> {
     const row = await this.getRow();
-    return row.leadsNotificationAddress ?? process.env.LEADS_NOTIFICATION_ADDRESS ?? 'hello@dialectlibrary.com';
+    return (
+      row.leadsNotificationAddress ??
+      process.env.LEADS_NOTIFICATION_ADDRESS ??
+      'hello@dialectlibrary.com'
+    );
   }
 
   async getReferralCookiePersistSeconds(): Promise<number> {
@@ -368,7 +403,11 @@ export class PlatformSettingsService {
     if (row.referralCookiePersistSeconds !== null) {
       return row.referralCookiePersistSeconds;
     }
-    return this.parsePositiveInt(process.env.REFERRAL_COOKIE_PERSIST_SECONDS, 24 * 60 * 60, 'REFERRAL_COOKIE_PERSIST_SECONDS');
+    return this.parsePositiveInt(
+      process.env.REFERRAL_COOKIE_PERSIST_SECONDS,
+      24 * 60 * 60,
+      'REFERRAL_COOKIE_PERSIST_SECONDS',
+    );
   }
 
   async getReferralInviteExpirySeconds(): Promise<number> {
@@ -376,7 +415,11 @@ export class PlatformSettingsService {
     if (row.referralInviteExpirySeconds !== null) {
       return row.referralInviteExpirySeconds;
     }
-    return this.parsePositiveInt(process.env.REFERRAL_INVITE_EXPIRY_SECONDS, 24 * 60 * 60, 'REFERRAL_INVITE_EXPIRY_SECONDS');
+    return this.parsePositiveInt(
+      process.env.REFERRAL_INVITE_EXPIRY_SECONDS,
+      24 * 60 * 60,
+      'REFERRAL_INVITE_EXPIRY_SECONDS',
+    );
   }
 
   async getWordTrainingRecordingTimeoutSeconds(): Promise<number> {
@@ -408,7 +451,11 @@ export class PlatformSettingsService {
     if (row.dictationRecordingTimeoutSeconds !== null) {
       return row.dictationRecordingTimeoutSeconds;
     }
-    return this.parsePositiveInt(process.env.DICTATION_RECORDING_TIMEOUT_SECONDS, 5, 'DICTATION_RECORDING_TIMEOUT_SECONDS');
+    return this.parsePositiveInt(
+      process.env.DICTATION_RECORDING_TIMEOUT_SECONDS,
+      5,
+      'DICTATION_RECORDING_TIMEOUT_SECONDS',
+    );
   }
 
   async getDictationRecordingMaxTimeoutSeconds(): Promise<number> {
@@ -442,10 +489,18 @@ export class PlatformSettingsService {
     const row = await this.getRow();
     const referralCookiePersistSeconds =
       row.referralCookiePersistSeconds ??
-      this.parsePositiveInt(process.env.REFERRAL_COOKIE_PERSIST_SECONDS, 24 * 60 * 60, 'REFERRAL_COOKIE_PERSIST_SECONDS');
+      this.parsePositiveInt(
+        process.env.REFERRAL_COOKIE_PERSIST_SECONDS,
+        24 * 60 * 60,
+        'REFERRAL_COOKIE_PERSIST_SECONDS',
+      );
     const referralInviteExpirySeconds =
       row.referralInviteExpirySeconds ??
-      this.parsePositiveInt(process.env.REFERRAL_INVITE_EXPIRY_SECONDS, 24 * 60 * 60, 'REFERRAL_INVITE_EXPIRY_SECONDS');
+      this.parsePositiveInt(
+        process.env.REFERRAL_INVITE_EXPIRY_SECONDS,
+        24 * 60 * 60,
+        'REFERRAL_INVITE_EXPIRY_SECONDS',
+      );
     const wordTrainingRecordingTimeoutSeconds =
       row.wordTrainingRecordingTimeoutSeconds ??
       this.parsePositiveInt(
@@ -462,7 +517,11 @@ export class PlatformSettingsService {
       );
     const dictationRecordingTimeoutSeconds =
       row.dictationRecordingTimeoutSeconds ??
-      this.parsePositiveInt(process.env.DICTATION_RECORDING_TIMEOUT_SECONDS, 5, 'DICTATION_RECORDING_TIMEOUT_SECONDS');
+      this.parsePositiveInt(
+        process.env.DICTATION_RECORDING_TIMEOUT_SECONDS,
+        5,
+        'DICTATION_RECORDING_TIMEOUT_SECONDS',
+      );
     const dictationRecordingMaxTimeoutSeconds =
       row.dictationRecordingMaxTimeoutSeconds ??
       this.parsePositiveInt(
@@ -543,7 +602,11 @@ export class PlatformSettingsService {
       authMaintenanceExcludePartner: row.authMaintenanceExcludePartner,
       registerRateLimitPerHour:
         row.registerRateLimitPerHour ??
-        this.parsePositiveInt(process.env.REGISTER_RATE_LIMIT_PER_HOUR, 30, 'REGISTER_RATE_LIMIT_PER_HOUR'),
+        this.parsePositiveInt(
+          process.env.REGISTER_RATE_LIMIT_PER_HOUR,
+          30,
+          'REGISTER_RATE_LIMIT_PER_HOUR',
+        ),
       landingShowCountries: row.landingShowCountries,
       landingShowDialects: row.landingShowDialects,
       landingShowTrainers: row.landingShowTrainers,
@@ -639,15 +702,23 @@ export class PlatformSettingsService {
       // is read from the existing row when the caller only patches the
       // message/flag without resending the timestamp.
       const existing = await this.getRow();
-      const until = data.authMaintenanceUntil !== undefined ? data.authMaintenanceUntil : existing.authMaintenanceUntil;
+      const until =
+        data.authMaintenanceUntil !== undefined
+          ? data.authMaintenanceUntil
+          : existing.authMaintenanceUntil;
       if (!until || until.getTime() <= Date.now()) {
-        throw new BadRequestException('authMaintenanceUntil must be a future date/time when enabling maintenance mode');
+        throw new BadRequestException(
+          'authMaintenanceUntil must be a future date/time when enabling maintenance mode',
+        );
       }
       const blockLogin = data.authMaintenanceBlockLogin ?? existing.authMaintenanceBlockLogin;
       const blockSignup = data.authMaintenanceBlockSignup ?? existing.authMaintenanceBlockSignup;
-      const blockSessions = data.authMaintenanceBlockSessions ?? existing.authMaintenanceBlockSessions;
+      const blockSessions =
+        data.authMaintenanceBlockSessions ?? existing.authMaintenanceBlockSessions;
       if (!blockLogin && !blockSignup && !blockSessions) {
-        throw new BadRequestException('Select at least one of login, signup, or sessions to block when enabling maintenance mode');
+        throw new BadRequestException(
+          'Select at least one of login, signup, or sessions to block when enabling maintenance mode',
+        );
       }
     }
     if (data.llmProviderOrder) {
@@ -657,7 +728,9 @@ export class PlatformSettingsService {
         LLM_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
         new Set(tokens).size === LLM_PROVIDER_KEYS.length;
       if (!isValidPermutation) {
-        throw new BadRequestException('llmProviderOrder must list openai, deepseek, and anthropic exactly once each');
+        throw new BadRequestException(
+          'llmProviderOrder must list openai, deepseek, and anthropic exactly once each',
+        );
       }
     }
 
@@ -668,7 +741,9 @@ export class PlatformSettingsService {
         LLM_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
         new Set(tokens).size === LLM_PROVIDER_KEYS.length;
       if (!isValidPermutation) {
-        throw new BadRequestException('spellingNormalizationProviderOrder must list openai, deepseek, and anthropic exactly once each');
+        throw new BadRequestException(
+          'spellingNormalizationProviderOrder must list openai, deepseek, and anthropic exactly once each',
+        );
       }
     }
 
@@ -679,7 +754,9 @@ export class PlatformSettingsService {
         SMS_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
         new Set(tokens).size === SMS_PROVIDER_KEYS.length;
       if (!isValidPermutation) {
-        throw new BadRequestException('smsProviderOrder must list termii, twilio, and africastalking exactly once each');
+        throw new BadRequestException(
+          'smsProviderOrder must list termii, twilio, and africastalking exactly once each',
+        );
       }
     }
 
@@ -690,7 +767,9 @@ export class PlatformSettingsService {
         SMS_TRANSACTIONAL_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
         new Set(tokens).size === SMS_TRANSACTIONAL_PROVIDER_KEYS.length;
       if (!isValidPermutation) {
-        throw new BadRequestException('smsTransactionalProviderOrder must list termii, twilio, africastalking, and smslive247 exactly once each');
+        throw new BadRequestException(
+          'smsTransactionalProviderOrder must list termii, twilio, africastalking, and smslive247 exactly once each',
+        );
       }
     }
 
@@ -699,15 +778,22 @@ export class PlatformSettingsService {
 
     if (data.allowedWithdrawalCurrencies) {
       const tokens = data.allowedWithdrawalCurrencies.split(',').map((v) => v.trim().toUpperCase());
-      if (tokens.length === 0 || !tokens.every((t) => SUPPORTED_WITHDRAWAL_CURRENCIES.includes(t))) {
-        throw new BadRequestException(`allowedWithdrawalCurrencies must be a non-empty CSV subset of ${SUPPORTED_WITHDRAWAL_CURRENCIES.join(', ')}`);
+      if (
+        tokens.length === 0 ||
+        !tokens.every((t) => SUPPORTED_WITHDRAWAL_CURRENCIES.includes(t))
+      ) {
+        throw new BadRequestException(
+          `allowedWithdrawalCurrencies must be a non-empty CSV subset of ${SUPPORTED_WITHDRAWAL_CURRENCIES.join(', ')}`,
+        );
       }
     }
 
     if (data.allowedWithdrawalNetworks) {
       const tokens = data.allowedWithdrawalNetworks.split(',').map((v) => v.trim().toUpperCase());
       if (tokens.length === 0 || !tokens.every((t) => SUPPORTED_WITHDRAWAL_NETWORKS.includes(t))) {
-        throw new BadRequestException(`allowedWithdrawalNetworks must be a non-empty CSV subset of ${SUPPORTED_WITHDRAWAL_NETWORKS.join(', ')}`);
+        throw new BadRequestException(
+          `allowedWithdrawalNetworks must be a non-empty CSV subset of ${SUPPORTED_WITHDRAWAL_NETWORKS.join(', ')}`,
+        );
       }
     }
 
@@ -716,10 +802,13 @@ export class PlatformSettingsService {
     }
 
     if (data.manualPhoneVerificationWhatsappNumber !== undefined) {
-      data.manualPhoneVerificationWhatsappNumber = data.manualPhoneVerificationWhatsappNumber.trim();
+      data.manualPhoneVerificationWhatsappNumber =
+        data.manualPhoneVerificationWhatsappNumber.trim();
     }
     if (data.manualPhoneVerificationEnabled && data.manualPhoneVerificationWhatsappNumber === '') {
-      throw new BadRequestException('manualPhoneVerificationWhatsappNumber is required when manual verification is enabled');
+      throw new BadRequestException(
+        'manualPhoneVerificationWhatsappNumber is required when manual verification is enabled',
+      );
     }
 
     if (data.smsSenderId !== undefined) {
@@ -743,7 +832,9 @@ export class PlatformSettingsService {
       const liveness = data.qualityWeightLiveness ?? existing.qualityWeightLiveness.toNumber();
       const sum = consensus + noise + quality + liveness;
       if (Math.abs(sum - 100) > 0.01) {
-        throw new BadRequestException('qualityWeightConsensus/Noise/Quality/Liveness must sum to 100');
+        throw new BadRequestException(
+          'qualityWeightConsensus/Noise/Quality/Liveness must sum to 100',
+        );
       }
     }
 
@@ -771,10 +862,18 @@ export class PlatformSettingsService {
     this.cachedAt = Date.now();
     const referralCookiePersistSeconds =
       row.referralCookiePersistSeconds ??
-      this.parsePositiveInt(process.env.REFERRAL_COOKIE_PERSIST_SECONDS, 24 * 60 * 60, 'REFERRAL_COOKIE_PERSIST_SECONDS');
+      this.parsePositiveInt(
+        process.env.REFERRAL_COOKIE_PERSIST_SECONDS,
+        24 * 60 * 60,
+        'REFERRAL_COOKIE_PERSIST_SECONDS',
+      );
     const referralInviteExpirySeconds =
       row.referralInviteExpirySeconds ??
-      this.parsePositiveInt(process.env.REFERRAL_INVITE_EXPIRY_SECONDS, 24 * 60 * 60, 'REFERRAL_INVITE_EXPIRY_SECONDS');
+      this.parsePositiveInt(
+        process.env.REFERRAL_INVITE_EXPIRY_SECONDS,
+        24 * 60 * 60,
+        'REFERRAL_INVITE_EXPIRY_SECONDS',
+      );
     const wordTrainingRecordingTimeoutSeconds =
       row.wordTrainingRecordingTimeoutSeconds ??
       this.parsePositiveInt(
@@ -791,7 +890,11 @@ export class PlatformSettingsService {
       );
     const dictationRecordingTimeoutSeconds =
       row.dictationRecordingTimeoutSeconds ??
-      this.parsePositiveInt(process.env.DICTATION_RECORDING_TIMEOUT_SECONDS, 5, 'DICTATION_RECORDING_TIMEOUT_SECONDS');
+      this.parsePositiveInt(
+        process.env.DICTATION_RECORDING_TIMEOUT_SECONDS,
+        5,
+        'DICTATION_RECORDING_TIMEOUT_SECONDS',
+      );
     const dictationRecordingMaxTimeoutSeconds =
       row.dictationRecordingMaxTimeoutSeconds ??
       this.parsePositiveInt(
@@ -872,7 +975,11 @@ export class PlatformSettingsService {
       authMaintenanceExcludePartner: row.authMaintenanceExcludePartner,
       registerRateLimitPerHour:
         row.registerRateLimitPerHour ??
-        this.parsePositiveInt(process.env.REGISTER_RATE_LIMIT_PER_HOUR, 30, 'REGISTER_RATE_LIMIT_PER_HOUR'),
+        this.parsePositiveInt(
+          process.env.REGISTER_RATE_LIMIT_PER_HOUR,
+          30,
+          'REGISTER_RATE_LIMIT_PER_HOUR',
+        ),
       landingShowCountries: row.landingShowCountries,
       landingShowDialects: row.landingShowDialects,
       landingShowTrainers: row.landingShowTrainers,
@@ -922,7 +1029,8 @@ export class PlatformSettingsService {
       // (magic-link request is a signup path -- see requestMagicLink);
       // register page shows it only if signup is blocked, so both are
       // surfaced and the frontend picks the one relevant to the page it's on.
-      authMaintenanceEnabled: authMaintenance.enabled && (authMaintenance.blockLogin || authMaintenance.blockSignup),
+      authMaintenanceEnabled:
+        authMaintenance.enabled && (authMaintenance.blockLogin || authMaintenance.blockSignup),
       authMaintenanceBlocksLogin: authMaintenance.enabled && authMaintenance.blockLogin,
       authMaintenanceBlocksSignup: authMaintenance.enabled && authMaintenance.blockSignup,
       authMaintenanceUntil: authMaintenance.until,

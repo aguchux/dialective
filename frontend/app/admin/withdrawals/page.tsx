@@ -39,7 +39,9 @@ const statusTone: Record<WithdrawalStatus, string> = {
 
 export default function AdminWithdrawalsPage() {
   const [tab, setTab] = useState<WithdrawalStatus | 'ALL'>('PENDING');
-  const { data: withdrawals = [], isLoading } = useListAdminWithdrawalsQuery(tab === 'ALL' ? undefined : { status: tab });
+  const { data: withdrawals = [], isLoading } = useListAdminWithdrawalsQuery(
+    tab === 'ALL' ? undefined : { status: tab },
+  );
   const { data: platformSettings } = useGetPlatformSettingsQuery();
 
   return (
@@ -47,10 +49,13 @@ export default function AdminWithdrawalsPage() {
       <div className="grid gap-6">
         <div>
           <h1 className="text-3xl font-black">Withdrawals</h1>
-          <p className="mt-2 text-muted">Review, approve, and submit crypto withdrawal payouts via NOWPayments.</p>
+          <p className="mt-2 text-muted">
+            Review, approve, and submit crypto withdrawal payouts via NOWPayments.
+          </p>
           {platformSettings && !platformSettings.nowPaymentsPayoutsEnabled && (
             <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
-              NOWPayments payouts are disabled in Settings -- withdrawals can still be approved and rejected, but not submitted to the provider until this is turned on.
+              NOWPayments payouts are disabled in Settings -- withdrawals can still be approved and
+              rejected, but not submitted to the provider until this is turned on.
             </p>
           )}
         </div>
@@ -82,10 +87,26 @@ export default function AdminWithdrawalsPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoading && <tr><td className="px-4 py-5" colSpan={7}>Loading withdrawals...</td></tr>}
-              {!isLoading && withdrawals.length === 0 && <tr><td className="px-4 py-5" colSpan={7}>No withdrawals in this view.</td></tr>}
+              {isLoading && (
+                <tr>
+                  <td className="px-4 py-5" colSpan={7}>
+                    Loading withdrawals...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && withdrawals.length === 0 && (
+                <tr>
+                  <td className="px-4 py-5" colSpan={7}>
+                    No withdrawals in this view.
+                  </td>
+                </tr>
+              )}
               {withdrawals.map((withdrawal) => (
-                <WithdrawalRow key={withdrawal.id} withdrawal={withdrawal} otpRequired={platformSettings?.adminPayoutOtpEnabled ?? false} />
+                <WithdrawalRow
+                  key={withdrawal.id}
+                  withdrawal={withdrawal}
+                  otpRequired={platformSettings?.adminPayoutOtpEnabled ?? false}
+                />
               ))}
             </tbody>
           </table>
@@ -95,7 +116,13 @@ export default function AdminWithdrawalsPage() {
   );
 }
 
-function WithdrawalRow({ withdrawal, otpRequired }: { withdrawal: AdminWithdrawalRequest; otpRequired: boolean }) {
+function WithdrawalRow({
+  withdrawal,
+  otpRequired,
+}: {
+  withdrawal: AdminWithdrawalRequest;
+  otpRequired: boolean;
+}) {
   const [refresh, { isLoading: refreshing }] = useRefreshWithdrawalStatusMutation();
   const [error, setError] = useState('');
 
@@ -111,17 +138,30 @@ function WithdrawalRow({ withdrawal, otpRequired }: { withdrawal: AdminWithdrawa
   return (
     <tr className="border-t border-line align-top">
       <td className="px-4 py-3">
-        <span className={`rounded-md px-2 py-1 text-xs font-black ${statusTone[withdrawal.status]}`}>{withdrawal.status}</span>
-        {withdrawal.providerStatus && <p className="mt-1 text-xs text-muted">provider: {withdrawal.providerStatus}</p>}
-        {withdrawal.providerError && <p className="mt-1 text-xs font-bold text-danger">{withdrawal.providerError}</p>}
+        <span
+          className={`rounded-md px-2 py-1 text-xs font-black ${statusTone[withdrawal.status]}`}
+        >
+          {withdrawal.status}
+        </span>
+        {withdrawal.providerStatus && (
+          <p className="mt-1 text-xs text-muted">provider: {withdrawal.providerStatus}</p>
+        )}
+        {withdrawal.providerError && (
+          <p className="mt-1 text-xs font-bold text-danger">{withdrawal.providerError}</p>
+        )}
         {error && <p className="mt-1 text-xs font-bold text-danger">{error}</p>}
       </td>
       <td className="px-4 py-3">{withdrawal.wallet.user.email}</td>
       <td className="px-4 py-3">
         {withdrawal.tokenAmount} DL
-        <p className="text-xs text-muted">{withdrawal.usdtAmount} {withdrawal.destinationCurrency}</p>
+        <p className="text-xs text-muted">
+          {withdrawal.usdtAmount} {withdrawal.destinationCurrency}
+        </p>
       </td>
-      <td className="max-w-56 truncate px-4 py-3 font-mono text-xs" title={withdrawal.destinationAddress}>
+      <td
+        className="max-w-56 truncate px-4 py-3 font-mono text-xs"
+        title={withdrawal.destinationAddress}
+      >
         {withdrawal.destinationAddress}
         <p className="font-sans text-xs text-muted">{withdrawal.destinationNetwork}</p>
       </td>
@@ -130,7 +170,12 @@ function WithdrawalRow({ withdrawal, otpRequired }: { withdrawal: AdminWithdrawa
           <>
             <p className="font-mono">{withdrawal.providerPayoutId}</p>
             {withdrawal.status === 'PROCESSING' && (
-              <button className="mt-1 font-bold text-accent disabled:opacity-50" disabled={refreshing} onClick={handleRefresh} type="button">
+              <button
+                className="mt-1 font-bold text-accent disabled:opacity-50"
+                disabled={refreshing}
+                onClick={handleRefresh}
+                type="button"
+              >
                 {refreshing ? 'Refreshing…' : 'Refresh status'}
               </button>
             )}
@@ -139,7 +184,9 @@ function WithdrawalRow({ withdrawal, otpRequired }: { withdrawal: AdminWithdrawa
           '—'
         )}
       </td>
-      <td className="whitespace-nowrap px-4 py-3">{new Date(withdrawal.createdAt).toLocaleString()}</td>
+      <td className="whitespace-nowrap px-4 py-3">
+        {new Date(withdrawal.createdAt).toLocaleString()}
+      </td>
       <td className="px-4 py-3">
         <WithdrawalActions otpRequired={otpRequired} withdrawal={withdrawal} />
       </td>
@@ -147,11 +194,21 @@ function WithdrawalRow({ withdrawal, otpRequired }: { withdrawal: AdminWithdrawa
   );
 }
 
-function WithdrawalActions({ withdrawal, otpRequired }: { withdrawal: AdminWithdrawalRequest; otpRequired: boolean }) {
+function WithdrawalActions({
+  withdrawal,
+  otpRequired,
+}: {
+  withdrawal: AdminWithdrawalRequest;
+  otpRequired: boolean;
+}) {
   if (withdrawal.status === 'PENDING') {
     return (
       <div className="flex flex-wrap gap-1.5">
-        <WithdrawalActionDialog action="approve" otpRequired={otpRequired} withdrawal={withdrawal} />
+        <WithdrawalActionDialog
+          action="approve"
+          otpRequired={otpRequired}
+          withdrawal={withdrawal}
+        />
         <WithdrawalActionDialog action="reject" otpRequired={false} withdrawal={withdrawal} />
       </div>
     );
@@ -160,7 +217,12 @@ function WithdrawalActions({ withdrawal, otpRequired }: { withdrawal: AdminWithd
     return (
       <div className="flex flex-wrap gap-1.5">
         <WithdrawalActionDialog action="submit" otpRequired={otpRequired} withdrawal={withdrawal} />
-        <WithdrawalActionDialog action="paid" otpRequired={otpRequired} withdrawal={withdrawal} label="Mark paid manually" />
+        <WithdrawalActionDialog
+          action="paid"
+          otpRequired={otpRequired}
+          withdrawal={withdrawal}
+          label="Mark paid manually"
+        />
       </div>
     );
   }
@@ -170,8 +232,18 @@ function WithdrawalActions({ withdrawal, otpRequired }: { withdrawal: AdminWithd
   if (withdrawal.status === 'FAILED') {
     return (
       <div className="flex flex-wrap gap-1.5">
-        <WithdrawalActionDialog action="approve" label="Re-approve & retry" otpRequired={otpRequired} withdrawal={withdrawal} />
-        <WithdrawalActionDialog action="reject" label="Reject & refund" otpRequired={false} withdrawal={withdrawal} />
+        <WithdrawalActionDialog
+          action="approve"
+          label="Re-approve & retry"
+          otpRequired={otpRequired}
+          withdrawal={withdrawal}
+        />
+        <WithdrawalActionDialog
+          action="reject"
+          label="Reject & refund"
+          otpRequired={false}
+          withdrawal={withdrawal}
+        />
       </div>
     );
   }
@@ -180,12 +252,30 @@ function WithdrawalActions({ withdrawal, otpRequired }: { withdrawal: AdminWithd
 
 type ActionKind = 'approve' | 'submit' | 'paid' | 'reject';
 
-const actionCopy: Record<ActionKind, { title: string; description: string; confirmLabel: string }> = {
-  approve: { title: 'Approve withdrawal', description: 'Confirm you have reviewed this withdrawal before it can be submitted to the payout provider.', confirmLabel: 'Approve' },
-  submit: { title: 'Submit to NOWPayments', description: 'This sends the payout request to NOWPayments now.', confirmLabel: 'Submit payout' },
-  paid: { title: 'Mark paid manually', description: 'Only use this if you sent the payout outside of NOWPayments.', confirmLabel: 'Mark paid' },
-  reject: { title: 'Reject withdrawal', description: 'DL will be refunded to the trainer’s balance immediately.', confirmLabel: 'Reject & refund' },
-};
+const actionCopy: Record<ActionKind, { title: string; description: string; confirmLabel: string }> =
+  {
+    approve: {
+      title: 'Approve withdrawal',
+      description:
+        'Confirm you have reviewed this withdrawal before it can be submitted to the payout provider.',
+      confirmLabel: 'Approve',
+    },
+    submit: {
+      title: 'Submit to NOWPayments',
+      description: 'This sends the payout request to NOWPayments now.',
+      confirmLabel: 'Submit payout',
+    },
+    paid: {
+      title: 'Mark paid manually',
+      description: 'Only use this if you sent the payout outside of NOWPayments.',
+      confirmLabel: 'Mark paid',
+    },
+    reject: {
+      title: 'Reject withdrawal',
+      description: 'DL will be refunded to the trainer’s balance immediately.',
+      confirmLabel: 'Reject & refund',
+    },
+  };
 
 function WithdrawalActionDialog({
   action,
@@ -220,9 +310,12 @@ function WithdrawalActionDialog({
   }
 
   async function run(otp?: { otpRequestId: string; code: string }) {
-    if (action === 'approve') return approve({ id: withdrawal.id, adminNote, ...(otp ?? {}) }).unwrap();
-    if (action === 'submit') return submit({ id: withdrawal.id, adminNote, ...(otp ?? {}) }).unwrap();
-    if (action === 'paid') return resolve({ id: withdrawal.id, outcome: 'paid', adminNote, ...(otp ?? {}) }).unwrap();
+    if (action === 'approve')
+      return approve({ id: withdrawal.id, adminNote, ...(otp ?? {}) }).unwrap();
+    if (action === 'submit')
+      return submit({ id: withdrawal.id, adminNote, ...(otp ?? {}) }).unwrap();
+    if (action === 'paid')
+      return resolve({ id: withdrawal.id, outcome: 'paid', adminNote, ...(otp ?? {}) }).unwrap();
     return resolve({ id: withdrawal.id, outcome: 'rejected', adminNote }).unwrap();
   }
 
@@ -239,14 +332,25 @@ function WithdrawalActionDialog({
       setOpen(false);
       reset();
     } catch (err) {
-      setError(normalizeErrorMessage(err, otpRequestId ? 'Could not verify this code' : 'Could not complete this action'));
+      setError(
+        normalizeErrorMessage(
+          err,
+          otpRequestId ? 'Could not verify this code' : 'Could not complete this action',
+        ),
+      );
     }
   }
 
   const copy = actionCopy[action];
 
   return (
-    <Dialog onOpenChange={(next) => { setOpen(next); if (!next) reset(); }} open={open}>
+    <Dialog
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) reset();
+      }}
+      open={open}
+    >
       <DialogTrigger asChild>
         <button
           className={`min-h-8 rounded-lg border px-2.5 text-xs font-extrabold ${action === 'reject' ? 'border-red-200 bg-red-50 text-danger' : 'border-line bg-white text-ink'}`}
@@ -255,21 +359,42 @@ function WithdrawalActionDialog({
           {label ?? copy.confirmLabel}
         </button>
       </DialogTrigger>
-      <DialogContent title={otpRequestId ? 'Enter your code' : copy.title} description={otpRequestId ? 'We emailed a 6-digit code to confirm this action.' : copy.description}>
+      <DialogContent
+        title={otpRequestId ? 'Enter your code' : copy.title}
+        description={
+          otpRequestId ? 'We emailed a 6-digit code to confirm this action.' : copy.description
+        }
+      >
         <form className="grid gap-3" onSubmit={handleSubmit}>
           {!otpRequestId && (
             <div className="grid gap-2 rounded-lg border border-line bg-surface p-3 text-sm">
-              <p><span className="font-bold">Trainer:</span> {withdrawal.wallet.user.email}</p>
-              <p><span className="font-bold">Amount:</span> {withdrawal.tokenAmount} DL ({withdrawal.usdtAmount} {withdrawal.destinationCurrency})</p>
-              <p className="break-all"><span className="font-bold">Address:</span> {withdrawal.destinationAddress}</p>
-              <p><span className="font-bold">Network:</span> {withdrawal.destinationNetwork}</p>
-              <p><span className="font-bold">Withdrawal ID:</span> <span className="font-mono text-xs">{withdrawal.id}</span></p>
+              <p>
+                <span className="font-bold">Trainer:</span> {withdrawal.wallet.user.email}
+              </p>
+              <p>
+                <span className="font-bold">Amount:</span> {withdrawal.tokenAmount} DL (
+                {withdrawal.usdtAmount} {withdrawal.destinationCurrency})
+              </p>
+              <p className="break-all">
+                <span className="font-bold">Address:</span> {withdrawal.destinationAddress}
+              </p>
+              <p>
+                <span className="font-bold">Network:</span> {withdrawal.destinationNetwork}
+              </p>
+              <p>
+                <span className="font-bold">Withdrawal ID:</span>{' '}
+                <span className="font-mono text-xs">{withdrawal.id}</span>
+              </p>
             </div>
           )}
           {!otpRequestId && (
             <label className="grid gap-1.5 text-sm font-bold">
               Admin note (optional)
-              <textarea className="min-h-16 rounded-lg border border-line bg-white px-3 py-2 text-sm" onChange={(e) => setAdminNote(e.target.value)} value={adminNote} />
+              <textarea
+                className="min-h-16 rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                onChange={(e) => setAdminNote(e.target.value)}
+                value={adminNote}
+              />
             </label>
           )}
           {otpRequestId && (
@@ -284,9 +409,13 @@ function WithdrawalActionDialog({
               value={code}
             />
           )}
-          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">{error}</p>}
+          {error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">{error}</p>
+          )}
           <div className="flex justify-end gap-2">
-            <DialogClose className="inline-flex min-h-9 items-center rounded-lg border border-line bg-white px-3 text-sm font-bold">Cancel</DialogClose>
+            <DialogClose className="inline-flex min-h-9 items-center rounded-lg border border-line bg-white px-3 text-sm font-bold">
+              Cancel
+            </DialogClose>
             <ActionButton
               className="inline-flex min-h-10 items-center rounded-lg bg-accent px-3.5 font-bold text-white disabled:opacity-60"
               disabled={otpRequestId !== null && code.length !== 6}
@@ -324,11 +453,17 @@ function WithdrawalVerifyDialog({ withdrawal }: { withdrawal: AdminWithdrawalReq
   return (
     <Dialog onOpenChange={setOpen} open={open}>
       <DialogTrigger asChild>
-        <button className="min-h-8 rounded-lg border border-line bg-white px-2.5 text-xs font-extrabold" type="button">
+        <button
+          className="min-h-8 rounded-lg border border-line bg-white px-2.5 text-xs font-extrabold"
+          type="button"
+        >
           Verify (2FA)
         </button>
       </DialogTrigger>
-      <DialogContent title="Verify payout" description="Enter the NOWPayments 2FA code for this payout, if the provider requires one.">
+      <DialogContent
+        title="Verify payout"
+        description="Enter the NOWPayments 2FA code for this payout, if the provider requires one."
+      >
         <form className="grid gap-3" onSubmit={handleSubmit}>
           <input
             autoFocus
@@ -339,10 +474,19 @@ function WithdrawalVerifyDialog({ withdrawal }: { withdrawal: AdminWithdrawalReq
             required
             value={verificationCode}
           />
-          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">{error}</p>}
+          {error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">{error}</p>
+          )}
           <div className="flex justify-end gap-2">
-            <DialogClose className="inline-flex min-h-9 items-center rounded-lg border border-line bg-white px-3 text-sm font-bold">Cancel</DialogClose>
-            <ActionButton className="inline-flex min-h-10 items-center rounded-lg bg-accent px-3.5 font-bold text-white disabled:opacity-60" pending={isLoading} pendingLabel="Verifying" type="submit">
+            <DialogClose className="inline-flex min-h-9 items-center rounded-lg border border-line bg-white px-3 text-sm font-bold">
+              Cancel
+            </DialogClose>
+            <ActionButton
+              className="inline-flex min-h-10 items-center rounded-lg bg-accent px-3.5 font-bold text-white disabled:opacity-60"
+              pending={isLoading}
+              pendingLabel="Verifying"
+              type="submit"
+            >
               Verify
             </ActionButton>
           </div>

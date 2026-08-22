@@ -19,7 +19,10 @@ type PreferenceKey = 'blogNewsNotificationsEnabled' | 'courseNotificationsEnable
 export function NotificationPreferencesPanel() {
   const { data: me } = useGetMeQuery();
   const [updateProfile] = useUpdateProfileMutation();
-  const [prefs, setPrefs] = useState({ blogNewsNotificationsEnabled: false, courseNotificationsEnabled: false });
+  const [prefs, setPrefs] = useState({
+    blogNewsNotificationsEnabled: false,
+    courseNotificationsEnabled: false,
+  });
   const [saving, setSaving] = useState<PreferenceKey | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +56,9 @@ export function NotificationPreferencesPanel() {
     <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Notifications</h2>
-        <p className="leading-relaxed text-muted">Choose which platform updates land in your notification inbox.</p>
+        <p className="leading-relaxed text-muted">
+          Choose which platform updates land in your notification inbox.
+        </p>
       </div>
 
       <div className="grid divide-y divide-line overflow-hidden rounded-lg border border-line">

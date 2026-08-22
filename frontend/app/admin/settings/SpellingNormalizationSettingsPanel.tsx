@@ -1,10 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -20,7 +25,10 @@ const DEFAULT_ORDER: ProviderKey[] = ['openai', 'deepseek', 'anthropic'];
 
 function parseOrder(csv: string): ProviderKey[] {
   const parts = csv.split(',').map((part) => part.trim()) as ProviderKey[];
-  const isValid = parts.length === 3 && DEFAULT_ORDER.every((key) => parts.includes(key)) && new Set(parts).size === 3;
+  const isValid =
+    parts.length === 3 &&
+    DEFAULT_ORDER.every((key) => parts.includes(key)) &&
+    new Set(parts).size === 3;
   return isValid ? parts : DEFAULT_ORDER;
 }
 
@@ -73,9 +81,9 @@ export function SpellingNormalizationSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Dialect Spelling Normalization</h2>
         <p className="leading-relaxed text-muted">
-          When a trainer submits a word-training spelling, an LLM drafts a corrected version in proper dialect
-          orthography, stored alongside the trainer's raw text for dataset review. This never overwrites what the
-          trainer typed and never affects scoring or payout.
+          When a trainer submits a word-training spelling, an LLM drafts a corrected version in
+          proper dialect orthography, stored alongside the trainer's raw text for dataset review.
+          This never overwrites what the trainer typed and never affects scoring or payout.
         </p>
       </div>
 
@@ -83,7 +91,10 @@ export function SpellingNormalizationSettingsPanel() {
       {!isLoading && (
         <form className="grid gap-4 md:max-w-md" onSubmit={handleSave}>
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="spelling-normalization-enabled">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="spelling-normalization-enabled"
+            >
               <input
                 checked={enabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -94,7 +105,8 @@ export function SpellingNormalizationSettingsPanel() {
               <span>
                 <span className="block font-bold">Enable spelling normalization</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Off by default so nothing runs until API keys are configured and this is explicitly enabled.
+                  Off by default so nothing runs until API keys are configured and this is
+                  explicitly enabled.
                 </span>
               </span>
             </label>
@@ -103,13 +115,16 @@ export function SpellingNormalizationSettingsPanel() {
           <div className="grid gap-2">
             <span className="font-bold">Provider order (fallback chain)</span>
             <p className="text-sm leading-relaxed text-muted">
-              1st choice is tried first; 2nd and 3rd are only used if the ones before them fail. All three must be
-              distinct.
+              1st choice is tried first; 2nd and 3rd are only used if the ones before them fail. All
+              three must be distinct.
             </p>
             <div className="grid grid-cols-3 gap-3">
               {(['1st choice', '2nd choice', '3rd choice'] as const).map((label, index) => (
                 <div className="grid gap-1" key={label}>
-                  <label className="text-sm font-bold" htmlFor={`spelling-normalization-order-${index}`}>
+                  <label
+                    className="text-sm font-bold"
+                    htmlFor={`spelling-normalization-order-${index}`}
+                  >
                     {label}
                   </label>
                   <select
@@ -130,7 +145,12 @@ export function SpellingNormalizationSettingsPanel() {
           </div>
 
           <div>
-            <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+            <ActionButton
+              className={primaryButtonClass}
+              type="submit"
+              pending={isSaving}
+              pendingLabel="Saving"
+            >
               Save spelling normalization settings
             </ActionButton>
           </div>

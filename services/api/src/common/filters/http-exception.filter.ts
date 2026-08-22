@@ -1,4 +1,11 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { Request, Response } from 'express';
 
 interface ErrorResponseBody {
@@ -37,7 +44,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = body;
         error = exception.name;
       } else {
-        const bodyObj = body as { message?: string | string[]; error?: string; statusCode?: unknown; [k: string]: unknown };
+        const bodyObj = body as {
+          message?: string | string[];
+          error?: string;
+          statusCode?: unknown;
+          [k: string]: unknown;
+        };
         message = bodyObj.message ?? exception.message;
         error = bodyObj.error ?? exception.name;
         // Custom exceptions (e.g. AuthMaintenanceException) attach fields

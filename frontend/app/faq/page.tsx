@@ -6,7 +6,8 @@ import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 
 export const metadata = {
   title: 'FAQ',
-  description: 'Answers about contributing dialect recordings, word translations, review, privacy, and rewards.',
+  description:
+    'Answers about contributing dialect recordings, word translations, review, privacy, and rewards.',
 };
 
 export default function FaqPage() {

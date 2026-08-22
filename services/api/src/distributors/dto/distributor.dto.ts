@@ -1,5 +1,20 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Length, Matches, Max, MaxLength, Min, NotEquals } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  IsUUID,
+  Length,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  NotEquals,
+} from 'class-validator';
 
 // Sanity ceiling on a single bulk grant, well above any realistic real-world
 // allocation (the spec's own example is 1,000,000) but far under the

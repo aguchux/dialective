@@ -22,7 +22,10 @@ export function CountryFlagMarquee({ countries }: { countries: MarqueeCountry[] 
   const track = [...countries, ...countries];
 
   return (
-    <section className="group -mx-4 overflow-hidden py-4 md:-mx-[3.4rem] md:py-5" aria-label="Countries represented on Dialect Library">
+    <section
+      className="group -mx-4 overflow-hidden py-4 md:-mx-[3.4rem] md:py-5"
+      aria-label="Countries represented on Dialect Library"
+    >
       <div className="flex w-max animate-[flag-marquee_38s_linear_infinite] gap-3 group-hover:[animation-play-state:paused]">
         {track.map((country, index) => {
           return (
@@ -31,9 +34,19 @@ export function CountryFlagMarquee({ countries }: { countries: MarqueeCountry[] 
               key={`${country.code}-${index}`}
               title={country.name}
             >
-              <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgba(5,5,5,0.05)]" aria-hidden="true">
+              <span
+                className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgba(5,5,5,0.05)]"
+                aria-hidden="true"
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element -- decorative marquee icon; not worth adding a new next/image remotePattern for */}
-                <img alt="" className="h-full w-full object-cover" height={18} loading="lazy" src={flagImageUrl(country.code)} width={24} />
+                <img
+                  alt=""
+                  className="h-full w-full object-cover"
+                  height={18}
+                  loading="lazy"
+                  src={flagImageUrl(country.code)}
+                  width={24}
+                />
               </span>
               <span className="whitespace-nowrap text-[rgba(5,5,5,0.72)]">
                 {country.name}

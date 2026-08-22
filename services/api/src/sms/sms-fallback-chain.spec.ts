@@ -17,7 +17,12 @@ describe('SmsFallbackChain', () => {
     const smslive247 = fakeProvider('smslive247', noop);
     const chain = new SmsFallbackChain({ termii, twilio, africastalking, smslive247 });
 
-    const result = await chain.send('+2348012345678', 'code 123456', ['termii', 'twilio', 'africastalking', 'smslive247']);
+    const result = await chain.send('+2348012345678', 'code 123456', [
+      'termii',
+      'twilio',
+      'africastalking',
+      'smslive247',
+    ]);
 
     expect(result).toEqual({ provider: 'termii' });
     expect(termii.send).toHaveBeenCalledTimes(1);
@@ -35,7 +40,12 @@ describe('SmsFallbackChain', () => {
     const smslive247 = fakeProvider('smslive247', noop);
     const chain = new SmsFallbackChain({ termii, twilio, africastalking, smslive247 });
 
-    const result = await chain.send('+2348012345678', 'code', ['termii', 'twilio', 'africastalking', 'smslive247']);
+    const result = await chain.send('+2348012345678', 'code', [
+      'termii',
+      'twilio',
+      'africastalking',
+      'smslive247',
+    ]);
 
     expect(result).toEqual({ provider: 'twilio' });
     expect(termii.send).toHaveBeenCalledTimes(1);
@@ -57,7 +67,12 @@ describe('SmsFallbackChain', () => {
     const smslive247 = fakeProvider('smslive247', noop);
     const chain = new SmsFallbackChain({ termii, twilio, africastalking, smslive247 });
 
-    const result = await chain.send('+2348012345678', 'code', ['termii', 'twilio', 'africastalking', 'smslive247']);
+    const result = await chain.send('+2348012345678', 'code', [
+      'termii',
+      'twilio',
+      'africastalking',
+      'smslive247',
+    ]);
 
     expect(result).toEqual({ provider: 'smslive247' });
     expect(smslive247.send).toHaveBeenCalledTimes(1);
@@ -90,7 +105,12 @@ describe('SmsFallbackChain', () => {
     const smslive247 = fakeProvider('smslive247', noop);
     const chain = new SmsFallbackChain({ termii, twilio, africastalking, smslive247 });
 
-    const result = await chain.send('+2348012345678', 'code', ['africastalking', 'termii', 'twilio', 'smslive247']);
+    const result = await chain.send('+2348012345678', 'code', [
+      'africastalking',
+      'termii',
+      'twilio',
+      'smslive247',
+    ]);
 
     expect(result).toEqual({ provider: 'africastalking' });
     expect(termii.send).not.toHaveBeenCalled();

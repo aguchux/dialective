@@ -46,14 +46,22 @@ describe('WalletController NOWPayments IPN', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       referralSettings: {
-        upsert: jest.fn().mockResolvedValue({ fundingBonusEnabled: false, fundingBonusRate: { gt: () => false } }),
+        upsert: jest
+          .fn()
+          .mockResolvedValue({ fundingBonusEnabled: false, fundingBonusRate: { gt: () => false } }),
       },
       // buildDistributorReferralBonuses (packages/db/src/payouts.ts) reads
       // this before falling back to the legacy referralSettings path above --
       // enabled: false short-circuits it to an empty bonus list, matching
       // this fixture's intent of "no referral bonus of any kind applies".
       distributorSettings: {
-        upsert: jest.fn().mockResolvedValue({ enabled: false, multiLevelReferralEnabled: false, maxReferralDepth: 0 }),
+        upsert: jest
+          .fn()
+          .mockResolvedValue({
+            enabled: false,
+            multiLevelReferralEnabled: false,
+            maxReferralDepth: 0,
+          }),
       },
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 'user-1', referredById: null }),
@@ -67,7 +75,13 @@ describe('WalletController NOWPayments IPN', () => {
       verifyIpnSignature: jest.fn().mockReturnValue(true),
       getIpnEventHash: jest.fn().mockReturnValue('event-hash'),
     };
-    const controller = new WalletController(prisma as never, nowPayments as never, {} as never, {} as never, {} as never);
+    const controller = new WalletController(
+      prisma as never,
+      nowPayments as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
     return { controller, prisma, tx };
   }
 
@@ -80,9 +94,11 @@ describe('WalletController NOWPayments IPN', () => {
       status: 'finished',
     });
     expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
-    expect(tx.deposit.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'deposit-1', status: { not: 'confirmed' } },
-    }));
+    expect(tx.deposit.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'deposit-1', status: { not: 'confirmed' } },
+      }),
+    );
     expect(tx.ledgerEntry.create).toHaveBeenCalledTimes(1);
     expect(tx.wallet.update).toHaveBeenCalledTimes(1);
   });
@@ -100,9 +116,13 @@ describe('WalletController NOWPayments IPN', () => {
 
   it('rejects callbacks with an invalid signature before persistence', async () => {
     const { controller, prisma } = setup();
-    (controller as unknown as { nowPayments: { verifyIpnSignature: jest.Mock } }).nowPayments.verifyIpnSignature.mockReturnValue(false);
+    (
+      controller as unknown as { nowPayments: { verifyIpnSignature: jest.Mock } }
+    ).nowPayments.verifyIpnSignature.mockReturnValue(false);
 
-    await expect(controller.handleNowPaymentsWebhook(finishedBody, 'invalid')).rejects.toThrow('Invalid webhook signature');
+    await expect(controller.handleNowPaymentsWebhook(finishedBody, 'invalid')).rejects.toThrow(
+      'Invalid webhook signature',
+    );
     expect(prisma.nowPaymentsIpnEvent.upsert).not.toHaveBeenCalled();
   });
 
@@ -110,11 +130,16 @@ describe('WalletController NOWPayments IPN', () => {
     const { controller, prisma, tx } = setup();
 
     await expect(
-      controller.handleNowPaymentsWebhook({ ...finishedBody, payment_status: 'confirming' }, 'valid'),
+      controller.handleNowPaymentsWebhook(
+        { ...finishedBody, payment_status: 'confirming' },
+        'valid',
+      ),
     ).resolves.toEqual({ received: true, credited: false, status: 'confirming' });
-    expect(prisma.deposit.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ providerStatus: 'confirming', status: 'pending' }),
-    }));
+    expect(prisma.deposit.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ providerStatus: 'confirming', status: 'pending' }),
+      }),
+    );
     expect(tx.ledgerEntry.create).not.toHaveBeenCalled();
   });
 
@@ -124,9 +149,13 @@ describe('WalletController NOWPayments IPN', () => {
     await expect(
       controller.handleNowPaymentsWebhook({ ...finishedBody, price_amount: 9 }, 'valid'),
     ).resolves.toEqual({ received: true, credited: false });
-    expect(prisma.nowPaymentsIpnEvent.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ processingError: 'Payment price amount does not match deposit' }),
-    }));
+    expect(prisma.nowPaymentsIpnEvent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          processingError: 'Payment price amount does not match deposit',
+        }),
+      }),
+    );
     expect(tx.ledgerEntry.create).not.toHaveBeenCalled();
   });
 });
@@ -154,10 +183,16 @@ describe('WalletController withdrawal payout automation', () => {
       withdrawalRequest: {
         findUnique: jest.fn().mockResolvedValue(withdrawal),
         findUniqueOrThrow: jest.fn().mockResolvedValue(withdrawal),
-        update: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...withdrawal, ...data })),
+        update: jest
+          .fn()
+          .mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+            Promise.resolve({ ...withdrawal, ...data }),
+          ),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
-      user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'admin-1', email: 'admin@x.com' }) },
+      user: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'admin-1', email: 'admin@x.com' }),
+      },
       nowPaymentsPayoutEvent: { create: jest.fn().mockResolvedValue({}) },
       wallet: { update: jest.fn().mockResolvedValue({}) },
       ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
@@ -167,9 +202,15 @@ describe('WalletController withdrawal payout automation', () => {
       return Promise.all(input as Promise<unknown>[]);
     });
     const nowPayments = {
-      createPayout: jest.fn().mockResolvedValue({ payoutId: 'payout-1', status: 'processing', raw: {} }),
-      getPayoutStatus: jest.fn().mockResolvedValue({ payoutId: 'payout-1', status: 'processing', raw: {} }),
-      verifyPayout: jest.fn().mockResolvedValue({ payoutId: 'payout-1', status: 'processing', raw: {} }),
+      createPayout: jest
+        .fn()
+        .mockResolvedValue({ payoutId: 'payout-1', status: 'processing', raw: {} }),
+      getPayoutStatus: jest
+        .fn()
+        .mockResolvedValue({ payoutId: 'payout-1', status: 'processing', raw: {} }),
+      verifyPayout: jest
+        .fn()
+        .mockResolvedValue({ payoutId: 'payout-1', status: 'processing', raw: {} }),
     };
     const platformSettings = {
       isNowPaymentsPayoutsEnabled: jest.fn().mockResolvedValue(true),
@@ -177,15 +218,27 @@ describe('WalletController withdrawal payout automation', () => {
       isAutoSubmitAfterApprovalEnabled: jest.fn().mockResolvedValue(false),
     };
     const otp = { verify: jest.fn().mockResolvedValue({}), issueForUser: jest.fn() };
-    const controller = new WalletController(prisma as never, nowPayments as never, platformSettings as never, otp as never, {} as never);
+    const controller = new WalletController(
+      prisma as never,
+      nowPayments as never,
+      platformSettings as never,
+      otp as never,
+      {} as never,
+    );
     const req = { user: { sub: 'admin-1' } } as never;
     return { controller, prisma, nowPayments, platformSettings, otp, req };
   }
 
   it('does not call createPayout again when the withdrawal already has a providerPayoutId (idempotency)', async () => {
-    const { controller, nowPayments } = setup(baseWithdrawal({ status: 'APPROVED', providerPayoutId: 'payout-1' }));
+    const { controller, nowPayments } = setup(
+      baseWithdrawal({ status: 'APPROVED', providerPayoutId: 'payout-1' }),
+    );
 
-    await controller.submitWithdrawalToNowPayments({ user: { sub: 'admin-1' } } as never, 'withdrawal-1', {});
+    await controller.submitWithdrawalToNowPayments(
+      { user: { sub: 'admin-1' } } as never,
+      'withdrawal-1',
+      {},
+    );
 
     expect(nowPayments.createPayout).not.toHaveBeenCalled();
     expect(nowPayments.getPayoutStatus).toHaveBeenCalledWith('payout-1');
@@ -195,7 +248,11 @@ describe('WalletController withdrawal payout automation', () => {
     const { controller, nowPayments } = setup(baseWithdrawal({ status: 'FAILED' }));
 
     await expect(
-      controller.submitWithdrawalToNowPayments({ user: { sub: 'admin-1' } } as never, 'withdrawal-1', {}),
+      controller.submitWithdrawalToNowPayments(
+        { user: { sub: 'admin-1' } } as never,
+        'withdrawal-1',
+        {},
+      ),
     ).rejects.toThrow('Only approved withdrawals can be submitted to NOWPayments');
     expect(nowPayments.createPayout).not.toHaveBeenCalled();
   });
@@ -204,7 +261,11 @@ describe('WalletController withdrawal payout automation', () => {
     const { controller, nowPayments } = setup(baseWithdrawal({ status: 'PENDING' }));
 
     await expect(
-      controller.submitWithdrawalToNowPayments({ user: { sub: 'admin-1' } } as never, 'withdrawal-1', {}),
+      controller.submitWithdrawalToNowPayments(
+        { user: { sub: 'admin-1' } } as never,
+        'withdrawal-1',
+        {},
+      ),
     ).rejects.toThrow('Only approved withdrawals can be submitted to NOWPayments');
     expect(nowPayments.createPayout).not.toHaveBeenCalled();
   });
@@ -214,7 +275,11 @@ describe('WalletController withdrawal payout automation', () => {
     prisma.withdrawalRequest.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(
-      controller.submitWithdrawalToNowPayments({ user: { sub: 'admin-1' } } as never, 'withdrawal-1', {}),
+      controller.submitWithdrawalToNowPayments(
+        { user: { sub: 'admin-1' } } as never,
+        'withdrawal-1',
+        {},
+      ),
     ).rejects.toThrow('already being submitted or was already submitted');
     expect(nowPayments.createPayout).not.toHaveBeenCalled();
   });
@@ -222,15 +287,23 @@ describe('WalletController withdrawal payout automation', () => {
   it('submits to NOWPayments once the claim succeeds for an APPROVED withdrawal', async () => {
     const { controller, nowPayments, prisma } = setup(baseWithdrawal({ status: 'APPROVED' }));
 
-    const result = await controller.submitWithdrawalToNowPayments({ user: { sub: 'admin-1' } } as never, 'withdrawal-1', {});
+    const result = await controller.submitWithdrawalToNowPayments(
+      { user: { sub: 'admin-1' } } as never,
+      'withdrawal-1',
+      {},
+    );
 
     expect(nowPayments.createPayout).toHaveBeenCalledWith(
       expect.objectContaining({ withdrawalId: 'withdrawal-1', currency: 'USDT', amount: 10 }),
     );
     expect(prisma.withdrawalRequest.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'withdrawal-1', status: 'APPROVED', providerPayoutId: null } }),
+      expect.objectContaining({
+        where: { id: 'withdrawal-1', status: 'APPROVED', providerPayoutId: null },
+      }),
     );
-    expect(result).toEqual(expect.objectContaining({ withdrawalId: 'withdrawal-1', providerPayoutId: 'payout-1' }));
+    expect(result).toEqual(
+      expect.objectContaining({ withdrawalId: 'withdrawal-1', providerPayoutId: 'payout-1' }),
+    );
   });
 
   it('marks a withdrawal FAILED (not APPROVED) when createPayout throws, without refunding automatically', async () => {
@@ -240,12 +313,25 @@ describe('WalletController withdrawal payout automation', () => {
       getPayoutStatus: jest.fn(),
       verifyPayout: jest.fn(),
     };
-    const platformSettings = { isNowPaymentsPayoutsEnabled: jest.fn().mockResolvedValue(true), isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false) };
+    const platformSettings = {
+      isNowPaymentsPayoutsEnabled: jest.fn().mockResolvedValue(true),
+      isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false),
+    };
     const otp = { verify: jest.fn(), issueForUser: jest.fn() };
-    const controllerWithFailingProvider = new WalletController(prisma as never, nowPayments as never, platformSettings as never, otp as never, {} as never);
+    const controllerWithFailingProvider = new WalletController(
+      prisma as never,
+      nowPayments as never,
+      platformSettings as never,
+      otp as never,
+      {} as never,
+    );
 
     await expect(
-      controllerWithFailingProvider.submitWithdrawalToNowPayments({ user: { sub: 'admin-1' } } as never, 'withdrawal-1', {}),
+      controllerWithFailingProvider.submitWithdrawalToNowPayments(
+        { user: { sub: 'admin-1' } } as never,
+        'withdrawal-1',
+        {},
+      ),
     ).rejects.toThrow('provider unreachable');
 
     expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
@@ -272,17 +358,23 @@ describe('WalletController withdrawal payout automation', () => {
   it('approve refuses a withdrawal that is not PENDING', async () => {
     const { controller, req } = setup(baseWithdrawal({ status: 'APPROVED' }));
 
-    await expect(controller.approveWithdrawal(req, 'withdrawal-1', {})).rejects.toThrow('Only pending withdrawals can be approved');
+    await expect(controller.approveWithdrawal(req, 'withdrawal-1', {})).rejects.toThrow(
+      'Only pending withdrawals can be approved',
+    );
   });
 
   it('resolve(reject) refunds tokens exactly once via a single WITHDRAWAL_REVERSED ledger entry', async () => {
     const { controller, prisma, req } = setup(baseWithdrawal({ status: 'PENDING' }));
 
-    const result = await controller.resolveWithdrawal(req, 'withdrawal-1', { outcome: 'rejected' } as never);
+    const result = await controller.resolveWithdrawal(req, 'withdrawal-1', {
+      outcome: 'rejected',
+    } as never);
 
     expect(prisma.ledgerEntry.create).toHaveBeenCalledTimes(1);
     expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ type: 'WITHDRAWAL_REVERSED', reference: 'withdrawal-1' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ type: 'WITHDRAWAL_REVERSED', reference: 'withdrawal-1' }),
+      }),
     );
     expect(prisma.wallet.update).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ withdrawalId: 'withdrawal-1', status: 'rejected' });
@@ -291,25 +383,28 @@ describe('WalletController withdrawal payout automation', () => {
   it('resolve refuses to re-resolve an already-terminal withdrawal (no double refund)', async () => {
     const { controller, prisma, req } = setup(baseWithdrawal({ status: 'PAID' }));
 
-    await expect(controller.resolveWithdrawal(req, 'withdrawal-1', { outcome: 'rejected' } as never)).rejects.toThrow(
-      'Withdrawal request already resolved',
-    );
+    await expect(
+      controller.resolveWithdrawal(req, 'withdrawal-1', { outcome: 'rejected' } as never),
+    ).rejects.toThrow('Withdrawal request already resolved');
     expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
   });
 
   it('resolve refuses to mark a FAILED withdrawal paid manually without reconciliation', async () => {
     const { controller, req } = setup(baseWithdrawal({ status: 'FAILED' }));
 
-    await expect(controller.resolveWithdrawal(req, 'withdrawal-1', { outcome: 'paid' } as never)).rejects.toThrow(
-      'must be reconciled',
-    );
+    await expect(
+      controller.resolveWithdrawal(req, 'withdrawal-1', { outcome: 'paid' } as never),
+    ).rejects.toThrow('must be reconciled');
   });
 
   it('the admin OTP context hash binds amount/currency/address/network, not just id', async () => {
     const { controller, otp, platformSettings, req } = setup(baseWithdrawal({ status: 'PENDING' }));
     platformSettings.isAdminPayoutOtpEnabled.mockResolvedValue(true);
 
-    await controller.approveWithdrawal(req, 'withdrawal-1', { otpRequestId: 'otp-1', code: '123456' });
+    await controller.approveWithdrawal(req, 'withdrawal-1', {
+      otpRequestId: 'otp-1',
+      code: '123456',
+    });
 
     expect(otp.verify).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -340,13 +435,16 @@ describe('WalletController earning history', () => {
         count: jest.fn().mockResolvedValue(11),
       },
     };
-    const controller = new WalletController(prisma as never, {} as never, {} as never, {} as never, {} as never);
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
 
     await expect(
-      controller.listEarnings(
-        { user: { sub: 'user-1' } } as never,
-        { page: 2, pageSize: 10 },
-      ),
+      controller.listEarnings({ user: { sub: 'user-1' } } as never, { page: 2, pageSize: 10 }),
     ).resolves.toEqual({
       items: [{ ...entries[0], amount: '25.5' }],
       page: 2,
@@ -355,7 +453,11 @@ describe('WalletController earning history', () => {
       totalPages: 2,
     });
     expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ skip: 10, take: 10, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+      expect.objectContaining({
+        skip: 10,
+        take: 10,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      }),
     );
   });
 });
@@ -385,41 +487,101 @@ describe('WalletController admin leaderboard', () => {
       },
       wallet: {
         findMany: jest.fn().mockResolvedValue([
-          { id: 'wallet-high', user: { id: 'earner-high', firstName: 'High', lastName: 'Earner', email: 'high@example.com', role: 'TRAINER' } },
-          { id: 'wallet-low', user: { id: 'earner-low', firstName: 'Low', lastName: 'Earner', email: 'low@example.com', role: 'TRAINER' } },
+          {
+            id: 'wallet-high',
+            user: {
+              id: 'earner-high',
+              firstName: 'High',
+              lastName: 'Earner',
+              email: 'high@example.com',
+              role: 'TRAINER',
+            },
+          },
+          {
+            id: 'wallet-low',
+            user: {
+              id: 'earner-low',
+              firstName: 'Low',
+              lastName: 'Earner',
+              email: 'low@example.com',
+              role: 'TRAINER',
+            },
+          },
         ]),
       },
       user: {
         findMany: jest.fn().mockResolvedValue([
-          { id: 'user-a', firstName: 'Ada', lastName: 'Tasks', email: 'ada@example.com', role: 'TRAINER' },
-          { id: 'user-b', firstName: 'Ben', lastName: 'Words', email: 'ben@example.com', role: 'TRAINER' },
+          {
+            id: 'user-a',
+            firstName: 'Ada',
+            lastName: 'Tasks',
+            email: 'ada@example.com',
+            role: 'TRAINER',
+          },
+          {
+            id: 'user-b',
+            firstName: 'Ben',
+            lastName: 'Words',
+            email: 'ben@example.com',
+            role: 'TRAINER',
+          },
         ]),
       },
     };
-    const controller = new WalletController(prisma as never, {} as never, {} as never, {} as never, {} as never);
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
 
     await expect(controller.getAdminLeaderboard()).resolves.toEqual({
       topEarners: [
         {
-          user: { id: 'earner-high', firstName: 'High', lastName: 'Earner', email: 'high@example.com', role: 'TRAINER' },
+          user: {
+            id: 'earner-high',
+            firstName: 'High',
+            lastName: 'Earner',
+            email: 'high@example.com',
+            role: 'TRAINER',
+          },
           totalEarned: '30',
           payoutCount: 2,
         },
         {
-          user: { id: 'earner-low', firstName: 'Low', lastName: 'Earner', email: 'low@example.com', role: 'TRAINER' },
+          user: {
+            id: 'earner-low',
+            firstName: 'Low',
+            lastName: 'Earner',
+            email: 'low@example.com',
+            role: 'TRAINER',
+          },
           totalEarned: '12',
           payoutCount: 1,
         },
       ],
       topContributors: [
         {
-          user: { id: 'user-a', firstName: 'Ada', lastName: 'Tasks', email: 'ada@example.com', role: 'TRAINER' },
+          user: {
+            id: 'user-a',
+            firstName: 'Ada',
+            lastName: 'Tasks',
+            email: 'ada@example.com',
+            role: 'TRAINER',
+          },
           totalTasks: 7,
           wordRecordings: 2,
           submissions: 5,
         },
         {
-          user: { id: 'user-b', firstName: 'Ben', lastName: 'Words', email: 'ben@example.com', role: 'TRAINER' },
+          user: {
+            id: 'user-b',
+            firstName: 'Ben',
+            lastName: 'Words',
+            email: 'ben@example.com',
+            role: 'TRAINER',
+          },
           totalTasks: 4,
           wordRecordings: 4,
           submissions: 0,
@@ -454,19 +616,64 @@ describe('WalletController paginated leaderboard', () => {
       },
       wallet: {
         findMany: jest.fn().mockResolvedValue([
-          { id: 'wallet-1', user: { id: 'user-1', firstName: 'A', lastName: 'One', email: 'a@example.com', role: 'TRAINER' } },
-          { id: 'wallet-2', user: { id: 'user-2', firstName: 'B', lastName: 'Two', email: 'b@example.com', role: 'TRAINER' } },
-          { id: 'wallet-3', user: { id: 'user-3', firstName: 'C', lastName: 'Three', email: 'c@example.com', role: 'TRAINER' } },
+          {
+            id: 'wallet-1',
+            user: {
+              id: 'user-1',
+              firstName: 'A',
+              lastName: 'One',
+              email: 'a@example.com',
+              role: 'TRAINER',
+            },
+          },
+          {
+            id: 'wallet-2',
+            user: {
+              id: 'user-2',
+              firstName: 'B',
+              lastName: 'Two',
+              email: 'b@example.com',
+              role: 'TRAINER',
+            },
+          },
+          {
+            id: 'wallet-3',
+            user: {
+              id: 'user-3',
+              firstName: 'C',
+              lastName: 'Three',
+              email: 'c@example.com',
+              role: 'TRAINER',
+            },
+          },
         ]),
       },
       user: {
         findMany: jest.fn().mockResolvedValue([
-          { id: 'user-1', firstName: 'A', lastName: 'One', email: 'a@example.com', role: 'TRAINER' },
-          { id: 'user-2', firstName: 'B', lastName: 'Two', email: 'b@example.com', role: 'TRAINER' },
+          {
+            id: 'user-1',
+            firstName: 'A',
+            lastName: 'One',
+            email: 'a@example.com',
+            role: 'TRAINER',
+          },
+          {
+            id: 'user-2',
+            firstName: 'B',
+            lastName: 'Two',
+            email: 'b@example.com',
+            role: 'TRAINER',
+          },
         ]),
       },
     };
-    const controller = new WalletController(prisma as never, {} as never, {} as never, {} as never, {} as never);
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
     return { controller, prisma };
   }
 
@@ -487,7 +694,9 @@ describe('WalletController paginated leaderboard', () => {
     expect(prisma.ledgerEntry.groupBy).toHaveBeenCalledWith(expect.objectContaining({ take: 200 }));
 
     const page2 = await controller.getAdminLeaderboardEarners({ page: 2, pageSize: 2 });
-    expect(page2.items).toEqual([{ user: expect.objectContaining({ id: 'user-3' }), totalEarned: '10', payoutCount: 1 }]);
+    expect(page2.items).toEqual([
+      { user: expect.objectContaining({ id: 'user-3' }), totalEarned: '10', payoutCount: 1 },
+    ]);
   });
 
   it('paginates contributors ranked by word recordings + submissions', async () => {
@@ -495,7 +704,14 @@ describe('WalletController paginated leaderboard', () => {
 
     const page1 = await controller.getAdminLeaderboardContributors({ page: 1, pageSize: 1 });
     expect(page1).toEqual({
-      items: [{ user: expect.objectContaining({ id: 'user-2' }), totalTasks: 5, wordRecordings: 0, submissions: 5 }],
+      items: [
+        {
+          user: expect.objectContaining({ id: 'user-2' }),
+          totalTasks: 5,
+          wordRecordings: 0,
+          submissions: 5,
+        },
+      ],
       page: 1,
       pageSize: 1,
       total: 2,
@@ -503,7 +719,14 @@ describe('WalletController paginated leaderboard', () => {
     });
 
     const page2 = await controller.getAdminLeaderboardContributors({ page: 2, pageSize: 1 });
-    expect(page2.items).toEqual([{ user: expect.objectContaining({ id: 'user-1' }), totalTasks: 3, wordRecordings: 3, submissions: 0 }]);
+    expect(page2.items).toEqual([
+      {
+        user: expect.objectContaining({ id: 'user-1' }),
+        totalTasks: 3,
+        wordRecordings: 3,
+        submissions: 0,
+      },
+    ]);
   });
 });
 
@@ -519,7 +742,13 @@ describe('WalletController admin training payouts', () => {
     };
     const platformSettings = { isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false) };
     const mail = { sendTrainingPayoutCreditedEmail: jest.fn().mockResolvedValue(undefined) };
-    const controller = new WalletController(prisma as never, {} as never, platformSettings as never, {} as never, mail as never);
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      platformSettings as never,
+      {} as never,
+      mail as never,
+    );
     return { controller, prisma, mail };
   }
 
@@ -548,10 +777,12 @@ describe('WalletController admin training payouts', () => {
     const { controller, mail, prisma } = setup();
     prisma.user.findUnique = jest.fn().mockRejectedValue(new Error('db hiccup'));
 
-    await expect(controller.createTrainingPayout(
-      { user: { sub: 'admin-1' } } as never,
-      { userId: 'trainer-1', tokenAmount: 10, reference: 'ref-1' } as never,
-    )).resolves.toEqual(expect.objectContaining({ amount: '10' }));
+    await expect(
+      controller.createTrainingPayout(
+        { user: { sub: 'admin-1' } } as never,
+        { userId: 'trainer-1', tokenAmount: 10, reference: 'ref-1' } as never,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ amount: '10' }));
     await new Promise((resolve) => setImmediate(resolve));
     expect(mail.sendTrainingPayoutCreditedEmail).not.toHaveBeenCalled();
   });
@@ -566,12 +797,20 @@ describe('WalletController admin wallet adjustments', () => {
       balance: '15',
     });
     const prisma = {
-      user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'admin-1', email: 'admin@x.com' }) },
+      user: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'admin-1', email: 'admin@x.com' }),
+      },
     };
     const platformSettings = { isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false) };
     const otp = { verify: jest.fn(), issueForUser: jest.fn() };
     const mail = { sendTrainingPayoutCreditedEmail: jest.fn() };
-    const controller = new WalletController(prisma as never, {} as never, platformSettings as never, otp as never, mail as never);
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      platformSettings as never,
+      otp as never,
+      mail as never,
+    );
     return { controller, prisma, mail };
   }
 
@@ -584,13 +823,20 @@ describe('WalletController admin wallet adjustments', () => {
     );
 
     expect(result).toEqual(expect.objectContaining({ amount: '-5', balance: '15' }));
-    expect(adjustAdminWallet).toHaveBeenCalledWith(prisma, 'trainer-1', -5, 'duplicate bonus correction');
+    expect(adjustAdminWallet).toHaveBeenCalledWith(
+      prisma,
+      'trainer-1',
+      -5,
+      'duplicate bonus correction',
+    );
     expect(mail.sendTrainingPayoutCreditedEmail).not.toHaveBeenCalled();
   });
 
   it('maps insufficient balance to a validation error', async () => {
     const { controller } = setup();
-    (adjustAdminWallet as jest.Mock).mockRejectedValue(new Error('Insufficient wallet balance for this debit'));
+    (adjustAdminWallet as jest.Mock).mockRejectedValue(
+      new Error('Insufficient wallet balance for this debit'),
+    );
 
     await expect(
       controller.createAdminWalletAdjustment(

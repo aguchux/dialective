@@ -5,8 +5,20 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { NowPaymentsService } from './nowpayments.service';
 
-const NOWPAYMENTS_PAYOUT_FINISHED_STATUSES = new Set(['finished', 'paid', 'complete', 'completed', 'success']);
-const NOWPAYMENTS_PAYOUT_FAILED_STATUSES = new Set(['failed', 'rejected', 'expired', 'cancelled', 'canceled']);
+const NOWPAYMENTS_PAYOUT_FINISHED_STATUSES = new Set([
+  'finished',
+  'paid',
+  'complete',
+  'completed',
+  'success',
+]);
+const NOWPAYMENTS_PAYOUT_FAILED_STATUSES = new Set([
+  'failed',
+  'rejected',
+  'expired',
+  'cancelled',
+  'canceled',
+]);
 
 /** How long a PROCESSING withdrawal can go without a status change before it's logged as stuck (payout-automation plan point 9's "alert/log if stale too long"). */
 const STALE_PROCESSING_HOURS = 24;
@@ -30,7 +42,13 @@ export class WithdrawalReconciliationService {
     private readonly platformSettings: PlatformSettingsService,
   ) {}
 
-  async run(): Promise<{ checked: number; paid: number; failed: number; stillProcessing: number; stale: number }> {
+  async run(): Promise<{
+    checked: number;
+    paid: number;
+    failed: number;
+    stillProcessing: number;
+    stale: number;
+  }> {
     if (!(await this.platformSettings.isNowPaymentsPayoutsEnabled())) {
       this.logger.log('NOWPayments payouts disabled -- skipping reconciliation');
       return { checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 };
@@ -68,7 +86,13 @@ export class WithdrawalReconciliationService {
           failed += 1;
         }
 
-        await this.recordStatus(withdrawal.id, withdrawal.providerPayoutId!, status, result.status, result.raw);
+        await this.recordStatus(
+          withdrawal.id,
+          withdrawal.providerPayoutId!,
+          status,
+          result.status,
+          result.raw,
+        );
       } catch (err) {
         // A poll failure (network error, provider 5xx) is transient -- it
         // must never flip the withdrawal to FAILED itself (that's reserved
@@ -87,8 +111,10 @@ export class WithdrawalReconciliationService {
 
   private mapProviderPayoutStatus(status: string | null | undefined): WithdrawalStatus {
     const normalized = status?.toLowerCase();
-    if (normalized && NOWPAYMENTS_PAYOUT_FINISHED_STATUSES.has(normalized)) return WithdrawalStatus.PAID;
-    if (normalized && NOWPAYMENTS_PAYOUT_FAILED_STATUSES.has(normalized)) return WithdrawalStatus.FAILED;
+    if (normalized && NOWPAYMENTS_PAYOUT_FINISHED_STATUSES.has(normalized))
+      return WithdrawalStatus.PAID;
+    if (normalized && NOWPAYMENTS_PAYOUT_FAILED_STATUSES.has(normalized))
+      return WithdrawalStatus.FAILED;
     return WithdrawalStatus.PROCESSING;
   }
 
@@ -107,7 +133,10 @@ export class WithdrawalReconciliationService {
           status,
           providerStatus: providerStatus ?? undefined,
           providerPayload: payload as Prisma.InputJsonValue,
-          providerError: status === WithdrawalStatus.FAILED ? (providerStatus ?? 'provider reported a terminal failure') : null,
+          providerError:
+            status === WithdrawalStatus.FAILED
+              ? (providerStatus ?? 'provider reported a terminal failure')
+              : null,
           providerSettledAt: status === WithdrawalStatus.PAID ? now : undefined,
           resolvedAt: status === WithdrawalStatus.PAID ? now : undefined,
         },

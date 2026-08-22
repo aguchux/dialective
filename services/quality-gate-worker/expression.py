@@ -11,9 +11,19 @@ from noise import SAMPLE_RATE, _frames
 # determined by its training data's label encoding, so any retrain must
 # preserve this exact order or db.py's write will fail loudly against
 # Postgres's enum type check (see compute_emotion's doc comment below).
-EMOTION_LABELS = ["NEUTRAL", "HAPPY", "SAD", "ANGRY", "FEARFUL", "SURPRISED", "DISGUSTED"]
+EMOTION_LABELS = [
+    "NEUTRAL",
+    "HAPPY",
+    "SAD",
+    "ANGRY",
+    "FEARFUL",
+    "SURPRISED",
+    "DISGUSTED",
+]
 
-DEFAULT_EMOTION_MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "emotion_classifier.joblib")
+DEFAULT_EMOTION_MODEL_PATH = os.path.join(
+    os.path.dirname(__file__), "models", "emotion_classifier.joblib"
+)
 
 _emotion_model_cache = None
 
@@ -58,7 +68,9 @@ def extract_prosody_metrics(data: np.ndarray, sample_rate: int = SAMPLE_RATE) ->
     is_peak = (rms[1:-1] > rms[:-2]) & (rms[1:-1] > rms[2:]) & (rms[1:-1] > threshold)
     syllable_count = int(np.sum(is_peak))
     duration_s = len(y) / sample_rate
-    speech_rate_estimate = float(syllable_count / duration_s) if duration_s > 0 else None
+    speech_rate_estimate = (
+        float(syllable_count / duration_s) if duration_s > 0 else None
+    )
 
     # Reuses noise.py's own frame-level RMS technique (same FRAME_MS/
     # FRAME_SAMPLES) to estimate the fraction of frames that are
@@ -67,14 +79,18 @@ def extract_prosody_metrics(data: np.ndarray, sample_rate: int = SAMPLE_RATE) ->
     # purpose: noise-floor estimation, not pause detection).
     frames = _frames((np.clip(y, -1.0, 1.0) * 32767).astype(np.int16))
     if frames:
-        frame_rms = np.array([np.sqrt(np.mean(frame.astype(np.float64) ** 2)) for frame in frames])
+        frame_rms = np.array(
+            [np.sqrt(np.mean(frame.astype(np.float64) ** 2)) for frame in frames]
+        )
         silence_threshold = np.percentile(frame_rms, 25)
         pause_ratio = float(np.mean(frame_rms <= silence_threshold))
     else:
         pause_ratio = None
 
     return {
-        "speechRateEstimate": round(speech_rate_estimate, 2) if speech_rate_estimate is not None else None,
+        "speechRateEstimate": round(speech_rate_estimate, 2)
+        if speech_rate_estimate is not None
+        else None,
         "meanPitchHz": round(mean_pitch_hz, 2) if mean_pitch_hz is not None else None,
         "pitchStdHz": round(pitch_std_hz, 2) if pitch_std_hz is not None else None,
         "meanRmsDb": round(mean_rms_db, 2),
@@ -103,7 +119,9 @@ def bucket_energy(mean_rms_db: float | None) -> str | None:
     return "MEDIUM"
 
 
-def extract_emotion_features(data: np.ndarray, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+def extract_emotion_features(
+    data: np.ndarray, sample_rate: int = SAMPLE_RATE
+) -> np.ndarray:
     """
     Same MFCC + delta + delta-delta, mean+std pooled feature pipeline as
     liveness.py::extract_features. Duplicated rather than imported/shared --
@@ -113,7 +131,9 @@ def extract_emotion_features(data: np.ndarray, sample_rate: int = SAMPLE_RATE) -
     ever needs a different feature pipeline than liveness.
     """
     n_mfcc = 20
-    mfcc = librosa.feature.mfcc(y=data.astype(np.float32), sr=sample_rate, n_mfcc=n_mfcc)
+    mfcc = librosa.feature.mfcc(
+        y=data.astype(np.float32), sr=sample_rate, n_mfcc=n_mfcc
+    )
     delta = librosa.feature.delta(mfcc)
     delta2 = librosa.feature.delta(mfcc, order=2)
     stacked = np.vstack([mfcc, delta, delta2])
@@ -127,7 +147,9 @@ def load_emotion_model(path: str = DEFAULT_EMOTION_MODEL_PATH):
     return _emotion_model_cache
 
 
-def compute_emotion(data: np.ndarray, sample_rate: int = SAMPLE_RATE, model=None) -> tuple[str, float]:
+def compute_emotion(
+    data: np.ndarray, sample_rate: int = SAMPLE_RATE, model=None
+) -> tuple[str, float]:
     """
     Returns (emotion_label, confidence) where emotion_label is one of
     EMOTION_LABELS (must exactly match Prisma's SpeechEmotion enum values --

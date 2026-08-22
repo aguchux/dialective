@@ -1,4 +1,17 @@
-import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Length, Matches, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Matches,
+  Max,
+  Min,
+} from 'class-validator';
 import { P2PDisputeStatus, P2POfferStatus, P2POfferType, P2PTradeStatus } from '@dialectiva/db';
 
 export class UpsertPaymentMethodDto {
@@ -130,7 +143,14 @@ export class ListOffersDto {
   type?: P2POfferType;
 
   @IsOptional()
-  @IsIn([P2POfferStatus.ACTIVE, P2POfferStatus.RESERVED, P2POfferStatus.EXPIRED, P2POfferStatus.CANCELLED, P2POfferStatus.COMPLETED, P2POfferStatus.DISPUTED])
+  @IsIn([
+    P2POfferStatus.ACTIVE,
+    P2POfferStatus.RESERVED,
+    P2POfferStatus.EXPIRED,
+    P2POfferStatus.CANCELLED,
+    P2POfferStatus.COMPLETED,
+    P2POfferStatus.DISPUTED,
+  ])
   status?: P2POfferStatus;
 }
 

@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Tailwind v4 class-based dark mode -- next-themes toggles `.dark` on
    <html> (attribute="class" in ThemeProvider, see app/providers.tsx), but
@@ -129,7 +129,12 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family:
-    var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    var(--font-inter),
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -148,13 +153,13 @@ textarea {
 }
 
 button,
-[role="button"] {
+[role='button'] {
   transition-property: color, background-color, border-color, opacity, box-shadow, transform;
   transition-duration: 150ms;
 }
 
 button:not(:disabled):active,
-[role="button"]:not([aria-disabled="true"]):active {
+[role='button']:not([aria-disabled='true']):active {
   transform: scale(0.97);
 }
 
@@ -166,27 +171,27 @@ button,
 label,
 select,
 summary,
-[role="button"],
-[role="link"],
-[role="tab"],
-[role="menuitem"],
-[role="option"],
-input[type="button"],
-input[type="submit"],
-input[type="reset"],
-input[type="checkbox"],
-input[type="radio"] {
+[role='button'],
+[role='link'],
+[role='tab'],
+[role='menuitem'],
+[role='option'],
+input[type='button'],
+input[type='submit'],
+input[type='reset'],
+input[type='checkbox'],
+input[type='radio'] {
   cursor: pointer;
 }
 
 button:disabled,
 select:disabled,
 input:disabled,
-[aria-disabled="true"] {
+[aria-disabled='true'] {
   cursor: not-allowed;
 }
 
-.action-button[aria-busy="true"] {
+.action-button[aria-busy='true'] {
   cursor: progress;
 }
 
@@ -202,7 +207,7 @@ input:disabled,
 
 @media (prefers-reduced-motion: reduce) {
   button,
-  [role="button"] {
+  [role='button'] {
     transition-duration: 0ms;
   }
 

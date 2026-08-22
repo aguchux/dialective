@@ -27,8 +27,9 @@ export default function CookiesPage() {
           <section className="grid gap-2">
             <h2 className="text-xl font-black text-[#050505]">1. Our approach to cookies</h2>
             <p>
-              Dialect Library keeps cookie use to the minimum needed to run the platform. We do not use
-              advertising cookies, and we do not run third-party analytics or tracking scripts on this site.
+              Dialect Library keeps cookie use to the minimum needed to run the platform. We do not
+              use advertising cookies, and we do not run third-party analytics or tracking scripts
+              on this site.
             </p>
           </section>
 
@@ -36,49 +37,52 @@ export default function CookiesPage() {
             <h2 className="text-xl font-black text-[#050505]">2. Cookies we use</h2>
             <ul className="ml-5 list-disc grid gap-1.5">
               <li>
-                <span className="font-bold text-[#050505]">Session cookie (strictly necessary)</span> — when you sign
-                in, our authentication system sets a session cookie to keep you logged in and to identify your
-                account role on subsequent requests. Without this cookie, you cannot stay signed in.
+                <span className="font-bold text-[#050505]">
+                  Session cookie (strictly necessary)
+                </span>{' '}
+                — when you sign in, our authentication system sets a session cookie to keep you
+                logged in and to identify your account role on subsequent requests. Without this
+                cookie, you cannot stay signed in.
               </li>
             </ul>
             <p>
-              This cookie is essential to the operation of the platform and cannot be disabled without disabling the
-              ability to log in.
+              This cookie is essential to the operation of the platform and cannot be disabled
+              without disabling the ability to log in.
             </p>
           </section>
 
           <section className="grid gap-2">
             <h2 className="text-xl font-black text-[#050505]">3. Local storage (not a cookie)</h2>
             <p>
-              We also use your browser&apos;s local storage — not a cookie — to remember your light/dark theme
-              preference. This stays on your device and is not sent to our servers.
+              We also use your browser&apos;s local storage — not a cookie — to remember your
+              light/dark theme preference. This stays on your device and is not sent to our servers.
             </p>
           </section>
 
           <section className="grid gap-2">
             <h2 className="text-xl font-black text-[#050505]">4. Third-party cookies</h2>
             <p>
-              We do not embed third-party advertising, analytics, or social-media tracking pixels on Dialect Library.
-              Our payment processor, NOWPayments, may set its own cookies on its own hosted checkout page during a
-              deposit — that page is operated by NOWPayments, not Dialect Library, and is covered by NOWPayments&apos;
-              own privacy and cookie practices.
+              We do not embed third-party advertising, analytics, or social-media tracking pixels on
+              Dialect Library. Our payment processor, NOWPayments, may set its own cookies on its
+              own hosted checkout page during a deposit — that page is operated by NOWPayments, not
+              Dialect Library, and is covered by NOWPayments&apos; own privacy and cookie practices.
             </p>
           </section>
 
           <section className="grid gap-2">
             <h2 className="text-xl font-black text-[#050505]">5. Managing cookies</h2>
             <p>
-              Most browsers let you block or delete cookies through their settings. Since our session cookie is
-              required to stay logged in, blocking it will sign you out and prevent you from accessing your trainer
-              dashboard or wallet.
+              Most browsers let you block or delete cookies through their settings. Since our
+              session cookie is required to stay logged in, blocking it will sign you out and
+              prevent you from accessing your trainer dashboard or wallet.
             </p>
           </section>
 
           <section className="grid gap-2">
             <h2 className="text-xl font-black text-[#050505]">6. Changes to this policy</h2>
             <p>
-              If Dialect Library adds analytics or other non-essential cookies in the future, we will update this
-              page to reflect that before doing so.
+              If Dialect Library adds analytics or other non-essential cookies in the future, we
+              will update this page to reflect that before doing so.
             </p>
           </section>
 

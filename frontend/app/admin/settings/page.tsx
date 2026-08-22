@@ -51,20 +51,25 @@ export default function AdminSettingsPage() {
         <div className="grid gap-2">
           <h1 className="text-3xl font-black">Settings</h1>
           <p className="leading-relaxed text-muted">
-            Platform configuration that previously required a redeploy to change. Anything left blank falls back to
-            its deployment default.
+            Platform configuration that previously required a redeploy to change. Anything left
+            blank falls back to its deployment default.
           </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-          <nav className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-1" aria-label="Settings groups">
+          <nav
+            className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-1"
+            aria-label="Settings groups"
+          >
             {groups.map((group) => (
               <button
                 key={group.key}
                 type="button"
                 onClick={() => setActive(group.key)}
                 className={`shrink-0 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition-colors ${
-                  active === group.key ? 'bg-accent text-white' : 'bg-white text-ink hover:bg-surface-muted'
+                  active === group.key
+                    ? 'bg-accent text-white'
+                    : 'bg-white text-ink hover:bg-surface-muted'
                 }`}
               >
                 {group.label}

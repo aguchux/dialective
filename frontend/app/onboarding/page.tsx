@@ -14,8 +14,10 @@ import {
 } from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const selectClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
+const selectClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -30,7 +32,9 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
 
   const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
-  const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(countryId, { skip: !countryId });
+  const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(countryId, {
+    skip: !countryId,
+  });
   const { data: dialectVariants } = useGetDialectVariantsQuery(dialectId, { skip: !dialectId });
   const [updateProfile, { isLoading: isSubmitting }] = useUpdateProfileMutation();
 
@@ -164,7 +168,11 @@ export default function OnboardingPage() {
             required
           >
             <option value="">
-              {!countryId ? 'Select a country first' : isLoadingDialects ? 'Loading...' : 'Select a dialect'}
+              {!countryId
+                ? 'Select a country first'
+                : isLoadingDialects
+                  ? 'Loading...'
+                  : 'Select a dialect'}
             </option>
             {dialects?.map((dialect) => (
               <option key={dialect.id} value={dialect.id}>
@@ -192,7 +200,12 @@ export default function OnboardingPage() {
             </>
           )}
 
-          <ActionButton className={primaryButtonClass} type="submit" pending={isSubmitting} pendingLabel="Saving profile">
+          <ActionButton
+            className={primaryButtonClass}
+            type="submit"
+            pending={isSubmitting}
+            pendingLabel="Saving profile"
+          >
             Continue
           </ActionButton>
         </form>

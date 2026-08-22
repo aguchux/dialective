@@ -1,7 +1,9 @@
 import os
 
 
-def get_env(name: str, default: str | None = None, *, required: bool = False) -> str | None:
+def get_env(
+    name: str, default: str | None = None, *, required: bool = False
+) -> str | None:
     value = os.environ.get(name, default)
     if required and not value:
         raise RuntimeError(f"{name} must be set")
@@ -26,5 +28,9 @@ class AgentConfig:
         # Open Whisper by default; swap to an NCAIR1 dialect checkpoint
         # (e.g. NCAIR1/Igbo-ASR) to directly exercise a Dialect Library
         # model under test.
-        self.whisper_model_checkpoint = get_env("WHISPER_MODEL_CHECKPOINT", default="openai/whisper-small")
-        self.mms_tts_checkpoint = get_env("MMS_TTS_CHECKPOINT", default="facebook/mms-tts-eng")
+        self.whisper_model_checkpoint = get_env(
+            "WHISPER_MODEL_CHECKPOINT", default="openai/whisper-small"
+        )
+        self.mms_tts_checkpoint = get_env(
+            "MMS_TTS_CHECKPOINT", default="facebook/mms-tts-eng"
+        )

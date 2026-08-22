@@ -12,14 +12,17 @@ export class TwilioProvider implements SmsProvider {
     const fromNumber = process.env.TWILIO_FROM_NUMBER;
     if (!accountSid || !authToken || !fromNumber) throw new Error('Twilio credentials not set');
 
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+    const res = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ To: toE164, From: fromNumber, Body: body }).toString(),
       },
-      body: new URLSearchParams({ To: toE164, From: fromNumber, Body: body }).toString(),
-    });
+    );
     if (!res.ok) throw new Error(`Twilio request failed: ${res.status} ${await res.text()}`);
   }
 }

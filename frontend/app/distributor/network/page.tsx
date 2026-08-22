@@ -50,11 +50,14 @@ export default function DistributorNetworkPage() {
           <div className="grid gap-1">
             <h1 className="text-3xl font-black">Network</h1>
             <p className="text-muted">
-              Names and DL balances of your referred members, up to {network?.maxDepth ?? 0} downline level
+              Names and DL balances of your referred members, up to {network?.maxDepth ?? 0}{' '}
+              downline level
               {network?.maxDepth === 1 ? '' : 's'}.
             </p>
           </div>
-          {dashboard?.profile.referralCode && <InviteButton referralCode={dashboard.profile.referralCode} />}
+          {dashboard?.profile.referralCode && (
+            <InviteButton referralCode={dashboard.profile.referralCode} />
+          )}
         </div>
 
         {isLoading && <p className="text-muted">Loading network...</p>}
@@ -64,7 +67,10 @@ export default function DistributorNetworkPage() {
             <section className="grid gap-3 sm:grid-cols-3">
               <Metric label="Direct referrals" value={network.directMembers.toLocaleString()} />
               <Metric label="Total members" value={network.totalMembers.toLocaleString()} />
-              <Metric label="Total DL balance" value={`${formatTokens(network.totalTokenBalance)} DL`} />
+              <Metric
+                label="Total DL balance"
+                value={`${formatTokens(network.totalTokenBalance)} DL`}
+              />
             </section>
 
             {network.maxDepth === 0 && (
@@ -94,7 +100,9 @@ export default function DistributorNetworkPage() {
 
                 {view === 'tree' &&
                   (network.tree.length === 0 ? (
-                    <p className="rounded-lg border border-line bg-surface p-6 text-center font-bold text-muted">No referred members yet.</p>
+                    <p className="rounded-lg border border-line bg-surface p-6 text-center font-bold text-muted">
+                      No referred members yet.
+                    </p>
                   ) : (
                     <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
                       {network.tree.map((node) => (
@@ -130,7 +138,8 @@ function InviteButton({ referralCode }: { referralCode: string }) {
   const [error, setError] = useState<string | null>(null);
   const [sendReferralInvite, { isLoading: isSending }] = useSendReferralInviteMutation();
 
-  const referralLink = typeof window !== 'undefined' ? `${window.location.origin}/register?ref=${referralCode}` : '';
+  const referralLink =
+    typeof window !== 'undefined' ? `${window.location.origin}/register?ref=${referralCode}` : '';
 
   async function copyLink() {
     if (!referralLink) return;
@@ -155,16 +164,33 @@ function InviteButton({ referralCode }: { referralCode: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="inline-flex min-h-10 items-center justify-center rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" type="button">
+      <DialogTrigger
+        className="inline-flex min-h-10 items-center justify-center rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+        type="button"
+      >
         Invite
       </DialogTrigger>
-      <DialogContent title="Invite to your network" description="Send an email invite, or copy your referral link.">
+      <DialogContent
+        title="Invite to your network"
+        description="Send an email invite, or copy your referral link."
+      >
         <div className="grid gap-1">
           <p className="text-sm font-bold text-ink">Referral link</p>
           <div className="flex min-w-0 items-center gap-2 rounded-lg border border-line bg-surface-muted p-2 pl-3">
-            <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{referralLink}</span>
-            <button className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent text-white" onClick={copyLink} type="button" title="Copy referral link">
-              {copied ? <Check className="size-4" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
+            <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+              {referralLink}
+            </span>
+            <button
+              className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent text-white"
+              onClick={copyLink}
+              type="button"
+              title="Copy referral link"
+            >
+              {copied ? (
+                <Check className="size-4" aria-hidden="true" />
+              ) : (
+                <Copy className="size-4" aria-hidden="true" />
+              )}
               <span className="sr-only">{copied ? 'Copied' : 'Copy referral link'}</span>
             </button>
           </div>
@@ -237,7 +263,11 @@ function NetworkNodeView({ node }: { node: DistributorNetworkNode }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-lg border border-line bg-surface-muted p-3">
-      <button className="flex w-full items-center justify-between gap-3 text-left" onClick={() => setOpen((value) => !value)} type="button">
+      <button
+        className="flex w-full items-center justify-between gap-3 text-left"
+        onClick={() => setOpen((value) => !value)}
+        type="button"
+      >
         <span>
           <span className="block font-black">{node.name}</span>
           <span className="text-xs font-bold uppercase text-muted">Level {node.level}</span>

@@ -14,5 +14,7 @@ export function Section({ children }: { children: React.ReactNode }) {
 }
 
 export function PromptPreview({ children }: { children: React.ReactNode }) {
-  return <blockquote className="grid gap-2.5 rounded-lg bg-surface-muted p-4">{children}</blockquote>;
+  return (
+    <blockquote className="grid gap-2.5 rounded-lg bg-surface-muted p-4">{children}</blockquote>
+  );
 }

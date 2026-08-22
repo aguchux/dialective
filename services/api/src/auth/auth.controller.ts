@@ -1,4 +1,16 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -43,7 +55,13 @@ export class AuthController {
   // fallback @nestjs/throttler needs at bootstrap.
   @Throttle({ default: { limit: 30, ttl: 60 * 60 * 1000 } })
   register(@Body() dto: RegisterDto) {
-    return this.auth.register(dto.email, dto.password, dto.firstName, dto.lastName, dto.referralCode);
+    return this.auth.register(
+      dto.email,
+      dto.password,
+      dto.firstName,
+      dto.lastName,
+      dto.referralCode,
+    );
   }
 
   @Post('login')
@@ -155,7 +173,10 @@ export class AuthController {
   @Post('phone/manual/request')
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 3, ttl: 10 * 60 * 1000 } })
-  requestManualPhoneVerification(@CurrentUser() user: AccessTokenClaims, @Body() dto: RequestManualPhoneVerificationDto) {
+  requestManualPhoneVerification(
+    @CurrentUser() user: AccessTokenClaims,
+    @Body() dto: RequestManualPhoneVerificationDto,
+  ) {
     return this.auth.requestManualPhoneVerification(user.sub, dto.phoneNumber);
   }
 
@@ -198,7 +219,11 @@ export class AuthController {
   @Get('admin/users')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  listUsers(@Query('role') role?: Role, @Query('status') status?: UserStatus, @Query('search') search?: string) {
+  listUsers(
+    @Query('role') role?: Role,
+    @Query('status') status?: UserStatus,
+    @Query('search') search?: string,
+  ) {
     return this.auth.listUsers({ role, status, search });
   }
 
@@ -216,7 +241,11 @@ export class AuthController {
   @Patch('admin/users/:id/role')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  updateUserRole(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string, @Body() dto: UpdateUserRoleDto) {
+  updateUserRole(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: UpdateUserRoleDto,
+  ) {
     if (id === admin.sub && dto.role !== Role.ADMIN) {
       throw new BadRequestException('You cannot change your own role');
     }
@@ -226,7 +255,11 @@ export class AuthController {
   @Patch('admin/users/:id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  updateUserStatus(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string, @Body() dto: UpdateUserStatusDto) {
+  updateUserStatus(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: UpdateUserStatusDto,
+  ) {
     if (id === admin.sub && dto.status !== UserStatus.ACTIVE) {
       throw new BadRequestException('You cannot suspend or block your own account');
     }
@@ -254,7 +287,11 @@ export class AuthController {
   @Post('admin/users/:id/lock/otp')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  requestUserLockOtp(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string, @Body() dto: LockUserDto) {
+  requestUserLockOtp(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: LockUserDto,
+  ) {
     return this.auth.requestUserLockOtp(admin.sub, id, dto.status);
   }
 
@@ -262,7 +299,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  lockUser(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string, @Body() dto: LockUserDto) {
+  lockUser(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: LockUserDto,
+  ) {
     return this.auth.lockUser(admin.sub, id, dto.status, dto.otpRequestId, dto.code);
   }
 
@@ -280,7 +321,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  deleteUser(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string, @Body() dto: DeleteUserDto) {
+  deleteUser(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: DeleteUserDto,
+  ) {
     return this.auth.deleteUser(admin.sub, id, dto.otpRequestId, dto.code);
   }
 
@@ -298,7 +343,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  releaseAuditHold(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string, @Body() dto: DeleteUserDto) {
+  releaseAuditHold(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: DeleteUserDto,
+  ) {
     return this.auth.releaseAuditHold(admin.sub, id, dto.otpRequestId, dto.code);
   }
 }

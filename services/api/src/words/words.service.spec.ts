@@ -25,16 +25,26 @@ describe('WordsService', () => {
   beforeEach(() => {
     prisma = {
       user: { findUnique: jest.fn().mockResolvedValue(trainer) },
-      trainingSession: { findUnique: jest.fn().mockResolvedValue(session), create: jest.fn().mockResolvedValue(session) },
+      trainingSession: {
+        findUnique: jest.fn().mockResolvedValue(session),
+        create: jest.fn().mockResolvedValue(session),
+      },
       word: {
         count: jest.fn().mockResolvedValue(1),
         findMany: jest.fn().mockResolvedValue([{ id: 'word-1', text: 'welcome' }]),
       },
       wallet: { upsert: jest.fn().mockResolvedValue({ id: 'wallet-1', balance: 10 }) },
       wordRecording: { count: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
-      wordTrainingAssignment: { create: jest.fn(), findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      wordTrainingAssignment: {
+        create: jest.fn(),
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       prompt: { findMany: jest.fn().mockResolvedValue([]) },
-      promptWord: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
+      promptWord: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $transaction: jest.fn(),
     };
     settings.getTaskTokenCost.mockResolvedValue(1);
@@ -44,7 +54,16 @@ describe('WordsService', () => {
     courses.getIncompleteRequiredCourses.mockReset().mockResolvedValue([]);
     settings.getAuditHoldEveryNSubmissions.mockReset().mockResolvedValue(0);
     mail.sendAuditHoldStartedEmail.mockReset().mockResolvedValue(undefined);
-    service = new WordsService(prisma, storage as any, settings as any, streams as any, llm as any, courses as any, asrRegistry as any, mail as any);
+    service = new WordsService(
+      prisma,
+      storage as any,
+      settings as any,
+      streams as any,
+      llm as any,
+      courses as any,
+      asrRegistry as any,
+      mail as any,
+    );
   });
 
   describe('startSession', () => {
@@ -55,20 +74,30 @@ describe('WordsService', () => {
     });
 
     it('blocks the session and never creates one when a required course is incomplete', async () => {
-      courses.getIncompleteRequiredCourses.mockResolvedValue([{ id: 'c1', slug: 'safety', title: 'Safety' }]);
-      await expect(service.startSession(trainer.id)).rejects.toThrow('Complete the required course');
+      courses.getIncompleteRequiredCourses.mockResolvedValue([
+        { id: 'c1', slug: 'safety', title: 'Safety' },
+      ]);
+      await expect(service.startSession(trainer.id)).rejects.toThrow(
+        'Complete the required course',
+      );
       expect(prisma.trainingSession.create).not.toHaveBeenCalled();
     });
 
     it('blocks the session when the trainer is on an active audit hold', async () => {
-      prisma.user.findUnique.mockResolvedValueOnce({ auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: null });
+      prisma.user.findUnique.mockResolvedValueOnce({
+        auditHoldAt: new Date('2026-01-01'),
+        auditHoldReleasedAt: null,
+      });
       await expect(service.startSession(trainer.id)).rejects.toThrow('temporarily on hold');
       expect(prisma.trainingSession.create).not.toHaveBeenCalled();
     });
 
     it('allows the session once a hold has been released after it was set', async () => {
       prisma.user.findUnique
-        .mockResolvedValueOnce({ auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: new Date('2026-01-02') })
+        .mockResolvedValueOnce({
+          auditHoldAt: new Date('2026-01-01'),
+          auditHoldReleasedAt: new Date('2026-01-02'),
+        })
         .mockResolvedValueOnce(trainer);
       const result = await service.startSession(trainer.id);
       expect(result.sessionId).toBe(session.id);
@@ -87,16 +116,32 @@ describe('WordsService', () => {
       sourceRecordingId: null,
       session: { id: session.id, userId: trainer.id, user: trainer },
     };
-    const recordingBody = { bucket: 'b', audioKey: 'k', responseText: 'welcome', durationMs: 1000, noiseRating: 'QUIET' };
+    const recordingBody = {
+      bucket: 'b',
+      audioKey: 'k',
+      responseText: 'welcome',
+      durationMs: 1000,
+      noiseRating: 'QUIET',
+    };
 
     beforeEach(() => {
       prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
-      prisma.$transaction.mockImplementation(async (fn: any) => fn({
-        wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-        wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-        wordRecording: { create: jest.fn().mockResolvedValue({ id: 'recording-1', direction: 'DIALECT_TO_ENGLISH', validationScore: { toNumber: () => 1 } }) },
-        ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
-      }));
+      prisma.$transaction.mockImplementation(async (fn: any) =>
+        fn({
+          wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          wordRecording: {
+            create: jest
+              .fn()
+              .mockResolvedValue({
+                id: 'recording-1',
+                direction: 'DIALECT_TO_ENGLISH',
+                validationScore: { toNumber: () => 1 },
+              }),
+          },
+          ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
+        }),
+      );
       prisma.wordRecording.count.mockResolvedValue(0);
       prisma.user.update = jest.fn().mockResolvedValue({ email: 'trainer@example.com' });
     });
@@ -120,32 +165,45 @@ describe('WordsService', () => {
       settings.getAuditHoldEveryNSubmissions.mockResolvedValue(500);
       prisma.wordRecording.count.mockResolvedValue(500);
       await service.createRecording(trainer.id, recordingBody as any);
-      expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: trainer.id },
-        data: { auditHoldAt: expect.any(Date) },
-      }));
-      expect(mail.sendAuditHoldStartedEmail).toHaveBeenCalledWith({ trainerEmail: 'trainer@example.com', submissionCount: 500 });
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: trainer.id },
+          data: { auditHoldAt: expect.any(Date) },
+        }),
+      );
+      expect(mail.sendAuditHoldStartedEmail).toHaveBeenCalledWith({
+        trainerEmail: 'trainer@example.com',
+        submissionCount: 500,
+      });
     });
 
     it('re-triggers at the next multiple (1000) without needing a separate since-release counter', async () => {
       settings.getAuditHoldEveryNSubmissions.mockResolvedValue(500);
       prisma.wordRecording.count.mockResolvedValue(1000);
       await service.createRecording(trainer.id, recordingBody as any);
-      expect(mail.sendAuditHoldStartedEmail).toHaveBeenCalledWith({ trainerEmail: 'trainer@example.com', submissionCount: 1000 });
+      expect(mail.sendAuditHoldStartedEmail).toHaveBeenCalledWith({
+        trainerEmail: 'trainer@example.com',
+        submissionCount: 1000,
+      });
     });
 
     it('does not fail the request if the notification email throws', async () => {
       settings.getAuditHoldEveryNSubmissions.mockResolvedValue(500);
       prisma.wordRecording.count.mockResolvedValue(500);
       mail.sendAuditHoldStartedEmail.mockRejectedValue(new Error('resend down'));
-      await expect(service.createRecording(trainer.id, recordingBody as any)).resolves.toMatchObject({ recordingId: 'recording-1' });
+      await expect(
+        service.createRecording(trainer.id, recordingBody as any),
+      ).resolves.toMatchObject({ recordingId: 'recording-1' });
     });
   });
 
   it('only issues English-to-dialect assignments when reverse training and sentence-rebuild are disabled', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
     settings.isSentenceRebuildEnabled.mockResolvedValue(false);
-    prisma.wordTrainingAssignment.create.mockResolvedValue({ id: 'assignment-1', direction: 'ENGLISH_TO_DIALECT' });
+    prisma.wordTrainingAssignment.create.mockResolvedValue({
+      id: 'assignment-1',
+      direction: 'ENGLISH_TO_DIALECT',
+    });
 
     await expect(service.nextAssignment(trainer.id, session.id)).resolves.toEqual({
       assignmentId: 'assignment-1',
@@ -164,9 +222,13 @@ describe('WordsService', () => {
   it('blocks nextAssignment when a required course becomes incomplete mid-session', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
     settings.isSentenceRebuildEnabled.mockResolvedValue(false);
-    courses.getIncompleteRequiredCourses.mockResolvedValue([{ id: 'c1', slug: 'safety', title: 'Safety' }]);
+    courses.getIncompleteRequiredCourses.mockResolvedValue([
+      { id: 'c1', slug: 'safety', title: 'Safety' },
+    ]);
 
-    await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow('Complete the required course');
+    await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
+      'Complete the required course',
+    );
     expect(prisma.wordTrainingAssignment.create).not.toHaveBeenCalled();
   });
 
@@ -178,16 +240,23 @@ describe('WordsService', () => {
       .mockResolvedValueOnce(1); // unattemptedCount, after excluding word-1/word-2
     prisma.wordRecording.findMany.mockResolvedValue([{ wordId: 'word-1' }, { wordId: 'word-2' }]);
     prisma.word.findMany.mockResolvedValue([{ id: 'word-3', text: 'river' }]);
-    prisma.wordTrainingAssignment.create.mockResolvedValue({ id: 'assignment-3', direction: 'ENGLISH_TO_DIALECT' });
+    prisma.wordTrainingAssignment.create.mockResolvedValue({
+      id: 'assignment-3',
+      direction: 'ENGLISH_TO_DIALECT',
+    });
 
     await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
       wordId: 'word-3',
       promptText: 'river',
     });
-    expect(prisma.word.count).toHaveBeenNthCalledWith(2, { where: { id: { notIn: ['word-1', 'word-2'] } } });
-    expect(prisma.word.findMany).toHaveBeenCalledWith(expect.objectContaining({
+    expect(prisma.word.count).toHaveBeenNthCalledWith(2, {
       where: { id: { notIn: ['word-1', 'word-2'] } },
-    }));
+    });
+    expect(prisma.word.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { notIn: ['word-1', 'word-2'] } },
+      }),
+    );
   });
 
   it('widens back to the full word bank once the trainer has attempted every word', async () => {
@@ -198,9 +267,14 @@ describe('WordsService', () => {
       .mockResolvedValueOnce(0); // unattemptedCount -- trainer has done both
     prisma.wordRecording.findMany.mockResolvedValue([{ wordId: 'word-1' }, { wordId: 'word-2' }]);
     prisma.word.findMany.mockResolvedValue([{ id: 'word-1', text: 'welcome' }]);
-    prisma.wordTrainingAssignment.create.mockResolvedValue({ id: 'assignment-4', direction: 'ENGLISH_TO_DIALECT' });
+    prisma.wordTrainingAssignment.create.mockResolvedValue({
+      id: 'assignment-4',
+      direction: 'ENGLISH_TO_DIALECT',
+    });
 
-    await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({ wordId: 'word-1' });
+    await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
+      wordId: 'word-1',
+    });
     expect(prisma.word.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
   });
 
@@ -209,8 +283,13 @@ describe('WordsService', () => {
     settings.isSentenceRebuildEnabled.mockResolvedValue(false);
     jest.spyOn(Math, 'random').mockReturnValue(0.1);
     prisma.wordRecording.count.mockResolvedValue(1);
-    prisma.wordRecording.findMany.mockResolvedValue([{ id: 'source-1', wordId: 'word-1', translationText: 'nnabata' }]);
-    prisma.wordTrainingAssignment.create.mockResolvedValue({ id: 'assignment-2', direction: 'DIALECT_TO_ENGLISH' });
+    prisma.wordRecording.findMany.mockResolvedValue([
+      { id: 'source-1', wordId: 'word-1', translationText: 'nnabata' },
+    ]);
+    prisma.wordTrainingAssignment.create.mockResolvedValue({
+      id: 'assignment-2',
+      direction: 'DIALECT_TO_ENGLISH',
+    });
 
     await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
       direction: 'DIALECT_TO_ENGLISH',
@@ -218,9 +297,11 @@ describe('WordsService', () => {
       sourceLanguage: 'Igbo',
       responseLanguage: 'English',
     });
-    expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ userId: { not: trainer.id } }),
-    }));
+    expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: { not: trainer.id } }),
+      }),
+    );
     jest.restoreAllMocks();
   });
 
@@ -237,27 +318,31 @@ describe('WordsService', () => {
       session: { userId: trainer.id, user: trainer },
     };
     prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
-    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) => callback({
-      ledgerEntry: { create: jest.fn() },
-      wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      wordRecording: {
-        create: jest.fn().mockImplementation(({ data }) => ({
-          id: 'recording-1',
-          direction: data.direction,
-          validationScore: { toNumber: () => data.validationScore },
-        })),
-      },
-    }));
+    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
+      callback({
+        ledgerEntry: { create: jest.fn() },
+        wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        wordRecording: {
+          create: jest.fn().mockImplementation(({ data }) => ({
+            id: 'recording-1',
+            direction: data.direction,
+            validationScore: { toNumber: () => data.validationScore },
+          })),
+        },
+      }),
+    );
 
-    await expect(service.createRecording(trainer.id, {
-      assignmentId: assignment.id,
-      responseText: '  WELCOME  ',
-      bucket: assignment.uploadBucket,
-      audioKey: assignment.uploadKey,
-      durationMs: 1200,
-      noiseRating: 'QUIET',
-    })).resolves.toMatchObject({ validationScore: 1 });
+    await expect(
+      service.createRecording(trainer.id, {
+        assignmentId: assignment.id,
+        responseText: '  WELCOME  ',
+        bucket: assignment.uploadBucket,
+        audioKey: assignment.uploadKey,
+        durationMs: 1200,
+        noiseRating: 'QUIET',
+      }),
+    ).resolves.toMatchObject({ validationScore: 1 });
   });
 
   it('rejects a recording that exceeds the per-word timeout x word count, plus grace', async () => {
@@ -276,14 +361,16 @@ describe('WordsService', () => {
     };
     prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
 
-    await expect(service.createRecording(trainer.id, {
-      assignmentId: assignment.id,
-      responseText: 'WELCOME',
-      bucket: assignment.uploadBucket,
-      audioKey: assignment.uploadKey,
-      durationMs: 10001,
-      noiseRating: 'QUIET',
-    })).rejects.toThrow('Recording exceeds the 5s limit for this word');
+    await expect(
+      service.createRecording(trainer.id, {
+        assignmentId: assignment.id,
+        responseText: 'WELCOME',
+        bucket: assignment.uploadBucket,
+        audioKey: assignment.uploadKey,
+        durationMs: 10001,
+        noiseRating: 'QUIET',
+      }),
+    ).rejects.toThrow('Recording exceeds the 5s limit for this word');
   });
 
   it('picks a sentence-rebuild assignment and shuffles its fragments when enabled', async () => {
@@ -292,12 +379,11 @@ describe('WordsService', () => {
     jest.spyOn(Math, 'random').mockReturnValue(0.5);
     prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-1' }]);
     prisma.promptWord.count.mockResolvedValue(3);
-    prisma.promptWord.findMany.mockResolvedValue([
-      { text: 'I' },
-      { text: 'am' },
-      { text: 'well' },
-    ]);
-    prisma.wordTrainingAssignment.create.mockResolvedValue({ id: 'assignment-3', direction: 'SENTENCE_REBUILD' });
+    prisma.promptWord.findMany.mockResolvedValue([{ text: 'I' }, { text: 'am' }, { text: 'well' }]);
+    prisma.wordTrainingAssignment.create.mockResolvedValue({
+      id: 'assignment-3',
+      direction: 'SENTENCE_REBUILD',
+    });
 
     const result = await service.nextAssignment(trainer.id, session.id);
 
@@ -335,23 +421,27 @@ describe('WordsService', () => {
       session: { userId: trainer.id, user: trainer },
     };
     prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
-    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) => callback({
-      ledgerEntry: { create: jest.fn() },
-      wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      wordRecording: {
-        create: jest.fn().mockImplementation(({ data }) => ({
-          id: 'recording-2',
-          direction: data.direction,
-          validationScore: { toNumber: () => data.validationScore },
-        })),
-      },
-    }));
+    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
+      callback({
+        ledgerEntry: { create: jest.fn() },
+        wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        wordRecording: {
+          create: jest.fn().mockImplementation(({ data }) => ({
+            id: 'recording-2',
+            direction: data.direction,
+            validationScore: { toNumber: () => data.validationScore },
+          })),
+        },
+      }),
+    );
 
-    await expect(service.createRecording(trainer.id, {
-      assignmentId: assignment.id,
-      submittedOrder: [0, 1, 2],
-    })).resolves.toMatchObject({ validationScore: 1 });
+    await expect(
+      service.createRecording(trainer.id, {
+        assignmentId: assignment.id,
+        submittedOrder: [0, 1, 2],
+      }),
+    ).resolves.toMatchObject({ validationScore: 1 });
   });
 
   it('scores a shuffled/wrong-order sentence-rebuild submission as 0', async () => {
@@ -373,23 +463,27 @@ describe('WordsService', () => {
       session: { userId: trainer.id, user: trainer },
     };
     prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
-    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) => callback({
-      ledgerEntry: { create: jest.fn() },
-      wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      wordRecording: {
-        create: jest.fn().mockImplementation(({ data }) => ({
-          id: 'recording-3',
-          direction: data.direction,
-          validationScore: { toNumber: () => data.validationScore },
-        })),
-      },
-    }));
+    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
+      callback({
+        ledgerEntry: { create: jest.fn() },
+        wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        wordRecording: {
+          create: jest.fn().mockImplementation(({ data }) => ({
+            id: 'recording-3',
+            direction: data.direction,
+            validationScore: { toNumber: () => data.validationScore },
+          })),
+        },
+      }),
+    );
 
-    await expect(service.createRecording(trainer.id, {
-      assignmentId: assignment.id,
-      submittedOrder: [2, 0, 1],
-    })).resolves.toMatchObject({ validationScore: 0 });
+    await expect(
+      service.createRecording(trainer.id, {
+        assignmentId: assignment.id,
+        submittedOrder: [2, 0, 1],
+      }),
+    ).resolves.toMatchObject({ validationScore: 0 });
   });
 
   describe('getSpellingSuggestions', () => {
@@ -405,7 +499,10 @@ describe('WordsService', () => {
       ]);
       prisma.wordTranslation = { findMany: jest.fn().mockResolvedValue([{ text: 'daalu' }]) };
 
-      const result = await service.getSpellingSuggestions({ wordId: 'word-1', dialectTag: 'ig' } as any);
+      const result = await service.getSpellingSuggestions({
+        wordId: 'word-1',
+        dialectTag: 'ig',
+      } as any);
 
       expect(result.suggestions).toEqual([
         { text: 'nnọọ', source: 'community' },
@@ -414,7 +511,11 @@ describe('WordsService', () => {
       ]);
       expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ direction: 'ENGLISH_TO_DIALECT', status: 'SCORED', score: 100 }),
+          where: expect.objectContaining({
+            direction: 'ENGLISH_TO_DIALECT',
+            status: 'SCORED',
+            score: 100,
+          }),
           orderBy: [{ compositeScore: { sort: 'desc', nulls: 'last' } }, { scoredAt: 'desc' }],
         }),
       );
@@ -426,7 +527,10 @@ describe('WordsService', () => {
       );
       prisma.wordTranslation = { findMany: jest.fn() };
 
-      const result = await service.getSpellingSuggestions({ wordId: 'word-1', dialectTag: 'ig' } as any);
+      const result = await service.getSpellingSuggestions({
+        wordId: 'word-1',
+        dialectTag: 'ig',
+      } as any);
 
       expect(result.suggestions).toHaveLength(8);
       expect(result.suggestions.every((s: any) => s.source === 'community')).toBe(true);

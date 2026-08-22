@@ -1,6 +1,11 @@
 export type SmsProviderKey = 'termii' | 'twilio' | 'africastalking' | 'smslive247';
 
-export const ALL_SMS_PROVIDER_KEYS: SmsProviderKey[] = ['termii', 'twilio', 'africastalking', 'smslive247'];
+export const ALL_SMS_PROVIDER_KEYS: SmsProviderKey[] = [
+  'termii',
+  'twilio',
+  'africastalking',
+  'smslive247',
+];
 
 /**
  * Fallback-chain-eligible providers for the fire-and-forget "send this
@@ -12,7 +17,11 @@ export const ALL_SMS_PROVIDER_KEYS: SmsProviderKey[] = ['termii', 'twilio', 'afr
  * numbers outright. smslive247 stays a valid SmsProvider (for potential
  * future non-OTP notification use) but is never a smsProviderOrder member.
  */
-export const SMS_OTP_FALLBACK_PROVIDER_KEYS: SmsProviderKey[] = ['termii', 'twilio', 'africastalking'];
+export const SMS_OTP_FALLBACK_PROVIDER_KEYS: SmsProviderKey[] = [
+  'termii',
+  'twilio',
+  'africastalking',
+];
 
 /**
  * A single provider sends one SMS to one E.164 number. Each implementation
@@ -47,7 +56,12 @@ export function parseSmsProviderOrder(csv: string): SmsProviderKey[] {
  * rejects messages containing OTP-shaped numbers, which ordinary
  * notification text never does.
  */
-export const SMS_TRANSACTIONAL_PROVIDER_KEYS: SmsProviderKey[] = ['termii', 'twilio', 'africastalking', 'smslive247'];
+export const SMS_TRANSACTIONAL_PROVIDER_KEYS: SmsProviderKey[] = [
+  'termii',
+  'twilio',
+  'africastalking',
+  'smslive247',
+];
 
 const DEFAULT_TRANSACTIONAL_PROVIDER_ORDER: SmsProviderKey[] = SMS_TRANSACTIONAL_PROVIDER_KEYS;
 

@@ -18,7 +18,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from liveness import SAMPLE_RATE, extract_features  # noqa: E402
 
 
-def synthetic_live_clip(rng: np.random.Generator, duration_s: float = 2.0) -> np.ndarray:
+def synthetic_live_clip(
+    rng: np.random.Generator, duration_s: float = 2.0
+) -> np.ndarray:
     """A natural-ish voiced tone with breath noise and slight pitch jitter -- a rough stand-in for a real voice's spectral irregularity."""
     t = np.linspace(0, duration_s, int(SAMPLE_RATE * duration_s), endpoint=False)
     fundamental = 140 + rng.normal(0, 8, size=t.shape).cumsum() * 0.01
@@ -28,7 +30,9 @@ def synthetic_live_clip(rng: np.random.Generator, duration_s: float = 2.0) -> np
     return (signal / np.max(np.abs(signal))).astype(np.float32)
 
 
-def synthetic_spoof_clip(rng: np.random.Generator, duration_s: float = 2.0) -> np.ndarray:
+def synthetic_spoof_clip(
+    rng: np.random.Generator, duration_s: float = 2.0
+) -> np.ndarray:
     """A perfectly steady tone with no jitter/breath -- a rough stand-in for a flat, overly-clean TTS/replay artifact."""
     t = np.linspace(0, duration_s, int(SAMPLE_RATE * duration_s), endpoint=False)
     signal = np.sin(2 * np.pi * 140 * t) + 0.3 * np.sin(2 * np.pi * 280 * t)

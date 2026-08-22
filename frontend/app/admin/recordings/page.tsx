@@ -29,7 +29,14 @@ const SORT_OPTIONS: { value: RecordingSortField; label: string }[] = [
   { value: 'payoutTokenAmount', label: 'Payout' },
 ];
 
-const STATUS_OPTIONS = ['PENDING', 'TRANSCRIBED', 'REJECTED', 'SCORED', 'SETTLED', 'EXPIRED'] as const;
+const STATUS_OPTIONS = [
+  'PENDING',
+  'TRANSCRIBED',
+  'REJECTED',
+  'SCORED',
+  'SETTLED',
+  'EXPIRED',
+] as const;
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -66,9 +73,19 @@ function PlayButton({ audioUrl }: { audioUrl: string | null }) {
         onClick={toggle}
         type="button"
       >
-        {playing ? <Pause className="size-4 fill-current" aria-hidden="true" /> : <Play className="ml-0.5 size-4 fill-current" aria-hidden="true" />}
+        {playing ? (
+          <Pause className="size-4 fill-current" aria-hidden="true" />
+        ) : (
+          <Play className="ml-0.5 size-4 fill-current" aria-hidden="true" />
+        )}
       </button>
-      <audio onEnded={() => setPlaying(false)} onPause={() => setPlaying(false)} onPlay={() => setPlaying(true)} ref={audioRef} src={audioUrl} />
+      <audio
+        onEnded={() => setPlaying(false)}
+        onPause={() => setPlaying(false)}
+        onPlay={() => setPlaying(true)}
+        ref={audioRef}
+        src={audioUrl}
+      />
     </>
   );
 }
@@ -118,7 +135,9 @@ export default function AdminRecordingsPage() {
     dialectTag: dialectTag || undefined,
     status: (status || undefined) as AdminRecordingSummary['status'] | undefined,
     ...(reviewState === 'unreviewed' ? { reviewState: 'unreviewed' as const } : {}),
-    ...(reviewState === 'VALID' || reviewState === 'INVALID' ? { adminAuditStatus: reviewState } : {}),
+    ...(reviewState === 'VALID' || reviewState === 'INVALID'
+      ? { adminAuditStatus: reviewState }
+      : {}),
   });
   const { data: dialects } = useGetAllDialectsQuery();
 
@@ -137,8 +156,8 @@ export default function AdminRecordingsPage() {
         <div className="grid gap-2">
           <h1 className="text-3xl font-black">Recordings</h1>
           <p className="leading-relaxed text-muted">
-            Every trainer recording platform-wide, sortable by score and filterable by word, dialect, status, and
-            review state. Play back audio and audit a recording inline.
+            Every trainer recording platform-wide, sortable by score and filterable by word,
+            dialect, status, and review state. Play back audio and audit a recording inline.
           </p>
         </div>
 
@@ -149,7 +168,9 @@ export default function AdminRecordingsPage() {
               type="button"
               onClick={() => setKind(tab.key)}
               className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
-                kind === tab.key ? 'bg-accent text-white' : 'bg-white text-ink hover:bg-surface-muted'
+                kind === tab.key
+                  ? 'bg-accent text-white'
+                  : 'bg-white text-ink hover:bg-surface-muted'
               }`}
             >
               {tab.label}
@@ -160,11 +181,16 @@ export default function AdminRecordingsPage() {
         <section className="grid gap-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
           <div className="flex flex-wrap items-center gap-3 border-b border-line p-3">
             <div className="relative max-w-sm">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+                aria-hidden="true"
+              />
               <input
                 className="min-h-10 w-full rounded-lg border border-line bg-white py-2 pl-9 pr-3 text-sm text-ink dark:bg-surface-muted"
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={kind === 'word' ? 'Search word or text...' : 'Search prompt or transcript...'}
+                placeholder={
+                  kind === 'word' ? 'Search word or text...' : 'Search prompt or transcript...'
+                }
                 type="search"
                 value={search}
                 aria-label="Search recordings"
@@ -172,7 +198,9 @@ export default function AdminRecordingsPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <label className="text-sm font-bold" htmlFor="rec-dialect-filter">Dialect</label>
+              <label className="text-sm font-bold" htmlFor="rec-dialect-filter">
+                Dialect
+              </label>
               <select
                 className="min-h-9 rounded-lg border border-line bg-white px-3 text-sm"
                 id="rec-dialect-filter"
@@ -181,13 +209,17 @@ export default function AdminRecordingsPage() {
               >
                 <option value="">All dialects</option>
                 {dialects?.map((d) => (
-                  <option key={d.tag} value={d.tag}>{d.name}</option>
+                  <option key={d.tag} value={d.tag}>
+                    {d.name}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div className="flex items-center gap-2">
-              <label className="text-sm font-bold" htmlFor="rec-status-filter">Status</label>
+              <label className="text-sm font-bold" htmlFor="rec-status-filter">
+                Status
+              </label>
               <select
                 className="min-h-9 rounded-lg border border-line bg-white px-3 text-sm"
                 id="rec-status-filter"
@@ -196,13 +228,17 @@ export default function AdminRecordingsPage() {
               >
                 <option value="">All statuses</option>
                 {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div className="flex items-center gap-2">
-              <label className="text-sm font-bold" htmlFor="rec-review-filter">Audit</label>
+              <label className="text-sm font-bold" htmlFor="rec-review-filter">
+                Audit
+              </label>
               <select
                 className="min-h-9 rounded-lg border border-line bg-white px-3 text-sm"
                 id="rec-review-filter"
@@ -217,7 +253,9 @@ export default function AdminRecordingsPage() {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-              <label className="text-sm font-bold" htmlFor="rec-sort-filter">Sort by</label>
+              <label className="text-sm font-bold" htmlFor="rec-sort-filter">
+                Sort by
+              </label>
               <select
                 className="min-h-9 rounded-lg border border-line bg-white px-3 text-sm"
                 id="rec-sort-filter"
@@ -225,14 +263,20 @@ export default function AdminRecordingsPage() {
                 value={sortBy}
               >
                 {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
                 ))}
               </select>
               <button
                 className={secondaryButtonClass}
                 onClick={() => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))}
                 type="button"
-                aria-label={sortDir === 'desc' ? 'Sorted descending, click for ascending' : 'Sorted ascending, click for descending'}
+                aria-label={
+                  sortDir === 'desc'
+                    ? 'Sorted descending, click for ascending'
+                    : 'Sorted ascending, click for descending'
+                }
               >
                 {sortDir === 'desc' ? '↓' : '↑'}
               </button>
@@ -254,21 +298,61 @@ export default function AdminRecordingsPage() {
                 <table className="w-full min-w-[1620px] border-collapse text-left text-sm">
                   <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                     <tr>
-                      <th className="px-5 py-3.5" scope="col">Play</th>
-                      <th className="px-5 py-3.5" scope="col">Trainer</th>
-                      <th className="px-5 py-3.5" scope="col">{kind === 'word' ? 'Word' : 'Prompt'}</th>
-                      <th className="px-5 py-3.5" scope="col">{kind === 'word' ? 'Typed answer' : 'Transcript'}</th>
-                      {kind === 'word' && <th className="px-5 py-3.5" scope="col">ASR Transcript</th>}
-                      <th className="px-5 py-3.5" scope="col">Dialect</th>
-                      <th className="px-5 py-3.5" scope="col">Status</th>
-                      <SortableHeader field="score" label="Score" active={sortBy} onClick={toggleSort} dir={sortDir} />
-                      <th className="px-5 py-3.5" scope="col">Noise</th>
-                      <th className="px-5 py-3.5" scope="col">Quality</th>
-                      <th className="px-5 py-3.5" scope="col">Liveness</th>
-                      <th className="px-5 py-3.5" scope="col">Expression</th>
-                      <SortableHeader field="payoutTokenAmount" label="Payout" active={sortBy} onClick={toggleSort} dir={sortDir} />
-                      <th className="px-5 py-3.5" scope="col">Audit</th>
-                      <th className="px-5 py-3.5" scope="col"><span className="sr-only">Actions</span></th>
+                      <th className="px-5 py-3.5" scope="col">
+                        Play
+                      </th>
+                      <th className="px-5 py-3.5" scope="col">
+                        Trainer
+                      </th>
+                      <th className="px-5 py-3.5" scope="col">
+                        {kind === 'word' ? 'Word' : 'Prompt'}
+                      </th>
+                      <th className="px-5 py-3.5" scope="col">
+                        {kind === 'word' ? 'Typed answer' : 'Transcript'}
+                      </th>
+                      {kind === 'word' && (
+                        <th className="px-5 py-3.5" scope="col">
+                          ASR Transcript
+                        </th>
+                      )}
+                      <th className="px-5 py-3.5" scope="col">
+                        Dialect
+                      </th>
+                      <th className="px-5 py-3.5" scope="col">
+                        Status
+                      </th>
+                      <SortableHeader
+                        field="score"
+                        label="Score"
+                        active={sortBy}
+                        onClick={toggleSort}
+                        dir={sortDir}
+                      />
+                      <th className="px-5 py-3.5" scope="col">
+                        Noise
+                      </th>
+                      <th className="px-5 py-3.5" scope="col">
+                        Quality
+                      </th>
+                      <th className="px-5 py-3.5" scope="col">
+                        Liveness
+                      </th>
+                      <th className="px-5 py-3.5" scope="col">
+                        Expression
+                      </th>
+                      <SortableHeader
+                        field="payoutTokenAmount"
+                        label="Payout"
+                        active={sortBy}
+                        onClick={toggleSort}
+                        dir={sortDir}
+                      />
+                      <th className="px-5 py-3.5" scope="col">
+                        Audit
+                      </th>
+                      <th className="px-5 py-3.5" scope="col">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
@@ -278,21 +362,43 @@ export default function AdminRecordingsPage() {
                           <PlayButton audioUrl={rec.audioUrl} />
                         </td>
                         <td className="px-5 py-3.5 font-bold">{trainerLabel(rec.trainer)}</td>
-                        <td className="max-w-xs truncate px-5 py-3.5" title={rec.promptText}>{rec.promptText}</td>
-                        <td className="max-w-xs truncate px-5 py-3.5" title={rec.responseText ?? undefined}>{rec.responseText || '—'}</td>
+                        <td className="max-w-xs truncate px-5 py-3.5" title={rec.promptText}>
+                          {rec.promptText}
+                        </td>
+                        <td
+                          className="max-w-xs truncate px-5 py-3.5"
+                          title={rec.responseText ?? undefined}
+                        >
+                          {rec.responseText || '—'}
+                        </td>
                         {kind === 'word' && (
-                          <td className="max-w-xs truncate px-5 py-3.5 text-muted" title={rec.asrTranscript ?? undefined}>
+                          <td
+                            className="max-w-xs truncate px-5 py-3.5 text-muted"
+                            title={rec.asrTranscript ?? undefined}
+                          >
                             {rec.asrTranscript || '—'}
                           </td>
                         )}
-                        <td className="px-5 py-3.5 text-muted">{resolveDialectName(rec.dialectTag, dialects)}</td>
+                        <td className="px-5 py-3.5 text-muted">
+                          {resolveDialectName(rec.dialectTag, dialects)}
+                        </td>
                         <td className="px-5 py-3.5 text-muted">{rec.status}</td>
-                        <td className="px-5 py-3.5 font-black tabular-nums">{scoreCell(rec.score)}</td>
-                        <td className="px-5 py-3.5 tabular-nums text-muted">{scoreCell(rec.noiseScore)}</td>
-                        <td className="px-5 py-3.5 tabular-nums text-muted">{scoreCell(rec.qualityScore)}</td>
-                        <td className="px-5 py-3.5 tabular-nums text-muted">{scoreCell(rec.livenessScore)}</td>
+                        <td className="px-5 py-3.5 font-black tabular-nums">
+                          {scoreCell(rec.score)}
+                        </td>
+                        <td className="px-5 py-3.5 tabular-nums text-muted">
+                          {scoreCell(rec.noiseScore)}
+                        </td>
+                        <td className="px-5 py-3.5 tabular-nums text-muted">
+                          {scoreCell(rec.qualityScore)}
+                        </td>
+                        <td className="px-5 py-3.5 tabular-nums text-muted">
+                          {scoreCell(rec.livenessScore)}
+                        </td>
                         <td className="px-5 py-3.5 text-muted">{expressionCell(rec)}</td>
-                        <td className="px-5 py-3.5 tabular-nums text-muted">{rec.payoutTokenAmount ? `${rec.payoutTokenAmount} DL` : '—'}</td>
+                        <td className="px-5 py-3.5 tabular-nums text-muted">
+                          {rec.payoutTokenAmount ? `${rec.payoutTokenAmount} DL` : '—'}
+                        </td>
                         <td className="px-5 py-3.5">
                           <AuditBadge status={rec.adminAuditStatus} />
                         </td>
@@ -320,7 +426,9 @@ export default function AdminRecordingsPage() {
                         <div className="min-w-0">
                           <p className="truncate font-extrabold">{trainerLabel(rec.trainer)}</p>
                           <p className="truncate text-sm text-muted">{rec.promptText}</p>
-                          {rec.responseText && <p className="truncate text-sm text-ink">&rarr; {rec.responseText}</p>}
+                          {rec.responseText && (
+                            <p className="truncate text-sm text-ink">&rarr; {rec.responseText}</p>
+                          )}
                           {rec.kind === 'word' && rec.asrTranscript && (
                             <p className="truncate text-sm text-muted">ASR: {rec.asrTranscript}</p>
                           )}
@@ -354,12 +462,21 @@ export default function AdminRecordingsPage() {
           )}
 
           {data && data.totalPages > 1 && (
-            <PaginationFooter page={data.page} totalPages={data.totalPages} isFetching={isFetching} onChange={setPage} />
+            <PaginationFooter
+              page={data.page}
+              totalPages={data.totalPages}
+              isFetching={isFetching}
+              onChange={setPage}
+            />
           )}
         </section>
       </div>
 
-      <RecordingDetailDialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)} recording={selected} />
+      <RecordingDetailDialog
+        open={selected !== null}
+        onOpenChange={(open) => !open && setSelected(null)}
+        recording={selected}
+      />
     </AdminShell>
   );
 }
@@ -380,7 +497,11 @@ function SortableHeader({
   const isActive = active === field;
   return (
     <th className="px-5 py-3.5" scope="col">
-      <button className="inline-flex items-center gap-1 font-extrabold uppercase" onClick={() => onClick(field)} type="button">
+      <button
+        className="inline-flex items-center gap-1 font-extrabold uppercase"
+        onClick={() => onClick(field)}
+        type="button"
+      >
         {label} {isActive && (dir === 'desc' ? '↓' : '↑')}
       </button>
     </th>
@@ -395,7 +516,11 @@ function AuditBadge({ status }: { status: AdminRecordingSummary['adminAuditStatu
         status === 'VALID' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
       }`}
     >
-      {status === 'VALID' ? <CheckCircle2 className="size-3.5" aria-hidden="true" /> : <XCircle className="size-3.5" aria-hidden="true" />}
+      {status === 'VALID' ? (
+        <CheckCircle2 className="size-3.5" aria-hidden="true" />
+      ) : (
+        <XCircle className="size-3.5" aria-hidden="true" />
+      )}
       {status === 'VALID' ? 'Valid' : 'Invalid'}
     </span>
   );
@@ -418,10 +543,20 @@ function PaginationFooter({
         Page {page} of {totalPages} {isFetching ? '· refreshing…' : ''}
       </p>
       <div className="flex gap-2">
-        <button className={secondaryButtonClass} disabled={page <= 1} onClick={() => onChange(page - 1)} type="button">
+        <button
+          className={secondaryButtonClass}
+          disabled={page <= 1}
+          onClick={() => onChange(page - 1)}
+          type="button"
+        >
           Previous
         </button>
-        <button className={secondaryButtonClass} disabled={page >= totalPages} onClick={() => onChange(page + 1)} type="button">
+        <button
+          className={secondaryButtonClass}
+          disabled={page >= totalPages}
+          onClick={() => onChange(page + 1)}
+          type="button"
+        >
           Next
         </button>
       </div>

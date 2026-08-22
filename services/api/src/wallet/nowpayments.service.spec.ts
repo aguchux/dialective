@@ -21,28 +21,37 @@ describe('NowPaymentsService IPN verification', () => {
   it.each([
     ['USDT' as const, 'usdttrc20'],
     ['USDC' as const, 'usdc'],
-  ])('maps %s to the merchant-enabled NOWPayments currency %s', async (payCurrency, providerCurrency) => {
-    process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ id: 'invoice-id', invoice_url: 'https://nowpayments.io/payment/test' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
+  ])(
+    'maps %s to the merchant-enabled NOWPayments currency %s',
+    async (payCurrency, providerCurrency) => {
+      process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
+      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(
+          JSON.stringify({ id: 'invoice-id', invoice_url: 'https://nowpayments.io/payment/test' }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      );
 
-    await expect(
-      service.createInvoice({
-        usdAmount: 10,
-        payCurrency,
-        orderId: 'deposit-id',
-        orderDescription: 'Test deposit',
-        ipnCallbackUrl: 'https://api.example.com/api/v1/wallet/webhooks/nowpayments',
-      }),
-    ).resolves.toEqual({ invoiceId: 'invoice-id', invoiceUrl: 'https://nowpayments.io/payment/test' });
+      await expect(
+        service.createInvoice({
+          usdAmount: 10,
+          payCurrency,
+          orderId: 'deposit-id',
+          orderDescription: 'Test deposit',
+          ipnCallbackUrl: 'https://api.example.com/api/v1/wallet/webhooks/nowpayments',
+        }),
+      ).resolves.toEqual({
+        invoiceId: 'invoice-id',
+        invoiceUrl: 'https://nowpayments.io/payment/test',
+      });
 
-    const request = fetchSpy.mock.calls[0][1];
-    expect(JSON.parse(String(request?.body))).toMatchObject({ pay_currency: providerCurrency });
-  });
+      const request = fetchSpy.mock.calls[0][1];
+      expect(JSON.parse(String(request?.body))).toMatchObject({ pay_currency: providerCurrency });
+    },
+  );
 
   it('accepts the HMAC-SHA512 signature of a recursively sorted payload', () => {
     const payload = {
@@ -58,9 +67,12 @@ describe('NowPaymentsService IPN verification', () => {
     expect(service.verifyIpnSignature(payload, signature)).toBe(true);
   });
 
-  it.each([undefined, '', 'not-hex', '00'])('rejects a missing or malformed signature: %s', (signature) => {
-    expect(service.verifyIpnSignature({ payment_id: 1 }, signature)).toBe(false);
-  });
+  it.each([undefined, '', 'not-hex', '00'])(
+    'rejects a missing or malformed signature: %s',
+    (signature) => {
+      expect(service.verifyIpnSignature({ payment_id: 1 }, signature)).toBe(false);
+    },
+  );
 
   it('produces the same event hash regardless of incoming key order', () => {
     expect(service.getIpnEventHash({ status: 'finished', id: 1, fee: { z: 2, a: 1 } })).toBe(
@@ -130,9 +142,14 @@ describe('NowPaymentsService IPN verification', () => {
     const fetchSpy = jest
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'jwt-token' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'payout-1', status: 'finished' }), { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'payout-1', status: 'finished' }), { status: 200 }),
+      );
 
-    await expect(service.getPayoutStatus('payout-1')).resolves.toMatchObject({ payoutId: 'payout-1', status: 'finished' });
+    await expect(service.getPayoutStatus('payout-1')).resolves.toMatchObject({
+      payoutId: 'payout-1',
+      status: 'finished',
+    });
 
     expect(fetchSpy.mock.calls[1][0]).toBe('https://api.nowpayments.io/v1/payout/payout-1');
   });

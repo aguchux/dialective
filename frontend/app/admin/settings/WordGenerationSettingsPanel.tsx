@@ -1,10 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -20,7 +25,10 @@ const DEFAULT_ORDER: ProviderKey[] = ['openai', 'deepseek', 'anthropic'];
 
 function parseOrder(csv: string): ProviderKey[] {
   const parts = csv.split(',').map((part) => part.trim()) as ProviderKey[];
-  const isValid = parts.length === 3 && DEFAULT_ORDER.every((key) => parts.includes(key)) && new Set(parts).size === 3;
+  const isValid =
+    parts.length === 3 &&
+    DEFAULT_ORDER.every((key) => parts.includes(key)) &&
+    new Set(parts).size === 3;
   return isValid ? parts : DEFAULT_ORDER;
 }
 
@@ -73,9 +81,13 @@ export function WordGenerationSettingsPanel() {
         llmProviderOrder: order.join(','),
         ...(wordsPerItem !== '' ? { llmWordsPerItem: Number(wordsPerItem) } : {}),
         ...(itemsPerRun !== '' ? { llmItemsPerRun: Number(itemsPerRun) } : {}),
-        ...(maxTotalGeneratedItems !== '' ? { llmMaxTotalGeneratedItems: Number(maxTotalGeneratedItems) } : {}),
+        ...(maxTotalGeneratedItems !== ''
+          ? { llmMaxTotalGeneratedItems: Number(maxTotalGeneratedItems) }
+          : {}),
         ...(maxPoolPerDialect !== '' ? { llmMaxPoolPerDialect: Number(maxPoolPerDialect) } : {}),
-        ...(backfillItemsPerDialectPerRun !== '' ? { llmBackfillItemsPerDialectPerRun: Number(backfillItemsPerDialectPerRun) } : {}),
+        ...(backfillItemsPerDialectPerRun !== ''
+          ? { llmBackfillItemsPerDialectPerRun: Number(backfillItemsPerDialectPerRun) }
+          : {}),
       }).unwrap();
       setMessage('Word generation settings saved.');
     } catch (err) {
@@ -88,8 +100,9 @@ export function WordGenerationSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Word Generation</h2>
         <p className="leading-relaxed text-muted">
-          Scheduled job that grows the word/prompt bank via an LLM instead of manual seeding. Providers are tried in
-          order below -- the first that succeeds is used, the others are only called if it fails.
+          Scheduled job that grows the word/prompt bank via an LLM instead of manual seeding.
+          Providers are tried in order below -- the first that succeeds is used, the others are only
+          called if it fails.
         </p>
       </div>
 
@@ -97,7 +110,10 @@ export function WordGenerationSettingsPanel() {
       {!isLoading && (
         <form className="grid gap-4 md:max-w-md" onSubmit={handleSave}>
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="llm-generation-enabled">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="llm-generation-enabled"
+            >
               <input
                 checked={enabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -108,8 +124,8 @@ export function WordGenerationSettingsPanel() {
               <span>
                 <span className="block font-bold">Enable word generation</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  When on, the scheduled job generates new words/prompts every run. Off by default so nothing runs
-                  until API keys are configured and this is explicitly enabled.
+                  When on, the scheduled job generates new words/prompts every run. Off by default
+                  so nothing runs until API keys are configured and this is explicitly enabled.
                 </span>
               </span>
             </label>
@@ -118,8 +134,8 @@ export function WordGenerationSettingsPanel() {
           <div className="grid gap-2">
             <span className="font-bold">Provider order (fallback chain)</span>
             <p className="text-sm leading-relaxed text-muted">
-              1st choice is tried first; 2nd and 3rd are only used if the ones before them fail. All three must be
-              distinct.
+              1st choice is tried first; 2nd and 3rd are only used if the ones before them fail. All
+              three must be distinct.
             </p>
             <div className="grid grid-cols-3 gap-3">
               {(['1st choice', '2nd choice', '3rd choice'] as const).map((label, index) => (
@@ -149,12 +165,13 @@ export function WordGenerationSettingsPanel() {
               Words per item
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              1 = single words (added to the word-training bank, each classified by part of speech). 2-5 = short
-              phrases <strong>composed from existing classified words</strong> (not freely invented) -- the system
-              picks that many words from the word bank (favoring a noun + verb pair when available) and asks the LLM
-              to build a natural sentence using only those words, then stores it for the dictation and
-              sentence-rebuild exercises. Composition needs a classified word bank to draw from, so run "words per
-              item = 1" (or the classification backfill) first for a dialect before switching this to 2-5.
+              1 = single words (added to the word-training bank, each classified by part of speech).
+              2-5 = short phrases <strong>composed from existing classified words</strong> (not
+              freely invented) -- the system picks that many words from the word bank (favoring a
+              noun + verb pair when available) and asks the LLM to build a natural sentence using
+              only those words, then stores it for the dictation and sentence-rebuild exercises.
+              Composition needs a classified word bank to draw from, so run "words per item = 1" (or
+              the classification backfill) first for a dialect before switching this to 2-5.
             </p>
             <input
               className={inputClass}
@@ -172,7 +189,9 @@ export function WordGenerationSettingsPanel() {
             <label className="font-bold" htmlFor="llm-items-per-run">
               Items per run
             </label>
-            <p className="text-sm leading-relaxed text-muted">How many new items to request from the LLM each scheduled run.</p>
+            <p className="text-sm leading-relaxed text-muted">
+              How many new items to request from the LLM each scheduled run.
+            </p>
             <input
               className={inputClass}
               id="llm-items-per-run"
@@ -190,8 +209,8 @@ export function WordGenerationSettingsPanel() {
               Max total generated items (global)
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              Hard global ceiling for generated source content. When reached, the generator stops creating brand-new
-              English items entirely until you raise this limit.
+              Hard global ceiling for generated source content. When reached, the generator stops
+              creating brand-new English items entirely until you raise this limit.
             </p>
             <input
               className={inputClass}
@@ -210,10 +229,11 @@ export function WordGenerationSettingsPanel() {
               Max content pool per dialect
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              Once a dialect's combined prompt + word bank reaches this size, generation stops adding new translations
-              for it until you raise this limit. Scoring needs multiple trainers submitting the same prompt/word --
-              growing the pool faster than a dialect's trainer base can spread everyone too thin to ever reach quorum.
-              Increase this gradually as each dialect's active trainer count grows.
+              Once a dialect's combined prompt + word bank reaches this size, generation stops
+              adding new translations for it until you raise this limit. Scoring needs multiple
+              trainers submitting the same prompt/word -- growing the pool faster than a dialect's
+              trainer base can spread everyone too thin to ever reach quorum. Increase this
+              gradually as each dialect's active trainer count grows.
             </p>
             <input
               className={inputClass}
@@ -232,10 +252,11 @@ export function WordGenerationSettingsPanel() {
               Catch-up items per dialect per run
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              A newly-enabled dialect starts with zero content and would otherwise only grow from the shared trickle of
-              brand-new words each run, staying permanently behind dialects enabled earlier. Each run, every dialect
-              still under its pool cap gets up to this many pre-existing English words/prompts translated for it first
-              (oldest backlog first), before any brand-new content is generated.
+              A newly-enabled dialect starts with zero content and would otherwise only grow from
+              the shared trickle of brand-new words each run, staying permanently behind dialects
+              enabled earlier. Each run, every dialect still under its pool cap gets up to this many
+              pre-existing English words/prompts translated for it first (oldest backlog first),
+              before any brand-new content is generated.
             </p>
             <input
               className={inputClass}
@@ -250,7 +271,12 @@ export function WordGenerationSettingsPanel() {
           </div>
 
           <div>
-            <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+            <ActionButton
+              className={primaryButtonClass}
+              type="submit"
+              pending={isSaving}
+              pendingLabel="Saving"
+            >
               Save word generation settings
             </ActionButton>
           </div>

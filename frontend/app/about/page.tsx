@@ -65,8 +65,9 @@ export default function AboutPage() {
               Building voice AI with the people who know each dialect best.
             </h1>
             <p className="max-w-2xl text-lg leading-relaxed text-[rgba(5,5,5,0.68)]">
-              Dialect Library is a crowdsourced voice and dialect data platform. Trainers record prompts, translate word
-              tasks, and help create speech datasets that reflect how people actually speak in their communities.
+              Dialect Library is a crowdsourced voice and dialect data platform. Trainers record
+              prompts, translate word tasks, and help create speech datasets that reflect how people
+              actually speak in their communities.
             </p>
             <div className="grid grid-flow-col gap-1 justify-start md:gap-3">
               <Link
@@ -91,12 +92,16 @@ export default function AboutPage() {
           <div className="grid gap-2">
             <h2 className="text-3xl font-black leading-tight md:text-4xl">How it works</h2>
             <p className="max-w-2xl leading-relaxed text-muted">
-              From funding your account to getting paid, referring others, or cashing out — here is the full loop.
+              From funding your account to getting paid, referring others, or cashing out — here is
+              the full loop.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             {howItWorks.map((item) => (
-              <article className="grid gap-2 rounded-lg border border-line bg-surface p-5" key={item.step}>
+              <article
+                className="grid gap-2 rounded-lg border border-line bg-surface p-5"
+                key={item.step}
+              >
                 <p className="text-sm font-extrabold uppercase text-accent">{item.step}</p>
                 <h3 className="text-xl font-black">{item.title}</h3>
                 <p className="leading-relaxed text-muted">{item.body}</p>
@@ -104,14 +109,18 @@ export default function AboutPage() {
             ))}
           </div>
           <p className="leading-relaxed text-muted">
-            Payout scoring, the subscriber-funded reward pool, and member-to-member DL resale are actively being built
-            out. DL funding is live today, and referral bonuses are controlled from the admin dashboard.
+            Payout scoring, the subscriber-funded reward pool, and member-to-member DL resale are
+            actively being built out. DL funding is live today, and referral bonuses are controlled
+            from the admin dashboard.
           </p>
         </section>
 
         <section className="grid gap-4 md:grid-cols-3" aria-label="Dialect Library principles">
           {principles.map((principle) => (
-            <article className="grid gap-3 rounded-lg border border-line bg-surface p-5" key={principle.title}>
+            <article
+              className="grid gap-3 rounded-lg border border-line bg-surface p-5"
+              key={principle.title}
+            >
               <h2 className="text-xl font-black">{principle.title}</h2>
               <p className="leading-relaxed text-muted">{principle.body}</p>
             </article>
@@ -121,8 +130,9 @@ export default function AboutPage() {
         <section className="grid gap-3 rounded-lg border border-[#efd6ad] bg-[#fff7e8] p-5 text-[#8a4b0f]">
           <h2 className="text-2xl font-black">Why this matters</h2>
           <p className="max-w-4xl leading-relaxed">
-            Speech tools often work best for well-represented accents and languages. Dialect Library focuses on collecting
-            high-signal local examples so future ASR and voice systems can serve more speakers accurately.
+            Speech tools often work best for well-represented accents and languages. Dialect Library
+            focuses on collecting high-signal local examples so future ASR and voice systems can
+            serve more speakers accurately.
           </p>
         </section>
       </div>

@@ -6,7 +6,9 @@
 export default function DemoPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-8">
-      <p className="text-neutral-500">ChatDialect demo -- voice conversation and avatar not wired up yet.</p>
+      <p className="text-neutral-500">
+        ChatDialect demo -- voice conversation and avatar not wired up yet.
+      </p>
     </main>
   );
 }

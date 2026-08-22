@@ -13,7 +13,9 @@ export default function DistributorTokensPage() {
     {
       key: 'createdAt',
       header: 'Date',
-      render: (a) => <span className="text-muted">{new Date(a.createdAt).toLocaleDateString()}</span>,
+      render: (a) => (
+        <span className="text-muted">{new Date(a.createdAt).toLocaleDateString()}</span>
+      ),
       sortValue: (a) => a.createdAt,
     },
     {
@@ -25,7 +27,9 @@ export default function DistributorTokensPage() {
     {
       key: 'discountRate',
       header: 'Discount',
-      render: (a) => <span className="text-muted">{(Number(a.discountRate) * 100).toFixed(2)}%</span>,
+      render: (a) => (
+        <span className="text-muted">{(Number(a.discountRate) * 100).toFixed(2)}%</span>
+      ),
       sortValue: (a) => Number(a.discountRate),
     },
     {
@@ -49,8 +53,16 @@ export default function DistributorTokensPage() {
         {data && (
           <>
             <section className="grid gap-3 sm:grid-cols-2">
-              <Metric icon={WalletCards} label="Available DL" value={formatTokens(data.wallet.balance)} />
-              <Metric icon={Network} label="Network DL balance" value={formatTokens(data.metrics.networkTokenBalance)} />
+              <Metric
+                icon={WalletCards}
+                label="Available DL"
+                value={formatTokens(data.wallet.balance)}
+              />
+              <Metric
+                icon={Network}
+                label="Network DL balance"
+                value={formatTokens(data.metrics.networkTokenBalance)}
+              />
             </section>
 
             <div>
@@ -70,10 +82,20 @@ export default function DistributorTokensPage() {
   );
 }
 
-function Metric({ icon: Icon, label, value }: { icon: typeof WalletCards; label: string; value: string }) {
+function Metric({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof WalletCards;
+  label: string;
+  value: string;
+}) {
   return (
     <article className="rounded-lg border border-line bg-surface p-4">
-      <div className="mb-4 flex size-10 items-center justify-center rounded-lg bg-accent-soft text-accent"><Icon className="size-5" /></div>
+      <div className="mb-4 flex size-10 items-center justify-center rounded-lg bg-accent-soft text-accent">
+        <Icon className="size-5" />
+      </div>
       <p className="text-sm font-bold text-muted">{label}</p>
       <p className="mt-1 text-2xl font-black">{value}</p>
     </article>

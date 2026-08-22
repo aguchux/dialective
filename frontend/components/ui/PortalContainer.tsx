@@ -20,7 +20,9 @@ export function PortalContainerProvider({
   container: HTMLElement | null;
   children: React.ReactNode;
 }) {
-  return <PortalContainerContext.Provider value={container}>{children}</PortalContainerContext.Provider>;
+  return (
+    <PortalContainerContext.Provider value={container}>{children}</PortalContainerContext.Provider>
+  );
 }
 
 export function usePortalContainer(): HTMLElement | undefined {

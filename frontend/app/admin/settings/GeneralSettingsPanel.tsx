@@ -1,10 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -22,7 +27,8 @@ export function GeneralSettingsPanel() {
   const [phoneVerificationRequired, setPhoneVerificationRequired] = useState(true);
   const [manualPhoneVerificationEnabled, setManualPhoneVerificationEnabled] = useState(true);
   const [manualPhoneVerificationFeeTokens, setManualPhoneVerificationFeeTokens] = useState('');
-  const [manualPhoneVerificationWhatsappNumber, setManualPhoneVerificationWhatsappNumber] = useState('');
+  const [manualPhoneVerificationWhatsappNumber, setManualPhoneVerificationWhatsappNumber] =
+    useState('');
   const [startupBonusAmount, setStartupBonusAmount] = useState('');
   const [wordStuckTimeoutMinutes, setWordStuckTimeoutMinutes] = useState('');
   const [scoringSlaMinutes, setScoringSlaMinutes] = useState('');
@@ -60,7 +66,11 @@ export function GeneralSettingsPanel() {
     setMessage(null);
     setError(null);
 
-    if (minScoreRange !== '' && maxScoreRange !== '' && Number(minScoreRange) > Number(maxScoreRange)) {
+    if (
+      minScoreRange !== '' &&
+      maxScoreRange !== '' &&
+      Number(minScoreRange) > Number(maxScoreRange)
+    ) {
       setError('Minimum score range cannot be greater than the maximum.');
       return;
     }
@@ -83,9 +93,13 @@ export function GeneralSettingsPanel() {
           : {}),
         manualPhoneVerificationWhatsappNumber,
         ...(startupBonusAmount !== '' ? { startupBonusAmount: Number(startupBonusAmount) } : {}),
-        ...(wordStuckTimeoutMinutes !== '' ? { wordStuckTimeoutMinutes: Number(wordStuckTimeoutMinutes) } : {}),
+        ...(wordStuckTimeoutMinutes !== ''
+          ? { wordStuckTimeoutMinutes: Number(wordStuckTimeoutMinutes) }
+          : {}),
         ...(scoringSlaMinutes !== '' ? { scoringSlaMinutes: Number(scoringSlaMinutes) } : {}),
-        ...(settlementDelayMinutes !== '' ? { settlementDelayMinutes: Number(settlementDelayMinutes) } : {}),
+        ...(settlementDelayMinutes !== ''
+          ? { settlementDelayMinutes: Number(settlementDelayMinutes) }
+          : {}),
         noFailOnTrainEnabled,
         ...(minScoreRange !== '' ? { minScoreRange: Number(minScoreRange) } : {}),
         ...(maxScoreRange !== '' ? { maxScoreRange: Number(maxScoreRange) } : {}),
@@ -112,7 +126,9 @@ export function GeneralSettingsPanel() {
             <label className="font-bold" htmlFor="token-usd-rate">
               DL/USD rate
             </label>
-            <p className="text-sm leading-relaxed text-muted">USD value of one DL, e.g. 0.10 = 10 cents.</p>
+            <p className="text-sm leading-relaxed text-muted">
+              USD value of one DL, e.g. 0.10 = 10 cents.
+            </p>
             <input
               className={inputClass}
               id="token-usd-rate"
@@ -129,7 +145,9 @@ export function GeneralSettingsPanel() {
             <label className="font-bold" htmlFor="min-withdrawal">
               Minimum withdrawal (DL)
             </label>
-            <p className="text-sm leading-relaxed text-muted">Smallest DL amount a trainer can withdraw at once.</p>
+            <p className="text-sm leading-relaxed text-muted">
+              Smallest DL amount a trainer can withdraw at once.
+            </p>
             <input
               className={inputClass}
               id="min-withdrawal"
@@ -146,7 +164,9 @@ export function GeneralSettingsPanel() {
             <label className="font-bold" htmlFor="task-token-cost">
               Task cost (DL)
             </label>
-            <p className="text-sm leading-relaxed text-muted">DL debited from a trainer's wallet per submission.</p>
+            <p className="text-sm leading-relaxed text-muted">
+              DL debited from a trainer's wallet per submission.
+            </p>
             <input
               className={inputClass}
               id="task-token-cost"
@@ -164,8 +184,8 @@ export function GeneralSettingsPanel() {
               Startup bonus (DL)
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              One-time DL credit granted automatically the first time a user verifies their email. Leave blank or 0
-              to turn it off.
+              One-time DL credit granted automatically the first time a user verifies their email.
+              Leave blank or 0 to turn it off.
             </p>
             <input
               className={inputClass}
@@ -184,8 +204,9 @@ export function GeneralSettingsPanel() {
               Training payout bonus cap (multiple of stake)
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              Caps the score-scaled Reward Pool bonus at this multiple of DL spent, e.g. 1.0 = up to 1x stake as
-              bonus at a perfect score. The trainer always gets DL spent back regardless of score.
+              Caps the score-scaled Reward Pool bonus at this multiple of DL spent, e.g. 1.0 = up to
+              1x stake as bonus at a perfect score. The trainer always gets DL spent back regardless
+              of score.
             </p>
             <input
               className={inputClass}
@@ -204,8 +225,8 @@ export function GeneralSettingsPanel() {
               Unmatched word recording timeout (minutes)
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              How long a dialect-to-English word recording can wait for peer reverse-validation before its held
-              DL is automatically returned to the trainer's balance.
+              How long a dialect-to-English word recording can wait for peer reverse-validation
+              before its held DL is automatically returned to the trainer's balance.
             </p>
             <input
               className={inputClass}
@@ -223,8 +244,9 @@ export function GeneralSettingsPanel() {
               Scoring time limit (minutes)
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              How long a submitted task can wait for consensus scoring before it's resolved automatically -- either
-              refunded (below) or, if "Pay on timeout" is on, paid out at a random score.
+              How long a submitted task can wait for consensus scoring before it's resolved
+              automatically -- either refunded (below) or, if "Pay on timeout" is on, paid out at a
+              random score.
             </p>
             <input
               className={inputClass}
@@ -242,9 +264,9 @@ export function GeneralSettingsPanel() {
               Settlement delay (minutes)
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              How long to wait after a task is scored before crediting the payout to the trainer's balance -- a
-              review window for catching issues before DL moves. 0 settles as soon as scoring completes; set well
-              past 1440 (24 hours) for a longer hold.
+              How long to wait after a task is scored before crediting the payout to the trainer's
+              balance -- a review window for catching issues before DL moves. 0 settles as soon as
+              scoring completes; set well past 1440 (24 hours) for a longer hold.
             </p>
             <input
               className={inputClass}
@@ -258,7 +280,10 @@ export function GeneralSettingsPanel() {
           </div>
 
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="no-fail-on-train">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="no-fail-on-train"
+            >
               <input
                 checked={noFailOnTrainEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -269,9 +294,10 @@ export function GeneralSettingsPanel() {
               <span>
                 <span className="block font-bold">Pay on timeout (no fail on train)</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  When on, a task still unscored past the scoring time limit is paid out at a random score within the
-                  range below instead of just being refunded -- the trainer completed and submitted real work, so
-                  they're paid for it even if consensus/reverse-validation never resolves.
+                  When on, a task still unscored past the scoring time limit is paid out at a random
+                  score within the range below instead of just being refunded -- the trainer
+                  completed and submitted real work, so they're paid for it even if
+                  consensus/reverse-validation never resolves.
                 </span>
               </span>
             </label>
@@ -313,7 +339,10 @@ export function GeneralSettingsPanel() {
           )}
 
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="reverse-word-training">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="reverse-word-training"
+            >
               <input
                 checked={reverseWordTrainingEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -324,14 +353,18 @@ export function GeneralSettingsPanel() {
               <span>
                 <span className="block font-bold">Dialect-to-English validation</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Mix translations submitted by other trainers into word sessions for reverse validation and scoring.
+                  Mix translations submitted by other trainers into word sessions for reverse
+                  validation and scoring.
                 </span>
               </span>
             </label>
           </div>
 
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="sentence-rebuild">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="sentence-rebuild"
+            >
               <input
                 checked={sentenceRebuildEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -342,16 +375,19 @@ export function GeneralSettingsPanel() {
               <span>
                 <span className="block font-bold">Sentence rebuild exercise</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Mix in a tap-the-fragments-in-order sentence exercise during word sessions, using classified word
-                  sequences generated for each prompt. Requires part-of-speech classification and segmentation to be
-                  populated for at least some prompts.
+                  Mix in a tap-the-fragments-in-order sentence exercise during word sessions, using
+                  classified word sequences generated for each prompt. Requires part-of-speech
+                  classification and segmentation to be populated for at least some prompts.
                 </span>
               </span>
             </label>
           </div>
 
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="admin-payout-otp">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="admin-payout-otp"
+            >
               <input
                 checked={adminPayoutOtpEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -362,15 +398,18 @@ export function GeneralSettingsPanel() {
               <span>
                 <span className="block font-bold">Require OTP for admin payouts</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  When on, issuing a training payout or marking a withdrawal paid requires the acting admin to verify
-                  an emailed one-time code first.
+                  When on, issuing a training payout or marking a withdrawal paid requires the
+                  acting admin to verify an emailed one-time code first.
                 </span>
               </span>
             </label>
           </div>
 
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="phone-verification-required">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="phone-verification-required"
+            >
               <input
                 checked={phoneVerificationRequired}
                 className="mt-0.5 size-5 accent-accent"
@@ -381,17 +420,21 @@ export function GeneralSettingsPanel() {
               <span>
                 <span className="block font-bold">Require phone verification</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  When on (default), trainers must verify their phone by SMS before requesting a withdrawal or
-                  trading on the P2P market. When off, phone numbers can be saved without SMS verification, and
-                  withdrawals and P2P trading fall back to an emailed one-time code instead -- withdrawals already
-                  require this email code regardless of this setting.
+                  When on (default), trainers must verify their phone by SMS before requesting a
+                  withdrawal or trading on the P2P market. When off, phone numbers can be saved
+                  without SMS verification, and withdrawals and P2P trading fall back to an emailed
+                  one-time code instead -- withdrawals already require this email code regardless of
+                  this setting.
                 </span>
               </span>
             </label>
           </div>
 
           <div className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4">
-            <label className="flex cursor-pointer items-start gap-3" htmlFor="manual-phone-verification">
+            <label
+              className="flex cursor-pointer items-start gap-3"
+              htmlFor="manual-phone-verification"
+            >
               <input
                 checked={manualPhoneVerificationEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -402,8 +445,8 @@ export function GeneralSettingsPanel() {
               <span>
                 <span className="block font-bold">Allow manual WhatsApp phone verification</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Trainers can pay a configured DL fee, see a one-time code, and send it to WhatsApp for admin
-                  verification when SMS delivery fails.
+                  Trainers can pay a configured DL fee, see a one-time code, and send it to WhatsApp
+                  for admin verification when SMS delivery fails.
                 </span>
               </span>
             </label>
@@ -435,7 +478,12 @@ export function GeneralSettingsPanel() {
           </div>
 
           <div>
-            <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+            <ActionButton
+              className={primaryButtonClass}
+              type="submit"
+              pending={isSaving}
+              pendingLabel="Saving"
+            >
               Save general settings
             </ActionButton>
           </div>

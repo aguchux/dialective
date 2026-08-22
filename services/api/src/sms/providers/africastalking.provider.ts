@@ -7,7 +7,7 @@ export class AfricasTalkingProvider implements SmsProvider {
     const apiKey = process.env.AFRICASTALKING_API_KEY;
     const username = process.env.AFRICASTALKING_USERNAME;
     const senderId = senderIdOverride || process.env.AFRICASTALKING_SENDER_ID;
-    if (!apiKey || !username) throw new Error('Africa\'s Talking credentials not set');
+    if (!apiKey || !username) throw new Error("Africa's Talking credentials not set");
 
     const params = new URLSearchParams({ username, to: toE164, message: body });
     if (senderId) params.set('from', senderId);
@@ -21,6 +21,7 @@ export class AfricasTalkingProvider implements SmsProvider {
       },
       body: params.toString(),
     });
-    if (!res.ok) throw new Error(`Africa's Talking request failed: ${res.status} ${await res.text()}`);
+    if (!res.ok)
+      throw new Error(`Africa's Talking request failed: ${res.status} ${await res.text()}`);
   }
 }

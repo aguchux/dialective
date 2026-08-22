@@ -42,21 +42,35 @@ export function BlogEditor({ data, uploadMedia, onChange, onReady }: BlogEditorP
       minHeight: 420,
       inlineToolbar: ['bold', 'italic', 'link'],
       tools: {
-        header: { class: Header as unknown as ToolConstructable, inlineToolbar: true, config: { levels: [2, 3, 4], defaultLevel: 2 } },
+        header: {
+          class: Header as unknown as ToolConstructable,
+          inlineToolbar: true,
+          config: { levels: [2, 3, 4], defaultLevel: 2 },
+        },
         list: { class: EditorList as unknown as ToolConstructable, inlineToolbar: true },
         checklist: { class: Checklist as unknown as ToolConstructable, inlineToolbar: true },
         quote: { class: Quote as unknown as ToolConstructable, inlineToolbar: true },
-        table: { class: Table as unknown as ToolConstructable, inlineToolbar: true, config: { rows: 2, cols: 3 } },
+        table: {
+          class: Table as unknown as ToolConstructable,
+          inlineToolbar: true,
+          config: { rows: 2, cols: 3 },
+        },
         image: {
           class: ImageTool as unknown as ToolConstructable,
           config: {
             uploader: {
-              uploadByFile: async (file: File) => ({ success: 1, file: { url: await uploadMedia(file, 'IMAGE') } }),
+              uploadByFile: async (file: File) => ({
+                success: 1,
+                file: { url: await uploadMedia(file, 'IMAGE') },
+              }),
             },
           },
         },
         video: { class: VideoBlock as unknown as ToolConstructable, config: { uploadMedia } },
-        embed: { class: Embed as unknown as ToolConstructable, config: { services: { youtube: true, vimeo: true } } },
+        embed: {
+          class: Embed as unknown as ToolConstructable,
+          config: { services: { youtube: true, vimeo: true } },
+        },
         delimiter: Delimiter as unknown as ToolConstructable,
         code: CodeTool as unknown as ToolConstructable,
         raw: RawTool as unknown as ToolConstructable,
@@ -69,7 +83,10 @@ export function BlogEditor({ data, uploadMedia, onChange, onReady }: BlogEditorP
       onChange: () => {
         if (!onChange) return;
         clearTimeout(changeTimer.current);
-        changeTimer.current = setTimeout(async () => onChange((await editor.save()) as EditorDocument), 450);
+        changeTimer.current = setTimeout(
+          async () => onChange((await editor.save()) as EditorDocument),
+          450,
+        );
       },
     });
 
@@ -82,7 +99,12 @@ export function BlogEditor({ data, uploadMedia, onChange, onReady }: BlogEditorP
     };
   }, [data, onChange, onReady, uploadMedia]);
 
-  return <div className="blog-editor min-h-105 rounded-lg border border-line bg-white px-2 py-5" id={holderId.current} />;
+  return (
+    <div
+      className="blog-editor min-h-105 rounded-lg border border-line bg-white px-2 py-5"
+      id={holderId.current}
+    />
+  );
 }
 
 class ButtonBlock {
@@ -90,7 +112,10 @@ class ButtonBlock {
   private wrapper?: HTMLDivElement;
 
   static get toolbox() {
-    return { title: 'Button', icon: '<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="5" width="14" height="8" rx="2" fill="none" stroke="currentColor"/><path d="M6 9h6" stroke="currentColor"/></svg>' };
+    return {
+      title: 'Button',
+      icon: '<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="5" width="14" height="8" rx="2" fill="none" stroke="currentColor"/><path d="M6 9h6" stroke="currentColor"/></svg>',
+    };
   }
 
   constructor({ data }: { data: { text?: string; url?: string; variant?: string } }) {
@@ -111,7 +136,8 @@ class ButtonBlock {
   }
 
   save() {
-    const value = (field: string) => (this.wrapper?.querySelector(`[data-field="${field}"]`) as HTMLInputElement)?.value.trim();
+    const value = (field: string) =>
+      (this.wrapper?.querySelector(`[data-field="${field}"]`) as HTMLInputElement)?.value.trim();
     return { text: value('text'), url: value('url'), variant: value('variant') };
   }
 }
@@ -122,10 +148,19 @@ class VideoBlock {
   private uploadMedia: BlogEditorProps['uploadMedia'];
 
   static get toolbox() {
-    return { title: 'Video', icon: '<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="3" width="14" height="12" rx="2" fill="none" stroke="currentColor"/><path d="m7 6 5 3-5 3Z" fill="currentColor"/></svg>' };
+    return {
+      title: 'Video',
+      icon: '<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="3" width="14" height="12" rx="2" fill="none" stroke="currentColor"/><path d="m7 6 5 3-5 3Z" fill="currentColor"/></svg>',
+    };
   }
 
-  constructor({ data, config }: { data: { url?: string; caption?: string }; config: { uploadMedia: BlogEditorProps['uploadMedia'] } }) {
+  constructor({
+    data,
+    config,
+  }: {
+    data: { url?: string; caption?: string };
+    config: { uploadMedia: BlogEditorProps['uploadMedia'] };
+  }) {
     this.data = data ?? {};
     this.uploadMedia = config.uploadMedia;
   }
@@ -138,7 +173,9 @@ class VideoBlock {
   }
 
   save() {
-    const caption = (this.wrapper?.querySelector('[data-field="caption"]') as HTMLInputElement)?.value.trim() ?? '';
+    const caption =
+      (this.wrapper?.querySelector('[data-field="caption"]') as HTMLInputElement)?.value.trim() ??
+      '';
     return { url: this.data.url ?? '', caption };
   }
 
@@ -160,5 +197,9 @@ class VideoBlock {
 }
 
 function escapeAttribute(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }

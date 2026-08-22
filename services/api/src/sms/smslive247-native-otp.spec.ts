@@ -37,23 +37,36 @@ describe('smslive247-native-otp', () => {
 
     it('throws when credentials are not set', async () => {
       delete process.env.SMSLIVE247_API_KEY;
-      await expect(createSmslive247Otp('+2348012345678')).rejects.toThrow('SMSLive247 credentials not set');
+      await expect(createSmslive247Otp('+2348012345678')).rejects.toThrow(
+        'SMSLive247 credentials not set',
+      );
     });
 
     it('throws on a non-2xx response', async () => {
-      global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 422, text: async () => 'bad request' }) as any;
-      await expect(createSmslive247Otp('+2348012345678')).rejects.toThrow('SMSLive247 token-create failed: 422');
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: false, status: 422, text: async () => 'bad request' }) as any;
+      await expect(createSmslive247Otp('+2348012345678')).rejects.toThrow(
+        'SMSLive247 token-create failed: 422',
+      );
     });
 
     it('throws when the response is missing expiresAt', async () => {
-      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ token: 'x' }) }) as any;
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => ({ token: 'x' }) }) as any;
       await expect(createSmslive247Otp('+2348012345678')).rejects.toThrow('missing expiresAt');
     });
   });
 
   describe('verifySmslive247Otp', () => {
     it('sends a DELETE with the code and phone number, returns true on isValid', async () => {
-      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ isValid: true, message: 'ok' }) }) as any;
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({
+          ok: true,
+          json: async () => ({ isValid: true, message: 'ok' }),
+        }) as any;
 
       const result = await verifySmslive247Otp('+2348012345678', '123456');
 
@@ -68,13 +81,22 @@ describe('smslive247-native-otp', () => {
     });
 
     it('returns false when isValid is false', async () => {
-      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ isValid: false, message: 'expired' }) }) as any;
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({
+          ok: true,
+          json: async () => ({ isValid: false, message: 'expired' }),
+        }) as any;
       expect(await verifySmslive247Otp('+2348012345678', '000000')).toBe(false);
     });
 
     it('throws on a non-2xx response', async () => {
-      global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 401, text: async () => 'unauthorized' }) as any;
-      await expect(verifySmslive247Otp('+2348012345678', '123456')).rejects.toThrow('SMSLive247 token-verify failed: 401');
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: false, status: 401, text: async () => 'unauthorized' }) as any;
+      await expect(verifySmslive247Otp('+2348012345678', '123456')).rejects.toThrow(
+        'SMSLive247 token-verify failed: 401',
+      );
     });
   });
 });

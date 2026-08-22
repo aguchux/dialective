@@ -25,7 +25,13 @@ interface GeoStats {
   visibility: GeoStatsVisibility;
 }
 
-const DEFAULT_VISIBILITY: GeoStatsVisibility = { countries: true, dialects: true, trainers: true, poolVolume: true, payout: true };
+const DEFAULT_VISIBILITY: GeoStatsVisibility = {
+  countries: true,
+  dialects: true,
+  trainers: true,
+  poolVolume: true,
+  payout: true,
+};
 
 interface Country {
   id: string;
@@ -46,7 +52,9 @@ async function getGeoStats(): Promise<GeoStats | null> {
 
 async function getCountries(): Promise<Country[]> {
   try {
-    const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/geo/countries`, { next: { revalidate: 300 } });
+    const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/geo/countries`, {
+      next: { revalidate: 300 },
+    });
     if (!res.ok) return [];
     return res.json();
   } catch {

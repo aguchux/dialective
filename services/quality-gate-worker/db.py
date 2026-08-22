@@ -74,14 +74,24 @@ WHERE id = %(record_id)s
 """
 
 _speech_expression_enabled_cache: tuple[bool, float] | None = None
-SPEECH_EXPRESSION_ENABLED_CACHE_TTL_S = 5.0  # mirrors PlatformSettingsService's own 5s in-process cache TTL
+SPEECH_EXPRESSION_ENABLED_CACHE_TTL_S = (
+    5.0  # mirrors PlatformSettingsService's own 5s in-process cache TTL
+)
 
 
 def build_db_connection():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
-def write_scores(conn, record_kind: str, record_id: str, *, noise_score: float, quality_score: float, liveness_score: float) -> None:
+def write_scores(
+    conn,
+    record_kind: str,
+    record_id: str,
+    *,
+    noise_score: float,
+    quality_score: float,
+    liveness_score: float,
+) -> None:
     """
     Writes the three quality-gate signals onto the Submission or
     WordRecording row api already inserted before publishing to
@@ -90,7 +100,11 @@ def write_scores(conn, record_kind: str, record_id: str, *, noise_score: float, 
     since this worker never creates rows, only annotates ones api already
     created.
     """
-    sql = UPDATE_SUBMISSION_SCORES_SQL if record_kind == "submission" else UPDATE_WORD_RECORDING_SCORES_SQL
+    sql = (
+        UPDATE_SUBMISSION_SCORES_SQL
+        if record_kind == "submission"
+        else UPDATE_WORD_RECORDING_SCORES_SQL
+    )
     with conn.cursor() as cur:
         cur.execute(
             sql,
@@ -129,7 +143,11 @@ def write_expression(
     speechExpressionEnabled is on (see get_speech_expression_enabled).
     Same 0-row-match tolerance as write_scores (logged, not raised).
     """
-    sql = UPDATE_SUBMISSION_EXPRESSION_SQL if record_kind == "submission" else UPDATE_WORD_RECORDING_EXPRESSION_SQL
+    sql = (
+        UPDATE_SUBMISSION_EXPRESSION_SQL
+        if record_kind == "submission"
+        else UPDATE_WORD_RECORDING_EXPRESSION_SQL
+    )
     with conn.cursor() as cur:
         cur.execute(
             sql,
@@ -141,7 +159,9 @@ def write_expression(
                 "style": style,
                 "speed": speed,
                 "energy": energy,
-                "prosody_metrics": json.dumps(prosody_metrics) if prosody_metrics is not None else None,
+                "prosody_metrics": json.dumps(prosody_metrics)
+                if prosody_metrics is not None
+                else None,
             },
         )
         if cur.rowcount == 0:
@@ -188,7 +208,12 @@ def reject_submission(conn, submission_id: str, rejection_reason: str) -> None:
     Submissions.
     """
     with conn.cursor() as cur:
-        cur.execute(REJECT_SUBMISSION_SQL, {"record_id": submission_id, "rejection_reason": rejection_reason})
+        cur.execute(
+            REJECT_SUBMISSION_SQL,
+            {"record_id": submission_id, "rejection_reason": rejection_reason},
+        )
         if cur.rowcount == 0:
-            logger.warning("reject_submission matched 0 rows for submission=%s", submission_id)
+            logger.warning(
+                "reject_submission matched 0 rows for submission=%s", submission_id
+            )
     conn.commit()

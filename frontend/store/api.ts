@@ -407,7 +407,8 @@ export interface Wallet {
 
 export type WithdrawalCurrency = 'USDT' | 'USDC';
 export type WithdrawalNetwork = 'TRC20' | 'ERC20' | 'BEP20' | 'SOL' | 'POLYGON';
-export type WithdrawalStatus = 'PENDING' | 'APPROVED' | 'PROCESSING' | 'PAID' | 'FAILED' | 'REJECTED';
+export type WithdrawalStatus =
+  'PENDING' | 'APPROVED' | 'PROCESSING' | 'PAID' | 'FAILED' | 'REJECTED';
 
 export interface AdminWithdrawalRequest {
   id: string;
@@ -460,8 +461,16 @@ export type LedgerEntryType =
   | 'P2P_ESCROW_CREDIT';
 
 export type P2POfferType = 'SELL' | 'BUY';
-export type P2POfferStatus = 'ACTIVE' | 'RESERVED' | 'EXPIRED' | 'CANCELLED' | 'COMPLETED' | 'DISPUTED';
-export type P2PTradeStatus = 'AWAITING_PAYMENT' | 'PAID_MARKED' | 'RELEASED' | 'CANCEL_PENDING' | 'CANCELLED' | 'DISPUTED' | 'EXPIRED';
+export type P2POfferStatus =
+  'ACTIVE' | 'RESERVED' | 'EXPIRED' | 'CANCELLED' | 'COMPLETED' | 'DISPUTED';
+export type P2PTradeStatus =
+  | 'AWAITING_PAYMENT'
+  | 'PAID_MARKED'
+  | 'RELEASED'
+  | 'CANCEL_PENDING'
+  | 'CANCELLED'
+  | 'DISPUTED'
+  | 'EXPIRED';
 export type P2PDisputeStatus = 'OPEN' | 'RESOLVED_BUYER' | 'RESOLVED_SELLER';
 
 export interface UserPaymentMethod {
@@ -613,7 +622,13 @@ export interface TrainerDashboardSummary {
   referrals: {
     code: string;
     invitedCount: number;
-    recentInvites: { id: string; firstName: string | null; email: string; createdAt: string; status: 'INVITED' | 'JOINED' }[];
+    recentInvites: {
+      id: string;
+      firstName: string | null;
+      email: string;
+      createdAt: string;
+      status: 'INVITED' | 'JOINED';
+    }[];
     cookiePersistSeconds: number;
     inviteExpirySeconds: number;
     fundingBonusRate: string;
@@ -980,7 +995,8 @@ export interface PlatformSettingsInput {
   landingShowPayout?: boolean;
 }
 
-export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD';
+export type WordTrainingDirection =
+  'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD';
 export type RecordingNoiseRating = 'NOISY' | 'FAIR' | 'QUIET';
 
 export interface WordTrainingSession {
@@ -1124,7 +1140,8 @@ export interface WordDetail {
   conf: number | null;
 }
 
-export type SpeechEmotion = 'NEUTRAL' | 'HAPPY' | 'SAD' | 'ANGRY' | 'FEARFUL' | 'SURPRISED' | 'DISGUSTED';
+export type SpeechEmotion =
+  'NEUTRAL' | 'HAPPY' | 'SAD' | 'ANGRY' | 'FEARFUL' | 'SURPRISED' | 'DISGUSTED';
 export type SpeechTone = 'FORMAL' | 'CASUAL' | 'EMPHATIC' | 'FLAT';
 export type SpeechStyle = 'CONVERSATIONAL' | 'READ_ALOUD' | 'EXPRESSIVE';
 export type SpeechSpeed = 'SLOW' | 'NORMAL' | 'FAST';
@@ -1191,7 +1208,8 @@ export interface AuditRecordingResult {
   clawedBack: boolean;
 }
 
-export type RecordingSortField = 'createdAt' | 'score' | 'compositeScore' | 'rawScore' | 'payoutTokenAmount';
+export type RecordingSortField =
+  'createdAt' | 'score' | 'compositeScore' | 'rawScore' | 'payoutTokenAmount';
 
 export interface ListAllRecordingsParams {
   kind: RecordingKind;
@@ -1492,9 +1510,14 @@ const rawBaseQuery = fetchBaseQuery({
 const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptions) => {
   const result = await rawBaseQuery(args, api, extraOptions);
   if (result.error && result.error.status === 503) {
-    const data = result.error.data as { error?: string; authMaintenanceUntil?: string; authMaintenanceMessage?: string | null } | undefined;
+    const data = result.error.data as
+      | { error?: string; authMaintenanceUntil?: string; authMaintenanceMessage?: string | null }
+      | undefined;
     if (data?.error === 'AuthMaintenance') {
-      notifyAuthMaintenance({ until: data.authMaintenanceUntil ?? null, message: data.authMaintenanceMessage ?? null });
+      notifyAuthMaintenance({
+        until: data.authMaintenanceUntil ?? null,
+        message: data.authMaintenanceMessage ?? null,
+      });
     }
   }
   return result;
@@ -1503,9 +1526,47 @@ const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptio
 export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
   baseQuery: baseQueryWithMaintenanceSignal,
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'RequiredCourses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'AdminRecordings', 'AudioRetentionRules', 'DataAccessLeads', 'P2P', 'Profile', 'Notifications', 'ApiAccessTokens'],
+  tagTypes: [
+    'Auth',
+    'Wallet',
+    'ReferralSettings',
+    'DistributorSettings',
+    'DistributorDashboard',
+    'DistributorAllocations',
+    'DistributorList',
+    'DistributorActivity',
+    'SubDistributorList',
+    'SubDistributorActivity',
+    'Users',
+    'AdminCountries',
+    'AdminDialects',
+    'PlatformSettings',
+    'BlogPosts',
+    'Courses',
+    'RequiredCourses',
+    'Pools',
+    'Submissions',
+    'AdminWords',
+    'AdminPrompts',
+    'AdminRecordings',
+    'AudioRetentionRules',
+    'DataAccessLeads',
+    'P2P',
+    'Profile',
+    'Notifications',
+    'ApiAccessTokens',
+  ],
   endpoints: (builder) => ({
-    register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
+    register: builder.mutation<
+      PendingOtp,
+      {
+        firstName: string;
+        lastName: string;
+        email: string;
+        password: string;
+        referralCode?: string;
+      }
+    >({
       query: (body) => ({
         url: '/auth/register',
         method: 'POST',
@@ -1548,18 +1609,27 @@ export const dialectivaApi = createApi({
       query: () => '/p2p/payment-methods',
       providesTags: ['P2P'],
     }),
-    requestP2PPaymentMethodOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, PaymentMethodInput>({
+    requestP2PPaymentMethodOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      PaymentMethodInput
+    >({
       query: (body) => ({ url: '/p2p/payment-methods/otp', method: 'POST', body }),
     }),
     createP2PPaymentMethod: builder.mutation<UserPaymentMethod, VerifiedPaymentMethodInput>({
       query: (body) => ({ url: '/p2p/payment-methods', method: 'POST', body }),
       invalidatesTags: ['P2P'],
     }),
-    updateP2PPaymentMethod: builder.mutation<UserPaymentMethod, { id: string; body: VerifiedPaymentMethodInput }>({
+    updateP2PPaymentMethod: builder.mutation<
+      UserPaymentMethod,
+      { id: string; body: VerifiedPaymentMethodInput }
+    >({
       query: ({ id, body }) => ({ url: `/p2p/payment-methods/${id}`, method: 'PATCH', body }),
       invalidatesTags: ['P2P'],
     }),
-    listP2POffers: builder.query<P2POffer[], { type?: P2POfferType; status?: P2POfferStatus } | void>({
+    listP2POffers: builder.query<
+      P2POffer[],
+      { type?: P2POfferType; status?: P2POfferStatus } | void
+    >({
       query: (params) => ({ url: '/p2p/offers', params: params ?? undefined }),
       providesTags: ['P2P'],
     }),
@@ -1572,7 +1642,13 @@ export const dialectivaApi = createApi({
     }),
     requestP2PTradeOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
-      | { action: 'create-offer'; type: P2POfferType; tokenAmount: number; fiatAmount: number; fiatCurrency: string }
+      | {
+          action: 'create-offer';
+          type: P2POfferType;
+          tokenAmount: number;
+          fiatAmount: number;
+          fiatCurrency: string;
+        }
       | { action: 'accept-offer'; offerId: string }
     >({
       query: (body) => ({ url: '/p2p/offers/otp', method: 'POST', body }),
@@ -1594,7 +1670,10 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/p2p/offers', method: 'POST', body }),
       invalidatesTags: ['P2P', 'Wallet'],
     }),
-    acceptP2POffer: builder.mutation<P2PTrade, { id: string; sellerPaymentMethodId?: string; otpRequestId?: string; code?: string }>({
+    acceptP2POffer: builder.mutation<
+      P2PTrade,
+      { id: string; sellerPaymentMethodId?: string; otpRequestId?: string; code?: string }
+    >({
       query: ({ id, ...body }) => ({ url: `/p2p/offers/${id}/accept`, method: 'POST', body }),
       invalidatesTags: ['P2P', 'Wallet'],
     }),
@@ -1618,8 +1697,15 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/p2p/trades/${id}/release`, method: 'POST' }),
       invalidatesTags: ['P2P', 'Wallet'],
     }),
-    raiseP2PDispute: builder.mutation<P2PTrade, { id: string; reason: string; evidenceUrl?: string }>({
-      query: ({ id, reason, evidenceUrl }) => ({ url: `/p2p/trades/${id}/dispute`, method: 'POST', body: { reason, evidenceUrl } }),
+    raiseP2PDispute: builder.mutation<
+      P2PTrade,
+      { id: string; reason: string; evidenceUrl?: string }
+    >({
+      query: ({ id, reason, evidenceUrl }) => ({
+        url: `/p2p/trades/${id}/dispute`,
+        method: 'POST',
+        body: { reason, evidenceUrl },
+      }),
       invalidatesTags: ['P2P'],
     }),
     getTrainerDashboard: builder.query<TrainerDashboardSummary, void>({
@@ -1649,7 +1735,13 @@ export const dialectivaApi = createApi({
     }),
     createSubmission: builder.mutation<
       { submissionId: string; status: string; tokensSpent: string },
-      { submissionId: string; promptId: string; dialectTag: string; bucket: string; audioKey: string }
+      {
+        submissionId: string;
+        promptId: string;
+        dialectTag: string;
+        bucket: string;
+        audioKey: string;
+      }
     >({
       query: (body) => ({ url: '/submissions/create', method: 'POST', body }),
       invalidatesTags: ['Wallet', 'Submissions'],
@@ -1657,14 +1749,20 @@ export const dialectivaApi = createApi({
     getSubmissionResult: builder.query<SubmissionResult, string>({
       query: (submissionId) => `/submissions/${submissionId}/result`,
     }),
-    getMySubmissions: builder.query<SubmissionsPage, { page: number; pageSize: number; status?: TrainerSubmissionSummary['status'][] }>({
+    getMySubmissions: builder.query<
+      SubmissionsPage,
+      { page: number; pageSize: number; status?: TrainerSubmissionSummary['status'][] }
+    >({
       query: ({ page, pageSize, status }) => ({
         url: '/submissions/mine',
         params: { page, pageSize, status: status?.join(',') },
       }),
       providesTags: ['Submissions'],
     }),
-    getMyWordRecordings: builder.query<SubmissionsPage, { page: number; pageSize: number; status?: TrainerSubmissionSummary['status'][] }>({
+    getMyWordRecordings: builder.query<
+      SubmissionsPage,
+      { page: number; pageSize: number; status?: TrainerSubmissionSummary['status'][] }
+    >({
       query: ({ page, pageSize, status }) => ({
         url: '/words/mine',
         params: { page, pageSize, status: status?.join(',') },
@@ -1686,11 +1784,19 @@ export const dialectivaApi = createApi({
     endWordTrainingSession: builder.mutation<{ ended: boolean }, string>({
       query: (sessionId) => ({ url: `/words/sessions/${sessionId}/end`, method: 'POST' }),
     }),
-    createWordRecordingUpload: builder.mutation<WordRecordingUpload, { assignmentId: string; contentType: string }>({
+    createWordRecordingUpload: builder.mutation<
+      WordRecordingUpload,
+      { assignmentId: string; contentType: string }
+    >({
       query: (body) => ({ url: '/words/recordings/upload-url', method: 'POST', body }),
     }),
     submitWordRecording: builder.mutation<
-      { recordingId: string; status: string; direction: WordTrainingDirection; validationScore: number | null },
+      {
+        recordingId: string;
+        status: string;
+        direction: WordTrainingDirection;
+        validationScore: number | null;
+      },
       {
         assignmentId: string;
         responseText?: string;
@@ -1704,7 +1810,10 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/words/recordings', method: 'POST', body }),
       invalidatesTags: ['Submissions', 'Wallet'],
     }),
-    requestDepositOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { usdAmount: number; currency: 'USDC' | 'USDT' }>({
+    requestDepositOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { usdAmount: number; currency: 'USDC' | 'USDT' }
+    >({
       query: (body) => ({ url: '/wallet/deposits/otp', method: 'POST', body }),
     }),
     createTokenDeposit: builder.mutation<
@@ -1715,7 +1824,12 @@ export const dialectivaApi = createApi({
     }),
     requestWithdrawalOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
-      { tokenAmount: number; destinationAddress: string; destinationCurrency: WithdrawalCurrency; destinationNetwork: WithdrawalNetwork }
+      {
+        tokenAmount: number;
+        destinationAddress: string;
+        destinationCurrency: WithdrawalCurrency;
+        destinationNetwork: WithdrawalNetwork;
+      }
     >({
       query: (body) => ({ url: '/wallet/withdrawals/otp', method: 'POST', body }),
     }),
@@ -1733,43 +1847,80 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/wallet/withdrawals', method: 'POST', body }),
       invalidatesTags: ['Wallet'],
     }),
-    listAdminWithdrawals: builder.query<AdminWithdrawalRequest[], { status?: WithdrawalStatus } | void>({
+    listAdminWithdrawals: builder.query<
+      AdminWithdrawalRequest[],
+      { status?: WithdrawalStatus } | void
+    >({
       query: (params) => ({ url: '/admin/withdrawals', params: params ?? undefined }),
       providesTags: ['Wallet'],
     }),
-    requestWithdrawalResolveOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, string>({
+    requestWithdrawalResolveOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      string
+    >({
       query: (id) => ({ url: `/admin/withdrawals/${id}/resolve/otp`, method: 'POST' }),
     }),
     approveWithdrawal: builder.mutation<
       { withdrawalId: string; status: string },
       { id: string; otpRequestId?: string; code?: string; adminNote?: string }
     >({
-      query: ({ id, ...body }) => ({ url: `/admin/withdrawals/${id}/approve`, method: 'POST', body }),
+      query: ({ id, ...body }) => ({
+        url: `/admin/withdrawals/${id}/approve`,
+        method: 'POST',
+        body,
+      }),
       invalidatesTags: ['Wallet'],
     }),
     submitWithdrawalToNowPayments: builder.mutation<
       { withdrawalId: string; status: string; providerPayoutId?: string },
-      { id: string; otpRequestId?: string; code?: string; verificationCode?: string; adminNote?: string }
+      {
+        id: string;
+        otpRequestId?: string;
+        code?: string;
+        verificationCode?: string;
+        adminNote?: string;
+      }
     >({
-      query: ({ id, ...body }) => ({ url: `/admin/withdrawals/${id}/submit-nowpayments`, method: 'POST', body }),
+      query: ({ id, ...body }) => ({
+        url: `/admin/withdrawals/${id}/submit-nowpayments`,
+        method: 'POST',
+        body,
+      }),
       invalidatesTags: ['Wallet'],
     }),
     verifyWithdrawalPayout: builder.mutation<
       { withdrawalId: string; status: string; providerPayoutId: string },
       { id: string; verificationCode: string }
     >({
-      query: ({ id, verificationCode }) => ({ url: `/admin/withdrawals/${id}/verify-nowpayments`, method: 'POST', body: { verificationCode } }),
+      query: ({ id, verificationCode }) => ({
+        url: `/admin/withdrawals/${id}/verify-nowpayments`,
+        method: 'POST',
+        body: { verificationCode },
+      }),
       invalidatesTags: ['Wallet'],
     }),
-    refreshWithdrawalStatus: builder.mutation<{ withdrawalId: string; status: string; providerPayoutId: string }, string>({
+    refreshWithdrawalStatus: builder.mutation<
+      { withdrawalId: string; status: string; providerPayoutId: string },
+      string
+    >({
       query: (id) => ({ url: `/admin/withdrawals/${id}/refresh-nowpayments`, method: 'POST' }),
       invalidatesTags: ['Wallet'],
     }),
     resolveWithdrawal: builder.mutation<
       { withdrawalId: string; status: string },
-      { id: string; outcome: 'paid' | 'rejected'; otpRequestId?: string; code?: string; adminNote?: string }
+      {
+        id: string;
+        outcome: 'paid' | 'rejected';
+        otpRequestId?: string;
+        code?: string;
+        adminNote?: string;
+      }
     >({
-      query: ({ id, ...body }) => ({ url: `/admin/withdrawals/${id}/resolve`, method: 'POST', body }),
+      query: ({ id, ...body }) => ({
+        url: `/admin/withdrawals/${id}/resolve`,
+        method: 'POST',
+        body,
+      }),
       invalidatesTags: ['Wallet'],
     }),
     getMe: builder.query<PublicUser, void>({
@@ -1825,17 +1976,27 @@ export const dialectivaApi = createApi({
       AdminSystemUpdate,
       { id: string; title?: string; message?: string; href?: string }
     >({
-      query: ({ id, ...body }) => ({ url: `/notifications/admin/updates/${id}`, method: 'PATCH', body }),
+      query: ({ id, ...body }) => ({
+        url: `/notifications/admin/updates/${id}`,
+        method: 'PATCH',
+        body,
+      }),
       invalidatesTags: ['Notifications'],
     }),
     deleteSystemUpdate: builder.mutation<{ id: string; deleted: true }, string>({
       query: (id) => ({ url: `/notifications/admin/updates/${id}`, method: 'DELETE' }),
       invalidatesTags: ['Notifications'],
     }),
-    requestPhoneOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { phoneNumber: string }>({
+    requestPhoneOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { phoneNumber: string }
+    >({
       query: (body) => ({ url: '/auth/phone/otp', method: 'POST', body }),
     }),
-    verifyPhone: builder.mutation<PublicUser, { phoneNumber: string; otpRequestId: string; code: string }>({
+    verifyPhone: builder.mutation<
+      PublicUser,
+      { phoneNumber: string; otpRequestId: string; code: string }
+    >({
       query: (body) => ({ url: '/auth/phone/verify', method: 'POST', body }),
       invalidatesTags: ['Profile'],
     }),
@@ -1843,11 +2004,17 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/auth/phone', method: 'PATCH', body }),
       invalidatesTags: ['Profile'],
     }),
-    requestManualPhoneVerification: builder.mutation<ManualPhoneVerificationRequestResult, { phoneNumber: string }>({
+    requestManualPhoneVerification: builder.mutation<
+      ManualPhoneVerificationRequestResult,
+      { phoneNumber: string }
+    >({
       query: (body) => ({ url: '/auth/phone/manual/request', method: 'POST', body }),
       invalidatesTags: ['Profile', 'Wallet'],
     }),
-    markManualPhoneVerificationSent: builder.mutation<{ id: string; status: ManualPhoneVerificationStatus; sentAt: string }, string>({
+    markManualPhoneVerificationSent: builder.mutation<
+      { id: string; status: ManualPhoneVerificationStatus; sentAt: string },
+      string
+    >({
       query: (id) => ({ url: `/auth/phone/manual/${id}/sent`, method: 'POST' }),
     }),
     requestMagicLink: builder.mutation<void, { email: string }>({
@@ -1888,7 +2055,10 @@ export const dialectivaApi = createApi({
         body,
       }),
     }),
-    getAdminDataAccessLeads: builder.query<DataAccessLeadsPage, { page?: number; pageSize?: number } | void>({
+    getAdminDataAccessLeads: builder.query<
+      DataAccessLeadsPage,
+      { page?: number; pageSize?: number } | void
+    >({
       query: (params) => ({
         url: '/leads/admin/data-access',
         params: params ?? undefined,
@@ -1933,15 +2103,28 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['DistributorSettings', 'DistributorDashboard'],
     }),
-    createDistributorAllocation: builder.mutation<DistributorAllocation, { distributorId: string; tokenAmount: number; discountRate?: number; note?: string }>({
+    createDistributorAllocation: builder.mutation<
+      DistributorAllocation,
+      { distributorId: string; tokenAmount: number; discountRate?: number; note?: string }
+    >({
       query: ({ distributorId, ...body }) => ({
         url: `/admin/distributors/${distributorId}/allocations`,
         method: 'POST',
         body,
       }),
-      invalidatesTags: ['DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'Wallet', 'Users'],
+      invalidatesTags: [
+        'DistributorDashboard',
+        'DistributorAllocations',
+        'DistributorList',
+        'DistributorActivity',
+        'Wallet',
+        'Users',
+      ],
     }),
-    listDistributorAllocations: builder.query<DistributorAllocationsPage, { distributorId?: string; page?: number; pageSize?: number } | void>({
+    listDistributorAllocations: builder.query<
+      DistributorAllocationsPage,
+      { distributorId?: string; page?: number; pageSize?: number } | void
+    >({
       query: (params) => ({ url: '/admin/distributors/allocations', params: params ?? undefined }),
       providesTags: ['DistributorAllocations'],
     }),
@@ -1949,8 +2132,14 @@ export const dialectivaApi = createApi({
       query: () => '/admin/distributors',
       providesTags: ['DistributorList'],
     }),
-    getDistributorActivity: builder.query<DistributorActivityPage, { distributorId: string; page?: number; pageSize?: number }>({
-      query: ({ distributorId, ...params }) => ({ url: `/admin/distributors/${distributorId}/activity`, params }),
+    getDistributorActivity: builder.query<
+      DistributorActivityPage,
+      { distributorId: string; page?: number; pageSize?: number }
+    >({
+      query: ({ distributorId, ...params }) => ({
+        url: `/admin/distributors/${distributorId}/activity`,
+        params,
+      }),
       providesTags: ['DistributorActivity'],
     }),
     getDistributorDashboard: builder.query<DistributorDashboard, void>({
@@ -1962,14 +2151,20 @@ export const dialectivaApi = createApi({
       providesTags: ['DistributorDashboard'],
     }),
     promoteSubDistributor: builder.mutation<PromotedSubDistributor, string>({
-      query: (userId) => ({ url: `/distributors/sub-distributors/${userId}/promote`, method: 'POST' }),
+      query: (userId) => ({
+        url: `/distributors/sub-distributors/${userId}/promote`,
+        method: 'POST',
+      }),
       invalidatesTags: ['SubDistributorList', 'DistributorDashboard'],
     }),
     listSubDistributors: builder.query<SubDistributorSummary[], void>({
       query: () => '/distributors/sub-distributors',
       providesTags: ['SubDistributorList'],
     }),
-    createSubDistributorAllocation: builder.mutation<DistributorAllocation, { subDistributorId: string; tokenAmount: number; discountRate?: number; note?: string }>({
+    createSubDistributorAllocation: builder.mutation<
+      DistributorAllocation,
+      { subDistributorId: string; tokenAmount: number; discountRate?: number; note?: string }
+    >({
       query: ({ subDistributorId, ...body }) => ({
         url: `/distributors/sub-distributors/${subDistributorId}/allocations`,
         method: 'POST',
@@ -1977,26 +2172,56 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['SubDistributorList', 'SubDistributorActivity', 'DistributorDashboard'],
     }),
-    getSubDistributorActivity: builder.query<DistributorActivityPage, { subDistributorId: string; page?: number; pageSize?: number }>({
-      query: ({ subDistributorId, ...params }) => ({ url: `/distributors/sub-distributors/${subDistributorId}/activity`, params }),
+    getSubDistributorActivity: builder.query<
+      DistributorActivityPage,
+      { subDistributorId: string; page?: number; pageSize?: number }
+    >({
+      query: ({ subDistributorId, ...params }) => ({
+        url: `/distributors/sub-distributors/${subDistributorId}/activity`,
+        params,
+      }),
       providesTags: ['SubDistributorActivity'],
     }),
-    updateSubDistributorStatus: builder.mutation<{ id: string; status: string }, { id: string; status: string }>({
-      query: ({ id, status }) => ({ url: `/distributors/sub-distributors/${id}/status`, method: 'PATCH', body: { status } }),
+    updateSubDistributorStatus: builder.mutation<
+      { id: string; status: string },
+      { id: string; status: string }
+    >({
+      query: ({ id, status }) => ({
+        url: `/distributors/sub-distributors/${id}/status`,
+        method: 'PATCH',
+        body: { status },
+      }),
       invalidatesTags: ['SubDistributorList'],
     }),
-    requestSubDistributorAdjustmentOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { id: string; amount: number; reference: string }>({
-      query: ({ id, ...body }) => ({ url: `/distributors/sub-distributors/${id}/adjustments/otp`, method: 'POST', body }),
+    requestSubDistributorAdjustmentOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { id: string; amount: number; reference: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/distributors/sub-distributors/${id}/adjustments/otp`,
+        method: 'POST',
+        body,
+      }),
     }),
-    adjustSubDistributorWallet: builder.mutation<SubDistributorAdjustment, { id: string; amount: number; reference: string; otpRequestId?: string; code?: string }>({
-      query: ({ id, ...body }) => ({ url: `/distributors/sub-distributors/${id}/adjustments`, method: 'POST', body }),
+    adjustSubDistributorWallet: builder.mutation<
+      SubDistributorAdjustment,
+      { id: string; amount: number; reference: string; otpRequestId?: string; code?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/distributors/sub-distributors/${id}/adjustments`,
+        method: 'POST',
+        body,
+      }),
       invalidatesTags: ['SubDistributorList', 'SubDistributorActivity'],
     }),
     getPoolsSummary: builder.query<PoolsSummary, void>({
       query: () => '/admin/pools/summary',
       providesTags: ['Pools'],
     }),
-    listSubscriptionPools: builder.query<SubscriptionPoolsPage, { page?: number; pageSize?: number; status?: 'ACTIVE' | 'CLOSED' } | void>({
+    listSubscriptionPools: builder.query<
+      SubscriptionPoolsPage,
+      { page?: number; pageSize?: number; status?: 'ACTIVE' | 'CLOSED' } | void
+    >({
       query: (params) => ({ url: '/admin/pools', params: params ?? undefined }),
       providesTags: ['Pools'],
     }),
@@ -2008,7 +2233,10 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/admin/pools/${id}/close`, method: 'PATCH' }),
       invalidatesTags: ['Pools'],
     }),
-    updateSubscriptionPool: builder.mutation<SubscriptionPool, { id: string; body: Partial<SubscriptionPoolInput> }>({
+    updateSubscriptionPool: builder.mutation<
+      SubscriptionPool,
+      { id: string; body: Partial<SubscriptionPoolInput> }
+    >({
       query: ({ id, body }) => ({ url: `/admin/pools/${id}`, method: 'PATCH', body }),
       invalidatesTags: ['Pools'],
     }),
@@ -2022,11 +2250,23 @@ export const dialectivaApi = createApi({
     getAdminLeaderboard: builder.query<AdminLeaderboard, void>({
       query: () => '/admin/leaderboard',
     }),
-    getAdminLeaderboardEarners: builder.query<LeaderboardPage<LeaderboardEarnerRow>, { page: number; pageSize: number }>({
-      query: ({ page, pageSize }) => ({ url: '/admin/leaderboard/earners', params: { page, pageSize } }),
+    getAdminLeaderboardEarners: builder.query<
+      LeaderboardPage<LeaderboardEarnerRow>,
+      { page: number; pageSize: number }
+    >({
+      query: ({ page, pageSize }) => ({
+        url: '/admin/leaderboard/earners',
+        params: { page, pageSize },
+      }),
     }),
-    getAdminLeaderboardContributors: builder.query<LeaderboardPage<LeaderboardContributorRow>, { page: number; pageSize: number }>({
-      query: ({ page, pageSize }) => ({ url: '/admin/leaderboard/contributors', params: { page, pageSize } }),
+    getAdminLeaderboardContributors: builder.query<
+      LeaderboardPage<LeaderboardContributorRow>,
+      { page: number; pageSize: number }
+    >({
+      query: ({ page, pageSize }) => ({
+        url: '/admin/leaderboard/contributors',
+        params: { page, pageSize },
+      }),
     }),
     getAdminP2PSettings: builder.query<P2PMarketSettings, void>({
       query: () => '/p2p/admin/settings',
@@ -2044,11 +2284,21 @@ export const dialectivaApi = createApi({
       query: (params) => ({ url: '/p2p/admin/disputes', params: params ?? undefined }),
       providesTags: ['P2P'],
     }),
-    resolveP2PDispute: builder.mutation<P2PDispute, { id: string; winner: 'buyer' | 'seller'; resolutionNote?: string }>({
-      query: ({ id, winner, resolutionNote }) => ({ url: `/p2p/admin/disputes/${id}/resolve`, method: 'POST', body: { winner, resolutionNote } }),
+    resolveP2PDispute: builder.mutation<
+      P2PDispute,
+      { id: string; winner: 'buyer' | 'seller'; resolutionNote?: string }
+    >({
+      query: ({ id, winner, resolutionNote }) => ({
+        url: `/p2p/admin/disputes/${id}/resolve`,
+        method: 'POST',
+        body: { winner, resolutionNote },
+      }),
       invalidatesTags: ['P2P', 'Wallet'],
     }),
-    getUsers: builder.query<PublicUser[], { role?: string; status?: string; search?: string } | void>({
+    getUsers: builder.query<
+      PublicUser[],
+      { role?: string; status?: string; search?: string } | void
+    >({
       query: (params) => ({
         url: '/auth/admin/users',
         params: params ?? undefined,
@@ -2066,8 +2316,15 @@ export const dialectivaApi = createApi({
       query: (params) => ({ url: '/auth/admin/phone-verifications', params: params ?? undefined }),
       providesTags: ['Users'],
     }),
-    verifyAdminManualPhoneVerification: builder.mutation<ManualPhoneVerificationRow, { id: string; code: string }>({
-      query: ({ id, code }) => ({ url: `/auth/admin/phone-verifications/${id}/verify`, method: 'POST', body: { code } }),
+    verifyAdminManualPhoneVerification: builder.mutation<
+      ManualPhoneVerificationRow,
+      { id: string; code: string }
+    >({
+      query: ({ id, code }) => ({
+        url: `/auth/admin/phone-verifications/${id}/verify`,
+        method: 'POST',
+        body: { code },
+      }),
       invalidatesTags: ['Users'],
     }),
     rejectAdminManualPhoneVerification: builder.mutation<ManualPhoneVerificationRow, string>({
@@ -2094,28 +2351,57 @@ export const dialectivaApi = createApi({
       query: (id) => `/auth/admin/users/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Users', id }],
     }),
-    getUserActivity: builder.query<UserActivityPage, { userId: string; page?: number; pageSize?: number }>({
+    getUserActivity: builder.query<
+      UserActivityPage,
+      { userId: string; page?: number; pageSize?: number }
+    >({
       query: ({ userId, ...params }) => ({ url: `/auth/admin/users/${userId}/activity`, params }),
       providesTags: (_result, _error, { userId }) => [{ type: 'Users', id: `${userId}-activity` }],
     }),
-    requestUserLockOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, { id: string; status: string }>({
-      query: ({ id, status }) => ({ url: `/auth/admin/users/${id}/lock/otp`, method: 'POST', body: { status } }),
+    requestUserLockOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { id: string; status: string }
+    >({
+      query: ({ id, status }) => ({
+        url: `/auth/admin/users/${id}/lock/otp`,
+        method: 'POST',
+        body: { status },
+      }),
     }),
-    lockUser: builder.mutation<PublicUser, { id: string; status: string; otpRequestId?: string; code?: string }>({
+    lockUser: builder.mutation<
+      PublicUser,
+      { id: string; status: string; otpRequestId?: string; code?: string }
+    >({
       query: ({ id, ...body }) => ({ url: `/auth/admin/users/${id}/lock`, method: 'POST', body }),
       invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
     }),
-    requestUserDeleteOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, string>({
+    requestUserDeleteOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      string
+    >({
       query: (id) => ({ url: `/auth/admin/users/${id}/delete/otp`, method: 'POST' }),
     }),
-    requestAuditHoldReleaseOtp: builder.mutation<{ otpRequestId: string; expiresInSeconds: number }, string>({
+    requestAuditHoldReleaseOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      string
+    >({
       query: (id) => ({ url: `/auth/admin/users/${id}/audit-hold/release/otp`, method: 'POST' }),
     }),
-    releaseAuditHold: builder.mutation<PublicUser, { id: string; otpRequestId?: string; code?: string }>({
-      query: ({ id, ...body }) => ({ url: `/auth/admin/users/${id}/audit-hold/release`, method: 'POST', body }),
+    releaseAuditHold: builder.mutation<
+      PublicUser,
+      { id: string; otpRequestId?: string; code?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/auth/admin/users/${id}/audit-hold/release`,
+        method: 'POST',
+        body,
+      }),
       invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
     }),
-    deleteUser: builder.mutation<{ id: string; deleted: boolean }, { id: string; otpRequestId?: string; code?: string }>({
+    deleteUser: builder.mutation<
+      { id: string; deleted: boolean },
+      { id: string; otpRequestId?: string; code?: string }
+    >({
       query: ({ id, ...body }) => ({ url: `/auth/admin/users/${id}/delete`, method: 'POST', body }),
       invalidatesTags: ['Users'],
     }),
@@ -2127,7 +2413,13 @@ export const dialectivaApi = createApi({
     }),
     createTrainingPayout: builder.mutation<
       { userId: string; reference: string; amount: string },
-      { userId: string; tokenAmount: number; reference: string; otpRequestId?: string; code?: string }
+      {
+        userId: string;
+        tokenAmount: number;
+        reference: string;
+        otpRequestId?: string;
+        code?: string;
+      }
     >({
       query: (body) => ({
         url: '/admin/training-payouts',
@@ -2144,14 +2436,28 @@ export const dialectivaApi = createApi({
     }),
     createAdminWalletAdjustment: builder.mutation<
       { userId: string; reference: string; amount: string; balance: string },
-      { userId: string; tokenAmount: number; reference: string; otpRequestId?: string; code?: string }
+      {
+        userId: string;
+        tokenAmount: number;
+        reference: string;
+        otpRequestId?: string;
+        code?: string;
+      }
     >({
       query: (body) => ({ url: '/admin/wallet-adjustments', method: 'POST', body }),
       invalidatesTags: ['Wallet', 'Users'],
     }),
-    getAdminTrainerRecordings: builder.query<AdminRecordingsPage, { trainerId: string; page: number; pageSize: number }>({
-      query: ({ trainerId, page, pageSize }) => ({ url: `/admin-recordings/trainers/${trainerId}`, params: { page, pageSize } }),
-      providesTags: (_result, _error, { trainerId }) => [{ type: 'AdminRecordings', id: trainerId }],
+    getAdminTrainerRecordings: builder.query<
+      AdminRecordingsPage,
+      { trainerId: string; page: number; pageSize: number }
+    >({
+      query: ({ trainerId, page, pageSize }) => ({
+        url: `/admin-recordings/trainers/${trainerId}`,
+        params: { page, pageSize },
+      }),
+      providesTags: (_result, _error, { trainerId }) => [
+        { type: 'AdminRecordings', id: trainerId },
+      ],
     }),
     getAdminAllRecordings: builder.query<AdminRecordingsPage, ListAllRecordingsParams>({
       query: (params) => ({ url: '/admin-recordings', params }),
@@ -2161,15 +2467,32 @@ export const dialectivaApi = createApi({
       { otpRequestId: string; expiresInSeconds: number },
       { kind: RecordingKind; id: string }
     >({
-      query: ({ kind, id }) => ({ url: `/admin-recordings/${kind}/${id}/audit/otp`, method: 'POST' }),
+      query: ({ kind, id }) => ({
+        url: `/admin-recordings/${kind}/${id}/audit/otp`,
+        method: 'POST',
+      }),
     }),
     auditRecording: builder.mutation<
       AuditRecordingResult,
-      { kind: RecordingKind; id: string; status: AdminAuditStatus; clawback?: boolean; otpRequestId?: string; code?: string; trainerId?: string }
+      {
+        kind: RecordingKind;
+        id: string;
+        status: AdminAuditStatus;
+        clawback?: boolean;
+        otpRequestId?: string;
+        code?: string;
+        trainerId?: string;
+      }
     >({
-      query: ({ kind, id, trainerId: _trainerId, ...body }) => ({ url: `/admin-recordings/${kind}/${id}/audit`, method: 'POST', body }),
+      query: ({ kind, id, trainerId: _trainerId, ...body }) => ({
+        url: `/admin-recordings/${kind}/${id}/audit`,
+        method: 'POST',
+        body,
+      }),
       invalidatesTags: (_result, _error, { trainerId }) =>
-        trainerId ? [{ type: 'AdminRecordings', id: trainerId }, 'AdminRecordings', 'Wallet', 'Users'] : ['AdminRecordings', 'Wallet', 'Users'],
+        trainerId
+          ? [{ type: 'AdminRecordings', id: trainerId }, 'AdminRecordings', 'Wallet', 'Users']
+          : ['AdminRecordings', 'Wallet', 'Users'],
     }),
     getAudioRetentionRules: builder.query<AudioRetentionRule[], void>({
       query: () => '/admin/dataset-storage/rules',
@@ -2179,8 +2502,15 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/admin/dataset-storage/rules', method: 'POST', body }),
       invalidatesTags: ['AudioRetentionRules'],
     }),
-    updateAudioRetentionRule: builder.mutation<AudioRetentionRule, { id: string; body: Partial<AudioRetentionRuleInput> }>({
-      query: ({ id, body }) => ({ url: `/admin/dataset-storage/rules/${id}`, method: 'PATCH', body }),
+    updateAudioRetentionRule: builder.mutation<
+      AudioRetentionRule,
+      { id: string; body: Partial<AudioRetentionRuleInput> }
+    >({
+      query: ({ id, body }) => ({
+        url: `/admin/dataset-storage/rules/${id}`,
+        method: 'PATCH',
+        body,
+      }),
       invalidatesTags: ['AudioRetentionRules'],
     }),
     deleteAudioRetentionRule: builder.mutation<{ id: string }, string>({
@@ -2224,23 +2554,51 @@ export const dialectivaApi = createApi({
       invalidatesTags: ['AdminDialects', 'AdminCountries'],
     }),
     generateDialectKeyboardLayout: builder.mutation<{ keyboardLayout: string }, string>({
-      query: (id) => ({ url: `/geo/admin/dialects/${id}/generate-keyboard-layout`, method: 'POST' }),
+      query: (id) => ({
+        url: `/geo/admin/dialects/${id}/generate-keyboard-layout`,
+        method: 'POST',
+      }),
     }),
     getAdminDialectVariants: builder.query<AdminDialectVariant[], string>({
       query: (dialectId) => `/geo/admin/dialects/${dialectId}/variants`,
-      providesTags: (_result, _error, dialectId) => [{ type: 'AdminDialects', id: `${dialectId}-variants` }],
+      providesTags: (_result, _error, dialectId) => [
+        { type: 'AdminDialects', id: `${dialectId}-variants` },
+      ],
     }),
-    createDialectVariant: builder.mutation<AdminDialectVariant, { dialectId: string; body: DialectVariantInput }>({
-      query: ({ dialectId, body }) => ({ url: `/geo/admin/dialects/${dialectId}/variants`, method: 'POST', body }),
-      invalidatesTags: (_result, _error, { dialectId }) => [{ type: 'AdminDialects', id: `${dialectId}-variants` }],
+    createDialectVariant: builder.mutation<
+      AdminDialectVariant,
+      { dialectId: string; body: DialectVariantInput }
+    >({
+      query: ({ dialectId, body }) => ({
+        url: `/geo/admin/dialects/${dialectId}/variants`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_result, _error, { dialectId }) => [
+        { type: 'AdminDialects', id: `${dialectId}-variants` },
+      ],
     }),
-    updateDialectVariant: builder.mutation<AdminDialectVariant, { id: string; dialectId: string; body: Partial<DialectVariantInput> }>({
-      query: ({ id, body }) => ({ url: `/geo/admin/dialect-variants/${id}`, method: 'PATCH', body }),
-      invalidatesTags: (_result, _error, { dialectId }) => [{ type: 'AdminDialects', id: `${dialectId}-variants` }],
+    updateDialectVariant: builder.mutation<
+      AdminDialectVariant,
+      { id: string; dialectId: string; body: Partial<DialectVariantInput> }
+    >({
+      query: ({ id, body }) => ({
+        url: `/geo/admin/dialect-variants/${id}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_result, _error, { dialectId }) => [
+        { type: 'AdminDialects', id: `${dialectId}-variants` },
+      ],
     }),
-    deleteDialectVariant: builder.mutation<{ id: string; deleted: boolean }, { id: string; dialectId: string }>({
+    deleteDialectVariant: builder.mutation<
+      { id: string; deleted: boolean },
+      { id: string; dialectId: string }
+    >({
       query: ({ id }) => ({ url: `/geo/admin/dialect-variants/${id}`, method: 'DELETE' }),
-      invalidatesTags: (_result, _error, { dialectId }) => [{ type: 'AdminDialects', id: `${dialectId}-variants` }],
+      invalidatesTags: (_result, _error, { dialectId }) => [
+        { type: 'AdminDialects', id: `${dialectId}-variants` },
+      ],
     }),
     getPlatformSettings: builder.query<PlatformSettings, void>({
       query: () => '/admin/platform-settings',
@@ -2262,27 +2620,47 @@ export const dialectivaApi = createApi({
       providesTags: ['ApiAccessTokens'],
     }),
     setApiAccessToken: builder.mutation<ApiAccessTokenSummary, { key: string; value: string }>({
-      query: ({ key, value }) => ({ url: `/admin/api-access-tokens/${key}`, method: 'PUT', body: { value } }),
+      query: ({ key, value }) => ({
+        url: `/admin/api-access-tokens/${key}`,
+        method: 'PUT',
+        body: { value },
+      }),
       invalidatesTags: ['ApiAccessTokens'],
     }),
     deleteApiAccessToken: builder.mutation<{ removed: boolean }, string>({
       query: (key) => ({ url: `/admin/api-access-tokens/${key}`, method: 'DELETE' }),
       invalidatesTags: ['ApiAccessTokens'],
     }),
-    getAdminWords: builder.query<AdminWordsPage, { page: number; pageSize: number; search?: string; partOfSpeech?: PartOfSpeech }>({
-      query: ({ page, pageSize, search, partOfSpeech }) => ({ url: '/words/admin', params: { page, pageSize, search, partOfSpeech } }),
+    getAdminWords: builder.query<
+      AdminWordsPage,
+      { page: number; pageSize: number; search?: string; partOfSpeech?: PartOfSpeech }
+    >({
+      query: ({ page, pageSize, search, partOfSpeech }) => ({
+        url: '/words/admin',
+        params: { page, pageSize, search, partOfSpeech },
+      }),
       providesTags: ['AdminWords'],
     }),
     deleteWord: builder.mutation<{ id: string; deleted: boolean }, string>({
       query: (id) => ({ url: `/words/admin/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminWords'],
     }),
-    getAdminPrompts: builder.query<AdminPromptsPage, { page: number; pageSize: number; dialectTag?: string; search?: string }>({
-      query: ({ page, pageSize, dialectTag, search }) => ({ url: '/prompts/admin', params: { page, pageSize, dialectTag, search } }),
+    getAdminPrompts: builder.query<
+      AdminPromptsPage,
+      { page: number; pageSize: number; dialectTag?: string; search?: string }
+    >({
+      query: ({ page, pageSize, dialectTag, search }) => ({
+        url: '/prompts/admin',
+        params: { page, pageSize, dialectTag, search },
+      }),
       providesTags: ['AdminPrompts'],
     }),
     updatePrompt: builder.mutation<AdminPrompt, { id: string; active: boolean }>({
-      query: ({ id, active }) => ({ url: `/prompts/admin/${id}`, method: 'PATCH', body: { active } }),
+      query: ({ id, active }) => ({
+        url: `/prompts/admin/${id}`,
+        method: 'PATCH',
+        body: { active },
+      }),
       invalidatesTags: ['AdminPrompts'],
     }),
     getAdminBlogPosts: builder.query<BlogPost[], void>({
@@ -2305,11 +2683,17 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/blog/admin/posts/${id}`, method: 'DELETE' }),
       invalidatesTags: ['BlogPosts'],
     }),
-    reorderBlogPosts: builder.mutation<{ reordered: number }, { items: { id: string; sortOrder: number }[] }>({
+    reorderBlogPosts: builder.mutation<
+      { reordered: number },
+      { items: { id: string; sortOrder: number }[] }
+    >({
       query: (body) => ({ url: '/blog/admin/posts/reorder', method: 'PATCH', body }),
       invalidatesTags: ['BlogPosts'],
     }),
-    createBlogMediaUpload: builder.mutation<BlogMediaUpload, { fileName: string; contentType: string; kind: 'IMAGE' | 'VIDEO' }>({
+    createBlogMediaUpload: builder.mutation<
+      BlogMediaUpload,
+      { fileName: string; contentType: string; kind: 'IMAGE' | 'VIDEO' }
+    >({
       query: (body) => ({ url: '/blog/admin/media/upload-url', method: 'POST', body }),
     }),
     getAdminCourses: builder.query<AdminCourseListItem[], void>({
@@ -2332,19 +2716,32 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/courses/admin/courses/${id}`, method: 'DELETE' }),
       invalidatesTags: ['Courses'],
     }),
-    reorderCourses: builder.mutation<{ reordered: number }, { items: { id: string; sortOrder: number }[] }>({
+    reorderCourses: builder.mutation<
+      { reordered: number },
+      { items: { id: string; sortOrder: number }[] }
+    >({
       query: (body) => ({ url: '/courses/admin/courses/reorder', method: 'PATCH', body }),
       invalidatesTags: ['Courses'],
     }),
-    createCourseMediaUpload: builder.mutation<CourseMediaUpload, { fileName: string; contentType: string; kind: 'IMAGE' | 'AUDIO' }>({
+    createCourseMediaUpload: builder.mutation<
+      CourseMediaUpload,
+      { fileName: string; contentType: string; kind: 'IMAGE' | 'AUDIO' }
+    >({
       query: (body) => ({ url: '/courses/admin/media/upload-url', method: 'POST', body }),
     }),
     getCourseToStudy: builder.query<CourseStudy, string>({
       query: (slug) => `/courses/study/${slug}`,
       providesTags: (_result, _error, slug) => [{ type: 'Courses', id: slug }],
     }),
-    saveCourseProgress: builder.mutation<CourseProgress, { slug: string; lastSlideIndex: number; totalSlides: number }>({
-      query: ({ slug, ...body }) => ({ url: `/courses/study/${slug}/progress`, method: 'PUT', body }),
+    saveCourseProgress: builder.mutation<
+      CourseProgress,
+      { slug: string; lastSlideIndex: number; totalSlides: number }
+    >({
+      query: ({ slug, ...body }) => ({
+        url: `/courses/study/${slug}/progress`,
+        method: 'PUT',
+        body,
+      }),
       // Completing a required course changes whether the trainer is still
       // gated from training -- refetch that check right after saving.
       invalidatesTags: ['RequiredCourses'],

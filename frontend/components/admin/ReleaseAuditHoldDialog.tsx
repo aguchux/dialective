@@ -10,7 +10,8 @@ import {
   useRequestAuditHoldReleaseOtpMutation,
 } from '@/store/api';
 
-const inputClass = 'min-h-9 w-full rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-9 w-full rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink dark:bg-surface-muted';
 
 /**
  * Shared OTP-gated (when PlatformSettings.adminPayoutOtpEnabled is on)
@@ -19,7 +20,13 @@ const inputClass = 'min-h-9 w-full rounded-lg border border-line bg-white px-3 p
  * (app/admin/audit-hold/page.tsx) can trigger the same release flow
  * per-row without duplicating it.
  */
-export function ReleaseAuditHoldDialog({ user, onClose }: { user: { id: string }; onClose: () => void }) {
+export function ReleaseAuditHoldDialog({
+  user,
+  onClose,
+}: {
+  user: { id: string };
+  onClose: () => void;
+}) {
   const { data: platformSettings } = useGetPlatformSettingsQuery();
   const otpRequired = platformSettings?.adminPayoutOtpEnabled ?? false;
 
@@ -41,14 +48,22 @@ export function ReleaseAuditHoldDialog({ user, onClose }: { user: { id: string }
       await releaseHold({ id: user.id, ...(otpRequestId ? { otpRequestId, code } : {}) }).unwrap();
       onClose();
     } catch (err) {
-      setError(normalizeErrorMessage(err, otpRequestId ? 'Unable to verify this code.' : 'Unable to release this audit hold.'));
+      setError(
+        normalizeErrorMessage(
+          err,
+          otpRequestId ? 'Unable to verify this code.' : 'Unable to release this audit hold.',
+        ),
+      );
     }
   }
 
   if (otpRequestId) {
     return (
       <Dialog open onOpenChange={(open) => !open && onClose()}>
-        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this release.">
+        <DialogContent
+          title="Enter your code"
+          description="We emailed a 6-digit code to confirm this release."
+        >
           <form className="grid gap-3" onSubmit={handleSubmit}>
             <input
               autoFocus

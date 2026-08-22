@@ -15,7 +15,8 @@ export class AnthropicProvider implements LlmProvider {
       model: MODEL,
       max_tokens: 512,
       temperature: 0.3,
-      system: 'You respond with ONLY the requested plain-text answer. No markdown, no quotes, no explanation, no prose beyond the answer itself.',
+      system:
+        'You respond with ONLY the requested plain-text answer. No markdown, no quotes, no explanation, no prose beyond the answer itself.',
       messages: [{ role: 'user', content: prompt }],
     });
     const block = message.content.find((item) => item.type === 'text');

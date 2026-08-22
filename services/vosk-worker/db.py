@@ -77,13 +77,21 @@ def char_similarity(a: str, b: str) -> float:
     for i in range(1, rows):
         for j in range(1, cols):
             cost = 0 if a[i - 1] == b[j - 1] else 1
-            dist[i][j] = min(dist[i - 1][j] + 1, dist[i][j - 1] + 1, dist[i - 1][j - 1] + cost)
+            dist[i][j] = min(
+                dist[i - 1][j] + 1, dist[i][j - 1] + 1, dist[i - 1][j - 1] + cost
+            )
     return 1 - dist[rows - 1][cols - 1] / max_len
 
 
 def compute_asr_match_score(transcript: str, expected_text: str) -> float:
     """0-100 similarity between the ASR transcript and the trainer's typed answer -- see WordRecording.asrMatchScore's schema comment."""
-    return round(char_similarity(normalize_for_match(transcript), normalize_for_match(expected_text)) * 100, 2)
+    return round(
+        char_similarity(
+            normalize_for_match(transcript), normalize_for_match(expected_text)
+        )
+        * 100,
+        2,
+    )
 
 
 def update_submission_result(
@@ -117,7 +125,9 @@ def update_submission_result(
                 "transcript": transcript,
                 "asr_confidence": asr_confidence,
                 "asr_engine": asr_engine,
-                "asr_word_detail": json.dumps(asr_word_detail) if asr_word_detail is not None else None,
+                "asr_word_detail": json.dumps(asr_word_detail)
+                if asr_word_detail is not None
+                else None,
                 "rejection_reason": rejection_reason,
             },
         )
@@ -154,10 +164,15 @@ def update_word_recording_result(
                 "transcript": transcript,
                 "asr_confidence": mean_confidence(word_confidences),
                 "asr_engine": engine,
-                "asr_word_detail": json.dumps(word_confidences) if word_confidences else None,
+                "asr_word_detail": json.dumps(word_confidences)
+                if word_confidences
+                else None,
                 "asr_match_score": compute_asr_match_score(transcript, expected_text),
             },
         )
         if cur.rowcount == 0:
-            logger.warning("update_word_recording_result matched 0 rows for word_recording=%s", word_recording_id)
+            logger.warning(
+                "update_word_recording_result matched 0 rows for word_recording=%s",
+                word_recording_id,
+            )
     conn.commit()

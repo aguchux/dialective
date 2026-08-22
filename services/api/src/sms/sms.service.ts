@@ -5,7 +5,12 @@ import { Smslive247Provider } from './providers/smslive247.provider';
 import { TermiiProvider } from './providers/termii.provider';
 import { TwilioProvider } from './providers/twilio.provider';
 import { SmsFallbackChain } from './sms-fallback-chain';
-import { parseSmsProviderOrder, parseSmsTransactionalProviderOrder, SmsProvider, SmsProviderKey } from './sms-provider.interface';
+import {
+  parseSmsProviderOrder,
+  parseSmsTransactionalProviderOrder,
+  SmsProvider,
+  SmsProviderKey,
+} from './sms-provider.interface';
 
 /**
  * Thin injectable wrapper around SmsFallbackChain, reading the

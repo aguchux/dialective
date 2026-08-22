@@ -55,7 +55,11 @@ export class ApiAccessTokensService {
    * display fragment are stored. No OTP gate (see ApiAccessTokensController
    * -- instant save, same posture as most of admin/platform-settings).
    */
-  async set(key: ApiAccessTokenKey, value: string, updatedByUserId: string): Promise<ApiAccessTokenSummary> {
+  async set(
+    key: ApiAccessTokenKey,
+    value: string,
+    updatedByUserId: string,
+  ): Promise<ApiAccessTokenSummary> {
     const trimmed = value.trim();
     if (!trimmed) {
       throw new BadRequestException('Token value must not be empty');

@@ -12,13 +12,20 @@ import {
 } from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
-function scopeLabel(country: { name: string } | null, dialectTag: string | null, dialects?: { tag: string; name: string }[]) {
+function scopeLabel(
+  country: { name: string } | null,
+  dialectTag: string | null,
+  dialects?: { tag: string; name: string }[],
+) {
   const countryPart = country ? country.name : 'All countries';
-  const dialectPart = dialectTag ? (dialects?.find((d) => d.tag === dialectTag)?.name ?? dialectTag) : 'all dialects';
+  const dialectPart = dialectTag
+    ? (dialects?.find((d) => d.tag === dialectTag)?.name ?? dialectTag)
+    : 'all dialects';
   return `${countryPart} / ${dialectPart}`;
 }
 
@@ -36,7 +43,9 @@ export function DatasetStorageSettingsPanel() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const dialectOptions = newCountryId ? (dialects ?? []).filter((d) => d.countryId === newCountryId) : (dialects ?? []);
+  const dialectOptions = newCountryId
+    ? (dialects ?? []).filter((d) => d.countryId === newCountryId)
+    : (dialects ?? []);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -96,10 +105,11 @@ export function DatasetStorageSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Dataset &amp; Storage</h2>
         <p className="leading-relaxed text-muted">
-          Controls automatic deletion of stored recording audio in DigitalOcean Spaces, once a submission or word
-          recording is fully settled or refunded. <strong>This deletes only the audio file.</strong> Transcripts,
-          per-word ASR detail, consensus scores, and all other dataset fields are never deleted by this feature --
-          they remain in Postgres permanently.
+          Controls automatic deletion of stored recording audio in DigitalOcean Spaces, once a
+          submission or word recording is fully settled or refunded.{' '}
+          <strong>This deletes only the audio file.</strong> Transcripts, per-word ASR detail,
+          consensus scores, and all other dataset fields are never deleted by this feature -- they
+          remain in Postgres permanently.
         </p>
       </div>
 
@@ -128,7 +138,9 @@ export function DatasetStorageSettingsPanel() {
                   <tbody>
                     {rules.map((rule) => (
                       <tr key={rule.id} className="border-b border-line/60">
-                        <td className="py-2 pr-3">{scopeLabel(rule.country, rule.dialectTag, dialects)}</td>
+                        <td className="py-2 pr-3">
+                          {scopeLabel(rule.country, rule.dialectTag, dialects)}
+                        </td>
                         <td className="py-2 pr-3">
                           <input
                             className={`${inputClass} max-w-[7rem]`}
@@ -164,7 +176,10 @@ export function DatasetStorageSettingsPanel() {
             )}
           </div>
 
-          <form className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4 md:max-w-lg" onSubmit={handleAdd}>
+          <form
+            className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4 md:max-w-lg"
+            onSubmit={handleAdd}
+          >
             <p className="font-bold">Add a rule</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-sm font-bold" htmlFor="rule-country">
@@ -216,7 +231,12 @@ export function DatasetStorageSettingsPanel() {
               />
             </label>
             <div>
-              <ActionButton className={primaryButtonClass} pending={isCreating} pendingLabel="Adding" type="submit">
+              <ActionButton
+                className={primaryButtonClass}
+                pending={isCreating}
+                pendingLabel="Adding"
+                type="submit"
+              >
                 Add rule
               </ActionButton>
             </div>

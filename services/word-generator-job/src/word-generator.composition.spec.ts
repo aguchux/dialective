@@ -12,7 +12,11 @@ describe('WordGeneratorService.selectWordsForComposition', () => {
   // Access the private method the same way this codebase's other specs
   // reach into services for unit-level coverage of non-exported logic
   // (see word-generator.pool-cap.spec.ts).
-  function callSelect(service: WordGeneratorService, wordsPerItem: number, count: number): Promise<{ id: string; text: string; partOfSpeech: string }[][]> {
+  function callSelect(
+    service: WordGeneratorService,
+    wordsPerItem: number,
+    count: number,
+  ): Promise<{ id: string; text: string; partOfSpeech: string }[][]> {
     return (service as any).selectWordsForComposition(wordsPerItem, count);
   }
 
@@ -50,11 +54,16 @@ describe('WordGeneratorService.selectWordsForComposition', () => {
   });
 
   it('excludes unclassified (partOfSpeech: null) words entirely', async () => {
-    const { service, prisma } = setup([...CLASSIFIED_POOL, { id: 'u1', text: 'mystery', partOfSpeech: null }]);
+    const { service, prisma } = setup([
+      ...CLASSIFIED_POOL,
+      { id: 'u1', text: 'mystery', partOfSpeech: null },
+    ]);
 
     await callSelect(service, 2, 1);
 
-    expect(prisma.word.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { partOfSpeech: { not: null } } }));
+    expect(prisma.word.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { partOfSpeech: { not: null } } }),
+    );
   });
 
   it('returns fewer sets than requested when the classified pool is too small to fill them all', async () => {

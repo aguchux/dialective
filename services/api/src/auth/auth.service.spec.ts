@@ -5,7 +5,11 @@ jest.mock('@dialectiva/db', () => ({
   creditStartupBonus: jest.fn(),
 }));
 import { creditStartupBonus, Prisma } from '@dialectiva/db';
-import { ConflictException, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  ConflictException,
+  UnauthorizedException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthMaintenanceException } from './auth-maintenance.exception';
 import { hashToken } from './token.util';
@@ -46,7 +50,13 @@ function setup(
       update: jest.fn(),
       updateMany: jest.fn(),
     },
-    wallet: { findUnique: jest.fn(), findUniqueOrThrow: jest.fn(), upsert: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+    wallet: {
+      findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
+      upsert: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
     ledgerEntry: { create: jest.fn() },
     $transaction: undefined as unknown as jest.Mock,
   };
@@ -99,14 +109,23 @@ function setup(
   };
   const p2p = { adminCancelAllForUser: jest.fn() };
   const storage = { deleteObject: jest.fn() };
-  const service = new AuthService(prisma as never, mail as never, otp as never, platformSettings as never, p2p as never, storage as never);
+  const service = new AuthService(
+    prisma as never,
+    mail as never,
+    otp as never,
+    platformSettings as never,
+    p2p as never,
+    storage as never,
+  );
   return { service, prisma, mail, otp, platformSettings, storage };
 }
 
 describe('AuthService auth maintenance gate', () => {
   it('register rejects with AuthMaintenanceException while signup is blocked', async () => {
     const { service, prisma } = setup({ enabled: true, message: 'Upgrading' });
-    await expect(service.register('a@b.com', 'password123', 'A', 'B')).rejects.toThrow(AuthMaintenanceException);
+    await expect(service.register('a@b.com', 'password123', 'A', 'B')).rejects.toThrow(
+      AuthMaintenanceException,
+    );
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
@@ -201,13 +220,20 @@ describe('AuthService verifyEmail startup bonus', () => {
 });
 
 describe('AuthService verifyOtp (registration) startup bonus', () => {
-  function setupTicket(prisma: ReturnType<typeof setup>['prisma'], otp: ReturnType<typeof setup>['otp']) {
+  function setupTicket(
+    prisma: ReturnType<typeof setup>['prisma'],
+    otp: ReturnType<typeof setup>['otp'],
+  ) {
     prisma.otpCode.findUnique.mockResolvedValue({ purpose: 'REGISTRATION' });
     otp.verifyWithoutConsuming.mockResolvedValue({ id: 'otp-1', userId: 'user-1' });
     // Same "count matched" convention as verifyEmail's updateMany guard --
     // default to "1 row matched" (a normal first-time verify).
     prisma.user.updateMany.mockResolvedValue({ count: 1 });
-    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', email: 'a@b.com', referredById: null });
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      referredById: null,
+    });
   }
 
   beforeEach(() => {
@@ -330,7 +356,10 @@ describe('AuthService.requestPasswordReset', () => {
 });
 
 describe('AuthService.resetPassword', () => {
-  function setupToken(prisma: ReturnType<typeof setup>['prisma'], overrides: Partial<{ usedAt: Date | null; expiresAt: Date }> = {}) {
+  function setupToken(
+    prisma: ReturnType<typeof setup>['prisma'],
+    overrides: Partial<{ usedAt: Date | null; expiresAt: Date }> = {},
+  ) {
     prisma.passwordResetToken.findUnique.mockResolvedValue({
       id: 'token-1',
       userId: 'user-1',
@@ -346,13 +375,22 @@ describe('AuthService.resetPassword', () => {
     await service.resetPassword('raw-token', 'new-password-123');
 
     expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'user-1' }, data: expect.objectContaining({ passwordHash: expect.any(String) }) }),
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: expect.objectContaining({ passwordHash: expect.any(String) }),
+      }),
     );
     expect(prisma.passwordResetToken.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'token-1' }, data: expect.objectContaining({ usedAt: expect.any(Date) }) }),
+      expect.objectContaining({
+        where: { id: 'token-1' },
+        data: expect.objectContaining({ usedAt: expect.any(Date) }),
+      }),
     );
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: 'user-1', revokedAt: null }, data: expect.objectContaining({ revokedAt: expect.any(Date) }) }),
+      expect.objectContaining({
+        where: { userId: 'user-1', revokedAt: null },
+        data: expect.objectContaining({ revokedAt: expect.any(Date) }),
+      }),
     );
   });
 
@@ -362,14 +400,18 @@ describe('AuthService.resetPassword', () => {
 
     await service.resetPassword('raw-token', 'new-password-123');
 
-    expect(prisma.passwordResetToken.findUnique).toHaveBeenCalledWith({ where: { tokenHash: hashToken('raw-token') } });
+    expect(prisma.passwordResetToken.findUnique).toHaveBeenCalledWith({
+      where: { tokenHash: hashToken('raw-token') },
+    });
   });
 
   it('rejects an unknown token', async () => {
     const { service, prisma } = setup();
     prisma.passwordResetToken.findUnique.mockResolvedValue(null);
 
-    await expect(service.resetPassword('raw-token', 'new-password-123')).rejects.toThrow(UnauthorizedException);
+    await expect(service.resetPassword('raw-token', 'new-password-123')).rejects.toThrow(
+      UnauthorizedException,
+    );
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
@@ -377,7 +419,9 @@ describe('AuthService.resetPassword', () => {
     const { service, prisma } = setup();
     setupToken(prisma, { usedAt: new Date() });
 
-    await expect(service.resetPassword('raw-token', 'new-password-123')).rejects.toThrow(UnauthorizedException);
+    await expect(service.resetPassword('raw-token', 'new-password-123')).rejects.toThrow(
+      UnauthorizedException,
+    );
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
@@ -385,7 +429,9 @@ describe('AuthService.resetPassword', () => {
     const { service, prisma } = setup();
     setupToken(prisma, { expiresAt: new Date(Date.now() - 1000) });
 
-    await expect(service.resetPassword('raw-token', 'new-password-123')).rejects.toThrow(UnauthorizedException);
+    await expect(service.resetPassword('raw-token', 'new-password-123')).rejects.toThrow(
+      UnauthorizedException,
+    );
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });
@@ -396,7 +442,9 @@ describe('AuthService.requestManualPhoneVerification', () => {
     prisma.user.findFirst.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue({ id: 'user-1', phoneVerifiedAt: new Date() });
 
-    await expect(service.requestManualPhoneVerification('user-1', '+2348012345678')).rejects.toThrow(ConflictException);
+    await expect(
+      service.requestManualPhoneVerification('user-1', '+2348012345678'),
+    ).rejects.toThrow(ConflictException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
@@ -407,13 +455,22 @@ describe('AuthService.requestManualPhoneVerification', () => {
     prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 0 });
     prisma.manualPhoneVerificationRequest.findFirst.mockResolvedValue({ id: 'existing-request' });
 
-    await expect(service.requestManualPhoneVerification('user-1', '+2348012345678')).rejects.toThrow(ConflictException);
+    await expect(
+      service.requestManualPhoneVerification('user-1', '+2348012345678'),
+    ).rejects.toThrow(ConflictException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
 
 describe('AuthService.verifyManualPhoneVerificationRequest', () => {
-  function pendingRequest(overrides: Partial<{ attempts: number; maxAttempts: number; expiresAt: Date; otpHash: string }> = {}) {
+  function pendingRequest(
+    overrides: Partial<{
+      attempts: number;
+      maxAttempts: number;
+      expiresAt: Date;
+      otpHash: string;
+    }> = {},
+  ) {
     return {
       id: 'request-1',
       userId: 'user-1',
@@ -437,21 +494,39 @@ describe('AuthService.verifyManualPhoneVerificationRequest', () => {
     prisma.manualPhoneVerificationRequest.findUniqueOrThrow.mockResolvedValue({
       ...request,
       status: 'VERIFIED',
-      user: { id: 'user-1', email: 'a@b.com', firstName: null, lastName: null, phoneNumber: '+1234567890', phoneVerifiedAt: new Date() },
+      user: {
+        id: 'user-1',
+        email: 'a@b.com',
+        firstName: null,
+        lastName: null,
+        phoneNumber: '+1234567890',
+        phoneVerifiedAt: new Date(),
+      },
       verifiedByAdmin: { id: 'admin-1', email: 'admin@b.com', firstName: null, lastName: null },
     });
 
-    const result = await service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456');
+    const result = await service.verifyManualPhoneVerificationRequest(
+      'admin-1',
+      'request-1',
+      '123456',
+    );
 
     expect(result.status).toBe('VERIFIED');
     expect(prisma.wallet.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: 'user-1', balance: { gte: request.feeTokenAmount } } }),
+      expect.objectContaining({
+        where: { userId: 'user-1', balance: { gte: request.feeTokenAmount } },
+      }),
     );
     expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ walletId: 'wallet-1', type: 'PHONE_VERIFICATION_FEE' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ walletId: 'wallet-1', type: 'PHONE_VERIFICATION_FEE' }),
+      }),
     );
     expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'user-1' }, data: expect.objectContaining({ phoneNumber: '+1234567890' }) }),
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: expect.objectContaining({ phoneNumber: '+1234567890' }),
+      }),
     );
     expect(mail.sendPhoneVerifiedEmail).toHaveBeenCalledWith('a@b.com', '+1234567890');
   });
@@ -464,9 +539,9 @@ describe('AuthService.verifyManualPhoneVerificationRequest', () => {
     prisma.wallet.upsert.mockResolvedValue({ id: 'wallet-1' });
     prisma.wallet.updateMany.mockResolvedValue({ count: 0 }); // insufficient balance
 
-    await expect(service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456')).rejects.toThrow(
-      UnprocessableEntityException,
-    );
+    await expect(
+      service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456'),
+    ).rejects.toThrow(UnprocessableEntityException);
 
     expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
     expect(prisma.user.update).not.toHaveBeenCalled();
@@ -477,7 +552,9 @@ describe('AuthService.verifyManualPhoneVerificationRequest', () => {
     prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 0 });
     prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(pendingRequest());
 
-    await expect(service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '000000')).rejects.toThrow(UnauthorizedException);
+    await expect(
+      service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '000000'),
+    ).rejects.toThrow(UnauthorizedException);
 
     expect(prisma.manualPhoneVerificationRequest.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -491,9 +568,13 @@ describe('AuthService.verifyManualPhoneVerificationRequest', () => {
   it('locks out further attempts once maxAttempts is reached, even with the correct code', async () => {
     const { service, prisma } = setup();
     prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 0 });
-    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(pendingRequest({ attempts: 5, maxAttempts: 5 }));
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(
+      pendingRequest({ attempts: 5, maxAttempts: 5 }),
+    );
 
-    await expect(service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456')).rejects.toThrow(UnauthorizedException);
+    await expect(
+      service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456'),
+    ).rejects.toThrow(UnauthorizedException);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
@@ -502,9 +583,9 @@ describe('AuthService.verifyManualPhoneVerificationRequest', () => {
     prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 0 }); // claim fails: another call already resolved it
     prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(pendingRequest());
 
-    await expect(service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456')).rejects.toThrow(
-      UnprocessableEntityException,
-    );
+    await expect(
+      service.verifyManualPhoneVerificationRequest('admin-1', 'request-1', '123456'),
+    ).rejects.toThrow(UnprocessableEntityException);
   });
 });
 
@@ -523,7 +604,14 @@ describe('AuthService.rejectManualPhoneVerificationRequest', () => {
     prisma.manualPhoneVerificationRequest.findUniqueOrThrow.mockResolvedValue({
       ...request,
       status: 'REJECTED',
-      user: { id: 'user-1', email: 'a@b.com', firstName: null, lastName: null, phoneNumber: '+1234567890', phoneVerifiedAt: null },
+      user: {
+        id: 'user-1',
+        email: 'a@b.com',
+        firstName: null,
+        lastName: null,
+        phoneNumber: '+1234567890',
+        phoneVerifiedAt: null,
+      },
       verifiedByAdmin: { id: 'admin-1', email: 'admin@b.com', firstName: null, lastName: null },
     });
 
@@ -540,8 +628,22 @@ describe('AuthService.listAuditHoldUsers', () => {
   it('returns only users whose hold is still active, filtering out released ones', async () => {
     const { service, prisma } = setup();
     prisma.user.findMany.mockResolvedValue([
-      { id: 'user-1', email: 'active-hold@b.com', auditHoldAt: new Date('2026-01-02'), auditHoldReleasedAt: null, dialect: null, dialectVariant: null },
-      { id: 'user-2', email: 'released@b.com', auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: new Date('2026-01-05'), dialect: null, dialectVariant: null },
+      {
+        id: 'user-1',
+        email: 'active-hold@b.com',
+        auditHoldAt: new Date('2026-01-02'),
+        auditHoldReleasedAt: null,
+        dialect: null,
+        dialectVariant: null,
+      },
+      {
+        id: 'user-2',
+        email: 'released@b.com',
+        auditHoldAt: new Date('2026-01-01'),
+        auditHoldReleasedAt: new Date('2026-01-05'),
+        dialect: null,
+        dialectVariant: null,
+      },
     ]);
 
     const result = await service.listAuditHoldUsers();
@@ -556,7 +658,14 @@ describe('AuthService.listAuditHoldUsers', () => {
   it('re-includes a user whose hold retriggered after an earlier release', async () => {
     const { service, prisma } = setup();
     prisma.user.findMany.mockResolvedValue([
-      { id: 'user-1', email: 'a@b.com', auditHoldAt: new Date('2026-02-01'), auditHoldReleasedAt: new Date('2026-01-05'), dialect: null, dialectVariant: null },
+      {
+        id: 'user-1',
+        email: 'a@b.com',
+        auditHoldAt: new Date('2026-02-01'),
+        auditHoldReleasedAt: new Date('2026-01-05'),
+        dialect: null,
+        dialectVariant: null,
+      },
     ]);
 
     const result = await service.listAuditHoldUsers();
@@ -575,23 +684,43 @@ describe('AuthService.listAuditHoldUsers', () => {
 describe('AuthService.releaseAuditHold', () => {
   it('rejects when the account is not currently on an audit hold', async () => {
     const { service, prisma } = setup();
-    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@b.com', auditHoldAt: null, auditHoldReleasedAt: null });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      auditHoldAt: null,
+      auditHoldReleasedAt: null,
+    });
 
-    await expect(service.releaseAuditHold('admin-1', 'user-1')).rejects.toThrow('not currently on an audit hold');
+    await expect(service.releaseAuditHold('admin-1', 'user-1')).rejects.toThrow(
+      'not currently on an audit hold',
+    );
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it('clears the hold, emails the trainer, and never touches status', async () => {
     const { service, prisma, mail } = setup();
-    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@b.com', auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: null });
-    prisma.user.update.mockResolvedValue({ id: 'user-1', email: 'a@b.com', status: 'ACTIVE', auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: new Date() });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      auditHoldAt: new Date('2026-01-01'),
+      auditHoldReleasedAt: null,
+    });
+    prisma.user.update.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      status: 'ACTIVE',
+      auditHoldAt: new Date('2026-01-01'),
+      auditHoldReleasedAt: new Date(),
+    });
 
     const result = await service.releaseAuditHold('admin-1', 'user-1');
 
-    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'user-1' },
-      data: expect.objectContaining({ auditHoldReleasedById: 'admin-1' }),
-    }));
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: expect.objectContaining({ auditHoldReleasedById: 'admin-1' }),
+      }),
+    );
     expect(prisma.user.update.mock.calls[0][0].data).not.toHaveProperty('status');
     expect(mail.sendAuditHoldReleasedEmail).toHaveBeenCalledWith('a@b.com');
     expect(result.onAuditHold).toBe(false);
@@ -600,18 +729,38 @@ describe('AuthService.releaseAuditHold', () => {
   it('requires OTP when adminPayoutOtpEnabled is on', async () => {
     const { service, prisma, platformSettings } = setup();
     platformSettings.isAdminPayoutOtpEnabled.mockResolvedValue(true);
-    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@b.com', auditHoldAt: new Date(), auditHoldReleasedAt: null });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      auditHoldAt: new Date(),
+      auditHoldReleasedAt: null,
+    });
 
-    await expect(service.releaseAuditHold('admin-1', 'user-1')).rejects.toThrow('OTP verification is required');
+    await expect(service.releaseAuditHold('admin-1', 'user-1')).rejects.toThrow(
+      'OTP verification is required',
+    );
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it('does not fail the release if the notification email throws', async () => {
     const { service, prisma, mail } = setup();
-    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@b.com', auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: null });
-    prisma.user.update.mockResolvedValue({ id: 'user-1', email: 'a@b.com', status: 'ACTIVE', auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: new Date() });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      auditHoldAt: new Date('2026-01-01'),
+      auditHoldReleasedAt: null,
+    });
+    prisma.user.update.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      status: 'ACTIVE',
+      auditHoldAt: new Date('2026-01-01'),
+      auditHoldReleasedAt: new Date(),
+    });
     mail.sendAuditHoldReleasedEmail.mockRejectedValue(new Error('resend down'));
 
-    await expect(service.releaseAuditHold('admin-1', 'user-1')).resolves.toMatchObject({ id: 'user-1' });
+    await expect(service.releaseAuditHold('admin-1', 'user-1')).resolves.toMatchObject({
+      id: 'user-1',
+    });
   });
 });

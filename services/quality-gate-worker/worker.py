@@ -6,8 +6,20 @@ import subprocess
 import redis
 import soundfile as sf
 
-from db import build_db_connection, get_speech_expression_enabled, reject_submission, write_expression, write_scores
-from expression import bucket_energy, bucket_speed, compute_emotion, extract_prosody_metrics, load_emotion_model
+from db import (
+    build_db_connection,
+    get_speech_expression_enabled,
+    reject_submission,
+    write_expression,
+    write_scores,
+)
+from expression import (
+    bucket_energy,
+    bucket_speed,
+    compute_emotion,
+    extract_prosody_metrics,
+    load_emotion_model,
+)
 from liveness import compute_liveness_score, load_model
 from noise import compute_noise_score
 from quality import compute_quality_score
@@ -35,13 +47,27 @@ MAX_SILENCE_RATIO = 0.9
 def transcode_to_wav(src_path: str, dst_path: str, sr: int = 16000) -> None:
     """Identical to vosk-worker's transcode_to_wav -- see that module's comment for why ffmpeg is needed here."""
     subprocess.run(
-        ["ffmpeg", "-y", "-i", src_path, "-ar", str(sr), "-ac", "1", "-f", "wav", dst_path],
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            src_path,
+            "-ar",
+            str(sr),
+            "-ac",
+            "1",
+            "-f",
+            "wav",
+            dst_path,
+        ],
         check=True,
         capture_output=True,
     )
 
 
-def prefilter_ok(audio_path: str, max_duration_s: float | None = None) -> tuple[bool, str | None]:
+def prefilter_ok(
+    audio_path: str, max_duration_s: float | None = None
+) -> tuple[bool, str | None]:
     """
     max_duration_s, when given, overrides the module-level MAX_DURATION_S --
     submissions.controller.ts computes and passes this per-prompt (see its
@@ -63,7 +89,9 @@ def prefilter_ok(audio_path: str, max_duration_s: float | None = None) -> tuple[
     return True, None
 
 
-def compute_scores(audio_path: str, liveness_model, *, expression_enabled: bool, emotion_model) -> dict:
+def compute_scores(
+    audio_path: str, liveness_model, *, expression_enabled: bool, emotion_model
+) -> dict:
     """
     Returns a dict rather than a fixed tuple -- the expression fields are
     conditional on expression_enabled, so a growing tuple stopped scaling
@@ -77,7 +105,9 @@ def compute_scores(audio_path: str, liveness_model, *, expression_enabled: bool,
     }
     if expression_enabled:
         prosody = extract_prosody_metrics(data, sr)
-        emotion_label, emotion_confidence = compute_emotion(data, sr, model=emotion_model)
+        emotion_label, emotion_confidence = compute_emotion(
+            data, sr, model=emotion_model
+        )
         result["expression"] = {
             "emotion": emotion_label,
             "emotion_confidence": emotion_confidence,
@@ -94,7 +124,11 @@ def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model, emotion
     def handle(_msg_id: str, fields: dict) -> None:
         job = fields if not fields.get("data") else json.loads(fields["data"])
         record_kind = job["record_kind"]
-        record_id = job["submission_id"] if record_kind == "submission" else job["word_recording_id"]
+        record_id = (
+            job["submission_id"]
+            if record_kind == "submission"
+            else job["word_recording_id"]
+        )
         raw_path = f"/tmp/{record_kind}-{record_id}.raw"
         wav_path = f"/tmp/{record_kind}-{record_id}.wav"
 
@@ -113,20 +147,34 @@ def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model, emotion
                 if record_kind == "submission":
                     reject_submission(db_conn, record_id, "unreadable_audio")
                 else:
-                    logger.warning("Unreadable audio for word_recording=%s; leaving scores unset", record_id)
+                    logger.warning(
+                        "Unreadable audio for word_recording=%s; leaving scores unset",
+                        record_id,
+                    )
                 return
 
-            max_duration_s = float(job["max_duration_s"]) if job.get("max_duration_s") else None
+            max_duration_s = (
+                float(job["max_duration_s"]) if job.get("max_duration_s") else None
+            )
             ok, reason = prefilter_ok(wav_path, max_duration_s)
             if not ok:
                 if record_kind == "submission":
                     reject_submission(db_conn, record_id, reason)
                 else:
-                    logger.warning("word_recording=%s failed prefilter (%s); leaving scores unset", record_id, reason)
+                    logger.warning(
+                        "word_recording=%s failed prefilter (%s); leaving scores unset",
+                        record_id,
+                        reason,
+                    )
                 return
 
             expression_enabled = get_speech_expression_enabled(db_conn)
-            scores = compute_scores(wav_path, liveness_model, expression_enabled=expression_enabled, emotion_model=emotion_model)
+            scores = compute_scores(
+                wav_path,
+                liveness_model,
+                expression_enabled=expression_enabled,
+                emotion_model=emotion_model,
+            )
             write_scores(
                 db_conn,
                 record_kind,
@@ -200,8 +248,14 @@ def main() -> None:
     # only once per pod lifetime.
     emotion_model = load_emotion_model()
 
-    consumer = StreamConsumer(redis_client, QUALITY_GATE_STREAM, CONSUMER_GROUP, CONSUMER_NAME)
-    logger.info("quality-gate-worker consuming stream=%s group=%s", QUALITY_GATE_STREAM, CONSUMER_GROUP)
+    consumer = StreamConsumer(
+        redis_client, QUALITY_GATE_STREAM, CONSUMER_GROUP, CONSUMER_NAME
+    )
+    logger.info(
+        "quality-gate-worker consuming stream=%s group=%s",
+        QUALITY_GATE_STREAM,
+        CONSUMER_GROUP,
+    )
     consumer.run(make_handler(s3, redis_client, db_conn, liveness_model, emotion_model))
 
 

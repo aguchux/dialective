@@ -29,7 +29,10 @@ export function NotificationListPanel() {
   const [markAllRead, { isLoading: markingAll }] = useMarkAllNotificationsReadMutation();
 
   function openNotification(notification: UserNotification) {
-    if (!notification.readAt) void markRead(notification.id).unwrap().catch(() => undefined);
+    if (!notification.readAt)
+      void markRead(notification.id)
+        .unwrap()
+        .catch(() => undefined);
     setOpen(notification);
   }
 
@@ -38,7 +41,9 @@ export function NotificationListPanel() {
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-5">
         <div>
           <h1 className="text-3xl font-black">Notifications</h1>
-          <p className="mt-1 text-muted">Updates, messages, courses, and blog alerts sent to your inbox.</p>
+          <p className="mt-1 text-muted">
+            Updates, messages, courses, and blog alerts sent to your inbox.
+          </p>
         </div>
         <ActionButton
           className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 font-bold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
@@ -75,14 +80,27 @@ export function NotificationListPanel() {
             }}
             type="button"
           >
-            <span className={`mt-2 size-2 rounded-full ${notification.readAt ? 'bg-line' : 'bg-accent'}`} aria-hidden="true" />
+            <span
+              className={`mt-2 size-2 rounded-full ${notification.readAt ? 'bg-line' : 'bg-accent'}`}
+              aria-hidden="true"
+            />
             <span className="min-w-0">
-              <span className="block text-xs font-black uppercase text-accent">{labelFor(notification.update.kind)}</span>
-              <span className="mt-1 line-clamp-1 block text-lg font-black">{notification.update.title}</span>
-              <span className="mt-1 line-clamp-1 block leading-relaxed text-muted">{notification.update.message}</span>
-              <span className="mt-2 block text-xs font-bold text-muted">{formatDateTime(notification.createdAt)}</span>
+              <span className="block text-xs font-black uppercase text-accent">
+                {labelFor(notification.update.kind)}
+              </span>
+              <span className="mt-1 line-clamp-1 block text-lg font-black">
+                {notification.update.title}
+              </span>
+              <span className="mt-1 line-clamp-1 block leading-relaxed text-muted">
+                {notification.update.message}
+              </span>
+              <span className="mt-2 block text-xs font-bold text-muted">
+                {formatDateTime(notification.createdAt)}
+              </span>
             </span>
-            {notification.update.href && <MoveUpRight className="mt-1 size-5 text-muted" aria-hidden="true" />}
+            {notification.update.href && (
+              <MoveUpRight className="mt-1 size-5 text-muted" aria-hidden="true" />
+            )}
           </button>
         ))}
         {data && data.totalPages > 1 && (
@@ -140,10 +158,17 @@ function NotificationDialog({
   return (
     <Dialog onOpenChange={onOpenChange} open={!!notification}>
       {notification && (
-        <DialogContent title={notification.update.title} description={formatDateTime(notification.createdAt)}>
+        <DialogContent
+          title={notification.update.title}
+          description={formatDateTime(notification.createdAt)}
+        >
           <div className="grid gap-4">
-            <span className="w-fit text-xs font-black uppercase text-accent">{labelFor(notification.update.kind)}</span>
-            <p className="whitespace-pre-wrap leading-relaxed text-ink">{notification.update.message}</p>
+            <span className="w-fit text-xs font-black uppercase text-accent">
+              {labelFor(notification.update.kind)}
+            </span>
+            <p className="whitespace-pre-wrap leading-relaxed text-ink">
+              {notification.update.message}
+            </p>
             {notification.update.href && (
               <button
                 className="inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-accent bg-accent px-4 font-bold text-white hover:bg-accent-dark"

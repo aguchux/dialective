@@ -30,7 +30,7 @@ function setup(status: {
   const platformSettings = {
     getAuthMaintenanceStatus: jest.fn().mockResolvedValue({
       enabled: status.enabled,
-      until: status.enabled ? status.until ?? new Date(Date.now() + 60_000) : null,
+      until: status.enabled ? (status.until ?? new Date(Date.now() + 60_000)) : null,
       message: status.message ?? null,
       blockLogin: false,
       blockSignup: false,
@@ -61,7 +61,9 @@ describe('JwtAuthGuard', () => {
 
   it('rejects a TRAINER session with AuthMaintenanceException when blockSessions is on', async () => {
     const { guard } = setup({ enabled: true, blockSessions: true });
-    await expect(guard.canActivate(contextFor(tokenFor(Role.TRAINER)))).rejects.toThrow(AuthMaintenanceException);
+    await expect(guard.canActivate(contextFor(tokenFor(Role.TRAINER)))).rejects.toThrow(
+      AuthMaintenanceException,
+    );
   });
 
   it('exempts ADMIN sessions by default when blockSessions is on', async () => {
@@ -71,12 +73,16 @@ describe('JwtAuthGuard', () => {
 
   it('still blocks ADMIN sessions when excludeAdmin is off', async () => {
     const { guard } = setup({ enabled: true, blockSessions: true, excludeAdmin: false });
-    await expect(guard.canActivate(contextFor(tokenFor(Role.ADMIN)))).rejects.toThrow(AuthMaintenanceException);
+    await expect(guard.canActivate(contextFor(tokenFor(Role.ADMIN)))).rejects.toThrow(
+      AuthMaintenanceException,
+    );
   });
 
   it('blocks PARTNER sessions by default (excludePartner defaults false)', async () => {
     const { guard } = setup({ enabled: true, blockSessions: true, excludePartner: false });
-    await expect(guard.canActivate(contextFor(tokenFor(Role.PARTNER)))).rejects.toThrow(AuthMaintenanceException);
+    await expect(guard.canActivate(contextFor(tokenFor(Role.PARTNER)))).rejects.toThrow(
+      AuthMaintenanceException,
+    );
   });
 
   it('exempts PARTNER sessions when excludePartner is on', async () => {

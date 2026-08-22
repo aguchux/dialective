@@ -44,10 +44,14 @@ def _validate_response(raw: dict) -> AgentResponse:
     intensity = emotion_raw.get("intensity")
 
     if emotion_type not in ALLOWED_EMOTIONS or not isinstance(intensity, (int, float)):
-        return AgentResponse(text=text, emotion=EmotionTag(type="neutral", intensity=0.0))
+        return AgentResponse(
+            text=text, emotion=EmotionTag(type="neutral", intensity=0.0)
+        )
 
     clamped_intensity = max(0.0, min(1.0, float(intensity)))
-    return AgentResponse(text=text, emotion=EmotionTag(type=emotion_type, intensity=clamped_intensity))
+    return AgentResponse(
+        text=text, emotion=EmotionTag(type=emotion_type, intensity=clamped_intensity)
+    )
 
 
 class OpenAIGPTProvider(LanguageModelProvider):
@@ -71,7 +75,11 @@ class OpenAIGPTProvider(LanguageModelProvider):
         self._model = model
 
     async def respond(self, transcript: str, history: list[dict]) -> AgentResponse:
-        messages = [{"role": "system", "content": self.SYSTEM_PROMPT}, *history, {"role": "user", "content": transcript}]
+        messages = [
+            {"role": "system", "content": self.SYSTEM_PROMPT},
+            *history,
+            {"role": "user", "content": transcript},
+        ]
         completion = await self._client.chat.completions.create(
             model=self._model,
             messages=messages,
@@ -81,6 +89,11 @@ class OpenAIGPTProvider(LanguageModelProvider):
         try:
             raw = json.loads(content)
         except json.JSONDecodeError:
-            logger.warning("LLM returned non-JSON content, falling back to neutral emotion: %r", content)
-            return AgentResponse(text=content.strip(), emotion=EmotionTag(type="neutral", intensity=0.0))
+            logger.warning(
+                "LLM returned non-JSON content, falling back to neutral emotion: %r",
+                content,
+            )
+            return AgentResponse(
+                text=content.strip(), emotion=EmotionTag(type="neutral", intensity=0.0)
+            )
         return _validate_response(raw)

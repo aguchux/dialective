@@ -1,8 +1,19 @@
 import { BadRequestException } from '@nestjs/common';
 
 const ALLOWED_BLOCKS = new Set([
-  'paragraph', 'header', 'list', 'checklist', 'quote', 'table', 'image',
-  'video', 'embed', 'delimiter', 'code', 'raw', 'button',
+  'paragraph',
+  'header',
+  'list',
+  'checklist',
+  'quote',
+  'table',
+  'image',
+  'video',
+  'embed',
+  'delimiter',
+  'code',
+  'raw',
+  'button',
 ]);
 
 interface EditorBlock {
@@ -27,7 +38,12 @@ export function validateEditorDocument(value: Record<string, unknown>): EditorDo
   }
 
   for (const block of value.blocks as EditorBlock[]) {
-    if (!block || typeof block !== 'object' || typeof block.type !== 'string' || !ALLOWED_BLOCKS.has(block.type)) {
+    if (
+      !block ||
+      typeof block !== 'object' ||
+      typeof block.type !== 'string' ||
+      !ALLOWED_BLOCKS.has(block.type)
+    ) {
       throw new BadRequestException('Blog content contains an unsupported block');
     }
     if (!block.data || typeof block.data !== 'object' || Array.isArray(block.data)) {
@@ -50,7 +66,10 @@ export function deriveExcerpt(document: EditorDocument): string {
 }
 
 export function calculateReadMinutes(document: EditorDocument): number {
-  const text = JSON.stringify(document.blocks).replace(/<[^>]*>/g, ' ').replace(/[^a-zA-Z0-9']+/g, ' ').trim();
+  const text = JSON.stringify(document.blocks)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/[^a-zA-Z0-9']+/g, ' ')
+    .trim();
   return Math.max(1, Math.ceil(text.split(/\s+/).filter(Boolean).length / 200));
 }
 

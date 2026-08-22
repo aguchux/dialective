@@ -28,11 +28,14 @@ export function NotificationBell() {
   const unreadCount = data?.unreadCount ?? 0;
   const items = data?.items.slice(0, 6) ?? [];
   const role = session?.user?.role;
-  const inboxHref = role === 'TRAINER' || role === 'PARTNER' ? '/dashboard?view=notifications' : '/notifications';
+  const inboxHref =
+    role === 'TRAINER' || role === 'PARTNER' ? '/dashboard?view=notifications' : '/notifications';
 
   async function openNotification(notification: UserNotification) {
     if (!notification.readAt) {
-      await markRead(notification.id).unwrap().catch(() => undefined);
+      await markRead(notification.id)
+        .unwrap()
+        .catch(() => undefined);
     }
     const href = notification.update.href;
     if (!href) {
@@ -103,13 +106,24 @@ export function NotificationBell() {
                   void openNotification(notification);
                 }}
               >
-                <span className={`mt-1 size-2 shrink-0 rounded-full ${notification.readAt ? 'bg-line' : 'bg-accent'}`} aria-hidden="true" />
+                <span
+                  className={`mt-1 size-2 shrink-0 rounded-full ${notification.readAt ? 'bg-line' : 'bg-accent'}`}
+                  aria-hidden="true"
+                />
                 <span className="min-w-0 flex-1">
-                  <span className="line-clamp-1 block font-black text-ink">{notification.update.title}</span>
-                  <span className="line-clamp-2 block text-xs leading-relaxed text-muted">{notification.update.message}</span>
-                  <span className="mt-1 block text-[11px] font-bold uppercase text-muted">{formatDateTime(notification.createdAt)}</span>
+                  <span className="line-clamp-1 block font-black text-ink">
+                    {notification.update.title}
+                  </span>
+                  <span className="line-clamp-2 block text-xs leading-relaxed text-muted">
+                    {notification.update.message}
+                  </span>
+                  <span className="mt-1 block text-[11px] font-bold uppercase text-muted">
+                    {formatDateTime(notification.createdAt)}
+                  </span>
                 </span>
-                {notification.update.href && <MoveUpRight className="mt-1 size-4 shrink-0 text-muted" aria-hidden="true" />}
+                {notification.update.href && (
+                  <MoveUpRight className="mt-1 size-4 shrink-0 text-muted" aria-hidden="true" />
+                )}
               </DropdownMenuItem>
             ))}
           </div>

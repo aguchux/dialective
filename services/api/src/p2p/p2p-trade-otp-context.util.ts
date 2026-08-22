@@ -10,7 +10,13 @@ import { hashContext } from '../otp/otp.util';
  */
 export function p2pTradeOtpContextHash(
   input:
-    | { action: 'create-offer'; type: string; tokenAmount: number; fiatAmount: number; fiatCurrency: string }
+    | {
+        action: 'create-offer';
+        type: string;
+        tokenAmount: number;
+        fiatAmount: number;
+        fiatCurrency: string;
+      }
     | { action: 'accept-offer'; offerId: string },
 ): string {
   return hashContext(input);

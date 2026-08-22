@@ -113,7 +113,9 @@ export class NowPaymentsService {
     if (!res.ok) {
       const body = await res.text();
       this.logger.error(`NOWPayments createInvoice failed: ${res.status} ${body}`);
-      throw new BadGatewayException('The payment provider could not start checkout. Please try again.');
+      throw new BadGatewayException(
+        'The payment provider could not start checkout. Please try again.',
+      );
     }
 
     const json = (await res.json()) as { id: string; invoice_url: string };
@@ -145,12 +147,16 @@ export class NowPaymentsService {
     const raw = await readNowPaymentsJson(res);
     if (!res.ok) {
       this.logger.error(`NOWPayments createPayout failed: ${res.status} ${JSON.stringify(raw)}`);
-      throw new BadGatewayException('The payout provider could not start this withdrawal. Please try again.');
+      throw new BadGatewayException(
+        'The payout provider could not start this withdrawal. Please try again.',
+      );
     }
 
     const payout = extractPayout(raw);
     if (!payout.id) {
-      this.logger.error(`NOWPayments createPayout response did not include payout id: ${JSON.stringify(raw)}`);
+      this.logger.error(
+        `NOWPayments createPayout response did not include payout id: ${JSON.stringify(raw)}`,
+      );
       throw new BadGatewayException('The payout provider returned an invalid payout response.');
     }
 
@@ -207,7 +213,9 @@ export class NowPaymentsService {
     const raw = await readNowPaymentsJson(res);
     if (!res.ok || typeof raw.token !== 'string') {
       this.logger.error(`NOWPayments payout auth failed: ${res.status} ${JSON.stringify(raw)}`);
-      throw new BadGatewayException('The payout provider could not authenticate this payout request.');
+      throw new BadGatewayException(
+        'The payout provider could not authenticate this payout request.',
+      );
     }
     return raw.token;
   }
@@ -237,7 +245,9 @@ export class NowPaymentsService {
   }
 
   getIpnEventHash(parsedBody: unknown): string {
-    return createHash('sha256').update(JSON.stringify(sortKeysDeep(parsedBody))).digest('hex');
+    return createHash('sha256')
+      .update(JSON.stringify(sortKeysDeep(parsedBody)))
+      .digest('hex');
   }
 }
 
@@ -251,16 +261,25 @@ async function readNowPaymentsJson(res: Response): Promise<Record<string, unknow
   }
 }
 
-function extractPayout(raw: Record<string, unknown>, fallbackId?: string): { id: string | null; status: string | null } {
+function extractPayout(
+  raw: Record<string, unknown>,
+  fallbackId?: string,
+): { id: string | null; status: string | null } {
   const candidates = [
     raw,
     raw.payout as Record<string, unknown> | undefined,
     raw.result as Record<string, unknown> | undefined,
-    Array.isArray(raw.withdrawals) ? (raw.withdrawals[0] as Record<string, unknown> | undefined) : undefined,
+    Array.isArray(raw.withdrawals)
+      ? (raw.withdrawals[0] as Record<string, unknown> | undefined)
+      : undefined,
   ].filter(Boolean) as Record<string, unknown>[];
 
   for (const candidate of candidates) {
-    const id = candidate.id ?? candidate.payout_id ?? candidate.batch_withdrawal_id ?? candidate.withdrawal_id;
+    const id =
+      candidate.id ??
+      candidate.payout_id ??
+      candidate.batch_withdrawal_id ??
+      candidate.withdrawal_id;
     const status = candidate.status ?? candidate.payout_status ?? candidate.withdrawal_status;
     if (typeof id === 'string' || typeof id === 'number') {
       return { id: String(id), status: typeof status === 'string' ? status : null };

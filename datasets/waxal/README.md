@@ -13,10 +13,10 @@ benchmark tool itself.
 
 WAXAL's ASR/TTS data is contributed by several providers, each under their own license:
 
-| Provider | License |
-|---|---|
+| Provider                                                                         | License      |
+| -------------------------------------------------------------------------------- | ------------ |
 | Makerere University, Digital Umuganda, Media Trust, Loud and Clear, AIMS Senegal | CC-BY-SA-4.0 |
-| University of Ghana | CC-BY-4.0 |
+| University of Ghana                                                              | CC-BY-4.0    |
 
 Both licenses require **attribution and source citation**, and any derivative work
 (including manifests or reports generated from this data) must use a compatible

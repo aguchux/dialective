@@ -5,7 +5,11 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSession, signIn, useSession } from 'next-auth/react';
 import { apiClient } from '@/lib/api-client';
-import { normalizeErrorMessage, useGetPublicClientSettingsQuery, useRegisterMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPublicClientSettingsQuery,
+  useRegisterMutation,
+} from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { AuthMaintenanceNotice } from '@/components/AuthMaintenanceNotice';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
@@ -19,7 +23,8 @@ import {
   writeReferralCookie,
 } from '@/lib/referral-cookie';
 
-const inputClass = 'min-h-10 min-w-0 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 min-w-0 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const secondaryButtonClass =
@@ -45,7 +50,8 @@ function RegisterContent() {
   const { data: publicClientSettings } = useGetPublicClientSettingsQuery();
 
   const referralCookieMaxAgeSeconds =
-    publicClientSettings?.referralCookiePersistSeconds && publicClientSettings.referralCookiePersistSeconds > 0
+    publicClientSettings?.referralCookiePersistSeconds &&
+    publicClientSettings.referralCookiePersistSeconds > 0
       ? publicClientSettings.referralCookiePersistSeconds
       : DEFAULT_REFERRAL_COOKIE_MAX_AGE_SECONDS;
 
@@ -72,7 +78,13 @@ function RegisterContent() {
 
     try {
       const effectiveReferralCode = referralCode ?? readReferralCookie();
-      const pending = await register({ firstName, lastName, email, password, referralCode: effectiveReferralCode }).unwrap();
+      const pending = await register({
+        firstName,
+        lastName,
+        email,
+        password,
+        referralCode: effectiveReferralCode,
+      }).unwrap();
       setTicket(pending.ticket);
     } catch (err) {
       const status = (err as { status?: number })?.status;
@@ -98,7 +110,10 @@ function RegisterContent() {
       } else {
         clearReferralCookie();
         const freshSession = await getSession();
-        window.location.href = roleHomePath(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
+        window.location.href = roleHomePath(
+          freshSession?.user?.role,
+          freshSession?.user?.onboardingComplete,
+        );
       }
     } finally {
       setIsVerifying(false);
@@ -135,7 +150,10 @@ function RegisterContent() {
       <AuthPage>
         <AuthPanel>
           <Breadcrumbs items={[{ label: 'Register' }]} />
-          <AuthMaintenanceNotice until={publicClientSettings.authMaintenanceUntil} note={publicClientSettings.authMaintenanceMessage} />
+          <AuthMaintenanceNotice
+            until={publicClientSettings.authMaintenanceUntil}
+            note={publicClientSettings.authMaintenanceMessage}
+          />
         </AuthPanel>
       </AuthPage>
     );
@@ -147,7 +165,9 @@ function RegisterContent() {
         <AuthPanel>
           <Breadcrumbs items={[{ label: 'Register' }]} />
           <h1 className="text-center text-[1.75rem] leading-tight">Verify your email</h1>
-          <p className="text-center text-sm text-muted">We sent a 6-digit code to {email}. It expires in 10 minutes.</p>
+          <p className="text-center text-sm text-muted">
+            We sent a 6-digit code to {email}. It expires in 10 minutes.
+          </p>
 
           <form className="grid gap-2.5" onSubmit={handleOtpSubmit}>
             <input
@@ -161,12 +181,23 @@ function RegisterContent() {
               required
               value={code}
             />
-            <ActionButton className={primaryButtonClass} disabled={code.length !== 6} pending={isVerifying} pendingLabel="Verifying" type="submit">
+            <ActionButton
+              className={primaryButtonClass}
+              disabled={code.length !== 6}
+              pending={isVerifying}
+              pendingLabel="Verifying"
+              type="submit"
+            >
               Verify
             </ActionButton>
           </form>
 
-          <ActionButton className={secondaryButtonClass} onClick={handleResend} pending={isResending} pendingLabel="Sending">
+          <ActionButton
+            className={secondaryButtonClass}
+            onClick={handleResend}
+            pending={isResending}
+            pendingLabel="Sending"
+          >
             Resend code
           </ActionButton>
 
@@ -226,7 +257,12 @@ function RegisterContent() {
             minLength={8}
             required
           />
-          <ActionButton className={primaryButtonClass} type="submit" pending={isSubmitting} pendingLabel="Creating account">
+          <ActionButton
+            className={primaryButtonClass}
+            type="submit"
+            pending={isSubmitting}
+            pendingLabel="Creating account"
+          >
             Register
           </ActionButton>
         </form>

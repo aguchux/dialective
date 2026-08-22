@@ -49,7 +49,14 @@ import { DictationDialog } from '@/components/trainer/DictationDialog';
 import { MarketView } from '@/components/p2p/MarketView';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationListPanel } from '@/components/notifications/NotificationListPanel';
-import { Avatar, cardClass, EmptyPanel, formatDate, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
+import {
+  Avatar,
+  cardClass,
+  EmptyPanel,
+  formatDate,
+  formatDateTime,
+  SectionTitle,
+} from '@/components/dashboard/shared';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -102,7 +109,16 @@ import type { Session } from 'next-auth';
 
 type SessionUpdateFn = (data?: Record<string, unknown>) => Promise<Session | null>;
 
-type DashboardView = 'home' | 'tokens' | 'earnings' | 'training' | 'market' | 'referrals' | 'scores' | 'profile' | 'notifications';
+type DashboardView =
+  | 'home'
+  | 'tokens'
+  | 'earnings'
+  | 'training'
+  | 'market'
+  | 'referrals'
+  | 'scores'
+  | 'profile'
+  | 'notifications';
 
 const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = [
   { id: 'tokens', label: 'Tokens', icon: WalletCards },
@@ -113,7 +129,13 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
 ];
 
 // Reachable only from the account dropdown/bell, not the main tab bar/mobile nav.
-const allViewIds: DashboardView[] = [...views.map((view) => view.id), 'home', 'referrals', 'profile', 'notifications'];
+const allViewIds: DashboardView[] = [
+  ...views.map((view) => view.id),
+  'home',
+  'referrals',
+  'profile',
+  'notifications',
+];
 
 export const activityLabels: Record<LedgerEntryType, string> = {
   DEPOSIT: 'DL funding',
@@ -140,7 +162,6 @@ export const activityLabels: Record<LedgerEntryType, string> = {
   P2P_ESCROW_CREDIT: 'P2P DL purchase',
 };
 
-
 export function TrainerDashboard() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
@@ -150,17 +171,32 @@ export function TrainerDashboard() {
   const [dictationOpen, setDictationOpen] = useState(false);
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
   const [requiredCoursesOpen, setRequiredCoursesOpen] = useState(false);
-  const [midSessionRequiredCourses, setMidSessionRequiredCourses] = useState<{ id: string; slug: string; title: string }[] | null>(null);
+  const [midSessionRequiredCourses, setMidSessionRequiredCourses] = useState<
+    { id: string; slug: string; title: string }[] | null
+  >(null);
   const requestedView = searchParams.get('view');
   const displayName = [session?.user.firstName, session?.user.lastName].filter(Boolean).join(' ');
-  const activeView = allViewIds.includes(requestedView as DashboardView) ? (requestedView as DashboardView) : 'home';
+  const activeView = allViewIds.includes(requestedView as DashboardView)
+    ? (requestedView as DashboardView)
+    : 'home';
   const { data, isLoading, isFetching, error, refetch } = useGetTrainerDashboardQuery(undefined, {
-    skip: status !== 'authenticated' || session?.user.role === 'ADMIN' || session?.user.role === 'DISTRIBUTOR',
+    skip:
+      status !== 'authenticated' ||
+      session?.user.role === 'ADMIN' ||
+      session?.user.role === 'DISTRIBUTOR',
   });
-  const { data: me } = useGetMeQuery(undefined, { skip: status !== 'authenticated' || session?.user.role === 'ADMIN' || session?.user.role === 'DISTRIBUTOR' });
+  const { data: me } = useGetMeQuery(undefined, {
+    skip:
+      status !== 'authenticated' ||
+      session?.user.role === 'ADMIN' ||
+      session?.user.role === 'DISTRIBUTOR',
+  });
   const dialectName = useDialectName(session?.user.dialectTag);
   const { data: incompleteRequiredCourses } = useGetIncompleteRequiredCoursesQuery(undefined, {
-    skip: status !== 'authenticated' || session?.user.role === 'ADMIN' || session?.user.role === 'DISTRIBUTOR',
+    skip:
+      status !== 'authenticated' ||
+      session?.user.role === 'ADMIN' ||
+      session?.user.role === 'DISTRIBUTOR',
   });
 
   // Same "check client-side first, server is still the authoritative
@@ -204,7 +240,10 @@ export function TrainerDashboard() {
 
   if (
     status === 'loading' ||
-    (status === 'authenticated' && (session.user.role === 'ADMIN' || session.user.role === 'DISTRIBUTOR' || !session.user.onboardingComplete))
+    (status === 'authenticated' &&
+      (session.user.role === 'ADMIN' ||
+        session.user.role === 'DISTRIBUTOR' ||
+        !session.user.onboardingComplete))
   ) {
     return <DashboardLoading />;
   }
@@ -215,7 +254,10 @@ export function TrainerDashboard() {
         <section className={`${cardClass} grid w-full max-w-sm gap-4 p-5`}>
           <BrandLogo size={36} />
           <h1 className="text-2xl font-black">Trainer dashboard</h1>
-          <Link className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-4 font-extrabold text-white" href="/login">
+          <Link
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-4 font-extrabold text-white"
+            href="/login"
+          >
             Log in
           </Link>
         </section>
@@ -245,7 +287,9 @@ export function TrainerDashboard() {
               <Avatar email={session.user.email ?? 'Trainer'} image={session.user.image} large />
               <div className="min-w-0">
                 <p className="text-sm font-bold text-muted">Welcome back</p>
-                <h1 className="truncate text-2xl font-black md:text-3xl">{displayName || emailName(session.user.email)}</h1>
+                <h1 className="truncate text-2xl font-black md:text-3xl">
+                  {displayName || emailName(session.user.email)}
+                </h1>
                 <div className="mt-1 flex items-center gap-2 text-sm text-muted">
                   <BadgeCheck className="size-4 text-emerald-600" aria-hidden="true" />
                   <span>{dialectName ? `${dialectName} trainer` : 'Dialect trainer'}</span>
@@ -366,7 +410,11 @@ function RequiredCoursesDialog({
   );
 }
 
-function RequiredCoursesBanner({ courses }: { courses: { id: string; slug: string; title: string }[] }) {
+function RequiredCoursesBanner({
+  courses,
+}: {
+  courses: { id: string; slug: string; title: string }[];
+}) {
   const first = courses[0];
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm dark:border-amber-900 dark:bg-amber-950">
@@ -503,7 +551,9 @@ function MicrophonePermissionBanner({ activeView }: { activeView: DashboardView 
       }`}
     >
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 md:px-2">
-        <p className={`font-bold ${denied ? 'text-danger dark:text-red-200' : 'text-amber-800 dark:text-amber-200'}`}>
+        <p
+          className={`font-bold ${denied ? 'text-danger dark:text-red-200' : 'text-amber-800 dark:text-amber-200'}`}
+        >
           {denied
             ? 'Your microphone is disabled — allow access in your browser settings to contribute recordings.'
             : 'Enable microphone access to contribute recordings.'}
@@ -523,7 +573,13 @@ function MicrophonePermissionBanner({ activeView }: { activeView: DashboardView 
   );
 }
 
-function EmailVerificationCard({ email, emailVerified }: { email: string; emailVerified: boolean }) {
+function EmailVerificationCard({
+  email,
+  emailVerified,
+}: {
+  email: string;
+  emailVerified: boolean;
+}) {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resend, { isLoading }] = useResendEmailVerificationMutation();
@@ -541,7 +597,10 @@ function EmailVerificationCard({ email, emailVerified }: { email: string; emailV
 
   return (
     <div className={`${cardClass} grid gap-4 p-5`}>
-      <SectionTitle title="Email address" subtitle={emailVerified ? 'Verified.' : 'Verify your email address.'} />
+      <SectionTitle
+        title="Email address"
+        subtitle={emailVerified ? 'Verified.' : 'Verify your email address.'}
+      />
       <p className="text-sm font-bold">{email}</p>
       {emailVerified ? (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
@@ -554,7 +613,11 @@ function EmailVerificationCard({ email, emailVerified }: { email: string; emailV
               Verification link sent — check your inbox.
             </p>
           )}
-          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{error}</p>}
+          {error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+              {error}
+            </p>
+          )}
           <div>
             <ActionButton
               className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
@@ -587,7 +650,12 @@ function DashboardHeader({
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
-        <BrandLogo href='/dashboard' size={34} className="text-base" textClassName="hidden font-black sm:inline" />
+        <BrandLogo
+          href="/dashboard"
+          size={34}
+          className="text-base"
+          textClassName="hidden font-black sm:inline"
+        />
         <nav className="hidden h-full items-stretch lg:flex" aria-label="Trainer dashboard">
           {views.map((view) => (
             <DashboardNavLink active={activeView === view.id} key={view.id} view={view} />
@@ -606,9 +674,14 @@ function DashboardHeader({
           <NotificationBell />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-1.5 pr-2 text-left hover:bg-surface-muted" type="button">
+              <button
+                className="flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-1.5 pr-2 text-left hover:bg-surface-muted"
+                type="button"
+              >
                 <Avatar email={email} image={image} />
-                <span className="hidden max-w-32 truncate text-sm font-bold text-ink sm:inline">{displayName}</span>
+                <span className="hidden max-w-32 truncate text-sm font-bold text-ink sm:inline">
+                  {displayName}
+                </span>
                 <ChevronDown className="hidden size-4 text-muted sm:block" aria-hidden="true" />
                 <span className="sr-only">Open account menu</span>
               </button>
@@ -665,7 +738,10 @@ function DashboardNavLink({ active, view }: { active: boolean; view: (typeof vie
 
 function MobileNavigation({ activeView }: { activeView: DashboardView }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden" aria-label="Trainer dashboard">
+    <nav
+      className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
+      aria-label="Trainer dashboard"
+    >
       {views.map((view) => {
         const Icon = view.icon;
         const active = view.id === activeView;
@@ -703,7 +779,14 @@ function DashboardViewContent({
   onStartDictation: () => void;
 }) {
   if (activeView === 'earnings') return <EarningsView data={data} refreshing={refreshing} />;
-  if (activeView === 'training') return <TrainingView dialectTag={dialectTag} onStartTask={onStartTask} onStartDictation={onStartDictation} />;
+  if (activeView === 'training')
+    return (
+      <TrainingView
+        dialectTag={dialectTag}
+        onStartTask={onStartTask}
+        onStartDictation={onStartDictation}
+      />
+    );
   if (activeView === 'market') return <MarketView />;
   if (activeView === 'referrals') return <ReferralsView data={data} email={email} />;
   if (activeView === 'scores') return <ScoresView />;
@@ -711,14 +794,24 @@ function DashboardViewContent({
   return <HomeView data={data} refreshing={refreshing} />;
 }
 
-function ViewHeading({ title, subtitle, refreshing }: { title: string; subtitle: string; refreshing?: boolean }) {
+function ViewHeading({
+  title,
+  subtitle,
+  refreshing,
+}: {
+  title: string;
+  subtitle: string;
+  refreshing?: boolean;
+}) {
   return (
     <div className="mb-5 flex items-start justify-between gap-4">
       <div>
         <h2 className="text-2xl font-black md:text-[28px]">{title}</h2>
         <p className="mt-1 text-sm leading-relaxed text-muted md:text-base">{subtitle}</p>
       </div>
-      {refreshing && <RefreshCw className="mt-1 size-4 animate-spin text-muted" aria-label="Refreshing" />}
+      {refreshing && (
+        <RefreshCw className="mt-1 size-4 animate-spin text-muted" aria-label="Refreshing" />
+      )}
     </div>
   );
 }
@@ -730,22 +823,52 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
   return (
     <div>
       <div className="flex items-start justify-between gap-3">
-        <ViewHeading title="Dashboard" subtitle="Your available platform balance at a glance." refreshing={refreshing} />
+        <ViewHeading
+          title="Dashboard"
+          subtitle="Your available platform balance at a glance."
+          refreshing={refreshing}
+        />
         <div className="flex shrink-0 items-center gap-2">
-          <WithdrawTokensDialog balance={data.balance} minWithdrawalTokens={data.minWithdrawalTokens} />
+          <WithdrawTokensDialog
+            balance={data.balance}
+            minWithdrawalTokens={data.minWithdrawalTokens}
+          />
           <FundTokensDialog />
         </div>
       </div>
       <section className="grid gap-3 sm:grid-cols-4" aria-label="DL balance">
-        <MetricCard icon={WalletCards} label="Available DL" value={formatCompactTokensValue(data.balance)} tone="purple" />
-        <MetricCard icon={Clock3} label="Held in review" value={formatCompactTokensValue(data.lockedBalance)} tone="blue" compact />
-        <MetricCard icon={Banknote} label="Estimated value" value={formatCompactUsd(usdValue)} tone="green" />
-        <MetricCard icon={CircleDollarSign} label="Current rate" value={`${formatUsd(data.tokenUsdRate)} / DL`} tone="amber" compact />
+        <MetricCard
+          icon={WalletCards}
+          label="Available DL"
+          value={formatCompactTokensValue(data.balance)}
+          tone="purple"
+        />
+        <MetricCard
+          icon={Clock3}
+          label="Held in review"
+          value={formatCompactTokensValue(data.lockedBalance)}
+          tone="blue"
+          compact
+        />
+        <MetricCard
+          icon={Banknote}
+          label="Estimated value"
+          value={formatCompactUsd(usdValue)}
+          tone="green"
+        />
+        <MetricCard
+          icon={CircleDollarSign}
+          label="Current rate"
+          value={`${formatUsd(data.tokenUsdRate)} / DL`}
+          tone="amber"
+          compact
+        />
       </section>
       {data.localCurrency && data.balanceInLocalCurrency && (
         <p className="mt-3 text-sm leading-relaxed text-muted">
           ≈ {formatCompactLocalCurrency(data.balanceInLocalCurrency, data.localCurrency.code)}
-          {data.localCurrency.updatedAt && ` · rate as of ${formatDateTime(data.localCurrency.updatedAt)}`}
+          {data.localCurrency.updatedAt &&
+            ` · rate as of ${formatDateTime(data.localCurrency.updatedAt)}`}
         </p>
       )}
       <section className="mt-8">
@@ -768,11 +891,18 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
 function TokensView({ refreshing }: { refreshing: boolean }) {
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const { data, isLoading, isFetching, isError, refetch } = useGetWalletActivityQuery({ page, pageSize });
+  const { data, isLoading, isFetching, isError, refetch } = useGetWalletActivityQuery({
+    page,
+    pageSize,
+  });
 
   return (
     <div>
-      <ViewHeading title="Tokens" subtitle="Full history of your token activity." refreshing={refreshing || isFetching} />
+      <ViewHeading
+        title="Tokens"
+        subtitle="Full history of your token activity."
+        refreshing={refreshing || isFetching}
+      />
       <section className={`${cardClass} overflow-hidden`}>
         {isLoading ? (
           <div className="grid min-h-52 place-items-center" role="status">
@@ -782,14 +912,20 @@ function TokensView({ refreshing }: { refreshing: boolean }) {
         ) : isError ? (
           <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
             <p className="font-extrabold">Could not load your token activity.</p>
-            <button className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted" onClick={() => void refetch()} type="button">
+            <button
+              className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted"
+              onClick={() => void refetch()}
+              type="button"
+            >
               Try again
             </button>
           </div>
         ) : data && data.items.length ? (
           <>
             <div className="divide-y divide-line md:hidden">
-              {data.items.map((entry) => <ActivityMobileRow entry={entry} key={entry.id} />)}
+              {data.items.map((entry) => (
+                <ActivityMobileRow entry={entry} key={entry.id} />
+              ))}
             </div>
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[720px] text-left">
@@ -802,13 +938,16 @@ function TokensView({ refreshing }: { refreshing: boolean }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {data.items.map((entry) => <ActivityTableRow entry={entry} key={entry.id} />)}
+                  {data.items.map((entry) => (
+                    <ActivityTableRow entry={entry} key={entry.id} />
+                  ))}
                 </tbody>
               </table>
             </div>
             <div className="flex flex-col gap-3 border-t border-line px-4 py-3 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
               <span>
-                Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, data.total)} of {data.total}
+                Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, data.total)} of{' '}
+                {data.total}
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -827,7 +966,9 @@ function TokensView({ refreshing }: { refreshing: boolean }) {
                   aria-label="Next activity page"
                   className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink disabled:cursor-not-allowed disabled:opacity-45"
                   disabled={page >= data.totalPages}
-                  onClick={() => setPage((currentPage) => Math.min(data.totalPages, currentPage + 1))}
+                  onClick={() =>
+                    setPage((currentPage) => Math.min(data.totalPages, currentPage + 1))
+                  }
                   type="button"
                 >
                   <ChevronRight className="size-4" aria-hidden="true" />
@@ -836,23 +977,59 @@ function TokensView({ refreshing }: { refreshing: boolean }) {
             </div>
           </>
         ) : (
-          <EmptyPanel icon={Clock3} title="No account activity yet" actionHref={undefined} actionLabel={undefined} />
+          <EmptyPanel
+            icon={Clock3}
+            title="No account activity yet"
+            actionHref={undefined}
+            actionLabel={undefined}
+          />
         )}
       </section>
     </div>
   );
 }
 
-function EarningsView({ data, refreshing }: { data: TrainerDashboardSummary; refreshing: boolean }) {
+function EarningsView({
+  data,
+  refreshing,
+}: {
+  data: TrainerDashboardSummary;
+  refreshing: boolean;
+}) {
   const total = Number(data.trainingEarningsTokens) + Number(data.referralEarningsTokens);
   return (
     <div>
-      <ViewHeading title="Earnings" subtitle="Training payouts and referral bonuses credited to your wallet." refreshing={refreshing} />
+      <ViewHeading
+        title="Earnings"
+        subtitle="Training payouts and referral bonuses credited to your wallet."
+        refreshing={refreshing}
+      />
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Earnings summary">
-        <MetricCard icon={Sparkles} label="Total earned" value={formatCompactTokensLabel(total)} tone="purple" compact />
-        <MetricCard icon={Mic2} label="Training" value={formatCompactTokensValue(data.trainingEarningsTokens)} tone="green" />
-        <MetricCard icon={Users} label="Referrals" value={formatCompactTokensValue(data.referralEarningsTokens)} tone="amber" />
-        <MetricCard icon={ArrowUpRight} label="Paid out" value={formatCompactTokensValue(data.paidOutTokens)} tone="blue" />
+        <MetricCard
+          icon={Sparkles}
+          label="Total earned"
+          value={formatCompactTokensLabel(total)}
+          tone="purple"
+          compact
+        />
+        <MetricCard
+          icon={Mic2}
+          label="Training"
+          value={formatCompactTokensValue(data.trainingEarningsTokens)}
+          tone="green"
+        />
+        <MetricCard
+          icon={Users}
+          label="Referrals"
+          value={formatCompactTokensValue(data.referralEarningsTokens)}
+          tone="amber"
+        />
+        <MetricCard
+          icon={ArrowUpRight}
+          label="Paid out"
+          value={formatCompactTokensValue(data.paidOutTokens)}
+          tone="blue"
+        />
       </section>
       <section className="mt-8">
         <EarningsChartSection />
@@ -865,7 +1042,10 @@ function EarningsView({ data, refreshing }: { data: TrainerDashboardSummary; ref
 function EarningHistoryTable({ tokenUsdRate }: { tokenUsdRate: number }) {
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const { data, isLoading, isFetching, isError, refetch } = useGetEarningHistoryQuery({ page, pageSize });
+  const { data, isLoading, isFetching, isError, refetch } = useGetEarningHistoryQuery({
+    page,
+    pageSize,
+  });
   const totalPages = data?.totalPages ?? 1;
   const firstRow = data?.total ? (data.page - 1) * data.pageSize + 1 : 0;
   const lastRow = data?.total ? Math.min(data.page * data.pageSize, data.total) : 0;
@@ -874,11 +1054,17 @@ function EarningHistoryTable({ tokenUsdRate }: { tokenUsdRate: number }) {
     <section className="mt-8" aria-labelledby="earning-history-title">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-black md:text-xl" id="earning-history-title">Earning history</h2>
-          <p className="mt-0.5 text-sm text-muted">Every training payout and referral bonus credited to your wallet.</p>
+          <h2 className="text-lg font-black md:text-xl" id="earning-history-title">
+            Earning history
+          </h2>
+          <p className="mt-0.5 text-sm text-muted">
+            Every training payout and referral bonus credited to your wallet.
+          </p>
         </div>
         {data && data.total > 0 ? (
-          <p className="text-sm font-bold text-muted">Showing {firstRow}-{lastRow} of {data.total.toLocaleString()}</p>
+          <p className="text-sm font-bold text-muted">
+            Showing {firstRow}-{lastRow} of {data.total.toLocaleString()}
+          </p>
         ) : null}
       </div>
 
@@ -891,7 +1077,11 @@ function EarningHistoryTable({ tokenUsdRate }: { tokenUsdRate: number }) {
         ) : isError ? (
           <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
             <p className="font-extrabold">Could not load earning history.</p>
-            <button className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted" onClick={() => void refetch()} type="button">
+            <button
+              className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted"
+              onClick={() => void refetch()}
+              type="button"
+            >
               Try again
             </button>
           </div>
@@ -902,21 +1092,44 @@ function EarningHistoryTable({ tokenUsdRate }: { tokenUsdRate: number }) {
                 <caption className="sr-only">Complete earning history</caption>
                 <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                   <tr>
-                    <th className="px-5 py-3.5" scope="col">Date</th>
-                    <th className="px-5 py-3.5" scope="col">Source</th>
-                    <th className="px-5 py-3.5" scope="col">Reference</th>
-                    <th className="px-5 py-3.5 text-right" scope="col">Value</th>
-                    <th className="px-5 py-3.5 text-right" scope="col">DL</th>
+                    <th className="px-5 py-3.5" scope="col">
+                      Date
+                    </th>
+                    <th className="px-5 py-3.5" scope="col">
+                      Source
+                    </th>
+                    <th className="px-5 py-3.5" scope="col">
+                      Reference
+                    </th>
+                    <th className="px-5 py-3.5 text-right" scope="col">
+                      Value
+                    </th>
+                    <th className="px-5 py-3.5 text-right" scope="col">
+                      DL
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {data.items.map((entry) => (
                     <tr className="hover:bg-surface-muted/60" key={entry.id}>
-                      <td className="whitespace-nowrap px-5 py-4 font-bold">{formatDateTime(entry.createdAt)}</td>
-                      <td className="px-5 py-4"><EarningTypeLabel type={entry.type} /></td>
-                      <td className="max-w-52 truncate px-5 py-4 font-mono text-xs text-muted" title={entry.reference}>{entry.reference}</td>
-                      <td className="whitespace-nowrap px-5 py-4 text-right font-bold text-muted">{formatUsd(Number(entry.amount) * tokenUsdRate)}</td>
-                      <td className="whitespace-nowrap px-5 py-4 text-right font-black text-emerald-700 dark:text-emerald-300">+{formatTokens(entry.amount)}</td>
+                      <td className="whitespace-nowrap px-5 py-4 font-bold">
+                        {formatDateTime(entry.createdAt)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <EarningTypeLabel type={entry.type} />
+                      </td>
+                      <td
+                        className="max-w-52 truncate px-5 py-4 font-mono text-xs text-muted"
+                        title={entry.reference}
+                      >
+                        {entry.reference}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-4 text-right font-bold text-muted">
+                        {formatUsd(Number(entry.amount) * tokenUsdRate)}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-4 text-right font-black text-emerald-700 dark:text-emerald-300">
+                        +{formatTokens(entry.amount)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -928,14 +1141,18 @@ function EarningHistoryTable({ tokenUsdRate }: { tokenUsdRate: number }) {
                 <article className="grid gap-3 p-4" key={entry.id}>
                   <div className="flex items-start justify-between gap-3">
                     <EarningTypeLabel type={entry.type} />
-                    <span className="whitespace-nowrap font-black text-emerald-700 dark:text-emerald-300">+{formatTokens(entry.amount)}</span>
+                    <span className="whitespace-nowrap font-black text-emerald-700 dark:text-emerald-300">
+                      +{formatTokens(entry.amount)}
+                    </span>
                   </div>
                   <div className="flex items-end justify-between gap-3 text-sm">
                     <div className="min-w-0">
                       <p className="font-bold">{formatDateTime(entry.createdAt)}</p>
                       <p className="truncate font-mono text-xs text-muted">{entry.reference}</p>
                     </div>
-                    <span className="shrink-0 font-bold text-muted">{formatUsd(Number(entry.amount) * tokenUsdRate)}</span>
+                    <span className="shrink-0 font-bold text-muted">
+                      {formatUsd(Number(entry.amount) * tokenUsdRate)}
+                    </span>
                   </div>
                 </article>
               ))}
@@ -947,12 +1164,26 @@ function EarningHistoryTable({ tokenUsdRate }: { tokenUsdRate: number }) {
 
         {data && data.total > 0 ? (
           <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-muted px-4 py-3 md:px-5">
-            <p className="text-sm font-bold text-muted">Page {data.page} of {totalPages}</p>
+            <p className="text-sm font-bold text-muted">
+              Page {data.page} of {totalPages}
+            </p>
             <div className="flex items-center gap-2">
-              <button aria-label="Previous earnings page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page <= 1 || isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button">
+              <button
+                aria-label="Previous earnings page"
+                className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={page <= 1 || isFetching}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                type="button"
+              >
                 <ChevronLeft className="size-4" aria-hidden="true" />
               </button>
-              <button aria-label="Next earnings page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page >= totalPages || isFetching} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} type="button">
+              <button
+                aria-label="Next earnings page"
+                className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={page >= totalPages || isFetching}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                type="button"
+              >
                 <ChevronRight className="size-4" aria-hidden="true" />
               </button>
             </div>
@@ -967,7 +1198,11 @@ function EarningTypeLabel({ type }: { type: LedgerEntryType }) {
   return (
     <span className="inline-flex items-center gap-2 font-extrabold">
       <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
-        {type === 'TRAINING_PAYOUT' ? <Mic2 className="size-4" aria-hidden="true" /> : <Users className="size-4" aria-hidden="true" />}
+        {type === 'TRAINING_PAYOUT' ? (
+          <Mic2 className="size-4" aria-hidden="true" />
+        ) : (
+          <Users className="size-4" aria-hidden="true" />
+        )}
       </span>
       {activityLabels[type]}
     </span>
@@ -1023,7 +1258,11 @@ function TrainingView({
         </button>
       </div>
 
-      <div className="mb-6 inline-flex rounded-lg border border-line bg-surface p-1" role="tablist" aria-label="Training sections">
+      <div
+        className="mb-6 inline-flex rounded-lg border border-line bg-surface p-1"
+        role="tablist"
+        aria-label="Training sections"
+      >
         <button
           aria-selected={tab === 'tasks'}
           className={`min-h-9 rounded-md px-4 text-sm font-extrabold transition-colors ${tab === 'tasks' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}
@@ -1049,20 +1288,31 @@ function TrainingView({
           <article className={`${cardClass} grid min-h-64 content-between gap-6 p-5 md:p-6`}>
             <div>
               <div className="mb-5 flex items-start justify-between gap-3">
-                <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent"><Mic2 className="size-5" aria-hidden="true" /></span>
+                <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent">
+                  <Mic2 className="size-5" aria-hidden="true" />
+                </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                   <span className="size-1.5 rounded-full bg-emerald-500" /> Available
                 </span>
               </div>
               <h3 className="text-xl font-black">Word training</h3>
-              <p className="mt-2 leading-relaxed text-muted">Translate individual words, record their pronunciation, and validate dialect submissions.</p>
+              <p className="mt-2 leading-relaxed text-muted">
+                Translate individual words, record their pronunciation, and validate dialect
+                submissions.
+              </p>
             </div>
             <div>
               <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
                 <span className="rounded-md bg-surface-muted px-2 py-1">Translation + voice</span>
-                <span className="rounded-md bg-surface-muted px-2 py-1">{dialectName ?? 'Your dialect'}</span>
+                <span className="rounded-md bg-surface-muted px-2 py-1">
+                  {dialectName ?? 'Your dialect'}
+                </span>
               </div>
-              <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" onClick={onStartTask} type="button">
+              <button
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto"
+                onClick={onStartTask}
+                type="button"
+              >
                 Start task <ArrowRight className="size-4" aria-hidden="true" />
               </button>
             </div>
@@ -1071,20 +1321,31 @@ function TrainingView({
           <article className={`${cardClass} grid min-h-64 content-between gap-6 p-5 md:p-6`}>
             <div>
               <div className="mb-5 flex items-start justify-between gap-3">
-                <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent"><Headphones className="size-5" aria-hidden="true" /></span>
+                <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent">
+                  <Headphones className="size-5" aria-hidden="true" />
+                </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                   <span className="size-1.5 rounded-full bg-emerald-500" /> Available
                 </span>
               </div>
               <h3 className="text-xl font-black">Dictation</h3>
-              <p className="mt-2 leading-relaxed text-muted">Read a prompt aloud, from a single word to a full sentence -- your recording is transcribed and cross-checked with other trainers.</p>
+              <p className="mt-2 leading-relaxed text-muted">
+                Read a prompt aloud, from a single word to a full sentence -- your recording is
+                transcribed and cross-checked with other trainers.
+              </p>
             </div>
             <div>
               <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
                 <span className="rounded-md bg-surface-muted px-2 py-1">Reading + voice</span>
-                <span className="rounded-md bg-surface-muted px-2 py-1">{dialectName ?? 'Your dialect'}</span>
+                <span className="rounded-md bg-surface-muted px-2 py-1">
+                  {dialectName ?? 'Your dialect'}
+                </span>
               </div>
-              <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto" onClick={onStartDictation} type="button">
+              <button
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto"
+                onClick={onStartDictation}
+                type="button"
+              >
                 Start dictation <ArrowRight className="size-4" aria-hidden="true" />
               </button>
             </div>
@@ -1097,7 +1358,8 @@ function TrainingView({
   );
 }
 
-type TaskDisplayStatus = 'PENDING' | 'TRANSCRIBED' | 'SCORED' | 'SETTLED' | 'REJECTED' | 'EXPIRED' | 'FAILED';
+type TaskDisplayStatus =
+  'PENDING' | 'TRANSCRIBED' | 'SCORED' | 'SETTLED' | 'REJECTED' | 'EXPIRED' | 'FAILED';
 
 const taskStatusLabels: Record<TaskDisplayStatus, string> = {
   PENDING: 'Awaiting transcription',
@@ -1146,7 +1408,11 @@ function formatCountdown(ms: number) {
  * settlement-job runs, submission.status flips to the real EXPIRED value
  * and that's what renders instead.
  */
-function deriveTaskStatus(submission: TrainerSubmissionSummary, nowMs: number, slaMs: number): TaskDisplayStatus {
+function deriveTaskStatus(
+  submission: TrainerSubmissionSummary,
+  nowMs: number,
+  slaMs: number,
+): TaskDisplayStatus {
   if (submission.status === 'REJECTED') return 'REJECTED';
   if (submission.status === 'EXPIRED') return 'EXPIRED';
   if (submission.status === 'SCORED' || submission.status === 'SETTLED') return submission.status;
@@ -1176,10 +1442,15 @@ function estimatedScoredPayout(tokensSpent: string, score: string) {
  */
 function qualityBreakdownTitle(submission: TrainerSubmissionSummary): string | undefined {
   if (submission.compositeScore === null) return undefined;
-  const parts = [`Transcript/exact-match: ${submission.score !== null ? Number(submission.score).toFixed(1) : '—'}%`];
-  if (submission.noiseScore !== null) parts.push(`Background noise: ${Number(submission.noiseScore).toFixed(1)}%`);
-  if (submission.qualityScore !== null) parts.push(`Audio quality: ${Number(submission.qualityScore).toFixed(1)}%`);
-  if (submission.livenessScore !== null) parts.push(`Voice liveness: ${Number(submission.livenessScore).toFixed(1)}%`);
+  const parts = [
+    `Transcript/exact-match: ${submission.score !== null ? Number(submission.score).toFixed(1) : '—'}%`,
+  ];
+  if (submission.noiseScore !== null)
+    parts.push(`Background noise: ${Number(submission.noiseScore).toFixed(1)}%`);
+  if (submission.qualityScore !== null)
+    parts.push(`Audio quality: ${Number(submission.qualityScore).toFixed(1)}%`);
+  if (submission.livenessScore !== null)
+    parts.push(`Voice liveness: ${Number(submission.livenessScore).toFixed(1)}%`);
   parts.push(`Composite (used for payout): ${Number(submission.compositeScore).toFixed(1)}%`);
   return parts.join('\n');
 }
@@ -1194,9 +1465,20 @@ function qualityBreakdownTitle(submission: TrainerSubmissionSummary): string | u
  */
 const MERGE_FETCH_PAGE_SIZE = 50;
 
-function useMergedSubmissions(status: TrainerSubmissionSummary['status'][], page: number, pageSize: number, pollingInterval?: number) {
-  const submissions = useGetMySubmissionsQuery({ page: 1, pageSize: MERGE_FETCH_PAGE_SIZE, status }, { pollingInterval });
-  const wordRecordings = useGetMyWordRecordingsQuery({ page: 1, pageSize: MERGE_FETCH_PAGE_SIZE, status }, { pollingInterval });
+function useMergedSubmissions(
+  status: TrainerSubmissionSummary['status'][],
+  page: number,
+  pageSize: number,
+  pollingInterval?: number,
+) {
+  const submissions = useGetMySubmissionsQuery(
+    { page: 1, pageSize: MERGE_FETCH_PAGE_SIZE, status },
+    { pollingInterval },
+  );
+  const wordRecordings = useGetMyWordRecordingsQuery(
+    { page: 1, pageSize: MERGE_FETCH_PAGE_SIZE, status },
+    { pollingInterval },
+  );
 
   const isLoading = submissions.isLoading || wordRecordings.isLoading;
   const isFetching = submissions.isFetching || wordRecordings.isFetching;
@@ -1220,22 +1502,23 @@ function useMergedSubmissions(status: TrainerSubmissionSummary['status'][], page
 function MyTasksView() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const { items, total, totalPages, isLoading, isFetching, isError, refetch } = useMergedSubmissions(
-    ['PENDING', 'TRANSCRIBED'],
-    page,
-    pageSize,
-    10000,
-  );
+  const { items, total, totalPages, isLoading, isFetching, isError, refetch } =
+    useMergedSubmissions(['PENDING', 'TRANSCRIBED'], page, pageSize, 10000);
   const now = Date.now();
   const scoringSlaLabel = formatDurationLabel(useScoringSlaMs());
 
   return (
     <section className={`${cardClass} overflow-hidden`}>
       <div className="flex items-center gap-3 border-b border-line bg-surface-muted px-5 py-4">
-        <span className="grid size-9 place-items-center rounded-lg bg-[#e8f0fe] text-[#3B6DF0]"><Clock3 className="size-5" aria-hidden="true" /></span>
+        <span className="grid size-9 place-items-center rounded-lg bg-[#e8f0fe] text-[#3B6DF0]">
+          <Clock3 className="size-5" aria-hidden="true" />
+        </span>
         <div>
           <h3 className="font-black">Submitted tasks</h3>
-          <p className="text-sm text-muted">Consensus scoring completes once enough trainers submit the same prompt, typically within {scoringSlaLabel}.</p>
+          <p className="text-sm text-muted">
+            Consensus scoring completes once enough trainers submit the same prompt, typically
+            within {scoringSlaLabel}.
+          </p>
         </div>
       </div>
 
@@ -1247,7 +1530,11 @@ function MyTasksView() {
       ) : isError ? (
         <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
           <p className="font-extrabold">Could not load your tasks.</p>
-          <button className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted" onClick={() => void refetch()} type="button">
+          <button
+            className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted"
+            onClick={() => void refetch()}
+            type="button"
+          >
             Try again
           </button>
         </div>
@@ -1258,12 +1545,24 @@ function MyTasksView() {
               <caption className="sr-only">Your submitted tasks</caption>
               <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                 <tr>
-                  <th className="px-5 py-3.5" scope="col">Prompt</th>
-                  <th className="px-5 py-3.5" scope="col">Dialect</th>
-                  <th className="px-5 py-3.5" scope="col">Status</th>
-                  <th className="px-5 py-3.5" scope="col">Time to scoring</th>
-                  <th className="px-5 py-3.5 text-right" scope="col">Est. reward</th>
-                  <th className="px-5 py-3.5" scope="col">Submitted</th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Prompt
+                  </th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Dialect
+                  </th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Status
+                  </th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Time to scoring
+                  </th>
+                  <th className="px-5 py-3.5 text-right" scope="col">
+                    Est. reward
+                  </th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Submitted
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -1281,17 +1580,37 @@ function MyTasksView() {
           </div>
         </>
       ) : (
-        <EmptyPanel actionHref="/dashboard?view=training" actionLabel="Start training" icon={Headphones} title="No tasks submitted yet" unframed />
+        <EmptyPanel
+          actionHref="/dashboard?view=training"
+          actionLabel="Start training"
+          icon={Headphones}
+          title="No tasks submitted yet"
+          unframed
+        />
       )}
 
       {total > 0 ? (
         <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-muted px-4 py-3 md:px-5">
-          <p className="text-sm font-bold text-muted">Page {page} of {totalPages}</p>
+          <p className="text-sm font-bold text-muted">
+            Page {page} of {totalPages}
+          </p>
           <div className="flex items-center gap-2">
-            <button aria-label="Previous page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page <= 1 || isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button">
+            <button
+              aria-label="Previous page"
+              className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={page <= 1 || isFetching}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              type="button"
+            >
               <ChevronLeft className="size-4" aria-hidden="true" />
             </button>
-            <button aria-label="Next page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page >= totalPages || isFetching} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} type="button">
+            <button
+              aria-label="Next page"
+              className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={page >= totalPages || isFetching}
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              type="button"
+            >
               <ChevronRight className="size-4" aria-hidden="true" />
             </button>
           </div>
@@ -1305,7 +1624,10 @@ function TaskCountdownCell({ submission }: { submission: TrainerSubmissionSummar
   const slaMs = useScoringSlaMs();
   const deadline = new Date(submission.createdAt).getTime() + slaMs;
   const remaining = useCountdown(deadline);
-  const finalized = submission.status === 'SCORED' || submission.status === 'SETTLED' || submission.status === 'REJECTED';
+  const finalized =
+    submission.status === 'SCORED' ||
+    submission.status === 'SETTLED' ||
+    submission.status === 'REJECTED';
   if (finalized) return <span className="text-muted">—</span>;
   if (remaining <= 0) return <span className="font-bold text-danger">Expired</span>;
   return <span className="font-mono font-bold">{formatCountdown(remaining)}</span>;
@@ -1318,12 +1640,15 @@ function TaskAudioButton({ audioUrl, label }: { audioUrl: string | null; label: 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      if (activeTaskAudio === audioRef.current) activeTaskAudio = null;
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        if (activeTaskAudio === audioRef.current) activeTaskAudio = null;
+      }
+    },
+    [],
+  );
 
   function stopAudio() {
     const audio = audioRef.current;
@@ -1376,7 +1701,9 @@ function TaskAudioButton({ audioUrl, label }: { audioUrl: string | null; label: 
     }
   }
 
-  const title = audioUrl ? `${isPlaying || isLoading ? 'Stop' : 'Play'} recording for ${label}` : 'Recording unavailable';
+  const title = audioUrl
+    ? `${isPlaying || isLoading ? 'Stop' : 'Play'} recording for ${label}`
+    : 'Recording unavailable';
 
   return (
     <button
@@ -1387,7 +1714,11 @@ function TaskAudioButton({ audioUrl, label }: { audioUrl: string | null; label: 
       title={title}
       type="button"
     >
-      {isPlaying || isLoading ? <Square className="size-4 fill-current" aria-hidden="true" /> : <Play className="ml-0.5 size-4 fill-current" aria-hidden="true" />}
+      {isPlaying || isLoading ? (
+        <Square className="size-4 fill-current" aria-hidden="true" />
+      ) : (
+        <Play className="ml-0.5 size-4 fill-current" aria-hidden="true" />
+      )}
     </button>
   );
 }
@@ -1405,7 +1736,9 @@ function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; no
       </td>
       <td className="px-5 py-4 text-muted">{dialectName}</td>
       <td className="px-5 py-4">
-        <span className={`w-fit rounded-md px-2.5 py-1 text-xs font-extrabold ${taskStatusTones[displayStatus]}`}>
+        <span
+          className={`w-fit rounded-md px-2.5 py-1 text-xs font-extrabold ${taskStatusTones[displayStatus]}`}
+        >
           {taskStatusLabels[displayStatus]}
         </span>
       </td>
@@ -1413,9 +1746,13 @@ function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; no
         <TaskCountdownCell submission={submission} />
       </td>
       <td className="whitespace-nowrap px-5 py-4 text-right font-bold text-muted">
-        {submission.payoutTokenAmount !== null ? `+${formatTokens(submission.payoutTokenAmount)} DL` : estimatedReward(submission.tokensSpent)}
+        {submission.payoutTokenAmount !== null
+          ? `+${formatTokens(submission.payoutTokenAmount)} DL`
+          : estimatedReward(submission.tokensSpent)}
       </td>
-      <td className="whitespace-nowrap px-5 py-4 text-muted">{formatDateTime(submission.createdAt)}</td>
+      <td className="whitespace-nowrap px-5 py-4 text-muted">
+        {formatDateTime(submission.createdAt)}
+      </td>
     </tr>
   );
 }
@@ -1423,21 +1760,30 @@ function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; no
 function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; now: number }) {
   const displayStatus = deriveTaskStatus(submission, now, useScoringSlaMs());
   const dialectName = useDialectName(submission.dialectTag);
-  const finalized = submission.status === 'SCORED' || submission.status === 'SETTLED' || submission.status === 'REJECTED';
+  const finalized =
+    submission.status === 'SCORED' ||
+    submission.status === 'SETTLED' ||
+    submission.status === 'REJECTED';
   return (
     <article className="grid gap-3 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <TaskAudioButton audioUrl={submission.audioUrl} label={submission.promptText} />
-          <p className="min-w-0 truncate font-bold" title={submission.promptText}>{submission.promptText}</p>
+          <p className="min-w-0 truncate font-bold" title={submission.promptText}>
+            {submission.promptText}
+          </p>
         </div>
-        <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-extrabold ${taskStatusTones[displayStatus]}`}>
+        <span
+          className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-extrabold ${taskStatusTones[displayStatus]}`}
+        >
           {taskStatusLabels[displayStatus]}
         </span>
       </div>
       <div className="flex items-end justify-between gap-3 text-sm">
         <div className="min-w-0">
-          <p className="text-muted">{dialectName} &middot; {formatDateTime(submission.createdAt)}</p>
+          <p className="text-muted">
+            {dialectName} &middot; {formatDateTime(submission.createdAt)}
+          </p>
           {!finalized && (
             <p className="font-bold">
               Time to scoring: <TaskCountdownCell submission={submission} />
@@ -1445,7 +1791,9 @@ function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; n
           )}
         </div>
         <span className="shrink-0 font-black text-muted">
-          {submission.payoutTokenAmount !== null ? `+${formatTokens(submission.payoutTokenAmount)}` : estimatedReward(submission.tokensSpent)}
+          {submission.payoutTokenAmount !== null
+            ? `+${formatTokens(submission.payoutTokenAmount)}`
+            : estimatedReward(submission.tokensSpent)}
         </span>
       </div>
     </article>
@@ -1462,7 +1810,10 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [sendReferralInvite, { isLoading: inviteSending }] = useSendReferralInviteMutation();
 
-  useEffect(() => setReferralLink(`${window.location.origin}/register?ref=${data.referrals.code}`), [data.referrals.code]);
+  useEffect(
+    () => setReferralLink(`${window.location.origin}/register?ref=${data.referrals.code}`),
+    [data.referrals.code],
+  );
 
   async function copyLink() {
     await navigator.clipboard.writeText(referralLink);
@@ -1476,7 +1827,10 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
     setInviteError(null);
 
     try {
-      await sendReferralInvite({ firstName: inviteFirstName.trim(), email: inviteEmail.trim() }).unwrap();
+      await sendReferralInvite({
+        firstName: inviteFirstName.trim(),
+        email: inviteEmail.trim(),
+      }).unwrap();
       setInviteMessage('Invitation sent successfully.');
       setInviteFirstName('');
       setInviteEmail('');
@@ -1489,7 +1843,10 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
   return (
     <div>
       <div className="mb-5 flex items-start justify-between gap-4">
-        <ViewHeading title="Referrals" subtitle="Your invitations and credited lifetime referral bonuses." />
+        <ViewHeading
+          title="Referrals"
+          subtitle="Your invitations and credited lifetime referral bonuses."
+        />
         <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
           <DialogTrigger asChild>
             <button className="inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-4 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark">
@@ -1546,9 +1903,26 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
       </div>
       {inviteMessage && <p className="mb-4 text-sm font-bold text-emerald-700">{inviteMessage}</p>}
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Referral summary">
-        <MetricCard icon={Users} label="People invited" value={data.referrals.invitedCount.toLocaleString()} tone="purple" />
-        <MetricCard icon={CircleDollarSign} label="Bonus earned" value={formatCompactTokensLabel(data.referralEarningsTokens)} tone="green" compact />
-        <MetricCard icon={BadgeCheck} label="Referral code" value={data.referrals.code} tone="blue" compact />
+        <MetricCard
+          icon={Users}
+          label="People invited"
+          value={data.referrals.invitedCount.toLocaleString()}
+          tone="purple"
+        />
+        <MetricCard
+          icon={CircleDollarSign}
+          label="Bonus earned"
+          value={formatCompactTokensLabel(data.referralEarningsTokens)}
+          tone="green"
+          compact
+        />
+        <MetricCard
+          icon={BadgeCheck}
+          label="Referral code"
+          value={data.referrals.code}
+          tone="blue"
+          compact
+        />
       </section>
       <section className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
         <div className={`${cardClass} p-5`}>
@@ -1556,19 +1930,39 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
           <p className="mt-1 text-sm text-muted">Signed in as {email}</p>
           <div className="mt-4 flex min-w-0 items-center gap-2 rounded-lg border border-line bg-surface-muted p-2 pl-3">
             <span className="min-w-0 flex-1 truncate text-sm font-bold">{referralLink}</span>
-            <button className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent text-white" onClick={copyLink} type="button" title="Copy invitation link">
-              {copied ? <Check className="size-4" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
+            <button
+              className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent text-white"
+              onClick={copyLink}
+              type="button"
+              title="Copy invitation link"
+            >
+              {copied ? (
+                <Check className="size-4" aria-hidden="true" />
+              ) : (
+                <Copy className="size-4" aria-hidden="true" />
+              )}
               <span className="sr-only">{copied ? 'Copied' : 'Copy invitation link'}</span>
             </button>
           </div>
         </div>
         <div className={`${cardClass} grid gap-4 p-5`}>
-          <RateRow enabled={data.referrals.fundingBonusEnabled} label="Funding bonus" rate={data.referrals.fundingBonusRate} />
-          <RateRow enabled={data.referrals.payoutBonusEnabled} label="Training payout bonus" rate={data.referrals.payoutBonusRate} />
+          <RateRow
+            enabled={data.referrals.fundingBonusEnabled}
+            label="Funding bonus"
+            rate={data.referrals.fundingBonusRate}
+          />
+          <RateRow
+            enabled={data.referrals.payoutBonusEnabled}
+            label="Training payout bonus"
+            rate={data.referrals.payoutBonusRate}
+          />
         </div>
       </section>
       <section className="mt-8">
-        <SectionTitle title="Recent invitations" subtitle="People invited or registered under your referral network." />
+        <SectionTitle
+          title="Recent invitations"
+          subtitle="People invited or registered under your referral network."
+        />
         {data.referrals.recentInvites.length ? (
           <div className={`${cardClass} divide-y divide-line`}>
             {data.referrals.recentInvites.map((invite) => (
@@ -1578,19 +1972,27 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
                   <p className="truncate font-extrabold">{invite.firstName ?? invite.email}</p>
                   <p className="truncate text-sm text-muted">{invite.email}</p>
                   <p className="text-sm text-muted">
-                    {invite.status === 'JOINED' ? 'Joined' : 'Invited'} {formatDate(invite.createdAt)}
+                    {invite.status === 'JOINED' ? 'Joined' : 'Invited'}{' '}
+                    {formatDate(invite.createdAt)}
                   </p>
                 </div>
                 {invite.status === 'JOINED' ? (
                   <BadgeCheck className="size-5 shrink-0 text-emerald-600" aria-label="Joined" />
                 ) : (
-                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">Invited</span>
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
+                    Invited
+                  </span>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <EmptyPanel icon={Users} title="No invitations yet" actionHref={undefined} actionLabel={undefined} />
+          <EmptyPanel
+            icon={Users}
+            title="No invitations yet"
+            actionHref={undefined}
+            actionLabel={undefined}
+          />
         )}
       </section>
     </div>
@@ -1611,7 +2013,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [updateProfile, { isLoading }] = useUpdateProfileMutation();
   const { data: me } = useGetMeQuery();
   const { data: methods = [] } = useGetP2PPaymentMethodsQuery();
-  const [requestPaymentOtp, { isLoading: paymentOtpSending }] = useRequestP2PPaymentMethodOtpMutation();
+  const [requestPaymentOtp, { isLoading: paymentOtpSending }] =
+    useRequestP2PPaymentMethodOtpMutation();
   const [createPaymentMethod, { isLoading: paymentCreating }] = useCreateP2PPaymentMethodMutation();
   const [updatePaymentMethod, { isLoading: paymentUpdating }] = useUpdateP2PPaymentMethodMutation();
   const primaryMethod = methods.find((method) => method.enabled);
@@ -1621,21 +2024,27 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const phoneVerificationRequired = publicSettings?.phoneVerificationRequired ?? true;
   const manualPhoneVerificationEnabled = publicSettings?.manualPhoneVerificationEnabled ?? false;
   const manualPhoneVerificationFeeTokens = publicSettings?.manualPhoneVerificationFeeTokens ?? '1';
-  const manualPhoneVerificationWhatsappNumber = publicSettings?.manualPhoneVerificationWhatsappNumber ?? '';
+  const manualPhoneVerificationWhatsappNumber =
+    publicSettings?.manualPhoneVerificationWhatsappNumber ?? '';
   const phoneVerified = me?.phoneVerified ?? false;
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneOtpRequestId, setPhoneOtpRequestId] = useState('');
   const [phoneOtpCode, setPhoneOtpCode] = useState('');
   const [phoneVerificationDialogOpen, setPhoneVerificationDialogOpen] = useState(false);
-  const [phoneVerificationMode, setPhoneVerificationMode] = useState<'SMS' | 'WHATSAPP' | null>(null);
-  const [manualPhoneRequest, setManualPhoneRequest] = useState<ManualPhoneVerificationRequestResult | null>(null);
+  const [phoneVerificationMode, setPhoneVerificationMode] = useState<'SMS' | 'WHATSAPP' | null>(
+    null,
+  );
+  const [manualPhoneRequest, setManualPhoneRequest] =
+    useState<ManualPhoneVerificationRequestResult | null>(null);
   const [phoneMessage, setPhoneMessage] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [requestPhoneOtp, { isLoading: phoneOtpSending }] = useRequestPhoneOtpMutation();
   const [verifyPhone, { isLoading: phoneVerifying }] = useVerifyPhoneMutation();
   const [savePhoneUnverified, { isLoading: phoneSaving }] = useSavePhoneUnverifiedMutation();
-  const [requestManualPhoneVerification, { isLoading: manualPhoneRequesting }] = useRequestManualPhoneVerificationMutation();
-  const [markManualPhoneVerificationSent, { isLoading: manualPhoneMarkingSent }] = useMarkManualPhoneVerificationSentMutation();
+  const [requestManualPhoneVerification, { isLoading: manualPhoneRequesting }] =
+    useRequestManualPhoneVerificationMutation();
+  const [markManualPhoneVerificationSent, { isLoading: manualPhoneMarkingSent }] =
+    useMarkManualPhoneVerificationSentMutation();
   const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
   const phoneValid = isValidPhoneNumber(normalizedPhoneNumber);
   const [notificationPrefs, setNotificationPrefs] = useState({
@@ -1645,7 +2054,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     blogNewsNotificationsEnabled: false,
     courseNotificationsEnabled: false,
   });
-  const [notificationSaving, setNotificationSaving] = useState<NotificationPreferenceKey | null>(null);
+  const [notificationSaving, setNotificationSaving] = useState<NotificationPreferenceKey | null>(
+    null,
+  );
 
   const [countryId, setCountryId] = useState('');
   const [dialectId, setDialectId] = useState('');
@@ -1653,7 +2064,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [dialectMessage, setDialectMessage] = useState<string | null>(null);
   const [dialectError, setDialectError] = useState<string | null>(null);
   const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
-  const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(countryId, { skip: !countryId });
+  const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(countryId, {
+    skip: !countryId,
+  });
   const { data: dialectVariants } = useGetDialectVariantsQuery(dialectId, { skip: !dialectId });
   const [updateDialectProfile, { isLoading: dialectSaving }] = useUpdateProfileMutation();
 
@@ -1665,7 +2078,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   }, [me]);
 
   const dialectDirty =
-    countryId !== (me?.countryId ?? '') || dialectId !== (me?.dialectId ?? '') || dialectVariantId !== (me?.dialectVariantId ?? '');
+    countryId !== (me?.countryId ?? '') ||
+    dialectId !== (me?.dialectId ?? '') ||
+    dialectVariantId !== (me?.dialectVariantId ?? '');
 
   function selectCountry(value: string) {
     setCountryId(value);
@@ -1687,7 +2102,11 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       return;
     }
     try {
-      const profile = await updateDialectProfile({ countryId, dialectId, dialectVariantId: dialectVariantId || '' }).unwrap();
+      const profile = await updateDialectProfile({
+        countryId,
+        dialectId,
+        dialectVariantId: dialectVariantId || '',
+      }).unwrap();
       await update({ dialectTag: profile.dialectTag, countryId: profile.countryId });
       setDialectMessage('Dialect updated.');
     } catch (err) {
@@ -1695,7 +2114,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     }
   }
 
-  const dirty = firstName.trim() !== (session.user.firstName ?? '') || lastName.trim() !== (session.user.lastName ?? '');
+  const dirty =
+    firstName.trim() !== (session.user.firstName ?? '') ||
+    lastName.trim() !== (session.user.lastName ?? '');
   const paymentPayload = {
     label: 'Bank transfer',
     methodType: 'BANK_TRANSFER',
@@ -1706,7 +2127,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     instructions: instructions.trim() || undefined,
     enabled: true,
   };
-  const paymentDirty = bankName.trim() !== (primaryMethod?.bankName ?? '') ||
+  const paymentDirty =
+    bankName.trim() !== (primaryMethod?.bankName ?? '') ||
     accountName.trim() !== (primaryMethod?.accountName ?? '') ||
     accountNumber.trim() !== (primaryMethod?.accountNumber ?? '') ||
     instructions.trim() !== (primaryMethod?.instructions ?? '');
@@ -1718,7 +2140,13 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     setInstructions(primaryMethod?.instructions ?? '');
     setPaymentOtpRequestId('');
     setPaymentOtpCode('');
-  }, [primaryMethod?.id, primaryMethod?.bankName, primaryMethod?.accountName, primaryMethod?.accountNumber, primaryMethod?.instructions]);
+  }, [
+    primaryMethod?.id,
+    primaryMethod?.bankName,
+    primaryMethod?.accountName,
+    primaryMethod?.accountNumber,
+    primaryMethod?.instructions,
+  ]);
 
   function updatePaymentField(setter: (value: string) => void, value: string) {
     setter(value);
@@ -1776,7 +2204,11 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
         await sendPhoneOtp();
         return;
       }
-      await verifyPhone({ phoneNumber: normalizedPhoneNumber, otpRequestId: phoneOtpRequestId, code: phoneOtpCode.trim() }).unwrap();
+      await verifyPhone({
+        phoneNumber: normalizedPhoneNumber,
+        otpRequestId: phoneOtpRequestId,
+        code: phoneOtpCode.trim(),
+      }).unwrap();
       setPhoneOtpRequestId('');
       setPhoneOtpCode('');
       setPhoneMessage('Phone number verified.');
@@ -1790,10 +2222,14 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     setPhoneMessage(null);
     setPhoneError(null);
     try {
-      const result = await requestManualPhoneVerification({ phoneNumber: normalizedPhoneNumber }).unwrap();
+      const result = await requestManualPhoneVerification({
+        phoneNumber: normalizedPhoneNumber,
+      }).unwrap();
       setManualPhoneRequest(result);
       setPhoneVerificationMode('WHATSAPP');
-      setPhoneMessage(`Manual verification started. ${result.feeTokenAmount} DL will be charged once verified.`);
+      setPhoneMessage(
+        `Manual verification started. ${result.feeTokenAmount} DL will be charged once verified.`,
+      );
     } catch (err) {
       setPhoneError(normalizeErrorMessage(err, 'Could not start manual verification.'));
     }
@@ -1829,7 +2265,10 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     setMessage(null);
     setError(null);
     try {
-      const profile = await updateProfile({ firstName: firstName.trim(), lastName: lastName.trim() }).unwrap();
+      const profile = await updateProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+      }).unwrap();
       await update({ firstName: profile.firstName, lastName: profile.lastName });
       setMessage('Profile updated.');
     } catch (err) {
@@ -1859,7 +2298,11 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
         await requestPaymentMethodOtp();
         return;
       }
-      const body = { ...paymentPayload, otpRequestId: paymentOtpRequestId, code: paymentOtpCode.trim() };
+      const body = {
+        ...paymentPayload,
+        otpRequestId: paymentOtpRequestId,
+        code: paymentOtpCode.trim(),
+      };
       if (primaryMethod) {
         await updatePaymentMethod({ id: primaryMethod.id, body }).unwrap();
       } else {
@@ -1924,10 +2367,20 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               disabled
               value={session.user.email ?? ''}
             />
-            <span className="text-xs font-medium text-muted">Email can&apos;t be changed here.</span>
+            <span className="text-xs font-medium text-muted">
+              Email can&apos;t be changed here.
+            </span>
           </label>
-          {message && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{message}</p>}
-          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{error}</p>}
+          {message && (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              {message}
+            </p>
+          )}
+          {error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+              {error}
+            </p>
+          )}
           <div>
             <ActionButton
               className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
@@ -1941,9 +2394,15 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
           </div>
         </form>
 
-        <EmailVerificationCard email={session.user.email ?? ''} emailVerified={me?.emailVerified ?? false} />
+        <EmailVerificationCard
+          email={session.user.email ?? ''}
+          emailVerified={me?.emailVerified ?? false}
+        />
 
-        <form className={`${cardClass} grid gap-4 p-5`} onSubmit={(event) => event.preventDefault()}>
+        <form
+          className={`${cardClass} grid gap-4 p-5`}
+          onSubmit={(event) => event.preventDefault()}
+        >
           <SectionTitle
             title="Phone number"
             subtitle={
@@ -1968,12 +2427,14 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                 placeholder: 'Mobile number',
               }}
               countrySelectorStyleProps={{
-                buttonClassName: '!min-h-11 !rounded-l-lg !rounded-r-none !border !border-line !border-r-0 !bg-surface !pl-3',
+                buttonClassName:
+                  '!min-h-11 !rounded-l-lg !rounded-r-none !border !border-line !border-r-0 !bg-surface !pl-3',
                 buttonContentWrapperClassName: '!gap-1.5',
                 flagClassName: '!m-0',
               }}
               dialCodePreviewStyleProps={{
-                className: '!min-h-11 !items-center !border !border-line !border-r-0 !bg-surface !px-2 !font-extrabold !text-muted',
+                className:
+                  '!min-h-11 !items-center !border !border-line !border-r-0 !bg-surface !px-2 !font-extrabold !text-muted',
               }}
               onChange={updatePhoneField}
               value={phoneNumber}
@@ -1984,8 +2445,16 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               This number is verified.
             </p>
           )}
-          {phoneMessage && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{phoneMessage}</p>}
-          {phoneError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{phoneError}</p>}
+          {phoneMessage && (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              {phoneMessage}
+            </p>
+          )}
+          {phoneError && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+              {phoneError}
+            </p>
+          )}
           {!phoneVerified && (
             <div className="flex flex-wrap gap-2">
               {!phoneVerificationRequired && (
@@ -2019,7 +2488,10 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                     Verify mobile
                   </ActionButton>
                 </DialogTrigger>
-                <DialogContent title="Verify mobile" description="Choose how you want to verify this number.">
+                <DialogContent
+                  title="Verify mobile"
+                  description="Choose how you want to verify this number."
+                >
                   <div className="grid gap-4">
                     <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold text-muted">
                       {normalizedPhoneNumber}
@@ -2032,7 +2504,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                           type="button"
                         >
                           <span className="font-black">SMS OTP Method</span>
-                          <span className="text-sm leading-relaxed text-muted">Receive the normal one-time code by SMS.</span>
+                          <span className="text-sm leading-relaxed text-muted">
+                            Receive the normal one-time code by SMS.
+                          </span>
                         </button>
                         <button
                           className="grid min-h-28 gap-2 rounded-lg border border-line bg-surface p-4 text-left transition-colors hover:border-accent hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
@@ -2042,8 +2516,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                         >
                           <span className="font-black">WhatsApp Method</span>
                           <span className="text-sm leading-relaxed text-muted">
-                            Get a code to send to WhatsApp for admin review -- {manualPhoneVerificationFeeTokens} DL is charged once
-                            verified.
+                            Get a code to send to WhatsApp for admin review --{' '}
+                            {manualPhoneVerificationFeeTokens} DL is charged once verified.
                           </span>
                         </button>
                       </div>
@@ -2089,8 +2563,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                         {!manualPhoneRequest ? (
                           <>
                             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
-                              {manualPhoneVerificationFeeTokens} DL will be charged from your balance once an admin verifies your
-                              code -- make sure you have enough DL before sending your WhatsApp message.
+                              {manualPhoneVerificationFeeTokens} DL will be charged from your
+                              balance once an admin verifies your code -- make sure you have enough
+                              DL before sending your WhatsApp message.
                             </div>
                             <ActionButton
                               className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
@@ -2106,10 +2581,17 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                         ) : (
                           <>
                             <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-4">
-                              <span className="text-xs font-bold uppercase text-muted">Send this code to WhatsApp</span>
-                              <span className="text-3xl font-black tracking-widest text-ink">{manualPhoneRequest.code}</span>
+                              <span className="text-xs font-bold uppercase text-muted">
+                                Send this code to WhatsApp
+                              </span>
+                              <span className="text-3xl font-black tracking-widest text-ink">
+                                {manualPhoneRequest.code}
+                              </span>
                               <span className="text-sm text-muted">
-                                Text {manualPhoneRequest.code} to {manualPhoneRequest.whatsappNumber || manualPhoneVerificationWhatsappNumber}.
+                                Text {manualPhoneRequest.code} to{' '}
+                                {manualPhoneRequest.whatsappNumber ||
+                                  manualPhoneVerificationWhatsappNumber}
+                                .
                               </span>
                             </div>
                             <ActionButton
@@ -2133,89 +2615,97 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
         </form>
 
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={savePaymentMethod}>
-          <SectionTitle title="Payment method" subtitle="Stored in Profile and protected by email 2FA for every edit." />
+          <SectionTitle
+            title="Payment method"
+            subtitle="Stored in Profile and protected by email 2FA for every edit."
+          />
           {!phoneVerified && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
               Verify your phone number above before adding a payment method.
             </p>
           )}
           <fieldset className="contents" disabled={!phoneVerified}>
-          <label className="grid gap-1.5 text-sm font-bold">
-            Bank name
-            <input
-              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-              onChange={(event) => updatePaymentField(setBankName, event.target.value)}
-              required
-              value={bankName}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-bold">
-            Account number
-            <input
-              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-              inputMode="numeric"
-              onChange={(event) => updatePaymentField(setAccountNumber, event.target.value)}
-              required
-              value={accountNumber}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-bold">
-            Account name
-            <input
-              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-              onChange={(event) => updatePaymentField(setAccountName, event.target.value)}
-              required
-              value={accountName}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-bold">
-            Notes <span className="font-normal text-muted">(optional)</span>
-            <textarea
-              className="min-h-20 resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-ink outline-none focus:border-accent"
-              onChange={(event) => updatePaymentField(setInstructions, event.target.value)}
-              placeholder="Anything a buyer should know before paying, e.g. preferred payment window or reference format"
-              value={instructions}
-            />
-          </label>
-          {paymentOtpRequestId ? (
             <label className="grid gap-1.5 text-sm font-bold">
-              Email verification code
+              Bank name
+              <input
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                onChange={(event) => updatePaymentField(setBankName, event.target.value)}
+                required
+                value={bankName}
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-bold">
+              Account number
               <input
                 className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
                 inputMode="numeric"
-                maxLength={8}
-                onChange={(event) => setPaymentOtpCode(event.target.value)}
+                onChange={(event) => updatePaymentField(setAccountNumber, event.target.value)}
                 required
-                value={paymentOtpCode}
+                value={accountNumber}
               />
             </label>
-          ) : null}
-          <div className="flex flex-wrap gap-2">
-            <ActionButton
-              className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!paymentDirty || !bankName.trim() || !accountName.trim() || !accountNumber.trim()}
-              onClick={() => void requestPaymentMethodOtp()}
-              pending={paymentOtpSending}
-              pendingLabel="Sending"
-              type="button"
-            >
-              Email code
-            </ActionButton>
-            <ActionButton
-              className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!paymentDirty || !paymentOtpRequestId || !paymentOtpCode.trim()}
-              pending={paymentSaving}
-              pendingLabel="Saving"
-              type="submit"
-            >
-              Save bank details
-            </ActionButton>
-          </div>
+            <label className="grid gap-1.5 text-sm font-bold">
+              Account name
+              <input
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                onChange={(event) => updatePaymentField(setAccountName, event.target.value)}
+                required
+                value={accountName}
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-bold">
+              Notes <span className="font-normal text-muted">(optional)</span>
+              <textarea
+                className="min-h-20 resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-ink outline-none focus:border-accent"
+                onChange={(event) => updatePaymentField(setInstructions, event.target.value)}
+                placeholder="Anything a buyer should know before paying, e.g. preferred payment window or reference format"
+                value={instructions}
+              />
+            </label>
+            {paymentOtpRequestId ? (
+              <label className="grid gap-1.5 text-sm font-bold">
+                Email verification code
+                <input
+                  className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                  inputMode="numeric"
+                  maxLength={8}
+                  onChange={(event) => setPaymentOtpCode(event.target.value)}
+                  required
+                  value={paymentOtpCode}
+                />
+              </label>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <ActionButton
+                className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={
+                  !paymentDirty || !bankName.trim() || !accountName.trim() || !accountNumber.trim()
+                }
+                onClick={() => void requestPaymentMethodOtp()}
+                pending={paymentOtpSending}
+                pendingLabel="Sending"
+                type="button"
+              >
+                Email code
+              </ActionButton>
+              <ActionButton
+                className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!paymentDirty || !paymentOtpRequestId || !paymentOtpCode.trim()}
+                pending={paymentSaving}
+                pendingLabel="Saving"
+                type="submit"
+              >
+                Save bank details
+              </ActionButton>
+            </div>
           </fieldset>
         </form>
 
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={saveDialect}>
-          <SectionTitle title="Dialect" subtitle="The country and dialect you train in. Changing this switches which words and prompts you're assigned." />
+          <SectionTitle
+            title="Dialect"
+            subtitle="The country and dialect you train in. Changing this switches which words and prompts you're assigned."
+          />
           <label className="grid gap-1.5 text-sm font-bold">
             Country
             <select
@@ -2242,7 +2732,13 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               required
               value={dialectId}
             >
-              <option value="">{!countryId ? 'Select a country first' : isLoadingDialects ? 'Loading...' : 'Select a dialect'}</option>
+              <option value="">
+                {!countryId
+                  ? 'Select a country first'
+                  : isLoadingDialects
+                    ? 'Loading...'
+                    : 'Select a dialect'}
+              </option>
               {dialects?.map((dialect) => (
                 <option key={dialect.id} value={dialect.id}>
                   {dialect.name}
@@ -2267,8 +2763,16 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               </select>
             </label>
           )}
-          {dialectMessage && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{dialectMessage}</p>}
-          {dialectError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{dialectError}</p>}
+          {dialectMessage && (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              {dialectMessage}
+            </p>
+          )}
+          {dialectError && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+              {dialectError}
+            </p>
+          )}
           <div>
             <ActionButton
               className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
@@ -2283,14 +2787,19 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
         </form>
 
         <div className={`${cardClass} grid content-start gap-4 p-5`}>
-          <SectionTitle title="Notifications" subtitle="Choose how Dialect Library should reach you." />
+          <SectionTitle
+            title="Notifications"
+            subtitle="Choose how Dialect Library should reach you."
+          />
           <div className="grid divide-y divide-line overflow-hidden rounded-lg border border-line">
             <NotificationToggleRow
               checked={notificationPrefs.emailNotificationsEnabled}
               disabled={notificationSaving !== null}
               label="Email"
               loading={notificationSaving === 'emailNotificationsEnabled'}
-              onChange={(checked) => void toggleNotificationPreference('emailNotificationsEnabled', checked)}
+              onChange={(checked) =>
+                void toggleNotificationPreference('emailNotificationsEnabled', checked)
+              }
               subtitle="Account, task, payout, and security updates."
             />
             <NotificationToggleRow
@@ -2298,7 +2807,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               disabled={notificationSaving !== null}
               label="SMS"
               loading={notificationSaving === 'smsNotificationsEnabled'}
-              onChange={(checked) => void toggleNotificationPreference('smsNotificationsEnabled', checked)}
+              onChange={(checked) =>
+                void toggleNotificationPreference('smsNotificationsEnabled', checked)
+              }
               subtitle="Urgent account and trade notifications."
             />
             <NotificationToggleRow
@@ -2306,7 +2817,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               disabled={notificationSaving !== null}
               label="Marketing"
               loading={notificationSaving === 'marketingNotificationsEnabled'}
-              onChange={(checked) => void toggleNotificationPreference('marketingNotificationsEnabled', checked)}
+              onChange={(checked) =>
+                void toggleNotificationPreference('marketingNotificationsEnabled', checked)
+              }
               subtitle="Product offers and campaign updates."
             />
             <NotificationToggleRow
@@ -2314,7 +2827,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               disabled={notificationSaving !== null}
               label="Blog & News"
               loading={notificationSaving === 'blogNewsNotificationsEnabled'}
-              onChange={(checked) => void toggleNotificationPreference('blogNewsNotificationsEnabled', checked)}
+              onChange={(checked) =>
+                void toggleNotificationPreference('blogNewsNotificationsEnabled', checked)
+              }
               subtitle="New articles and platform news."
             />
             <NotificationToggleRow
@@ -2322,7 +2837,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               disabled={notificationSaving !== null}
               label="Courses"
               loading={notificationSaving === 'courseNotificationsEnabled'}
-              onChange={(checked) => void toggleNotificationPreference('courseNotificationsEnabled', checked)}
+              onChange={(checked) =>
+                void toggleNotificationPreference('courseNotificationsEnabled', checked)
+              }
               subtitle="New learning courses and training guides."
             />
           </div>
@@ -2404,20 +2921,21 @@ const submissionStatusTones: Record<TrainerSubmissionSummary['status'], string> 
 function ScoresView() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const { items, total, totalPages, isLoading, isFetching, isError, refetch } = useMergedSubmissions(
-    ['SCORED', 'SETTLED', 'REJECTED', 'EXPIRED'],
-    page,
-    pageSize,
-    10000,
-  );
+  const { items, total, totalPages, isLoading, isFetching, isError, refetch } =
+    useMergedSubmissions(['SCORED', 'SETTLED', 'REJECTED', 'EXPIRED'], page, pageSize, 10000);
   const { data: dialects } = useGetAllDialectsQuery();
 
   return (
     <div>
-      <ViewHeading title="My Scores" subtitle="Consensus results from eligible voice training submissions." />
+      <ViewHeading
+        title="My Scores"
+        subtitle="Consensus results from eligible voice training submissions."
+      />
       <section className={`${cardClass} overflow-hidden`}>
         <div className="flex items-center gap-3 border-b border-line bg-surface-muted px-5 py-4">
-          <span className="grid size-9 place-items-center rounded-lg bg-[#fff0e8] text-[#b54b16] dark:bg-[#3a2119] dark:text-[#ff9b68]"><Star className="size-5" aria-hidden="true" /></span>
+          <span className="grid size-9 place-items-center rounded-lg bg-[#fff0e8] text-[#b54b16] dark:bg-[#3a2119] dark:text-[#ff9b68]">
+            <Star className="size-5" aria-hidden="true" />
+          </span>
           <div>
             <h3 className="font-black">Score history</h3>
             <p className="text-sm text-muted">Accuracy and review outcomes</p>
@@ -2432,7 +2950,11 @@ function ScoresView() {
         ) : isError ? (
           <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
             <p className="font-extrabold">Could not load your submissions.</p>
-            <button className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted" onClick={() => void refetch()} type="button">
+            <button
+              className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted"
+              onClick={() => void refetch()}
+              type="button"
+            >
               Try again
             </button>
           </div>
@@ -2443,29 +2965,59 @@ function ScoresView() {
                 <caption className="sr-only">Your submission history</caption>
                 <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                   <tr>
-                    <th className="px-5 py-3.5" scope="col">Prompt</th>
-                    <th className="px-5 py-3.5" scope="col">Dialect</th>
-                    <th className="px-5 py-3.5" scope="col">Status</th>
-                    <th className="px-5 py-3.5 text-right" scope="col">Score</th>
-                    <th className="px-5 py-3.5 text-right" scope="col">Payout (est.)</th>
-                    <th className="px-5 py-3.5" scope="col">Submitted</th>
+                    <th className="px-5 py-3.5" scope="col">
+                      Prompt
+                    </th>
+                    <th className="px-5 py-3.5" scope="col">
+                      Dialect
+                    </th>
+                    <th className="px-5 py-3.5" scope="col">
+                      Status
+                    </th>
+                    <th className="px-5 py-3.5 text-right" scope="col">
+                      Score
+                    </th>
+                    <th className="px-5 py-3.5 text-right" scope="col">
+                      Payout (est.)
+                    </th>
+                    <th className="px-5 py-3.5" scope="col">
+                      Submitted
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {items.map((submission) => (
                     <tr className="hover:bg-surface-muted/60" key={submission.id}>
-                      <td className="max-w-64 truncate px-5 py-4 font-bold" title={submission.promptText}>{submission.promptText}</td>
-                      <td className="px-5 py-4 text-muted">{resolveDialectName(submission.dialectTag, dialects)}</td>
+                      <td
+                        className="max-w-64 truncate px-5 py-4 font-bold"
+                        title={submission.promptText}
+                      >
+                        {submission.promptText}
+                      </td>
+                      <td className="px-5 py-4 text-muted">
+                        {resolveDialectName(submission.dialectTag, dialects)}
+                      </td>
                       <td className="px-5 py-4">
-                        <span className={`w-fit rounded-md px-2.5 py-1 text-xs font-extrabold ${submissionStatusTones[submission.status]}`}>
+                        <span
+                          className={`w-fit rounded-md px-2.5 py-1 text-xs font-extrabold ${submissionStatusTones[submission.status]}`}
+                        >
                           {submissionStatusLabels[submission.status]}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-4 text-right font-bold" title={qualityBreakdownTitle(submission)}>
-                        {submission.score !== null ? `${Number(submission.score).toFixed(1)}%` : '—'}
-                        {submission.compositeScore !== null && Number(submission.compositeScore).toFixed(1) !== Number(submission.score).toFixed(1) && (
-                          <span className="ml-1 font-normal text-muted">({Number(submission.compositeScore).toFixed(1)}% paid)</span>
-                        )}
+                      <td
+                        className="whitespace-nowrap px-5 py-4 text-right font-bold"
+                        title={qualityBreakdownTitle(submission)}
+                      >
+                        {submission.score !== null
+                          ? `${Number(submission.score).toFixed(1)}%`
+                          : '—'}
+                        {submission.compositeScore !== null &&
+                          Number(submission.compositeScore).toFixed(1) !==
+                            Number(submission.score).toFixed(1) && (
+                            <span className="ml-1 font-normal text-muted">
+                              ({Number(submission.compositeScore).toFixed(1)}% paid)
+                            </span>
+                          )}
                       </td>
                       <td className="whitespace-nowrap px-5 py-4 text-right font-black text-emerald-700 dark:text-emerald-300">
                         {submission.payoutTokenAmount !== null
@@ -2474,7 +3026,9 @@ function ScoresView() {
                             ? `~${formatTokens(estimatedScoredPayout(submission.tokensSpent, submission.score))}`
                             : '—'}
                       </td>
-                      <td className="whitespace-nowrap px-5 py-4 text-muted">{formatDateTime(submission.createdAt)}</td>
+                      <td className="whitespace-nowrap px-5 py-4 text-muted">
+                        {formatDateTime(submission.createdAt)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -2485,27 +3039,46 @@ function ScoresView() {
               {items.map((submission) => (
                 <article className="grid gap-3 p-4" key={submission.id}>
                   <div className="flex items-start justify-between gap-3">
-                    <p className="min-w-0 truncate font-bold" title={submission.promptText}>{submission.promptText}</p>
-                    <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-extrabold ${submissionStatusTones[submission.status]}`}>
+                    <p className="min-w-0 truncate font-bold" title={submission.promptText}>
+                      {submission.promptText}
+                    </p>
+                    <span
+                      className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-extrabold ${submissionStatusTones[submission.status]}`}
+                    >
                       {submissionStatusLabels[submission.status]}
                     </span>
                   </div>
                   <div className="flex items-end justify-between gap-3 text-sm">
                     <div className="min-w-0">
-                      <p className="text-muted">{resolveDialectName(submission.dialectTag, dialects)} &middot; {formatDateTime(submission.createdAt)}</p>
+                      <p className="text-muted">
+                        {resolveDialectName(submission.dialectTag, dialects)} &middot;{' '}
+                        {formatDateTime(submission.createdAt)}
+                      </p>
                       {submission.score !== null && (
                         <p className="font-bold" title={qualityBreakdownTitle(submission)}>
                           Score: {Number(submission.score).toFixed(1)}%
-                          {submission.compositeScore !== null && Number(submission.compositeScore).toFixed(1) !== Number(submission.score).toFixed(1) && (
-                            <span className="font-normal text-muted"> ({Number(submission.compositeScore).toFixed(1)}% paid)</span>
-                          )}
+                          {submission.compositeScore !== null &&
+                            Number(submission.compositeScore).toFixed(1) !==
+                              Number(submission.score).toFixed(1) && (
+                              <span className="font-normal text-muted">
+                                {' '}
+                                ({Number(submission.compositeScore).toFixed(1)}% paid)
+                              </span>
+                            )}
                         </p>
                       )}
                     </div>
                     {submission.payoutTokenAmount !== null ? (
-                      <span className="shrink-0 font-black text-emerald-700 dark:text-emerald-300">+{formatTokens(submission.payoutTokenAmount)}</span>
+                      <span className="shrink-0 font-black text-emerald-700 dark:text-emerald-300">
+                        +{formatTokens(submission.payoutTokenAmount)}
+                      </span>
                     ) : submission.score !== null ? (
-                      <span className="shrink-0 font-black text-emerald-700 dark:text-emerald-300">~{formatTokens(estimatedScoredPayout(submission.tokensSpent, submission.score))}</span>
+                      <span className="shrink-0 font-black text-emerald-700 dark:text-emerald-300">
+                        ~
+                        {formatTokens(
+                          estimatedScoredPayout(submission.tokensSpent, submission.score),
+                        )}
+                      </span>
                     ) : null}
                   </div>
                 </article>
@@ -2513,17 +3086,37 @@ function ScoresView() {
             </div>
           </>
         ) : (
-          <EmptyPanel actionHref="/dashboard?view=training" actionLabel="Start training" icon={Headphones} title="No scored submissions yet" unframed />
+          <EmptyPanel
+            actionHref="/dashboard?view=training"
+            actionLabel="Start training"
+            icon={Headphones}
+            title="No scored submissions yet"
+            unframed
+          />
         )}
 
         {total > 0 ? (
           <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-muted px-4 py-3 md:px-5">
-            <p className="text-sm font-bold text-muted">Page {page} of {totalPages}</p>
+            <p className="text-sm font-bold text-muted">
+              Page {page} of {totalPages}
+            </p>
             <div className="flex items-center gap-2">
-              <button aria-label="Previous page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page <= 1 || isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button">
+              <button
+                aria-label="Previous page"
+                className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={page <= 1 || isFetching}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                type="button"
+              >
                 <ChevronLeft className="size-4" aria-hidden="true" />
               </button>
-              <button aria-label="Next page" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40" disabled={page >= totalPages || isFetching} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} type="button">
+              <button
+                aria-label="Next page"
+                className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-bg disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={page >= totalPages || isFetching}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                type="button"
+              >
                 <ChevronRight className="size-4" aria-hidden="true" />
               </button>
             </div>
@@ -2560,7 +3153,12 @@ function FundTokensDialog() {
     if (!otpRequestId) return;
     setMessage(null);
     try {
-      const result = await createDeposit({ usdAmount: Number(amount), currency, otpRequestId, code }).unwrap();
+      const result = await createDeposit({
+        usdAmount: Number(amount),
+        currency,
+        otpRequestId,
+        code,
+      }).unwrap();
       window.location.assign(result.hostedCheckoutUrl);
     } catch (error) {
       setMessage(normalizeErrorMessage(error, 'Could not start DL funding.'));
@@ -2576,12 +3174,20 @@ function FundTokensDialog() {
   return (
     <Dialog onOpenChange={(open) => !open && reset()}>
       <DialogTrigger asChild>
-        <button className="mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-extrabold text-white hover:bg-accent-dark md:px-4" type="button">
-          <Plus className="size-4" aria-hidden="true" /> <span className="hidden sm:inline">Fund DL</span><span className="sm:hidden">Fund</span>
+        <button
+          className="mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-extrabold text-white hover:bg-accent-dark md:px-4"
+          type="button"
+        >
+          <Plus className="size-4" aria-hidden="true" />{' '}
+          <span className="hidden sm:inline">Fund DL</span>
+          <span className="sm:hidden">Fund</span>
         </button>
       </DialogTrigger>
       {otpRequestId ? (
-        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this purchase.">
+        <DialogContent
+          title="Enter your code"
+          description="We emailed a 6-digit code to confirm this purchase."
+        >
           <form className="grid gap-4" onSubmit={submitCode}>
             <input
               autoFocus
@@ -2593,8 +3199,18 @@ function FundTokensDialog() {
               required
               value={code}
             />
-            {message && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{message}</p>}
-            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" disabled={code.length !== 6} pending={isCreating} pendingLabel="Opening checkout" type="submit">
+            {message && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                {message}
+              </p>
+            )}
+            <ActionButton
+              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+              disabled={code.length !== 6}
+              pending={isCreating}
+              pendingLabel="Opening checkout"
+              type="submit"
+            >
               Continue to checkout <ArrowUpRight className="size-4" aria-hidden="true" />
             </ActionButton>
           </form>
@@ -2604,21 +3220,47 @@ function FundTokensDialog() {
           <form className="grid gap-4" onSubmit={submitAmount}>
             <label className="grid gap-1.5 text-sm font-bold">
               Amount in USD
-              <input className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent" min="1" onChange={(event) => setAmount(event.target.value)} required step="0.01" type="number" value={amount} />
+              <input
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                min="1"
+                onChange={(event) => setAmount(event.target.value)}
+                required
+                step="0.01"
+                type="number"
+                value={amount}
+              />
             </label>
             <fieldset className="grid gap-2">
               <legend className="mb-1 text-sm font-bold">Payment currency</legend>
               <div className="grid grid-cols-2 gap-2">
                 {(['USDT', 'USDC'] as const).map((option) => (
-                  <label className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border font-extrabold ${currency === option ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`} key={option}>
-                    <input className="sr-only" checked={currency === option} name="currency" onChange={() => setCurrency(option)} type="radio" />
+                  <label
+                    className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border font-extrabold ${currency === option ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
+                    key={option}
+                  >
+                    <input
+                      className="sr-only"
+                      checked={currency === option}
+                      name="currency"
+                      onChange={() => setCurrency(option)}
+                      type="radio"
+                    />
                     {option}
                   </label>
                 ))}
               </div>
             </fieldset>
-            {message && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{message}</p>}
-            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" pending={isRequestingOtp} pendingLabel="Sending code" type="submit">
+            {message && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                {message}
+              </p>
+            )}
+            <ActionButton
+              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+              pending={isRequestingOtp}
+              pendingLabel="Sending code"
+              type="submit"
+            >
               Send confirmation code
             </ActionButton>
           </form>
@@ -2645,7 +3287,13 @@ const WITHDRAWAL_ADDRESS_PATTERNS: Record<WithdrawalNetwork, RegExp> = {
   POLYGON: /^0x[0-9a-fA-F]{40}$/,
 };
 
-function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: string; minWithdrawalTokens: string }) {
+function WithdrawTokensDialog({
+  balance,
+  minWithdrawalTokens,
+}: {
+  balance: string;
+  minWithdrawalTokens: string;
+}) {
   const [amount, setAmount] = useState(minWithdrawalTokens);
   const [destinationAddress, setDestinationAddress] = useState('');
   const [destinationCurrency, setDestinationCurrency] = useState<WithdrawalCurrency>('USDT');
@@ -2657,7 +3305,9 @@ function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: strin
   const [requestOtp, { isLoading: isRequestingOtp }] = useRequestWithdrawalOtpMutation();
   const [createWithdrawal, { isLoading: isSubmitting }] = useCreateWithdrawalMutation();
 
-  const addressLooksValid = destinationAddress.length === 0 || WITHDRAWAL_ADDRESS_PATTERNS[destinationNetwork].test(destinationAddress.trim());
+  const addressLooksValid =
+    destinationAddress.length === 0 ||
+    WITHDRAWAL_ADDRESS_PATTERNS[destinationNetwork].test(destinationAddress.trim());
 
   function updateCurrency(currency: WithdrawalCurrency) {
     setDestinationCurrency(currency);
@@ -2682,7 +3332,12 @@ function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: strin
       return;
     }
     try {
-      const result = await requestOtp({ tokenAmount: Number(amount), destinationAddress, destinationCurrency, destinationNetwork }).unwrap();
+      const result = await requestOtp({
+        tokenAmount: Number(amount),
+        destinationAddress,
+        destinationCurrency,
+        destinationNetwork,
+      }).unwrap();
       setOtpRequestId(result.otpRequestId);
     } catch (error) {
       setMessage(normalizeErrorMessage(error, 'Could not send a confirmation code.'));
@@ -2694,7 +3349,14 @@ function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: strin
     if (!otpRequestId) return;
     setMessage(null);
     try {
-      await createWithdrawal({ tokenAmount: Number(amount), destinationAddress, destinationCurrency, destinationNetwork, otpRequestId, code }).unwrap();
+      await createWithdrawal({
+        tokenAmount: Number(amount),
+        destinationAddress,
+        destinationCurrency,
+        destinationNetwork,
+        otpRequestId,
+        code,
+      }).unwrap();
       setMessage(null);
       setOtpRequestId(null);
       setAmount(minWithdrawalTokens);
@@ -2715,12 +3377,20 @@ function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: strin
   return (
     <Dialog onOpenChange={(open) => !open && reset()}>
       <DialogTrigger asChild>
-        <button className="mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-3 text-sm font-extrabold text-ink hover:bg-surface-muted md:px-4" type="button">
-          <ArrowUpRight className="size-4" aria-hidden="true" /> <span className="hidden sm:inline">Withdraw</span><span className="sm:hidden">Withdraw</span>
+        <button
+          className="mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-3 text-sm font-extrabold text-ink hover:bg-surface-muted md:px-4"
+          type="button"
+        >
+          <ArrowUpRight className="size-4" aria-hidden="true" />{' '}
+          <span className="hidden sm:inline">Withdraw</span>
+          <span className="sm:hidden">Withdraw</span>
         </button>
       </DialogTrigger>
       {otpRequestId ? (
-        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this withdrawal.">
+        <DialogContent
+          title="Enter your code"
+          description="We emailed a 6-digit code to confirm this withdrawal."
+        >
           <form className="grid gap-4" onSubmit={submitCode}>
             <input
               autoFocus
@@ -2732,18 +3402,39 @@ function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: strin
               required
               value={code}
             />
-            {message && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{message}</p>}
-            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" disabled={code.length !== 6} pending={isSubmitting} pendingLabel="Submitting" type="submit">
+            {message && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                {message}
+              </p>
+            )}
+            <ActionButton
+              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+              disabled={code.length !== 6}
+              pending={isSubmitting}
+              pendingLabel="Submitting"
+              type="submit"
+            >
               Confirm withdrawal
             </ActionButton>
           </form>
         </DialogContent>
       ) : (
-        <DialogContent title="Withdraw DL" description={`Available balance: ${formatTokens(balance)} DL.`}>
+        <DialogContent
+          title="Withdraw DL"
+          description={`Available balance: ${formatTokens(balance)} DL.`}
+        >
           <form className="grid gap-4" onSubmit={submitDetails}>
             <label className="grid gap-1.5 text-sm font-bold">
               Amount in DL
-              <input className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent" min="0.00000001" onChange={(event) => setAmount(event.target.value)} required step="any" type="number" value={amount} />
+              <input
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                min="0.00000001"
+                onChange={(event) => setAmount(event.target.value)}
+                required
+                step="any"
+                type="number"
+                value={amount}
+              />
             </label>
             <div className="grid grid-cols-2 gap-2">
               <label className="grid gap-1.5 text-sm font-bold">
@@ -2754,7 +3445,9 @@ function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: strin
                   value={destinationCurrency}
                 >
                   {Object.keys(WITHDRAWAL_NETWORKS_BY_CURRENCY).map((currency) => (
-                    <option key={currency} value={currency}>{currency}</option>
+                    <option key={currency} value={currency}>
+                      {currency}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -2766,7 +3459,9 @@ function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: strin
                   value={destinationNetwork}
                 >
                   {WITHDRAWAL_NETWORKS_BY_CURRENCY[destinationCurrency].map((network) => (
-                    <option key={network} value={network}>{network}</option>
+                    <option key={network} value={network}>
+                      {network}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -2779,12 +3474,22 @@ function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: strin
                   setDestinationAddress(event.target.value.trim());
                   setAddressConfirmed(false);
                 }}
-                placeholder={destinationNetwork === 'TRC20' ? 'T...' : destinationNetwork === 'SOL' ? 'Base58 address' : '0x...'}
+                placeholder={
+                  destinationNetwork === 'TRC20'
+                    ? 'T...'
+                    : destinationNetwork === 'SOL'
+                      ? 'Base58 address'
+                      : '0x...'
+                }
                 required
                 type="text"
                 value={destinationAddress}
               />
-              {!addressLooksValid && <span className="text-xs font-bold text-danger">Doesn&apos;t look like a valid {destinationNetwork} address.</span>}
+              {!addressLooksValid && (
+                <span className="text-xs font-bold text-danger">
+                  Doesn&apos;t look like a valid {destinationNetwork} address.
+                </span>
+              )}
             </label>
             <label className="flex items-start gap-2.5 text-sm font-bold">
               <input
@@ -2795,13 +3500,23 @@ function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: strin
                 type="checkbox"
               />
               <span className="font-semibold leading-snug text-muted">
-                I confirm that the {destinationCurrency} address above is on the {destinationNetwork} network, belongs
-                to my own account, and I have double-checked it is correct. Funds sent to a wrong or unsupported
-                network cannot be recovered.
+                I confirm that the {destinationCurrency} address above is on the{' '}
+                {destinationNetwork} network, belongs to my own account, and I have double-checked
+                it is correct. Funds sent to a wrong or unsupported network cannot be recovered.
               </span>
             </label>
-            {message && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{message}</p>}
-            <ActionButton className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark" disabled={!addressLooksValid || !addressConfirmed} pending={isRequestingOtp} pendingLabel="Sending code" type="submit">
+            {message && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                {message}
+              </p>
+            )}
+            <ActionButton
+              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+              disabled={!addressLooksValid || !addressConfirmed}
+              pending={isRequestingOtp}
+              pendingLabel="Sending code"
+              type="submit"
+            >
               Send confirmation code
             </ActionButton>
           </form>
@@ -2811,7 +3526,19 @@ function WithdrawTokensDialog({ balance, minWithdrawalTokens }: { balance: strin
   );
 }
 
-function MetricCard({ icon: Icon, label, value, tone, compact = false }: { icon: typeof WalletCards; label: string; value: string; tone: 'purple' | 'green' | 'amber' | 'blue'; compact?: boolean }) {
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  tone,
+  compact = false,
+}: {
+  icon: typeof WalletCards;
+  label: string;
+  value: string;
+  tone: 'purple' | 'green' | 'amber' | 'blue';
+  compact?: boolean;
+}) {
   const tones = {
     purple: 'bg-accent-soft text-accent',
     green: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
@@ -2820,18 +3547,36 @@ function MetricCard({ icon: Icon, label, value, tone, compact = false }: { icon:
   };
   return (
     <article className={`${cardClass} flex min-h-32 items-start gap-3 p-4 md:p-5`}>
-      <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${tones[tone]}`}><Icon className="size-5" aria-hidden="true" /></span>
+      <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${tones[tone]}`}>
+        <Icon className="size-5" aria-hidden="true" />
+      </span>
       <div className="min-w-0">
         <p className="text-sm font-bold text-muted">{label}</p>
-        <p className={`mt-2 break-words font-black leading-tight ${compact ? 'text-xl' : 'text-2xl'}`}>{value}</p>
+        <p
+          className={`mt-2 break-words font-black leading-tight ${compact ? 'text-xl' : 'text-2xl'}`}
+        >
+          {value}
+        </p>
       </div>
     </article>
   );
 }
 
-type ActivityEntry = { id: string; type: LedgerEntryType; amount: string; reference: string; createdAt: string };
+type ActivityEntry = {
+  id: string;
+  type: LedgerEntryType;
+  amount: string;
+  reference: string;
+  createdAt: string;
+};
 
-function ActivityList({ entries, compact = false }: { entries: ActivityEntry[]; compact?: boolean }) {
+function ActivityList({
+  entries,
+  compact = false,
+}: {
+  entries: ActivityEntry[];
+  compact?: boolean;
+}) {
   const [page, setPage] = useState(1);
   const pageSize = compact ? Math.max(entries.length, 1) : 8;
   const totalPages = Math.max(1, Math.ceil(entries.length / pageSize));
@@ -2844,12 +3589,22 @@ function ActivityList({ entries, compact = false }: { entries: ActivityEntry[]; 
     setPage((currentPage) => Math.min(currentPage, totalPages));
   }, [totalPages]);
 
-  if (!entries.length) return <EmptyPanel icon={Clock3} title="No account activity yet" actionHref={undefined} actionLabel={undefined} />;
+  if (!entries.length)
+    return (
+      <EmptyPanel
+        icon={Clock3}
+        title="No account activity yet"
+        actionHref={undefined}
+        actionLabel={undefined}
+      />
+    );
 
   return (
     <div className={`${cardClass} overflow-hidden`}>
       <div className="divide-y divide-line md:hidden">
-        {shown.map((entry) => <ActivityMobileRow entry={entry} key={entry.id} />)}
+        {shown.map((entry) => (
+          <ActivityMobileRow entry={entry} key={entry.id} />
+        ))}
       </div>
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[720px] text-left">
@@ -2862,7 +3617,9 @@ function ActivityList({ entries, compact = false }: { entries: ActivityEntry[]; 
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {shown.map((entry) => <ActivityTableRow entry={entry} key={entry.id} />)}
+            {shown.map((entry) => (
+              <ActivityTableRow entry={entry} key={entry.id} />
+            ))}
           </tbody>
         </table>
       </div>
@@ -2905,15 +3662,20 @@ function ActivityMobileRow({ entry }: { entry: ActivityEntry }) {
   const Icon = entry.type === 'DEPOSIT' ? ArrowDownLeft : positive ? ArrowDownLeft : ArrowUpRight;
   return (
     <div className="flex items-center gap-3 p-3.5 md:px-4">
-      <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${positive ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-surface-muted text-muted'}`}>
+      <span
+        className={`grid size-9 shrink-0 place-items-center rounded-lg ${positive ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-surface-muted text-muted'}`}
+      >
         <Icon className="size-4" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-extrabold md:text-base">{activityLabels[entry.type]}</p>
         <p className="text-xs text-muted md:text-sm">{formatDate(entry.createdAt)}</p>
       </div>
-      <p className={`shrink-0 text-sm font-black md:text-base ${positive ? 'text-emerald-700 dark:text-emerald-300' : 'text-ink'}`}>
-        {positive ? '+' : ''}{formatTokens(entry.amount)}
+      <p
+        className={`shrink-0 text-sm font-black md:text-base ${positive ? 'text-emerald-700 dark:text-emerald-300' : 'text-ink'}`}
+      >
+        {positive ? '+' : ''}
+        {formatTokens(entry.amount)}
       </p>
     </div>
   );
@@ -2926,16 +3688,25 @@ function ActivityTableRow({ entry }: { entry: ActivityEntry }) {
     <tr className="align-middle">
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
-          <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${positive ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-surface-muted text-muted'}`}>
+          <span
+            className={`grid size-9 shrink-0 place-items-center rounded-lg ${positive ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-surface-muted text-muted'}`}
+          >
             <Icon className="size-4" aria-hidden="true" />
           </span>
           <span className="font-extrabold text-ink">{activityLabels[entry.type]}</span>
         </div>
       </td>
-      <td className="max-w-72 truncate px-4 py-3 font-mono text-xs text-muted">{entry.reference || '-'}</td>
-      <td className="whitespace-nowrap px-4 py-3 text-sm text-muted">{formatDate(entry.createdAt)}</td>
-      <td className={`whitespace-nowrap px-4 py-3 text-right font-black ${positive ? 'text-emerald-700 dark:text-emerald-300' : 'text-ink'}`}>
-        {positive ? '+' : ''}{formatTokens(entry.amount)}
+      <td className="max-w-72 truncate px-4 py-3 font-mono text-xs text-muted">
+        {entry.reference || '-'}
+      </td>
+      <td className="whitespace-nowrap px-4 py-3 text-sm text-muted">
+        {formatDate(entry.createdAt)}
+      </td>
+      <td
+        className={`whitespace-nowrap px-4 py-3 text-right font-black ${positive ? 'text-emerald-700 dark:text-emerald-300' : 'text-ink'}`}
+      >
+        {positive ? '+' : ''}
+        {formatTokens(entry.amount)}
       </td>
     </tr>
   );
@@ -2960,8 +3731,15 @@ function EarningsChartSection() {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <SectionTitle title={earningsChartRangeLabels[range]} subtitle={earningsChartRangeSubtitles[range]} />
-        <div className="inline-flex rounded-lg border border-line bg-surface p-1" role="tablist" aria-label="Earnings chart range">
+        <SectionTitle
+          title={earningsChartRangeLabels[range]}
+          subtitle={earningsChartRangeSubtitles[range]}
+        />
+        <div
+          className="inline-flex rounded-lg border border-line bg-surface p-1"
+          role="tablist"
+          aria-label="Earnings chart range"
+        >
           {(Object.keys(earningsChartRangeLabels) as EarningsChartRange[]).map((option) => (
             <button
               aria-selected={range === option}
@@ -2981,23 +3759,47 @@ function EarningsChartSection() {
   );
 }
 
-function EarningsChart({ buckets, range, loading }: { buckets: EarningsChart_Bucket[]; range: EarningsChartRange; loading: boolean }) {
+function EarningsChart({
+  buckets,
+  range,
+  loading,
+}: {
+  buckets: EarningsChart_Bucket[];
+  range: EarningsChartRange;
+  loading: boolean;
+}) {
   const max = Math.max(...buckets.map((bucket) => Number(bucket.amount)), 1);
   const dense = range !== 'year' && buckets.length > 14;
 
   if (loading) {
-    return <div className={`${cardClass} grid h-64 place-items-center`}><RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" /></div>;
+    return (
+      <div className={`${cardClass} grid h-64 place-items-center`}>
+        <RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" />
+      </div>
+    );
   }
 
   return (
-    <div className={`${cardClass} flex h-64 items-end gap-1.5 overflow-x-auto p-4 pt-8 sm:gap-3 md:p-5 md:pt-8`}>
+    <div
+      className={`${cardClass} flex h-64 items-end gap-1.5 overflow-x-auto p-4 pt-8 sm:gap-3 md:p-5 md:pt-8`}
+    >
       {buckets.map((bucket) => {
         const value = Number(bucket.amount);
         const height = value > 0 ? Math.max((value / max) * 100, 8) : 2;
         return (
-          <div className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2" key={bucket.label}>
-            {!dense && <span className="text-xs font-bold text-muted">{value ? formatTokens(value) : ''}</span>}
-            <div className="flex h-[150px] w-full max-w-10 items-end rounded-md bg-surface-muted" title={`${formatTokens(value)} DL`}>
+          <div
+            className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"
+            key={bucket.label}
+          >
+            {!dense && (
+              <span className="text-xs font-bold text-muted">
+                {value ? formatTokens(value) : ''}
+              </span>
+            )}
+            <div
+              className="flex h-[150px] w-full max-w-10 items-end rounded-md bg-surface-muted"
+              title={`${formatTokens(value)} DL`}
+            >
               <div className="w-full rounded-md bg-accent" style={{ height: `${height}%` }} />
             </div>
             <span className="text-xs font-extrabold text-muted">
@@ -3025,7 +3827,11 @@ function formatBucketLabel(label: string, range: EarningsChartRange) {
   if (range === 'year') return formatMonth(label);
   const date = new Date(`${label}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(date);
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(date);
 }
 
 function RateRow({ label, rate, enabled }: { label: string; rate: string; enabled: boolean }) {
@@ -3036,21 +3842,62 @@ function RateRow({ label, rate, enabled }: { label: string; rate: string; enable
         <p className="font-extrabold">{label}</p>
         <p className="text-sm text-muted">{enabled && percentage > 0 ? 'Active' : 'Not active'}</p>
       </div>
-      <span className={`text-xl font-black ${enabled && percentage > 0 ? 'text-accent' : 'text-muted'}`}>{percentage.toLocaleString(undefined, { maximumFractionDigits: 2 })}%</span>
+      <span
+        className={`text-xl font-black ${enabled && percentage > 0 ? 'text-accent' : 'text-muted'}`}
+      >
+        {percentage.toLocaleString(undefined, { maximumFractionDigits: 2 })}%
+      </span>
     </div>
   );
 }
 
 function DashboardLoading() {
-  return <div className="dashboard-theme min-h-screen animate-pulse bg-bg"><div className="h-16 border-b border-line bg-surface" /><div className="mx-auto max-w-6xl space-y-6 px-4 py-8"><div className="h-16 w-72 rounded-lg bg-surface-muted" /><div className="grid gap-3 sm:grid-cols-3"><div className="h-32 rounded-lg bg-surface" /><div className="h-32 rounded-lg bg-surface" /><div className="h-32 rounded-lg bg-surface" /></div></div></div>;
+  return (
+    <div className="dashboard-theme min-h-screen animate-pulse bg-bg">
+      <div className="h-16 border-b border-line bg-surface" />
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+        <div className="h-16 w-72 rounded-lg bg-surface-muted" />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="h-32 rounded-lg bg-surface" />
+          <div className="h-32 rounded-lg bg-surface" />
+          <div className="h-32 rounded-lg bg-surface" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ViewLoading() {
-  return <div className="animate-pulse space-y-5"><div className="h-14 w-64 rounded-lg bg-surface-muted" /><div className="grid gap-3 sm:grid-cols-3"><div className="h-32 rounded-lg bg-surface" /><div className="h-32 rounded-lg bg-surface" /><div className="h-32 rounded-lg bg-surface" /></div><div className="h-64 rounded-lg bg-surface" /></div>;
+  return (
+    <div className="animate-pulse space-y-5">
+      <div className="h-14 w-64 rounded-lg bg-surface-muted" />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="h-32 rounded-lg bg-surface" />
+        <div className="h-32 rounded-lg bg-surface" />
+        <div className="h-32 rounded-lg bg-surface" />
+      </div>
+      <div className="h-64 rounded-lg bg-surface" />
+    </div>
+  );
 }
 
 function DashboardError({ retry }: { retry: () => void }) {
-  return <section className={`${cardClass} grid min-h-64 place-items-center p-6 text-center`}><div className="grid justify-items-center gap-3"><RefreshCw className="size-6 text-danger" aria-hidden="true" /><h2 className="text-xl font-black">Dashboard data is unavailable</h2><button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white" onClick={retry} type="button"><RefreshCw className="size-4" aria-hidden="true" />Try again</button></div></section>;
+  return (
+    <section className={`${cardClass} grid min-h-64 place-items-center p-6 text-center`}>
+      <div className="grid justify-items-center gap-3">
+        <RefreshCw className="size-6 text-danger" aria-hidden="true" />
+        <h2 className="text-xl font-black">Dashboard data is unavailable</h2>
+        <button
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white"
+          onClick={retry}
+          type="button"
+        >
+          <RefreshCw className="size-4" aria-hidden="true" />
+          Try again
+        </button>
+      </div>
+    </section>
+  );
 }
 
 function formatTokens(value: string | number) {
@@ -3066,7 +3913,11 @@ function formatCompactTokensLabel(value: string | number) {
 }
 
 function formatUsd(value: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 function formatMonth(value: string) {
@@ -3082,5 +3933,8 @@ function normalizePhoneNumber(value: string) {
 
 function emailName(email?: string | null) {
   if (!email) return 'Trainer';
-  return email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return email
+    .split('@')[0]
+    .replace(/[._-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

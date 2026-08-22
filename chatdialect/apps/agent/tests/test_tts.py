@@ -9,7 +9,9 @@ def _make_mock_model(sample_rate: int, waveform_len: int):
     mock_model = MagicMock()
     mock_model.config.sampling_rate = sample_rate
     mock_output = MagicMock()
-    mock_output.waveform.squeeze.return_value.numpy.return_value = np.zeros(waveform_len, dtype=np.float32)
+    mock_output.waveform.squeeze.return_value.numpy.return_value = np.zeros(
+        waveform_len, dtype=np.float32
+    )
     mock_model.return_value = mock_output
     mock_model.to.return_value = mock_model
     return mock_model
@@ -22,7 +24,9 @@ async def test_synthesize_returns_expected_duration_and_sample_rate():
 
     with (
         patch("transformers.VitsModel.from_pretrained", return_value=mock_model),
-        patch("transformers.VitsTokenizer.from_pretrained", return_value=mock_tokenizer),
+        patch(
+            "transformers.VitsTokenizer.from_pretrained", return_value=mock_tokenizer
+        ),
         patch("torch.no_grad"),
     ):
         provider = MmsTtsProvider("facebook/mms-tts-eng")
@@ -44,7 +48,9 @@ async def test_synthesize_leaves_viseme_and_timing_fields_none():
 
     with (
         patch("transformers.VitsModel.from_pretrained", return_value=mock_model),
-        patch("transformers.VitsTokenizer.from_pretrained", return_value=mock_tokenizer),
+        patch(
+            "transformers.VitsTokenizer.from_pretrained", return_value=mock_tokenizer
+        ),
         patch("torch.no_grad"),
     ):
         provider = MmsTtsProvider("facebook/mms-tts-eng")

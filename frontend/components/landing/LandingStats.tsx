@@ -26,7 +26,14 @@ const VISIBILITY_KEY_BY_LABEL: Record<string, keyof StatsVisibility> = {
   Payout: 'payout',
 };
 
-export function LandingStats({ dialectCount, countryCount, poolVolumeUsd, totalTrainers, totalPayoutUsd, visibility }: LandingStatsProps) {
+export function LandingStats({
+  dialectCount,
+  countryCount,
+  poolVolumeUsd,
+  totalTrainers,
+  totalPayoutUsd,
+  visibility,
+}: LandingStatsProps) {
   const stats = landingStats
     .filter((stat) => visibility[VISIBILITY_KEY_BY_LABEL[stat.label]] ?? true)
     .map((stat) => {
@@ -51,7 +58,10 @@ export function LandingStats({ dialectCount, countryCount, poolVolumeUsd, totalT
   if (stats.length === 0) return null;
 
   return (
-    <section className="mx-auto grid max-w-[980px] gap-3 py-4 sm:grid-cols-2 lg:grid-cols-5" aria-label="Dialect Library platform metrics">
+    <section
+      className="mx-auto grid max-w-[980px] gap-3 py-4 sm:grid-cols-2 lg:grid-cols-5"
+      aria-label="Dialect Library platform metrics"
+    >
       {stats.map((stat) => (
         <div
           className="rounded-lg border border-[rgba(5,5,5,0.1)] bg-white/75 p-4 text-center shadow-[0_14px_30px_rgba(12,20,20,0.08)] backdrop-blur-sm"

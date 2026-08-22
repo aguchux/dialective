@@ -1,4 +1,16 @@
-import { Body, ConflictException, Controller, Delete, Get, NotFoundException, Param, Patch, Post, UnprocessableEntityException, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  ConflictException,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  UnprocessableEntityException,
+  UseGuards,
+} from '@nestjs/common';
 import { Prisma, Role, SubscriptionPoolStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
@@ -36,7 +48,13 @@ export class GeoController {
   @Get('countries')
   getCountries() {
     return this.prisma.country.findMany({
-      select: { id: true, code: true, name: true, currencyCode: true, _count: { select: { dialects: true } } },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        currencyCode: true,
+        _count: { select: { dialects: true } },
+      },
       orderBy: { name: 'asc' },
     });
   }
@@ -49,7 +67,16 @@ export class GeoController {
    */
   @Get('stats')
   async getStats() {
-    const [countryCount, dialectCount, totalTrainers, activeAgg, settledSubmissionAgg, settledWordAgg, rate, visibility] = await Promise.all([
+    const [
+      countryCount,
+      dialectCount,
+      totalTrainers,
+      activeAgg,
+      settledSubmissionAgg,
+      settledWordAgg,
+      rate,
+      visibility,
+    ] = await Promise.all([
       this.prisma.country.count(),
       this.prisma.dialect.count(),
       this.prisma.user.count({ where: { role: Role.TRAINER } }),
@@ -71,7 +98,8 @@ export class GeoController {
 
     const poolVolumeUsd = Number(activeAgg._sum.usdAmount ?? 0);
     const totalSettledTokens =
-      Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) + Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
+      Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) +
+      Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
     const totalPayoutUsd = totalSettledTokens * rate;
 
     // Every figure is still computed regardless of visibility -- these flags
@@ -201,7 +229,12 @@ export class GeoController {
       await this.prisma.country.delete({ where: { id } });
       return { id, deleted: true };
     } catch (err) {
-      throw mapPrismaError(err, undefined, 'Country not found', 'Country still has dialects or users assigned to it');
+      throw mapPrismaError(
+        err,
+        undefined,
+        'Country not found',
+        'Country still has dialects or users assigned to it',
+      );
     }
   }
 
@@ -212,7 +245,10 @@ export class GeoController {
   @Roles(Role.ADMIN)
   listDialectsForAdmin() {
     return this.prisma.dialect.findMany({
-      include: { country: { select: { id: true, name: true, code: true } }, _count: { select: { users: true } } },
+      include: {
+        country: { select: { id: true, name: true, code: true } },
+        _count: { select: { users: true } },
+      },
       orderBy: { name: 'asc' },
     });
   }
@@ -227,7 +263,12 @@ export class GeoController {
     }
     try {
       return await this.prisma.dialect.create({
-        data: { tag: dto.tag, name: dto.name, countryId: dto.countryId, keyboardLayout: dto.keyboardLayout },
+        data: {
+          tag: dto.tag,
+          name: dto.name,
+          countryId: dto.countryId,
+          keyboardLayout: dto.keyboardLayout,
+        },
       });
     } catch (err) {
       throw mapPrismaError(err, 'A dialect with this tag already exists');
@@ -269,7 +310,10 @@ export class GeoController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async generateKeyboardLayout(@Param('id') id: string) {
-    const dialect = await this.prisma.dialect.findUnique({ where: { id }, include: { country: true } });
+    const dialect = await this.prisma.dialect.findUnique({
+      where: { id },
+      include: { country: true },
+    });
     if (!dialect) throw new NotFoundException('Dialect not found');
 
     const prompt = [
@@ -278,7 +322,9 @@ export class GeoController {
       'Respond with ONLY a space-separated list of characters, no explanation, no numbering.',
     ].join(' ');
 
-    const order = parseProviderOrder((await this.platformSettings.getForAdmin()).spellingNormalizationProviderOrder);
+    const order = parseProviderOrder(
+      (await this.platformSettings.getForAdmin()).spellingNormalizationProviderOrder,
+    );
     const keyboardLayout = await this.llm.normalize(prompt, order);
     return { keyboardLayout: keyboardLayout.trim() };
   }
@@ -291,7 +337,12 @@ export class GeoController {
       await this.prisma.dialect.delete({ where: { id } });
       return { id, deleted: true };
     } catch (err) {
-      throw mapPrismaError(err, undefined, 'Dialect not found', 'Dialect still has users assigned to it');
+      throw mapPrismaError(
+        err,
+        undefined,
+        'Dialect not found',
+        'Dialect still has users assigned to it',
+      );
     }
   }
 
@@ -344,7 +395,11 @@ export class GeoController {
         data: { tag: dto.tag, name: dto.name },
       });
     } catch (err) {
-      throw mapPrismaError(err, 'A variant with this tag already exists under this dialect', 'Variant not found');
+      throw mapPrismaError(
+        err,
+        'A variant with this tag already exists under this dialect',
+        'Variant not found',
+      );
     }
   }
 
@@ -356,7 +411,12 @@ export class GeoController {
       await this.prisma.dialectVariant.delete({ where: { id } });
       return { id, deleted: true };
     } catch (err) {
-      throw mapPrismaError(err, undefined, 'Variant not found', 'Variant still has users or recordings assigned to it');
+      throw mapPrismaError(
+        err,
+        undefined,
+        'Variant not found',
+        'Variant still has users or recordings assigned to it',
+      );
     }
   }
 }

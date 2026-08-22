@@ -60,7 +60,11 @@ def compute_quality_score(data: np.ndarray, sample_rate: int = SAMPLE_RATE) -> f
     merely borderline on one axis doesn't tank the whole score.
     """
     clip_ratio = clipping_ratio(data)
-    clipping_score = 100.0 * max(0.0, 1.0 - clip_ratio / MAX_CLIPPED_RATIO) if clip_ratio <= MAX_CLIPPED_RATIO * 5 else 0.0
+    clipping_score = (
+        100.0 * max(0.0, 1.0 - clip_ratio / MAX_CLIPPED_RATIO)
+        if clip_ratio <= MAX_CLIPPED_RATIO * 5
+        else 0.0
+    )
     clipping_score = max(0.0, min(100.0, clipping_score))
 
     rolloff = spectral_rolloff_hz(data, sample_rate)

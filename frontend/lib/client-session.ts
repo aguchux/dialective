@@ -16,7 +16,10 @@ export function getCurrentSession(): Promise<Session | null> {
 
 async function requestSession(): Promise<Session | null> {
   if (typeof navigator !== 'undefined' && navigator.locks) {
-    return await navigator.locks.request<Promise<Session | null>>('dialectiva-session-refresh', () => getSession());
+    return await navigator.locks.request<Promise<Session | null>>(
+      'dialectiva-session-refresh',
+      () => getSession(),
+    );
   }
 
   return await getSession();

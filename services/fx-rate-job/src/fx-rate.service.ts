@@ -71,6 +71,8 @@ export class FxRateService {
       });
       updated += 1;
     }
-    this.logger.log(`fx-rate-job: updated ${updated} countries, skipped ${skipped} (currency not in FX API response)`);
+    this.logger.log(
+      `fx-rate-job: updated ${updated} countries, skipped ${skipped} (currency not in FX API response)`,
+    );
   }
 }

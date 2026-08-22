@@ -40,22 +40,30 @@ def get_hf_token(conn) -> str | None:
         if now - cached_at < HF_TOKEN_CACHE_TTL_S:
             return cached_value
 
-    value = os.environ.get('HF_TOKEN')
+    value = os.environ.get("HF_TOKEN")
     with conn.cursor() as cur:
-        cur.execute('SELECT "encryptedValue", "iv", "authTag" FROM api_access_tokens WHERE key = %s', ('huggingface',))
+        cur.execute(
+            'SELECT "encryptedValue", "iv", "authTag" FROM api_access_tokens WHERE key = %s',
+            ("huggingface",),
+        )
         row = cur.fetchone()
     if row:
-        passphrase = os.environ.get('API_TOKEN_ENCRYPTION_KEY')
+        passphrase = os.environ.get("API_TOKEN_ENCRYPTION_KEY")
         if not passphrase:
-            logger.warning('ApiAccessToken row exists for huggingface but API_TOKEN_ENCRYPTION_KEY is unset; falling back to HF_TOKEN env var')
+            logger.warning(
+                "ApiAccessToken row exists for huggingface but API_TOKEN_ENCRYPTION_KEY is unset; falling back to HF_TOKEN env var"
+            )
         else:
             try:
                 value = decrypt_token(row[0], row[1], row[2], passphrase)
             except Exception:
-                logger.exception('Failed to decrypt ApiAccessToken for huggingface; falling back to HF_TOKEN env var')
+                logger.exception(
+                    "Failed to decrypt ApiAccessToken for huggingface; falling back to HF_TOKEN env var"
+                )
 
     _hf_token_cache = (value, now)
     return value
+
 
 # Data-layer-only access against tables api's Prisma migrations own -- this
 # worker never runs DDL/migrations of its own. See AGENTS.md "Database
@@ -127,13 +135,21 @@ def char_similarity(a: str, b: str) -> float:
     for i in range(1, rows):
         for j in range(1, cols):
             cost = 0 if a[i - 1] == b[j - 1] else 1
-            dist[i][j] = min(dist[i - 1][j] + 1, dist[i][j - 1] + 1, dist[i - 1][j - 1] + cost)
+            dist[i][j] = min(
+                dist[i - 1][j] + 1, dist[i][j - 1] + 1, dist[i - 1][j - 1] + cost
+            )
     return 1 - dist[rows - 1][cols - 1] / max_len
 
 
 def compute_asr_match_score(transcript: str, expected_text: str) -> float:
     """0-100 similarity between the ASR transcript and the trainer's typed answer -- see WordRecording.asrMatchScore's schema comment."""
-    return round(char_similarity(normalize_for_match(transcript), normalize_for_match(expected_text)) * 100, 2)
+    return round(
+        char_similarity(
+            normalize_for_match(transcript), normalize_for_match(expected_text)
+        )
+        * 100,
+        2,
+    )
 
 
 def update_submission_result(
@@ -167,7 +183,9 @@ def update_submission_result(
                 "transcript": transcript,
                 "asr_confidence": asr_confidence,
                 "asr_engine": asr_engine,
-                "asr_word_detail": json.dumps(asr_word_detail) if asr_word_detail is not None else None,
+                "asr_word_detail": json.dumps(asr_word_detail)
+                if asr_word_detail is not None
+                else None,
                 "rejection_reason": rejection_reason,
             },
         )
@@ -210,5 +228,8 @@ def update_word_recording_result(
             },
         )
         if cur.rowcount == 0:
-            logger.warning("update_word_recording_result matched 0 rows for word_recording=%s", word_recording_id)
+            logger.warning(
+                "update_word_recording_result matched 0 rows for word_recording=%s",
+                word_recording_id,
+            )
     conn.commit()

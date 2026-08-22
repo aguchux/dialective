@@ -2,7 +2,16 @@
 
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Pause, Play, X, XCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  LoaderCircle,
+  Pause,
+  Play,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
   AdminRecordingSummary,
@@ -62,7 +71,9 @@ export function RecordingAuditDialog({
           className="fixed inset-0 z-[960] flex flex-col overflow-hidden bg-[#111] text-white focus:outline-none"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <RadixDialog.Title className="sr-only">Audit recordings for {trainerName}</RadixDialog.Title>
+          <RadixDialog.Title className="sr-only">
+            Audit recordings for {trainerName}
+          </RadixDialog.Title>
 
           <header className="flex items-center justify-between gap-3 border-b border-white/10 p-4">
             <div className="min-w-0">
@@ -109,7 +120,9 @@ export function RecordingAuditDialog({
               >
                 <ArrowLeft className="size-4" aria-hidden="true" /> Previous
               </button>
-              {isFetching && <LoaderCircle className="size-4 animate-spin text-white/40" aria-hidden="true" />}
+              {isFetching && (
+                <LoaderCircle className="size-4 animate-spin text-white/40" aria-hidden="true" />
+              )}
               <button
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-white/10 px-5 font-extrabold text-white transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={isLast}
@@ -126,7 +139,13 @@ export function RecordingAuditDialog({
   );
 }
 
-export function RecordingCard({ recording, trainerId }: { recording: AdminRecordingSummary; trainerId?: string }) {
+export function RecordingCard({
+  recording,
+  trainerId,
+}: {
+  recording: AdminRecordingSummary;
+  trainerId?: string;
+}) {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -134,7 +153,8 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
   const [clawback, setClawback] = useState(false);
   const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
   const [code, setCode] = useState('');
-  const [requestOtp, { isLoading: isRequestingOtp }] = useRequestRecordingAuditClawbackOtpMutation();
+  const [requestOtp, { isLoading: isRequestingOtp }] =
+    useRequestRecordingAuditClawbackOtpMutation();
   const [audit, { isLoading: isSubmitting }] = useAuditRecordingMutation();
 
   function togglePlayback() {
@@ -174,7 +194,12 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
       setOtpRequestId(null);
       setCode('');
     } catch (err) {
-      setError(normalizeErrorMessage(err, otpRequestId ? 'Unable to verify this code.' : 'Unable to save this audit.'));
+      setError(
+        normalizeErrorMessage(
+          err,
+          otpRequestId ? 'Unable to verify this code.' : 'Unable to save this audit.',
+        ),
+      );
     }
   }
 
@@ -186,14 +211,22 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
         <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-extrabold uppercase tracking-wide">
           {recording.kind === 'word' ? 'Word training' : 'Sentence submission'}
         </span>
-        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">{recording.status}</span>
+        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">
+          {recording.status}
+        </span>
         {recording.adminAuditStatus && (
           <span
             className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold ${
-              recording.adminAuditStatus === 'VALID' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
+              recording.adminAuditStatus === 'VALID'
+                ? 'bg-emerald-500/20 text-emerald-300'
+                : 'bg-red-500/20 text-red-300'
             }`}
           >
-            {recording.adminAuditStatus === 'VALID' ? <CheckCircle2 className="size-3.5" aria-hidden="true" /> : <XCircle className="size-3.5" aria-hidden="true" />}
+            {recording.adminAuditStatus === 'VALID' ? (
+              <CheckCircle2 className="size-3.5" aria-hidden="true" />
+            ) : (
+              <XCircle className="size-3.5" aria-hidden="true" />
+            )}
             Previously marked {recording.adminAuditStatus.toLowerCase()}
           </span>
         )}
@@ -209,16 +242,24 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
           <p className="text-sm font-bold text-white/60">Spoken response (ASR transcript)</p>
           {recording.asrTranscript ? (
             recording.asrWordDetail && recording.asrWordDetail.length > 0 ? (
-              <TranscriptWords words={recording.asrWordDetail} currentTime={currentTime} onSeek={seekTo} />
+              <TranscriptWords
+                words={recording.asrWordDetail}
+                currentTime={currentTime}
+                onSeek={seekTo}
+              />
             ) : (
               <p className="break-words text-lg font-bold">{recording.asrTranscript}</p>
             )
           ) : (
             <p className="break-words text-sm italic text-white/50">Not yet transcribed.</p>
           )}
-          {recording.kind === 'word' && recording.responseText && recording.responseText !== recording.asrTranscript && (
-            <p className="mt-1 break-words text-sm text-white/50">Typed answer: {recording.responseText}</p>
-          )}
+          {recording.kind === 'word' &&
+            recording.responseText &&
+            recording.responseText !== recording.asrTranscript && (
+              <p className="mt-1 break-words text-sm text-white/50">
+                Typed answer: {recording.responseText}
+              </p>
+            )}
         </div>
       )}
 
@@ -231,7 +272,11 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
               onClick={togglePlayback}
               type="button"
             >
-              {playing ? <Pause className="size-8 fill-current" aria-hidden="true" /> : <Play className="ml-1 size-8 fill-current" aria-hidden="true" />}
+              {playing ? (
+                <Pause className="size-8 fill-current" aria-hidden="true" />
+              ) : (
+                <Play className="ml-1 size-8 fill-current" aria-hidden="true" />
+              )}
             </button>
             <audio
               onEnded={() => setPlaying(false)}
@@ -257,11 +302,14 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
       {recording.emotion && (
         <div className="mx-auto grid max-w-md gap-1 rounded-lg bg-white/5 px-4 py-3 text-center text-sm text-white/70">
           <p className="text-xs font-bold uppercase text-white/40">
-            Speech expression <span className="normal-case">(descriptive only -- never affects payout)</span>
+            Speech expression{' '}
+            <span className="normal-case">(descriptive only -- never affects payout)</span>
           </p>
           <p className="font-bold text-white">
             {recording.emotion}
-            {recording.emotionConfidence ? ` (${Math.round(Number(recording.emotionConfidence) * 100)}%)` : ''}
+            {recording.emotionConfidence
+              ? ` (${Math.round(Number(recording.emotionConfidence) * 100)}%)`
+              : ''}
             {recording.tone ? ` · ${recording.tone}` : ''}
             {recording.style ? ` · ${recording.style}` : ''}
             {recording.speed ? ` · ${recording.speed}` : ''}
@@ -269,8 +317,10 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
           </p>
           {recording.prosodyMetrics && (
             <p className="text-xs text-white/50">
-              {recording.prosodyMetrics.meanPitchHz !== null && `Pitch: ${recording.prosodyMetrics.meanPitchHz.toFixed(0)}Hz `}
-              {recording.prosodyMetrics.meanRmsDb !== null && `· Energy: ${recording.prosodyMetrics.meanRmsDb.toFixed(1)}dB `}
+              {recording.prosodyMetrics.meanPitchHz !== null &&
+                `Pitch: ${recording.prosodyMetrics.meanPitchHz.toFixed(0)}Hz `}
+              {recording.prosodyMetrics.meanRmsDb !== null &&
+                `· Energy: ${recording.prosodyMetrics.meanRmsDb.toFixed(1)}dB `}
               {recording.prosodyMetrics.pauseRatio !== null &&
                 `· Pauses: ${Math.round(recording.prosodyMetrics.pauseRatio * 100)}%`}
             </p>
@@ -285,14 +335,19 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
       )}
 
       {error && (
-        <p className="rounded-lg bg-red-500/10 px-4 py-2 text-center text-sm font-bold text-red-300" role="alert">
+        <p
+          className="rounded-lg bg-red-500/10 px-4 py-2 text-center text-sm font-bold text-red-300"
+          role="alert"
+        >
           {error}
         </p>
       )}
 
       {otpRequestId ? (
         <div className="mx-auto grid w-full max-w-xs gap-3">
-          <p className="text-center text-sm font-bold text-white/70">Enter the 6-digit code emailed to confirm the clawback.</p>
+          <p className="text-center text-sm font-bold text-white/70">
+            Enter the 6-digit code emailed to confirm the clawback.
+          </p>
           <input
             autoFocus
             className="min-h-11 w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-center text-lg font-bold tracking-[0.3em] text-white outline-none focus:border-accent"
@@ -305,7 +360,10 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
           <div className="flex justify-center gap-2">
             <button
               className="inline-flex min-h-10 items-center justify-center rounded-lg bg-white/10 px-4 font-bold text-white hover:bg-white/20"
-              onClick={() => { setOtpRequestId(null); setCode(''); }}
+              onClick={() => {
+                setOtpRequestId(null);
+                setCode('');
+              }}
               type="button"
             >
               Cancel
@@ -326,7 +384,12 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
         <div className="mx-auto grid w-full max-w-sm gap-3">
           {recording.payoutTokenAmount && (
             <label className="mx-auto flex cursor-pointer items-center gap-2 text-sm font-bold text-white/80">
-              <input checked={clawback} className="size-4 accent-danger" onChange={(e) => setClawback(e.target.checked)} type="checkbox" />
+              <input
+                checked={clawback}
+                className="size-4 accent-danger"
+                onChange={(e) => setClawback(e.target.checked)}
+                type="checkbox"
+              />
               Also claw back the {recording.payoutTokenAmount} DL payout
             </label>
           )}
@@ -350,7 +413,11 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
               <XCircle className="size-4" aria-hidden="true" /> Mark invalid
             </ActionButton>
           </div>
-          {alreadyAudited && <p className="text-center text-xs text-white/40">Re-auditing overwrites the previous decision.</p>}
+          {alreadyAudited && (
+            <p className="text-center text-xs text-white/40">
+              Re-auditing overwrites the previous decision.
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -395,7 +462,11 @@ export function RecordingDetailDialog({
           </header>
 
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-4 md:p-8">
-            <RecordingCard key={recording.id} recording={recording} trainerId={recording.trainer?.id} />
+            <RecordingCard
+              key={recording.id}
+              recording={recording}
+              trainerId={recording.trainer?.id}
+            />
           </div>
         </RadixDialog.Content>
       </RadixDialog.Portal>

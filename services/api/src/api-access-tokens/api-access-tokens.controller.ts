@@ -1,11 +1,24 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Put, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { Role } from '@dialectiva/db';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AccessTokenClaims } from '../auth/jwt.util';
-import { ApiAccessTokenKey, ApiAccessTokensService, KNOWN_API_ACCESS_TOKEN_KEYS } from './api-access-tokens.service';
+import {
+  ApiAccessTokenKey,
+  ApiAccessTokensService,
+  KNOWN_API_ACCESS_TOKEN_KEYS,
+} from './api-access-tokens.service';
 import { SetApiAccessTokenDto } from './dto/set-api-access-token.dto';
 
 function assertKnownKey(key: string): asserts key is ApiAccessTokenKey {
@@ -27,7 +40,11 @@ export class ApiAccessTokensController {
   }
 
   @Put(':key')
-  async set(@Param('key') key: string, @Body() dto: SetApiAccessTokenDto, @CurrentUser() user: AccessTokenClaims) {
+  async set(
+    @Param('key') key: string,
+    @Body() dto: SetApiAccessTokenDto,
+    @CurrentUser() user: AccessTokenClaims,
+  ) {
     assertKnownKey(key);
     return this.tokens.set(key, dto.value, user.sub);
   }

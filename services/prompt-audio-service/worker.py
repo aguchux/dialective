@@ -20,7 +20,9 @@ REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
 PROMPT_AUDIO_STREAM = os.environ.get("PROMPT_AUDIO_STREAM", "prompt-audio-jobs")
 CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "prompt-audio-workers")
 CONSUMER_NAME = os.environ.get("HOSTNAME", "prompt-audio-service-1")
-PROMPT_AUDIO_BUCKET = os.environ.get("SPACES_PROMPT_AUDIO_BUCKET", "dialectiva-prompt-audio")
+PROMPT_AUDIO_BUCKET = os.environ.get(
+    "SPACES_PROMPT_AUDIO_BUCKET", "dialectiva-prompt-audio"
+)
 SPACES_REGION = os.environ.get("SPACES_REGION", "nyc3")
 
 _registry = load_registry()
@@ -46,7 +48,9 @@ def synthesize(text: str, model: VitsModel, tokenizer: VitsTokenizer) -> bytes:
         output = model(**inputs).waveform
 
     buf = io.BytesIO()
-    scipy.io.wavfile.write(buf, rate=model.config.sampling_rate, data=output.squeeze().numpy())
+    scipy.io.wavfile.write(
+        buf, rate=model.config.sampling_rate, data=output.squeeze().numpy()
+    )
     return buf.getvalue()
 
 
@@ -67,7 +71,9 @@ def make_handler(s3):
             model, tokenizer = get_model(dialect_tag)
         except UnsupportedDialectError:
             write_prompt_audio_url(prompt_id, "")  # marks unsupported_dialect
-            logger.warning("Unsupported dialect for prompt=%s dialect=%s", prompt_id, dialect_tag)
+            logger.warning(
+                "Unsupported dialect for prompt=%s dialect=%s", prompt_id, dialect_tag
+            )
             return
 
         audio_bytes = synthesize(text, model, tokenizer)
@@ -76,7 +82,11 @@ def make_handler(s3):
         # prompt audio is meant to be played back by any trainer's client, so
         # the bucket/CDN in front of it is expected to serve it directly.
         s3.put_object(
-            Bucket=PROMPT_AUDIO_BUCKET, Key=key, Body=audio_bytes, ContentType="audio/wav", ACL="public-read"
+            Bucket=PROMPT_AUDIO_BUCKET,
+            Key=key,
+            Body=audio_bytes,
+            ContentType="audio/wav",
+            ACL="public-read",
         )
 
         url = f"https://{PROMPT_AUDIO_BUCKET}.{SPACES_REGION}.digitaloceanspaces.com/{key}"
@@ -89,8 +99,14 @@ def main() -> None:
     redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     s3 = build_spaces_client()
 
-    consumer = StreamConsumer(redis_client, PROMPT_AUDIO_STREAM, CONSUMER_GROUP, CONSUMER_NAME)
-    logger.info("prompt-audio-service consuming stream=%s group=%s", PROMPT_AUDIO_STREAM, CONSUMER_GROUP)
+    consumer = StreamConsumer(
+        redis_client, PROMPT_AUDIO_STREAM, CONSUMER_GROUP, CONSUMER_NAME
+    )
+    logger.info(
+        "prompt-audio-service consuming stream=%s group=%s",
+        PROMPT_AUDIO_STREAM,
+        CONSUMER_GROUP,
+    )
     consumer.run(make_handler(s3))
 
 

@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Query, Req, UnprocessableEntityException, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+  Req,
+  UnprocessableEntityException,
+  UseGuards,
+} from '@nestjs/common';
 import { Prisma, Role } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -92,7 +104,10 @@ export class WordsController {
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
         if (err.code === 'P2025') throw new NotFoundException('Word not found');
-        if (err.code === 'P2003') throw new UnprocessableEntityException('Word still has recordings or assignments referencing it');
+        if (err.code === 'P2003')
+          throw new UnprocessableEntityException(
+            'Word still has recordings or assignments referencing it',
+          );
       }
       throw err;
     }

@@ -1,4 +1,18 @@
-import { IsBoolean, IsEmail, IsISO8601, IsInt, IsNumber, IsOptional, IsPositive, IsString, Matches, Max, MaxLength, Min, Validate } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsISO8601,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  Validate,
+} from 'class-validator';
 import { ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
 
 /** Accepts either a bare email ("noreply@x.com") or a display-name form ("Dialect Library" <noreply@x.com>) -- both are valid Resend "from" values. */
@@ -10,7 +24,10 @@ class IsEmailOrNamedEmailConstraint implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
     if (typeof value !== 'string') return false;
     const trimmed = value.trim();
-    return IsEmailOrNamedEmailConstraint.EMAIL_RE.test(trimmed) || IsEmailOrNamedEmailConstraint.NAMED_RE.test(trimmed);
+    return (
+      IsEmailOrNamedEmailConstraint.EMAIL_RE.test(trimmed) ||
+      IsEmailOrNamedEmailConstraint.NAMED_RE.test(trimmed)
+    );
   }
 
   defaultMessage(): string {
@@ -275,7 +292,9 @@ export class UpdatePlatformSettingsDto {
   // smslive247NativeOtpEnabled below.
   @IsOptional()
   @IsString()
-  @Matches(/^(termii|twilio|africastalking),(termii|twilio|africastalking),(termii|twilio|africastalking)$/)
+  @Matches(
+    /^(termii|twilio|africastalking),(termii|twilio|africastalking),(termii|twilio|africastalking)$/,
+  )
   smsProviderOrder?: string;
 
   @IsOptional()

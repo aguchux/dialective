@@ -24,7 +24,9 @@ export class DatasetStorageService {
       id: rule.id,
       enabled: rule.enabled,
       countryId: rule.countryId,
-      country: rule.country ? { id: rule.country.id, name: rule.country.name, code: rule.country.code } : null,
+      country: rule.country
+        ? { id: rule.country.id, name: rule.country.name, code: rule.country.code }
+        : null,
       dialectTag: rule.dialectTag,
       retentionDays: rule.retentionDays,
       createdAt: rule.createdAt,

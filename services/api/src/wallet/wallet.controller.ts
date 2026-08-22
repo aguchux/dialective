@@ -60,7 +60,11 @@ import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { CreateReferralInviteDto } from './dto/create-referral-invite.dto';
 import { tokensToUsdt, usdToTokens } from './token-rate.util';
 import { tokensToLocalCurrency } from './currency-rate.util';
-import { withdrawalContextHash, depositContextHash, adminActionContextHash } from './otp-context.util';
+import {
+  withdrawalContextHash,
+  depositContextHash,
+  adminActionContextHash,
+} from './otp-context.util';
 import { MailService } from '../mail/mail.service';
 
 const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
@@ -70,8 +74,20 @@ const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.REFERRAL_PAYOUT_BONUS,
 ];
 
-const NOWPAYMENTS_PAYOUT_FINISHED_STATUSES = new Set(['finished', 'paid', 'complete', 'completed', 'success']);
-const NOWPAYMENTS_PAYOUT_FAILED_STATUSES = new Set(['failed', 'rejected', 'expired', 'cancelled', 'canceled']);
+const NOWPAYMENTS_PAYOUT_FINISHED_STATUSES = new Set([
+  'finished',
+  'paid',
+  'complete',
+  'completed',
+  'success',
+]);
+const NOWPAYMENTS_PAYOUT_FAILED_STATUSES = new Set([
+  'failed',
+  'rejected',
+  'expired',
+  'cancelled',
+  'canceled',
+]);
 
 // How many top-ranked rows the dedicated /admin/leaderboard page ranks and
 // paginates through -- see buildEarnersRanking's doc comment for why a
@@ -128,7 +144,11 @@ export class WalletController {
   private async getLocalCurrency(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { country: { select: { currencyCode: true, usdExchangeRate: true, exchangeRateUpdatedAt: true } } },
+      select: {
+        country: {
+          select: { currencyCode: true, usdExchangeRate: true, exchangeRateUpdatedAt: true },
+        },
+      },
     });
     if (!user?.country || user.country.usdExchangeRate === null) {
       return null;
@@ -156,7 +176,11 @@ export class WalletController {
       taskTokenCost: taskTokenCost.toString(),
       localCurrency,
       balanceInLocalCurrency: localCurrency
-        ? tokensToLocalCurrency(wallet.balance.toNumber(), tokenUsdRate, Number(localCurrency.usdExchangeRate)).toString()
+        ? tokensToLocalCurrency(
+            wallet.balance.toNumber(),
+            tokenUsdRate,
+            Number(localCurrency.usdExchangeRate),
+          ).toString()
         : null,
     };
   }
@@ -165,7 +189,10 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
-  async sendReferralInvite(@Req() req: AuthenticatedRequest, @Body() dto: CreateReferralInviteDto): Promise<void> {
+  async sendReferralInvite(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreateReferralInviteDto,
+  ): Promise<void> {
     const inviter = await this.prisma.user.findUnique({
       where: { id: req.user.sub },
       select: { firstName: true, lastName: true, email: true, referralCode: true },
@@ -182,12 +209,16 @@ export class WalletController {
     // either already joined a network or have none, but either way a new
     // invite for them makes no sense (see AGENTS.md-style rule: "once
     // registered, cannot be invited again").
-    const existingUser = await this.prisma.user.findFirst({ where: { email: { equals: dto.email, mode: 'insensitive' } }, select: { id: true } });
+    const existingUser = await this.prisma.user.findFirst({
+      where: { email: { equals: dto.email, mode: 'insensitive' } },
+      select: { id: true },
+    });
     if (existingUser) {
       throw new BadRequestException('This email is already registered');
     }
 
-    const inviterName = [inviter.firstName, inviter.lastName].filter(Boolean).join(' ').trim() || inviter.email;
+    const inviterName =
+      [inviter.firstName, inviter.lastName].filter(Boolean).join(' ').trim() || inviter.email;
     const frontend = process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
     const referralUrl = `${frontend}/register?ref=${encodeURIComponent(inviter.referralCode)}`;
     const inviteExpirySeconds = await this.platformSettings.getReferralInviteExpirySeconds();
@@ -200,7 +231,12 @@ export class WalletController {
     await this.prisma.referralInvite.upsert({
       where: { inviterId_email: { inviterId: req.user.sub, email: dto.email } },
       create: { inviterId: req.user.sub, email: dto.email, firstName: dto.firstName, expiresAt },
-      update: { firstName: dto.firstName, status: ReferralInviteStatus.INVITED, joinedUserId: null, expiresAt },
+      update: {
+        firstName: dto.firstName,
+        status: ReferralInviteStatus.INVITED,
+        joinedUserId: null,
+        expiresAt,
+      },
     });
 
     await this.mail.sendReferralInviteEmail({
@@ -220,7 +256,15 @@ export class WalletController {
     sixMonthsAgo.setUTCMonth(sixMonthsAgo.getUTCMonth() - 5, 1);
     sixMonthsAgo.setUTCHours(0, 0, 0, 0);
 
-    const [user, settings, ledgerTotals, recentActivity, earningsHistory, withdrawalTotals, pendingInvites] = await Promise.all([
+    const [
+      user,
+      settings,
+      ledgerTotals,
+      recentActivity,
+      earningsHistory,
+      withdrawalTotals,
+      pendingInvites,
+    ] = await Promise.all([
       this.prisma.user.findUniqueOrThrow({
         where: { id: req.user.sub },
         select: {
@@ -248,7 +292,14 @@ export class WalletController {
       this.prisma.ledgerEntry.findMany({
         where: {
           walletId: wallet.id,
-          type: { in: ['TRAINING_PAYOUT', 'REFERRAL_COMMISSION', 'REFERRAL_FUNDING_BONUS', 'REFERRAL_PAYOUT_BONUS'] },
+          type: {
+            in: [
+              'TRAINING_PAYOUT',
+              'REFERRAL_COMMISSION',
+              'REFERRAL_FUNDING_BONUS',
+              'REFERRAL_PAYOUT_BONUS',
+            ],
+          },
           createdAt: { gte: sixMonthsAgo },
         },
         select: { amount: true, createdAt: true },
@@ -270,7 +321,9 @@ export class WalletController {
 
     const monthTotals = new Map<string, number>();
     for (let offset = 0; offset < 6; offset += 1) {
-      const month = new Date(Date.UTC(sixMonthsAgo.getUTCFullYear(), sixMonthsAgo.getUTCMonth() + offset, 1));
+      const month = new Date(
+        Date.UTC(sixMonthsAgo.getUTCFullYear(), sixMonthsAgo.getUTCMonth() + offset, 1),
+      );
       monthTotals.set(month.toISOString().slice(0, 7), 0);
     }
     for (const entry of earningsHistory) {
@@ -331,8 +384,14 @@ export class WalletController {
       ]).toString(),
       paidOutTokens: withdrawalAmount(WithdrawalStatus.PAID).toString(),
       pendingPayoutTokens: withdrawalAmount(WithdrawalStatus.PENDING).toString(),
-      recentActivity: recentActivity.map((entry) => ({ ...entry, amount: entry.amount.toString() })),
-      monthlyEarnings: Array.from(monthTotals, ([month, amount]) => ({ month, amount: amount.toString() })),
+      recentActivity: recentActivity.map((entry) => ({
+        ...entry,
+        amount: entry.amount.toString(),
+      })),
+      monthlyEarnings: Array.from(monthTotals, ([month, amount]) => ({
+        month,
+        amount: amount.toString(),
+      })),
       referrals: {
         code: user.referralCode,
         invitedCount: user._count.referrals,
@@ -348,7 +407,7 @@ export class WalletController {
   }
 
   /**
-    * Lazily deletes this inviter's expired pending invites before returning the
+   * Lazily deletes this inviter's expired pending invites before returning the
    * remaining ones -- expired invites are never surfaced as "expired" in
    * the dashboard, they just disappear from the list.
    */
@@ -379,8 +438,20 @@ export class WalletController {
     pending: { id: string; firstName: string; email: string; createdAt: Date }[],
   ) {
     const merged = [
-      ...joined.map((row) => ({ id: row.id, firstName: row.firstName, email: row.email, createdAt: row.createdAt, status: 'JOINED' as const })),
-      ...pending.map((row) => ({ id: row.id, firstName: row.firstName, email: row.email, createdAt: row.createdAt, status: 'INVITED' as const })),
+      ...joined.map((row) => ({
+        id: row.id,
+        firstName: row.firstName,
+        email: row.email,
+        createdAt: row.createdAt,
+        status: 'JOINED' as const,
+      })),
+      ...pending.map((row) => ({
+        id: row.id,
+        firstName: row.firstName,
+        email: row.email,
+        createdAt: row.createdAt,
+        status: 'INVITED' as const,
+      })),
     ];
     merged.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     return merged.slice(0, 8);
@@ -402,7 +473,9 @@ export class WalletController {
 
     const since = isYear
       ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1))
-      : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (dayCount - 1)));
+      : new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (dayCount - 1)),
+        );
     since.setUTCHours(0, 0, 0, 0);
 
     const entries = await this.prisma.ledgerEntry.findMany({
@@ -426,7 +499,9 @@ export class WalletController {
       }
     } else {
       for (let offset = 0; offset < dayCount; offset += 1) {
-        const day = new Date(Date.UTC(since.getUTCFullYear(), since.getUTCMonth(), since.getUTCDate() + offset));
+        const day = new Date(
+          Date.UTC(since.getUTCFullYear(), since.getUTCMonth(), since.getUTCDate() + offset),
+        );
         buckets.set(day.toISOString().slice(0, 10), 0);
       }
       for (const entry of entries) {
@@ -572,7 +647,10 @@ export class WalletController {
    */
   @Post('wallet/webhooks/nowpayments')
   @HttpCode(HttpStatus.OK)
-  async handleNowPaymentsWebhook(@Body() body: Record<string, unknown>, @Headers('x-nowpayments-sig') signature?: string) {
+  async handleNowPaymentsWebhook(
+    @Body() body: Record<string, unknown>,
+    @Headers('x-nowpayments-sig') signature?: string,
+  ) {
     if (!this.nowPayments.verifyIpnSignature(body, signature)) {
       throw new UnauthorizedException('Invalid webhook signature');
     }
@@ -612,9 +690,15 @@ export class WalletController {
       return { received: true, matched: false };
     }
 
-    const validationError = validateFinishedPayment(body, deposit.providerChargeId, deposit.usdAmount.toString());
+    const validationError = validateFinishedPayment(
+      body,
+      deposit.providerChargeId,
+      deposit.usdAmount.toString(),
+    );
     if (paymentStatus === 'finished' && validationError) {
-      this.logger.error(`Rejected finished NOWPayments IPN for deposit=${deposit.id}: ${validationError}`);
+      this.logger.error(
+        `Rejected finished NOWPayments IPN for deposit=${deposit.id}: ${validationError}`,
+      );
       await this.completeIpnEvent(event.id, validationError, deposit.id);
       return { received: true, credited: false };
     }
@@ -641,11 +725,18 @@ export class WalletController {
           data: { depositId: deposit.id, processedAt: now },
         }),
       ]);
-      this.logger.log(`NOWPayments IPN status=${paymentStatus} deposit=${deposit.id} credited=false`);
+      this.logger.log(
+        `NOWPayments IPN status=${paymentStatus} deposit=${deposit.id} credited=false`,
+      );
       return { received: true, credited: false, status: paymentStatus };
     }
 
-    const fundingBonuses = await creditFundingReferralBonusesOps(this.prisma, deposit.wallet.user.id, deposit.tokenAmount, deposit.id);
+    const fundingBonuses = await creditFundingReferralBonusesOps(
+      this.prisma,
+      deposit.wallet.user.id,
+      deposit.tokenAmount,
+      deposit.id,
+    );
 
     const credited = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.deposit.updateMany({
@@ -654,12 +745,20 @@ export class WalletController {
       });
 
       if (claimed.count === 0) {
-        await tx.nowPaymentsIpnEvent.update({ where: { id: event.id }, data: { depositId: deposit.id, processedAt: now } });
+        await tx.nowPaymentsIpnEvent.update({
+          where: { id: event.id },
+          data: { depositId: deposit.id, processedAt: now },
+        });
         return false;
       }
 
       await tx.ledgerEntry.create({
-        data: { walletId: deposit.walletId, type: 'DEPOSIT', amount: deposit.tokenAmount, reference: deposit.id },
+        data: {
+          walletId: deposit.walletId,
+          type: 'DEPOSIT',
+          amount: deposit.tokenAmount,
+          reference: deposit.id,
+        },
       });
       await tx.wallet.update({
         where: { id: deposit.walletId },
@@ -674,11 +773,16 @@ export class WalletController {
         });
       }
 
-      await tx.nowPaymentsIpnEvent.update({ where: { id: event.id }, data: { depositId: deposit.id, processedAt: now } });
+      await tx.nowPaymentsIpnEvent.update({
+        where: { id: event.id },
+        data: { depositId: deposit.id, processedAt: now },
+      });
       return true;
     });
 
-    this.logger.log(`NOWPayments IPN status=${paymentStatus} deposit=${deposit.id} credited=${credited}`);
+    this.logger.log(
+      `NOWPayments IPN status=${paymentStatus} deposit=${deposit.id} credited=${credited}`,
+    );
     return { received: true, credited, status: paymentStatus };
   }
 
@@ -688,7 +792,6 @@ export class WalletController {
       data: { depositId, processedAt: new Date(), processingError },
     });
   }
-
 
   /** Shared PENDING withdrawal preconditions -- kill switch, minimum, allow-listed currency/network, verified contact. */
   private async validateWithdrawalRequest(
@@ -709,10 +812,14 @@ export class WalletController {
       this.platformSettings.getAllowedWithdrawalNetworks(),
     ]);
     if (!allowedCurrencies.includes(destinationCurrency.toUpperCase())) {
-      throw new UnprocessableEntityException(`${destinationCurrency} is not an allowed withdrawal currency`);
+      throw new UnprocessableEntityException(
+        `${destinationCurrency} is not an allowed withdrawal currency`,
+      );
     }
     if (!allowedNetworks.includes(destinationNetwork.toUpperCase())) {
-      throw new UnprocessableEntityException(`${destinationNetwork} is not an allowed withdrawal network`);
+      throw new UnprocessableEntityException(
+        `${destinationNetwork} is not an allowed withdrawal network`,
+      );
     }
 
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
@@ -723,17 +830,27 @@ export class WalletController {
     // withdrawals still keep their own per-transaction WITHDRAWAL email OTP
     // (requestWithdrawalOtp/createWithdrawal below), so there's no gap.
     if ((await this.platformSettings.isPhoneVerificationRequired()) && !user.phoneVerifiedAt) {
-      throw new UnprocessableEntityException('Verify your phone number before requesting a withdrawal');
+      throw new UnprocessableEntityException(
+        'Verify your phone number before requesting a withdrawal',
+      );
     }
   }
 
   @Post('wallet/withdrawals/otp')
   @UseGuards(JwtAuthGuard, UserThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
-  async requestWithdrawalOtp(@Req() req: AuthenticatedRequest, @Body() body: RequestWithdrawalOtpDto) {
+  async requestWithdrawalOtp(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: RequestWithdrawalOtpDto,
+  ) {
     const destinationCurrency = body.destinationCurrency ?? 'USDT';
     const destinationNetwork = body.destinationNetwork ?? 'TRC20';
-    await this.validateWithdrawalRequest(req.user.sub, body.tokenAmount, destinationCurrency, destinationNetwork);
+    await this.validateWithdrawalRequest(
+      req.user.sub,
+      body.tokenAmount,
+      destinationCurrency,
+      destinationNetwork,
+    );
 
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
     const contextHash = withdrawalContextHash({
@@ -751,7 +868,12 @@ export class WalletController {
   async createWithdrawal(@Req() req: AuthenticatedRequest, @Body() body: CreateWithdrawalDto) {
     const destinationCurrency = body.destinationCurrency ?? 'USDT';
     const destinationNetwork = body.destinationNetwork ?? 'TRC20';
-    await this.validateWithdrawalRequest(req.user.sub, body.tokenAmount, destinationCurrency, destinationNetwork);
+    await this.validateWithdrawalRequest(
+      req.user.sub,
+      body.tokenAmount,
+      destinationCurrency,
+      destinationNetwork,
+    );
 
     const wallet = await this.getOrCreateWallet(req.user.sub);
 
@@ -891,7 +1013,11 @@ export class WalletController {
   @Post('admin/withdrawals/:id/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  async approveWithdrawal(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: SubmitWithdrawalPayoutDto) {
+  async approveWithdrawal(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: SubmitWithdrawalPayoutDto,
+  ) {
     const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
     if (!withdrawal) {
       throw new NotFoundException('Withdrawal request not found');
@@ -900,11 +1026,21 @@ export class WalletController {
       throw new UnprocessableEntityException('Only pending withdrawals can be approved');
     }
 
-    await this.verifyAdminPayoutOtpIfEnabled(req.user.sub, withdrawal, body.otpRequestId, body.code);
+    await this.verifyAdminPayoutOtpIfEnabled(
+      req.user.sub,
+      withdrawal,
+      body.otpRequestId,
+      body.code,
+    );
 
     const approved = await this.prisma.withdrawalRequest.update({
       where: { id },
-      data: { status: WithdrawalStatus.APPROVED, approvedByAdminId: req.user.sub, approvedAt: new Date(), adminNote: body.adminNote },
+      data: {
+        status: WithdrawalStatus.APPROVED,
+        approvedByAdminId: req.user.sub,
+        approvedAt: new Date(),
+        adminNote: body.adminNote,
+      },
     });
     this.logger.log(`Withdrawal approved: admin=${req.user.sub} withdrawal=${id}`);
 
@@ -938,13 +1074,20 @@ export class WalletController {
       // still reached NOWPayments, so silently retrying create risks a
       // second real payout. Forcing re-approval makes that retry a
       // deliberate, audited admin decision instead of a same-click resend.
-      throw new UnprocessableEntityException('Only approved withdrawals can be submitted to NOWPayments -- re-approve failed withdrawals before retrying');
+      throw new UnprocessableEntityException(
+        'Only approved withdrawals can be submitted to NOWPayments -- re-approve failed withdrawals before retrying',
+      );
     }
     if (withdrawal.providerPayoutId) {
       return this.refreshNowPaymentsWithdrawalStatus(id);
     }
 
-    await this.verifyAdminPayoutOtpIfEnabled(req.user.sub, withdrawal, body.otpRequestId, body.code);
+    await this.verifyAdminPayoutOtpIfEnabled(
+      req.user.sub,
+      withdrawal,
+      body.otpRequestId,
+      body.code,
+    );
 
     // Atomically claim the row before calling out to NOWPayments -- the
     // WHERE clause (status still APPROVED, no providerPayoutId yet) is
@@ -958,7 +1101,9 @@ export class WalletController {
       data: { providerStatus: 'submitting' },
     });
     if (claim.count === 0) {
-      throw new UnprocessableEntityException('This withdrawal is already being submitted or was already submitted');
+      throw new UnprocessableEntityException(
+        'This withdrawal is already being submitted or was already submitted',
+      );
     }
 
     try {
@@ -998,18 +1143,31 @@ export class WalletController {
           },
         }),
       ]);
-      this.logger.log(`Withdrawal submitted to NOWPayments: admin=${req.user.sub} withdrawal=${id} providerPayoutId=${payout.payoutId}`);
+      this.logger.log(
+        `Withdrawal submitted to NOWPayments: admin=${req.user.sub} withdrawal=${id} providerPayoutId=${payout.payoutId}`,
+      );
 
       if (body.verificationCode) {
-        return this.verifyNowPaymentsWithdrawalPayout(req, id, { verificationCode: body.verificationCode });
+        return this.verifyNowPaymentsWithdrawalPayout(req, id, {
+          verificationCode: body.verificationCode,
+        });
       }
 
-      return { withdrawalId: id, status: this.mapProviderPayoutStatus(payout.status), providerPayoutId: payout.payoutId };
+      return {
+        withdrawalId: id,
+        status: this.mapProviderPayoutStatus(payout.status),
+        providerPayoutId: payout.payoutId,
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await this.prisma.withdrawalRequest.update({
         where: { id },
-        data: { status: WithdrawalStatus.FAILED, provider: 'nowpayments', providerError: message, adminNote: body.adminNote },
+        data: {
+          status: WithdrawalStatus.FAILED,
+          provider: 'nowpayments',
+          providerError: message,
+          adminNote: body.adminNote,
+        },
       });
       await this.prisma.nowPaymentsPayoutEvent.create({
         data: {
@@ -1020,7 +1178,9 @@ export class WalletController {
           processingError: message,
         },
       });
-      this.logger.error(`Withdrawal submit-to-NOWPayments failed: admin=${req.user.sub} withdrawal=${id}: ${message}`);
+      this.logger.error(
+        `Withdrawal submit-to-NOWPayments failed: admin=${req.user.sub} withdrawal=${id}: ${message}`,
+      );
       throw err;
     }
   }
@@ -1028,7 +1188,11 @@ export class WalletController {
   @Post('admin/withdrawals/:id/verify-nowpayments')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  async verifyNowPaymentsWithdrawalPayout(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: VerifyWithdrawalPayoutDto) {
+  async verifyNowPaymentsWithdrawalPayout(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: VerifyWithdrawalPayoutDto,
+  ) {
     const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
     if (!withdrawal) {
       throw new NotFoundException('Withdrawal request not found');
@@ -1037,10 +1201,25 @@ export class WalletController {
       throw new UnprocessableEntityException('Withdrawal has not been submitted to NOWPayments');
     }
 
-    const result = await this.nowPayments.verifyPayout(withdrawal.providerPayoutId, body.verificationCode);
-    await this.recordNowPaymentsPayoutStatus(id, result.payoutId, 'verify', result.status, result.raw);
-    this.logger.log(`Withdrawal payout verified: admin=${req.user.sub} withdrawal=${id} providerStatus=${result.status ?? 'unknown'}`);
-    return { withdrawalId: id, status: this.mapProviderPayoutStatus(result.status), providerPayoutId: result.payoutId };
+    const result = await this.nowPayments.verifyPayout(
+      withdrawal.providerPayoutId,
+      body.verificationCode,
+    );
+    await this.recordNowPaymentsPayoutStatus(
+      id,
+      result.payoutId,
+      'verify',
+      result.status,
+      result.raw,
+    );
+    this.logger.log(
+      `Withdrawal payout verified: admin=${req.user.sub} withdrawal=${id} providerStatus=${result.status ?? 'unknown'}`,
+    );
+    return {
+      withdrawalId: id,
+      status: this.mapProviderPayoutStatus(result.status),
+      providerPayoutId: result.payoutId,
+    };
   }
 
   @Post('admin/withdrawals/:id/refresh-nowpayments')
@@ -1056,31 +1235,53 @@ export class WalletController {
     }
 
     const result = await this.nowPayments.getPayoutStatus(withdrawal.providerPayoutId);
-    await this.recordNowPaymentsPayoutStatus(id, result.payoutId, 'status', result.status, result.raw);
-    return { withdrawalId: id, status: this.mapProviderPayoutStatus(result.status), providerPayoutId: result.payoutId };
+    await this.recordNowPaymentsPayoutStatus(
+      id,
+      result.payoutId,
+      'status',
+      result.status,
+      result.raw,
+    );
+    return {
+      withdrawalId: id,
+      status: this.mapProviderPayoutStatus(result.status),
+      providerPayoutId: result.payoutId,
+    };
   }
 
   @Post('admin/withdrawals/:id/resolve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  async resolveWithdrawal(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: ResolveWithdrawalDto) {
+  async resolveWithdrawal(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: ResolveWithdrawalDto,
+  ) {
     const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
     if (!withdrawal) {
       throw new NotFoundException('Withdrawal request not found');
     }
-    const resolvableStatuses: WithdrawalStatus[] = [WithdrawalStatus.PENDING, WithdrawalStatus.APPROVED, WithdrawalStatus.FAILED];
+    const resolvableStatuses: WithdrawalStatus[] = [
+      WithdrawalStatus.PENDING,
+      WithdrawalStatus.APPROVED,
+      WithdrawalStatus.FAILED,
+    ];
     if (!resolvableStatuses.includes(withdrawal.status)) {
       throw new UnprocessableEntityException('Withdrawal request already resolved');
     }
     if (body.outcome === 'paid' && withdrawal.status === WithdrawalStatus.FAILED) {
-      throw new UnprocessableEntityException('A failed payout must be reconciled (check provider status) before marking paid manually -- reject/refund instead if the payout truly never went through');
+      throw new UnprocessableEntityException(
+        'A failed payout must be reconciled (check provider status) before marking paid manually -- reject/refund instead if the payout truly never went through',
+      );
     }
 
     // Only the money-moving outcome ("paid") is gated -- rejecting reverses
     // nothing an admin hasn't already implicitly authorized by declining.
     if (body.outcome === 'paid' && (await this.platformSettings.isAdminPayoutOtpEnabled())) {
       if (!body.otpRequestId || !body.code) {
-        throw new UnprocessableEntityException('OTP verification is required to mark this withdrawal paid');
+        throw new UnprocessableEntityException(
+          'OTP verification is required to mark this withdrawal paid',
+        );
       }
       await this.otp.verify({
         otpRequestId: body.otpRequestId,
@@ -1107,7 +1308,11 @@ export class WalletController {
       await this.prisma.$transaction([
         this.prisma.withdrawalRequest.update({
           where: { id },
-          data: { status: WithdrawalStatus.REJECTED, resolvedAt: new Date(), adminNote: body.adminNote },
+          data: {
+            status: WithdrawalStatus.REJECTED,
+            resolvedAt: new Date(),
+            adminNote: body.adminNote,
+          },
         }),
         this.prisma.ledgerEntry.create({
           data: {
@@ -1124,19 +1329,29 @@ export class WalletController {
       ]);
     }
 
-    this.logger.log(`Withdrawal resolved: admin=${req.user.sub} withdrawal=${id} outcome=${body.outcome}`);
+    this.logger.log(
+      `Withdrawal resolved: admin=${req.user.sub} withdrawal=${id} outcome=${body.outcome}`,
+    );
     return { withdrawalId: id, status: body.outcome === 'paid' ? 'paid' : 'rejected' };
   }
 
   private async verifyAdminPayoutOtpIfEnabled(
     adminUserId: string,
-    withdrawal: { id: string; tokenAmount: Prisma.Decimal; destinationCurrency: string; destinationAddress: string; destinationNetwork: string },
+    withdrawal: {
+      id: string;
+      tokenAmount: Prisma.Decimal;
+      destinationCurrency: string;
+      destinationAddress: string;
+      destinationNetwork: string;
+    },
     otpRequestId?: string,
     code?: string,
   ): Promise<void> {
     if (!(await this.platformSettings.isAdminPayoutOtpEnabled())) return;
     if (!otpRequestId || !code) {
-      throw new UnprocessableEntityException('OTP verification is required to submit this withdrawal payout');
+      throw new UnprocessableEntityException(
+        'OTP verification is required to submit this withdrawal payout',
+      );
     }
     await this.otp.verify({
       otpRequestId,
@@ -1156,8 +1371,10 @@ export class WalletController {
 
   private mapProviderPayoutStatus(status: string | null | undefined): WithdrawalStatus {
     const normalized = status?.toLowerCase();
-    if (normalized && NOWPAYMENTS_PAYOUT_FINISHED_STATUSES.has(normalized)) return WithdrawalStatus.PAID;
-    if (normalized && NOWPAYMENTS_PAYOUT_FAILED_STATUSES.has(normalized)) return WithdrawalStatus.FAILED;
+    if (normalized && NOWPAYMENTS_PAYOUT_FINISHED_STATUSES.has(normalized))
+      return WithdrawalStatus.PAID;
+    if (normalized && NOWPAYMENTS_PAYOUT_FAILED_STATUSES.has(normalized))
+      return WithdrawalStatus.FAILED;
     return WithdrawalStatus.PROCESSING;
   }
 
@@ -1293,7 +1510,10 @@ export class WalletController {
       this.prisma.submission.count({ where: { status: SubmissionStatus.REJECTED } }),
       this.prisma.wallet.count(),
       this.prisma.wallet.aggregate({ _sum: { balance: true, lockedBalance: true } }),
-      this.prisma.deposit.aggregate({ where: { status: 'confirmed' }, _sum: { usdAmount: true, tokenAmount: true } }),
+      this.prisma.deposit.aggregate({
+        where: { status: 'confirmed' },
+        _sum: { usdAmount: true, tokenAmount: true },
+      }),
       this.prisma.deposit.count({ where: { status: 'pending' } }),
       this.prisma.deposit.count({ where: { status: 'confirmed' } }),
       this.prisma.nowPaymentsIpnEvent.count(),
@@ -1392,12 +1612,11 @@ export class WalletController {
       // settlement-job's getRewardPoolAvailableTokens uses (informational only,
       // never gates a payout; see computeTrainingPayout's no-loss guarantee).
       // Can legitimately go negative -- that's the signal more pools need opening.
-      rewardPoolAvailableTokens: (
-        new Prisma.Decimal(subscriptionPoolAgg._sum.usdAmount ?? 0)
-          .div(tokenUsdRate)
-          .sub(settledSubmissionPayoutAgg._sum.payoutTokenAmount ?? 0)
-          .sub(settledWordRecordingPayoutAgg._sum.payoutTokenAmount ?? 0)
-      ).toString(),
+      rewardPoolAvailableTokens: new Prisma.Decimal(subscriptionPoolAgg._sum.usdAmount ?? 0)
+        .div(tokenUsdRate)
+        .sub(settledSubmissionPayoutAgg._sum.payoutTokenAmount ?? 0)
+        .sub(settledWordRecordingPayoutAgg._sum.payoutTokenAmount ?? 0)
+        .toString(),
       blogPostsCount,
       publishedBlogPostsCount,
       draftBlogPostsCount,
@@ -1462,7 +1681,9 @@ export class WalletController {
 
     const earnerWallets = await this.prisma.wallet.findMany({
       where: { id: { in: sortedEarners.map((entry) => entry.walletId) } },
-      include: { user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+      },
     });
     const walletById = new Map(earnerWallets.map((wallet) => [wallet.id, wallet]));
 
@@ -1583,7 +1804,10 @@ export class WalletController {
   @UseGuards(JwtAuthGuard, RolesGuard, UserThrottlerGuard)
   @Roles(Role.ADMIN)
   @Throttle({ default: { limit: 20, ttl: 60 * 60 * 1000 } })
-  async requestTrainingPayoutOtp(@Req() req: AuthenticatedRequest, @Body() body: CreateTrainingPayoutDto) {
+  async requestTrainingPayoutOtp(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: CreateTrainingPayoutDto,
+  ) {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
     const contextHash = adminActionContextHash({
       action: 'training-payout',
@@ -1597,7 +1821,10 @@ export class WalletController {
   @Post('admin/training-payouts')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  async createTrainingPayout(@Req() req: AuthenticatedRequest, @Body() body: CreateTrainingPayoutDto) {
+  async createTrainingPayout(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: CreateTrainingPayoutDto,
+  ) {
     if (await this.platformSettings.isAdminPayoutOtpEnabled()) {
       if (!body.otpRequestId || !body.code) {
         throw new UnprocessableEntityException('OTP verification is required to issue this payout');
@@ -1616,19 +1843,33 @@ export class WalletController {
       });
     }
 
-    const result = await creditAdminFunding(this.prisma, body.userId, body.tokenAmount, body.reference);
+    const result = await creditAdminFunding(
+      this.prisma,
+      body.userId,
+      body.tokenAmount,
+      body.reference,
+    );
 
     // Best-effort -- the credit has already landed, so a failed/slow email
     // must never fail this endpoint or roll back the credit. Fire-and-log
     // rather than await-and-throw, same treatment as any other
     // notification that isn't part of the transaction it's about.
-    void this.prisma.user.findUnique({ where: { id: body.userId }, select: { email: true } })
-      .then((trainer) => trainer && this.mail.sendTrainingPayoutCreditedEmail({
-        trainerEmail: trainer.email,
-        tokenAmount: result.amount,
-        reference: body.reference,
-      }))
-      .catch((err) => this.logger.error(`Failed to send admin-funding email for user=${body.userId}: ${err instanceof Error ? err.message : String(err)}`));
+    void this.prisma.user
+      .findUnique({ where: { id: body.userId }, select: { email: true } })
+      .then(
+        (trainer) =>
+          trainer &&
+          this.mail.sendTrainingPayoutCreditedEmail({
+            trainerEmail: trainer.email,
+            tokenAmount: result.amount,
+            reference: body.reference,
+          }),
+      )
+      .catch((err) =>
+        this.logger.error(
+          `Failed to send admin-funding email for user=${body.userId}: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
 
     return result;
   }
@@ -1637,7 +1878,10 @@ export class WalletController {
   @UseGuards(JwtAuthGuard, RolesGuard, UserThrottlerGuard)
   @Roles(Role.ADMIN)
   @Throttle({ default: { limit: 20, ttl: 60 * 60 * 1000 } })
-  async requestAdminWalletAdjustmentOtp(@Req() req: AuthenticatedRequest, @Body() body: AdminWalletAdjustmentDto) {
+  async requestAdminWalletAdjustmentOtp(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: AdminWalletAdjustmentDto,
+  ) {
     if (body.tokenAmount >= 0) {
       throw new UnprocessableEntityException('Debit amount must be negative');
     }
@@ -1654,13 +1898,18 @@ export class WalletController {
   @Post('admin/wallet-adjustments')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  async createAdminWalletAdjustment(@Req() req: AuthenticatedRequest, @Body() body: AdminWalletAdjustmentDto) {
+  async createAdminWalletAdjustment(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: AdminWalletAdjustmentDto,
+  ) {
     if (body.tokenAmount >= 0) {
       throw new UnprocessableEntityException('Debit amount must be negative');
     }
     if (await this.platformSettings.isAdminPayoutOtpEnabled()) {
       if (!body.otpRequestId || !body.code) {
-        throw new UnprocessableEntityException('OTP verification is required to adjust this wallet');
+        throw new UnprocessableEntityException(
+          'OTP verification is required to adjust this wallet',
+        );
       }
       await this.otp.verify({
         otpRequestId: body.otpRequestId,
@@ -1677,8 +1926,15 @@ export class WalletController {
     }
 
     try {
-      const result = await adjustAdminWallet(this.prisma, body.userId, body.tokenAmount, body.reference);
-      this.logger.log(`Admin wallet adjusted: admin=${req.user.sub} user=${body.userId} amount=${result.amount}`);
+      const result = await adjustAdminWallet(
+        this.prisma,
+        body.userId,
+        body.tokenAmount,
+        body.reference,
+      );
+      this.logger.log(
+        `Admin wallet adjusted: admin=${req.user.sub} user=${body.userId} amount=${result.amount}`,
+      );
       return result;
     } catch (err) {
       if (err instanceof Error && err.message === 'Insufficient wallet balance for this debit') {
@@ -1699,7 +1955,9 @@ export class WalletController {
   async listReferrals() {
     const totals = await this.prisma.ledgerEntry.groupBy({
       by: ['walletId'],
-      where: { type: { in: ['REFERRAL_COMMISSION', 'REFERRAL_FUNDING_BONUS', 'REFERRAL_PAYOUT_BONUS'] } },
+      where: {
+        type: { in: ['REFERRAL_COMMISSION', 'REFERRAL_FUNDING_BONUS', 'REFERRAL_PAYOUT_BONUS'] },
+      },
       _sum: { amount: true },
       _count: { _all: true },
     });
@@ -1707,7 +1965,15 @@ export class WalletController {
     const walletIds = totals.map((t) => t.walletId);
     const wallets = await this.prisma.wallet.findMany({
       where: { id: { in: walletIds } },
-      include: { user: { select: { email: true, referralCode: true, referrals: { select: { id: true, email: true, createdAt: true } } } } },
+      include: {
+        user: {
+          select: {
+            email: true,
+            referralCode: true,
+            referrals: { select: { id: true, email: true, createdAt: true } },
+          },
+        },
+      },
     });
     const walletById = new Map(wallets.map((w) => [w.id, w]));
 

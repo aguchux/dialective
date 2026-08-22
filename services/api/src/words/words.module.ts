@@ -10,7 +10,15 @@ import { MailModule } from '../mail/mail.module';
 import { WordsService } from './words.service';
 
 @Module({
-  imports: [StorageModule, SettingsModule, RedisStreamsModule, LlmModule, CoursesModule, AsrRegistryModule, MailModule],
+  imports: [
+    StorageModule,
+    SettingsModule,
+    RedisStreamsModule,
+    LlmModule,
+    CoursesModule,
+    AsrRegistryModule,
+    MailModule,
+  ],
   controllers: [WordsController],
   providers: [WordsService],
 })

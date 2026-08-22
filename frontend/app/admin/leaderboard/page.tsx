@@ -34,8 +34,8 @@ export default function AdminLeaderboardPage() {
         <div className="grid gap-2">
           <h1 className="text-3xl font-black">Leaderboard</h1>
           <p className="leading-relaxed text-muted">
-            Ranked by DL earned through task payouts (not admin credits or transfers) and by tasks submitted.
-            Ranks up to the top 200 trainers on each list.
+            Ranked by DL earned through task payouts (not admin credits or transfers) and by tasks
+            submitted. Ranks up to the top 200 trainers on each list.
           </p>
         </div>
 
@@ -48,7 +48,9 @@ export default function AdminLeaderboardPage() {
                 type="button"
                 onClick={() => setActive(tab.key)}
                 className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
-                  active === tab.key ? 'bg-accent text-white' : 'bg-white text-ink hover:bg-surface-muted'
+                  active === tab.key
+                    ? 'bg-accent text-white'
+                    : 'bg-white text-ink hover:bg-surface-muted'
                 }`}
               >
                 <Icon className="size-4" aria-hidden="true" />
@@ -67,7 +69,10 @@ export default function AdminLeaderboardPage() {
 
 function EarnersTab() {
   const [page, setPage] = useState(1);
-  const { data, isLoading, isFetching, isError, refetch } = useGetAdminLeaderboardEarnersQuery({ page, pageSize: PAGE_SIZE });
+  const { data, isLoading, isFetching, isError, refetch } = useGetAdminLeaderboardEarnersQuery({
+    page,
+    pageSize: PAGE_SIZE,
+  });
 
   return (
     <section className="grid gap-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -81,18 +86,32 @@ function EarnersTab() {
             <table className="w-full min-w-180 border-collapse text-left text-sm">
               <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                 <tr>
-                  <th className="px-5 py-3.5" scope="col">Rank</th>
-                  <th className="px-5 py-3.5" scope="col">Trainer</th>
-                  <th className="px-5 py-3.5" scope="col">DL earned</th>
-                  <th className="px-5 py-3.5" scope="col">Payouts</th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Rank
+                  </th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Trainer
+                  </th>
+                  <th className="px-5 py-3.5" scope="col">
+                    DL earned
+                  </th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Payouts
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {data.items.map((row, index) => (
                   <tr key={row.user.id}>
-                    <td className="px-5 py-3.5 font-extrabold text-muted">{(page - 1) * PAGE_SIZE + index + 1}</td>
-                    <td className="px-5 py-3.5"><UserCell user={row.user} /></td>
-                    <td className="px-5 py-3.5 font-extrabold text-accent">{formatCompactTokens(row.totalEarned)}</td>
+                    <td className="px-5 py-3.5 font-extrabold text-muted">
+                      {(page - 1) * PAGE_SIZE + index + 1}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <UserCell user={row.user} />
+                    </td>
+                    <td className="px-5 py-3.5 font-extrabold text-accent">
+                      {formatCompactTokens(row.totalEarned)}
+                    </td>
                     <td className="px-5 py-3.5 text-muted">{row.payoutCount.toLocaleString()}</td>
                   </tr>
                 ))}
@@ -105,17 +124,26 @@ function EarnersTab() {
               <article className="grid gap-2 p-4" key={row.user.id}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2">
-                    <span className="text-sm font-extrabold text-muted">{(page - 1) * PAGE_SIZE + index + 1}</span>
+                    <span className="text-sm font-extrabold text-muted">
+                      {(page - 1) * PAGE_SIZE + index + 1}
+                    </span>
                     <UserCell user={row.user} />
                   </div>
-                  <p className="shrink-0 font-extrabold text-accent">{formatCompactTokens(row.totalEarned)}</p>
+                  <p className="shrink-0 font-extrabold text-accent">
+                    {formatCompactTokens(row.totalEarned)}
+                  </p>
                 </div>
                 <p className="text-xs text-muted">{row.payoutCount.toLocaleString()} payouts</p>
               </article>
             ))}
           </div>
 
-          <PaginationFooter page={data.page} totalPages={data.totalPages} isFetching={isFetching} onChange={setPage} />
+          <PaginationFooter
+            page={data.page}
+            totalPages={data.totalPages}
+            isFetching={isFetching}
+            onChange={setPage}
+          />
         </>
       ) : (
         <p className="p-5 text-muted">No task payouts yet.</p>
@@ -126,7 +154,9 @@ function EarnersTab() {
 
 function ContributorsTab() {
   const [page, setPage] = useState(1);
-  const { data, isLoading, isFetching, isError, refetch } = useGetAdminLeaderboardContributorsQuery({ page, pageSize: PAGE_SIZE });
+  const { data, isLoading, isFetching, isError, refetch } = useGetAdminLeaderboardContributorsQuery(
+    { page, pageSize: PAGE_SIZE },
+  );
 
   return (
     <section className="grid gap-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -140,20 +170,38 @@ function ContributorsTab() {
             <table className="w-full min-w-180 border-collapse text-left text-sm">
               <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                 <tr>
-                  <th className="px-5 py-3.5" scope="col">Rank</th>
-                  <th className="px-5 py-3.5" scope="col">Trainer</th>
-                  <th className="px-5 py-3.5" scope="col">Total tasks</th>
-                  <th className="px-5 py-3.5" scope="col">Words</th>
-                  <th className="px-5 py-3.5" scope="col">Sentences</th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Rank
+                  </th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Trainer
+                  </th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Total tasks
+                  </th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Words
+                  </th>
+                  <th className="px-5 py-3.5" scope="col">
+                    Sentences
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {data.items.map((row, index) => (
                   <tr key={row.user.id}>
-                    <td className="px-5 py-3.5 font-extrabold text-muted">{(page - 1) * PAGE_SIZE + index + 1}</td>
-                    <td className="px-5 py-3.5"><UserCell user={row.user} /></td>
-                    <td className="px-5 py-3.5 font-extrabold">{row.totalTasks.toLocaleString()}</td>
-                    <td className="px-5 py-3.5 text-muted">{row.wordRecordings.toLocaleString()}</td>
+                    <td className="px-5 py-3.5 font-extrabold text-muted">
+                      {(page - 1) * PAGE_SIZE + index + 1}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <UserCell user={row.user} />
+                    </td>
+                    <td className="px-5 py-3.5 font-extrabold">
+                      {row.totalTasks.toLocaleString()}
+                    </td>
+                    <td className="px-5 py-3.5 text-muted">
+                      {row.wordRecordings.toLocaleString()}
+                    </td>
                     <td className="px-5 py-3.5 text-muted">{row.submissions.toLocaleString()}</td>
                   </tr>
                 ))}
@@ -166,17 +214,27 @@ function ContributorsTab() {
               <article className="grid gap-2 p-4" key={row.user.id}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2">
-                    <span className="text-sm font-extrabold text-muted">{(page - 1) * PAGE_SIZE + index + 1}</span>
+                    <span className="text-sm font-extrabold text-muted">
+                      {(page - 1) * PAGE_SIZE + index + 1}
+                    </span>
                     <UserCell user={row.user} />
                   </div>
                   <p className="shrink-0 font-extrabold">{row.totalTasks.toLocaleString()} tasks</p>
                 </div>
-                <p className="text-xs text-muted">{row.wordRecordings.toLocaleString()} words, {row.submissions.toLocaleString()} sentences</p>
+                <p className="text-xs text-muted">
+                  {row.wordRecordings.toLocaleString()} words, {row.submissions.toLocaleString()}{' '}
+                  sentences
+                </p>
               </article>
             ))}
           </div>
 
-          <PaginationFooter page={data.page} totalPages={data.totalPages} isFetching={isFetching} onChange={setPage} />
+          <PaginationFooter
+            page={data.page}
+            totalPages={data.totalPages}
+            isFetching={isFetching}
+            onChange={setPage}
+          />
         </>
       ) : (
         <p className="p-5 text-muted">No submitted tasks yet.</p>
@@ -224,10 +282,20 @@ function PaginationFooter({
         Page {page} of {totalPages} {isFetching ? '· refreshing…' : ''}
       </p>
       <div className="flex gap-2">
-        <button className={secondaryButtonClass} disabled={page <= 1} onClick={() => onChange(page - 1)} type="button">
+        <button
+          className={secondaryButtonClass}
+          disabled={page <= 1}
+          onClick={() => onChange(page - 1)}
+          type="button"
+        >
           Previous
         </button>
-        <button className={secondaryButtonClass} disabled={page >= totalPages} onClick={() => onChange(page + 1)} type="button">
+        <button
+          className={secondaryButtonClass}
+          disabled={page >= totalPages}
+          onClick={() => onChange(page + 1)}
+          type="button"
+        >
           Next
         </button>
       </div>

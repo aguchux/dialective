@@ -56,9 +56,17 @@ export function DropdownMenuItem({
   );
 }
 
-export function DropdownMenuLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+export function DropdownMenuLabel({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <RadixDropdown.Label className={className ?? 'px-2.5 py-1.5 text-xs font-bold uppercase text-muted'}>
+    <RadixDropdown.Label
+      className={className ?? 'px-2.5 py-1.5 text-xs font-bold uppercase text-muted'}
+    >
       {children}
     </RadixDropdown.Label>
   );

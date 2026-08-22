@@ -5,7 +5,14 @@ import { Clock3, Landmark, Plus } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { formatCompactNumber } from '@/lib/format';
-import { Avatar, cardClass, EmptyPanel, formatDate, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
+import {
+  Avatar,
+  cardClass,
+  EmptyPanel,
+  formatDate,
+  formatDateTime,
+  SectionTitle,
+} from '@/components/dashboard/shared';
 import {
   P2POffer,
   P2PTrade,
@@ -54,10 +61,14 @@ export function MarketView() {
   const [createOffer, { isLoading: offerSaving }] = useCreateP2POfferMutation();
   const [acceptOffer, { isLoading: accepting }] = useAcceptP2POfferMutation();
   const [requestTradeOtp, { isLoading: tradeOtpSending }] = useRequestP2PTradeOtpMutation();
-  const [markPaid, { isLoading: markingPaid, originalArgs: markingPaidId }] = useMarkP2PTradePaidMutation();
-  const [releaseTrade, { isLoading: releasing, originalArgs: releasingId }] = useReleaseP2PTradeMutation();
-  const [requestCancel, { isLoading: cancelling, originalArgs: cancellingId }] = useRequestP2PTradeCancelMutation();
-  const [raiseDispute, { isLoading: disputing, originalArgs: disputingArgs }] = useRaiseP2PDisputeMutation();
+  const [markPaid, { isLoading: markingPaid, originalArgs: markingPaidId }] =
+    useMarkP2PTradePaidMutation();
+  const [releaseTrade, { isLoading: releasing, originalArgs: releasingId }] =
+    useReleaseP2PTradeMutation();
+  const [requestCancel, { isLoading: cancelling, originalArgs: cancellingId }] =
+    useRequestP2PTradeCancelMutation();
+  const [raiseDispute, { isLoading: disputing, originalArgs: disputingArgs }] =
+    useRaiseP2PDisputeMutation();
   const primaryMethod = methods.find((method) => method.enabled);
   const phoneVerificationRequired = platformSettings?.phoneVerificationRequired ?? true;
   const phoneVerified = me?.phoneVerified ?? false;
@@ -75,7 +86,9 @@ export function MarketView() {
   }, [referenceRate?.currencyCode]);
 
   function deriveFiatAmount(tokens: number): string | null {
-    const rate = referenceRate?.tokenReferencePrice ? Number(referenceRate.tokenReferencePrice) : null;
+    const rate = referenceRate?.tokenReferencePrice
+      ? Number(referenceRate.tokenReferencePrice)
+      : null;
     if (!rate || !Number.isFinite(tokens) || tokens <= 0) return null;
     return (tokens * rate).toFixed(2).replace(/\.00$/, '');
   }
@@ -117,14 +130,21 @@ export function MarketView() {
         fiatCurrency,
         paymentMethod: 'BANK_TRANSFER',
         paymentMethodId: offerType === 'SELL' ? primaryMethod?.id : undefined,
-        ...(offerOtpRequestId ? { otpRequestId: offerOtpRequestId, code: offerOtpCode.trim() } : {}),
+        ...(offerOtpRequestId
+          ? { otpRequestId: offerOtpRequestId, code: offerOtpCode.trim() }
+          : {}),
       }).unwrap();
       setCreateOpen(false);
       setActiveTab(offerType);
       setOfferOtpRequestId(null);
       setOfferOtpCode('');
     } catch (err) {
-      setError(normalizeErrorMessage(err, offerOtpRequestId ? 'Could not verify this code' : 'Could not post market offer'));
+      setError(
+        normalizeErrorMessage(
+          err,
+          offerOtpRequestId ? 'Could not verify this code' : 'Could not post market offer',
+        ),
+      );
     }
   }
 
@@ -142,7 +162,10 @@ export function MarketView() {
       return;
     }
     try {
-      await acceptOffer({ id: offer.id, sellerPaymentMethodId: offer.type === 'BUY' ? primaryMethod?.id : undefined }).unwrap();
+      await acceptOffer({
+        id: offer.id,
+        sellerPaymentMethodId: offer.type === 'BUY' ? primaryMethod?.id : undefined,
+      }).unwrap();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not accept offer'));
     }
@@ -171,7 +194,9 @@ export function MarketView() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black tracking-normal md:text-3xl">DL market</h1>
-          <p className="mt-1 text-muted">Peer-to-peer DL escrow for sell offers and buy requests.</p>
+          <p className="mt-1 text-muted">
+            Peer-to-peer DL escrow for sell offers and buy requests.
+          </p>
         </div>
         <Dialog
           open={createOpen}
@@ -193,7 +218,10 @@ export function MarketView() {
               Create request
             </button>
           </DialogTrigger>
-          <DialogContent title="Create market request" description="Post a sell offer or a buy request. Trades use escrow until payment is confirmed.">
+          <DialogContent
+            title="Create market request"
+            description="Post a sell offer or a buy request. Trades use escrow until payment is confirmed."
+          >
             <form className="grid gap-3" onSubmit={submitOffer}>
               <div className="grid grid-cols-2 gap-2 rounded-lg bg-bg p-1">
                 {(['SELL', 'BUY'] as const).map((type) => (
@@ -209,17 +237,31 @@ export function MarketView() {
               </div>
               <label className="grid gap-1.5 text-sm font-bold">
                 DL amount
-                <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => updateTokenAmount(e.target.value)} type="number" value={tokenAmount} />
+                <input
+                  className="min-h-11 rounded-lg border border-line bg-bg px-3"
+                  min="0"
+                  onChange={(e) => updateTokenAmount(e.target.value)}
+                  type="number"
+                  value={tokenAmount}
+                />
               </label>
               {referenceRate?.tokenReferencePrice && referenceRate.currencyCode && (
                 <p className="text-xs text-muted">
-                  Reference: 1 DL ≈ {Number(referenceRate.tokenReferencePrice).toLocaleString()} {referenceRate.currencyCode} — you can price above or below this.
+                  Reference: 1 DL ≈ {Number(referenceRate.tokenReferencePrice).toLocaleString()}{' '}
+                  {referenceRate.currencyCode} — you can price above or below this.
                 </p>
               )}
               <div className="grid grid-cols-[1fr_auto] gap-2">
                 <label className="grid gap-1.5 text-sm font-bold">
                   Fiat amount
-                  <input className="min-h-11 rounded-lg border border-line bg-bg px-3" min="0" onChange={(e) => setFiatAmount(e.target.value)} step="0.01" type="number" value={fiatAmount} />
+                  <input
+                    className="min-h-11 rounded-lg border border-line bg-bg px-3"
+                    min="0"
+                    onChange={(e) => setFiatAmount(e.target.value)}
+                    step="0.01"
+                    type="number"
+                    value={fiatAmount}
+                  />
                 </label>
                 <label className="grid gap-1.5 text-sm font-bold">
                   Currency
@@ -250,9 +292,19 @@ export function MarketView() {
               )}
               <ActionButton
                 className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={marketDisabled || (offerType === 'SELL' && !primaryMethod) || (Boolean(offerOtpRequestId) && !offerOtpCode.trim())}
+                disabled={
+                  marketDisabled ||
+                  (offerType === 'SELL' && !primaryMethod) ||
+                  (Boolean(offerOtpRequestId) && !offerOtpCode.trim())
+                }
                 pending={offerSaving || tradeOtpSending}
-                pendingLabel={offerOtpRequestId ? 'Posting' : !phoneVerificationRequired ? 'Sending code' : 'Posting'}
+                pendingLabel={
+                  offerOtpRequestId
+                    ? 'Posting'
+                    : !phoneVerificationRequired
+                      ? 'Sending code'
+                      : 'Posting'
+                }
                 type="submit"
               >
                 {offerOtpRequestId
@@ -267,17 +319,25 @@ export function MarketView() {
           </DialogContent>
         </Dialog>
       </div>
-      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div>}
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+          {error}
+        </div>
+      )}
       {!settings?.enabled && (
         <div className={`${cardClass} mb-5 p-5`}>
           <p className="font-black">P2P market is currently disabled.</p>
-          <p className="mt-1 text-sm text-muted">Admin must enable marketplace settings before trades can start.</p>
+          <p className="mt-1 text-sm text-muted">
+            Admin must enable marketplace settings before trades can start.
+          </p>
         </div>
       )}
       {settings?.enabled && phoneVerificationRequired && !phoneVerified && (
         <div className={`${cardClass} mb-5 p-5`}>
           <p className="font-black">Verify your phone number to trade.</p>
-          <p className="mt-1 text-sm text-muted">Add and verify a phone number in Profile before buying or selling on the P2P market.</p>
+          <p className="mt-1 text-sm text-muted">
+            Add and verify a phone number in Profile before buying or selling on the P2P market.
+          </p>
         </div>
       )}
 
@@ -300,30 +360,54 @@ export function MarketView() {
         </div>
 
         <div className="grid gap-5">
-          {activeTab === 'SELL' && <MarketOfferList accepting={accepting} disabled={marketDisabled} offers={sellOffers} onAccept={accept} title="Sell offers" />}
-          {activeTab === 'BUY' && <MarketOfferList accepting={accepting} disabled={marketDisabled} offers={buyOffers} onAccept={accept} title="Buy requests" />}
+          {activeTab === 'SELL' && (
+            <MarketOfferList
+              accepting={accepting}
+              disabled={marketDisabled}
+              offers={sellOffers}
+              onAccept={accept}
+              title="Sell offers"
+            />
+          )}
+          {activeTab === 'BUY' && (
+            <MarketOfferList
+              accepting={accepting}
+              disabled={marketDisabled}
+              offers={buyOffers}
+              onAccept={accept}
+              title="Buy requests"
+            />
+          )}
           {activeTab === 'TRADES' && (
-          <section>
-            <SectionTitle title="My trades" subtitle="Pay, release, cancel safely, or raise disputes." />
-            <div className="grid gap-3">
-              {trades.length === 0 && <EmptyPanel icon={Clock3} title="No trades yet" unframed />}
-              {trades.map((trade) => (
-                <TradeCard
-                  key={trade.id}
-                  trade={trade}
-                  viewerId={me?.id}
-                  markingPaid={markingPaid && markingPaidId === trade.id}
-                  releasing={releasing && releasingId === trade.id}
-                  cancelling={cancelling && cancellingId === trade.id}
-                  disputing={disputing && disputingArgs?.id === trade.id}
-                  onCancel={(id) => requestCancel(id).unwrap()}
-                  onDispute={(id) => raiseDispute({ id, reason: 'Payment/escrow issue requires admin review' }).unwrap()}
-                  onMarkPaid={(id) => markPaid(id).unwrap()}
-                  onRelease={(id) => releaseTrade(id).unwrap()}
-                />
-              ))}
-            </div>
-          </section>
+            <section>
+              <SectionTitle
+                title="My trades"
+                subtitle="Pay, release, cancel safely, or raise disputes."
+              />
+              <div className="grid gap-3">
+                {trades.length === 0 && <EmptyPanel icon={Clock3} title="No trades yet" unframed />}
+                {trades.map((trade) => (
+                  <TradeCard
+                    key={trade.id}
+                    trade={trade}
+                    viewerId={me?.id}
+                    markingPaid={markingPaid && markingPaidId === trade.id}
+                    releasing={releasing && releasingId === trade.id}
+                    cancelling={cancelling && cancellingId === trade.id}
+                    disputing={disputing && disputingArgs?.id === trade.id}
+                    onCancel={(id) => requestCancel(id).unwrap()}
+                    onDispute={(id) =>
+                      raiseDispute({
+                        id,
+                        reason: 'Payment/escrow issue requires admin review',
+                      }).unwrap()
+                    }
+                    onMarkPaid={(id) => markPaid(id).unwrap()}
+                    onRelease={(id) => releaseTrade(id).unwrap()}
+                  />
+                ))}
+              </div>
+            </section>
           )}
         </div>
       </section>
@@ -339,7 +423,10 @@ export function MarketView() {
             }
           }}
         >
-          <DialogContent title="Confirm this trade" description="We emailed a 6-digit code to confirm this trade.">
+          <DialogContent
+            title="Confirm this trade"
+            description="We emailed a 6-digit code to confirm this trade."
+          >
             <div className="grid gap-3">
               <label className="grid gap-1.5 text-sm font-bold">
                 Email verification code
@@ -394,10 +481,14 @@ function MarketOfferList({
           <div className={`${cardClass} grid gap-3 p-4`} key={offer.id}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-bold text-muted">{offer.type === 'SELL' ? 'Selling' : 'Buying'}</p>
+                <p className="text-sm font-bold text-muted">
+                  {offer.type === 'SELL' ? 'Selling' : 'Buying'}
+                </p>
                 <p className="text-2xl font-black">{formatCompactNumber(offer.tokenAmount)}</p>
               </div>
-              <p className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-black text-accent">{offer.status}</p>
+              <p className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-black text-accent">
+                {offer.status}
+              </p>
             </div>
             {offer.user && (
               <button
@@ -409,37 +500,70 @@ function MarketOfferList({
                 <span className="text-sm font-bold">{traderDisplayName(offer.user)}</span>
               </button>
             )}
-            <p className="font-extrabold">{Number(offer.fiatAmount).toLocaleString()} {offer.fiatCurrency}</p>
+            <p className="font-extrabold">
+              {Number(offer.fiatAmount).toLocaleString()} {offer.fiatCurrency}
+            </p>
             <p className="text-sm text-muted">Expires {formatDateTime(offer.expiresAt)}</p>
-            <button className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50" disabled={accepting || disabled} onClick={() => onAccept(offer)} type="button">
+            <button
+              className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50"
+              disabled={accepting || disabled}
+              onClick={() => onAccept(offer)}
+              type="button"
+            >
               {offer.type === 'SELL' ? 'Buy DL' : 'Sell to buyer'}
             </button>
           </div>
         ))}
       </div>
-      <TraderProfileDialog onOpenChange={(open) => !open && setProfileUserId(null)} userId={profileUserId} />
+      <TraderProfileDialog
+        onOpenChange={(open) => !open && setProfileUserId(null)}
+        userId={profileUserId}
+      />
     </section>
   );
 }
 
-function traderDisplayName(user: { firstName: string | null; lastName: string | null; email: string }) {
+function traderDisplayName(user: {
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+}) {
   const name = [user.firstName, user.lastName].filter(Boolean).join(' ');
   return name || user.email;
 }
 
-function TraderProfileDialog({ userId, onOpenChange }: { userId: string | null; onOpenChange: (open: boolean) => void }) {
-  const { data: profile, isLoading, error } = useGetP2PTraderProfileQuery(userId ?? '', { skip: !userId });
+function TraderProfileDialog({
+  userId,
+  onOpenChange,
+}: {
+  userId: string | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const {
+    data: profile,
+    isLoading,
+    error,
+  } = useGetP2PTraderProfileQuery(userId ?? '', { skip: !userId });
   return (
     <Dialog open={userId !== null} onOpenChange={onOpenChange}>
-      <DialogContent title="Trader profile" description="Basic info shown to other traders in the market.">
+      <DialogContent
+        title="Trader profile"
+        description="Basic info shown to other traders in the market."
+      >
         {isLoading && <p className="text-sm text-muted">Loading…</p>}
-        {!isLoading && Boolean(error) && <p className="text-sm text-danger">{normalizeErrorMessage(error, 'Could not load this trader profile')}</p>}
+        {!isLoading && Boolean(error) && (
+          <p className="text-sm text-danger">
+            {normalizeErrorMessage(error, 'Could not load this trader profile')}
+          </p>
+        )}
         {profile && (
           <div className="grid gap-4">
             <div className="flex items-center gap-3">
               <Avatar email={profile.firstName ?? profile.id} large />
               <div>
-                <p className="text-lg font-black">{[profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Trainer'}</p>
+                <p className="text-lg font-black">
+                  {[profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Trainer'}
+                </p>
                 <p className="text-sm text-muted">Member since {formatDate(profile.memberSince)}</p>
               </div>
             </div>
@@ -450,7 +574,9 @@ function TraderProfileDialog({ userId, onOpenChange }: { userId: string | null; 
               </div>
               <div className="rounded-lg border border-line bg-bg p-3">
                 <p className="text-xs font-bold text-muted">Avg. release time</p>
-                <p className="text-xl font-black">{formatResponseTime(profile.avgReleaseSeconds)}</p>
+                <p className="text-xl font-black">
+                  {formatResponseTime(profile.avgReleaseSeconds)}
+                </p>
               </div>
             </div>
           </div>
@@ -507,7 +633,8 @@ function TradeCard({
   const isSeller = trade.sellerId === viewerId;
   const isOpen = OPEN_TRADE_STATUSES.has(trade.status);
 
-  const canMarkPaid = isBuyer && (trade.status === 'AWAITING_PAYMENT' || trade.status === 'CANCEL_PENDING');
+  const canMarkPaid =
+    isBuyer && (trade.status === 'AWAITING_PAYMENT' || trade.status === 'CANCEL_PENDING');
   const canRelease = isSeller && trade.status === 'PAID_MARKED';
   const canRequestCancel = isOpen && trade.status !== 'PAID_MARKED';
   const canDispute = isOpen;
@@ -526,32 +653,60 @@ function TradeCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-bold text-muted">
-            {trade.offerType === 'SELL' ? 'Sell offer trade' : 'Buy request trade'} · You are the {isBuyer ? 'buyer' : 'seller'}
+            {trade.offerType === 'SELL' ? 'Sell offer trade' : 'Buy request trade'} · You are the{' '}
+            {isBuyer ? 'buyer' : 'seller'}
           </p>
-          <p className="text-xl font-black">{formatCompactNumber(trade.tokenAmount)} · {Number(trade.fiatAmount).toLocaleString()} {trade.fiatCurrency}</p>
+          <p className="text-xl font-black">
+            {formatCompactNumber(trade.tokenAmount)} · {Number(trade.fiatAmount).toLocaleString()}{' '}
+            {trade.fiatCurrency}
+          </p>
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(trade.status)}`}>{STATUS_LABELS[trade.status]}</span>
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(trade.status)}`}
+        >
+          {STATUS_LABELS[trade.status]}
+        </span>
       </div>
       {trade.sellerPaymentMethod && (
         <div className="rounded-lg border border-line bg-bg p-3 text-sm">
           <p className="font-black">Seller payment details</p>
-          <p>{trade.sellerPaymentMethod.bankName} · {trade.sellerPaymentMethod.accountName} · {trade.sellerPaymentMethod.accountNumber}</p>
+          <p>
+            {trade.sellerPaymentMethod.bankName} · {trade.sellerPaymentMethod.accountName} ·{' '}
+            {trade.sellerPaymentMethod.accountNumber}
+          </p>
         </div>
       )}
       {trade.status === 'AWAITING_PAYMENT' && (
-        <p className="text-sm text-muted">Payment deadline: {formatDateTime(trade.paymentDeadlineAt)}</p>
-      )}
-      {trade.status === 'PAID_MARKED' && trade.paidAt && (
-        <p className="text-sm text-muted">Buyer marked paid {formatDateTime(trade.paidAt)}{isSeller ? ' — confirm and release when you have received payment.' : ' — waiting for the seller to release.'}</p>
-      )}
-      {trade.status === 'RELEASED' && trade.releasedAt && <p className="text-sm text-muted">Released {formatDateTime(trade.releasedAt)}.</p>}
-      {trade.status === 'CANCELLED' && trade.cancelledAt && <p className="text-sm text-muted">Cancelled {formatDateTime(trade.cancelledAt)}.</p>}
-      {trade.status === 'CANCEL_PENDING' && trade.cancelAvailableAt && (
         <p className="text-sm text-muted">
-          {trade.cancelRequestedByUserId === viewerId ? 'You requested' : 'The other party requested'} cancellation — finalizes {formatDateTime(trade.cancelAvailableAt)} unless the buyer pays first.
+          Payment deadline: {formatDateTime(trade.paymentDeadlineAt)}
         </p>
       )}
-      {trade.status === 'DISPUTED' && <p className="text-sm text-muted">An admin is reviewing this trade.</p>}
+      {trade.status === 'PAID_MARKED' && trade.paidAt && (
+        <p className="text-sm text-muted">
+          Buyer marked paid {formatDateTime(trade.paidAt)}
+          {isSeller
+            ? ' — confirm and release when you have received payment.'
+            : ' — waiting for the seller to release.'}
+        </p>
+      )}
+      {trade.status === 'RELEASED' && trade.releasedAt && (
+        <p className="text-sm text-muted">Released {formatDateTime(trade.releasedAt)}.</p>
+      )}
+      {trade.status === 'CANCELLED' && trade.cancelledAt && (
+        <p className="text-sm text-muted">Cancelled {formatDateTime(trade.cancelledAt)}.</p>
+      )}
+      {trade.status === 'CANCEL_PENDING' && trade.cancelAvailableAt && (
+        <p className="text-sm text-muted">
+          {trade.cancelRequestedByUserId === viewerId
+            ? 'You requested'
+            : 'The other party requested'}{' '}
+          cancellation — finalizes {formatDateTime(trade.cancelAvailableAt)} unless the buyer pays
+          first.
+        </p>
+      )}
+      {trade.status === 'DISPUTED' && (
+        <p className="text-sm text-muted">An admin is reviewing this trade.</p>
+      )}
       {actionError && <p className="text-sm font-bold text-danger">{actionError}</p>}
       <div className="flex flex-wrap gap-2">
         {canMarkPaid && (
@@ -599,7 +754,9 @@ function TradeCard({
           </ActionButton>
         )}
         {!canMarkPaid && !canRelease && !canRequestCancel && !canDispute && (
-          <p className="text-sm text-muted">No actions available -- this trade is {STATUS_LABELS[trade.status].toLowerCase()}.</p>
+          <p className="text-sm text-muted">
+            No actions available -- this trade is {STATUS_LABELS[trade.status].toLowerCase()}.
+          </p>
         )}
       </div>
     </div>

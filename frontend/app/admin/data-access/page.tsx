@@ -43,13 +43,19 @@ export default function AdminDataAccessLeadsPage() {
       key: 'website',
       header: 'Website',
       sortValue: (row) => row.website ?? '',
-      render: (row) => row.website
-        ? (
-          <a className="font-bold text-accent hover:underline" href={row.website} target="_blank" rel="noreferrer">
+      render: (row) =>
+        row.website ? (
+          <a
+            className="font-bold text-accent hover:underline"
+            href={row.website}
+            target="_blank"
+            rel="noreferrer"
+          >
             {row.website}
           </a>
-        )
-        : <span>-</span>,
+        ) : (
+          <span>-</span>
+        ),
     },
     {
       key: 'countriesInterested',
@@ -70,13 +76,13 @@ export default function AdminDataAccessLeadsPage() {
       sortValue: (row) => row.contactedAt ?? '',
       render: (row) => (
         <div className="grid gap-1">
-          <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-bold ${row.contactedAt ? 'bg-accent-soft text-accent-dark' : 'bg-[#fff3e0] text-[#8a4b0f]'}`}>
+          <span
+            className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-bold ${row.contactedAt ? 'bg-accent-soft text-accent-dark' : 'bg-[#fff3e0] text-[#8a4b0f]'}`}
+          >
             {row.contactedAt ? 'Contacted' : 'Pending'}
           </span>
           {row.contactedAt && (
-            <span className="text-xs text-muted">
-              {new Date(row.contactedAt).toLocaleString()}
-            </span>
+            <span className="text-xs text-muted">{new Date(row.contactedAt).toLocaleString()}</span>
           )}
         </div>
       ),
@@ -106,7 +112,8 @@ export default function AdminDataAccessLeadsPage() {
         <div className="grid gap-2">
           <h1 className="text-3xl font-black">Data Access Leads</h1>
           <p className="leading-relaxed text-muted">
-            Voice-data subscription requests submitted from the public form. Use contact details below for follow-up.
+            Voice-data subscription requests submitted from the public form. Use contact details
+            below for follow-up.
           </p>
         </div>
 

@@ -7,7 +7,8 @@ import { useSession } from 'next-auth/react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { normalizeErrorMessage, useUpdateProfileMutation } from '@/store/api';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -34,7 +35,8 @@ export function RequireNameDialog() {
   // (see app/onboarding/page.tsx) -- skip there so a TRAINER mid-onboarding
   // doesn't see two name prompts stacked on top of each other.
   const skip = pathname === '/onboarding';
-  const open = !skip && status === 'authenticated' && (!session.user?.firstName || !session.user?.lastName);
+  const open =
+    !skip && status === 'authenticated' && (!session.user?.firstName || !session.user?.lastName);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,8 +46,15 @@ export function RequireNameDialog() {
       return;
     }
     try {
-      const profile = await updateProfile({ firstName: firstName.trim(), lastName: lastName.trim() }).unwrap();
-      await update({ firstName: profile.firstName, lastName: profile.lastName, onboardingComplete: profile.onboardingComplete });
+      const profile = await updateProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+      }).unwrap();
+      await update({
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        onboardingComplete: profile.onboardingComplete,
+      });
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to save your name.'));
     }
@@ -64,7 +73,9 @@ export function RequireNameDialog() {
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <div className="grid gap-1">
-            <RadixDialog.Title className="text-xl font-black">Complete your profile</RadixDialog.Title>
+            <RadixDialog.Title className="text-xl font-black">
+              Complete your profile
+            </RadixDialog.Title>
             <RadixDialog.Description className="text-sm text-muted">
               We need your name before you can continue.
             </RadixDialog.Description>
@@ -108,7 +119,12 @@ export function RequireNameDialog() {
               </p>
             )}
 
-            <ActionButton className={primaryButtonClass} pending={isLoading} pendingLabel="Saving" type="submit">
+            <ActionButton
+              className={primaryButtonClass}
+              pending={isLoading}
+              pendingLabel="Saving"
+              type="submit"
+            >
               Continue
             </ActionButton>
           </form>

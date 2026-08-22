@@ -13,7 +13,12 @@ export class SmsFallbackChain {
 
   constructor(private readonly providersByKey: Record<SmsProviderKey, SmsProvider>) {}
 
-  async send(toE164: string, body: string, order: SmsProviderKey[], senderIdOverride?: string): Promise<{ provider: SmsProviderKey }> {
+  async send(
+    toE164: string,
+    body: string,
+    order: SmsProviderKey[],
+    senderIdOverride?: string,
+  ): Promise<{ provider: SmsProviderKey }> {
     const failures: string[] = [];
 
     for (const key of order) {

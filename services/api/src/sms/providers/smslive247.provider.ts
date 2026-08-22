@@ -22,7 +22,11 @@ export class Smslive247Provider implements SmsProvider {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ senderID: senderId, messageText: body, phoneNumber: toE164.replace(/^\+/, '') }),
+      body: JSON.stringify({
+        senderID: senderId,
+        messageText: body,
+        phoneNumber: toE164.replace(/^\+/, ''),
+      }),
     });
     if (!res.ok) throw new Error(`SMSLive247 request failed: ${res.status} ${await res.text()}`);
   }

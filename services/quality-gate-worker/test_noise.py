@@ -3,12 +3,16 @@ import numpy as np
 from noise import SAMPLE_RATE, compute_noise_score, estimate_snr_db, snr_db_to_score
 
 
-def sine_wave(freq: float, duration_s: float, amplitude: float, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+def sine_wave(
+    freq: float, duration_s: float, amplitude: float, sample_rate: int = SAMPLE_RATE
+) -> np.ndarray:
     t = np.linspace(0, duration_s, int(sample_rate * duration_s), endpoint=False)
     return amplitude * np.sin(2 * np.pi * freq * t)
 
 
-def speech_like_segment(rng: np.random.Generator, duration_s: float, amplitude: float) -> np.ndarray:
+def speech_like_segment(
+    rng: np.random.Generator, duration_s: float, amplitude: float
+) -> np.ndarray:
     """
     WebRTC VAD looks for broadband, amplitude-modulated formant-like
     structure, not a pure tone -- a plain sine wave is classified as
@@ -18,7 +22,9 @@ def speech_like_segment(rng: np.random.Generator, duration_s: float, amplitude: 
     classifies as speech in practice.
     """
     t = np.linspace(0, duration_s, int(SAMPLE_RATE * duration_s), endpoint=False)
-    envelope = 0.6 + 0.4 * np.sin(2 * np.pi * 4 * t) ** 2  # ~4 Hz syllable-rate modulation
+    envelope = (
+        0.6 + 0.4 * np.sin(2 * np.pi * 4 * t) ** 2
+    )  # ~4 Hz syllable-rate modulation
     harmonics = sum(np.sin(2 * np.pi * f * t) for f in (120, 240, 360, 480))
     voiced = amplitude * envelope * (harmonics / 4)
     breath_noise = rng.normal(0, amplitude * 0.05, t.shape)

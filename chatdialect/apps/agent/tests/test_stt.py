@@ -20,14 +20,18 @@ def _make_provider_with_mocked_pipeline(pipeline_return_value):
     mock_pipeline_instance = MagicMock(return_value=pipeline_return_value)
     with (
         patch("transformers.pipelines.pipeline", return_value=mock_pipeline_instance),
-        patch("transformers.pipeline", return_value=mock_pipeline_instance, create=True),
+        patch(
+            "transformers.pipeline", return_value=mock_pipeline_instance, create=True
+        ),
     ):
         provider = WhisperLocalProvider("openai/whisper-small")
     return provider, mock_pipeline_instance
 
 
 async def test_transcribe_strips_and_returns_text():
-    provider, mock_pipeline_instance = _make_provider_with_mocked_pipeline({"text": "  hello world  "})
+    provider, mock_pipeline_instance = _make_provider_with_mocked_pipeline(
+        {"text": "  hello world  "}
+    )
 
     result = await provider.transcribe("/tmp/fake.wav")
 

@@ -6,38 +6,54 @@ import { useParams } from 'next/navigation';
 import { DistributorShell } from '@/components/distributor/DistributorShell';
 import { formatTokens } from '@/components/distributor/format';
 import { activityLabels } from '@/components/trainer/TrainerDashboard';
-import { DistributorActivityEntry, useGetSubDistributorActivityQuery, useListSubDistributorsQuery } from '@/store/api';
+import {
+  DistributorActivityEntry,
+  useGetSubDistributorActivityQuery,
+  useListSubDistributorsQuery,
+} from '@/store/api';
 
 export default function SubDistributorActivityPage() {
   const params = useParams<{ id: string }>();
   const subDistributorId = params.id;
-  const { data: subDistributors, isLoading: isLoadingSubDistributor } = useListSubDistributorsQuery();
+  const { data: subDistributors, isLoading: isLoadingSubDistributor } =
+    useListSubDistributorsQuery();
   const subDistributor = subDistributors?.find((d) => d.id === subDistributorId);
 
   const [page, setPage] = useState(1);
   const pageSize = 20;
-  const { data, isLoading } = useGetSubDistributorActivityQuery({ subDistributorId, page, pageSize });
+  const { data, isLoading } = useGetSubDistributorActivityQuery({
+    subDistributorId,
+    page,
+    pageSize,
+  });
 
   return (
     <DistributorShell>
       <div className="grid gap-6">
         <div className="grid gap-2">
-          <Link className="text-sm font-bold text-accent hover:text-accent-dark" href="/distributor/sub-distributors">
+          <Link
+            className="text-sm font-bold text-accent hover:text-accent-dark"
+            href="/distributor/sub-distributors"
+          >
             &larr; Sub-distributors
           </Link>
           <h1 className="text-3xl font-black">
-            {isLoadingSubDistributor && !subDistributor ? 'Loading...' : subDistributor?.name ?? 'Sub-distributor activity'}
+            {isLoadingSubDistributor && !subDistributor
+              ? 'Loading...'
+              : (subDistributor?.name ?? 'Sub-distributor activity')}
           </h1>
           {subDistributor && <p className="leading-relaxed text-muted">{subDistributor.email}</p>}
           <p className="leading-relaxed text-muted">
-            Every transaction against this sub-distributor&rsquo;s wallet &mdash; bulk allocations, your credits and
-            debits, and referral bonus fan-out.
+            Every transaction against this sub-distributor&rsquo;s wallet &mdash; bulk allocations,
+            your credits and debits, and referral bonus fan-out.
           </p>
         </div>
 
         <div className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
           {isLoading && <p className="text-muted">Loading...</p>}
-          {!isLoading && (!data || data.items.length === 0) && <p className="text-sm text-muted">No transactions yet.</p>}
+          {!isLoading && (!data || data.items.length === 0) && (
+            <p className="text-sm text-muted">No transactions yet.</p>
+          )}
           {!isLoading && data && data.items.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full min-w-96 text-left text-sm">

@@ -9,5 +9,16 @@
     "services/fx-rate-job",
     "services/settlement-job",
     "services/word-generator-job"
-  ]
+  ],
+  "scripts": {
+    "format": "npm run format:node && npm run format:python",
+    "format:check": "npm run format:node:check && npm run format:python:check",
+    "format:node": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore --ignore-path frontend/.gitignore --ignore-path chatdialect/.gitignore",
+    "format:node:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore --ignore-path frontend/.gitignore --ignore-path chatdialect/.gitignore",
+    "format:python": "node scripts/format-python.mjs",
+    "format:python:check": "node scripts/format-python.mjs --check"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
 }

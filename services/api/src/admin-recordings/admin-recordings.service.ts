@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { AdminAuditStatus, OtpPurpose, adjustAdminWallet } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -63,17 +68,29 @@ export class AdminRecordingsService {
     ]);
 
     const merged = [
-      ...wordRecordings.map((recording) => ({ kind: 'word' as const, createdAt: recording.createdAt, recording })),
-      ...submissions.map((submission) => ({ kind: 'submission' as const, createdAt: submission.createdAt, submission })),
+      ...wordRecordings.map((recording) => ({
+        kind: 'word' as const,
+        createdAt: recording.createdAt,
+        recording,
+      })),
+      ...submissions.map((submission) => ({
+        kind: 'submission' as const,
+        createdAt: submission.createdAt,
+        submission,
+      })),
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     const total = merged.length;
     const skip = (query.page - 1) * query.pageSize;
     const pageSlice = merged.slice(skip, skip + query.pageSize);
 
-    const items = await Promise.all(pageSlice.map((entry) =>
-      entry.kind === 'word' ? this.toWordRecordingSummary(entry.recording) : this.toSubmissionSummary(entry.submission),
-    ));
+    const items = await Promise.all(
+      pageSlice.map((entry) =>
+        entry.kind === 'word'
+          ? this.toWordRecordingSummary(entry.recording)
+          : this.toSubmissionSummary(entry.submission),
+      ),
+    );
 
     return {
       items,
@@ -114,7 +131,9 @@ export class AdminRecordingsService {
         }),
         this.prisma.wordRecording.count({ where }),
       ]);
-      const items = await Promise.all(rows.map((row) => this.toWordRecordingSummary(row, row.user)));
+      const items = await Promise.all(
+        rows.map((row) => this.toWordRecordingSummary(row, row.user)),
+      );
       return this.paginated(items, query, total);
     }
 
@@ -217,26 +236,41 @@ export class AdminRecordingsService {
   async audit(adminId: string, kind: RecordingKind, recordingId: string, dto: AuditRecordingDto) {
     const record = await this.getRecordOrThrow(kind, recordingId);
 
-    const wantsClawback = dto.status === AdminAuditStatus.INVALID && dto.clawback && record.payoutTokenAmount;
+    const wantsClawback =
+      dto.status === AdminAuditStatus.INVALID && dto.clawback && record.payoutTokenAmount;
     if (wantsClawback) {
       const tokenAmount = -record.payoutTokenAmount!.toNumber();
       if (await this.settings.isAdminPayoutOtpEnabled()) {
         if (!dto.otpRequestId || !dto.code) {
-          throw new UnprocessableEntityException('OTP verification is required to claw back this payout');
+          throw new UnprocessableEntityException(
+            'OTP verification is required to claw back this payout',
+          );
         }
         await this.otp.verify({
           otpRequestId: dto.otpRequestId,
           userId: adminId,
           purpose: OtpPurpose.ADMIN_PAYOUT,
           code: dto.code,
-          contextHash: adminActionContextHash({ action: 'recording-audit-clawback', kind, recordingId, tokenAmount }),
+          contextHash: adminActionContextHash({
+            action: 'recording-audit-clawback',
+            kind,
+            recordingId,
+            tokenAmount,
+          }),
         });
       }
       try {
-        await adjustAdminWallet(this.prisma, record.userId!, tokenAmount, `recording-audit:${kind}:${recordingId}`);
+        await adjustAdminWallet(
+          this.prisma,
+          record.userId!,
+          tokenAmount,
+          `recording-audit:${kind}:${recordingId}`,
+        );
       } catch (err) {
         if (err instanceof Error && err.message === 'Insufficient wallet balance for this debit') {
-          throw new UnprocessableEntityException('Trainer balance is too low to claw back this payout');
+          throw new UnprocessableEntityException(
+            'Trainer balance is too low to claw back this payout',
+          );
         }
         throw err;
       }
@@ -248,7 +282,13 @@ export class AdminRecordingsService {
         ? await this.prisma.wordRecording.update({ where: { id: recordingId }, data })
         : await this.prisma.submission.update({ where: { id: recordingId }, data });
 
-    return { id: recordingId, kind, adminAuditStatus: updated.adminAuditStatus, adminAuditedAt: updated.adminAuditedAt, clawedBack: Boolean(wantsClawback) };
+    return {
+      id: recordingId,
+      kind,
+      adminAuditStatus: updated.adminAuditStatus,
+      adminAuditedAt: updated.adminAuditedAt,
+      clawedBack: Boolean(wantsClawback),
+    };
   }
 
   private async getRecordOrThrow(kind: RecordingKind, id: string) {
@@ -264,16 +304,30 @@ export class AdminRecordingsService {
   }
 
   private async toWordRecordingSummary(
-    recording: Awaited<ReturnType<AdminRecordingsService['prisma']['wordRecording']['findMany']>>[number] & {
+    recording: Awaited<
+      ReturnType<AdminRecordingsService['prisma']['wordRecording']['findMany']>
+    >[number] & {
       word: { text: string } | null;
       prompt: { text: string } | null;
     },
-    trainer?: { id: string; email: string; firstName: string | null; lastName: string | null } | null,
+    trainer?: {
+      id: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+    } | null,
   ) {
     return {
       id: recording.id,
       kind: 'word' as const,
-      trainer: trainer ? { id: trainer.id, email: trainer.email, firstName: trainer.firstName, lastName: trainer.lastName } : null,
+      trainer: trainer
+        ? {
+            id: trainer.id,
+            email: trainer.email,
+            firstName: trainer.firstName,
+            lastName: trainer.lastName,
+          }
+        : null,
       direction: recording.direction,
       promptText:
         recording.direction === 'SENTENCE_REBUILD'
@@ -303,7 +357,12 @@ export class AdminRecordingsService {
       payoutTokenAmount: recording.payoutTokenAmount?.toString() ?? null,
       audioUrl:
         recording.audioBucket && recording.audioKey
-          ? (await this.storage.createPresignedDownloadUrl(recording.audioBucket, recording.audioKey)).url
+          ? (
+              await this.storage.createPresignedDownloadUrl(
+                recording.audioBucket,
+                recording.audioKey,
+              )
+            ).url
           : null,
       asrWordDetail: recording.asrWordDetail as WordDetail[] | null,
       asrMatchScore: recording.asrMatchScore?.toString() ?? null,
@@ -317,15 +376,29 @@ export class AdminRecordingsService {
   }
 
   private async toSubmissionSummary(
-    submission: Awaited<ReturnType<AdminRecordingsService['prisma']['submission']['findMany']>>[number] & {
+    submission: Awaited<
+      ReturnType<AdminRecordingsService['prisma']['submission']['findMany']>
+    >[number] & {
       prompt: { text: string };
     },
-    trainer?: { id: string; email: string; firstName: string | null; lastName: string | null } | null,
+    trainer?: {
+      id: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+    } | null,
   ) {
     return {
       id: submission.id,
       kind: 'submission' as const,
-      trainer: trainer ? { id: trainer.id, email: trainer.email, firstName: trainer.firstName, lastName: trainer.lastName } : null,
+      trainer: trainer
+        ? {
+            id: trainer.id,
+            email: trainer.email,
+            firstName: trainer.firstName,
+            lastName: trainer.lastName,
+          }
+        : null,
       direction: null,
       promptText: submission.prompt.text,
       responseText: submission.transcript,
@@ -350,7 +423,12 @@ export class AdminRecordingsService {
       payoutTokenAmount: submission.payoutTokenAmount?.toString() ?? null,
       audioUrl:
         submission.audioBucket && submission.audioKey
-          ? (await this.storage.createPresignedDownloadUrl(submission.audioBucket, submission.audioKey)).url
+          ? (
+              await this.storage.createPresignedDownloadUrl(
+                submission.audioBucket,
+                submission.audioKey,
+              )
+            ).url
           : null,
       asrWordDetail: submission.asrWordDetail as WordDetail[] | null,
       rejectionReason: submission.rejectionReason,

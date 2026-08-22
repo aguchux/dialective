@@ -23,7 +23,8 @@ import {
   type UserActivityEntry,
 } from '@/store/api';
 
-const inputClass = 'min-h-9 w-full rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-9 w-full rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink dark:bg-surface-muted';
 
 const statusStyles: Record<string, string> = {
   ACTIVE: 'bg-accent-soft text-accent-dark',
@@ -45,21 +46,30 @@ export default function AdminUserDetailPage() {
   const { data: user, isLoading } = useGetAdminUserQuery(userId);
   const [page, setPage] = useState(1);
   const pageSize = 20;
-  const { data: activity, isLoading: isLoadingActivity } = useGetUserActivityQuery({ userId, page, pageSize });
+  const { data: activity, isLoading: isLoadingActivity } = useGetUserActivityQuery({
+    userId,
+    page,
+    pageSize,
+  });
 
   const [lockDialogOpen, setLockDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
   const [releaseHoldDialogOpen, setReleaseHoldDialogOpen] = useState(false);
 
-  const displayName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Name not provided' : '';
+  const displayName = user
+    ? [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Name not provided'
+    : '';
   const dialectName = useDialectName(user?.dialectTag);
 
   return (
     <AdminShell>
       <div className="grid gap-6">
         <div className="grid gap-2">
-          <Link className="text-sm font-bold text-accent hover:text-accent-dark" href="/admin/users">
+          <Link
+            className="text-sm font-bold text-accent hover:text-accent-dark"
+            href="/admin/users"
+          >
             &larr; Users
           </Link>
           <h1 className="text-3xl font-black">{isLoading ? 'Loading...' : displayName}</h1>
@@ -70,21 +80,44 @@ export default function AdminUserDetailPage() {
           <>
             <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)] md:grid-cols-2 lg:grid-cols-3">
               <Field label="Role" value={user.role} />
-              <Field label="Status" value={<span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${statusStyles[user.status]}`}>{user.status}</span>} />
+              <Field
+                label="Status"
+                value={
+                  <span
+                    className={`rounded-lg px-2.5 py-1 text-xs font-bold ${statusStyles[user.status]}`}
+                  >
+                    {user.status}
+                  </span>
+                }
+              />
               {user.onAuditHold && (
                 <Field
                   label="Audit hold"
-                  value={<span className="rounded-lg bg-[#fff3e0] px-2.5 py-1 text-xs font-bold text-[#8a4b0f]">On hold since {new Date(user.auditHoldAt!).toLocaleDateString()}</span>}
+                  value={
+                    <span className="rounded-lg bg-[#fff3e0] px-2.5 py-1 text-xs font-bold text-[#8a4b0f]">
+                      On hold since {new Date(user.auditHoldAt!).toLocaleDateString()}
+                    </span>
+                  }
                 />
               )}
-              <Field label="DL balance" value={<span className="font-mono text-lg text-accent-dark">{formatTokens(user.walletBalance ?? 0)} DL</span>} />
+              <Field
+                label="DL balance"
+                value={
+                  <span className="font-mono text-lg text-accent-dark">
+                    {formatTokens(user.walletBalance ?? 0)} DL
+                  </span>
+                }
+              />
               <Field label="Email verified" value={user.emailVerified ? 'Yes' : 'No'} />
               <Field label="Phone" value={user.phoneNumber ?? 'Not set'} />
               <Field label="Phone verified" value={user.phoneVerified ? 'Yes' : 'No'} />
               <Field label="Onboarding complete" value={user.onboardingComplete ? 'Yes' : 'No'} />
               <Field label="Referral code" value={user.referralCode} />
               <Field label="Dialect" value={dialectName ?? 'Not set'} />
-              <Field label="User ID" value={<span className="break-all font-mono text-xs">{user.id}</span>} />
+              <Field
+                label="User ID"
+                value={<span className="break-all font-mono text-xs">{user.id}</span>}
+              />
             </section>
 
             <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -110,20 +143,23 @@ export default function AdminUserDetailPage() {
                 </div>
               )}
               <p className="text-xs leading-relaxed text-muted">
-                Locking suspends or blocks the account, revokes active sessions, rejects any pending withdrawal, and cancels open P2P
-                trades &mdash; reversible from this page. Deleting permanently removes the account and its data; the person can sign up
-                again afterward as a brand-new account.
+                Locking suspends or blocks the account, revokes active sessions, rejects any pending
+                withdrawal, and cancels open P2P trades &mdash; reversible from this page. Deleting
+                permanently removes the account and its data; the person can sign up again afterward
+                as a brand-new account.
               </p>
             </section>
 
             {user.role === 'TRAINER' && user.onAuditHold && (
               <section className="grid gap-3 rounded-lg border border-[#f5c78e] bg-[#fff8ef] p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-                <h2 className="text-lg font-black text-[#8a4b0f]">Account on automatic audit hold</h2>
+                <h2 className="text-lg font-black text-[#8a4b0f]">
+                  Account on automatic audit hold
+                </h2>
                 <p className="text-sm leading-relaxed text-[#8a4b0f]">
-                  This trainer&rsquo;s submission count reached the platform&rsquo;s audit-hold threshold on{' '}
-                  {new Date(user.auditHoldAt!).toLocaleString()}. They cannot start new training tasks until this
-                  hold is released. This is separate from account lock status &mdash; releasing it does not change
-                  ACTIVE/SUSPENDED/BLOCKED.
+                  This trainer&rsquo;s submission count reached the platform&rsquo;s audit-hold
+                  threshold on {new Date(user.auditHoldAt!).toLocaleString()}. They cannot start new
+                  training tasks until this hold is released. This is separate from account lock
+                  status &mdash; releasing it does not change ACTIVE/SUSPENDED/BLOCKED.
                 </p>
                 <div>
                   <button
@@ -141,8 +177,9 @@ export default function AdminUserDetailPage() {
               <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
                 <h2 className="text-lg font-black">Recording audit</h2>
                 <p className="text-sm leading-relaxed text-muted">
-                  Play through this trainer&rsquo;s recordings one at a time and mark each as valid or invalid. Marking a paid-out
-                  recording invalid can optionally claw back its DL payout.
+                  Play through this trainer&rsquo;s recordings one at a time and mark each as valid
+                  or invalid. Marking a paid-out recording invalid can optionally claw back its DL
+                  payout.
                 </p>
                 <div>
                   <button
@@ -159,7 +196,9 @@ export default function AdminUserDetailPage() {
             <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
               <h2 className="text-lg font-black">Token transactions</h2>
               {isLoadingActivity && <p className="text-muted">Loading...</p>}
-              {!isLoadingActivity && (!activity || activity.items.length === 0) && <p className="text-sm text-muted">No transactions yet.</p>}
+              {!isLoadingActivity && (!activity || activity.items.length === 0) && (
+                <p className="text-sm text-muted">No transactions yet.</p>
+              )}
               {!isLoadingActivity && activity && activity.items.length > 0 && (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-96 text-left text-sm">
@@ -256,7 +295,13 @@ function ActivityRow({ entry }: { entry: UserActivityEntry }) {
   );
 }
 
-function LockUserDialog({ user, onClose }: { user: { id: string; status: string }; onClose: () => void }) {
+function LockUserDialog({
+  user,
+  onClose,
+}: {
+  user: { id: string; status: string };
+  onClose: () => void;
+}) {
   const { data: platformSettings } = useGetPlatformSettingsQuery();
   const otpRequired = platformSettings?.adminPayoutOtpEnabled ?? false;
 
@@ -276,17 +321,29 @@ function LockUserDialog({ user, onClose }: { user: { id: string; status: string 
         setOtpRequestId(result.otpRequestId);
         return;
       }
-      await lockUser({ id: user.id, status, ...(otpRequestId ? { otpRequestId, code } : {}) }).unwrap();
+      await lockUser({
+        id: user.id,
+        status,
+        ...(otpRequestId ? { otpRequestId, code } : {}),
+      }).unwrap();
       onClose();
     } catch (err) {
-      setError(normalizeErrorMessage(err, otpRequestId ? 'Unable to verify this code.' : 'Unable to update this account.'));
+      setError(
+        normalizeErrorMessage(
+          err,
+          otpRequestId ? 'Unable to verify this code.' : 'Unable to update this account.',
+        ),
+      );
     }
   }
 
   if (otpRequestId) {
     return (
       <Dialog open onOpenChange={(open) => !open && onClose()}>
-        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this action.">
+        <DialogContent
+          title="Enter your code"
+          description="We emailed a 6-digit code to confirm this action."
+        >
           <form className="grid gap-3" onSubmit={handleSubmit}>
             <input
               autoFocus
@@ -331,7 +388,12 @@ function LockUserDialog({ user, onClose }: { user: { id: string; status: string 
             <label className="text-xs font-bold uppercase text-muted" htmlFor="lock-status">
               Status
             </label>
-            <select className={inputClass} id="lock-status" onChange={(e) => setStatus(e.target.value)} value={status}>
+            <select
+              className={inputClass}
+              id="lock-status"
+              onChange={(e) => setStatus(e.target.value)}
+              value={status}
+            >
               <option value="ACTIVE">Active</option>
               <option value="SUSPENDED">Suspended</option>
               <option value="BLOCKED">Blocked</option>
@@ -339,8 +401,8 @@ function LockUserDialog({ user, onClose }: { user: { id: string; status: string 
           </div>
           {status !== 'ACTIVE' && (
             <p className="text-sm leading-relaxed text-muted">
-              This revokes active sessions, rejects any pending withdrawal (returning the DL to their wallet), and cancels open P2P
-              offers/trades (returning escrowed DL).
+              This revokes active sessions, rejects any pending withdrawal (returning the DL to
+              their wallet), and cancels open P2P offers/trades (returning escrowed DL).
             </p>
           )}
           {error && (
@@ -366,7 +428,6 @@ function LockUserDialog({ user, onClose }: { user: { id: string; status: string 
     </Dialog>
   );
 }
-
 
 function DeleteUserDialog({
   user,
@@ -399,14 +460,22 @@ function DeleteUserDialog({
       await deleteUser({ id: user.id, ...(otpRequestId ? { otpRequestId, code } : {}) }).unwrap();
       onDeleted();
     } catch (err) {
-      setError(normalizeErrorMessage(err, otpRequestId ? 'Unable to verify this code.' : 'Unable to delete this account.'));
+      setError(
+        normalizeErrorMessage(
+          err,
+          otpRequestId ? 'Unable to verify this code.' : 'Unable to delete this account.',
+        ),
+      );
     }
   }
 
   if (otpRequestId) {
     return (
       <Dialog open onOpenChange={(open) => !open && onClose()}>
-        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this permanent deletion.">
+        <DialogContent
+          title="Enter your code"
+          description="We emailed a 6-digit code to confirm this permanent deletion."
+        >
           <form className="grid gap-3" onSubmit={handleSubmit}>
             <input
               autoFocus
@@ -454,7 +523,12 @@ function DeleteUserDialog({
             <label className="text-xs font-bold uppercase text-muted" htmlFor="confirm-email">
               Type <span className="font-mono">{user.email}</span> to confirm
             </label>
-            <input className={inputClass} id="confirm-email" onChange={(e) => setConfirmText(e.target.value)} value={confirmText} />
+            <input
+              className={inputClass}
+              id="confirm-email"
+              onChange={(e) => setConfirmText(e.target.value)}
+              value={confirmText}
+            />
           </div>
           {error && (
             <p className="leading-relaxed text-danger" role="alert">

@@ -39,7 +39,10 @@ export class P2PController {
   }
 
   @Post('payment-methods/otp')
-  requestPaymentMethodOtp(@Req() req: AuthenticatedRequest, @Body() body: RequestPaymentMethodOtpDto) {
+  requestPaymentMethodOtp(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: RequestPaymentMethodOtpDto,
+  ) {
     return this.p2p.requestPaymentMethodOtp(req.user.sub, body);
   }
 
@@ -49,7 +52,11 @@ export class P2PController {
   }
 
   @Patch('payment-methods/:id')
-  updatePaymentMethod(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: UpsertPaymentMethodDto) {
+  updatePaymentMethod(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: UpsertPaymentMethodDto,
+  ) {
     return this.p2p.updatePaymentMethod(req.user.sub, id, body);
   }
 
@@ -79,7 +86,11 @@ export class P2PController {
   }
 
   @Post('offers/:id/accept')
-  acceptOffer(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: AcceptOfferDto) {
+  acceptOffer(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: AcceptOfferDto,
+  ) {
     return this.p2p.acceptOffer(req.user.sub, id, body);
   }
 
@@ -109,7 +120,11 @@ export class P2PController {
   }
 
   @Post('trades/:id/dispute')
-  raiseDispute(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: RaiseDisputeDto) {
+  raiseDispute(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: RaiseDisputeDto,
+  ) {
     return this.p2p.raiseDispute(req.user.sub, id, body);
   }
 
@@ -144,7 +159,11 @@ export class P2PController {
   @Post('admin/disputes/:id/resolve')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
-  adminResolveDispute(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: ResolveDisputeDto) {
+  adminResolveDispute(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: ResolveDisputeDto,
+  ) {
     return this.p2p.resolveDispute(req.user.sub, id, body);
   }
 }

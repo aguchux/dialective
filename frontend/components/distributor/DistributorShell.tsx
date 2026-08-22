@@ -4,7 +4,19 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { LayoutDashboard, Network, WalletCards, Store, Users, Menu, X, Home, LogOut, ChevronDown, UserCircle } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Network,
+  WalletCards,
+  Store,
+  Users,
+  Menu,
+  X,
+  Home,
+  LogOut,
+  ChevronDown,
+  UserCircle,
+} from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import {
@@ -31,7 +43,8 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const email = session?.user?.email ?? '';
-  const displayName = [session?.user?.firstName, session?.user?.lastName].filter(Boolean).join(' ') || email;
+  const displayName =
+    [session?.user?.firstName, session?.user?.lastName].filter(Boolean).join(' ') || email;
   const initial = displayName ? displayName[0].toUpperCase() : '?';
 
   useEffect(() => {
@@ -54,7 +67,12 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <DistributorSidebar pathname={pathname} router={router} mobile onClose={() => setMenuOpen(false)} />
+        <DistributorSidebar
+          pathname={pathname}
+          router={router}
+          mobile
+          onClose={() => setMenuOpen(false)}
+        />
       </div>
 
       <div className="flex min-h-screen min-w-0 flex-col">
@@ -79,8 +97,12 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
             <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pl-1 pr-2.5 transition-colors hover:bg-surface-muted">
-                <span className="grid size-7 place-items-center rounded-full bg-accent text-sm font-black text-white">{initial}</span>
-                <span className="hidden max-w-40 truncate text-sm font-bold sm:inline">{displayName}</span>
+                <span className="grid size-7 place-items-center rounded-full bg-accent text-sm font-black text-white">
+                  {initial}
+                </span>
+                <span className="hidden max-w-40 truncate text-sm font-bold sm:inline">
+                  {displayName}
+                </span>
                 <ChevronDown className="size-3.5" />
               </DropdownMenuTrigger>
               <DropdownMenuContent>
@@ -122,24 +144,34 @@ function DistributorSidebar({
   onClose?: () => void;
 }) {
   return (
-    <aside className={`${mobile ? 'flex h-full' : 'hidden md:flex'} flex-col gap-1 border-r border-line bg-surface p-4 text-ink`}>
+    <aside
+      className={`${mobile ? 'flex h-full' : 'hidden md:flex'} flex-col gap-1 border-r border-line bg-surface p-4 text-ink`}
+    >
       <div className="mb-4 flex items-center justify-between px-1">
         <BrandLogo textClassName="text-base" size={32} />
         {mobile && (
-          <button className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-muted hover:text-ink" onClick={onClose} type="button" aria-label="Close distributor menu">
+          <button
+            className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-muted hover:text-ink"
+            onClick={onClose}
+            type="button"
+            aria-label="Close distributor menu"
+          >
             <X className="size-[18px]" />
           </button>
         )}
       </div>
       <nav className="grid gap-1 overflow-y-auto">
         {navItems.map((item) => {
-          const active = item.href === '/distributor' ? pathname === item.href : pathname.startsWith(item.href);
+          const active =
+            item.href === '/distributor' ? pathname === item.href : pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold no-underline transition-colors ${
-                active ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-surface-muted hover:text-ink'
+                active
+                  ? 'bg-accent-soft text-accent'
+                  : 'text-muted hover:bg-surface-muted hover:text-ink'
               }`}
             >
               <item.icon className="size-[18px]" />

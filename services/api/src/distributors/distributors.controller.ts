@@ -44,7 +44,11 @@ export class DistributorsController {
 
   @Post('admin/distributors/:id/allocations')
   @Roles(Role.ADMIN)
-  allocate(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: CreateDistributorAllocationDto) {
+  allocate(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: CreateDistributorAllocationDto,
+  ) {
     return this.distributors.allocateTokens(req.user.sub, id, body);
   }
 
@@ -82,31 +86,51 @@ export class DistributorsController {
 
   @Post('distributors/sub-distributors/:id/allocations')
   @Roles(Role.DISTRIBUTOR)
-  allocateToSubDistributor(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: CreateDistributorAllocationDto) {
+  allocateToSubDistributor(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: CreateDistributorAllocationDto,
+  ) {
     return this.distributors.allocateToSubDistributor(req.user.sub, id, body);
   }
 
   @Get('distributors/sub-distributors/:id/activity')
   @Roles(Role.DISTRIBUTOR)
-  getSubDistributorActivity(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Query() query: ListDistributorActivityDto) {
+  getSubDistributorActivity(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Query() query: ListDistributorActivityDto,
+  ) {
     return this.distributors.getSubDistributorActivity(req.user.sub, id, query);
   }
 
   @Patch('distributors/sub-distributors/:id/status')
   @Roles(Role.DISTRIBUTOR)
-  updateSubDistributorStatus(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: UpdateSubDistributorStatusDto) {
+  updateSubDistributorStatus(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: UpdateSubDistributorStatusDto,
+  ) {
     return this.distributors.updateSubDistributorStatus(req.user.sub, id, body.status);
   }
 
   @Post('distributors/sub-distributors/:id/adjustments/otp')
   @Roles(Role.DISTRIBUTOR)
-  requestSubDistributorAdjustmentOtp(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: AdjustSubDistributorWalletDto) {
+  requestSubDistributorAdjustmentOtp(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: AdjustSubDistributorWalletDto,
+  ) {
     return this.distributors.requestSubDistributorAdjustmentOtp(req.user.sub, id, body);
   }
 
   @Post('distributors/sub-distributors/:id/adjustments')
   @Roles(Role.DISTRIBUTOR)
-  adjustSubDistributorWallet(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() body: AdjustSubDistributorWalletDto) {
+  adjustSubDistributorWallet(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: AdjustSubDistributorWalletDto,
+  ) {
     return this.distributors.adjustSubDistributorWallet(req.user.sub, id, body);
   }
 }

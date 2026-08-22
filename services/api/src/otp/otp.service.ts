@@ -41,7 +41,12 @@ export class OtpService {
     private readonly sms: SmsService,
   ) {}
 
-  private async deliver(channel: OtpChannel, destination: string, code: string, purpose: OtpPurpose): Promise<void> {
+  private async deliver(
+    channel: OtpChannel,
+    destination: string,
+    code: string,
+    purpose: OtpPurpose,
+  ): Promise<void> {
     if (channel === 'SMS') {
       await this.sms.sendOtp(destination, code);
     } else {
@@ -108,10 +113,14 @@ export class OtpService {
     const { code, hash: codeHash } = generateOtpCode();
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-    await this.prisma.otpCode.update({ where: { id: row.id }, data: { codeHash, expiresAt, attempts: 0 } });
+    await this.prisma.otpCode.update({
+      where: { id: row.id },
+      data: { codeHash, expiresAt, attempts: 0 },
+    });
 
     if (row.purpose === 'PHONE_VERIFICATION') {
-      if (!user.phoneNumber) throw new UnauthorizedException('This code request is no longer valid');
+      if (!user.phoneNumber)
+        throw new UnauthorizedException('This code request is no longer valid');
       await this.sms.sendOtp(user.phoneNumber, code);
     } else {
       await this.mail.sendOtpEmail(user.email, code, row.purpose);
@@ -180,7 +189,10 @@ export class OtpService {
     }
 
     if (hashOtpCode(params.code) !== row.codeHash) {
-      await this.prisma.otpCode.update({ where: { id: row.id }, data: { attempts: { increment: 1 } } });
+      await this.prisma.otpCode.update({
+        where: { id: row.id },
+        data: { attempts: { increment: 1 } },
+      });
       throw invalid();
     }
 

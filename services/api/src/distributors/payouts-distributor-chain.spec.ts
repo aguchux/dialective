@@ -54,7 +54,12 @@ function walletFor(userId: string) {
 function setupChain(options: {
   distributorSettings: typeof ENABLED_DISTRIBUTOR_SETTINGS;
   chain: { id: string; role: 'TRAINER' | 'DISTRIBUTOR' | 'ADMIN' }[];
-  referralSettings?: { fundingBonusEnabled: boolean; fundingBonusRate: InstanceType<typeof Decimal>; payoutBonusEnabled: boolean; payoutBonusRate: InstanceType<typeof Decimal> };
+  referralSettings?: {
+    fundingBonusEnabled: boolean;
+    fundingBonusRate: InstanceType<typeof Decimal>;
+    payoutBonusEnabled: boolean;
+    payoutBonusRate: InstanceType<typeof Decimal>;
+  };
 }) {
   const { chain, distributorSettings, referralSettings } = options;
   const usersById = new Map(
@@ -64,7 +69,12 @@ function setupChain(options: {
     ]),
   );
   const wallets = new Map<string, ReturnType<typeof walletFor>>();
-  const ledgerEntries: { walletId: string; type: string; amount: InstanceType<typeof Decimal>; reference: string }[] = [];
+  const ledgerEntries: {
+    walletId: string;
+    type: string;
+    amount: InstanceType<typeof Decimal>;
+    reference: string;
+  }[] = [];
 
   const prisma = {
     distributorSettings: { upsert: jest.fn().mockResolvedValue(distributorSettings) },
@@ -85,23 +95,44 @@ function setupChain(options: {
       }),
     },
     wallet: {
-      findUnique: jest.fn(({ where }: { where: { userId: string } }) => Promise.resolve(wallets.get(where.userId) ?? null)),
+      findUnique: jest.fn(({ where }: { where: { userId: string } }) =>
+        Promise.resolve(wallets.get(where.userId) ?? null),
+      ),
       create: jest.fn(({ data }: { data: { userId: string } }) => {
         const wallet = walletFor(data.userId);
         wallets.set(data.userId, wallet);
         return Promise.resolve(wallet);
       }),
-      update: jest.fn(({ where, data }: { where: { id: string }; data: { balance: { increment: InstanceType<typeof Decimal> } } }) => {
-        const wallet = [...wallets.values()].find((w) => w.id === where.id);
-        if (wallet) wallet.balance = wallet.balance.add(data.balance.increment);
-        return Promise.resolve(wallet);
-      }),
+      update: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: { balance: { increment: InstanceType<typeof Decimal> } };
+        }) => {
+          const wallet = [...wallets.values()].find((w) => w.id === where.id);
+          if (wallet) wallet.balance = wallet.balance.add(data.balance.increment);
+          return Promise.resolve(wallet);
+        },
+      ),
     },
     ledgerEntry: {
-      create: jest.fn(({ data }: { data: { walletId: string; type: string; amount: InstanceType<typeof Decimal>; reference: string } }) => {
-        ledgerEntries.push(data);
-        return Promise.resolve(data);
-      }),
+      create: jest.fn(
+        ({
+          data,
+        }: {
+          data: {
+            walletId: string;
+            type: string;
+            amount: InstanceType<typeof Decimal>;
+            reference: string;
+          };
+        }) => {
+          ledgerEntries.push(data);
+          return Promise.resolve(data);
+        },
+      ),
     },
     $transaction: jest.fn(async (ops: unknown) => Promise.all(ops as Promise<unknown>[])),
   };
@@ -122,7 +153,12 @@ describe('creditFundingReferralBonusesOps distributor chain', () => {
       ],
     });
 
-    const { ops, bonuses } = await creditFundingReferralBonusesOps(prisma, 'trainer', 1000, 'deposit-1');
+    const { ops, bonuses } = await creditFundingReferralBonusesOps(
+      prisma,
+      'trainer',
+      1000,
+      'deposit-1',
+    );
     await Promise.all(ops);
 
     expect(bonuses).toEqual([
@@ -130,7 +166,11 @@ describe('creditFundingReferralBonusesOps distributor chain', () => {
       { userId: 'distL3', level: 3, rate: '0.01', amount: '10' },
     ]);
     expect(ledgerEntries).toEqual([
-      expect.objectContaining({ type: 'DISTRIBUTOR_FUNDING_BONUS', amount: expect.objectContaining({}), reference: 'deposit-1:L2' }),
+      expect.objectContaining({
+        type: 'DISTRIBUTOR_FUNDING_BONUS',
+        amount: expect.objectContaining({}),
+        reference: 'deposit-1:L2',
+      }),
       expect.objectContaining({ type: 'DISTRIBUTOR_FUNDING_BONUS', reference: 'deposit-1:L3' }),
     ]);
   });
@@ -142,14 +182,26 @@ describe('creditFundingReferralBonusesOps distributor chain', () => {
         { id: 'trainer', role: 'TRAINER' },
         { id: 'referrer-trainer', role: 'TRAINER' },
       ],
-      referralSettings: { fundingBonusEnabled: true, fundingBonusRate: new Decimal('0.1'), payoutBonusEnabled: false, payoutBonusRate: new Decimal(0) },
+      referralSettings: {
+        fundingBonusEnabled: true,
+        fundingBonusRate: new Decimal('0.1'),
+        payoutBonusEnabled: false,
+        payoutBonusRate: new Decimal(0),
+      },
     });
 
-    const { ops, bonuses } = await creditFundingReferralBonusesOps(prisma, 'trainer', 1000, 'deposit-1');
+    const { ops, bonuses } = await creditFundingReferralBonusesOps(
+      prisma,
+      'trainer',
+      1000,
+      'deposit-1',
+    );
     await Promise.all(ops);
 
     expect(bonuses).toEqual([{ userId: 'referrer-trainer', level: 1, rate: '0.1', amount: '100' }]);
-    expect(ledgerEntries).toEqual([expect.objectContaining({ type: 'REFERRAL_FUNDING_BONUS', reference: 'deposit-1' })]);
+    expect(ledgerEntries).toEqual([
+      expect.objectContaining({ type: 'REFERRAL_FUNDING_BONUS', reference: 'deposit-1' }),
+    ]);
   });
 
   it('pays no bonus at all when the distributor system is disabled and there is no distributor ancestor', async () => {
@@ -158,7 +210,12 @@ describe('creditFundingReferralBonusesOps distributor chain', () => {
       chain: [{ id: 'trainer', role: 'TRAINER' }],
     });
 
-    const { ops, bonuses } = await creditFundingReferralBonusesOps(prisma, 'trainer', 1000, 'deposit-1');
+    const { ops, bonuses } = await creditFundingReferralBonusesOps(
+      prisma,
+      'trainer',
+      1000,
+      'deposit-1',
+    );
     await Promise.all(ops);
 
     expect(bonuses).toEqual([]);
@@ -220,7 +277,12 @@ describe('creditTrainingPayout no-loss guarantee with a distributor chain', () =
         { id: 'trainer', role: 'TRAINER' },
         { id: 'referrer', role: 'TRAINER' },
       ],
-      referralSettings: { fundingBonusEnabled: false, fundingBonusRate: new Decimal(0), payoutBonusEnabled: true, payoutBonusRate: new Decimal('0.1') },
+      referralSettings: {
+        fundingBonusEnabled: false,
+        fundingBonusRate: new Decimal(0),
+        payoutBonusEnabled: true,
+        payoutBonusRate: new Decimal('0.1'),
+      },
     });
 
     const result = await creditTrainingPayout(prisma, 'trainer', 100, 'submission-1');

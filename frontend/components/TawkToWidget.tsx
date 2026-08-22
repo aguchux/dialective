@@ -19,7 +19,10 @@ const AUTHENTICATION_SHELL_PATHS = new Set([
 
 interface TawkApi {
   onLoad?: () => void;
-  setAttributes?: (attributes: Record<string, string>, callback?: (error?: unknown) => void) => void;
+  setAttributes?: (
+    attributes: Record<string, string>,
+    callback?: (error?: unknown) => void,
+  ) => void;
   hideWidget?: () => void;
   showWidget?: () => void;
   visitor?: { name?: string; email?: string };
@@ -115,7 +118,10 @@ export function TawkToWidget() {
   useEffect(() => {
     if (!shouldShowWidget || status !== 'authenticated' || !session.user) return;
 
-    const name = [session.user.firstName, session.user.lastName].filter(Boolean).join(' ') || session.user.email || undefined;
+    const name =
+      [session.user.firstName, session.user.lastName].filter(Boolean).join(' ') ||
+      session.user.email ||
+      undefined;
     const email = session.user.email ?? undefined;
     if (!name && !email) return;
 

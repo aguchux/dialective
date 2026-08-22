@@ -10,7 +10,14 @@ describe('SubmissionsController.getResult', () => {
     const asrRegistry: any = {};
     const platformSettings: any = {};
     const courses: any = {};
-    const controller = new SubmissionsController(storage, streams, asrRegistry, prisma, platformSettings, courses);
+    const controller = new SubmissionsController(
+      storage,
+      streams,
+      asrRegistry,
+      prisma,
+      platformSettings,
+      courses,
+    );
     return { controller, prisma };
   }
 
@@ -40,7 +47,9 @@ describe('SubmissionsController.getResult', () => {
     const { controller, prisma } = setup({ status: 'ok' });
     prisma.submission.findFirst.mockResolvedValue(null);
 
-    await expect(controller.getResult({ user: { sub: 'someone-else' } } as any, 'sub-1')).rejects.toThrow('Submission not found');
+    await expect(
+      controller.getResult({ user: { sub: 'someone-else' } } as any, 'sub-1'),
+    ).rejects.toThrow('Submission not found');
   });
 });
 
@@ -53,9 +62,19 @@ describe('SubmissionsController.create audit-hold gate', () => {
     const streams: any = { publish: jest.fn() };
     const storage: any = {};
     const asrRegistry: any = { resolve: jest.fn().mockReturnValue({ stream: 'asr-jobs-vosk' }) };
-    const platformSettings: any = { getTaskTokenCost: jest.fn(), getDictationMaxRecordingSeconds: jest.fn() };
+    const platformSettings: any = {
+      getTaskTokenCost: jest.fn(),
+      getDictationMaxRecordingSeconds: jest.fn(),
+    };
     const courses: any = { getIncompleteRequiredCourses: jest.fn().mockResolvedValue([]) };
-    const controller = new SubmissionsController(storage, streams, asrRegistry, prisma, platformSettings, courses);
+    const controller = new SubmissionsController(
+      storage,
+      streams,
+      asrRegistry,
+      prisma,
+      platformSettings,
+      courses,
+    );
     return { controller, prisma };
   }
 
@@ -71,17 +90,27 @@ describe('SubmissionsController.create audit-hold gate', () => {
 
   it('rejects before any prompt/token lookup when the trainer is on an active audit hold', async () => {
     const { controller, prisma } = setup();
-    prisma.user.findUnique.mockResolvedValue({ auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: null });
+    prisma.user.findUnique.mockResolvedValue({
+      auditHoldAt: new Date('2026-01-01'),
+      auditHoldReleasedAt: null,
+    });
 
-    await expect(controller.create({ user: { sub: 'user-1' } } as any, body)).rejects.toThrow('temporarily on hold');
+    await expect(controller.create({ user: { sub: 'user-1' } } as any, body)).rejects.toThrow(
+      'temporarily on hold',
+    );
     expect(prisma.prompt.findFirst).not.toHaveBeenCalled();
   });
 
   it('does not block a trainer whose hold was already released', async () => {
     const { controller, prisma } = setup();
-    prisma.user.findUnique.mockResolvedValue({ auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: new Date('2026-01-02') });
+    prisma.user.findUnique.mockResolvedValue({
+      auditHoldAt: new Date('2026-01-01'),
+      auditHoldReleasedAt: new Date('2026-01-02'),
+    });
     prisma.prompt.findFirst.mockResolvedValue(null); // short-circuits with NotFoundException, proving the hold gate itself passed
 
-    await expect(controller.create({ user: { sub: 'user-1' } } as any, body)).rejects.toThrow('Prompt not found');
+    await expect(controller.create({ user: { sub: 'user-1' } } as any, body)).rejects.toThrow(
+      'Prompt not found',
+    );
   });
 });

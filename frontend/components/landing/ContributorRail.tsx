@@ -6,7 +6,9 @@ interface ContributorRailProps {
 
 export function ContributorRail({ dialectCount }: ContributorRailProps) {
   const cards = contributorCards.map((card) =>
-    card.name === '4 languages' && dialectCount !== null ? { ...card, name: `${dialectCount} languages` } : card,
+    card.name === '4 languages' && dialectCount !== null
+      ? { ...card, name: `${dialectCount} languages` }
+      : card,
   );
 
   return (
@@ -34,7 +36,8 @@ export function ContributorRail({ dialectCount }: ContributorRailProps) {
             <div
               className="pointer-events-none absolute inset-0"
               style={{
-                background: 'linear-gradient(180deg, transparent 26%, rgba(0,0,0,0.12) 48%, rgba(0,0,0,0.7) 100%)',
+                background:
+                  'linear-gradient(180deg, transparent 26%, rgba(0,0,0,0.12) 48%, rgba(0,0,0,0.7) 100%)',
               }}
             />
             <div className="relative grid h-full content-between">

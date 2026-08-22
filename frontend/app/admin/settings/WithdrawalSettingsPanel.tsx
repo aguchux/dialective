@@ -1,10 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -31,8 +36,18 @@ export function WithdrawalSettingsPanel() {
     setCryptoWithdrawalsEnabled(settings.cryptoWithdrawalsEnabled);
     setNowPaymentsPayoutsEnabled(settings.nowPaymentsPayoutsEnabled);
     setAutoSubmitAfterApproval(settings.autoSubmitAfterApproval);
-    setAllowedCurrencies(settings.allowedWithdrawalCurrencies.split(',').map((v) => v.trim()).filter(Boolean));
-    setAllowedNetworks(settings.allowedWithdrawalNetworks.split(',').map((v) => v.trim()).filter(Boolean));
+    setAllowedCurrencies(
+      settings.allowedWithdrawalCurrencies
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean),
+    );
+    setAllowedNetworks(
+      settings.allowedWithdrawalNetworks
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean),
+    );
     setWithdrawalFeeMode(settings.withdrawalFeeMode === 'user' ? 'user' : 'platform');
     setWithdrawalFeeTokenAmount(settings.withdrawalFeeTokenAmount);
     setWithdrawalFeePercent(settings.withdrawalFeePercent);
@@ -64,8 +79,12 @@ export function WithdrawalSettingsPanel() {
         allowedWithdrawalCurrencies: allowedCurrencies.join(','),
         allowedWithdrawalNetworks: allowedNetworks.join(','),
         withdrawalFeeMode,
-        ...(withdrawalFeeTokenAmount !== '' ? { withdrawalFeeTokenAmount: Number(withdrawalFeeTokenAmount) } : {}),
-        ...(withdrawalFeePercent !== '' ? { withdrawalFeePercent: Number(withdrawalFeePercent) } : {}),
+        ...(withdrawalFeeTokenAmount !== ''
+          ? { withdrawalFeeTokenAmount: Number(withdrawalFeeTokenAmount) }
+          : {}),
+        ...(withdrawalFeePercent !== ''
+          ? { withdrawalFeePercent: Number(withdrawalFeePercent) }
+          : {}),
       }).unwrap();
       setMessage('Withdrawal settings saved.');
     } catch (err) {
@@ -78,8 +97,9 @@ export function WithdrawalSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Crypto Withdrawals</h2>
         <p className="leading-relaxed text-muted">
-          Controls for the NOWPayments payout automation -- admin approval and provider submission remain separate,
-          manual steps regardless of these settings; see the Withdrawals page to act on individual requests.
+          Controls for the NOWPayments payout automation -- admin approval and provider submission
+          remain separate, manual steps regardless of these settings; see the Withdrawals page to
+          act on individual requests.
         </p>
       </div>
 
@@ -87,7 +107,10 @@ export function WithdrawalSettingsPanel() {
       {!isLoading && (
         <form className="grid gap-4 md:max-w-lg" onSubmit={handleSave}>
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="crypto-withdrawals-enabled">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="crypto-withdrawals-enabled"
+            >
               <input
                 checked={cryptoWithdrawalsEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -105,7 +128,10 @@ export function WithdrawalSettingsPanel() {
           </div>
 
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="nowpayments-payouts-enabled">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="nowpayments-payouts-enabled"
+            >
               <input
                 checked={nowPaymentsPayoutsEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -116,15 +142,19 @@ export function WithdrawalSettingsPanel() {
               <span>
                 <span className="block font-bold">NOWPayments automated payouts enabled</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  When off, admins can still approve and manually mark withdrawals paid, but "Submit to NOWPayments"
-                  is disabled -- keep this off until payout credentials are configured and tested.
+                  When off, admins can still approve and manually mark withdrawals paid, but "Submit
+                  to NOWPayments" is disabled -- keep this off until payout credentials are
+                  configured and tested.
                 </span>
               </span>
             </label>
           </div>
 
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="auto-submit-after-approval">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="auto-submit-after-approval"
+            >
               <input
                 checked={autoSubmitAfterApproval}
                 className="mt-0.5 size-5 accent-accent"
@@ -135,8 +165,9 @@ export function WithdrawalSettingsPanel() {
               <span>
                 <span className="block font-bold">Auto-submit after approval</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  When on, approving a withdrawal immediately submits it to NOWPayments in the same action. Leave off
-                  (default) to keep approval and provider submission as two distinct, separately auditable steps.
+                  When on, approving a withdrawal immediately submits it to NOWPayments in the same
+                  action. Leave off (default) to keep approval and provider submission as two
+                  distinct, separately auditable steps.
                 </span>
               </span>
             </label>
@@ -144,10 +175,15 @@ export function WithdrawalSettingsPanel() {
 
           <div className="grid gap-1.5">
             <span className="font-bold">Allowed currencies</span>
-            <p className="text-sm leading-relaxed text-muted">Trainers can only choose from these when requesting a withdrawal.</p>
+            <p className="text-sm leading-relaxed text-muted">
+              Trainers can only choose from these when requesting a withdrawal.
+            </p>
             <div className="flex flex-wrap gap-2">
               {SUPPORTED_CURRENCIES.map((currency) => (
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2" key={currency}>
+                <label
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2"
+                  key={currency}
+                >
                   <input
                     checked={allowedCurrencies.includes(currency)}
                     className="size-4 accent-accent"
@@ -162,10 +198,15 @@ export function WithdrawalSettingsPanel() {
 
           <div className="grid gap-1.5">
             <span className="font-bold">Allowed networks</span>
-            <p className="text-sm leading-relaxed text-muted">Trainers can only choose from these when requesting a withdrawal.</p>
+            <p className="text-sm leading-relaxed text-muted">
+              Trainers can only choose from these when requesting a withdrawal.
+            </p>
             <div className="flex flex-wrap gap-2">
               {SUPPORTED_NETWORKS.map((network) => (
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2" key={network}>
+                <label
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2"
+                  key={network}
+                >
                   <input
                     checked={allowedNetworks.includes(network)}
                     className="size-4 accent-accent"
@@ -181,16 +222,24 @@ export function WithdrawalSettingsPanel() {
           <div className="grid gap-1">
             <span className="font-bold">Withdrawal fee</span>
             <p className="text-sm leading-relaxed text-muted">
-              "Platform" absorbs any provider network fee -- the trainer receives the full DL amount worth. "User"
-              deducts a flat DL amount (if set) or a percentage from the payout.
+              "Platform" absorbs any provider network fee -- the trainer receives the full DL amount
+              worth. "User" deducts a flat DL amount (if set) or a percentage from the payout.
             </p>
             <div className="flex gap-3">
               <label className="flex items-center gap-2 font-bold">
-                <input checked={withdrawalFeeMode === 'platform'} onChange={() => setWithdrawalFeeMode('platform')} type="radio" />
+                <input
+                  checked={withdrawalFeeMode === 'platform'}
+                  onChange={() => setWithdrawalFeeMode('platform')}
+                  type="radio"
+                />
                 Platform pays
               </label>
               <label className="flex items-center gap-2 font-bold">
-                <input checked={withdrawalFeeMode === 'user'} onChange={() => setWithdrawalFeeMode('user')} type="radio" />
+                <input
+                  checked={withdrawalFeeMode === 'user'}
+                  onChange={() => setWithdrawalFeeMode('user')}
+                  type="radio"
+                />
                 User pays
               </label>
             </div>
@@ -199,7 +248,9 @@ export function WithdrawalSettingsPanel() {
           {withdrawalFeeMode === 'user' && (
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1">
-                <label className="font-bold" htmlFor="withdrawal-fee-token-amount">Flat fee (DL)</label>
+                <label className="font-bold" htmlFor="withdrawal-fee-token-amount">
+                  Flat fee (DL)
+                </label>
                 <input
                   className={inputClass}
                   id="withdrawal-fee-token-amount"
@@ -211,7 +262,9 @@ export function WithdrawalSettingsPanel() {
                 />
               </div>
               <div className="grid gap-1">
-                <label className="font-bold" htmlFor="withdrawal-fee-percent">Or percentage (%)</label>
+                <label className="font-bold" htmlFor="withdrawal-fee-percent">
+                  Or percentage (%)
+                </label>
                 <input
                   className={inputClass}
                   id="withdrawal-fee-percent"
@@ -223,12 +276,19 @@ export function WithdrawalSettingsPanel() {
                   value={withdrawalFeePercent}
                 />
               </div>
-              <p className="col-span-2 text-xs text-muted">Flat fee takes precedence over percentage when both are set above zero.</p>
+              <p className="col-span-2 text-xs text-muted">
+                Flat fee takes precedence over percentage when both are set above zero.
+              </p>
             </div>
           )}
 
           <div>
-            <ActionButton className={primaryButtonClass} pending={isSaving} pendingLabel="Saving" type="submit">
+            <ActionButton
+              className={primaryButtonClass}
+              pending={isSaving}
+              pendingLabel="Saving"
+              type="submit"
+            >
               Save withdrawal settings
             </ActionButton>
           </div>

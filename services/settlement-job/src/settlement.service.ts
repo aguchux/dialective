@@ -68,7 +68,8 @@ export function computeWordRecordingCompositeScore(
   weights: QualityWeights & { asrMatch: number },
   scoreRange: { min: number; max: number },
 ): number {
-  const weightSum = weights.consensus + weights.noise + weights.quality + weights.liveness + weights.asrMatch;
+  const weightSum =
+    weights.consensus + weights.noise + weights.quality + weights.liveness + weights.asrMatch;
   const blended =
     weightSum <= 0
       ? realScore.toNumber()
@@ -103,13 +104,14 @@ export class SettlementService {
     this.logger.log('Settlement run starting');
 
     const bonusCapMultiple = await this.getTrainingPayoutBonusCapMultiple();
-    const [qualityGateEnabled, qualityWeights, asrMatchWeight, scoreRange, settlementDelayMinutes] = await Promise.all([
-      this.isQualityGateEnabled(),
-      this.getQualityWeights(),
-      this.getAsrMatchWeight(),
-      this.getScoreRange(),
-      this.getSettlementDelayMinutes(),
-    ]);
+    const [qualityGateEnabled, qualityWeights, asrMatchWeight, scoreRange, settlementDelayMinutes] =
+      await Promise.all([
+        this.isQualityGateEnabled(),
+        this.getQualityWeights(),
+        this.getAsrMatchWeight(),
+        this.getScoreRange(),
+        this.getSettlementDelayMinutes(),
+      ]);
 
     const submissionResult = await this.settleSubmissions(
       bonusCapMultiple,
@@ -212,7 +214,12 @@ export class SettlementService {
         );
         const payoutScore = qualityGateEnabled ? compositeScore : submission.score;
         const payout = computeTrainingPayout(submission.tokensSpent, payoutScore, bonusCapMultiple);
-        const { ops } = await creditTrainingPayoutOps(this.prisma, submission.userId, payout, submission.id);
+        const { ops } = await creditTrainingPayoutOps(
+          this.prisma,
+          submission.userId,
+          payout,
+          submission.id,
+        );
 
         // Release the lock taken at submit time in the same transaction as
         // the payout credit -- no window where tokensSpent is neither
@@ -289,7 +296,9 @@ export class SettlementService {
 
     for (const recording of recordings) {
       if (recording.score === null || recording.userId === null) {
-        this.logger.warn(`Skipping wordRecording=${recording.id}: status SCORED but score/userId missing`);
+        this.logger.warn(
+          `Skipping wordRecording=${recording.id}: status SCORED but score/userId missing`,
+        );
         continue;
       }
 
@@ -306,7 +315,12 @@ export class SettlementService {
         );
         const payoutScore = qualityGateEnabled ? compositeScore : recording.score;
         const payout = computeTrainingPayout(recording.tokensSpent, payoutScore, bonusCapMultiple);
-        const { ops } = await creditTrainingPayoutOps(this.prisma, recording.userId, payout, recording.id);
+        const { ops } = await creditTrainingPayoutOps(
+          this.prisma,
+          recording.userId,
+          payout,
+          recording.id,
+        );
 
         // Same lock-release-alongside-payout pattern as settleSubmissions,
         // same legacy-row guard.
@@ -464,11 +478,20 @@ export class SettlementService {
 
     const [timedOutSubmissions, timedOutRecordings] = await Promise.all([
       this.prisma.submission.findMany({
-        where: { status: { in: ['PENDING', 'TRANSCRIBED'] }, refundedAt: null, createdAt: { lt: cutoff } },
+        where: {
+          status: { in: ['PENDING', 'TRANSCRIBED'] },
+          refundedAt: null,
+          createdAt: { lt: cutoff },
+        },
         select: { id: true, userId: true, tokensSpent: true },
       }),
       this.prisma.wordRecording.findMany({
-        where: { status: 'PENDING', refundedAt: null, userId: { not: null }, createdAt: { lt: cutoff } },
+        where: {
+          status: 'PENDING',
+          refundedAt: null,
+          userId: { not: null },
+          createdAt: { lt: cutoff },
+        },
         select: { id: true, userId: true, tokensSpent: true },
       }),
     ]);
@@ -486,7 +509,11 @@ export class SettlementService {
         // concurrent settlement-job run already claimed it first, count is 0
         // and this run skips it -- no double refund/payout.
         const claim = await this.prisma.submission.updateMany({
-          where: { id: submission.id, status: { in: ['PENDING', 'TRANSCRIBED'] }, refundedAt: null },
+          where: {
+            id: submission.id,
+            status: { in: ['PENDING', 'TRANSCRIBED'] },
+            refundedAt: null,
+          },
           data: { status: 'EXPIRED', refundedAt: new Date() },
         });
         if (claim.count === 0) continue;
@@ -560,7 +587,11 @@ export class SettlementService {
     }
   }
 
-  private async refundTokens(userId: string, tokensSpent: Prisma.Decimal, reference: string): Promise<void> {
+  private async refundTokens(
+    userId: string,
+    tokensSpent: Prisma.Decimal,
+    reference: string,
+  ): Promise<void> {
     // Legacy (pre-locking) rows spent balance directly and never locked
     // anything -- decrementing lockedBalance for them would drive it
     // negative, so only touch it for rows that actually have a lock.
@@ -772,7 +803,8 @@ export class SettlementService {
 
     const totalAvailableUsd = Number(activeAgg._sum.usdAmount ?? 0);
     const totalSettled =
-      Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) + Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
+      Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) +
+      Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
     return totalAvailableUsd / rate - totalSettled;
   }
 }

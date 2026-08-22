@@ -30,7 +30,10 @@ export class NotificationsService {
     });
   }
 
-  async notifyBlogPublished(authorId: string, post: { id: string; title: string; excerpt?: string | null; slug: string }) {
+  async notifyBlogPublished(
+    authorId: string,
+    post: { id: string; title: string; excerpt?: string | null; slug: string },
+  ) {
     return this.publishUpdate({
       kind: SystemUpdateKind.BLOG,
       title: `New blog: ${post.title}`,
@@ -42,7 +45,10 @@ export class NotificationsService {
     });
   }
 
-  async notifyCoursePublished(authorId: string, course: { id: string; title: string; summary: string; slug: string }) {
+  async notifyCoursePublished(
+    authorId: string,
+    course: { id: string; title: string; summary: string; slug: string },
+  ) {
     return this.publishUpdate({
       kind: SystemUpdateKind.COURSE,
       title: `New course: ${course.title}`,
@@ -59,7 +65,8 @@ export class NotificationsService {
     const sourceId = input.sourceId ?? null;
     const title = input.title.trim();
     const message = input.message.trim();
-    if (!title || !message) throw new BadRequestException('Notification title and message are required');
+    if (!title || !message)
+      throw new BadRequestException('Notification title and message are required');
 
     const existing = sourceId
       ? await this.prisma.systemUpdate.findUnique({
@@ -116,17 +123,24 @@ export class NotificationsService {
     });
     const readCountByUpdateId = new Map(readCounts.map((row) => [row.updateId, row._count._all]));
 
-    return updates.map((update) => ({ ...update, readCount: readCountByUpdateId.get(update.id) ?? 0 }));
+    return updates.map((update) => ({
+      ...update,
+      readCount: readCountByUpdateId.get(update.id) ?? 0,
+    }));
   }
 
   async updateUpdate(id: string, dto: { title?: string; message?: string; href?: string | null }) {
-    const existing = await this.prisma.systemUpdate.findUnique({ where: { id }, select: { id: true } });
+    const existing = await this.prisma.systemUpdate.findUnique({
+      where: { id },
+      select: { id: true },
+    });
     if (!existing) throw new NotFoundException('Update not found');
 
     const title = dto.title?.trim();
     const message = dto.message?.trim();
     if (dto.title !== undefined && !title) throw new BadRequestException('Title cannot be empty');
-    if (dto.message !== undefined && !message) throw new BadRequestException('Message cannot be empty');
+    if (dto.message !== undefined && !message)
+      throw new BadRequestException('Message cannot be empty');
 
     return this.prisma.systemUpdate.update({
       where: { id },
@@ -139,7 +153,10 @@ export class NotificationsService {
   }
 
   async deleteUpdate(id: string) {
-    const existing = await this.prisma.systemUpdate.findUnique({ where: { id }, select: { id: true } });
+    const existing = await this.prisma.systemUpdate.findUnique({
+      where: { id },
+      select: { id: true },
+    });
     if (!existing) throw new NotFoundException('Update not found');
     // userNotification rows cascade-delete via the updateId FK (see the
     // system_notifications migration) -- deleting the update alone is enough.
@@ -176,7 +193,10 @@ export class NotificationsService {
       data: { readAt: new Date() },
     });
     if (result.count === 0) {
-      const exists = await this.prisma.userNotification.findFirst({ where: { id, userId }, select: { id: true } });
+      const exists = await this.prisma.userNotification.findFirst({
+        where: { id, userId },
+        select: { id: true },
+      });
       if (!exists) throw new NotFoundException('Notification not found');
     }
     return { id, read: true };

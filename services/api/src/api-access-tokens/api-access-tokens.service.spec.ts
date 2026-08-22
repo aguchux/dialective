@@ -21,20 +21,33 @@ describe('ApiAccessTokensService.list', () => {
 
     const result = await service.list();
 
-    expect(result).toEqual([{ key: 'huggingface', isSet: false, lastFour: null, updatedAt: null, updatedByEmail: null }]);
+    expect(result).toEqual([
+      { key: 'huggingface', isSet: false, lastFour: null, updatedAt: null, updatedByEmail: null },
+    ]);
   });
 
   it('reports isSet with the masked last-4 for a configured key', async () => {
     const { service, prisma } = setup();
     const updatedAt = new Date('2026-08-22T00:00:00Z');
     prisma.apiAccessToken.findMany.mockResolvedValue([
-      { key: 'huggingface', lastFour: 'a1b2', updatedAt, updatedBy: { email: 'admin@example.com' } },
+      {
+        key: 'huggingface',
+        lastFour: 'a1b2',
+        updatedAt,
+        updatedBy: { email: 'admin@example.com' },
+      },
     ]);
 
     const result = await service.list();
 
     expect(result).toEqual([
-      { key: 'huggingface', isSet: true, lastFour: 'a1b2', updatedAt, updatedByEmail: 'admin@example.com' },
+      {
+        key: 'huggingface',
+        isSet: true,
+        lastFour: 'a1b2',
+        updatedAt,
+        updatedByEmail: 'admin@example.com',
+      },
     ]);
   });
 });
@@ -43,14 +56,21 @@ describe('ApiAccessTokensService.set', () => {
   it('rejects an empty/whitespace-only value without touching the database', async () => {
     const { service, prisma } = setup();
 
-    await expect(service.set('huggingface', '   ', 'admin-1')).rejects.toThrow('Token value must not be empty');
+    await expect(service.set('huggingface', '   ', 'admin-1')).rejects.toThrow(
+      'Token value must not be empty',
+    );
     expect(prisma.apiAccessToken.upsert).not.toHaveBeenCalled();
   });
 
   it('encrypts the value and never returns it in plaintext', async () => {
     const { service, prisma } = setup();
-    prisma.apiAccessToken.upsert.mockImplementation(({ create }: { create: Record<string, unknown> }) =>
-      Promise.resolve({ ...create, updatedAt: new Date(), updatedBy: { email: 'admin@example.com' } }),
+    prisma.apiAccessToken.upsert.mockImplementation(
+      ({ create }: { create: Record<string, unknown> }) =>
+        Promise.resolve({
+          ...create,
+          updatedAt: new Date(),
+          updatedBy: { email: 'admin@example.com' },
+        }),
     );
 
     const result = await service.set('huggingface', 'hf_abcdef1234', 'admin-1');
@@ -74,10 +94,12 @@ describe('ApiAccessTokensService.getDecrypted', () => {
   it('decrypts a previously-set value back to its original plaintext', async () => {
     const { service, prisma } = setup();
     let stored: Record<string, unknown> | null = null;
-    prisma.apiAccessToken.upsert.mockImplementation(({ create }: { create: Record<string, unknown> }) => {
-      stored = create;
-      return Promise.resolve({ ...create, updatedAt: new Date(), updatedBy: null });
-    });
+    prisma.apiAccessToken.upsert.mockImplementation(
+      ({ create }: { create: Record<string, unknown> }) => {
+        stored = create;
+        return Promise.resolve({ ...create, updatedAt: new Date(), updatedBy: null });
+      },
+    );
     await service.set('huggingface', 'hf_real_token', 'admin-1');
     prisma.apiAccessToken.findUnique.mockResolvedValue(stored);
 

@@ -63,7 +63,9 @@ export function DataTable<T>({
     const trimmed = query.trim().toLowerCase();
     if (!trimmed || searchableColumns.length === 0) return rows;
     return rows.filter((row) =>
-      searchableColumns.some((column) => String(column.sortValue!(row)).toLowerCase().includes(trimmed)),
+      searchableColumns.some((column) =>
+        String(column.sortValue!(row)).toLowerCase().includes(trimmed),
+      ),
     );
   }, [rows, query, searchableColumns]);
 
@@ -112,7 +114,10 @@ export function DataTable<T>({
       {searchable && searchableColumns.length > 0 && (
         <div className="border-b border-line p-3">
           <div className="relative max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+              aria-hidden="true"
+            />
             <input
               className="min-h-10 w-full rounded-lg border border-line bg-white py-2 pl-9 pr-3 text-sm text-ink dark:bg-surface-muted"
               onChange={(e) => handleSearchChange(e.target.value)}
@@ -173,7 +178,9 @@ export function DataTable<T>({
               <article className="grid gap-2 p-4" key={rowKey(row)}>
                 {columns.map((column) => (
                   <div className="flex items-start justify-between gap-3" key={column.key}>
-                    <span className="shrink-0 text-xs font-bold uppercase text-muted">{column.header}</span>
+                    <span className="shrink-0 text-xs font-bold uppercase text-muted">
+                      {column.header}
+                    </span>
                     <div className="min-w-0 text-right">{column.render(row)}</div>
                   </div>
                 ))}

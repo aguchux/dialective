@@ -128,13 +128,13 @@ const DIALECT_VARIANTS_BY_TAG: Record<string, { tag: string; name: string }[]> =
 // WordRecording -- not new dialects, just the same values as real rows.
 const COUNTRIES: CountrySeed[] = [
   ...AFRICA_COUNTRIES,
-  { code: 'US', name: 'United States', dialects: [
-    { tag: 'en-us', name: 'English (US)' },
-  ] },
+  { code: 'US', name: 'United States', dialects: [{ tag: 'en-us', name: 'English (US)' }] },
 ];
 
 async function main() {
-  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  });
   try {
     const wordResult = await prisma.word.createMany({
       data: WORDS.map((text) => ({ text })),
@@ -151,10 +151,12 @@ async function main() {
       ),
     );
     const countryIds = new Map(countryRows.map((country) => [country.code, country.id]));
-    const dialects = COUNTRIES.flatMap((country) => country.dialects.map((dialect) => ({
-      ...dialect,
-      countryId: countryIds.get(country.code)!,
-    })));
+    const dialects = COUNTRIES.flatMap((country) =>
+      country.dialects.map((dialect) => ({
+        ...dialect,
+        countryId: countryIds.get(country.code)!,
+      })),
+    );
 
     const dialectRows = await Promise.all(
       dialects.map((dialect) =>

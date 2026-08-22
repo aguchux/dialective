@@ -70,12 +70,22 @@ export class MailService {
 
   async sendPasswordResetEmail(email: string, token: string): Promise<void> {
     const url = `${frontendUrl()}/reset-password?token=${token}`;
-    await this.send(email, 'Reset your Dialect Library password', passwordResetHtml(url), `Reset your password: ${url}`);
+    await this.send(
+      email,
+      'Reset your Dialect Library password',
+      passwordResetHtml(url),
+      `Reset your password: ${url}`,
+    );
   }
 
   async sendEmailVerificationEmail(email: string, token: string): Promise<void> {
     const url = `${frontendUrl()}/verify-email?token=${token}`;
-    await this.send(email, 'Verify your Dialect Library email', verifyEmailHtml(url), `Verify your email: ${url}`);
+    await this.send(
+      email,
+      'Verify your Dialect Library email',
+      verifyEmailHtml(url),
+      `Verify your email: ${url}`,
+    );
   }
 
   async sendMagicLinkEmail(email: string, token: string): Promise<void> {
@@ -85,17 +95,32 @@ export class MailService {
     // frontend page exchanges the token via its own server-side route and
     // then establishes the NextAuth session. See AGENTS.md "Authentication".
     const url = `${frontendUrl()}/magic-link?token=${token}`;
-    await this.send(email, 'Your Dialect Library sign-in link', magicLinkHtml(url), `Sign in: ${url}`);
+    await this.send(
+      email,
+      'Your Dialect Library sign-in link',
+      magicLinkHtml(url),
+      `Sign in: ${url}`,
+    );
   }
 
   async sendOtpEmail(email: string, code: string, purpose: OtpPurpose): Promise<void> {
     const { subject, intro } = otpCopyForPurpose(purpose);
-    await this.send(email, subject, otpHtml(intro, code), `${intro} Your code: ${code} (expires in 10 minutes).`);
+    await this.send(
+      email,
+      subject,
+      otpHtml(intro, code),
+      `${intro} Your code: ${code} (expires in 10 minutes).`,
+    );
   }
 
   async sendDataAccessLeadNotification(lead: DataAccessLeadNotification): Promise<void> {
     const to = await this.settings.getLeadsNotificationAddress();
-    await this.send(to, `New voice data lead: ${lead.name}`, dataAccessLeadHtml(lead), dataAccessLeadText(lead));
+    await this.send(
+      to,
+      `New voice data lead: ${lead.name}`,
+      dataAccessLeadHtml(lead),
+      dataAccessLeadText(lead),
+    );
   }
 
   async sendReferralJoinNotification(payload: ReferralJoinNotification): Promise<void> {
@@ -126,7 +151,9 @@ export class MailService {
    * this is called, so a caller that wants the payout to still succeed even
    * if the email fails should catch this separately (see call site).
    */
-  async sendTrainingPayoutCreditedEmail(payload: TrainingPayoutCreditedNotification): Promise<void> {
+  async sendTrainingPayoutCreditedEmail(
+    payload: TrainingPayoutCreditedNotification,
+  ): Promise<void> {
     const dashboardUrl = `${frontendUrl()}/dashboard?view=tokens`;
     await this.send(
       payload.trainerEmail,
@@ -147,7 +174,9 @@ export class MailService {
     const coursesUrl = `${frontendUrl()}/dashboard?view=training`;
     await this.send(
       payload.trainerEmail,
-      payload.rewardTokens ? `Course complete: ${payload.courseTitle} (+${payload.rewardTokens} DL)` : `Course complete: ${payload.courseTitle}`,
+      payload.rewardTokens
+        ? `Course complete: ${payload.courseTitle} (+${payload.rewardTokens} DL)`
+        : `Course complete: ${payload.courseTitle}`,
       courseCompletedHtml(payload.courseTitle, payload.rewardTokens, coursesUrl),
       courseCompletedText(payload.courseTitle, payload.rewardTokens, coursesUrl),
     );
@@ -231,25 +260,52 @@ function magicLinkHtml(url: string): string {
 function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: string } {
   switch (purpose) {
     case 'REGISTRATION':
-      return { subject: 'Verify your Dialect Library account', intro: 'Enter this code to verify your new account.' };
+      return {
+        subject: 'Verify your Dialect Library account',
+        intro: 'Enter this code to verify your new account.',
+      };
     case 'LOGIN':
-      return { subject: 'Your Dialect Library login code', intro: 'Enter this code to finish signing in.' };
+      return {
+        subject: 'Your Dialect Library login code',
+        intro: 'Enter this code to finish signing in.',
+      };
     case 'WITHDRAWAL':
-      return { subject: 'Confirm your withdrawal', intro: 'Enter this code to confirm your withdrawal request.' };
+      return {
+        subject: 'Confirm your withdrawal',
+        intro: 'Enter this code to confirm your withdrawal request.',
+      };
     case 'DEPOSIT':
-      return { subject: 'Confirm your deposit', intro: 'Enter this code to confirm your token purchase.' };
+      return {
+        subject: 'Confirm your deposit',
+        intro: 'Enter this code to confirm your token purchase.',
+      };
     case 'ADMIN_PAYOUT':
-      return { subject: 'Confirm this payout', intro: 'Enter this code to confirm this admin payout action.' };
+      return {
+        subject: 'Confirm this payout',
+        intro: 'Enter this code to confirm this admin payout action.',
+      };
     case 'P2P_PAYMENT_METHOD':
-      return { subject: 'Confirm your payment method', intro: 'Enter this code to save your payment method.' };
+      return {
+        subject: 'Confirm your payment method',
+        intro: 'Enter this code to save your payment method.',
+      };
     case 'PHONE_VERIFICATION':
       // Always SMS-delivered in practice (see OtpService.deliver) -- this
       // case exists only so the switch stays exhaustive if ever called by mistake.
-      return { subject: 'Verify your phone number', intro: 'Enter this code to verify your phone number.' };
+      return {
+        subject: 'Verify your phone number',
+        intro: 'Enter this code to verify your phone number.',
+      };
     case 'P2P_TRADE':
-      return { subject: 'Confirm your P2P trade', intro: 'Enter this code to confirm this P2P market action.' };
+      return {
+        subject: 'Confirm your P2P trade',
+        intro: 'Enter this code to confirm this P2P market action.',
+      };
     case 'SUB_DISTRIBUTOR_ADJUSTMENT':
-      return { subject: 'Confirm this wallet adjustment', intro: 'Enter this code to confirm this sub-distributor wallet adjustment.' };
+      return {
+        subject: 'Confirm this wallet adjustment',
+        intro: 'Enter this code to confirm this sub-distributor wallet adjustment.',
+      };
   }
 }
 
@@ -320,25 +376,41 @@ ${payload.referralUrl}
 This link connects your account to ${payload.inviterName}'s referral network.`;
 }
 
-function trainingPayoutCreditedHtml(tokenAmount: string, reference: string | null, dashboardUrl: string): string {
+function trainingPayoutCreditedHtml(
+  tokenAmount: string,
+  reference: string | null,
+  dashboardUrl: string,
+): string {
   return `<p><strong>${escapeHtml(tokenAmount)} DL</strong> has been added to your Dialect Library wallet.</p>
 ${reference ? `<p>Reason: ${escapeHtml(reference)}</p>` : ''}
 <p>View your balance and activity here:</p>
 <p><a href="${dashboardUrl}">${dashboardUrl}</a></p>`;
 }
 
-function trainingPayoutCreditedText(tokenAmount: string, reference: string | null, dashboardUrl: string): string {
+function trainingPayoutCreditedText(
+  tokenAmount: string,
+  reference: string | null,
+  dashboardUrl: string,
+): string {
   return `${tokenAmount} DL has been added to your Dialect Library wallet.
 ${reference ? `Reason: ${reference}\n` : ''}View your balance: ${dashboardUrl}`;
 }
 
-function courseCompletedHtml(courseTitle: string, rewardTokens: string | null, coursesUrl: string): string {
+function courseCompletedHtml(
+  courseTitle: string,
+  rewardTokens: string | null,
+  coursesUrl: string,
+): string {
   return `<p>You've completed <strong>${escapeHtml(courseTitle)}</strong>.</p>
 ${rewardTokens ? `<p><strong>${escapeHtml(rewardTokens)} DL</strong> has been added to your Dialect Library wallet for completing this course.</p>` : ''}
 <p><a href="${coursesUrl}">Continue training</a></p>`;
 }
 
-function courseCompletedText(courseTitle: string, rewardTokens: string | null, coursesUrl: string): string {
+function courseCompletedText(
+  courseTitle: string,
+  rewardTokens: string | null,
+  coursesUrl: string,
+): string {
   return `You've completed ${courseTitle}.
 ${rewardTokens ? `${rewardTokens} DL has been added to your Dialect Library wallet for completing this course.\n` : ''}Continue training: ${coursesUrl}`;
 }

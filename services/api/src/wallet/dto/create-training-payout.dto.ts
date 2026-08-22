@@ -1,4 +1,14 @@
-import { IsNumber, IsOptional, IsString, IsUUID, Length, Matches, MaxLength, Min, MinLength } from 'class-validator';
+import {
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Matches,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 export class CreateTrainingPayoutDto {
   @IsString()

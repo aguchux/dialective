@@ -41,7 +41,9 @@ describe('CoursesService', () => {
         { id: 'course-2', title: 'Optional' },
       ]);
       prisma.user.count.mockResolvedValue(10);
-      prisma.courseProgress.groupBy.mockResolvedValue([{ courseId: 'course-1', _count: { _all: 6 } }]);
+      prisma.courseProgress.groupBy.mockResolvedValue([
+        { courseId: 'course-1', _count: { _all: 6 } },
+      ]);
 
       const result = await service.listAdmin();
 
@@ -59,8 +61,15 @@ describe('CoursesService', () => {
   describe('getPublishedPreview', () => {
     it('strips slides and returns a slideCount', async () => {
       prisma.course.findFirst.mockResolvedValue({
-        id: 'c1', slug: 'intro', title: 'Intro', summary: 'sum',
-        coverImageUrl: null, coverImageAlt: null, publishedAt: new Date(), createdAt: new Date(), updatedAt: new Date(),
+        id: 'c1',
+        slug: 'intro',
+        title: 'Intro',
+        summary: 'sum',
+        coverImageUrl: null,
+        coverImageAlt: null,
+        publishedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
         slides: { slides: [{ text: 'a' }, { text: 'b' }, { text: 'c' }] },
       });
       const result = await service.getPublishedPreview('intro');
@@ -75,10 +84,14 @@ describe('CoursesService', () => {
   });
 
   describe('getForStudy', () => {
-    it('returns full slides plus the caller\'s own progress', async () => {
+    it("returns full slides plus the caller's own progress", async () => {
       prisma.course.findFirst.mockResolvedValue({
-        id: 'c1', slug: 'intro', title: 'Intro', summary: 'sum',
-        coverImageUrl: null, coverImageAlt: null,
+        id: 'c1',
+        slug: 'intro',
+        title: 'Intro',
+        summary: 'sum',
+        coverImageUrl: null,
+        coverImageAlt: null,
         slides: { slides: [{ text: 'a' }, { text: 'b' }] },
       });
       prisma.courseProgress.findUnique.mockResolvedValue({ lastSlideIndex: 1, completedAt: null });
@@ -90,22 +103,34 @@ describe('CoursesService', () => {
 
     it('404s on a draft or nonexistent slug -- same as "does not exist" to a non-admin caller', async () => {
       prisma.course.findFirst.mockResolvedValue(null);
-      await expect(service.getForStudy('user-1', 'draft-course')).rejects.toThrow(NotFoundException);
+      await expect(service.getForStudy('user-1', 'draft-course')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
   describe('getPublicForStudy', () => {
     it('returns full slides with no progress field, filtered to PUBLISHED+PUBLIC', async () => {
       prisma.course.findFirst.mockResolvedValue({
-        id: 'c1', slug: 'how-it-works', title: 'How It Works', summary: 'sum',
-        coverImageUrl: null, coverImageAlt: null,
+        id: 'c1',
+        slug: 'how-it-works',
+        title: 'How It Works',
+        summary: 'sum',
+        coverImageUrl: null,
+        coverImageAlt: null,
         slides: { slides: [{ text: 'a' }, { text: 'b' }] },
       });
 
       const result = await service.getPublicForStudy('how-it-works');
 
       expect(prisma.course.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ slug: 'how-it-works', status: 'PUBLISHED', visibility: 'PUBLIC' }) }),
+        expect.objectContaining({
+          where: expect.objectContaining({
+            slug: 'how-it-works',
+            status: 'PUBLISHED',
+            visibility: 'PUBLIC',
+          }),
+        }),
       );
       expect(result.slides).toEqual([{ text: 'a' }, { text: 'b' }]);
       expect((result as Record<string, unknown>).progress).toBeUndefined();
@@ -123,9 +148,11 @@ describe('CoursesService', () => {
       prisma.courseProgress.upsert.mockImplementation(({ create }: any) => Promise.resolve(create));
 
       const result = await service.saveProgress('user-1', 'intro', 99, 5);
-      expect(prisma.courseProgress.upsert).toHaveBeenCalledWith(expect.objectContaining({
-        create: expect.objectContaining({ lastSlideIndex: 4, completedAt: expect.any(Date) }),
-      }));
+      expect(prisma.courseProgress.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ lastSlideIndex: 4, completedAt: expect.any(Date) }),
+        }),
+      );
       expect(result.lastSlideIndex).toBe(4);
     });
 
@@ -134,15 +161,22 @@ describe('CoursesService', () => {
       prisma.courseProgress.upsert.mockImplementation(({ create }: any) => Promise.resolve(create));
 
       await service.saveProgress('user-1', 'intro', 1, 5);
-      expect(prisma.courseProgress.upsert).toHaveBeenCalledWith(expect.objectContaining({
-        create: expect.objectContaining({ lastSlideIndex: 1, completedAt: null }),
-      }));
+      expect(prisma.courseProgress.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ lastSlideIndex: 1, completedAt: null }),
+        }),
+      );
     });
 
     it('never clears an existing completedAt on a later, earlier-index save', async () => {
       prisma.course.findFirst.mockResolvedValue({ id: 'c1' });
       prisma.courseProgress.findUnique.mockResolvedValue({ completedAt: new Date('2026-01-01') });
-      prisma.courseProgress.upsert.mockImplementation(({ update }: any) => Promise.resolve({ lastSlideIndex: update.lastSlideIndex, completedAt: update.completedAt ?? 'unchanged' }));
+      prisma.courseProgress.upsert.mockImplementation(({ update }: any) =>
+        Promise.resolve({
+          lastSlideIndex: update.lastSlideIndex,
+          completedAt: update.completedAt ?? 'unchanged',
+        }),
+      );
 
       await service.saveProgress('user-1', 'intro', 0, 5);
       const call = prisma.courseProgress.upsert.mock.calls[0][0];
@@ -150,9 +184,16 @@ describe('CoursesService', () => {
     });
 
     it('does not re-credit or re-email on a save that keeps an already-completed course completed', async () => {
-      prisma.course.findFirst.mockResolvedValue({ id: 'c1', title: 'Intro', completionRewardTokens: new Prisma.Decimal(5) });
+      prisma.course.findFirst.mockResolvedValue({
+        id: 'c1',
+        title: 'Intro',
+        completionRewardTokens: new Prisma.Decimal(5),
+      });
       prisma.courseProgress.findUnique.mockResolvedValue({ completedAt: new Date('2026-01-01') });
-      prisma.courseProgress.upsert.mockResolvedValue({ lastSlideIndex: 4, completedAt: new Date('2026-01-01') });
+      prisma.courseProgress.upsert.mockResolvedValue({
+        lastSlideIndex: 4,
+        completedAt: new Date('2026-01-01'),
+      });
 
       await service.saveProgress('user-1', 'intro', 4, 5);
       expect(mail.sendCourseCompletedEmail).not.toHaveBeenCalled();
@@ -160,41 +201,73 @@ describe('CoursesService', () => {
 
     it('credits the completion reward and emails once, the first time a course is completed', async () => {
       const completionRewardTokens = new Prisma.Decimal(5);
-      prisma.course.findFirst.mockResolvedValue({ id: 'c1', title: 'Intro', completionRewardTokens });
+      prisma.course.findFirst.mockResolvedValue({
+        id: 'c1',
+        title: 'Intro',
+        completionRewardTokens,
+      });
       prisma.courseProgress.findUnique.mockResolvedValue(null);
-      prisma.courseProgress.upsert.mockResolvedValue({ lastSlideIndex: 4, completedAt: new Date() });
+      prisma.courseProgress.upsert.mockResolvedValue({
+        lastSlideIndex: 4,
+        completedAt: new Date(),
+      });
       prisma.ledgerEntry = { create: jest.fn().mockResolvedValue({}) };
-      prisma.wallet = { findUnique: jest.fn().mockResolvedValue({ id: 'w1' }), create: jest.fn(), update: jest.fn().mockResolvedValue({}) };
+      prisma.wallet = {
+        findUnique: jest.fn().mockResolvedValue({ id: 'w1' }),
+        create: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
+      };
       prisma.$transaction.mockImplementation((fn: any) => fn(prisma));
 
       await service.saveProgress('user-1', 'intro', 4, 5);
 
-      expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({ type: 'COURSE_COMPLETION_REWARD', reference: 'c1' }),
-      }));
+      expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'COURSE_COMPLETION_REWARD', reference: 'c1' }),
+        }),
+      );
       expect(mail.sendCourseCompletedEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ trainerEmail: 'trainer@example.com', courseTitle: 'Intro', rewardTokens: '5' }),
+        expect.objectContaining({
+          trainerEmail: 'trainer@example.com',
+          courseTitle: 'Intro',
+          rewardTokens: '5',
+        }),
       );
     });
 
     it('still emails completion with no reward when the course has none', async () => {
-      prisma.course.findFirst.mockResolvedValue({ id: 'c1', title: 'Intro', completionRewardTokens: null });
+      prisma.course.findFirst.mockResolvedValue({
+        id: 'c1',
+        title: 'Intro',
+        completionRewardTokens: null,
+      });
       prisma.courseProgress.findUnique.mockResolvedValue(null);
-      prisma.courseProgress.upsert.mockResolvedValue({ lastSlideIndex: 4, completedAt: new Date() });
+      prisma.courseProgress.upsert.mockResolvedValue({
+        lastSlideIndex: 4,
+        completedAt: new Date(),
+      });
 
       await service.saveProgress('user-1', 'intro', 4, 5);
 
       expect(mail.sendCourseCompletedEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ trainerEmail: 'trainer@example.com', courseTitle: 'Intro', rewardTokens: null }),
+        expect.objectContaining({
+          trainerEmail: 'trainer@example.com',
+          courseTitle: 'Intro',
+          rewardTokens: null,
+        }),
       );
     });
   });
 
   describe('create', () => {
     it('rejects an invalid slide document before touching the database', async () => {
-      await expect(service.create('author-1', {
-        title: 'My Course', summary: 'sum', content: { slides: [] },
-      } as any)).rejects.toThrow(BadRequestException);
+      await expect(
+        service.create('author-1', {
+          title: 'My Course',
+          summary: 'sum',
+          content: { slides: [] },
+        } as any),
+      ).rejects.toThrow(BadRequestException);
       expect(prisma.course.create).not.toHaveBeenCalled();
     });
 
@@ -203,7 +276,9 @@ describe('CoursesService', () => {
       prisma.course.create.mockImplementation(({ data }: any) => Promise.resolve(data));
 
       const result = await service.create('author-1', {
-        title: 'Getting Started', summary: 'sum', content: { slides: [{ text: { blocks: [{ type: 'paragraph', data: { text: 'hi' } }] } }] },
+        title: 'Getting Started',
+        summary: 'sum',
+        content: { slides: [{ text: { blocks: [{ type: 'paragraph', data: { text: 'hi' } }] } }] },
       } as any);
       expect(result.slug).toMatch(/^getting-started-/);
       expect(result.sortOrder).toBe(0);
@@ -213,20 +288,39 @@ describe('CoursesService', () => {
   describe('update', () => {
     it('rejects publishing a course with zero slides', async () => {
       prisma.course.findUnique.mockResolvedValue({
-        id: 'c1', status: 'DRAFT', slides: { slides: [] }, author: {},
+        id: 'c1',
+        status: 'DRAFT',
+        slides: { slides: [] },
+        author: {},
       });
-      await expect(service.update('c1', { status: 'PUBLISHED' } as any)).rejects.toThrow(BadRequestException);
+      await expect(service.update('c1', { status: 'PUBLISHED' } as any)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
   describe('reorder', () => {
     it('rejects duplicate ids', async () => {
-      await expect(service.reorder({ items: [{ id: 'a', sortOrder: 0 }, { id: 'a', sortOrder: 1 }] } as any)).rejects.toThrow(BadRequestException);
+      await expect(
+        service.reorder({
+          items: [
+            { id: 'a', sortOrder: 0 },
+            { id: 'a', sortOrder: 1 },
+          ],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('rejects when an id does not exist', async () => {
       prisma.course.count.mockResolvedValue(1);
-      await expect(service.reorder({ items: [{ id: 'a', sortOrder: 0 }, { id: 'b', sortOrder: 1 }] } as any)).rejects.toThrow(BadRequestException);
+      await expect(
+        service.reorder({
+          items: [
+            { id: 'a', sortOrder: 0 },
+            { id: 'b', sortOrder: 1 },
+          ],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

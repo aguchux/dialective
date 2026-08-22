@@ -13,16 +13,22 @@ describe('blog content utilities', () => {
   });
 
   it('rejects unsupported blocks', () => {
-    expect(() => validateEditorDocument({ blocks: [{ type: 'script', data: {} }] })).toThrow(BadRequestException);
+    expect(() => validateEditorDocument({ blocks: [{ type: 'script', data: {} }] })).toThrow(
+      BadRequestException,
+    );
   });
 
   it('limits excerpts to 160 characters', () => {
-    const document = validateEditorDocument({ blocks: [{ type: 'paragraph', data: { text: 'word '.repeat(60) } }] });
+    const document = validateEditorDocument({
+      blocks: [{ type: 'paragraph', data: { text: 'word '.repeat(60) } }],
+    });
     expect(deriveExcerpt(document).length).toBeLessThanOrEqual(160);
   });
 
   it('calculates a minimum one-minute reading time', () => {
-    const document = validateEditorDocument({ blocks: [{ type: 'paragraph', data: { text: 'A short post.' } }] });
+    const document = validateEditorDocument({
+      blocks: [{ type: 'paragraph', data: { text: 'A short post.' } }],
+    });
     expect(calculateReadMinutes(document)).toBe(1);
   });
 });

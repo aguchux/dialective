@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { BlogPostStatus, CourseVisibility, creditCourseCompletionReward, Prisma } from '@dialectiva/db';
+import {
+  BlogPostStatus,
+  CourseVisibility,
+  creditCourseCompletionReward,
+  Prisma,
+} from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MailService } from '../mail/mail.service';
@@ -14,7 +19,12 @@ const authorSelect = { email: true } as const;
 // Slugs are never client-supplied: always `${slugified title}-${id}`, same
 // pattern as BlogService.slugFor -- uniqueness comes for free from the id.
 function slugFor(title: string, id: string): string {
-  const base = title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 150);
+  const base = title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 150);
   return `${base || 'course'}-${id}`;
 }
 
@@ -31,9 +41,16 @@ export class CoursesService {
       where: { status: BlogPostStatus.PUBLISHED },
       orderBy: [{ sortOrder: 'asc' }, { publishedAt: 'desc' }],
       select: {
-        id: true, slug: true, title: true, summary: true, visibility: true,
-        coverImageUrl: true, coverImageAlt: true, publishedAt: true,
-        createdAt: true, updatedAt: true,
+        id: true,
+        slug: true,
+        title: true,
+        summary: true,
+        visibility: true,
+        coverImageUrl: true,
+        coverImageAlt: true,
+        publishedAt: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
   }
@@ -42,9 +59,17 @@ export class CoursesService {
     const course = await this.prisma.course.findFirst({
       where: { slug, status: BlogPostStatus.PUBLISHED },
       select: {
-        id: true, slug: true, title: true, summary: true, visibility: true,
-        coverImageUrl: true, coverImageAlt: true, publishedAt: true,
-        createdAt: true, updatedAt: true, slides: true,
+        id: true,
+        slug: true,
+        title: true,
+        summary: true,
+        visibility: true,
+        coverImageUrl: true,
+        coverImageAlt: true,
+        publishedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        slides: true,
       },
     });
     if (!course) throw new NotFoundException('Course not found');
@@ -77,7 +102,9 @@ export class CoursesService {
       coverImageUrl: course.coverImageUrl,
       coverImageAlt: course.coverImageAlt,
       slides: (course.slides as unknown as CourseDocument).slides,
-      progress: progress ? { lastSlideIndex: progress.lastSlideIndex, completedAt: progress.completedAt } : null,
+      progress: progress
+        ? { lastSlideIndex: progress.lastSlideIndex, completedAt: progress.completedAt }
+        : null,
     };
   }
 
@@ -159,7 +186,12 @@ export class CoursesService {
 
     if (hasReward) {
       try {
-        const credited = await creditCourseCompletionReward(this.prisma, userId, course.id, course.completionRewardTokens!);
+        const credited = await creditCourseCompletionReward(
+          this.prisma,
+          userId,
+          course.id,
+          course.completionRewardTokens!,
+        );
         if (credited) rewardTokens = course.completionRewardTokens!.toString();
       } catch {
         // Reward credit failure shouldn't block the completion email below,
@@ -169,9 +201,16 @@ export class CoursesService {
     }
 
     try {
-      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
       if (user) {
-        await this.mail.sendCourseCompletedEmail({ trainerEmail: user.email, courseTitle: course.title, rewardTokens });
+        await this.mail.sendCourseCompletedEmail({
+          trainerEmail: user.email,
+          courseTitle: course.title,
+          rewardTokens,
+        });
       }
     } catch {
       // Best-effort, same as every other post-completion side effect here.
@@ -216,7 +255,10 @@ export class CoursesService {
     const document = validateCourseDocument(dto.content);
     const id = randomUUID();
     const title = dto.title.trim();
-    const lastCourse = await this.prisma.course.findFirst({ orderBy: { sortOrder: 'desc' }, select: { sortOrder: true } });
+    const lastCourse = await this.prisma.course.findFirst({
+      orderBy: { sortOrder: 'desc' },
+      select: { sortOrder: true },
+    });
     const status = dto.status ?? BlogPostStatus.DRAFT;
 
     const course = await this.prisma.course.create({
@@ -268,10 +310,13 @@ export class CoursesService {
         ...(dto.coverImageAlt !== undefined && { coverImageAlt: cleanOptional(dto.coverImageAlt) }),
         ...(dto.visibility !== undefined && { visibility: dto.visibility }),
         ...(dto.required !== undefined && { required: dto.required }),
-        ...(dto.completionRewardTokens !== undefined && { completionRewardTokens: dto.completionRewardTokens ?? null }),
+        ...(dto.completionRewardTokens !== undefined && {
+          completionRewardTokens: dto.completionRewardTokens ?? null,
+        }),
         ...(dto.status !== undefined && {
           status: dto.status,
-          publishedAt: nextStatus === BlogPostStatus.PUBLISHED ? current.publishedAt ?? new Date() : null,
+          publishedAt:
+            nextStatus === BlogPostStatus.PUBLISHED ? (current.publishedAt ?? new Date()) : null,
         }),
       },
       include: { author: { select: authorSelect } },
@@ -284,13 +329,18 @@ export class CoursesService {
 
   async reorder(dto: ReorderCoursesDto) {
     const ids = dto.items.map((item) => item.id);
-    if (new Set(ids).size !== ids.length) throw new BadRequestException('Duplicate course ids are not allowed');
+    if (new Set(ids).size !== ids.length)
+      throw new BadRequestException('Duplicate course ids are not allowed');
     const count = await this.prisma.course.count({ where: { id: { in: ids } } });
     if (count !== ids.length) throw new BadRequestException('One or more courses do not exist');
-    await this.prisma.$transaction(dto.items.map((item) => this.prisma.course.update({
-      where: { id: item.id },
-      data: { sortOrder: item.sortOrder },
-    })));
+    await this.prisma.$transaction(
+      dto.items.map((item) =>
+        this.prisma.course.update({
+          where: { id: item.id },
+          data: { sortOrder: item.sortOrder },
+        }),
+      ),
+    );
     return { reordered: ids.length };
   }
 

@@ -7,12 +7,12 @@ export const faqItems = [
   {
     question: 'Who can become a trainer?',
     answer:
-      'Anyone who can naturally speak one of the supported dialects can create an account and contribute. During onboarding you pick your country from the full list of African countries and then choose from that country\'s supported dialects.',
+      "Anyone who can naturally speak one of the supported dialects can create an account and contribute. During onboarding you pick your country from the full list of African countries and then choose from that country's supported dialects.",
   },
   {
     question: 'What kind of tasks will I do?',
     answer:
-      'There are two task types on the Training tab: word training (translate an English word into your dialect, or pronounce it, plus reverse-validating other trainers\' translations back to English) and sentence dictation (record yourself reading a full prompt sentence aloud in your dialect).',
+      "There are two task types on the Training tab: word training (translate an English word into your dialect, or pronounce it, plus reverse-validating other trainers' translations back to English) and sentence dictation (record yourself reading a full prompt sentence aloud in your dialect).",
   },
   {
     question: 'Do I need AI experience?',
@@ -22,12 +22,12 @@ export const faqItems = [
   {
     question: 'How are submissions scored?',
     answer:
-      'Sentence-dictation recordings are transcribed automatically and then compared against other trainers who submitted the same prompt in your dialect (consensus scoring) -- more trainers active in your dialect means faster, more reliable scoring. Word-training translations are scored through peer reverse-validation, where another trainer transcribes your recording back to English. You can follow every submission\'s status on the Training tab, and see completed results with your accuracy score under My Scores.',
+      "Sentence-dictation recordings are transcribed automatically and then compared against other trainers who submitted the same prompt in your dialect (consensus scoring) -- more trainers active in your dialect means faster, more reliable scoring. Word-training translations are scored through peer reverse-validation, where another trainer transcribes your recording back to English. You can follow every submission's status on the Training tab, and see completed results with your accuracy score under My Scores.",
   },
   {
     question: 'What happens if my submission never gets scored?',
     answer:
-      'Every submission has a scoring time limit. If it isn\'t scored in time (for example, too few other trainers have submitted that prompt yet), it\'s automatically resolved -- either refunded, or, when enabled, paid out at a fair score anyway -- so you never lose your stake or your effort to low activity in your dialect.',
+      "Every submission has a scoring time limit. If it isn't scored in time (for example, too few other trainers have submitted that prompt yet), it's automatically resolved -- either refunded, or, when enabled, paid out at a fair score anyway -- so you never lose your stake or your effort to low activity in your dialect.",
   },
   {
     question: 'How do I fund my account and what is DL?',
@@ -42,7 +42,7 @@ export const faqItems = [
   {
     question: 'Why do I need to verify my email?',
     answer:
-      'Email verification confirms you control a real, recoverable account before any withdrawal is processed. If your email isn\'t verified yet, you\'ll see a reminder banner on your dashboard and in your Profile with a one-click option to resend the verification link.',
+      "Email verification confirms you control a real, recoverable account before any withdrawal is processed. If your email isn't verified yet, you'll see a reminder banner on your dashboard and in your Profile with a one-click option to resend the verification link.",
   },
   {
     question: 'What is the referral program?',

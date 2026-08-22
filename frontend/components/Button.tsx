@@ -14,6 +14,19 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   pendingLabel?: ReactNode;
 }
 
-export function Button({ variant = 'primary', className = '', pending, pendingLabel, ...props }: ButtonProps) {
-  return <ActionButton className={`${base} ${variants[variant]} ${className}`} pending={pending} pendingLabel={pendingLabel} {...props} />;
+export function Button({
+  variant = 'primary',
+  className = '',
+  pending,
+  pendingLabel,
+  ...props
+}: ButtonProps) {
+  return (
+    <ActionButton
+      className={`${base} ${variants[variant]} ${className}`}
+      pending={pending}
+      pendingLabel={pendingLabel}
+      {...props}
+    />
+  );
 }

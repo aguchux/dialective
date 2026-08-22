@@ -19,7 +19,11 @@ describe('SettlementService resolveTimedOutScoring', () => {
         }),
       },
       submission: {
-        findMany: jest.fn().mockResolvedValue([{ id: 'sub-1', userId: 'user-1', tokensSpent: { toNumber: () => 1 } }]),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 'sub-1', userId: 'user-1', tokensSpent: { toNumber: () => 1 } },
+          ]),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest.fn().mockResolvedValue({}),
       },

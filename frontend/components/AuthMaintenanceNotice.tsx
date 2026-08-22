@@ -10,7 +10,13 @@ import { useCountdown } from '@/lib/use-countdown';
  * time passes, so once this hits zero a retry of the underlying request
  * will succeed even before this component re-fetches.
  */
-export function AuthMaintenanceNotice({ until, note }: { until: string | null; note: string | null }) {
+export function AuthMaintenanceNotice({
+  until,
+  note,
+}: {
+  until: string | null;
+  note: string | null;
+}) {
   const countdown = useCountdown(until);
 
   return (

@@ -10,8 +10,13 @@ export interface LiveKitTokenResponse {
   room: string;
 }
 
-export async function getLiveKitToken(apiBaseUrl: string, room = 'chatdialect-demo'): Promise<LiveKitTokenResponse> {
-  const response = await fetch(`${apiBaseUrl}/chatdialect/livekit/token?room=${encodeURIComponent(room)}`);
+export async function getLiveKitToken(
+  apiBaseUrl: string,
+  room = 'chatdialect-demo',
+): Promise<LiveKitTokenResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/chatdialect/livekit/token?room=${encodeURIComponent(room)}`,
+  );
   if (!response.ok) {
     throw new Error(`Failed to fetch LiveKit token: ${response.status}`);
   }

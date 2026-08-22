@@ -14,7 +14,8 @@ import {
   useListAdminDistributorsQuery,
 } from '@/store/api';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const secondaryButtonClass =
@@ -32,7 +33,9 @@ function formatTokens(value: string | number) {
 
 export default function AdminDistributorsPage() {
   const { data: distributors, isLoading } = useListAdminDistributorsQuery();
-  const [creditingDistributor, setCreditingDistributor] = useState<DistributorAdminSummary | null>(null);
+  const [creditingDistributor, setCreditingDistributor] = useState<DistributorAdminSummary | null>(
+    null,
+  );
 
   const columns: DataTableColumn<DistributorAdminSummary>[] = [
     {
@@ -50,7 +53,11 @@ export default function AdminDistributorsPage() {
       key: 'status',
       header: 'Status',
       sortValue: (d) => d.status,
-      render: (d) => <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${statusStyles[d.status]}`}>{d.status}</span>,
+      render: (d) => (
+        <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${statusStyles[d.status]}`}>
+          {d.status}
+        </span>
+      ),
     },
     {
       key: 'tokenBalance',
@@ -59,7 +66,9 @@ export default function AdminDistributorsPage() {
       render: (d) => (
         <>
           <p className="font-extrabold">{formatTokens(d.tokenBalance)} DL</p>
-          {Number(d.lockedBalance) > 0 && <p className="text-xs text-muted">{formatTokens(d.lockedBalance)} DL locked</p>}
+          {Number(d.lockedBalance) > 0 && (
+            <p className="text-xs text-muted">{formatTokens(d.lockedBalance)} DL locked</p>
+          )}
         </>
       ),
     },
@@ -67,13 +76,17 @@ export default function AdminDistributorsPage() {
       key: 'totalCredit',
       header: 'All credit',
       sortValue: (d) => Number(d.totalCredit),
-      render: (d) => <span className="font-bold text-accent-dark">+{formatTokens(d.totalCredit)} DL</span>,
+      render: (d) => (
+        <span className="font-bold text-accent-dark">+{formatTokens(d.totalCredit)} DL</span>
+      ),
     },
     {
       key: 'totalDebit',
       header: 'All debit',
       sortValue: (d) => Number(d.totalDebit),
-      render: (d) => <span className="font-bold text-danger">-{formatTokens(d.totalDebit)} DL</span>,
+      render: (d) => (
+        <span className="font-bold text-danger">-{formatTokens(d.totalDebit)} DL</span>
+      ),
     },
     {
       key: 'actions',
@@ -81,7 +94,11 @@ export default function AdminDistributorsPage() {
       searchable: false,
       render: (d) => (
         <div className="flex flex-wrap items-center gap-2">
-          <button className={secondaryButtonClass} onClick={() => setCreditingDistributor(d)} type="button">
+          <button
+            className={secondaryButtonClass}
+            onClick={() => setCreditingDistributor(d)}
+            type="button"
+          >
             + Credit
           </button>
           <Link className={secondaryButtonClass} href={`/admin/distributors/${d.id}`}>
@@ -98,7 +115,8 @@ export default function AdminDistributorsPage() {
         <div className="grid gap-2">
           <h1 className="text-3xl font-black">Distributors</h1>
           <p className="leading-relaxed text-muted">
-            Every distributor&rsquo;s DL balance, lifetime credit and debit, bulk allocations, and network activity.
+            Every distributor&rsquo;s DL balance, lifetime credit and debit, bulk allocations, and
+            network activity.
           </p>
         </div>
 
@@ -113,13 +131,22 @@ export default function AdminDistributorsPage() {
       </div>
 
       {creditingDistributor && (
-        <CreditDistributorDialog distributor={creditingDistributor} onClose={() => setCreditingDistributor(null)} />
+        <CreditDistributorDialog
+          distributor={creditingDistributor}
+          onClose={() => setCreditingDistributor(null)}
+        />
       )}
     </AdminShell>
   );
 }
 
-function CreditDistributorDialog({ distributor, onClose }: { distributor: DistributorAdminSummary; onClose: () => void }) {
+function CreditDistributorDialog({
+  distributor,
+  onClose,
+}: {
+  distributor: DistributorAdminSummary;
+  onClose: () => void;
+}) {
   const { data: settings } = useGetDistributorSettingsQuery();
   const [allocate, { isLoading: isAllocating }] = useCreateDistributorAllocationMutation();
 
@@ -131,7 +158,7 @@ function CreditDistributorDialog({ distributor, onClose }: { distributor: Distri
   const defaultBulkDiscountRate = settings?.defaultBulkDiscountRate ?? '0';
   const effectiveTokenAmount = useMemo(() => {
     const amount = Number(tokenAmount || 0);
-    const rate = Number((discountRate || defaultBulkDiscountRate) || 0);
+    const rate = Number(discountRate || defaultBulkDiscountRate || 0);
     if (!Number.isFinite(amount) || amount <= 0) return null;
     return { amount, rate, discountedValue: amount * (1 - rate) };
   }, [tokenAmount, discountRate, defaultBulkDiscountRate]);
@@ -161,13 +188,16 @@ function CreditDistributorDialog({ distributor, onClose }: { distributor: Distri
         <form className="grid gap-3" onSubmit={handleSubmit}>
           {!settings?.enabled || !settings?.bulkAllocationEnabled ? (
             <p className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm leading-relaxed text-muted">
-              Bulk allocations are currently disabled. Enable them from Settings &rarr; Distributor Settings before
-              crediting a distributor.
+              Bulk allocations are currently disabled. Enable them from Settings &rarr; Distributor
+              Settings before crediting a distributor.
             </p>
           ) : (
             <>
               <div className="grid gap-1">
-                <label className="text-xs font-bold uppercase text-muted" htmlFor="credit-token-amount">
+                <label
+                  className="text-xs font-bold uppercase text-muted"
+                  htmlFor="credit-token-amount"
+                >
                   DL tokens
                 </label>
                 <input
@@ -182,7 +212,10 @@ function CreditDistributorDialog({ distributor, onClose }: { distributor: Distri
                 />
               </div>
               <div className="grid gap-1">
-                <label className="text-xs font-bold uppercase text-muted" htmlFor="credit-discount-rate">
+                <label
+                  className="text-xs font-bold uppercase text-muted"
+                  htmlFor="credit-discount-rate"
+                >
                   Discount rate
                 </label>
                 <input
@@ -199,12 +232,19 @@ function CreditDistributorDialog({ distributor, onClose }: { distributor: Distri
               </div>
               {effectiveTokenAmount && (
                 <div className="grid gap-1 rounded-lg border border-line bg-surface px-3 py-2.5 text-sm">
-                  <p className="text-muted">{effectiveTokenAmount.amount.toLocaleString()} DL is credited to the wallet in full.</p>
+                  <p className="text-muted">
+                    {effectiveTokenAmount.amount.toLocaleString()} DL is credited to the wallet in
+                    full.
+                  </p>
                   {effectiveTokenAmount.rate > 0 && (
                     <p className="font-bold">
-                      At a {(effectiveTokenAmount.rate * 100).toFixed(2)}% discount, that&rsquo;s worth{' '}
-                      {effectiveTokenAmount.discountedValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} DL to
-                      invoice off-platform &mdash; a record for your own accounting, not a charge collected here.
+                      At a {(effectiveTokenAmount.rate * 100).toFixed(2)}% discount, that&rsquo;s
+                      worth{' '}
+                      {effectiveTokenAmount.discountedValue.toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      DL to invoice off-platform &mdash; a record for your own accounting, not a
+                      charge collected here.
                     </p>
                   )}
                 </div>
@@ -213,7 +253,12 @@ function CreditDistributorDialog({ distributor, onClose }: { distributor: Distri
                 <label className="text-xs font-bold uppercase text-muted" htmlFor="credit-note">
                   Note
                 </label>
-                <textarea className={`${inputClass} min-h-24`} id="credit-note" onChange={(e) => setNote(e.target.value)} value={note} />
+                <textarea
+                  className={`${inputClass} min-h-24`}
+                  id="credit-note"
+                  onChange={(e) => setNote(e.target.value)}
+                  value={note}
+                />
               </div>
             </>
           )}
@@ -243,4 +288,3 @@ function CreditDistributorDialog({ distributor, onClose }: { distributor: Distri
     </Dialog>
   );
 }
-

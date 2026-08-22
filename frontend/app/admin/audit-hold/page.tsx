@@ -44,7 +44,10 @@ export default function AdminAuditHoldQueuePage() {
       sortValue: (u) => trainerName(u),
       render: (u) => (
         <div className="min-w-0">
-          <Link className="font-extrabold text-accent no-underline hover:text-accent-dark" href={`/admin/users/${u.id}`}>
+          <Link
+            className="font-extrabold text-accent no-underline hover:text-accent-dark"
+            href={`/admin/users/${u.id}`}
+          >
             {trainerName(u)}
           </Link>
           <p className="break-all text-sm text-muted">{u.email}</p>
@@ -103,9 +106,9 @@ export default function AdminAuditHoldQueuePage() {
         <div className="grid gap-2">
           <h1 className="text-3xl font-black">Audit queue</h1>
           <p className="leading-relaxed text-muted">
-            Trainers automatically paused for a routine review after reaching a submission-count threshold. Review
-            their recordings (play the audio, accept or reject each one instantly), then release the hold so they
-            can resume training.
+            Trainers automatically paused for a routine review after reaching a submission-count
+            threshold. Review their recordings (play the audio, accept or reject each one
+            instantly), then release the hold so they can resume training.
           </p>
         </div>
 

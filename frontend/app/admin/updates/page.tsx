@@ -18,10 +18,26 @@ import {
 import { formatDateTime } from '@/components/dashboard/shared';
 
 const kinds: { value: SystemUpdateKind; label: string; description: string }[] = [
-  { value: 'MESSAGE', label: 'Message', description: 'General inbox message for all active users.' },
-  { value: 'MAINTENANCE', label: 'Maintenance', description: 'Platform maintenance or outage notice for all active users.' },
-  { value: 'BLOG', label: 'Blog', description: 'Manual blog/news alert for users opted into Blog & News.' },
-  { value: 'COURSE', label: 'Course', description: 'Manual course alert for users opted into Courses.' },
+  {
+    value: 'MESSAGE',
+    label: 'Message',
+    description: 'General inbox message for all active users.',
+  },
+  {
+    value: 'MAINTENANCE',
+    label: 'Maintenance',
+    description: 'Platform maintenance or outage notice for all active users.',
+  },
+  {
+    value: 'BLOG',
+    label: 'Blog',
+    description: 'Manual blog/news alert for users opted into Blog & News.',
+  },
+  {
+    value: 'COURSE',
+    label: 'Course',
+    description: 'Manual course alert for users opted into Courses.',
+  },
 ];
 
 const kindStyles: Record<SystemUpdateKind, string> = {
@@ -31,7 +47,8 @@ const kindStyles: Record<SystemUpdateKind, string> = {
   COURSE: 'bg-[#e6f6ec] text-[#0f7a3d]',
 };
 
-const inputClass = 'min-h-11 rounded-lg border border-line bg-white px-3 font-bold outline-none focus:border-accent';
+const inputClass =
+  'min-h-11 rounded-lg border border-line bg-white px-3 font-bold outline-none focus:border-accent';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const secondaryButtonClass =
@@ -46,7 +63,8 @@ export default function AdminUpdatesPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleDelete(update: AdminSystemUpdate) {
-    if (!window.confirm(`Delete "${update.title}"? This removes it from every recipient's inbox.`)) return;
+    if (!window.confirm(`Delete "${update.title}"? This removes it from every recipient's inbox.`))
+      return;
     setError(null);
     setPendingDeleteId(update.id);
     try {
@@ -74,7 +92,13 @@ export default function AdminUpdatesPage() {
       key: 'kind',
       header: 'Type',
       sortValue: (u) => u.kind,
-      render: (u) => <span className={`rounded-full px-2.5 py-1 text-xs font-black uppercase ${kindStyles[u.kind]}`}>{u.kind}</span>,
+      render: (u) => (
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-black uppercase ${kindStyles[u.kind]}`}
+        >
+          {u.kind}
+        </span>
+      ),
     },
     {
       key: 'read',
@@ -86,7 +110,9 @@ export default function AdminUpdatesPage() {
             {u.readCount.toLocaleString()} / {u._count.notifications.toLocaleString()}
           </p>
           <p className="text-xs text-muted">
-            {u._count.notifications === 0 ? 'No recipients' : `${Math.round((u.readCount / u._count.notifications) * 100)}% read`}
+            {u._count.notifications === 0
+              ? 'No recipients'
+              : `${Math.round((u.readCount / u._count.notifications) * 100)}% read`}
           </p>
         </>
       ),
@@ -103,7 +129,11 @@ export default function AdminUpdatesPage() {
       searchable: false,
       render: (u) => (
         <div className="flex flex-wrap items-center gap-2">
-          <button className={secondaryButtonClass} onClick={() => setEditingUpdate(u)} type="button">
+          <button
+            className={secondaryButtonClass}
+            onClick={() => setEditingUpdate(u)}
+            type="button"
+          >
             <Pencil className="size-3.5" aria-hidden="true" /> Edit
           </button>
           <ActionButton
@@ -138,7 +168,11 @@ export default function AdminUpdatesPage() {
           </button>
         </header>
 
-        {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-bold text-danger">{error}</p>}
+        {error && (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-bold text-danger">
+            {error}
+          </p>
+        )}
 
         <DataTable
           columns={columns}
@@ -151,7 +185,9 @@ export default function AdminUpdatesPage() {
       </div>
 
       {isAdding && <AddUpdateDialog onClose={() => setIsAdding(false)} />}
-      {editingUpdate && <EditUpdateDialog onClose={() => setEditingUpdate(null)} update={editingUpdate} />}
+      {editingUpdate && (
+        <EditUpdateDialog onClose={() => setEditingUpdate(null)} update={editingUpdate} />
+      )}
     </AdminShell>
   );
 }
@@ -176,7 +212,9 @@ function AddUpdateDialog({ onClose }: { onClose: () => void }) {
         message: message.trim(),
         ...(href.trim() ? { href: href.trim() } : {}),
       }).unwrap();
-      setNotice(`Update sent to ${result.recipients.toLocaleString()} recipient${result.recipients === 1 ? '' : 's'}.`);
+      setNotice(
+        `Update sent to ${result.recipients.toLocaleString()} recipient${result.recipients === 1 ? '' : 's'}.`,
+      );
       setTitle('');
       setMessage('');
       setHref('');
@@ -187,22 +225,35 @@ function AddUpdateDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent title="Send a new update" description="Delivered into every eligible recipient's notification inbox.">
+      <DialogContent
+        title="Send a new update"
+        description="Delivered into every eligible recipient's notification inbox."
+      >
         <form className="grid gap-4" onSubmit={submit}>
           <div className="grid gap-2">
-            <label className="text-xs font-black uppercase text-muted" htmlFor="update-kind">Update type</label>
+            <label className="text-xs font-black uppercase text-muted" htmlFor="update-kind">
+              Update type
+            </label>
             <select
               className={inputClass}
               id="update-kind"
               onChange={(event) => setKind(event.target.value as SystemUpdateKind)}
               value={kind}
             >
-              {kinds.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              {kinds.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
             </select>
-            <p className="text-sm text-muted">{kinds.find((item) => item.value === kind)?.description}</p>
+            <p className="text-sm text-muted">
+              {kinds.find((item) => item.value === kind)?.description}
+            </p>
           </div>
           <div className="grid gap-2">
-            <label className="text-xs font-black uppercase text-muted" htmlFor="update-title">Title</label>
+            <label className="text-xs font-black uppercase text-muted" htmlFor="update-title">
+              Title
+            </label>
             <input
               className={inputClass}
               id="update-title"
@@ -213,7 +264,9 @@ function AddUpdateDialog({ onClose }: { onClose: () => void }) {
             />
           </div>
           <div className="grid gap-2">
-            <label className="text-xs font-black uppercase text-muted" htmlFor="update-message">Message</label>
+            <label className="text-xs font-black uppercase text-muted" htmlFor="update-message">
+              Message
+            </label>
             <textarea
               className="min-h-32 resize-y rounded-lg border border-line bg-white px-3 py-3 font-medium outline-none focus:border-accent"
               id="update-message"
@@ -224,7 +277,9 @@ function AddUpdateDialog({ onClose }: { onClose: () => void }) {
             />
           </div>
           <div className="grid gap-2">
-            <label className="text-xs font-black uppercase text-muted" htmlFor="update-link">Related link</label>
+            <label className="text-xs font-black uppercase text-muted" htmlFor="update-link">
+              Related link
+            </label>
             <input
               className={inputClass}
               id="update-link"
@@ -233,8 +288,16 @@ function AddUpdateDialog({ onClose }: { onClose: () => void }) {
               value={href}
             />
           </div>
-          {notice && <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-bold text-emerald-700">{notice}</p>}
-          {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-bold text-danger">{error}</p>}
+          {notice && (
+            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-bold text-emerald-700">
+              {notice}
+            </p>
+          )}
+          {error && (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-bold text-danger">
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-2">
             <DialogClose className="inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-4 font-bold text-ink transition-colors hover:bg-surface-muted">
               {notice ? 'Done' : 'Cancel'}
@@ -266,7 +329,12 @@ function EditUpdateDialog({ update, onClose }: { update: AdminSystemUpdate; onCl
     event.preventDefault();
     setError(null);
     try {
-      await editUpdate({ id: update.id, title: title.trim(), message: message.trim(), href: href.trim() }).unwrap();
+      await editUpdate({
+        id: update.id,
+        title: title.trim(),
+        message: message.trim(),
+        href: href.trim(),
+      }).unwrap();
       onClose();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to save this update.'));
@@ -275,10 +343,15 @@ function EditUpdateDialog({ update, onClose }: { update: AdminSystemUpdate; onCl
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent title="Edit update" description="Changes apply to this update everywhere it already appears -- recipients are not re-notified.">
+      <DialogContent
+        title="Edit update"
+        description="Changes apply to this update everywhere it already appears -- recipients are not re-notified."
+      >
         <form className="grid gap-4" onSubmit={submit}>
           <div className="grid gap-2">
-            <label className="text-xs font-black uppercase text-muted" htmlFor="edit-update-title">Title</label>
+            <label className="text-xs font-black uppercase text-muted" htmlFor="edit-update-title">
+              Title
+            </label>
             <input
               className={inputClass}
               id="edit-update-title"
@@ -289,7 +362,12 @@ function EditUpdateDialog({ update, onClose }: { update: AdminSystemUpdate; onCl
             />
           </div>
           <div className="grid gap-2">
-            <label className="text-xs font-black uppercase text-muted" htmlFor="edit-update-message">Message</label>
+            <label
+              className="text-xs font-black uppercase text-muted"
+              htmlFor="edit-update-message"
+            >
+              Message
+            </label>
             <textarea
               className="min-h-32 resize-y rounded-lg border border-line bg-white px-3 py-3 font-medium outline-none focus:border-accent"
               id="edit-update-message"
@@ -300,7 +378,9 @@ function EditUpdateDialog({ update, onClose }: { update: AdminSystemUpdate; onCl
             />
           </div>
           <div className="grid gap-2">
-            <label className="text-xs font-black uppercase text-muted" htmlFor="edit-update-link">Related link</label>
+            <label className="text-xs font-black uppercase text-muted" htmlFor="edit-update-link">
+              Related link
+            </label>
             <input
               className={inputClass}
               id="edit-update-link"
@@ -309,12 +389,21 @@ function EditUpdateDialog({ update, onClose }: { update: AdminSystemUpdate; onCl
               value={href}
             />
           </div>
-          {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-bold text-danger">{error}</p>}
+          {error && (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-bold text-danger">
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-2">
             <DialogClose className="inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-4 font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60">
               Cancel
             </DialogClose>
-            <ActionButton className={primaryButtonClass} pending={isSaving} pendingLabel="Saving" type="submit">
+            <ActionButton
+              className={primaryButtonClass}
+              pending={isSaving}
+              pendingLabel="Saving"
+              type="submit"
+            >
               Save changes
             </ActionButton>
           </div>

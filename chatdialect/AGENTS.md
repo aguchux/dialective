@@ -45,7 +45,7 @@ not as a new app under this directory. `apps/web` reaches it via
 photorealistic generated humans; video-avatar streaming; full-body
 animation; motion capture; custom 3D character creator; avatar marketplace;
 custom voice cloning; training new ASR/TTS/facial-animation models
-(self-hosting an *existing* checkpoint is fine — training a new one is
+(self-hosting an _existing_ checkpoint is fine — training a new one is
 not); perfect phoneme-level lip sync for every dialect; phone/SIP support;
 WhatsApp integration; enterprise RAG; payments/billing; multi-agent
 orchestration; large admin dashboard; mobile native apps; WebGPU-only
@@ -77,12 +77,13 @@ range is narrowed to 10 ports.
 
 ## Phase ordering (doc §40 — do not start with visual polish)
 
-1. Repository/bootstrap — 2. LiveKit connection — 3. Voice AI vertical
-slice — 4. Text transcript — 5. Avatar renderer — 6. Avatar state machine —
-7. Conversation-to-avatar state wiring — 8. Audio-amplitude mouth sync —
-9. Viseme sync where available — 10. Emotion metadata + expressions —
-11. Text composer — 12. Error/reconnect handling — 13. Mobile polish —
-14. Embeddable widget — 15. Performance/security cleanup.
+Repository/bootstrap, then LiveKit connection, then the voice AI vertical
+slice, then text transcript, then the avatar renderer, then the avatar
+state machine, then conversation-to-avatar state wiring, then
+audio-amplitude mouth sync, then viseme sync where available, then
+emotion metadata and expressions, then the text composer, then
+error/reconnect handling, then mobile polish, then the embeddable widget,
+then performance/security cleanup.
 
 ## Privacy guardrail (doc §35)
 

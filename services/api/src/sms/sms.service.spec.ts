@@ -18,7 +18,9 @@ describe('SmsService', () => {
       smsProviderOrder: 'twilio,termii,africastalking',
       smsTransactionalProviderOrder: 'termii,twilio,africastalking,smslive247',
     });
-    const sendSpy = jest.spyOn((service as any).chain, 'send').mockResolvedValue({ provider: 'twilio' });
+    const sendSpy = jest
+      .spyOn((service as any).chain, 'send')
+      .mockResolvedValue({ provider: 'twilio' });
 
     await service.sendOtp('+2348012345678', '123456');
 
@@ -35,7 +37,9 @@ describe('SmsService', () => {
       smsProviderOrder: 'termii,twilio,africastalking',
       smsTransactionalProviderOrder: 'smslive247,termii,twilio,africastalking',
     });
-    const sendSpy = jest.spyOn((service as any).chain, 'send').mockResolvedValue({ provider: 'smslive247' });
+    const sendSpy = jest
+      .spyOn((service as any).chain, 'send')
+      .mockResolvedValue({ provider: 'smslive247' });
 
     await service.sendTransactional('+2348012345678', 'Your P2P trade has started.');
 
@@ -53,7 +57,9 @@ describe('SmsService', () => {
       smsTransactionalProviderOrder: 'termii,twilio,africastalking,smslive247',
       smsSenderId: 'Dialect',
     });
-    const sendSpy = jest.spyOn((service as any).chain, 'send').mockResolvedValue({ provider: 'termii' });
+    const sendSpy = jest
+      .spyOn((service as any).chain, 'send')
+      .mockResolvedValue({ provider: 'termii' });
 
     await service.sendOtp('+2348012345678', '123456');
 

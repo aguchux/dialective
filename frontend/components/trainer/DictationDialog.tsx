@@ -1,7 +1,19 @@
 'use client';
 
 import * as RadixDialog from '@radix-ui/react-dialog';
-import { ArrowRight, Check, Clock3, LoaderCircle, Mic, Pause, Play, Send, Square, Trash2, X } from 'lucide-react';
+import {
+  ArrowRight,
+  Check,
+  Clock3,
+  LoaderCircle,
+  Mic,
+  Pause,
+  Play,
+  Send,
+  Square,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { usePortalContainer } from '@/components/ui/PortalContainer';
@@ -41,7 +53,8 @@ function isNoPromptsAvailable(err: unknown): boolean {
 }
 
 type FlowStep = 'terms' | 'loading' | 'recording' | 'unavailable';
-type RecorderState = 'ready' | 'recording' | 'recorded' | 'playing' | 'paused' | 'submitting' | 'submitted';
+type RecorderState =
+  'ready' | 'recording' | 'recorded' | 'playing' | 'paused' | 'submitting' | 'submitted';
 
 export function DictationDialog({
   open,
@@ -105,11 +118,14 @@ export function DictationDialog({
     chunksRef.current = [];
   }, [audioUrl]);
 
-  useEffect(() => () => {
-    releaseMicrophone();
-    if (audioUrl) URL.revokeObjectURL(audioUrl);
-    if (pollTimeoutRef.current !== null) window.clearTimeout(pollTimeoutRef.current);
-  }, [audioUrl, releaseMicrophone]);
+  useEffect(
+    () => () => {
+      releaseMicrophone();
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      if (pollTimeoutRef.current !== null) window.clearTimeout(pollTimeoutRef.current);
+    },
+    [audioUrl, releaseMicrophone],
+  );
 
   useEffect(() => {
     if (open) return;
@@ -184,7 +200,9 @@ export function DictationDialog({
       });
       streamRef.current = stream;
       const mimeType = preferredMimeType();
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
       recorderRef.current = recorder;
       chunksRef.current = [];
       noiseTotalRef.current = 0;
@@ -197,7 +215,9 @@ export function DictationDialog({
         const duration = Math.min(maxRecordingMs, Math.max(1, Date.now() - startedAtRef.current));
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         const url = URL.createObjectURL(blob);
-        const averageNoise = noiseSamplesRef.current ? noiseTotalRef.current / noiseSamplesRef.current : 0;
+        const averageNoise = noiseSamplesRef.current
+          ? noiseTotalRef.current / noiseSamplesRef.current
+          : 0;
         setElapsedMs(duration);
         setNoiseRating(classifyNoise(averageNoise));
         setAudioBlob(blob);
@@ -217,7 +237,11 @@ export function DictationDialog({
       }, 100);
     } catch (err) {
       releaseMicrophone();
-      setError(err instanceof DOMException && err.name === 'NotAllowedError' ? MIC_PERMISSION_ERROR : 'The microphone could not be started.');
+      setError(
+        err instanceof DOMException && err.name === 'NotAllowedError'
+          ? MIC_PERMISSION_ERROR
+          : 'The microphone could not be started.',
+      );
     }
   }
 
@@ -281,7 +305,10 @@ export function DictationDialog({
           setRecorderState('submitted');
           return;
         }
-        pollTimeoutRef.current = window.setTimeout(() => pollForResult(submissionId, startedAt), RESULT_POLL_INTERVAL_MS);
+        pollTimeoutRef.current = window.setTimeout(
+          () => pollForResult(submissionId, startedAt),
+          RESULT_POLL_INTERVAL_MS,
+        );
       });
   }
 
@@ -297,7 +324,11 @@ export function DictationDialog({
     setRecorderState('submitting');
     try {
       const uploadContentType = audioBlob.type.split(';')[0] || 'audio/webm';
-      const upload = await createUploadUrl({ promptId: prompt.promptId, dialectTag: prompt.dialectTag, contentType: uploadContentType }).unwrap();
+      const upload = await createUploadUrl({
+        promptId: prompt.promptId,
+        dialectTag: prompt.dialectTag,
+        contentType: uploadContentType,
+      }).unwrap();
       const uploaded = await fetch(upload.uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': uploadContentType },
@@ -315,7 +346,12 @@ export function DictationDialog({
 
       pollForResult(upload.submissionId, Date.now());
     } catch (err) {
-      setError(normalizeErrorMessage(err, err instanceof Error ? err.message : 'Unable to submit the recording.'));
+      setError(
+        normalizeErrorMessage(
+          err,
+          err instanceof Error ? err.message : 'Unable to submit the recording.',
+        ),
+      );
       setRecorderState('recorded');
     } finally {
       submittingRef.current = false;
@@ -326,24 +362,41 @@ export function DictationDialog({
   const ringColor = noiseColor(noiseRating);
 
   return (
-    <RadixDialog.Root open={open} onOpenChange={(nextOpen) => { if (!nextOpen) void closeDialog(); }}>
+    <RadixDialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) void closeDialog();
+      }}
+    >
       <RadixDialog.Portal container={portalContainer}>
         <RadixDialog.Overlay className="fixed inset-0 z-40 bg-black/65 data-[state=open]:animate-[fadeIn_150ms_ease-out]" />
         <RadixDialog.Content
           aria-describedby="dictation-description"
           className="fixed inset-0 z-50 overflow-y-auto bg-bg text-ink focus:outline-none data-[state=open]:animate-[fadeIn_150ms_ease-out]"
-          onEscapeKeyDown={(event) => { if (recorderState === 'recording') event.preventDefault(); }}
+          onEscapeKeyDown={(event) => {
+            if (recorderState === 'recording') event.preventDefault();
+          }}
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
           <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
             <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4 md:px-6">
               <div className="min-w-0">
-                <RadixDialog.Title className="truncate text-lg font-black">Dictation</RadixDialog.Title>
-                <RadixDialog.Description className="truncate text-xs font-semibold text-muted" id="dictation-description">
+                <RadixDialog.Title className="truncate text-lg font-black">
+                  Dictation
+                </RadixDialog.Title>
+                <RadixDialog.Description
+                  className="truncate text-xs font-semibold text-muted"
+                  id="dictation-description"
+                >
                   Read a prompt aloud in your dialect
                 </RadixDialog.Description>
               </div>
-              <button aria-label="Close dictation" className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-surface-muted" onClick={() => void closeDialog()} type="button">
+              <button
+                aria-label="Close dictation"
+                className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-surface-muted"
+                onClick={() => void closeDialog()}
+                type="button"
+              >
                 <X className="size-5" aria-hidden="true" />
               </button>
             </div>
@@ -357,15 +410,45 @@ export function DictationDialog({
                   <h2 className="mt-1 text-2xl font-black">Consent to AI training use</h2>
                 </div>
                 <div className="grid gap-3 text-sm leading-7 text-muted md:text-base">
-                  <p>You confirm that the recordings are your voice and that you are at least 18 years old.</p>
-                  <p>You grant Dialect Library permission to store, process, analyze, license, and use your recordings and derived data to develop, evaluate, and improve speech and artificial intelligence systems.</p>
-                  <p>This permission is worldwide, perpetual, and may include sharing de-identified training data with approved research or commercial partners. Your account identity will not be included in licensed audio datasets.</p>
+                  <p>
+                    You confirm that the recordings are your voice and that you are at least 18
+                    years old.
+                  </p>
+                  <p>
+                    You grant Dialect Library permission to store, process, analyze, license, and
+                    use your recordings and derived data to develop, evaluate, and improve speech
+                    and artificial intelligence systems.
+                  </p>
+                  <p>
+                    This permission is worldwide, perpetual, and may include sharing de-identified
+                    training data with approved research or commercial partners. Your account
+                    identity will not be included in licensed audio datasets.
+                  </p>
                 </div>
-                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="dictation-consent">
-                  <input checked={accepted} className="mt-0.5 size-5 accent-accent" id="dictation-consent" onChange={(event) => setAccepted(event.target.checked)} type="checkbox" />
-                  <span className="text-sm font-bold leading-6">I have read and agree to the voice data agreement and the <a className="text-accent underline" href="/terms" target="_blank">Terms of Use</a>.</span>
+                <label
+                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+                  htmlFor="dictation-consent"
+                >
+                  <input
+                    checked={accepted}
+                    className="mt-0.5 size-5 accent-accent"
+                    id="dictation-consent"
+                    onChange={(event) => setAccepted(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span className="text-sm font-bold leading-6">
+                    I have read and agree to the voice data agreement and the{' '}
+                    <a className="text-accent underline" href="/terms" target="_blank">
+                      Terms of Use
+                    </a>
+                    .
+                  </span>
                 </label>
-                {error && <p className="text-sm font-bold text-danger" role="alert">{error}</p>}
+                {error && (
+                  <p className="text-sm font-bold text-danger" role="alert">
+                    {error}
+                  </p>
+                )}
                 <ActionButton
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={!accepted}
@@ -384,14 +467,40 @@ export function DictationDialog({
             {step === 'recording' && prompt && (
               <section className="mx-auto grid w-full max-w-2xl gap-6 text-center">
                 <div>
-                  <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">Read this aloud</span>
-                  <h2 className="mt-4 break-words text-4xl font-black md:text-5xl">{prompt.text}</h2>
+                  <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
+                    Read this aloud
+                  </span>
+                  <h2 className="mt-4 break-words text-4xl font-black md:text-5xl">
+                    {prompt.text}
+                  </h2>
                 </div>
 
                 <div className="relative mx-auto grid size-[248px] place-items-center md:size-[288px]">
-                  <svg aria-hidden="true" className="absolute inset-0 size-full -rotate-90" viewBox="0 0 240 240">
-                    <circle cx="120" cy="120" fill="none" r={RING_RADIUS} stroke="var(--line)" strokeWidth="12" />
-                    <circle cx="120" cy="120" fill="none" r={RING_RADIUS} stroke={ringColor} strokeDasharray={RING_CIRCUMFERENCE} strokeDashoffset={RING_CIRCUMFERENCE * (1 - progress)} strokeLinecap="round" strokeWidth="12" className="transition-[stroke,stroke-dashoffset] duration-100" />
+                  <svg
+                    aria-hidden="true"
+                    className="absolute inset-0 size-full -rotate-90"
+                    viewBox="0 0 240 240"
+                  >
+                    <circle
+                      cx="120"
+                      cy="120"
+                      fill="none"
+                      r={RING_RADIUS}
+                      stroke="var(--line)"
+                      strokeWidth="12"
+                    />
+                    <circle
+                      cx="120"
+                      cy="120"
+                      fill="none"
+                      r={RING_RADIUS}
+                      stroke={ringColor}
+                      strokeDasharray={RING_CIRCUMFERENCE}
+                      strokeDashoffset={RING_CIRCUMFERENCE * (1 - progress)}
+                      strokeLinecap="round"
+                      strokeWidth="12"
+                      className="transition-[stroke,stroke-dashoffset] duration-100"
+                    />
                   </svg>
                   <button
                     aria-label={recorderButtonLabel(recorderState)}
@@ -404,44 +513,107 @@ export function DictationDialog({
                     }}
                     type="button"
                   >
-                    {recorderState === 'recording' ? <Square className="size-12 fill-current" aria-hidden="true" /> : recorderState === 'playing' ? <Pause className="size-12 fill-current" aria-hidden="true" /> : recorderState === 'recorded' || recorderState === 'paused' ? <Play className="ml-1 size-12 fill-current" aria-hidden="true" /> : recorderState === 'submitting' ? <LoaderCircle className="size-12 animate-spin" aria-hidden="true" /> : recorderState === 'submitted' ? <Check className="size-14" aria-hidden="true" /> : <Mic className="size-14" aria-hidden="true" />}
+                    {recorderState === 'recording' ? (
+                      <Square className="size-12 fill-current" aria-hidden="true" />
+                    ) : recorderState === 'playing' ? (
+                      <Pause className="size-12 fill-current" aria-hidden="true" />
+                    ) : recorderState === 'recorded' || recorderState === 'paused' ? (
+                      <Play className="ml-1 size-12 fill-current" aria-hidden="true" />
+                    ) : recorderState === 'submitting' ? (
+                      <LoaderCircle className="size-12 animate-spin" aria-hidden="true" />
+                    ) : recorderState === 'submitted' ? (
+                      <Check className="size-14" aria-hidden="true" />
+                    ) : (
+                      <Mic className="size-14" aria-hidden="true" />
+                    )}
                   </button>
                 </div>
 
                 <div className="flex items-center justify-center gap-3 text-sm font-bold">
-                  <span>{formatDuration(elapsedMs)} / {formatDuration(maxRecordingMs)}</span>
-                  <span aria-hidden="true" className="text-line">|</span>
-                  <span className="inline-flex items-center gap-2"><span className="size-2.5 rounded-full" style={{ backgroundColor: ringColor }} />{noiseLabel(noiseRating)}</span>
+                  <span>
+                    {formatDuration(elapsedMs)} / {formatDuration(maxRecordingMs)}
+                  </span>
+                  <span aria-hidden="true" className="text-line">
+                    |
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span
+                      className="size-2.5 rounded-full"
+                      style={{ backgroundColor: ringColor }}
+                    />
+                    {noiseLabel(noiseRating)}
+                  </span>
                 </div>
 
-                {audioUrl && <audio onEnded={() => setRecorderState('recorded')} ref={audioRef} src={audioUrl} />}
+                {audioUrl && (
+                  <audio
+                    onEnded={() => setRecorderState('recorded')}
+                    ref={audioRef}
+                    src={audioUrl}
+                  />
+                )}
                 {error && (
                   <div className="grid justify-items-center gap-1">
-                    <p className="text-sm font-bold text-danger" role="alert">{error}</p>
+                    <p className="text-sm font-bold text-danger" role="alert">
+                      {error}
+                    </p>
                     {error === MIC_PERMISSION_ERROR && (
-                      <button className="text-sm font-extrabold text-accent underline hover:no-underline" onClick={() => void startRecording()} type="button">
+                      <button
+                        className="text-sm font-extrabold text-accent underline hover:no-underline"
+                        onClick={() => void startRecording()}
+                        type="button"
+                      >
                         Click here to give permission
                       </button>
                     )}
                   </div>
                 )}
 
-                {(recorderState === 'recorded' || recorderState === 'paused' || recorderState === 'playing') && (
+                {(recorderState === 'recorded' ||
+                  recorderState === 'paused' ||
+                  recorderState === 'playing') && (
                   <div className="flex flex-wrap items-center justify-center gap-3">
-                    <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted" onClick={clearRecording} type="button"><Trash2 className="size-4" aria-hidden="true" />Delete</button>
-                    <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark" onClick={() => void saveRecording()} type="button"><Send className="size-4" aria-hidden="true" />Submit</button>
+                    <button
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted"
+                      onClick={clearRecording}
+                      type="button"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                      Delete
+                    </button>
+                    <button
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark"
+                      onClick={() => void saveRecording()}
+                      type="button"
+                    >
+                      <Send className="size-4" aria-hidden="true" />
+                      Submit
+                    </button>
                   </div>
                 )}
 
-                {recorderState === 'submitting' && <p className="text-sm font-bold text-muted">Uploading and submitting...</p>}
+                {recorderState === 'submitting' && (
+                  <p className="text-sm font-bold text-muted">Uploading and submitting...</p>
+                )}
 
                 {recorderState === 'submitted' && (
                   <div className="mx-auto grid w-full max-w-md gap-4 rounded-lg border border-line bg-surface p-5">
-                    <div className="flex items-center justify-center gap-2 font-black text-emerald-700 dark:text-emerald-300"><Check className="size-5" aria-hidden="true" />Recording submitted</div>
+                    <div className="flex items-center justify-center gap-2 font-black text-emerald-700 dark:text-emerald-300">
+                      <Check className="size-5" aria-hidden="true" />
+                      Recording submitted
+                    </div>
                     <p className="text-sm font-bold text-muted">
-                      {submittedStatus === 'rejected' ? 'This recording could not be used -- try again with a quieter environment.' : 'Your reading is being processed. Scoring happens after enough trainers have submitted this same prompt.'}
+                      {submittedStatus === 'rejected'
+                        ? 'This recording could not be used -- try again with a quieter environment.'
+                        : 'Your reading is being processed. Scoring happens after enough trainers have submitted this same prompt.'}
                     </p>
-                    <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark" onClick={() => void nextPrompt()} type="button">Next prompt <ArrowRight className="size-4" aria-hidden="true" /></button>
+                    <button
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark"
+                      onClick={() => void nextPrompt()}
+                      type="button"
+                    >
+                      Next prompt <ArrowRight className="size-4" aria-hidden="true" />
+                    </button>
                   </div>
                 )}
               </section>
@@ -454,10 +626,14 @@ export function DictationDialog({
                 </span>
                 <h2 className="text-2xl font-black">No prompts available right now</h2>
                 <p className="leading-relaxed text-muted">
-                  The prompt bank is temporarily empty for your dialect. Check back later -- new prompts are added
-                  regularly.
+                  The prompt bank is temporarily empty for your dialect. Check back later -- new
+                  prompts are added regularly.
                 </p>
-                <button className="mx-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted" onClick={() => void closeDialog()} type="button">
+                <button
+                  className="mx-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted"
+                  onClick={() => void closeDialog()}
+                  type="button"
+                >
                   Close
                 </button>
               </section>
@@ -470,11 +646,18 @@ export function DictationDialog({
 }
 
 function LoadingState({ label }: { label: string }) {
-  return <div className="grid place-items-center gap-3 py-16 text-center" role="status"><LoaderCircle className="size-8 animate-spin text-accent" aria-hidden="true" /><p className="font-extrabold">{label}</p></div>;
+  return (
+    <div className="grid place-items-center gap-3 py-16 text-center" role="status">
+      <LoaderCircle className="size-8 animate-spin text-accent" aria-hidden="true" />
+      <p className="font-extrabold">{label}</p>
+    </div>
+  );
 }
 
 function preferredMimeType(): string | undefined {
-  return ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find((type) => MediaRecorder.isTypeSupported(type));
+  return ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find((type) =>
+    MediaRecorder.isTypeSupported(type),
+  );
 }
 
 function classifyNoise(rms: number): RecordingNoiseRating {

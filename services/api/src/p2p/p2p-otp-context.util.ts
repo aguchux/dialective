@@ -1,7 +1,9 @@
 import { hashContext } from '../otp/otp.util';
 import { RequestPaymentMethodOtpDto, UpsertPaymentMethodDto } from './dto/p2p.dto';
 
-export function paymentMethodContextHash(input: (RequestPaymentMethodOtpDto | UpsertPaymentMethodDto) & { id?: string }): string {
+export function paymentMethodContextHash(
+  input: (RequestPaymentMethodOtpDto | UpsertPaymentMethodDto) & { id?: string },
+): string {
   return hashContext({
     id: input.id ?? '',
     label: normalized(input.label),

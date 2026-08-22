@@ -5,21 +5,29 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSession, signIn, useSession } from 'next-auth/react';
 import { apiClient, ApiError } from '@/lib/api-client';
-import { normalizeErrorMessage, useGetPublicClientSettingsQuery, useRequestMagicLinkMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPublicClientSettingsQuery,
+  useRequestMagicLinkMutation,
+} from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { AuthMaintenanceNotice } from '@/components/AuthMaintenanceNotice';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { postAuthPath } from '@/lib/role-home';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const secondaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-surface px-3.5 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
 
 function authDestination(role: string | undefined, onboardingComplete: boolean | undefined) {
-  const callbackUrl = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('callbackUrl');
+  const callbackUrl =
+    typeof window === 'undefined'
+      ? null
+      : new URLSearchParams(window.location.search).get('callbackUrl');
   return postAuthPath(role, onboardingComplete, callbackUrl);
 }
 
@@ -43,7 +51,10 @@ export default function LoginPage() {
   // same countdown notice a fresh visitor sees, even in the moment before
   // publicSettings has refetched with authMaintenanceBlocksLogin=true (a
   // session-only block can be on while login itself stays open).
-  const [forcedMaintenance, setForcedMaintenance] = useState<{ until: string | null; message: string | null } | null>(null);
+  const [forcedMaintenance, setForcedMaintenance] = useState<{
+    until: string | null;
+    message: string | null;
+  } | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -69,7 +80,13 @@ export default function LoginPage() {
       if (err instanceof ApiError && err.status === 503) {
         setMessage('Login just went into scheduled maintenance. Please refresh the page.');
       } else {
-        setMessage(err instanceof ApiError ? (err.status === 401 ? 'Invalid email or password.' : err.message) : normalizeErrorMessage(err, 'Unable to log in.'));
+        setMessage(
+          err instanceof ApiError
+            ? err.status === 401
+              ? 'Invalid email or password.'
+              : err.message
+            : normalizeErrorMessage(err, 'Unable to log in.'),
+        );
       }
     } finally {
       setIsLoggingIn(false);
@@ -87,7 +104,10 @@ export default function LoginPage() {
         setMessage('Invalid or expired code.');
       } else {
         const freshSession = await getSession();
-        window.location.href = authDestination(freshSession?.user?.role, freshSession?.user?.onboardingComplete);
+        window.location.href = authDestination(
+          freshSession?.user?.role,
+          freshSession?.user?.onboardingComplete,
+        );
       }
     } finally {
       setIsVerifying(false);
@@ -148,7 +168,9 @@ export default function LoginPage() {
         <AuthPanel>
           <Breadcrumbs items={[{ label: 'Login' }]} />
           <h1 className="text-center text-[1.75rem] leading-tight">Enter your code</h1>
-          <p className="text-center text-sm text-muted">We sent a 6-digit code to {email}. It expires in 10 minutes.</p>
+          <p className="text-center text-sm text-muted">
+            We sent a 6-digit code to {email}. It expires in 10 minutes.
+          </p>
 
           <form className="grid gap-2.5" onSubmit={handleOtpSubmit}>
             <input
@@ -162,16 +184,35 @@ export default function LoginPage() {
               required
               value={code}
             />
-            <ActionButton className={primaryButtonClass} disabled={code.length !== 6} pending={isVerifying} pendingLabel="Verifying" type="submit">
+            <ActionButton
+              className={primaryButtonClass}
+              disabled={code.length !== 6}
+              pending={isVerifying}
+              pendingLabel="Verifying"
+              type="submit"
+            >
               Verify
             </ActionButton>
           </form>
 
           <div className="grid gap-2">
-            <ActionButton className={secondaryButtonClass} onClick={handleResend} pending={isResending} pendingLabel="Sending">
+            <ActionButton
+              className={secondaryButtonClass}
+              onClick={handleResend}
+              pending={isResending}
+              pendingLabel="Sending"
+            >
               Resend code
             </ActionButton>
-            <button className="text-sm font-bold text-muted underline" onClick={() => { setTicket(null); setCode(''); setMessage(null); }} type="button">
+            <button
+              className="text-sm font-bold text-muted underline"
+              onClick={() => {
+                setTicket(null);
+                setCode('');
+                setMessage(null);
+              }}
+              type="button"
+            >
               Use a different account
             </button>
           </div>
@@ -207,10 +248,18 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-          <Link className="justify-self-end text-sm font-bold text-accent hover:text-accent-dark" href="/forgot-password">
+          <Link
+            className="justify-self-end text-sm font-bold text-accent hover:text-accent-dark"
+            href="/forgot-password"
+          >
             Forgot password?
           </Link>
-          <ActionButton className={primaryButtonClass} type="submit" pending={isLoggingIn} pendingLabel="Logging in">
+          <ActionButton
+            className={primaryButtonClass}
+            type="submit"
+            pending={isLoggingIn}
+            pendingLabel="Logging in"
+          >
             Log in
           </ActionButton>
         </form>

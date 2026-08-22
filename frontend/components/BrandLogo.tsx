@@ -8,7 +8,12 @@ interface BrandLogoProps {
   textClassName?: string;
 }
 
-export function BrandLogo({ href = '/', size = 40, className = '', textClassName = '' }: BrandLogoProps) {
+export function BrandLogo({
+  href = '/',
+  size = 40,
+  className = '',
+  textClassName = '',
+}: BrandLogoProps) {
   const content = (
     <>
       <Image

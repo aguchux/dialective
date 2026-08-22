@@ -10,4 +10,8 @@ export {
   creditTrainingPayout,
   creditTrainingPayoutOps,
 } from './payouts';
-export type { AdminWalletAdjustmentResult, CreditAdminFundingResult, CreditTrainingPayoutResult } from './payouts';
+export type {
+  AdminWalletAdjustmentResult,
+  CreditAdminFundingResult,
+  CreditTrainingPayoutResult,
+} from './payouts';

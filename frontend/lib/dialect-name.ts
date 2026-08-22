@@ -24,7 +24,10 @@ export function useDialectName(tag: string | null | undefined): string | null {
 }
 
 /** Non-hook variant for contexts that already have the full dialect list (e.g. a table rendering many rows) -- avoids one query subscription per row. */
-export function resolveDialectName(tag: string | null | undefined, dialects: { tag: string; name: string }[] | undefined): string | null {
+export function resolveDialectName(
+  tag: string | null | undefined,
+  dialects: { tag: string; name: string }[] | undefined,
+): string | null {
   if (!tag) return null;
   const match = dialects?.find((d) => d.tag.toLowerCase() === tag.toLowerCase());
   return match?.name ?? tag.toUpperCase();

@@ -1,4 +1,13 @@
-import { IsEmail, IsNumber, IsOptional, IsString, IsUUID, Min, MinLength, MaxLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateSubscriptionPoolDto {
   @IsString()

@@ -26,7 +26,8 @@ export class AsrRegistryService {
 
   constructor() {
     const path = join(__dirname, '..', 'models', 'asr-registry.yaml');
-    this.registry = (yaml.load(readFileSync(path, 'utf8')) as Record<string, AsrRegistryEntry>) ?? {};
+    this.registry =
+      (yaml.load(readFileSync(path, 'utf8')) as Record<string, AsrRegistryEntry>) ?? {};
   }
 
   resolve(dialectTag: string): AsrRegistryEntry | undefined {

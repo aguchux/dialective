@@ -41,7 +41,9 @@ export class JwtAuthGuard implements CanActivate {
     const status = await this.platformSettings.getAuthMaintenanceStatus();
     if (status.enabled && status.blockSessions) {
       const role = request.user.role;
-      const exempt = (role === Role.ADMIN && status.excludeAdmin) || (role === Role.PARTNER && status.excludePartner);
+      const exempt =
+        (role === Role.ADMIN && status.excludeAdmin) ||
+        (role === Role.PARTNER && status.excludePartner);
       if (!exempt) {
         throw new AuthMaintenanceException(status.until!, status.message);
       }

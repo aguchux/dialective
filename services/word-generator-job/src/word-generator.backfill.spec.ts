@@ -4,9 +4,16 @@ describe('WordGeneratorService backfillDialectTranslations', () => {
   function setup() {
     const prisma: any = {
       word: { findMany: jest.fn().mockResolvedValue([]) },
-      prompt: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null), create: jest.fn() },
+      prompt: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+      },
       dialect: { findUnique: jest.fn().mockResolvedValue({ name: 'Igbo' }) },
-      wordTranslation: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({}) },
+      wordTranslation: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
       promptTranslation: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn() },
       $transaction: jest.fn(async (ops: unknown[]) => Promise.all(ops as Promise<unknown>[])),
     };
@@ -16,14 +23,29 @@ describe('WordGeneratorService backfillDialectTranslations', () => {
     // call chain.generateStructured/chain.generate, so a minimal mock chain
     // is enough to unit-test backfill's row-selection logic in isolation.
     (service as any).chain = {
-      generateStructured: jest.fn().mockResolvedValue({ items: [{ text: 'nnukwu', partOfSpeech: 'ADJECTIVE' }], provider: 'openai' }),
+      generateStructured: jest
+        .fn()
+        .mockResolvedValue({
+          items: [{ text: 'nnukwu', partOfSpeech: 'ADJECTIVE' }],
+          provider: 'openai',
+        }),
       generate: jest.fn().mockResolvedValue({ items: ['nnukwu'], provider: 'openai' }),
     };
     return { service, prisma };
   }
 
-  function callBackfill(service: WordGeneratorService, dialectTag: string, wordsPerItem: number, maxItemsThisRun: number) {
-    return (service as any).backfillDialectTranslations(dialectTag, wordsPerItem, ['openai', 'deepseek', 'anthropic'], maxItemsThisRun);
+  function callBackfill(
+    service: WordGeneratorService,
+    dialectTag: string,
+    wordsPerItem: number,
+    maxItemsThisRun: number,
+  ) {
+    return (service as any).backfillDialectTranslations(
+      dialectTag,
+      wordsPerItem,
+      ['openai', 'deepseek', 'anthropic'],
+      maxItemsThisRun,
+    );
   }
 
   it('queries Word rows missing a translation for this dialect, oldest first, capped at maxItemsThisRun', async () => {
@@ -96,9 +118,19 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
           llmBackfillItemsPerDialectPerRun: 10,
         }),
       },
-      dialect: { findMany: jest.fn().mockResolvedValue([{ tag: 'ig' }]), findUnique: jest.fn().mockResolvedValue({ name: 'Igbo' }) },
-      prompt: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      wordTranslation: { groupBy: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({}) },
+      dialect: {
+        findMany: jest.fn().mockResolvedValue([{ tag: 'ig' }]),
+        findUnique: jest.fn().mockResolvedValue({ name: 'Igbo' }),
+      },
+      prompt: {
+        groupBy: jest.fn().mockResolvedValue([]),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      wordTranslation: {
+        groupBy: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
       word: {
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),

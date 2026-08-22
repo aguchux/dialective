@@ -10,7 +10,8 @@ import {
 } from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -25,9 +26,11 @@ export function ReferralBonusSettingsPanel() {
   const [error, setError] = useState<string | null>(null);
 
   const { data: settings, isLoading: isLoadingSettings } = useGetReferralSettingsQuery();
-  const { data: platformSettings, isLoading: isLoadingPlatformSettings } = useGetPlatformSettingsQuery();
+  const { data: platformSettings, isLoading: isLoadingPlatformSettings } =
+    useGetPlatformSettingsQuery();
   const [updateSettings, { isLoading: isSavingReferral }] = useUpdateReferralSettingsMutation();
-  const [updatePlatformSettings, { isLoading: isSavingPlatform }] = useUpdatePlatformSettingsMutation();
+  const [updatePlatformSettings, { isLoading: isSavingPlatform }] =
+    useUpdatePlatformSettingsMutation();
 
   const isSaving = isSavingReferral || isSavingPlatform;
 
@@ -74,8 +77,8 @@ export function ReferralBonusSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Referral bonuses</h2>
         <p className="leading-relaxed text-muted">
-          Set the fixed platform referral bonuses. A rate of 0 or a disabled toggle prevents that bonus from being
-          applied.
+          Set the fixed platform referral bonuses. A rate of 0 or a disabled toggle prevents that
+          bonus from being applied.
         </p>
       </div>
 
@@ -120,7 +123,8 @@ export function ReferralBonusSettingsPanel() {
               Training payout referral bonus
             </label>
             <p className="leading-relaxed text-muted">
-              Deducted from an invited user&apos;s scored training payout and remitted to the referrer.
+              Deducted from an invited user&apos;s scored training payout and remitted to the
+              referrer.
             </p>
             <label htmlFor="payout-rate">Fractional rate, e.g. 0.05 = 5%</label>
             <input
@@ -168,7 +172,12 @@ export function ReferralBonusSettingsPanel() {
           </div>
 
           <div>
-            <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+            <ActionButton
+              className={primaryButtonClass}
+              type="submit"
+              pending={isSaving}
+              pendingLabel="Saving"
+            >
               Save settings
             </ActionButton>
           </div>

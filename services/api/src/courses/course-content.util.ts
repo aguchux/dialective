@@ -38,7 +38,11 @@ export function validateCourseDocument(value: Record<string, unknown>): CourseDo
     throw new BadRequestException('Course content is too large');
   }
 
-  if (!Array.isArray(value.slides) || value.slides.length === 0 || value.slides.length > MAX_SLIDES) {
+  if (
+    !Array.isArray(value.slides) ||
+    value.slides.length === 0 ||
+    value.slides.length > MAX_SLIDES
+  ) {
     throw new BadRequestException(`Course content must contain between 1 and ${MAX_SLIDES} slides`);
   }
 
@@ -56,7 +60,9 @@ export function validateCourseDocument(value: Record<string, unknown>): CourseDo
       throw new BadRequestException(`Slide ${index + 1} has invalid text content`);
     }
     if (text.blocks.length > MAX_SLIDE_BLOCKS) {
-      throw new BadRequestException(`Slide ${index + 1} must contain at most ${MAX_SLIDE_BLOCKS} blocks`);
+      throw new BadRequestException(
+        `Slide ${index + 1} must contain at most ${MAX_SLIDE_BLOCKS} blocks`,
+      );
     }
     if (!hasNonEmptyBlocks(text)) {
       throw new BadRequestException(`Slide ${index + 1} must have text`);

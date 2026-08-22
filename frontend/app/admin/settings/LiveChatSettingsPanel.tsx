@@ -1,10 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -48,9 +53,10 @@ export function LiveChatSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Live chat</h2>
         <p className="leading-relaxed text-muted">
-          Adds the Tawk.to chat widget to every public and dashboard page. Find your Property ID and Widget ID in
-          your Tawk.to dashboard under Administration &rarr; Chat Widget &rarr; Widget Settings, or in the embed
-          snippet&rsquo;s URL: <code>embed.tawk.to/&lt;propertyId&gt;/&lt;widgetId&gt;</code>.
+          Adds the Tawk.to chat widget to every public and dashboard page. Find your Property ID and
+          Widget ID in your Tawk.to dashboard under Administration &rarr; Chat Widget &rarr; Widget
+          Settings, or in the embed snippet&rsquo;s URL:{' '}
+          <code>embed.tawk.to/&lt;propertyId&gt;/&lt;widgetId&gt;</code>.
         </p>
       </div>
 
@@ -58,7 +64,10 @@ export function LiveChatSettingsPanel() {
       {!isLoading && (
         <form className="grid gap-4 md:max-w-md" onSubmit={handleSave}>
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="tawk-to-enabled">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="tawk-to-enabled"
+            >
               <input
                 checked={tawkToEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -69,8 +78,8 @@ export function LiveChatSettingsPanel() {
               <span>
                 <span className="block font-bold">Enable Tawk.to live chat</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  The widget only loads once this is on and both IDs below are set -- a half-configured toggle never
-                  ships a broken embed to visitors.
+                  The widget only loads once this is on and both IDs below are set -- a
+                  half-configured toggle never ships a broken embed to visitors.
                 </span>
               </span>
             </label>
@@ -109,7 +118,12 @@ export function LiveChatSettingsPanel() {
           )}
 
           <div>
-            <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+            <ActionButton
+              className={primaryButtonClass}
+              type="submit"
+              pending={isSaving}
+              pendingLabel="Saving"
+            >
               Save live chat settings
             </ActionButton>
           </div>

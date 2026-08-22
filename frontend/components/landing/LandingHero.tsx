@@ -10,8 +10,8 @@ export function LandingHero() {
         Become the voice that AI learns from
       </h1>
       <p className="text-lg font-medium leading-snug text-[rgba(5,5,5,0.68)] md:text-[1.34rem]">
-        Contribute short recordings and word translations in your language or dialect. Work from your phone, wherever
-        you are. No AI experience needed.
+        Contribute short recordings and word translations in your language or dialect. Work from
+        your phone, wherever you are. No AI experience needed.
       </p>
       <div className="flex flex-wrap items-center justify-center gap-3">
         <Link

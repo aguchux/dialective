@@ -86,9 +86,18 @@ export class SubmissionsController {
     // prefilter (max_duration_s) -- see getDictationMaxRecordingSeconds.
     // Computed here (not just at create time) so the UI can show the
     // countdown before the trainer starts recording, not only after.
-    const maxRecordingSeconds = await this.platformSettings.getDictationMaxRecordingSeconds(countPromptWords(prompt.text));
+    const maxRecordingSeconds = await this.platformSettings.getDictationMaxRecordingSeconds(
+      countPromptWords(prompt.text),
+    );
 
-    return { submissionId, uploadUrl: url, key, bucket: SUBMISSIONS_BUCKET, expiresInSeconds, maxRecordingSeconds };
+    return {
+      submissionId,
+      uploadUrl: url,
+      key,
+      bucket: SUBMISSIONS_BUCKET,
+      expiresInSeconds,
+      maxRecordingSeconds,
+    };
   }
 
   /**
@@ -168,9 +177,13 @@ export class SubmissionsController {
     // scoped by) -- a variant of a different dialect never gets stamped.
     const trainer = await this.prisma.user.findUnique({
       where: { id: req.user.sub },
-      select: { dialectVariantId: true, dialectVariant: { select: { dialect: { select: { tag: true } } } } },
+      select: {
+        dialectVariantId: true,
+        dialectVariant: { select: { dialect: { select: { tag: true } } } },
+      },
     });
-    const dialectVariantId = trainer?.dialectVariant?.dialect.tag === body.dialectTag ? trainer.dialectVariantId : null;
+    const dialectVariantId =
+      trainer?.dialectVariant?.dialect.tag === body.dialectTag ? trainer.dialectVariantId : null;
 
     // Ensure the wallet row exists first (brand-new trainers have none yet)
     // so the atomic debit below always has a row to match against.
@@ -192,10 +205,15 @@ export class SubmissionsController {
     const locked = await this.prisma.$transaction(async (tx) => {
       const lock = await tx.wallet.updateMany({
         where: { id: wallet.id, balance: { gte: taskTokenCost } },
-        data: { balance: { decrement: taskTokenCost }, lockedBalance: { increment: taskTokenCost } },
+        data: {
+          balance: { decrement: taskTokenCost },
+          lockedBalance: { increment: taskTokenCost },
+        },
       });
       if (lock.count === 0) {
-        throw new UnprocessableEntityException(`Insufficient balance: this task costs ${taskTokenCost} tokens`);
+        throw new UnprocessableEntityException(
+          `Insufficient balance: this task costs ${taskTokenCost} tokens`,
+        );
       }
 
       await tx.ledgerEntry.create({
@@ -238,7 +256,9 @@ export class SubmissionsController {
     // frontend countdown, which a malicious/buggy client could ignore.
     // quality-gate-worker falls back to its own MAX_DURATION_S constant
     // when this field is absent (e.g. word_recording jobs never set it).
-    const maxDurationSeconds = await this.platformSettings.getDictationMaxRecordingSeconds(countPromptWords(prompt.text));
+    const maxDurationSeconds = await this.platformSettings.getDictationMaxRecordingSeconds(
+      countPromptWords(prompt.text),
+    );
     await this.streams.publish('quality-gate-jobs', {
       record_kind: 'submission',
       submission_id: body.submissionId,
@@ -282,7 +302,11 @@ export class SubmissionsController {
     if (!raw) {
       throw new NotFoundException('Result not ready yet');
     }
-    const { transcript: _transcript, word_confidences: _wordConfidences, ...rest } = JSON.parse(raw);
+    const {
+      transcript: _transcript,
+      word_confidences: _wordConfidences,
+      ...rest
+    } = JSON.parse(raw);
     return rest;
   }
 
@@ -294,7 +318,10 @@ export class SubmissionsController {
   @Get('mine')
   @UseGuards(JwtAuthGuard)
   async listMine(@Req() req: AuthenticatedRequest, @Query() query: ListSubmissionsDto) {
-    const where = { userId: req.user.sub, ...(query.status ? { status: { in: query.status } } : {}) };
+    const where = {
+      userId: req.user.sub,
+      ...(query.status ? { status: { in: query.status } } : {}),
+    };
     const skip = (query.page - 1) * query.pageSize;
     const [items, total] = await Promise.all([
       this.prisma.submission.findMany({
@@ -308,28 +335,35 @@ export class SubmissionsController {
     ]);
 
     return {
-      items: await Promise.all(items.map(async (submission) => ({
-        id: submission.id,
-        promptText: submission.prompt.text,
-        dialectTag: submission.dialectTag,
-        status: submission.status,
-        tokensSpent: submission.tokensSpent.toString(),
-        rawScore: submission.rawScore?.toString() ?? null,
-        score: submission.score?.toString() ?? null,
-        noiseScore: submission.noiseScore?.toString() ?? null,
-        qualityScore: submission.qualityScore?.toString() ?? null,
-        livenessScore: submission.livenessScore?.toString() ?? null,
-        compositeScore: submission.compositeScore?.toString() ?? null,
-        payoutTokenAmount: submission.payoutTokenAmount?.toString() ?? null,
-        audioUrl:
-          submission.audioBucket && submission.audioKey
-            ? (await this.storage.createPresignedDownloadUrl(submission.audioBucket, submission.audioKey)).url
-            : null,
-        rejectionReason: submission.rejectionReason,
-        createdAt: submission.createdAt,
-        scoredAt: submission.scoredAt,
-        settledAt: submission.settledAt,
-      }))),
+      items: await Promise.all(
+        items.map(async (submission) => ({
+          id: submission.id,
+          promptText: submission.prompt.text,
+          dialectTag: submission.dialectTag,
+          status: submission.status,
+          tokensSpent: submission.tokensSpent.toString(),
+          rawScore: submission.rawScore?.toString() ?? null,
+          score: submission.score?.toString() ?? null,
+          noiseScore: submission.noiseScore?.toString() ?? null,
+          qualityScore: submission.qualityScore?.toString() ?? null,
+          livenessScore: submission.livenessScore?.toString() ?? null,
+          compositeScore: submission.compositeScore?.toString() ?? null,
+          payoutTokenAmount: submission.payoutTokenAmount?.toString() ?? null,
+          audioUrl:
+            submission.audioBucket && submission.audioKey
+              ? (
+                  await this.storage.createPresignedDownloadUrl(
+                    submission.audioBucket,
+                    submission.audioKey,
+                  )
+                ).url
+              : null,
+          rejectionReason: submission.rejectionReason,
+          createdAt: submission.createdAt,
+          scoredAt: submission.scoredAt,
+          settledAt: submission.settledAt,
+        })),
+      ),
       page: query.page,
       pageSize: query.pageSize,
       total,

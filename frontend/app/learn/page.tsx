@@ -8,7 +8,8 @@ import { getPublishedCourses } from '@/lib/courses-api';
 
 export const metadata = {
   title: 'Learning Center',
-  description: 'Courses on voice training, dialect contribution, and getting the most out of Dialect Library.',
+  description:
+    'Courses on voice training, dialect contribution, and getting the most out of Dialect Library.',
 };
 
 export default async function LearnPage() {
@@ -21,17 +22,25 @@ export default async function LearnPage() {
         <Breadcrumbs items={[{ label: 'Learning Center' }]} />
         <header className="grid gap-3 border-b border-line pb-7">
           <p className="text-sm font-extrabold uppercase text-accent">Learning Center</p>
-          <h1 className="max-w-3xl text-4xl font-black leading-tight md:text-5xl">Learn Dialect Library</h1>
+          <h1 className="max-w-3xl text-4xl font-black leading-tight md:text-5xl">
+            Learn Dialect Library
+          </h1>
           <p className="max-w-2xl text-lg leading-relaxed text-muted">
-            Short, narrated courses on voice training, dialect contribution, and getting paid on the platform.
-            Log in to start any course.
+            Short, narrated courses on voice training, dialect contribution, and getting paid on the
+            platform. Log in to start any course.
           </p>
         </header>
         <section className="grid gap-6 md:grid-cols-2" aria-label="Courses">
           {courses.map((course) => (
-            <article className="group grid content-start gap-3 overflow-hidden rounded-lg border border-line bg-white" key={course.slug}>
+            <article
+              className="group grid content-start gap-3 overflow-hidden rounded-lg border border-line bg-white"
+              key={course.slug}
+            >
               {course.coverImageUrl && (
-                <Link className="relative block aspect-[16/9] overflow-hidden" href={`/learn/${course.slug}`}>
+                <Link
+                  className="relative block aspect-[16/9] overflow-hidden"
+                  href={`/learn/${course.slug}`}
+                >
                   <Image
                     alt={course.coverImageAlt || ''}
                     className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
@@ -48,17 +57,31 @@ export default async function LearnPage() {
                   </span>
                 )}
                 <h2 className="text-2xl font-black leading-tight">
-                  <Link className="text-ink no-underline hover:text-accent" href={`/learn/${course.slug}`}>{course.title}</Link>
+                  <Link
+                    className="text-ink no-underline hover:text-accent"
+                    href={`/learn/${course.slug}`}
+                  >
+                    {course.title}
+                  </Link>
                 </h2>
                 <p className="leading-relaxed text-muted">{course.summary}</p>
-                <Link className="font-bold text-accent no-underline hover:text-accent-dark" href={`/learn/${course.slug}`}>View course &rarr;</Link>
+                <Link
+                  className="font-bold text-accent no-underline hover:text-accent-dark"
+                  href={`/learn/${course.slug}`}
+                >
+                  View course &rarr;
+                </Link>
               </div>
             </article>
           ))}
-          {courses.length === 0 && <p className="py-12 text-muted">No courses have been published yet.</p>}
+          {courses.length === 0 && (
+            <p className="py-12 text-muted">No courses have been published yet.</p>
+          )}
         </section>
       </div>
-      <div className="relative z-10"><LandingFooter /></div>
+      <div className="relative z-10">
+        <LandingFooter />
+      </div>
     </main>
   );
 }

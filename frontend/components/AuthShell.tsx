@@ -22,14 +22,21 @@ export function AuthPage({ children }: { children: React.ReactNode }) {
 export function AuthPanel({ children }: { children: React.ReactNode }) {
   return (
     <section className="grid min-h-115 gap-4 rounded-lg border border-line bg-surface p-6 shadow-[0_12px_28px_rgba(27,31,27,0.07)] md:p-8">
-      <BrandLogo href="/" size={36} className="justify-self-center text-accent" textClassName="text-sm" />
+      <BrandLogo
+        href="/"
+        size={36}
+        className="justify-self-center text-accent"
+        textClassName="text-sm"
+      />
       {children}
     </section>
   );
 }
 
 export function Eyebrow({ children }: { children: React.ReactNode }) {
-  return <div className="text-sm font-extrabold uppercase tracking-normal text-accent">{children}</div>;
+  return (
+    <div className="text-sm font-extrabold uppercase tracking-normal text-accent">{children}</div>
+  );
 }
 
 export function Notice({ children }: { children: React.ReactNode }) {

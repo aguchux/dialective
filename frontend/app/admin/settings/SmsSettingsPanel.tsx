@@ -1,10 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -19,7 +24,12 @@ const PROVIDER_LABELS: Record<SmsTransactionalProviderKey, string> = {
 };
 
 const DEFAULT_ORDER: SmsProviderKey[] = ['termii', 'twilio', 'africastalking'];
-const DEFAULT_TRANSACTIONAL_ORDER: SmsTransactionalProviderKey[] = ['termii', 'twilio', 'africastalking', 'smslive247'];
+const DEFAULT_TRANSACTIONAL_ORDER: SmsTransactionalProviderKey[] = [
+  'termii',
+  'twilio',
+  'africastalking',
+  'smslive247',
+];
 
 function parseOrder(csv: string): SmsProviderKey[] {
   const parts = csv.split(',').map((part) => part.trim()) as SmsProviderKey[];
@@ -46,7 +56,9 @@ export function SmsSettingsPanel() {
   const [smsSenderId, setSmsSenderId] = useState('');
   const [order, setOrder] = useState<SmsProviderKey[]>(DEFAULT_ORDER);
   const [smslive247NativeOtpEnabled, setSmslive247NativeOtpEnabled] = useState(false);
-  const [transactionalOrder, setTransactionalOrder] = useState<SmsTransactionalProviderKey[]>(DEFAULT_TRANSACTIONAL_ORDER);
+  const [transactionalOrder, setTransactionalOrder] = useState<SmsTransactionalProviderKey[]>(
+    DEFAULT_TRANSACTIONAL_ORDER,
+  );
   const [p2pSmsTradeCreatedEnabled, setP2pSmsTradeCreatedEnabled] = useState(false);
   const [p2pSmsPaymentMarkedEnabled, setP2pSmsPaymentMarkedEnabled] = useState(false);
   const [p2pSmsTokensReleasedEnabled, setP2pSmsTokensReleasedEnabled] = useState(false);
@@ -118,8 +130,8 @@ export function SmsSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">SMS Providers</h2>
         <p className="leading-relaxed text-muted">
-          Delivers phone-verification codes (Profile &gt; Phone number, required before payment methods or P2P
-          trading).
+          Delivers phone-verification codes (Profile &gt; Phone number, required before payment
+          methods or P2P trading).
         </p>
       </div>
 
@@ -131,10 +143,10 @@ export function SmsSettingsPanel() {
               Sender ID
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              The name shown to recipients as the SMS sender (e.g. &quot;Dialect&quot;), used by Termii, SMSLive247,
-              and Africa&apos;s Talking, including SMSLive247&apos;s native OTP flow below. Twilio ignores this --
-              it sends from a purchased phone number instead. Leave blank to use each provider&apos;s configured
-              default.
+              The name shown to recipients as the SMS sender (e.g. &quot;Dialect&quot;), used by
+              Termii, SMSLive247, and Africa&apos;s Talking, including SMSLive247&apos;s native OTP
+              flow below. Twilio ignores this -- it sends from a purchased phone number instead.
+              Leave blank to use each provider&apos;s configured default.
             </p>
             <input
               className={`${inputClass} max-w-60`}
@@ -150,8 +162,8 @@ export function SmsSettingsPanel() {
           <div className="grid gap-2">
             <span className="font-bold">Provider order (fallback chain)</span>
             <p className="text-sm leading-relaxed text-muted">
-              1st choice is tried first; the rest are only used if the ones before them fail. All three must be
-              distinct. Used only when the SMSLive247 native OTP flow below is off.
+              1st choice is tried first; the rest are only used if the ones before them fail. All
+              three must be distinct. Used only when the SMSLive247 native OTP flow below is off.
             </p>
             <div className="grid grid-cols-3 gap-3">
               {(['1st choice', '2nd choice', '3rd choice'] as const).map((label, index) => (
@@ -163,7 +175,9 @@ export function SmsSettingsPanel() {
                     className={inputClass}
                     id={`sms-order-${index}`}
                     value={order[index]}
-                    onChange={(e) => setChoice(index as 0 | 1 | 2, e.target.value as SmsProviderKey)}
+                    onChange={(e) =>
+                      setChoice(index as 0 | 1 | 2, e.target.value as SmsProviderKey)
+                    }
                   >
                     {DEFAULT_ORDER.map((key) => (
                       <option key={key} value={key}>
@@ -177,7 +191,10 @@ export function SmsSettingsPanel() {
           </div>
 
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="smslive247-native-otp-enabled">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="smslive247-native-otp-enabled"
+            >
               <input
                 checked={smslive247NativeOtpEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -188,10 +205,12 @@ export function SmsSettingsPanel() {
               <span>
                 <span className="block font-bold">Use SMSLive247&apos;s native OTP flow</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  SMSLive247&apos;s general SMS route rejects any message containing an OTP-shaped code, so it can&apos;t
-                  join the fallback chain above. When on, phone verification bypasses the fallback chain entirely and
-                  uses SMSLive247&apos;s own token-generate/verify API end-to-end -- SMSLive247 generates and checks the
-                  code on their side, not ours. When off (default), phone verification uses the fallback chain above.
+                  SMSLive247&apos;s general SMS route rejects any message containing an OTP-shaped
+                  code, so it can&apos;t join the fallback chain above. When on, phone verification
+                  bypasses the fallback chain entirely and uses SMSLive247&apos;s own
+                  token-generate/verify API end-to-end -- SMSLive247 generates and checks the code
+                  on their side, not ours. When off (default), phone verification uses the fallback
+                  chain above.
                 </span>
               </span>
             </label>
@@ -200,44 +219,59 @@ export function SmsSettingsPanel() {
           <div className="border-t border-line pt-5">
             <h3 className="text-lg font-black">Transactional SMS (P2P trade notifications)</h3>
             <p className="mt-1 text-sm leading-relaxed text-muted">
-              Plain notification text, not OTP -- SMSLive247 can join this fallback chain since only their OTP route
-              rejects OTP-shaped messages.
+              Plain notification text, not OTP -- SMSLive247 can join this fallback chain since only
+              their OTP route rejects OTP-shaped messages.
             </p>
           </div>
 
           <div className="grid gap-2">
             <span className="font-bold">Provider order (fallback chain)</span>
             <p className="text-sm leading-relaxed text-muted">
-              1st choice is tried first; the rest are only used if the ones before them fail. All four must be
-              distinct.
+              1st choice is tried first; the rest are only used if the ones before them fail. All
+              four must be distinct.
             </p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {(['1st choice', '2nd choice', '3rd choice', '4th choice'] as const).map((label, index) => (
-                <div className="grid gap-1" key={label}>
-                  <label className="text-sm font-bold" htmlFor={`sms-transactional-order-${index}`}>
-                    {label}
-                  </label>
-                  <select
-                    className={inputClass}
-                    id={`sms-transactional-order-${index}`}
-                    value={transactionalOrder[index]}
-                    onChange={(e) => setTransactionalChoice(index as 0 | 1 | 2 | 3, e.target.value as SmsTransactionalProviderKey)}
-                  >
-                    {DEFAULT_TRANSACTIONAL_ORDER.map((key) => (
-                      <option key={key} value={key}>
-                        {PROVIDER_LABELS[key]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
+              {(['1st choice', '2nd choice', '3rd choice', '4th choice'] as const).map(
+                (label, index) => (
+                  <div className="grid gap-1" key={label}>
+                    <label
+                      className="text-sm font-bold"
+                      htmlFor={`sms-transactional-order-${index}`}
+                    >
+                      {label}
+                    </label>
+                    <select
+                      className={inputClass}
+                      id={`sms-transactional-order-${index}`}
+                      value={transactionalOrder[index]}
+                      onChange={(e) =>
+                        setTransactionalChoice(
+                          index as 0 | 1 | 2 | 3,
+                          e.target.value as SmsTransactionalProviderKey,
+                        )
+                      }
+                    >
+                      {DEFAULT_TRANSACTIONAL_ORDER.map((key) => (
+                        <option key={key} value={key}>
+                          {PROVIDER_LABELS[key]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ),
+              )}
             </div>
           </div>
 
           <div className="grid gap-2">
             <span className="font-bold">Notification events</span>
-            <p className="text-sm leading-relaxed text-muted">Each event below is independently on/off.</p>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3" htmlFor="p2p-sms-trade-created">
+            <p className="text-sm leading-relaxed text-muted">
+              Each event below is independently on/off.
+            </p>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3"
+              htmlFor="p2p-sms-trade-created"
+            >
               <input
                 checked={p2pSmsTradeCreatedEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -252,7 +286,10 @@ export function SmsSettingsPanel() {
                 </span>
               </span>
             </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3" htmlFor="p2p-sms-payment-marked">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3"
+              htmlFor="p2p-sms-payment-marked"
+            >
               <input
                 checked={p2pSmsPaymentMarkedEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -263,11 +300,15 @@ export function SmsSettingsPanel() {
               <span>
                 <span className="block font-bold">Buyer marked paid</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  SMS the seller when the buyer marks a trade as paid, so they can confirm and release DL.
+                  SMS the seller when the buyer marks a trade as paid, so they can confirm and
+                  release DL.
                 </span>
               </span>
             </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3" htmlFor="p2p-sms-tokens-released">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3"
+              htmlFor="p2p-sms-tokens-released"
+            >
               <input
                 checked={p2pSmsTokensReleasedEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -282,7 +323,10 @@ export function SmsSettingsPanel() {
                 </span>
               </span>
             </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3" htmlFor="p2p-sms-cancelled">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3"
+              htmlFor="p2p-sms-cancelled"
+            >
               <input
                 checked={p2pSmsCancelledEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -293,15 +337,20 @@ export function SmsSettingsPanel() {
               <span>
                 <span className="block font-bold">Cancelled / expired / dispute</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  SMS the seller when a trade is cancelled, expires, or a dispute resolves in their favor, and SMS
-                  the other party when a dispute is raised.
+                  SMS the seller when a trade is cancelled, expires, or a dispute resolves in their
+                  favor, and SMS the other party when a dispute is raised.
                 </span>
               </span>
             </label>
           </div>
 
           <div>
-            <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+            <ActionButton
+              className={primaryButtonClass}
+              type="submit"
+              pending={isSaving}
+              pendingLabel="Saving"
+            >
               Save SMS provider settings
             </ActionButton>
           </div>

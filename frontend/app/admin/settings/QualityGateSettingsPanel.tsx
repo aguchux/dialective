@@ -1,10 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -32,7 +37,10 @@ export function QualityGateSettingsPanel() {
   }, [settings]);
 
   const weightSum =
-    (Number(weightConsensus) || 0) + (Number(weightNoise) || 0) + (Number(weightQuality) || 0) + (Number(weightLiveness) || 0);
+    (Number(weightConsensus) || 0) +
+    (Number(weightNoise) || 0) +
+    (Number(weightQuality) || 0) +
+    (Number(weightLiveness) || 0);
   const weightSumValid = Math.abs(weightSum - 100) < 0.01;
 
   async function handleSave(e: React.FormEvent) {
@@ -65,11 +73,11 @@ export function QualityGateSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Voice Quality Gate</h2>
         <p className="leading-relaxed text-muted">
-          Every submitted recording is scored for background noise, audio clarity, and live-voice confidence
-          (quality-gate-worker). These blend with the transcript/exact-match score into a composite score that drives
-          payout -- the composite is always clamped into the Min/Max score range set in General settings, so it
-          behaves exactly like the no-fail-on-train synthetic score range, just computed from real signals instead of
-          a random draw.
+          Every submitted recording is scored for background noise, audio clarity, and live-voice
+          confidence (quality-gate-worker). These blend with the transcript/exact-match score into a
+          composite score that drives payout -- the composite is always clamped into the Min/Max
+          score range set in General settings, so it behaves exactly like the no-fail-on-train
+          synthetic score range, just computed from real signals instead of a random draw.
         </p>
       </div>
 
@@ -77,7 +85,10 @@ export function QualityGateSettingsPanel() {
       {!isLoading && (
         <form className="grid gap-4 md:max-w-md" onSubmit={handleSave}>
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="quality-gate-enabled">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="quality-gate-enabled"
+            >
               <input
                 checked={enabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -88,9 +99,10 @@ export function QualityGateSettingsPanel() {
               <span>
                 <span className="block font-bold">Apply quality scores to payout</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  When on, the composite score (below) determines the payout bonus instead of the raw transcript/
-                  exact-match score. When off, noise/quality/liveness are still measured and shown for every
-                  submission, they just don't affect payout yet -- useful for reviewing scores before turning this on.
+                  When on, the composite score (below) determines the payout bonus instead of the
+                  raw transcript/ exact-match score. When off, noise/quality/liveness are still
+                  measured and shown for every submission, they just don't affect payout yet --
+                  useful for reviewing scores before turning this on.
                 </span>
               </span>
             </label>
@@ -163,7 +175,9 @@ export function QualityGateSettingsPanel() {
                 />
               </div>
             </div>
-            <p className={`text-sm font-bold ${weightSumValid ? 'text-accent-dark' : 'text-danger'}`}>
+            <p
+              className={`text-sm font-bold ${weightSumValid ? 'text-accent-dark' : 'text-danger'}`}
+            >
               Sums to: {weightSum}% {weightSumValid ? '' : '(must equal 100%)'}
             </p>
           </div>
@@ -173,11 +187,12 @@ export function QualityGateSettingsPanel() {
               Spoken/typed match (word training only)
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              How closely a word-training recording&rsquo;s spoken audio (ASR-transcribed) matches what the trainer
-              typed, catching a correct typed answer paired with a different spoken word. Separate from the weights
-              above &mdash; it&rsquo;s additive, not part of that 100% budget, and defaults to 0 (off) so this never
-              affects payout until you raise it. Doesn&rsquo;t apply to sentence submissions, which already use the
-              transcript as their primary score.
+              How closely a word-training recording&rsquo;s spoken audio (ASR-transcribed) matches
+              what the trainer typed, catching a correct typed answer paired with a different spoken
+              word. Separate from the weights above &mdash; it&rsquo;s additive, not part of that
+              100% budget, and defaults to 0 (off) so this never affects payout until you raise it.
+              Doesn&rsquo;t apply to sentence submissions, which already use the transcript as their
+              primary score.
             </p>
             <input
               className={`${inputClass} max-w-40`}
@@ -192,7 +207,13 @@ export function QualityGateSettingsPanel() {
           </div>
 
           <div>
-            <ActionButton className={primaryButtonClass} disabled={!weightSumValid} type="submit" pending={isSaving} pendingLabel="Saving">
+            <ActionButton
+              className={primaryButtonClass}
+              disabled={!weightSumValid}
+              type="submit"
+              pending={isSaving}
+              pendingLabel="Saving"
+            >
               Save quality gate settings
             </ActionButton>
           </div>

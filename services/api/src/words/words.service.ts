@@ -79,7 +79,10 @@ export class WordsService {
   async endSession(userId: string, sessionId: string) {
     const session = await this.getOwnedSession(userId, sessionId);
     if (!session.endedAt) {
-      await this.prisma.trainingSession.update({ where: { id: session.id }, data: { endedAt: new Date() } });
+      await this.prisma.trainingSession.update({
+        where: { id: session.id },
+        data: { endedAt: new Date() },
+      });
     }
     return { ended: true };
   }
@@ -110,9 +113,10 @@ export class WordsService {
     const sentenceRebuildEnabled = await this.settings.isSentenceRebuildEnabled();
 
     const roll = Math.random();
-    const reverseSource = reverseEnabled && roll < 1 / 3
-      ? await this.pickReverseSource(userId, sessionId, trainer.dialect!.tag)
-      : null;
+    const reverseSource =
+      reverseEnabled && roll < 1 / 3
+        ? await this.pickReverseSource(userId, sessionId, trainer.dialect!.tag)
+        : null;
 
     if (reverseSource) {
       const assignment = await this.prisma.wordTrainingAssignment.create({
@@ -125,7 +129,12 @@ export class WordsService {
       });
       const sourceAudioUrl =
         reverseSource.audioBucket && reverseSource.audioKey
-          ? (await this.storage.createPresignedDownloadUrl(reverseSource.audioBucket, reverseSource.audioKey)).url
+          ? (
+              await this.storage.createPresignedDownloadUrl(
+                reverseSource.audioBucket,
+                reverseSource.audioKey,
+              )
+            ).url
           : null;
       return {
         assignmentId: assignment.id,
@@ -141,9 +150,10 @@ export class WordsService {
       };
     }
 
-    const sentenceRebuild = sentenceRebuildEnabled && roll < 2 / 3
-      ? await this.pickSentenceRebuildSource(trainer.dialect!.tag)
-      : null;
+    const sentenceRebuild =
+      sentenceRebuildEnabled && roll < 2 / 3
+        ? await this.pickSentenceRebuildSource(trainer.dialect!.tag)
+        : null;
 
     if (sentenceRebuild) {
       const assignment = await this.prisma.wordTrainingAssignment.create({
@@ -239,8 +249,16 @@ export class WordsService {
     if (assignment.uploadBucket !== body.bucket || assignment.uploadKey !== body.audioKey) {
       throw new ForbiddenException('Recording upload does not belong to this assignment');
     }
-    if (!body.responseText || !body.audioKey || !body.bucket || body.durationMs === undefined || !body.noiseRating) {
-      throw new UnprocessableEntityException('responseText, bucket, audioKey, durationMs, and noiseRating are required for this assignment');
+    if (
+      !body.responseText ||
+      !body.audioKey ||
+      !body.bucket ||
+      body.durationMs === undefined ||
+      !body.noiseRating
+    ) {
+      throw new UnprocessableEntityException(
+        'responseText, bucket, audioKey, durationMs, and noiseRating are required for this assignment',
+      );
     }
     if (!assignment.word) {
       throw new UnprocessableEntityException('This assignment has no associated word');
@@ -260,14 +278,19 @@ export class WordsService {
     const allowedMs = Math.min(perWordSeconds * wordCount, maxSeconds) * 1000;
     const durationGraceMs = 5_000;
     if (body.durationMs > allowedMs + durationGraceMs) {
-      throw new UnprocessableEntityException(`Recording exceeds the ${Math.round(allowedMs / 1000)}s limit for this word`);
+      throw new UnprocessableEntityException(
+        `Recording exceeds the ${Math.round(allowedMs / 1000)}s limit for this word`,
+      );
     }
 
     const normalizedAnswer = normalizeAnswer(body.responseText);
     const normalizedEnglish = normalizeAnswer(assignment.word.text);
-    const validationScore = assignment.direction === 'DIALECT_TO_ENGLISH'
-      ? normalizedAnswer === normalizedEnglish ? 1 : 0
-      : null;
+    const validationScore =
+      assignment.direction === 'DIALECT_TO_ENGLISH'
+        ? normalizedAnswer === normalizedEnglish
+          ? 1
+          : 0
+        : null;
     const score = validationScore !== null ? validationScore * 100 : null;
 
     const taskTokenCost = await this.settings.getTaskTokenCost();
@@ -291,10 +314,15 @@ export class WordsService {
       // refund or replaced by the no-loss payout once SCORED.
       const lock = await tx.wallet.updateMany({
         where: { id: wallet.id, balance: { gte: taskTokenCost } },
-        data: { balance: { decrement: taskTokenCost }, lockedBalance: { increment: taskTokenCost } },
+        data: {
+          balance: { decrement: taskTokenCost },
+          lockedBalance: { increment: taskTokenCost },
+        },
       });
       if (lock.count === 0) {
-        throw new UnprocessableEntityException(`Insufficient balance: this task costs ${taskTokenCost} tokens`);
+        throw new UnprocessableEntityException(
+          `Insufficient balance: this task costs ${taskTokenCost} tokens`,
+        );
       }
 
       const created = await tx.wordRecording.create({
@@ -337,7 +365,12 @@ export class WordsService {
     }
 
     if (assignment.direction === 'ENGLISH_TO_DIALECT') {
-      await this.normalizeSpellingBestEffort(recording.id, assignment.word.text, assignment.session.user.dialect!.name, body.responseText!.trim());
+      await this.normalizeSpellingBestEffort(
+        recording.id,
+        assignment.word.text,
+        assignment.session.user.dialect!.name,
+        body.responseText!.trim(),
+      );
     }
 
     // Same quality-gate-jobs stream Submissions publish to (see
@@ -401,11 +434,15 @@ export class WordsService {
 
     const correctOrder = promptWords.map((w) => w.position);
     const submitted = body.submittedOrder;
-    const isExactMatch = submitted.length === correctOrder.length && submitted.every((position, index) => position === correctOrder[index]);
+    const isExactMatch =
+      submitted.length === correctOrder.length &&
+      submitted.every((position, index) => position === correctOrder[index]);
     const score = isExactMatch ? 100 : 0;
 
     const positionToText = new Map(promptWords.map((w) => [w.position, w.text]));
-    const submittedText = submitted.map((position) => positionToText.get(position) ?? '?').join(' ');
+    const submittedText = submitted
+      .map((position) => positionToText.get(position) ?? '?')
+      .join(' ');
 
     const taskTokenCost = await this.settings.getTaskTokenCost();
     const wallet = await this.prisma.wallet.upsert({
@@ -423,10 +460,15 @@ export class WordsService {
 
       const lock = await tx.wallet.updateMany({
         where: { id: wallet.id, balance: { gte: taskTokenCost } },
-        data: { balance: { decrement: taskTokenCost }, lockedBalance: { increment: taskTokenCost } },
+        data: {
+          balance: { decrement: taskTokenCost },
+          lockedBalance: { increment: taskTokenCost },
+        },
       });
       if (lock.count === 0) {
-        throw new UnprocessableEntityException(`Insufficient balance: this task costs ${taskTokenCost} tokens`);
+        throw new UnprocessableEntityException(
+          `Insufficient balance: this task costs ${taskTokenCost} tokens`,
+        );
       }
 
       const created = await tx.wordRecording.create({
@@ -497,33 +539,40 @@ export class WordsService {
     ]);
 
     return {
-      items: await Promise.all(items.map(async (recording) => ({
-        id: recording.id,
-        promptText:
-          recording.direction === 'SENTENCE_REBUILD'
-            ? `Rebuild: ${recording.prompt?.text ?? recording.translationText}`
-            : recording.direction === 'ENGLISH_TO_DIALECT'
-              ? (recording.word?.text ?? recording.translationText)
-              : `Translate: ${recording.translationText}`,
-        dialectTag: recording.dialectTag,
-        status: recording.status,
-        tokensSpent: recording.tokensSpent.toString(),
-        rawScore: recording.rawScore?.toString() ?? null,
-        score: recording.score?.toString() ?? null,
-        noiseScore: recording.noiseScore?.toString() ?? null,
-        qualityScore: recording.qualityScore?.toString() ?? null,
-        livenessScore: recording.livenessScore?.toString() ?? null,
-        compositeScore: recording.compositeScore?.toString() ?? null,
-        payoutTokenAmount: recording.payoutTokenAmount?.toString() ?? null,
-        audioUrl:
-          recording.audioBucket && recording.audioKey
-            ? (await this.storage.createPresignedDownloadUrl(recording.audioBucket, recording.audioKey)).url
-            : null,
-        rejectionReason: null as string | null,
-        createdAt: recording.createdAt,
-        scoredAt: recording.scoredAt,
-        settledAt: recording.settledAt,
-      }))),
+      items: await Promise.all(
+        items.map(async (recording) => ({
+          id: recording.id,
+          promptText:
+            recording.direction === 'SENTENCE_REBUILD'
+              ? `Rebuild: ${recording.prompt?.text ?? recording.translationText}`
+              : recording.direction === 'ENGLISH_TO_DIALECT'
+                ? (recording.word?.text ?? recording.translationText)
+                : `Translate: ${recording.translationText}`,
+          dialectTag: recording.dialectTag,
+          status: recording.status,
+          tokensSpent: recording.tokensSpent.toString(),
+          rawScore: recording.rawScore?.toString() ?? null,
+          score: recording.score?.toString() ?? null,
+          noiseScore: recording.noiseScore?.toString() ?? null,
+          qualityScore: recording.qualityScore?.toString() ?? null,
+          livenessScore: recording.livenessScore?.toString() ?? null,
+          compositeScore: recording.compositeScore?.toString() ?? null,
+          payoutTokenAmount: recording.payoutTokenAmount?.toString() ?? null,
+          audioUrl:
+            recording.audioBucket && recording.audioKey
+              ? (
+                  await this.storage.createPresignedDownloadUrl(
+                    recording.audioBucket,
+                    recording.audioKey,
+                  )
+                ).url
+              : null,
+          rejectionReason: null as string | null,
+          createdAt: recording.createdAt,
+          scoredAt: recording.scoredAt,
+          settledAt: recording.settledAt,
+        })),
+      ),
       page: query.page,
       pageSize: query.pageSize,
       total,
@@ -539,7 +588,12 @@ export class WordsService {
    * down, etc.) is swallowed: this must never fail or delay the
    * already-completed recording submission.
    */
-  private async normalizeSpellingBestEffort(recordingId: string, englishWord: string, dialectName: string, typedText: string) {
+  private async normalizeSpellingBestEffort(
+    recordingId: string,
+    englishWord: string,
+    dialectName: string,
+    typedText: string,
+  ) {
     try {
       const enabled = await this.settings.isSpellingNormalizationEnabled();
       if (!enabled) return;
@@ -610,10 +664,12 @@ export class WordsService {
       take: 8,
     });
 
-    const suggestions: { text: string; source: 'community' | 'ai' }[] = communityRows.map((row) => ({
-      text: row.translationText,
-      source: 'community' as const,
-    }));
+    const suggestions: { text: string; source: 'community' | 'ai' }[] = communityRows.map(
+      (row) => ({
+        text: row.translationText,
+        source: 'community' as const,
+      }),
+    );
 
     const remaining = 8 - suggestions.length;
     if (remaining > 0) {
@@ -648,7 +704,10 @@ export class WordsService {
    * 0 -- avoids punishing a correct translation for someone else's bad
    * transcription back to English.
    */
-  private async scoreReverseValidatedSource(sourceRecordingId: string, reverseValidationScore: number) {
+  private async scoreReverseValidatedSource(
+    sourceRecordingId: string,
+    reverseValidationScore: number,
+  ) {
     if (reverseValidationScore < 1) return;
     await this.prisma.wordRecording.updateMany({
       where: { id: sourceRecordingId, status: 'PENDING' },
@@ -699,13 +758,18 @@ export class WordsService {
     });
 
     try {
-      await this.mail.sendAuditHoldStartedEmail({ trainerEmail: user.email, submissionCount: count });
+      await this.mail.sendAuditHoldStartedEmail({
+        trainerEmail: user.email,
+        submissionCount: count,
+      });
     } catch (err) {
       // Best-effort, same as every other post-action email in this codebase
       // -- the hold has already been applied by the time this runs, and a
       // failed notification shouldn't unwind it or fail the request that
       // triggered it (that request's own recording already succeeded).
-      this.logger.error(`Failed to send audit-hold-started email for user=${userId}: ${(err as Error).message}`);
+      this.logger.error(
+        `Failed to send audit-hold-started email for user=${userId}: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -715,14 +779,16 @@ export class WordsService {
       include: { dialect: true, dialectVariant: true },
     });
     if (!trainer) throw new NotFoundException('Trainer not found');
-    if (!trainer.dialect) throw new UnprocessableEntityException('Complete dialect onboarding before training');
+    if (!trainer.dialect)
+      throw new UnprocessableEntityException('Complete dialect onboarding before training');
     return trainer;
   }
 
   private async getOwnedSession(userId: string, sessionId: string) {
     const session = await this.prisma.trainingSession.findUnique({ where: { id: sessionId } });
     if (!session) throw new NotFoundException('Training session not found');
-    if (session.userId !== userId) throw new ForbiddenException('Training session does not belong to you');
+    if (session.userId !== userId)
+      throw new ForbiddenException('Training session does not belong to you');
     return session;
   }
 
@@ -736,7 +802,8 @@ export class WordsService {
       },
     });
     if (!assignment) throw new NotFoundException('Word assignment not found');
-    if (assignment.session.userId !== userId) throw new ForbiddenException('Word assignment does not belong to you');
+    if (assignment.session.userId !== userId)
+      throw new ForbiddenException('Word assignment does not belong to you');
     return assignment;
   }
 
@@ -758,15 +825,23 @@ export class WordsService {
     });
     const attemptedIds = attempted.flatMap(({ wordId }) => (wordId ? [wordId] : []));
 
-    const unattemptedCount = await this.prisma.word.count({ where: { id: { notIn: attemptedIds } } });
+    const unattemptedCount = await this.prisma.word.count({
+      where: { id: { notIn: attemptedIds } },
+    });
     const where = unattemptedCount > 0 ? { id: { notIn: attemptedIds } } : {};
     const count = unattemptedCount > 0 ? unattemptedCount : totalWords;
 
-    const [word] = await this.prisma.word.findMany({ where, take: 1, skip: Math.floor(Math.random() * count) });
+    const [word] = await this.prisma.word.findMany({
+      where,
+      take: 1,
+      skip: Math.floor(Math.random() * count),
+    });
     return word;
   }
 
-  private async pickSentenceRebuildSource(dialectTag: string): Promise<{ promptId: string; fragments: string[] } | null> {
+  private async pickSentenceRebuildSource(
+    dialectTag: string,
+  ): Promise<{ promptId: string; fragments: string[] } | null> {
     const where = { dialectTag, active: true, words: { some: { dialectTag } } };
     const promptIds = await this.prisma.prompt.findMany({ where, select: { id: true } });
     const eligible: string[] = [];
@@ -791,7 +866,11 @@ export class WordsService {
       select: { sourceRecordingId: true },
     });
     const where = {
-      id: { notIn: usedSources.flatMap(({ sourceRecordingId }) => sourceRecordingId ? [sourceRecordingId] : []) },
+      id: {
+        notIn: usedSources.flatMap(({ sourceRecordingId }) =>
+          sourceRecordingId ? [sourceRecordingId] : [],
+        ),
+      },
       dialectTag,
       direction: 'ENGLISH_TO_DIALECT' as const,
       userId: { not: userId },
@@ -809,7 +888,11 @@ export class WordsService {
 }
 
 function normalizeAnswer(value: string): string {
-  return value.trim().toLocaleLowerCase('en').replace(/[^a-z0-9\s'-]/g, '').replace(/\s+/g, ' ');
+  return value
+    .trim()
+    .toLocaleLowerCase('en')
+    .replace(/[^a-z0-9\s'-]/g, '')
+    .replace(/\s+/g, ' ');
 }
 
 /** Fisher-Yates shuffle -- used to present SENTENCE_REBUILD fragments in random order (never the correct order). */

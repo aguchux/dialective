@@ -19,7 +19,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from expression import EMOTION_LABELS, SAMPLE_RATE, extract_emotion_features  # noqa: E402
 
 
-def synthetic_clip_for_label(rng: np.random.Generator, label_index: int, duration_s: float = 2.0) -> np.ndarray:
+def synthetic_clip_for_label(
+    rng: np.random.Generator, label_index: int, duration_s: float = 2.0
+) -> np.ndarray:
     """
     A rough per-label synthetic tone, distinguished only by pitch/jitter/
     amplitude-modulation parameters -- purely so each of the 7 labels
@@ -42,7 +44,9 @@ def main() -> None:
     features, labels = [], []
     for label_index, _label in enumerate(EMOTION_LABELS):
         for _ in range(60):
-            features.append(extract_emotion_features(synthetic_clip_for_label(rng, label_index)))
+            features.append(
+                extract_emotion_features(synthetic_clip_for_label(rng, label_index))
+            )
             labels.append(label_index)
 
     clf = LogisticRegression(max_iter=1000)

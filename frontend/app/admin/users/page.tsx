@@ -20,8 +20,10 @@ import {
   useUpdateUserStatusMutation,
 } from '@/store/api';
 
-const selectClass = 'min-h-9 rounded-lg border border-line bg-white px-2.5 py-1.5 text-sm font-bold text-ink dark:bg-surface-muted';
-const inputClass = 'min-h-9 w-full max-w-xs rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink dark:bg-surface-muted';
+const selectClass =
+  'min-h-9 rounded-lg border border-line bg-white px-2.5 py-1.5 text-sm font-bold text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-9 w-full max-w-xs rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink dark:bg-surface-muted';
 
 const roleOptions = ['TRAINER', 'DISTRIBUTOR', 'PARTNER', 'ADMIN'] as const;
 const statusOptions = ['ACTIVE', 'SUSPENDED', 'BLOCKED'] as const;
@@ -109,9 +111,7 @@ export default function AdminUsersPage() {
       key: 'email',
       header: 'User',
       sortValue: (u) => `${u.firstName ?? ''} ${u.lastName ?? ''} ${u.email}`,
-      render: (u) => (
-        <UserIdentityCell selfId={selfId} user={u} />
-      ),
+      render: (u) => <UserIdentityCell selfId={selfId} user={u} />,
     },
     {
       key: 'role',
@@ -119,20 +119,45 @@ export default function AdminUsersPage() {
       sortValue: (u) => u.role,
       render: (u) => {
         const pending = pendingField === `role:${u.id}`;
-        return <div className="flex items-center gap-2"><select aria-busy={pending} className={selectClass} value={u.role} disabled={u.id === selfId || pending} onChange={(e) => changeRole(u.id, e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}</select>{pending && <ActionSpinner className="text-accent" />}</div>;
+        return (
+          <div className="flex items-center gap-2">
+            <select
+              aria-busy={pending}
+              className={selectClass}
+              value={u.role}
+              disabled={u.id === selfId || pending}
+              onChange={(e) => changeRole(u.id, e.target.value)}
+            >
+              {roleOptions.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            {pending && <ActionSpinner className="text-accent" />}
+          </div>
+        );
       },
     },
     {
       key: 'status',
       header: 'Status',
       sortValue: (u) => u.status,
-      render: (u) => <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${statusStyles[u.status]}`}>{u.status}</span>,
+      render: (u) => (
+        <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${statusStyles[u.status]}`}>
+          {u.status}
+        </span>
+      ),
     },
     {
       key: 'walletBalance',
       header: 'DL balance',
       sortValue: (u) => Number(u.walletBalance ?? 0),
-      render: (u) => <span className="font-mono font-bold tabular-nums">{formatTokens(u.walletBalance ?? 0)} DL</span>,
+      render: (u) => (
+        <span className="font-mono font-bold tabular-nums">
+          {formatTokens(u.walletBalance ?? 0)} DL
+        </span>
+      ),
     },
     {
       key: 'actions',
@@ -141,7 +166,19 @@ export default function AdminUsersPage() {
         const pending = pendingField === `status:${u.id}`;
         return (
           <div className="flex flex-wrap items-center gap-2">
-            <select aria-busy={pending} className={selectClass} value={u.status} disabled={u.id === selfId || pending} onChange={(e) => changeStatus(u.id, e.target.value)}>{statusOptions.map((s) => <option key={s} value={s}>{s === 'ACTIVE' ? 'Set active' : s === 'SUSPENDED' ? 'Suspend' : 'Block'}</option>)}</select>
+            <select
+              aria-busy={pending}
+              className={selectClass}
+              value={u.status}
+              disabled={u.id === selfId || pending}
+              onChange={(e) => changeStatus(u.id, e.target.value)}
+            >
+              {statusOptions.map((s) => (
+                <option key={s} value={s}>
+                  {s === 'ACTIVE' ? 'Set active' : s === 'SUSPENDED' ? 'Suspend' : 'Block'}
+                </option>
+              ))}
+            </select>
             {pending && <ActionSpinner className="text-accent" />}
             {u.role === 'TRAINER' && (
               <button
@@ -170,7 +207,9 @@ export default function AdminUsersPage() {
       <div className="grid gap-6">
         <div className="grid gap-2">
           <h1 className="text-3xl font-black">Users</h1>
-          <p className="leading-relaxed text-muted">Manage roles and account status across trainers, distributors, partners, and admins.</p>
+          <p className="leading-relaxed text-muted">
+            Manage roles and account status across trainers, distributors, partners, and admins.
+          </p>
         </div>
 
         <section className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-white p-4 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -191,7 +230,12 @@ export default function AdminUsersPage() {
             <label className="text-xs font-bold uppercase text-muted" htmlFor="role-filter">
               Role
             </label>
-            <select className={selectClass} id="role-filter" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+            <select
+              className={selectClass}
+              id="role-filter"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+            >
               <option value="">All</option>
               {roleOptions.map((r) => (
                 <option key={r} value={r}>
@@ -204,7 +248,12 @@ export default function AdminUsersPage() {
             <label className="text-xs font-bold uppercase text-muted" htmlFor="status-filter">
               Status
             </label>
-            <select className={selectClass} id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <select
+              className={selectClass}
+              id="status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
               <option value="">All</option>
               {statusOptions.map((s) => (
                 <option key={s} value={s}>
@@ -215,7 +264,11 @@ export default function AdminUsersPage() {
           </div>
         </section>
 
-        {error && <p className="leading-relaxed text-danger" role="alert">{error}</p>}
+        {error && (
+          <p className="leading-relaxed text-danger" role="alert">
+            {error}
+          </p>
+        )}
 
         <DataTable
           columns={columns}
@@ -228,7 +281,9 @@ export default function AdminUsersPage() {
       </div>
 
       {fundingUser && <AddTokensDialog onClose={() => setFundingUser(null)} user={fundingUser} />}
-      {debitingUser && <DebitTokensDialog onClose={() => setDebitingUser(null)} user={debitingUser} />}
+      {debitingUser && (
+        <DebitTokensDialog onClose={() => setDebitingUser(null)} user={debitingUser} />
+      )}
     </AdminShell>
   );
 }
@@ -243,11 +298,16 @@ function UserIdentityCell({ user, selfId }: { user: PublicUser; selfId?: string 
         title={`${performance.label}: ${performance.detail}`}
       />
       <div className="min-w-0">
-        <Link className="font-extrabold text-accent no-underline hover:text-accent-dark" href={`/admin/users/${user.id}`}>
+        <Link
+          className="font-extrabold text-accent no-underline hover:text-accent-dark"
+          href={`/admin/users/${user.id}`}
+        >
           {[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Name not provided'}
         </Link>
         <p className="break-all text-sm text-muted">{user.email}</p>
-        <p className="text-xs font-bold text-muted">{performance.label} · {performance.detail}</p>
+        <p className="text-xs font-bold text-muted">
+          {performance.label} · {performance.detail}
+        </p>
         {user.id === selfId && <p className="text-xs text-muted">This is you</p>}
       </div>
     </div>
@@ -292,14 +352,22 @@ function DebitTokensDialog({ user, onClose }: { user: PublicUser; onClose: () =>
       }).unwrap();
       onClose();
     } catch (err) {
-      setError(normalizeErrorMessage(err, otpRequestId ? 'Unable to verify this code.' : 'Unable to debit this wallet.'));
+      setError(
+        normalizeErrorMessage(
+          err,
+          otpRequestId ? 'Unable to verify this code.' : 'Unable to debit this wallet.',
+        ),
+      );
     }
   }
 
   if (otpRequestId) {
     return (
       <Dialog open onOpenChange={(open) => !open && onClose()}>
-        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this silent wallet debit.">
+        <DialogContent
+          title="Enter your code"
+          description="We emailed a 6-digit code to confirm this silent wallet debit."
+        >
           <form className="grid gap-3" onSubmit={handleSubmit}>
             <input
               autoFocus
@@ -311,7 +379,11 @@ function DebitTokensDialog({ user, onClose }: { user: PublicUser; onClose: () =>
               required
               value={code}
             />
-            {error && <p className="leading-relaxed text-danger" role="alert">{error}</p>}
+            {error && (
+              <p className="leading-relaxed text-danger" role="alert">
+                {error}
+              </p>
+            )}
             <div className="flex justify-end gap-2">
               <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60">
                 Cancel
@@ -371,7 +443,11 @@ function DebitTokensDialog({ user, onClose }: { user: PublicUser; onClose: () =>
               value={reference}
             />
           </div>
-          {error && <p className="leading-relaxed text-danger" role="alert">{error}</p>}
+          {error && (
+            <p className="leading-relaxed text-danger" role="alert">
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-2">
             <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60">
               Cancel
@@ -427,14 +503,22 @@ function AddTokensDialog({ user, onClose }: { user: PublicUser; onClose: () => v
       }).unwrap();
       onClose();
     } catch (err) {
-      setError(normalizeErrorMessage(err, otpRequestId ? 'Unable to verify this code.' : 'Unable to add DL to this trainer.'));
+      setError(
+        normalizeErrorMessage(
+          err,
+          otpRequestId ? 'Unable to verify this code.' : 'Unable to add DL to this trainer.',
+        ),
+      );
     }
   }
 
   if (otpRequestId) {
     return (
       <Dialog open onOpenChange={(open) => !open && onClose()}>
-        <DialogContent title="Enter your code" description="We emailed a 6-digit code to confirm this payout.">
+        <DialogContent
+          title="Enter your code"
+          description="We emailed a 6-digit code to confirm this payout."
+        >
           <form className="grid gap-3" onSubmit={handleSubmit}>
             <input
               autoFocus

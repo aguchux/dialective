@@ -1,7 +1,10 @@
 import { WordGeneratorService } from './word-generator.service';
 
 describe('WordGeneratorService pool-cap gate', () => {
-  function setup(promptCounts: { dialectTag: string; _count: { _all: number } }[], wordTranslationCounts: { dialectTag: string; _count: { _all: number } }[]) {
+  function setup(
+    promptCounts: { dialectTag: string; _count: { _all: number } }[],
+    wordTranslationCounts: { dialectTag: string; _count: { _all: number } }[],
+  ) {
     const prisma: any = {
       prompt: { groupBy: jest.fn().mockResolvedValue(promptCounts) },
       wordTranslation: { groupBy: jest.fn().mockResolvedValue(wordTranslationCounts) },
@@ -12,12 +15,19 @@ describe('WordGeneratorService pool-cap gate', () => {
 
   // Access the private method the same way this codebase's other specs
   // reach into services for unit-level coverage of non-exported logic.
-  function callFilter(service: WordGeneratorService, dialectTags: string[], maxPoolPerDialect: number): Promise<string[]> {
+  function callFilter(
+    service: WordGeneratorService,
+    dialectTags: string[],
+    maxPoolPerDialect: number,
+  ): Promise<string[]> {
     return (service as any).filterDialectsUnderPoolCap(dialectTags, maxPoolPerDialect);
   }
 
   it('keeps a dialect whose combined prompt + word-translation pool is below the cap', async () => {
-    const { service } = setup([{ dialectTag: 'ig', _count: { _all: 5 } }], [{ dialectTag: 'ig', _count: { _all: 3 } }]);
+    const { service } = setup(
+      [{ dialectTag: 'ig', _count: { _all: 5 } }],
+      [{ dialectTag: 'ig', _count: { _all: 3 } }],
+    );
 
     const result = await callFilter(service, ['ig'], 20);
 
@@ -25,7 +35,10 @@ describe('WordGeneratorService pool-cap gate', () => {
   });
 
   it('excludes a dialect whose combined pool has reached the cap', async () => {
-    const { service } = setup([{ dialectTag: 'ig', _count: { _all: 15 } }], [{ dialectTag: 'ig', _count: { _all: 5 } }]);
+    const { service } = setup(
+      [{ dialectTag: 'ig', _count: { _all: 15 } }],
+      [{ dialectTag: 'ig', _count: { _all: 5 } }],
+    );
 
     const result = await callFilter(service, ['ig'], 20);
 

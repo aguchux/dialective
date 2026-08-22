@@ -1,11 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { useCountdown } from '@/lib/use-countdown';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const dangerButtonClass =
@@ -51,7 +56,9 @@ export function MaintenanceSettingsPanel() {
     setRegisterRateLimitPerHour(String(platformSettings.registerRateLimitPerHour));
   }, [platformSettings]);
 
-  const liveUntil = platformSettings?.authMaintenanceEnabled ? platformSettings.authMaintenanceUntil : null;
+  const liveUntil = platformSettings?.authMaintenanceEnabled
+    ? platformSettings.authMaintenanceUntil
+    : null;
   const countdown = useCountdown(liveUntil);
   const noScopeSelected = !blockLogin && !blockSignup && !blockSessions;
 
@@ -80,7 +87,11 @@ export function MaintenanceSettingsPanel() {
         authMaintenanceExcludeAdmin: excludeAdmin,
         authMaintenanceExcludePartner: excludePartner,
       }).unwrap();
-      setMessage(enabled ? 'Maintenance mode is on for the scopes checked below.' : 'Maintenance mode turned off.');
+      setMessage(
+        enabled
+          ? 'Maintenance mode is on for the scopes checked below.'
+          : 'Maintenance mode turned off.',
+      );
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to save maintenance settings.'));
     }
@@ -126,8 +137,8 @@ export function MaintenanceSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Login &amp; signup maintenance</h2>
         <p className="leading-relaxed text-muted">
-          Temporarily stop authentication for scheduled maintenance. Choose exactly what gets blocked below -- new
-          logins, new signups, and/or every currently-signed-in session.
+          Temporarily stop authentication for scheduled maintenance. Choose exactly what gets
+          blocked below -- new logins, new signups, and/or every currently-signed-in session.
         </p>
       </div>
 
@@ -145,7 +156,13 @@ export function MaintenanceSettingsPanel() {
                 )}
               </p>
               <div className="mt-2">
-                <ActionButton className={dangerButtonClass} type="button" onClick={handleEndNow} pending={isSaving} pendingLabel="Ending">
+                <ActionButton
+                  className={dangerButtonClass}
+                  type="button"
+                  onClick={handleEndNow}
+                  pending={isSaving}
+                  pendingLabel="Ending"
+                >
                   End maintenance now
                 </ActionButton>
               </div>
@@ -168,7 +185,10 @@ export function MaintenanceSettingsPanel() {
               </span>
             </label>
 
-            <fieldset className="grid gap-2 rounded-lg border border-line bg-surface p-4" disabled={!enabled}>
+            <fieldset
+              className="grid gap-2 rounded-lg border border-line bg-surface p-4"
+              disabled={!enabled}
+            >
               <legend className="px-1 font-bold">What to block</legend>
 
               <label className="flex items-start gap-3 py-1">
@@ -180,7 +200,9 @@ export function MaintenanceSettingsPanel() {
                 />
                 <span>
                   <span className="block font-bold">Login</span>
-                  <span className="block text-sm leading-relaxed text-muted">New sign-in attempts are rejected.</span>
+                  <span className="block text-sm leading-relaxed text-muted">
+                    New sign-in attempts are rejected.
+                  </span>
                 </span>
               </label>
 
@@ -224,7 +246,9 @@ export function MaintenanceSettingsPanel() {
                       checked={excludeAdmin}
                       onChange={(e) => setExcludeAdmin(e.target.checked)}
                     />
-                    <span className="text-sm">Admins (recommended, so you can end maintenance early)</span>
+                    <span className="text-sm">
+                      Admins (recommended, so you can end maintenance early)
+                    </span>
                   </label>
                   <label className="flex items-center gap-2">
                     <input
@@ -239,7 +263,9 @@ export function MaintenanceSettingsPanel() {
               )}
 
               {noScopeSelected && (
-                <p className="text-sm leading-relaxed text-danger">Check at least one scope to block.</p>
+                <p className="text-sm leading-relaxed text-danger">
+                  Check at least one scope to block.
+                </p>
               )}
             </fieldset>
 
@@ -255,8 +281,8 @@ export function MaintenanceSettingsPanel() {
                 disabled={!enabled}
               />
               <p className="mt-1 text-sm leading-relaxed text-muted">
-                Everything automatically comes back on at this time, even if nobody remembers to flip the toggle off
-                -- the backend clears it the moment this time passes.
+                Everything automatically comes back on at this time, even if nobody remembers to
+                flip the toggle off -- the backend clears it the moment this time passes.
               </p>
             </div>
 
@@ -274,13 +300,21 @@ export function MaintenanceSettingsPanel() {
             </div>
 
             <div>
-              <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+              <ActionButton
+                className={primaryButtonClass}
+                type="submit"
+                pending={isSaving}
+                pendingLabel="Saving"
+              >
                 Save settings
               </ActionButton>
             </div>
           </form>
 
-          <form className="grid gap-3 border-t border-line pt-4 md:max-w-xl" onSubmit={handleSaveRateLimit}>
+          <form
+            className="grid gap-3 border-t border-line pt-4 md:max-w-xl"
+            onSubmit={handleSaveRateLimit}
+          >
             <div className="grid gap-1">
               <label htmlFor="register-rate-limit">Sign-up rate limit</label>
               <input
@@ -293,14 +327,19 @@ export function MaintenanceSettingsPanel() {
                 value={registerRateLimitPerHour}
               />
               <p className="text-sm leading-relaxed text-muted">
-                Max registration attempts allowed per hour from the same IP address, before that IP sees
-                &ldquo;Too many requests&rdquo;. A shared office/carrier network can trip a low limit during normal
-                sign-up retries -- raise this if trainers report being blocked. Takes effect immediately, no
-                deploy needed.
+                Max registration attempts allowed per hour from the same IP address, before that IP
+                sees &ldquo;Too many requests&rdquo;. A shared office/carrier network can trip a low
+                limit during normal sign-up retries -- raise this if trainers report being blocked.
+                Takes effect immediately, no deploy needed.
               </p>
             </div>
             <div>
-              <ActionButton className={primaryButtonClass} pending={isSaving} pendingLabel="Saving" type="submit">
+              <ActionButton
+                className={primaryButtonClass}
+                pending={isSaving}
+                pendingLabel="Saving"
+                type="submit"
+              >
                 Save rate limit
               </ActionButton>
             </div>

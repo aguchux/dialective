@@ -46,7 +46,10 @@ describe('P2PService trade-notification SMS', () => {
 
     await service.markPaid('buyer-1', trade.id);
 
-    expect(sms.sendTransactional).toHaveBeenCalledWith(seller.phoneNumber, expect.stringContaining('paid'));
+    expect(sms.sendTransactional).toHaveBeenCalledWith(
+      seller.phoneNumber,
+      expect.stringContaining('paid'),
+    );
   });
 
   it('does not send an SMS when the toggle is off', async () => {

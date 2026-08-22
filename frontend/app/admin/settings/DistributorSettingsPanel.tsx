@@ -2,10 +2,15 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { normalizeErrorMessage, useGetDistributorSettingsQuery, useUpdateDistributorSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetDistributorSettingsQuery,
+  useUpdateDistributorSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -29,7 +34,13 @@ export function DistributorSettingsPanel() {
     setMultiLevelReferralEnabled(settings.multiLevelReferralEnabled);
     setDefaultBulkDiscountRate(settings.defaultBulkDiscountRate);
     setMaxReferralDepth(String(settings.maxReferralDepth));
-    setRates([settings.level1Rate, settings.level2Rate, settings.level3Rate, settings.level4Rate, settings.level5Rate]);
+    setRates([
+      settings.level1Rate,
+      settings.level2Rate,
+      settings.level3Rate,
+      settings.level4Rate,
+      settings.level5Rate,
+    ]);
   }, [settings]);
 
   const totalEnabledRate = useMemo(() => {
@@ -81,26 +92,60 @@ export function DistributorSettingsPanel() {
         <form className="grid max-w-xl gap-4" onSubmit={saveSettings}>
           <div className="grid gap-3 rounded-lg border border-line bg-surface p-4">
             <label className="flex items-center gap-2 font-bold">
-              <input checked={enabled} onChange={(e) => setEnabled(e.target.checked)} type="checkbox" />
+              <input
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+                type="checkbox"
+              />
               Enable distributor features
             </label>
             <label className="flex items-center gap-2 font-bold">
-              <input checked={bulkAllocationEnabled} onChange={(e) => setBulkAllocationEnabled(e.target.checked)} type="checkbox" />
+              <input
+                checked={bulkAllocationEnabled}
+                onChange={(e) => setBulkAllocationEnabled(e.target.checked)}
+                type="checkbox"
+              />
               Enable admin bulk DL allocations
             </label>
             <label className="flex items-center gap-2 font-bold">
-              <input checked={multiLevelReferralEnabled} onChange={(e) => setMultiLevelReferralEnabled(e.target.checked)} type="checkbox" />
+              <input
+                checked={multiLevelReferralEnabled}
+                onChange={(e) => setMultiLevelReferralEnabled(e.target.checked)}
+                type="checkbox"
+              />
               Enable multi-level distributor referral bonuses
             </label>
           </div>
 
           <div className="grid gap-3 rounded-lg border border-line bg-surface p-4">
-            <label className="font-bold" htmlFor="bulk-discount">Default bulk discount rate</label>
-            <input id="bulk-discount" className={inputClass} min="0" max="1" step="0.0001" type="number" value={defaultBulkDiscountRate} onChange={(e) => setDefaultBulkDiscountRate(e.target.value)} />
+            <label className="font-bold" htmlFor="bulk-discount">
+              Default bulk discount rate
+            </label>
+            <input
+              id="bulk-discount"
+              className={inputClass}
+              min="0"
+              max="1"
+              step="0.0001"
+              type="number"
+              value={defaultBulkDiscountRate}
+              onChange={(e) => setDefaultBulkDiscountRate(e.target.value)}
+            />
 
-            <label className="font-bold" htmlFor="max-depth">Referral depth</label>
-            <select id="max-depth" className={inputClass} value={maxReferralDepth} onChange={(e) => setMaxReferralDepth(e.target.value)}>
-              {[1, 2, 3, 4, 5].map((depth) => <option key={depth} value={depth}>{depth} level{depth > 1 ? 's' : ''}</option>)}
+            <label className="font-bold" htmlFor="max-depth">
+              Referral depth
+            </label>
+            <select
+              id="max-depth"
+              className={inputClass}
+              value={maxReferralDepth}
+              onChange={(e) => setMaxReferralDepth(e.target.value)}
+            >
+              {[1, 2, 3, 4, 5].map((depth) => (
+                <option key={depth} value={depth}>
+                  {depth} level{depth > 1 ? 's' : ''}
+                </option>
+              ))}
             </select>
 
             <div className="grid gap-3 md:grid-cols-5">
@@ -114,7 +159,13 @@ export function DistributorSettingsPanel() {
                     step="0.0001"
                     type="number"
                     value={rate}
-                    onChange={(e) => setRates((current) => current.map((item, itemIndex) => itemIndex === index ? e.target.value : item))}
+                    onChange={(e) =>
+                      setRates((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? e.target.value : item,
+                        ),
+                      )
+                    }
                   />
                 </label>
               ))}
@@ -125,14 +176,23 @@ export function DistributorSettingsPanel() {
           </div>
 
           <div>
-            <ActionButton className={primaryButtonClass} pending={isSaving} pendingLabel="Saving" type="submit">
+            <ActionButton
+              className={primaryButtonClass}
+              pending={isSaving}
+              pendingLabel="Saving"
+              type="submit"
+            >
               Save distributor settings
             </ActionButton>
           </div>
         </form>
       )}
       {message && <p className="leading-relaxed text-accent-dark">{message}</p>}
-      {error && <p className="leading-relaxed text-danger" role="alert">{error}</p>}
+      {error && (
+        <p className="leading-relaxed text-danger" role="alert">
+          {error}
+        </p>
+      )}
     </section>
   );
 }

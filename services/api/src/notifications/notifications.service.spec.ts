@@ -24,9 +24,7 @@ describe('NotificationsService.listAdminUpdates', () => {
       { id: 'u1', _count: { notifications: 10 } },
       { id: 'u2', _count: { notifications: 5 } },
     ]);
-    prisma.userNotification.groupBy.mockResolvedValue([
-      { updateId: 'u1', _count: { _all: 7 } },
-    ]);
+    prisma.userNotification.groupBy.mockResolvedValue([{ updateId: 'u1', _count: { _all: 7 } }]);
 
     const result = await service.listAdminUpdates();
 
@@ -35,7 +33,9 @@ describe('NotificationsService.listAdminUpdates', () => {
       expect.objectContaining({ id: 'u2', readCount: 0 }),
     ]);
     expect(prisma.userNotification.groupBy).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ updateId: { in: ['u1', 'u2'] }, readAt: { not: null } }) }),
+      expect.objectContaining({
+        where: expect.objectContaining({ updateId: { in: ['u1', 'u2'] }, readAt: { not: null } }),
+      }),
     );
   });
 
@@ -58,7 +58,10 @@ describe('NotificationsService.updateUpdate', () => {
 
     await service.updateUpdate('u1', { title: '  New title  ' });
 
-    expect(prisma.systemUpdate.update).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { title: 'New title' } });
+    expect(prisma.systemUpdate.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { title: 'New title' },
+    });
   });
 
   it('clears href when an empty string is passed', async () => {
@@ -68,7 +71,10 @@ describe('NotificationsService.updateUpdate', () => {
 
     await service.updateUpdate('u1', { href: '' });
 
-    expect(prisma.systemUpdate.update).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { href: null } });
+    expect(prisma.systemUpdate.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { href: null },
+    });
   });
 
   it('leaves href untouched when omitted', async () => {
@@ -78,14 +84,19 @@ describe('NotificationsService.updateUpdate', () => {
 
     await service.updateUpdate('u1', { title: 'x' });
 
-    expect(prisma.systemUpdate.update).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { title: 'x' } });
+    expect(prisma.systemUpdate.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { title: 'x' },
+    });
   });
 
   it('rejects an empty title', async () => {
     const { service, prisma } = setup();
     prisma.systemUpdate.findUnique.mockResolvedValue({ id: 'u1' });
 
-    await expect(service.updateUpdate('u1', { title: '   ' })).rejects.toThrow('Title cannot be empty');
+    await expect(service.updateUpdate('u1', { title: '   ' })).rejects.toThrow(
+      'Title cannot be empty',
+    );
     expect(prisma.systemUpdate.update).not.toHaveBeenCalled();
   });
 
@@ -93,7 +104,9 @@ describe('NotificationsService.updateUpdate', () => {
     const { service, prisma } = setup();
     prisma.systemUpdate.findUnique.mockResolvedValue(null);
 
-    await expect(service.updateUpdate('missing', { title: 'x' })).rejects.toThrow(NotFoundException);
+    await expect(service.updateUpdate('missing', { title: 'x' })).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });
 

@@ -60,10 +60,14 @@ export function parsePosItemArray(raw: string): PosItem[] {
   const items: PosItem[] = [];
   for (const entry of array) {
     if (typeof entry !== 'object' || entry === null) continue;
-    const text = typeof (entry as { text?: unknown }).text === 'string' ? (entry as { text: string }).text.trim() : '';
+    const text =
+      typeof (entry as { text?: unknown }).text === 'string'
+        ? (entry as { text: string }).text.trim()
+        : '';
     if (!text) continue;
     const rawTag = (entry as { partOfSpeech?: unknown }).partOfSpeech;
-    const tag = typeof rawTag === 'string' ? (rawTag.trim().toUpperCase() as PartOfSpeechValue) : 'OTHER';
+    const tag =
+      typeof rawTag === 'string' ? (rawTag.trim().toUpperCase() as PartOfSpeechValue) : 'OTHER';
     const partOfSpeech = PART_OF_SPEECH_VALUES.includes(tag) ? tag : 'OTHER';
     items.push({ text, partOfSpeech });
   }

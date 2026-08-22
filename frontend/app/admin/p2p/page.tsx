@@ -13,14 +13,20 @@ import { useState } from 'react';
 
 export default function AdminP2PPage() {
   const { data: trades = [], isLoading: tradesLoading } = useListAdminP2PTradesQuery();
-  const { data: disputes = [], isLoading: disputesLoading } = useListAdminP2PDisputesQuery({ status: 'OPEN' });
+  const { data: disputes = [], isLoading: disputesLoading } = useListAdminP2PDisputesQuery({
+    status: 'OPEN',
+  });
   const [resolveDispute, { isLoading: resolving }] = useResolveP2PDisputeMutation();
   const [error, setError] = useState('');
 
   async function resolve(dispute: P2PDispute, winner: 'buyer' | 'seller') {
     setError('');
     try {
-      await resolveDispute({ id: dispute.id, winner, resolutionNote: `Resolved to ${winner}` }).unwrap();
+      await resolveDispute({
+        id: dispute.id,
+        winner,
+        resolutionNote: `Resolved to ${winner}`,
+      }).unwrap();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to resolve dispute'));
     }
@@ -31,9 +37,15 @@ export default function AdminP2PPage() {
       <div className="grid gap-6">
         <div>
           <h1 className="text-3xl font-black">P2P Market</h1>
-          <p className="mt-2 text-muted">Monitor escrow trades, cancellation states, and open disputes.</p>
+          <p className="mt-2 text-muted">
+            Monitor escrow trades, cancellation states, and open disputes.
+          </p>
         </div>
-        {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
+        {error && (
+          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+            {error}
+          </p>
+        )}
 
         <section className="grid gap-3">
           <h2 className="text-xl font-black">Open disputes</h2>
@@ -46,15 +58,27 @@ export default function AdminP2PPage() {
                   <div>
                     <p className="font-black">{dispute.reason}</p>
                     <p className="text-sm text-muted">
-                      {dispute.trade.tokenAmount} DL · {Number(dispute.trade.fiatAmount).toLocaleString()} {dispute.trade.fiatCurrency}
+                      {dispute.trade.tokenAmount} DL ·{' '}
+                      {Number(dispute.trade.fiatAmount).toLocaleString()}{' '}
+                      {dispute.trade.fiatCurrency}
                     </p>
                     <p className="mt-1 text-sm text-muted">Raised by {dispute.raisedBy.email}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-60" disabled={resolving} onClick={() => resolve(dispute, 'buyer')} type="button">
+                    <button
+                      className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-60"
+                      disabled={resolving}
+                      onClick={() => resolve(dispute, 'buyer')}
+                      type="button"
+                    >
                       Release to buyer
                     </button>
-                    <button className="min-h-10 rounded-lg border border-line px-3 font-extrabold disabled:opacity-60" disabled={resolving} onClick={() => resolve(dispute, 'seller')} type="button">
+                    <button
+                      className="min-h-10 rounded-lg border border-line px-3 font-extrabold disabled:opacity-60"
+                      disabled={resolving}
+                      onClick={() => resolve(dispute, 'seller')}
+                      type="button"
+                    >
                       Refund seller
                     </button>
                   </div>
@@ -79,9 +103,23 @@ export default function AdminP2PPage() {
                 </tr>
               </thead>
               <tbody>
-                {tradesLoading && <tr><td className="px-4 py-5" colSpan={6}>Loading trades...</td></tr>}
-                {!tradesLoading && trades.length === 0 && <tr><td className="px-4 py-5" colSpan={6}>No P2P trades yet.</td></tr>}
-                {trades.map((trade) => <TradeRow key={trade.id} trade={trade} />)}
+                {tradesLoading && (
+                  <tr>
+                    <td className="px-4 py-5" colSpan={6}>
+                      Loading trades...
+                    </td>
+                  </tr>
+                )}
+                {!tradesLoading && trades.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-5" colSpan={6}>
+                      No P2P trades yet.
+                    </td>
+                  </tr>
+                )}
+                {trades.map((trade) => (
+                  <TradeRow key={trade.id} trade={trade} />
+                ))}
               </tbody>
             </table>
           </div>
@@ -92,7 +130,11 @@ export default function AdminP2PPage() {
 }
 
 function Panel({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">{children}</div>;
+  return (
+    <div className="rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+      {children}
+    </div>
+  );
 }
 
 function TradeRow({ trade }: { trade: P2PTrade }) {
@@ -100,7 +142,9 @@ function TradeRow({ trade }: { trade: P2PTrade }) {
     <tr className="border-t border-line">
       <td className="px-4 py-3 font-black">{trade.status}</td>
       <td className="px-4 py-3">{trade.offerType}</td>
-      <td className="px-4 py-3">{trade.tokenAmount} DL · {Number(trade.fiatAmount).toLocaleString()} {trade.fiatCurrency}</td>
+      <td className="px-4 py-3">
+        {trade.tokenAmount} DL · {Number(trade.fiatAmount).toLocaleString()} {trade.fiatCurrency}
+      </td>
       <td className="px-4 py-3">{trade.buyer.email}</td>
       <td className="px-4 py-3">{trade.seller.email}</td>
       <td className="px-4 py-3">{new Date(trade.paymentDeadlineAt).toLocaleString()}</td>

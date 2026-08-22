@@ -13,7 +13,13 @@ import {
   useVerifyAdminManualPhoneVerificationMutation,
 } from '@/store/api';
 
-const statuses: ('ALL' | ManualPhoneVerificationStatus)[] = ['PENDING', 'VERIFIED', 'REJECTED', 'EXPIRED', 'ALL'];
+const statuses: ('ALL' | ManualPhoneVerificationStatus)[] = [
+  'PENDING',
+  'VERIFIED',
+  'REJECTED',
+  'EXPIRED',
+  'ALL',
+];
 
 export default function AdminPhoneVerificationsPage() {
   const [status, setStatus] = useState<'ALL' | ManualPhoneVerificationStatus>('PENDING');
@@ -32,7 +38,9 @@ export default function AdminPhoneVerificationsPage() {
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-3xl font-black">Phone verifications</h1>
-            <p className="mt-2 max-w-4xl text-muted">Review WhatsApp manual mobile verification requests.</p>
+            <p className="mt-2 max-w-4xl text-muted">
+              Review WhatsApp manual mobile verification requests.
+            </p>
           </div>
           <label className="grid gap-1 text-sm font-bold">
             Status
@@ -70,11 +78,15 @@ export default function AdminPhoneVerificationsPage() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td className="px-4 py-10 text-center text-muted" colSpan={7}>Loading requests...</td>
+                    <td className="px-4 py-10 text-center text-muted" colSpan={7}>
+                      Loading requests...
+                    </td>
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-10 text-center font-bold text-muted" colSpan={7}>No manual verification requests.</td>
+                    <td className="px-4 py-10 text-center font-bold text-muted" colSpan={7}>
+                      No manual verification requests.
+                    </td>
                   </tr>
                 ) : (
                   rows.map((row) => <RequestRow key={row.id} row={row} onVerify={setVerifyRow} />)
@@ -84,7 +96,8 @@ export default function AdminPhoneVerificationsPage() {
           </div>
           <div className="flex flex-col gap-3 border-t border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted">
-              Page {data?.page ?? page} of {data?.totalPages ?? 1}{isFetching ? ' - refreshing' : ''}
+              Page {data?.page ?? page} of {data?.totalPages ?? 1}
+              {isFetching ? ' - refreshing' : ''}
             </p>
             <div className="flex gap-2">
               <button
@@ -113,7 +126,13 @@ export default function AdminPhoneVerificationsPage() {
   );
 }
 
-function RequestRow({ row, onVerify }: { row: ManualPhoneVerificationRow; onVerify: (row: ManualPhoneVerificationRow) => void }) {
+function RequestRow({
+  row,
+  onVerify,
+}: {
+  row: ManualPhoneVerificationRow;
+  onVerify: (row: ManualPhoneVerificationRow) => void;
+}) {
   const [reject, { isLoading: rejecting }] = useRejectAdminManualPhoneVerificationMutation();
   const [error, setError] = useState<string | null>(null);
   const name = useMemo(
@@ -138,7 +157,9 @@ function RequestRow({ row, onVerify }: { row: ManualPhoneVerificationRow; onVeri
           <div className="text-muted">{row.user.email}</div>
         </td>
         <td className="px-4 py-3 font-bold">{row.phoneNumber}</td>
-        <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+        <td className="px-4 py-3">
+          <StatusBadge status={row.status} />
+        </td>
         <td className="px-4 py-3">{row.feeTokenAmount} DL</td>
         <td className="px-4 py-3">{row.sentAt ? formatDateTime(row.sentAt) : 'Not marked sent'}</td>
         <td className="px-4 py-3">{formatDateTime(row.createdAt)}</td>
@@ -169,14 +190,22 @@ function RequestRow({ row, onVerify }: { row: ManualPhoneVerificationRow; onVeri
       </tr>
       {error && (
         <tr>
-          <td className="px-4 pb-3 text-danger" colSpan={7}>{error}</td>
+          <td className="px-4 pb-3 text-danger" colSpan={7}>
+            {error}
+          </td>
         </tr>
       )}
     </>
   );
 }
 
-function VerifyDialog({ row, onOpenChange }: { row: ManualPhoneVerificationRow | null; onOpenChange: (open: boolean) => void }) {
+function VerifyDialog({
+  row,
+  onOpenChange,
+}: {
+  row: ManualPhoneVerificationRow | null;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [verify, { isLoading }] = useVerifyAdminManualPhoneVerificationMutation();
@@ -199,7 +228,10 @@ function VerifyDialog({ row, onOpenChange }: { row: ManualPhoneVerificationRow |
         {row && (
           <div className="grid gap-4">
             <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm">
-              <div className="font-black">{[row.user.firstName, row.user.lastName].filter(Boolean).join(' ') || row.user.email}</div>
+              <div className="font-black">
+                {[row.user.firstName, row.user.lastName].filter(Boolean).join(' ') ||
+                  row.user.email}
+              </div>
               <div className="text-muted">{row.phoneNumber}</div>
             </div>
             <label className="grid gap-1.5 text-sm font-bold">
@@ -212,7 +244,11 @@ function VerifyDialog({ row, onOpenChange }: { row: ManualPhoneVerificationRow |
                 value={code}
               />
             </label>
-            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">{error}</p>}
+            {error && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">
+                {error}
+              </p>
+            )}
             <ActionButton
               className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:opacity-60"
               disabled={code.length !== 6}
@@ -237,9 +273,15 @@ function StatusBadge({ status }: { status: ManualPhoneVerificationStatus }) {
     REJECTED: 'bg-red-50 text-red-700',
     EXPIRED: 'bg-slate-100 text-slate-700',
   };
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-black ${styles[status]}`}>{status.toLowerCase()}</span>;
+  return (
+    <span className={`rounded-full px-2.5 py-1 text-xs font-black ${styles[status]}`}>
+      {status.toLowerCase()}
+    </span>
+  );
 }
 
 function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(
+    new Date(value),
+  );
 }

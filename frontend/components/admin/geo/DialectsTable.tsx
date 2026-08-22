@@ -18,7 +18,8 @@ import {
   useUpdateDialectVariantMutation,
 } from '@/store/api';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const secondaryButtonClass =
@@ -32,7 +33,13 @@ const dangerButtonClass =
  * or a single country's dialects (admin/geo/countries/[id]) without
  * duplicating the word-gen-toggle/keyboard-dialog logic.
  */
-export function DialectsTable({ dialects, isLoading }: { dialects: AdminDialect[] | undefined; isLoading: boolean }) {
+export function DialectsTable({
+  dialects,
+  isLoading,
+}: {
+  dialects: AdminDialect[] | undefined;
+  isLoading: boolean;
+}) {
   const [deleteDialect] = useDeleteDialectMutation();
   const [updateDialect] = useUpdateDialectMutation();
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +100,10 @@ export function DialectsTable({ dialects, isLoading }: { dialects: AdminDialect[
       header: 'Word generation',
       sortValue: (d) => (d.llmGenerationEnabled ? 1 : 0),
       render: (d) => (
-        <label className="flex items-center gap-2 text-sm font-bold" title="Also requires word generation enabled on the parent country">
+        <label
+          className="flex items-center gap-2 text-sm font-bold"
+          title="Also requires word generation enabled on the parent country"
+        >
           <input
             checked={d.llmGenerationEnabled}
             className="size-4 accent-accent"
@@ -110,11 +120,19 @@ export function DialectsTable({ dialects, isLoading }: { dialects: AdminDialect[
       header: 'Actions',
       render: (d) => (
         <div className="flex flex-wrap gap-2">
-          <button className={secondaryButtonClass} onClick={() => setEditingKeyboardFor(d)} type="button">
+          <button
+            className={secondaryButtonClass}
+            onClick={() => setEditingKeyboardFor(d)}
+            type="button"
+          >
             <Keyboard className="mr-1.5 inline size-4" aria-hidden="true" />
             Keyboard
           </button>
-          <button className={secondaryButtonClass} onClick={() => setEditingVariantsFor(d)} type="button">
+          <button
+            className={secondaryButtonClass}
+            onClick={() => setEditingVariantsFor(d)}
+            type="button"
+          >
             <Layers className="mr-1.5 inline size-4" aria-hidden="true" />
             Variants
           </button>
@@ -152,16 +170,28 @@ export function DialectsTable({ dialects, isLoading }: { dialects: AdminDialect[
       />
 
       {editingKeyboardFor && (
-        <EditKeyboardLayoutDialog dialect={editingKeyboardFor} onClose={() => setEditingKeyboardFor(null)} />
+        <EditKeyboardLayoutDialog
+          dialect={editingKeyboardFor}
+          onClose={() => setEditingKeyboardFor(null)}
+        />
       )}
       {editingVariantsFor && (
-        <DialectVariantsDialog dialect={editingVariantsFor} onClose={() => setEditingVariantsFor(null)} />
+        <DialectVariantsDialog
+          dialect={editingVariantsFor}
+          onClose={() => setEditingVariantsFor(null)}
+        />
       )}
     </section>
   );
 }
 
-function EditKeyboardLayoutDialog({ dialect, onClose }: { dialect: AdminDialect; onClose: () => void }) {
+function EditKeyboardLayoutDialog({
+  dialect,
+  onClose,
+}: {
+  dialect: AdminDialect;
+  onClose: () => void;
+}) {
   const [layout, setLayout] = useState(dialect.keyboardLayout ?? '');
   const [error, setError] = useState<string | null>(null);
   const [updateDialect, { isLoading: isSaving }] = useUpdateDialectMutation();
@@ -196,7 +226,10 @@ function EditKeyboardLayoutDialog({ dialect, onClose }: { dialect: AdminDialect;
       >
         <form className="grid gap-3" onSubmit={handleSave}>
           <div className="grid gap-1">
-            <label className="text-xs font-bold uppercase text-muted" htmlFor="dialect-keyboard-layout">
+            <label
+              className="text-xs font-bold uppercase text-muted"
+              htmlFor="dialect-keyboard-layout"
+            >
               Characters
             </label>
             <textarea
@@ -225,7 +258,12 @@ function EditKeyboardLayoutDialog({ dialect, onClose }: { dialect: AdminDialect;
           )}
           <div className="flex justify-end gap-2">
             <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
-            <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+            <ActionButton
+              className={primaryButtonClass}
+              type="submit"
+              pending={isSaving}
+              pendingLabel="Saving"
+            >
               Save
             </ActionButton>
           </div>
@@ -242,7 +280,13 @@ function EditKeyboardLayoutDialog({ dialect, onClose }: { dialect: AdminDialect;
  * activity each variant has (users onboarded under it, recordings,
  * submissions), not a separate content pool.
  */
-function DialectVariantsDialog({ dialect, onClose }: { dialect: AdminDialect; onClose: () => void }) {
+function DialectVariantsDialog({
+  dialect,
+  onClose,
+}: {
+  dialect: AdminDialect;
+  onClose: () => void;
+}) {
   const { data: variants, isLoading } = useGetAdminDialectVariantsQuery(dialect.id);
   const [createVariant, { isLoading: isCreating }] = useCreateDialectVariantMutation();
   const [updateVariant] = useUpdateDialectVariantMutation();
@@ -261,7 +305,10 @@ function DialectVariantsDialog({ dialect, onClose }: { dialect: AdminDialect; on
     e.preventDefault();
     setError(null);
     try {
-      await createVariant({ dialectId: dialect.id, body: { tag: tag.trim(), name: name.trim() } }).unwrap();
+      await createVariant({
+        dialectId: dialect.id,
+        body: { tag: tag.trim(), name: name.trim() },
+      }).unwrap();
       setTag('');
       setName('');
     } catch (err) {
@@ -279,7 +326,11 @@ function DialectVariantsDialog({ dialect, onClose }: { dialect: AdminDialect; on
     setError(null);
     setSavingId(id);
     try {
-      await updateVariant({ id, dialectId: dialect.id, body: { tag: editTag.trim(), name: editName.trim() } }).unwrap();
+      await updateVariant({
+        id,
+        dialectId: dialect.id,
+        body: { tag: editTag.trim(), name: editName.trim() },
+      }).unwrap();
       setEditingId(null);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to save this variant.'));
@@ -317,8 +368,18 @@ function DialectVariantsDialog({ dialect, onClose }: { dialect: AdminDialect; on
                 <li className="rounded-lg border border-line bg-surface p-3" key={variant.id}>
                   {editingId === variant.id ? (
                     <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-center">
-                      <input className={inputClass} onChange={(e) => setEditName(e.target.value)} placeholder="Name" value={editName} />
-                      <input className={`${inputClass} font-mono`} onChange={(e) => setEditTag(e.target.value)} placeholder="tag" value={editTag} />
+                      <input
+                        className={inputClass}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="Name"
+                        value={editName}
+                      />
+                      <input
+                        className={`${inputClass} font-mono`}
+                        onChange={(e) => setEditTag(e.target.value)}
+                        placeholder="tag"
+                        value={editTag}
+                      />
                       <ActionButton
                         className={secondaryButtonClass}
                         onClick={() => handleSaveEdit(variant.id)}
@@ -328,7 +389,11 @@ function DialectVariantsDialog({ dialect, onClose }: { dialect: AdminDialect; on
                       >
                         Save
                       </ActionButton>
-                      <button className={secondaryButtonClass} onClick={() => setEditingId(null)} type="button">
+                      <button
+                        className={secondaryButtonClass}
+                        onClick={() => setEditingId(null)}
+                        type="button"
+                      >
                         Cancel
                       </button>
                     </div>
@@ -336,26 +401,39 @@ function DialectVariantsDialog({ dialect, onClose }: { dialect: AdminDialect; on
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="font-extrabold">
-                          {variant.name} <span className="font-mono text-muted">({variant.tag})</span>
+                          {variant.name}{' '}
+                          <span className="font-mono text-muted">({variant.tag})</span>
                         </p>
                         <p className="text-sm text-muted">
-                          {variant._count.users} user{variant._count.users === 1 ? '' : 's'} &middot;{' '}
-                          {variant._count.wordRecordings} word recording{variant._count.wordRecordings === 1 ? '' : 's'} &middot;{' '}
-                          {variant._count.submissions} submission{variant._count.submissions === 1 ? '' : 's'}
+                          {variant._count.users} user{variant._count.users === 1 ? '' : 's'}{' '}
+                          &middot; {variant._count.wordRecordings} word recording
+                          {variant._count.wordRecordings === 1 ? '' : 's'} &middot;{' '}
+                          {variant._count.submissions} submission
+                          {variant._count.submissions === 1 ? '' : 's'}
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <button className={secondaryButtonClass} onClick={() => startEdit(variant)} type="button">
+                        <button
+                          className={secondaryButtonClass}
+                          onClick={() => startEdit(variant)}
+                          type="button"
+                        >
                           Edit
                         </button>
                         <ActionButton
                           className={dangerButtonClass}
-                          disabled={variant._count.users > 0 || variant._count.wordRecordings > 0 || variant._count.submissions > 0}
+                          disabled={
+                            variant._count.users > 0 ||
+                            variant._count.wordRecordings > 0 ||
+                            variant._count.submissions > 0
+                          }
                           onClick={() => handleDelete(variant.id)}
                           pending={deletingId === variant.id}
                           pendingLabel="Removing"
                           title={
-                            variant._count.users > 0 || variant._count.wordRecordings > 0 || variant._count.submissions > 0
+                            variant._count.users > 0 ||
+                            variant._count.wordRecordings > 0 ||
+                            variant._count.submissions > 0
                               ? 'This variant still has tagged activity'
                               : undefined
                           }
@@ -371,20 +449,42 @@ function DialectVariantsDialog({ dialect, onClose }: { dialect: AdminDialect; on
             </ul>
           )}
 
-          <form className="grid gap-2 border-t border-line pt-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end" onSubmit={handleCreate}>
+          <form
+            className="grid gap-2 border-t border-line pt-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+            onSubmit={handleCreate}
+          >
             <div className="grid gap-1">
               <label className="text-xs font-bold uppercase text-muted" htmlFor="variant-name">
                 Name
               </label>
-              <input className={inputClass} id="variant-name" onChange={(e) => setName(e.target.value)} placeholder="e.g. Izzi" required value={name} />
+              <input
+                className={inputClass}
+                id="variant-name"
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Izzi"
+                required
+                value={name}
+              />
             </div>
             <div className="grid gap-1">
               <label className="text-xs font-bold uppercase text-muted" htmlFor="variant-tag">
                 Tag
               </label>
-              <input className={`${inputClass} font-mono`} id="variant-tag" onChange={(e) => setTag(e.target.value)} placeholder="izzi" required value={tag} />
+              <input
+                className={`${inputClass} font-mono`}
+                id="variant-tag"
+                onChange={(e) => setTag(e.target.value)}
+                placeholder="izzi"
+                required
+                value={tag}
+              />
             </div>
-            <ActionButton className={primaryButtonClass} pending={isCreating} pendingLabel="Adding" type="submit">
+            <ActionButton
+              className={primaryButtonClass}
+              pending={isCreating}
+              pendingLabel="Adding"
+              type="submit"
+            >
               Add variant
             </ActionButton>
           </form>

@@ -5,7 +5,11 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { activityLabels } from '@/components/trainer/TrainerDashboard';
-import { DistributorActivityEntry, useGetDistributorActivityQuery, useListAdminDistributorsQuery } from '@/store/api';
+import {
+  DistributorActivityEntry,
+  useGetDistributorActivityQuery,
+  useListAdminDistributorsQuery,
+} from '@/store/api';
 
 function formatTokens(value: string | number) {
   return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 4 });
@@ -25,22 +29,29 @@ export default function DistributorActivityPage() {
     <AdminShell>
       <div className="grid gap-6">
         <div className="grid gap-2">
-          <Link className="text-sm font-bold text-accent hover:text-accent-dark" href="/admin/distributors">
+          <Link
+            className="text-sm font-bold text-accent hover:text-accent-dark"
+            href="/admin/distributors"
+          >
             &larr; Distributors
           </Link>
           <h1 className="text-3xl font-black">
-            {isLoadingDistributor && !distributor ? 'Loading...' : distributor?.name ?? 'Distributor activity'}
+            {isLoadingDistributor && !distributor
+              ? 'Loading...'
+              : (distributor?.name ?? 'Distributor activity')}
           </h1>
           {distributor && <p className="leading-relaxed text-muted">{distributor.email}</p>}
           <p className="leading-relaxed text-muted">
-            Every transaction against this distributor&rsquo;s wallet &mdash; bulk allocations, referral bonuses at
-            every level, P2P sales, and withdrawals.
+            Every transaction against this distributor&rsquo;s wallet &mdash; bulk allocations,
+            referral bonuses at every level, P2P sales, and withdrawals.
           </p>
         </div>
 
         <div className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
           {isLoading && <p className="text-muted">Loading...</p>}
-          {!isLoading && (!data || data.items.length === 0) && <p className="text-sm text-muted">No transactions yet.</p>}
+          {!isLoading && (!data || data.items.length === 0) && (
+            <p className="text-sm text-muted">No transactions yet.</p>
+          )}
           {!isLoading && data && data.items.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full min-w-96 text-left text-sm">

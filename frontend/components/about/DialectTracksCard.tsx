@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useGetCountriesQuery, useGetDialectsQuery } from '@/store/api';
 
-const selectClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
+const selectClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
 
 export function DialectTracksCard() {
   const {
@@ -20,7 +21,9 @@ export function DialectTracksCard() {
     }
   }, [countries, countryId]);
 
-  const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(countryId, { skip: !countryId });
+  const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(countryId, {
+    skip: !countryId,
+  });
 
   return (
     <aside className="grid content-start gap-3 rounded-lg border border-[rgba(5,5,5,0.1)] bg-surface p-4">
@@ -35,7 +38,11 @@ export function DialectTracksCard() {
         ) : isCountriesError ? (
           <p className="text-muted">
             Couldn&apos;t load countries.{' '}
-            <button className="font-bold text-accent underline" onClick={() => refetchCountries()} type="button">
+            <button
+              className="font-bold text-accent underline"
+              onClick={() => refetchCountries()}
+              type="button"
+            >
               Try again
             </button>
           </p>
@@ -62,7 +69,10 @@ export function DialectTracksCard() {
       {!isLoadingDialects && dialects && dialects.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {dialects.map((dialect) => (
-            <span className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold" key={dialect.id}>
+            <span
+              className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold"
+              key={dialect.id}
+            >
               {dialect.name}
             </span>
           ))}
@@ -70,8 +80,8 @@ export function DialectTracksCard() {
       )}
 
       <p className="leading-relaxed text-muted">
-        Coverage expands through registered model and prompt support, not by silently substituting a different
-        language model.
+        Coverage expands through registered model and prompt support, not by silently substituting a
+        different language model.
       </p>
     </aside>
   );

@@ -15,7 +15,8 @@ function parseAllowedOrigins(): string[] {
   // api (ChatDialectController) -- once it has a real domain, add it to
   // the CORS_ALLOWED_ORIGINS env var in k8s/overlays/prod/configs/api.env,
   // not here (never hardcode a second domain into this default).
-  const raw = process.env.CORS_ALLOWED_ORIGINS ?? 'https://dialectlibrary.com,https://www.dialectlibrary.com';
+  const raw =
+    process.env.CORS_ALLOWED_ORIGINS ?? 'https://dialectlibrary.com,https://www.dialectlibrary.com';
   return raw
     .split(',')
     .map((origin) => origin.trim())

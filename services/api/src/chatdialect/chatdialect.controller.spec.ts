@@ -13,7 +13,9 @@ describe('ChatDialectController.getToken', () => {
     delete process.env.LIVEKIT_URL;
     const controller = new ChatDialectController();
 
-    await expect(controller.getToken()).rejects.toThrow('LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET must all be set');
+    await expect(controller.getToken()).rejects.toThrow(
+      'LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET must all be set',
+    );
   });
 
   it('mints a token with a generated identity and the requested room', async () => {

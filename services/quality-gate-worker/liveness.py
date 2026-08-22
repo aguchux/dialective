@@ -6,7 +6,9 @@ import numpy as np
 
 SAMPLE_RATE = 16000
 N_MFCC = 20  # LFCC is not natively in librosa; MFCC over a linear-ish mel scale is the practical CPU-only substitute, same spirit as classical LFCC-based ASVspoof baselines
-DEFAULT_MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "liveness_classifier.joblib")
+DEFAULT_MODEL_PATH = os.path.join(
+    os.path.dirname(__file__), "models", "liveness_classifier.joblib"
+)
 
 _model_cache = None
 
@@ -21,7 +23,9 @@ def extract_features(data: np.ndarray, sample_rate: int = SAMPLE_RATE) -> np.nda
     baseline in the ASVspoof challenges before end-to-end deep
     countermeasures existed.
     """
-    mfcc = librosa.feature.mfcc(y=data.astype(np.float32), sr=sample_rate, n_mfcc=N_MFCC)
+    mfcc = librosa.feature.mfcc(
+        y=data.astype(np.float32), sr=sample_rate, n_mfcc=N_MFCC
+    )
     delta = librosa.feature.delta(mfcc)
     delta2 = librosa.feature.delta(mfcc, order=2)
 
@@ -36,7 +40,9 @@ def load_model(path: str = DEFAULT_MODEL_PATH):
     return _model_cache
 
 
-def compute_liveness_score(data: np.ndarray, sample_rate: int = SAMPLE_RATE, model=None) -> float:
+def compute_liveness_score(
+    data: np.ndarray, sample_rate: int = SAMPLE_RATE, model=None
+) -> float:
     """
     Returns a 0-100 confidence that `data` is live human speech (not
     TTS/replay/synthetic). The classifier is trained offline against a

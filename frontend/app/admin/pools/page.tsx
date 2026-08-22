@@ -24,7 +24,8 @@ const summaryIconBg: Record<string, string> = {
   settled: 'bg-[#fff3e0] text-[#D98A0D]',
 };
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const secondaryButtonClass =
@@ -33,7 +34,12 @@ const dangerButtonClass =
   'inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-danger transition-colors hover:bg-[#fde8e8] disabled:cursor-not-allowed disabled:opacity-60';
 
 export default function AdminPoolsPage() {
-  const { data: summary, isLoading: isLoadingSummary, isError: isSummaryError, error: summaryError } = useGetPoolsSummaryQuery();
+  const {
+    data: summary,
+    isLoading: isLoadingSummary,
+    isError: isSummaryError,
+    error: summaryError,
+  } = useGetPoolsSummaryQuery();
   const { data: pools, isLoading: isLoadingPools } = useListSubscriptionPoolsQuery();
   const [closePool, { isLoading: isClosing }] = useCloseSubscriptionPoolMutation();
   const [deletePool] = useDeleteSubscriptionPoolMutation();
@@ -102,7 +108,9 @@ export default function AdminPoolsPage() {
         <div>
           <p className="font-extrabold">
             {p.subscriberName}
-            {p.organization && <span className="font-medium text-muted"> &middot; {p.organization}</span>}
+            {p.organization && (
+              <span className="font-medium text-muted"> &middot; {p.organization}</span>
+            )}
           </p>
           <p className="text-sm text-muted">
             {p.subscriberEmail}
@@ -115,7 +123,8 @@ export default function AdminPoolsPage() {
       key: 'usdAmount',
       header: 'Amount (USD)',
       sortValue: (p) => Number(p.usdAmount),
-      render: (p) => `$${Number(p.usdAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+      render: (p) =>
+        `$${Number(p.usdAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
     },
     {
       key: 'status',
@@ -124,7 +133,9 @@ export default function AdminPoolsPage() {
       render: (p) => (
         <span
           className={`w-fit rounded-md px-2.5 py-1 text-xs font-extrabold ${
-            p.status === 'ACTIVE' ? 'bg-accent-soft text-accent-dark' : 'bg-surface-muted text-muted'
+            p.status === 'ACTIVE'
+              ? 'bg-accent-soft text-accent-dark'
+              : 'bg-surface-muted text-muted'
           }`}
         >
           {p.status === 'ACTIVE' ? 'Active' : 'Closed'}
@@ -170,9 +181,9 @@ export default function AdminPoolsPage() {
         <div className="grid gap-2">
           <h1 className="text-3xl font-black">Reward Pool</h1>
           <p className="leading-relaxed text-muted">
-            The Reward Pool is funded by data subscribers, not trainers. Every active subscription pool sums into
-            the total available balance, which funds scored training-payout bonuses. This is never shown to
-            trainers directly.
+            The Reward Pool is funded by data subscribers, not trainers. Every active subscription
+            pool sums into the total available balance, which funds scored training-payout bonuses.
+            This is never shown to trainers directly.
           </p>
         </div>
 
@@ -182,12 +193,20 @@ export default function AdminPoolsPage() {
           </p>
         )}
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Reward pool stats">
+        <section
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+          aria-label="Reward pool stats"
+        >
           {cards.map((card) => (
-            <div className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]" key={card.key}>
+            <div
+              className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]"
+              key={card.key}
+            >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-bold text-muted">{card.label}</p>
-                <span className={`grid size-9 place-items-center rounded-full ${summaryIconBg[card.key]}`}>
+                <span
+                  className={`grid size-9 place-items-center rounded-full ${summaryIconBg[card.key]}`}
+                >
                   <PoolStatIcon />
                 </span>
               </div>
@@ -195,7 +214,9 @@ export default function AdminPoolsPage() {
                 {isLoadingSummary ? '...' : card.value}
               </p>
               {card.negative && (
-                <p className="text-sm font-bold text-danger">Pool is running negative -- open more subscriptions.</p>
+                <p className="text-sm font-bold text-danger">
+                  Pool is running negative -- open more subscriptions.
+                </p>
               )}
             </div>
           ))}
@@ -264,7 +285,10 @@ function CreatePoolDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger className={primaryButtonClass}>+ Open pool</DialogTrigger>
-      <DialogContent title="Open a subscription pool" description="Record a data-buying subscriber's payment. The amount is added to the total reward pool available.">
+      <DialogContent
+        title="Open a subscription pool"
+        description="Record a data-buying subscriber's payment. The amount is added to the total reward pool available."
+      >
         <PoolForm
           error={error}
           isLoading={isLoading}
@@ -318,7 +342,10 @@ function EditPoolDialog({ pool, onClose }: { pool: SubscriptionPool; onClose: ()
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent title="Edit subscription pool" description="Update this subscriber's recorded payment.">
+      <DialogContent
+        title="Edit subscription pool"
+        description="Update this subscriber's recorded payment."
+      >
         <PoolForm
           error={error}
           isLoading={isLoading}
@@ -407,7 +434,12 @@ function PoolForm({
         <label className="text-xs font-bold uppercase text-muted" htmlFor="pool-organization">
           Organization
         </label>
-        <input className={inputClass} id="pool-organization" onChange={(e) => onOrganizationChange(e.target.value)} value={organization} />
+        <input
+          className={inputClass}
+          id="pool-organization"
+          onChange={(e) => onOrganizationChange(e.target.value)}
+          value={organization}
+        />
       </div>
       <div className="grid gap-1">
         <label className="text-xs font-bold uppercase text-muted" htmlFor="pool-usd-amount">
@@ -428,7 +460,12 @@ function PoolForm({
         <label className="text-xs font-bold uppercase text-muted" htmlFor="pool-note">
           Note
         </label>
-        <textarea className={`${inputClass} min-h-20`} id="pool-note" onChange={(e) => onNoteChange(e.target.value)} value={note} />
+        <textarea
+          className={`${inputClass} min-h-20`}
+          id="pool-note"
+          onChange={(e) => onNoteChange(e.target.value)}
+          value={note}
+        />
       </div>
       {error && (
         <p className="leading-relaxed text-danger" role="alert">
@@ -437,7 +474,12 @@ function PoolForm({
       )}
       <div className="flex justify-end gap-2">
         <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
-        <ActionButton className={primaryButtonClass} pending={isLoading} pendingLabel={submitPendingLabel} type="submit">
+        <ActionButton
+          className={primaryButtonClass}
+          pending={isLoading}
+          pendingLabel={submitPendingLabel}
+          type="submit"
+        >
           {submitLabel}
         </ActionButton>
       </div>
@@ -447,9 +489,20 @@ function PoolForm({
 
 function PoolStatIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
       <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v10M9 9.5c0-1.4 1.3-2.5 3-2.5s3 1 3 2.2-1 1.8-3 2.3-3 1.1-3 2.3 1.3 2.2 3 2.2 3-1.1 3-2.5" strokeLinecap="round" />
+      <path
+        d="M12 7v10M9 9.5c0-1.4 1.3-2.5 3-2.5s3 1 3 2.2-1 1.8-3 2.3-3 1.1-3 2.3 1.3 2.2 3 2.2 3-1.1 3-2.5"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

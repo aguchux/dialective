@@ -69,4 +69,6 @@ class MmsTtsProvider(TextToSpeechProvider):
         import scipy.io.wavfile
 
         scipy.io.wavfile.write(buf, rate=sample_rate, data=waveform)
-        return SpeechSynthesisResult(audio=buf.getvalue(), duration=duration, sample_rate=sample_rate)
+        return SpeechSynthesisResult(
+            audio=buf.getvalue(), duration=duration, sample_rate=sample_rate
+        )

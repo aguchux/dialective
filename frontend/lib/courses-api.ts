@@ -38,7 +38,9 @@ export async function getPublishedCourses(): Promise<PublicCourseCard[]> {
 }
 
 export async function getPublishedCoursePreview(slug: string): Promise<PublicCoursePreview | null> {
-  const response = await fetch(`${PUBLIC_API_V1_BASE_URL}/courses/${encodeURIComponent(slug)}`, { next: { revalidate: 60 } });
+  const response = await fetch(`${PUBLIC_API_V1_BASE_URL}/courses/${encodeURIComponent(slug)}`, {
+    next: { revalidate: 60 },
+  });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Courses API returned ${response.status}`);
   return response.json() as Promise<PublicCoursePreview>;
@@ -48,7 +50,10 @@ export async function getPublishedCoursePreview(slug: string): Promise<PublicCou
 // same as a nonexistent one (see CoursesService.getPublicForStudy), so this
 // can never be used to read a private course's content without logging in.
 export async function getPublicCourseStudy(slug: string): Promise<PublicCourseStudy | null> {
-  const response = await fetch(`${PUBLIC_API_V1_BASE_URL}/courses/${encodeURIComponent(slug)}/view`, { next: { revalidate: 60 } });
+  const response = await fetch(
+    `${PUBLIC_API_V1_BASE_URL}/courses/${encodeURIComponent(slug)}/view`,
+    { next: { revalidate: 60 } },
+  );
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Courses API returned ${response.status}`);
   return response.json() as Promise<PublicCourseStudy>;

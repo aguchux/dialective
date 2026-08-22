@@ -61,7 +61,9 @@ function TokenRow({ token }: { token: ApiAccessTokenSummary }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="font-bold">{meta.label}</p>
-          {meta.description && <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted">{meta.description}</p>}
+          {meta.description && (
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted">{meta.description}</p>
+          )}
         </div>
         <span
           className={`shrink-0 rounded-full px-3 py-1 text-sm font-bold ${
@@ -87,11 +89,23 @@ function TokenRow({ token }: { token: ApiAccessTokenSummary }) {
           type="password"
           value={value}
         />
-        <ActionButton className={primaryButtonClass} disabled={!value.trim()} pending={isSaving} pendingLabel="Saving" type="submit">
+        <ActionButton
+          className={primaryButtonClass}
+          disabled={!value.trim()}
+          pending={isSaving}
+          pendingLabel="Saving"
+          type="submit"
+        >
           {token.isSet ? 'Rotate' : 'Save'}
         </ActionButton>
         {token.isSet && (
-          <ActionButton className={dangerButtonClass} onClick={handleRemove} pending={isDeleting} pendingLabel="Removing" type="button">
+          <ActionButton
+            className={dangerButtonClass}
+            onClick={handleRemove}
+            pending={isDeleting}
+            pendingLabel="Removing"
+            type="button"
+          >
             Remove
           </ActionButton>
         )}
@@ -115,9 +129,9 @@ export function ApiAccessTokensSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">API Access Tokens</h2>
         <p className="leading-relaxed text-muted">
-          Third-party API credentials used by backend workers, rotatable here instead of via a Kubernetes secret and
-          redeploy. Values are encrypted at rest and never shown again after saving -- only the last 4 characters are
-          displayed to confirm which token is active.
+          Third-party API credentials used by backend workers, rotatable here instead of via a
+          Kubernetes secret and redeploy. Values are encrypted at rest and never shown again after
+          saving -- only the last 4 characters are displayed to confirm which token is active.
         </p>
       </div>
 

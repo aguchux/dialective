@@ -18,7 +18,9 @@ def _frames(data: np.ndarray) -> list:
     return frames
 
 
-NOISE_FLOOR_PERCENTILE = 15  # bottom 15% of frames by RMS energy stand in for the noise floor
+NOISE_FLOOR_PERCENTILE = (
+    15  # bottom 15% of frames by RMS energy stand in for the noise floor
+)
 
 
 def estimate_snr_db(data: np.ndarray, sample_rate: int = SAMPLE_RATE) -> float:
@@ -43,17 +45,27 @@ def estimate_snr_db(data: np.ndarray, sample_rate: int = SAMPLE_RATE) -> float:
     but must not raise on an unexpected edge case.
     """
     if sample_rate != SAMPLE_RATE:
-        raise ValueError(f"estimate_snr_db expects {SAMPLE_RATE}Hz audio, got {sample_rate}Hz")
+        raise ValueError(
+            f"estimate_snr_db expects {SAMPLE_RATE}Hz audio, got {sample_rate}Hz"
+        )
 
-    int16_data = (np.clip(data, -1.0, 1.0) * 32767).astype(np.int16) if data.dtype != np.int16 else data
+    int16_data = (
+        (np.clip(data, -1.0, 1.0) * 32767).astype(np.int16)
+        if data.dtype != np.int16
+        else data
+    )
     vad = webrtcvad.Vad(VAD_AGGRESSIVENESS)
 
     all_frames = _frames(int16_data)
     if not all_frames:
         return 0.0
 
-    frame_rms = np.array([np.sqrt(np.mean(frame.astype(np.float64) ** 2)) for frame in all_frames])
-    is_speech = np.array([vad.is_speech(frame.tobytes(), sample_rate) for frame in all_frames])
+    frame_rms = np.array(
+        [np.sqrt(np.mean(frame.astype(np.float64) ** 2)) for frame in all_frames]
+    )
+    is_speech = np.array(
+        [vad.is_speech(frame.tobytes(), sample_rate) for frame in all_frames]
+    )
 
     eps = 1e-8
     speech_rms_values = frame_rms[is_speech]

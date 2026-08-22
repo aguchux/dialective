@@ -9,7 +9,11 @@ describe('course content utilities', () => {
   it('accepts a well-formed slide document and trims/strips empty optional fields', () => {
     const document = validateCourseDocument({
       slides: [
-        { text: textDoc('Welcome to the course'), imageUrl: 'https://cdn.example.com/a.png', audioUrl: '' },
+        {
+          text: textDoc('Welcome to the course'),
+          imageUrl: 'https://cdn.example.com/a.png',
+          audioUrl: '',
+        },
         { text: textDoc('Second slide') },
       ],
     });
@@ -29,21 +33,29 @@ describe('course content utilities', () => {
   });
 
   it('rejects a slide with missing or empty-block text', () => {
-    expect(() => validateCourseDocument({ slides: [{ text: { blocks: [] } }] })).toThrow(BadRequestException);
+    expect(() => validateCourseDocument({ slides: [{ text: { blocks: [] } }] })).toThrow(
+      BadRequestException,
+    );
     expect(() => validateCourseDocument({ slides: [{}] })).toThrow(BadRequestException);
   });
 
   it('rejects a slide whose text contains an unsupported Editor.js block', () => {
-    expect(() => validateCourseDocument({ slides: [{ text: { blocks: [{ type: 'script', data: {} }] } }] })).toThrow(BadRequestException);
+    expect(() =>
+      validateCourseDocument({ slides: [{ text: { blocks: [{ type: 'script', data: {} }] } }] }),
+    ).toThrow(BadRequestException);
   });
 
   it('rejects a slide with more than 30 blocks', () => {
     const blocks = Array.from({ length: 31 }, () => ({ type: 'paragraph', data: { text: 'x' } }));
-    expect(() => validateCourseDocument({ slides: [{ text: { blocks } }] })).toThrow(BadRequestException);
+    expect(() => validateCourseDocument({ slides: [{ text: { blocks } }] })).toThrow(
+      BadRequestException,
+    );
   });
 
   it('rejects a slide with a non-string imageUrl', () => {
-    expect(() => validateCourseDocument({ slides: [{ text: textDoc('ok'), imageUrl: 123 }] })).toThrow(BadRequestException);
+    expect(() =>
+      validateCourseDocument({ slides: [{ text: textDoc('ok'), imageUrl: 123 }] }),
+    ).toThrow(BadRequestException);
   });
 
   it('rejects when slides is not an array', () => {

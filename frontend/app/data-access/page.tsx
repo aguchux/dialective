@@ -8,7 +8,8 @@ import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 import { normalizeErrorMessage, useCreateDataAccessLeadMutation } from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-11 items-center justify-center rounded-full border border-accent bg-accent px-5 py-3 font-extrabold text-white transition-colors hover:border-accent-dark hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -64,13 +65,16 @@ export default function DataAccessPage() {
 
         <section className="grid gap-5 rounded-lg border border-line bg-white/80 p-5 shadow-[0_14px_32px_rgba(27,31,27,0.08)] backdrop-blur-sm md:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] md:p-7">
           <div className="grid gap-4">
-            <p className="text-sm font-extrabold uppercase text-accent">For teams and researchers</p>
+            <p className="text-sm font-extrabold uppercase text-accent">
+              For teams and researchers
+            </p>
             <h1 className="max-w-3xl text-4xl font-black leading-tight md:text-5xl">
               License voice and dialect data collected by real speakers.
             </h1>
             <p className="max-w-2xl text-lg leading-relaxed text-[rgba(5,5,5,0.68)]">
-              Dialect Library&apos;s dataset is growing every day. Tell us your organization, website, and target
-              countries and we&apos;ll follow up about access, coverage, and licensing terms.
+              Dialect Library&apos;s dataset is growing every day. Tell us your organization,
+              website, and target countries and we&apos;ll follow up about access, coverage, and
+              licensing terms.
             </p>
           </div>
 
@@ -126,7 +130,12 @@ export default function DataAccessPage() {
                     onChange={(e) => setCountriesInterested(e.target.value)}
                     required
                   />
-                  <ActionButton className={primaryButtonClass} type="submit" pending={isLoading} pendingLabel="Submitting request">
+                  <ActionButton
+                    className={primaryButtonClass}
+                    type="submit"
+                    pending={isLoading}
+                    pendingLabel="Submitting request"
+                  >
                     Subscribe to voice data
                   </ActionButton>
                 </form>
@@ -142,7 +151,10 @@ export default function DataAccessPage() {
 
         <section className="grid gap-4 md:grid-cols-3" aria-label="Data access use cases">
           {useCases.map((item) => (
-            <article className="grid gap-3 rounded-lg border border-line bg-surface p-5" key={item.title}>
+            <article
+              className="grid gap-3 rounded-lg border border-line bg-surface p-5"
+              key={item.title}
+            >
               <h2 className="text-xl font-black">{item.title}</h2>
               <p className="leading-relaxed text-muted">{item.body}</p>
             </article>
@@ -152,8 +164,8 @@ export default function DataAccessPage() {
         <section className="grid gap-3 rounded-lg border border-[#efd6ad] bg-[#fff7e8] p-5 text-[#8a4b0f]">
           <h2 className="text-2xl font-black">Manual review</h2>
           <p className="max-w-4xl leading-relaxed">
-            There is no self-serve subscription yet — every request is reviewed manually while the dataset and
-            licensing terms are still being defined.
+            There is no self-serve subscription yet — every request is reviewed manually while the
+            dataset and licensing terms are still being defined.
           </p>
         </section>
       </div>

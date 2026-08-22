@@ -58,7 +58,12 @@ export async function creditTrainingPayout(
   tokenAmount: Decimal | number | string,
   reference: string,
 ): Promise<CreditTrainingPayoutResult> {
-  const { ops, result } = await buildCreditTrainingPayoutOps(prisma, userId, tokenAmount, reference);
+  const { ops, result } = await buildCreditTrainingPayoutOps(
+    prisma,
+    userId,
+    tokenAmount,
+    reference,
+  );
   await prisma.$transaction(ops);
   return result;
 }
@@ -75,7 +80,12 @@ export async function creditTrainingPayoutOps(
   tokenAmount: Decimal | number | string,
   reference: string,
 ) {
-  const { ops, result } = await buildCreditTrainingPayoutOps(prisma, userId, tokenAmount, reference);
+  const { ops, result } = await buildCreditTrainingPayoutOps(
+    prisma,
+    userId,
+    tokenAmount,
+    reference,
+  );
   return { ops, result };
 }
 
@@ -99,7 +109,10 @@ async function buildCreditTrainingPayoutOps(
 
   const grossAmount = new Decimal(tokenAmount);
   const distributorBonuses = await buildDistributorReferralBonuses(prisma, userId, grossAmount);
-  const distributorPayoutTotal = distributorBonuses.reduce((sum, bonus) => sum.add(bonus.amount), new Decimal(0));
+  const distributorPayoutTotal = distributorBonuses.reduce(
+    (sum, bonus) => sum.add(bonus.amount),
+    new Decimal(0),
+  );
   if (distributorBonuses.length > 0) {
     // Distributor commissions are platform-funded, not deducted from the
     // trainer -- the trainer's own payout stays exactly grossAmount
@@ -153,7 +166,8 @@ async function buildCreditTrainingPayoutOps(
     return { ops, result };
   }
 
-  const hasPayoutBonus = user.referredById && settings.payoutBonusEnabled && settings.payoutBonusRate.gt(0);
+  const hasPayoutBonus =
+    user.referredById && settings.payoutBonusEnabled && settings.payoutBonusRate.gt(0);
   const payoutBonus = hasPayoutBonus ? settings.payoutBonusRate.mul(grossAmount) : null;
   const netAmount = payoutBonus ? grossAmount.sub(payoutBonus) : grossAmount;
   const referrerWallet =
@@ -341,7 +355,12 @@ export async function creditCourseCompletionReward(
   try {
     await prisma.$transaction(async (tx) => {
       await tx.ledgerEntry.create({
-        data: { walletId: wallet.id, type: 'COURSE_COMPLETION_REWARD', amount, reference: courseId },
+        data: {
+          walletId: wallet.id,
+          type: 'COURSE_COMPLETION_REWARD',
+          amount,
+          reference: courseId,
+        },
       });
       await tx.wallet.update({
         where: { id: wallet.id },
@@ -474,8 +493,17 @@ async function buildDistributorReferralBonuses(
     settings.level5Rate,
   ];
   const maxDepth = Math.min(5, settings.maxReferralDepth);
-  const bonuses: Array<{ userId: string; walletId: string; level: number; rate: Decimal; amount: Decimal }> = [];
-  let cursor = await prisma.user.findUnique({ where: { id: userId }, select: { referredById: true } });
+  const bonuses: Array<{
+    userId: string;
+    walletId: string;
+    level: number;
+    rate: Decimal;
+    amount: Decimal;
+  }> = [];
+  let cursor = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { referredById: true },
+  });
 
   for (let level = 1; level <= maxDepth && cursor?.referredById; level += 1) {
     const ancestor = await prisma.user.findUnique({

@@ -7,7 +7,12 @@ import redis
 import soundfile as sf
 from vosk import KaldiRecognizer, Model
 
-from db import build_db_connection, mean_confidence, update_submission_result, update_word_recording_result
+from db import (
+    build_db_connection,
+    mean_confidence,
+    update_submission_result,
+    update_word_recording_result,
+)
 from model_registry import UnsupportedDialectError, load_registry, resolve_model_path
 from spaces import build_spaces_client
 from streams import StreamConsumer, publish
@@ -46,13 +51,27 @@ def transcode_to_wav(src_path: str, dst_path: str, sr: int = 16000) -> None:
     downstream touches the file.
     """
     subprocess.run(
-        ["ffmpeg", "-y", "-i", src_path, "-ar", str(sr), "-ac", "1", "-f", "wav", dst_path],
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            src_path,
+            "-ar",
+            str(sr),
+            "-ac",
+            "1",
+            "-f",
+            "wav",
+            dst_path,
+        ],
         check=True,
         capture_output=True,
     )
 
 
-def prefilter_ok(audio_path: str, max_duration_s: float | None = None) -> tuple[bool, str | None]:
+def prefilter_ok(
+    audio_path: str, max_duration_s: float | None = None
+) -> tuple[bool, str | None]:
     """
     Duration/silence check before spending ASR time (design doc §5.1).
     max_duration_s, when given (submission jobs forwarded from
@@ -93,7 +112,11 @@ def write_result(redis_client: redis.Redis, submission_id: str, **fields) -> Non
 
 
 def write_submission_row(db_conn, submission_id: str, status: str, **fields) -> None:
-    status_map = {"rejected": "REJECTED", "unsupported_dialect": "REJECTED", "ok": "TRANSCRIBED"}
+    status_map = {
+        "rejected": "REJECTED",
+        "unsupported_dialect": "REJECTED",
+        "ok": "TRANSCRIBED",
+    }
     word_conf = fields.get("word_confidences")
     update_submission_result(
         db_conn,
@@ -103,7 +126,8 @@ def write_submission_row(db_conn, submission_id: str, status: str, **fields) -> 
         asr_confidence=mean_confidence(word_conf) if word_conf is not None else None,
         asr_engine="vosk" if status != "unsupported_dialect" else None,
         asr_word_detail=word_conf if word_conf else None,
-        rejection_reason=fields.get("reason") or ("unsupported_dialect" if status == "unsupported_dialect" else None),
+        rejection_reason=fields.get("reason")
+        or ("unsupported_dialect" if status == "unsupported_dialect" else None),
     )
 
 
@@ -126,18 +150,29 @@ def handle_word_recording_job(s3, db_conn, job: dict) -> None:
         try:
             transcode_to_wav(raw_path, wav_path)
         except subprocess.CalledProcessError:
-            logger.warning("Unreadable audio for word_recording=%s; skipping ASR", word_recording_id)
+            logger.warning(
+                "Unreadable audio for word_recording=%s; skipping ASR",
+                word_recording_id,
+            )
             return
 
         ok, reason = prefilter_ok(wav_path)
         if not ok:
-            logger.warning("word_recording=%s failed prefilter (%s); skipping ASR", word_recording_id, reason)
+            logger.warning(
+                "word_recording=%s failed prefilter (%s); skipping ASR",
+                word_recording_id,
+                reason,
+            )
             return
 
         try:
             model = get_model(dialect_tag)
         except UnsupportedDialectError:
-            logger.info("No vosk model for dialect=%s; skipping ASR for word_recording=%s", dialect_tag, word_recording_id)
+            logger.info(
+                "No vosk model for dialect=%s; skipping ASR for word_recording=%s",
+                dialect_tag,
+                word_recording_id,
+            )
             return
 
         text, word_conf = transcribe(wav_path, model)
@@ -174,27 +209,55 @@ def make_handler(s3, redis_client: redis.Redis, db_conn):
             try:
                 transcode_to_wav(raw_path, wav_path)
             except subprocess.CalledProcessError:
-                write_result(redis_client, submission_id, status="rejected", reason="unreadable_audio")
-                write_submission_row(db_conn, submission_id, "rejected", reason="unreadable_audio")
+                write_result(
+                    redis_client,
+                    submission_id,
+                    status="rejected",
+                    reason="unreadable_audio",
+                )
+                write_submission_row(
+                    db_conn, submission_id, "rejected", reason="unreadable_audio"
+                )
                 return
 
-            max_duration_s = float(job["max_duration_s"]) if job.get("max_duration_s") else None
+            max_duration_s = (
+                float(job["max_duration_s"]) if job.get("max_duration_s") else None
+            )
             ok, reason = prefilter_ok(wav_path, max_duration_s)
             if not ok:
-                write_result(redis_client, submission_id, status="rejected", reason=reason)
+                write_result(
+                    redis_client, submission_id, status="rejected", reason=reason
+                )
                 write_submission_row(db_conn, submission_id, "rejected", reason=reason)
                 return
 
             try:
                 model = get_model(dialect_tag)
             except UnsupportedDialectError:
-                write_result(redis_client, submission_id, status="unsupported_dialect", dialect_tag=dialect_tag)
+                write_result(
+                    redis_client,
+                    submission_id,
+                    status="unsupported_dialect",
+                    dialect_tag=dialect_tag,
+                )
                 write_submission_row(db_conn, submission_id, "unsupported_dialect")
                 return
 
             text, word_conf = transcribe(wav_path, model)
-            write_result(redis_client, submission_id, status="ok", transcript=text, word_confidences=word_conf)
-            write_submission_row(db_conn, submission_id, "ok", transcript=text, word_confidences=word_conf)
+            write_result(
+                redis_client,
+                submission_id,
+                status="ok",
+                transcript=text,
+                word_confidences=word_conf,
+            )
+            write_submission_row(
+                db_conn,
+                submission_id,
+                "ok",
+                transcript=text,
+                word_confidences=word_conf,
+            )
 
             publish(
                 redis_client,

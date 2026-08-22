@@ -16,7 +16,12 @@ export function postAuthPath(
 ): string {
   const homePath = roleHomePath(role, onboardingComplete);
 
-  if (!callbackUrl || !callbackUrl.startsWith('/') || callbackUrl.startsWith('//') || callbackUrl.includes('\\')) {
+  if (
+    !callbackUrl ||
+    !callbackUrl.startsWith('/') ||
+    callbackUrl.startsWith('//') ||
+    callbackUrl.includes('\\')
+  ) {
     return homePath;
   }
 
@@ -28,7 +33,12 @@ export function postAuthPath(
     return callbackUrl;
   }
 
-  if (role !== 'ADMIN' && role !== 'DISTRIBUTOR' && onboardingComplete && isPathWithin(callbackUrl, '/dashboard')) {
+  if (
+    role !== 'ADMIN' &&
+    role !== 'DISTRIBUTOR' &&
+    onboardingComplete &&
+    isPathWithin(callbackUrl, '/dashboard')
+  ) {
     return callbackUrl;
   }
 

@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
@@ -7,7 +18,10 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role, SubscriptionPoolStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
-import { CreateSubscriptionPoolDto, UpdateSubscriptionPoolDto } from './dto/create-subscription-pool.dto';
+import {
+  CreateSubscriptionPoolDto,
+  UpdateSubscriptionPoolDto,
+} from './dto/create-subscription-pool.dto';
 import { ListSubscriptionPoolsDto } from './dto/list-subscription-pools.dto';
 
 /**
@@ -97,7 +111,8 @@ export class PoolsController {
     const rate = await this.platformSettings.getTokenUsdRate();
     const totalAvailableUsd = Number(activeAgg._sum.usdAmount ?? 0);
     const totalSettledTokens =
-      Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) + Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
+      Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) +
+      Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
     const totalAvailableTokens = totalAvailableUsd / rate - totalSettledTokens;
 
     return {

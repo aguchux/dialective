@@ -21,12 +21,16 @@ class FakeEmotionModel:
         return np.array([self.proba])
 
 
-def sine_wave(freq: float, duration_s: float, amplitude: float, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+def sine_wave(
+    freq: float, duration_s: float, amplitude: float, sample_rate: int = SAMPLE_RATE
+) -> np.ndarray:
     t = np.linspace(0, duration_s, int(sample_rate * duration_s), endpoint=False)
     return amplitude * np.sin(2 * np.pi * freq * t)
 
 
-def speech_like_segment(rng: np.random.Generator, duration_s: float, amplitude: float) -> np.ndarray:
+def speech_like_segment(
+    rng: np.random.Generator, duration_s: float, amplitude: float
+) -> np.ndarray:
     t = np.linspace(0, duration_s, int(SAMPLE_RATE * duration_s), endpoint=False)
     envelope = 0.6 + 0.4 * np.sin(2 * np.pi * 4 * t) ** 2
     harmonics = sum(np.sin(2 * np.pi * f * t) for f in (120, 240, 360, 480))
@@ -114,4 +118,12 @@ def test_emotion_labels_match_prisma_schema_enum_exactly():
     would surface as a Postgres enum-validation error at write time, not a
     silent bad write, but this catches it far earlier and more cheaply.
     """
-    assert EMOTION_LABELS == ["NEUTRAL", "HAPPY", "SAD", "ANGRY", "FEARFUL", "SURPRISED", "DISGUSTED"]
+    assert EMOTION_LABELS == [
+        "NEUTRAL",
+        "HAPPY",
+        "SAD",
+        "ANGRY",
+        "FEARFUL",
+        "SURPRISED",
+        "DISGUSTED",
+    ]

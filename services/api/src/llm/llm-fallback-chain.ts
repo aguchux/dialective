@@ -13,7 +13,10 @@ export class LlmFallbackChain {
 
   constructor(private readonly providersByKey: Record<LlmProviderKey, LlmProvider>) {}
 
-  async normalize(prompt: string, order: LlmProviderKey[]): Promise<{ text: string; provider: LlmProviderKey }> {
+  async normalize(
+    prompt: string,
+    order: LlmProviderKey[],
+  ): Promise<{ text: string; provider: LlmProviderKey }> {
     const failures: string[] = [];
 
     for (const key of order) {

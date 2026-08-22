@@ -53,10 +53,16 @@ describe('FxRateService.run', () => {
 
     expect(prisma.country.update).toHaveBeenCalledTimes(2);
     expect(prisma.country.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'c-ng' }, data: expect.objectContaining({ usdExchangeRate: 1500 }) }),
+      expect.objectContaining({
+        where: { id: 'c-ng' },
+        data: expect.objectContaining({ usdExchangeRate: 1500 }),
+      }),
     );
     expect(prisma.country.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'c-us' }, data: expect.objectContaining({ usdExchangeRate: 1 }) }),
+      expect.objectContaining({
+        where: { id: 'c-us' },
+        data: expect.objectContaining({ usdExchangeRate: 1 }),
+      }),
     );
   });
 
@@ -72,7 +78,9 @@ describe('FxRateService.run', () => {
 
   it('throws and touches no rows when the FX API request fails', async () => {
     prisma.country.findMany.mockResolvedValue([{ id: 'c-ng', currencyCode: 'NGN' }]);
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' }) as any;
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' }) as any;
 
     await expect(service.run()).rejects.toThrow('FX API request failed');
     expect(prisma.country.update).not.toHaveBeenCalled();

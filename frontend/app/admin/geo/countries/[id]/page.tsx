@@ -18,16 +18,22 @@ export default function AdminCountryDialectsPage() {
     <AdminShell>
       <div className="grid gap-6">
         <div className="grid gap-2">
-          <Link className="text-sm font-bold text-accent no-underline hover:text-accent-dark" href="/admin/geo">
+          <Link
+            className="text-sm font-bold text-accent no-underline hover:text-accent-dark"
+            href="/admin/geo"
+          >
             &larr; Coverage
           </Link>
           {!isLoadingCountries && !country ? (
             <h1 className="text-3xl font-black">Country not found</h1>
           ) : (
             <>
-              <h1 className="text-3xl font-black">{country ? `${country.name} dialects` : 'Loading...'}</h1>
+              <h1 className="text-3xl font-black">
+                {country ? `${country.name} dialects` : 'Loading...'}
+              </h1>
               <p className="leading-relaxed text-muted">
-                Dialects belonging to {country ? country.name : 'this country'} -- word generation, keyboard layouts, and deletion.
+                Dialects belonging to {country ? country.name : 'this country'} -- word generation,
+                keyboard layouts, and deletion.
               </p>
             </>
           )}
@@ -36,7 +42,10 @@ export default function AdminCountryDialectsPage() {
         {!isLoadingCountries && !country ? (
           <p className="text-muted">No country matches this link. It may have been deleted.</p>
         ) : (
-          <DialectsTable dialects={countryDialects} isLoading={isLoadingCountries || isLoadingDialects} />
+          <DialectsTable
+            dialects={countryDialects}
+            isLoading={isLoadingCountries || isLoadingDialects}
+          />
         )}
       </div>
     </AdminShell>

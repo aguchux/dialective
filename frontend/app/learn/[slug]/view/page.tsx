@@ -8,7 +8,9 @@ import { LandingHeader } from '@/components/landing/LandingHeader';
 import { CourseSlideViewer } from '@/components/courses/CourseSlideViewer';
 import { getPublicCourseStudy } from '@/lib/courses-api';
 
-interface PublicCourseViewPageProps { params: { slug: string } }
+interface PublicCourseViewPageProps {
+  params: { slug: string };
+}
 
 export async function generateMetadata({ params }: PublicCourseViewPageProps): Promise<Metadata> {
   const course = await getPublicCourseStudy(params.slug).catch(() => null);
@@ -34,14 +36,23 @@ export default async function PublicCourseViewPage({ params }: PublicCourseViewP
       <LandingHeader />
       <div className="mx-auto grid max-w-3xl content-start gap-6 px-4 py-8 md:px-6">
         <div>
-          <Breadcrumbs items={[{ href: '/learn', label: 'Learning Center' }, { href: `/learn/${course.slug}`, label: course.title }, { label: 'Start' }]} />
+          <Breadcrumbs
+            items={[
+              { href: '/learn', label: 'Learning Center' },
+              { href: `/learn/${course.slug}`, label: course.title },
+              { label: 'Start' },
+            ]}
+          />
         </div>
         <header className="grid gap-1.5">
           <h1 className="text-3xl font-black">{course.title}</h1>
           <p className="leading-relaxed text-muted">{course.summary}</p>
         </header>
         <div>
-          <Link className="inline-flex items-center gap-1.5 text-sm font-bold text-accent no-underline hover:text-accent-dark" href={`/learn/${course.slug}`}>
+          <Link
+            className="inline-flex items-center gap-1.5 text-sm font-bold text-accent no-underline hover:text-accent-dark"
+            href={`/learn/${course.slug}`}
+          >
             <ArrowLeft className="size-4" aria-hidden="true" /> Back to course overview
           </Link>
         </div>

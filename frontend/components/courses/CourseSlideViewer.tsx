@@ -103,7 +103,10 @@ export function CourseSlideViewer({
     setPlayback('playing');
   }
 
-  const progressPercent = useMemo(() => Math.min(100, Math.max(0, audioProgress * 100)), [audioProgress]);
+  const progressPercent = useMemo(
+    () => Math.min(100, Math.max(0, audioProgress * 100)),
+    [audioProgress],
+  );
 
   if (!slide) return null;
 
@@ -171,7 +174,9 @@ export function CourseSlideViewer({
               is pinned, under the left text column, since prev/next live over
               the image column instead. */}
           <div className="order-2 flex min-h-0 flex-1 flex-col bg-white text-ink md:order-1 md:w-1/3 md:flex-none">
-            <div className={`min-h-0 flex-1 overflow-y-auto p-5 md:p-6 ${slide.audioUrl ? 'pb-32 md:pb-6' : 'pb-20 md:pb-6'}`}>
+            <div
+              className={`min-h-0 flex-1 overflow-y-auto p-5 md:p-6 ${slide.audioUrl ? 'pb-32 md:pb-6' : 'pb-20 md:pb-6'}`}
+            >
               <div className="blog-prose text-base leading-relaxed">
                 <BlogContent blocks={slide.text.blocks} />
               </div>
@@ -206,10 +211,17 @@ export function CourseSlideViewer({
                     onClick={togglePlayback}
                     type="button"
                   >
-                    {playback === 'playing' ? <Pause className="size-5 fill-current" aria-hidden="true" /> : <Play className="ml-0.5 size-5 fill-current" aria-hidden="true" />}
+                    {playback === 'playing' ? (
+                      <Pause className="size-5 fill-current" aria-hidden="true" />
+                    ) : (
+                      <Play className="ml-0.5 size-5 fill-current" aria-hidden="true" />
+                    )}
                   </button>
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
-                    <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${progressPercent}%` }} />
+                    <div
+                      className="h-full rounded-full bg-accent transition-[width]"
+                      style={{ width: `${progressPercent}%` }}
+                    />
                   </div>
                   <audio
                     onEnded={() => setPlayback('idle')}

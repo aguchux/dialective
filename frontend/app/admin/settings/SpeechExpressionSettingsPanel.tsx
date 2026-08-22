@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
 const primaryButtonClass =
@@ -38,10 +42,11 @@ export function SpeechExpressionSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Speech Expression Analysis</h2>
         <p className="leading-relaxed text-muted">
-          Optionally analyzes each recording&rsquo;s emotion, tone, style, speed, and energy (quality-gate-worker),
-          for future dataset use (expressive TTS, emotion-aware training, pronunciation analysis). This is purely
-          descriptive metadata -- unlike the Voice Quality Gate, it{' '}
-          <strong>never affects the composite score or payout</strong>, no matter how it&rsquo;s configured.
+          Optionally analyzes each recording&rsquo;s emotion, tone, style, speed, and energy
+          (quality-gate-worker), for future dataset use (expressive TTS, emotion-aware training,
+          pronunciation analysis). This is purely descriptive metadata -- unlike the Voice Quality
+          Gate, it <strong>never affects the composite score or payout</strong>, no matter how
+          it&rsquo;s configured.
         </p>
       </div>
 
@@ -49,7 +54,10 @@ export function SpeechExpressionSettingsPanel() {
       {!isLoading && (
         <form className="grid gap-4 md:max-w-md" onSubmit={handleSave}>
           <div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="speech-expression-enabled">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="speech-expression-enabled"
+            >
               <input
                 checked={enabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -60,15 +68,20 @@ export function SpeechExpressionSettingsPanel() {
               <span>
                 <span className="block font-bold">Analyze emotion &amp; prosody</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  When off (default), the analysis is skipped entirely for every recording, saving the extra
-                  processing cost. When on, results appear in the admin Recordings table.
+                  When off (default), the analysis is skipped entirely for every recording, saving
+                  the extra processing cost. When on, results appear in the admin Recordings table.
                 </span>
               </span>
             </label>
           </div>
 
           <div>
-            <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+            <ActionButton
+              className={primaryButtonClass}
+              type="submit"
+              pending={isSaving}
+              pendingLabel="Saving"
+            >
               Save speech expression settings
             </ActionButton>
           </div>

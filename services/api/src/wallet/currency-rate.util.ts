@@ -6,6 +6,10 @@ import { tokensToUsdt } from './token-rate.util';
  * cached on Country.usdExchangeRate (fx-rate-job). Never used for
  * deposit/withdrawal accounting, which stays USD-denominated.
  */
-export function tokensToLocalCurrency(tokenAmount: number, tokenUsdRate: number, usdExchangeRate: number): number {
+export function tokensToLocalCurrency(
+  tokenAmount: number,
+  tokenUsdRate: number,
+  usdExchangeRate: number,
+): number {
   return tokensToUsdt(tokenAmount, tokenUsdRate) * usdExchangeRate;
 }

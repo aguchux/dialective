@@ -6,7 +6,12 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { CreateBlogPostDto } from './dto/create-blog-post.dto';
 import { UpdateBlogPostDto } from './dto/update-blog-post.dto';
 import { ReorderBlogPostsDto } from './dto/reorder-blog-posts.dto';
-import { calculateReadMinutes, deriveExcerpt, EditorDocument, validateEditorDocument } from './blog-content.util';
+import {
+  calculateReadMinutes,
+  deriveExcerpt,
+  EditorDocument,
+  validateEditorDocument,
+} from './blog-content.util';
 
 const authorSelect = { email: true } as const;
 
@@ -14,22 +19,37 @@ const authorSelect = { email: true } as const;
 // uniqueness comes for free from the id and the URL stays stable-ish while
 // still reflecting title edits (see BlogService.update).
 function slugFor(title: string, id: string): string {
-  const base = title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 150);
+  const base = title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 150);
   return `${base || 'post'}-${id}`;
 }
 
 @Injectable()
 export class BlogService {
-  constructor(private readonly prisma: PrismaService, private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async listPublished() {
     const posts = await this.prisma.blogPost.findMany({
       where: { status: BlogPostStatus.PUBLISHED },
       orderBy: [{ sortOrder: 'asc' }, { publishedAt: 'desc' }],
       select: {
-        id: true, slug: true, title: true, excerpt: true, content: true,
-        coverImageUrl: true, coverImageAlt: true, publishedAt: true,
-        createdAt: true, updatedAt: true,
+        id: true,
+        slug: true,
+        title: true,
+        excerpt: true,
+        content: true,
+        coverImageUrl: true,
+        coverImageAlt: true,
+        publishedAt: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
     return posts.map(({ content, ...post }) => ({
@@ -42,13 +62,23 @@ export class BlogService {
     const post = await this.prisma.blogPost.findFirst({
       where: { slug, status: BlogPostStatus.PUBLISHED },
       select: {
-        id: true, slug: true, title: true, content: true, excerpt: true,
-        coverImageUrl: true, coverImageAlt: true, publishedAt: true,
-        createdAt: true, updatedAt: true,
+        id: true,
+        slug: true,
+        title: true,
+        content: true,
+        excerpt: true,
+        coverImageUrl: true,
+        coverImageAlt: true,
+        publishedAt: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
     if (!post) throw new NotFoundException('Blog post not found');
-    return { ...post, readMinutes: calculateReadMinutes(post.content as unknown as EditorDocument) };
+    return {
+      ...post,
+      readMinutes: calculateReadMinutes(post.content as unknown as EditorDocument),
+    };
   }
 
   listAdmin() {
@@ -71,7 +101,10 @@ export class BlogService {
     const document = validateEditorDocument(dto.content);
     const id = randomUUID();
     const title = dto.title.trim();
-    const lastPost = await this.prisma.blogPost.findFirst({ orderBy: { sortOrder: 'desc' }, select: { sortOrder: true } });
+    const lastPost = await this.prisma.blogPost.findFirst({
+      orderBy: { sortOrder: 'desc' },
+      select: { sortOrder: true },
+    });
     const status = dto.status ?? BlogPostStatus.DRAFT;
     const excerpt = deriveExcerpt(document);
     if (status === BlogPostStatus.PUBLISHED && !excerpt) {
@@ -124,7 +157,8 @@ export class BlogService {
         ...(dto.coverImageAlt !== undefined && { coverImageAlt: cleanOptional(dto.coverImageAlt) }),
         ...(dto.status !== undefined && {
           status: dto.status,
-          publishedAt: nextStatus === BlogPostStatus.PUBLISHED ? current.publishedAt ?? new Date() : null,
+          publishedAt:
+            nextStatus === BlogPostStatus.PUBLISHED ? (current.publishedAt ?? new Date()) : null,
         }),
       },
       include: { author: { select: authorSelect } },
@@ -137,13 +171,18 @@ export class BlogService {
 
   async reorder(dto: ReorderBlogPostsDto) {
     const ids = dto.items.map((item) => item.id);
-    if (new Set(ids).size !== ids.length) throw new BadRequestException('Duplicate blog post ids are not allowed');
+    if (new Set(ids).size !== ids.length)
+      throw new BadRequestException('Duplicate blog post ids are not allowed');
     const count = await this.prisma.blogPost.count({ where: { id: { in: ids } } });
     if (count !== ids.length) throw new BadRequestException('One or more blog posts do not exist');
-    await this.prisma.$transaction(dto.items.map((item) => this.prisma.blogPost.update({
-      where: { id: item.id },
-      data: { sortOrder: item.sortOrder },
-    })));
+    await this.prisma.$transaction(
+      dto.items.map((item) =>
+        this.prisma.blogPost.update({
+          where: { id: item.id },
+          data: { sortOrder: item.sortOrder },
+        }),
+      ),
+    );
     return { reordered: ids.length };
   }
 
@@ -152,7 +191,6 @@ export class BlogService {
     await this.prisma.blogPost.delete({ where: { id } });
     return { id, deleted: true };
   }
-
 }
 
 function cleanOptional(value?: string): string | null {

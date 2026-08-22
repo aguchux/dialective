@@ -60,19 +60,31 @@ async function apiFetch<T>(path: string, init: RequestInit): Promise<T> {
 
 export const apiClient = {
   login: (email: string, password: string) =>
-    apiFetch<PendingOtp>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    apiFetch<PendingOtp>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
 
   register: (firstName: string, lastName: string, email: string, password: string) =>
-    apiFetch<PendingOtp>('/auth/register', { method: 'POST', body: JSON.stringify({ firstName, lastName, email, password }) }),
+    apiFetch<PendingOtp>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ firstName, lastName, email, password }),
+    }),
 
   verifyOtp: (ticket: string, code: string) =>
-    apiFetch<AuthResult>('/auth/otp/verify', { method: 'POST', body: JSON.stringify({ ticket, code }) }),
+    apiFetch<AuthResult>('/auth/otp/verify', {
+      method: 'POST',
+      body: JSON.stringify({ ticket, code }),
+    }),
 
   resendOtp: (ticket: string) =>
     apiFetch<void>('/auth/otp/resend', { method: 'POST', body: JSON.stringify({ ticket }) }),
 
   refresh: (refreshToken: string) =>
-    apiFetch<AuthTokens>('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken }) }),
+    apiFetch<AuthTokens>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    }),
 
   logout: (refreshToken: string) =>
     apiFetch<void>('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken }) }),
@@ -88,7 +100,10 @@ export const apiClient = {
     }),
 
   requestPasswordReset: (email: string) =>
-    apiFetch<void>('/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ email }) }),
+    apiFetch<void>('/auth/password-reset/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
 
   resetPassword: (token: string, newPassword: string) =>
     apiFetch<void>('/auth/password-reset/confirm', {

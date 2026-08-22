@@ -23,12 +23,14 @@ export function readReferralCookie(): string | undefined {
 
 export function writeReferralCookie(code: string, maxAgeSeconds: number): void {
   if (typeof document === 'undefined') return;
-  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
+  const secure =
+    typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
   document.cookie = `${REFERRAL_COOKIE_KEY}=${encodeURIComponent(code)}; Max-Age=${maxAgeSeconds}; Path=/; SameSite=Lax${secure}`;
 }
 
 export function clearReferralCookie(): void {
   if (typeof document === 'undefined') return;
-  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
+  const secure =
+    typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
   document.cookie = `${REFERRAL_COOKIE_KEY}=; Max-Age=0; Path=/; SameSite=Lax${secure}`;
 }

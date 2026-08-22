@@ -1,4 +1,16 @@
-import { IsBoolean, IsEnum, IsNumber, IsObject, IsOptional, IsString, IsUrl, Length, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Length,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { BlogPostStatus, CourseVisibility } from '@dialectiva/db';
 
 export class CreateCourseDto {

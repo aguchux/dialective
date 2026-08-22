@@ -19,7 +19,9 @@ class StreamConsumer:
     consistent across the Python and NestJS sides.
     """
 
-    def __init__(self, client: redis.Redis, stream: str, group: str, consumer_name: str):
+    def __init__(
+        self, client: redis.Redis, stream: str, group: str, consumer_name: str
+    ):
         self.client = client
         self.stream = stream
         self.group = group
@@ -33,12 +35,20 @@ class StreamConsumer:
             if "BUSYGROUP" not in str(err):
                 raise
 
-    def run(self, handler: Callable[[str, Dict[str, str]], None], poll_interval_s: float = 5.0) -> None:
+    def run(
+        self,
+        handler: Callable[[str, Dict[str, str]], None],
+        poll_interval_s: float = 5.0,
+    ) -> None:
         while True:
             self._reclaim_stuck_entries(handler)
 
             entries = self.client.xreadgroup(
-                self.group, self.consumer_name, {self.stream: ">"}, count=1, block=int(poll_interval_s * 1000)
+                self.group,
+                self.consumer_name,
+                {self.stream: ">"},
+                count=1,
+                block=int(poll_interval_s * 1000),
             )
             if not entries:
                 continue
@@ -47,7 +57,12 @@ class StreamConsumer:
                 for msg_id, fields in messages:
                     self._handle(msg_id, fields, handler)
 
-    def _handle(self, msg_id: str, fields: Dict[str, str], handler: Callable[[str, Dict[str, str]], None]) -> None:
+    def _handle(
+        self,
+        msg_id: str,
+        fields: Dict[str, str],
+        handler: Callable[[str, Dict[str, str]], None],
+    ) -> None:
         try:
             handler(msg_id, fields)
             self.client.xack(self.stream, self.group, msg_id)
@@ -55,13 +70,22 @@ class StreamConsumer:
             logger.exception("Handler failed for %s %s", self.stream, msg_id)
             # Left un-acked; _reclaim_stuck_entries will retry or dead-letter it.
 
-    def _reclaim_stuck_entries(self, handler: Callable[[str, Dict[str, str]], None]) -> None:
+    def _reclaim_stuck_entries(
+        self, handler: Callable[[str, Dict[str, str]], None]
+    ) -> None:
         _next_cursor, claimed, _deleted = self.client.xautoclaim(
-            self.stream, self.group, self.consumer_name, min_idle_time=RECLAIM_IDLE_MS, start_id="0-0", count=10
+            self.stream,
+            self.group,
+            self.consumer_name,
+            min_idle_time=RECLAIM_IDLE_MS,
+            start_id="0-0",
+            count=10,
         )
 
         for msg_id, fields in claimed:
-            pending = self.client.xpending_range(self.stream, self.group, min=msg_id, max=msg_id, count=1)
+            pending = self.client.xpending_range(
+                self.stream, self.group, min=msg_id, max=msg_id, count=1
+            )
             delivery_count = pending[0]["times_delivered"] if pending else 1
 
             if delivery_count > MAX_DELIVERY_ATTEMPTS:

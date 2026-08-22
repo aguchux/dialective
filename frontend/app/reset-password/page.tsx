@@ -8,7 +8,8 @@ import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { ActionButton } from '@/components/ui/ActionButton';
 
-const inputClass = 'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -66,7 +67,9 @@ function ResetPasswordContent() {
         <AuthPanel>
           <Breadcrumbs items={[{ href: '/login', label: 'Login' }, { label: 'Reset password' }]} />
           <h1 className="text-center text-[1.75rem] leading-tight">Reset link missing</h1>
-          <Alert>This password reset link is missing its token. Request a new reset link to continue.</Alert>
+          <Alert>
+            This password reset link is missing its token. Request a new reset link to continue.
+          </Alert>
           <Link className={primaryButtonClass} href="/forgot-password">
             Request reset link
           </Link>
@@ -101,7 +104,12 @@ function ResetPasswordContent() {
             type="password"
             value={confirmPassword}
           />
-          <ActionButton className={primaryButtonClass} type="submit" pending={isLoading} pendingLabel="Resetting">
+          <ActionButton
+            className={primaryButtonClass}
+            type="submit"
+            pending={isLoading}
+            pendingLabel="Resetting"
+          >
             Reset password
           </ActionButton>
         </form>

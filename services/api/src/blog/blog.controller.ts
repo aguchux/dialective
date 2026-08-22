@@ -32,7 +32,10 @@ export class BlogPublicController {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 export class BlogAdminController {
-  constructor(private readonly blog: BlogService, private readonly storage: StorageService) {}
+  constructor(
+    private readonly blog: BlogService,
+    private readonly storage: StorageService,
+  ) {}
 
   @Get('posts')
   list() {
@@ -77,8 +80,15 @@ export class BlogAdminController {
 
 function safeExtension(fileName: string, contentType: string): string {
   const fallbacks: Record<string, string> = {
-    'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif',
-    'video/mp4': 'mp4', 'video/webm': 'webm', 'video/ogg': 'ogv', 'video/quicktime': 'mov',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/avif': 'avif',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+    'video/ogg': 'ogv',
+    'video/quicktime': 'mov',
   };
   return fallbacks[contentType] ?? 'bin';
 }

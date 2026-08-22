@@ -2,9 +2,16 @@ import { Type } from 'class-transformer';
 import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { AdminAuditStatus, SubmissionStatus } from '@dialectiva/db';
 
-export type RecordingSortField = 'createdAt' | 'score' | 'compositeScore' | 'rawScore' | 'payoutTokenAmount';
+export type RecordingSortField =
+  'createdAt' | 'score' | 'compositeScore' | 'rawScore' | 'payoutTokenAmount';
 
-const SORT_FIELDS: RecordingSortField[] = ['createdAt', 'score', 'compositeScore', 'rawScore', 'payoutTokenAmount'];
+const SORT_FIELDS: RecordingSortField[] = [
+  'createdAt',
+  'score',
+  'compositeScore',
+  'rawScore',
+  'payoutTokenAmount',
+];
 
 export class ListAllRecordingsDto {
   @IsIn(['word', 'submission'])

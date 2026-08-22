@@ -1,4 +1,14 @@
-import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Length, Matches, Min } from 'class-validator';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Matches,
+  Min,
+} from 'class-validator';
 
 export class CreateWithdrawalDto {
   @IsNumber()

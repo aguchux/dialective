@@ -5,7 +5,10 @@
  * SubmissionsController (gate) so all three agree on the exact same
  * definition of "currently on hold".
  */
-export function isOnAuditHold(user: { auditHoldAt: Date | null; auditHoldReleasedAt: Date | null }): boolean {
+export function isOnAuditHold(user: {
+  auditHoldAt: Date | null;
+  auditHoldReleasedAt: Date | null;
+}): boolean {
   if (!user.auditHoldAt) return false;
   if (!user.auditHoldReleasedAt) return true;
   return user.auditHoldReleasedAt.getTime() < user.auditHoldAt.getTime();

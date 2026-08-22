@@ -30,7 +30,9 @@ function VerifyEmailContent() {
         <Breadcrumbs items={[{ label: 'Verify email' }]} />
         <h1 className="text-center text-[1.75rem] leading-tight">Verify email</h1>
         {status === 'pending' && <Notice>Verifying...</Notice>}
-        {status === 'success' && <Notice>Your email has been verified. You can close this page.</Notice>}
+        {status === 'success' && (
+          <Notice>Your email has been verified. You can close this page.</Notice>
+        )}
         {status === 'error' && <Alert>This verification link is invalid or has expired.</Alert>}
       </AuthPanel>
     </AuthPage>

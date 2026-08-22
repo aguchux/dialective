@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { normalizeErrorMessage, useGetPlatformSettingsQuery, useUpdatePlatformSettingsMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 
 const primaryButtonClass =
@@ -65,9 +69,9 @@ export function LandingPageSettingsPanel() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Landing Page</h2>
         <p className="leading-relaxed text-muted">
-          Show or hide each stat card in the marketing landing page&rsquo;s metrics row. Hiding a card only affects
-          display &mdash; the underlying figures are still tracked and available everywhere else (this settings
-          panel, the admin dashboard).
+          Show or hide each stat card in the marketing landing page&rsquo;s metrics row. Hiding a
+          card only affects display &mdash; the underlying figures are still tracked and available
+          everywhere else (this settings panel, the admin dashboard).
         </p>
       </div>
 
@@ -85,19 +89,28 @@ export function LandingPageSettingsPanel() {
                   checked={visible[toggle.key]}
                   className="mt-0.5 size-5 accent-accent"
                   id={`landing-show-${toggle.key}`}
-                  onChange={(event) => setVisible((current) => ({ ...current, [toggle.key]: event.target.checked }))}
+                  onChange={(event) =>
+                    setVisible((current) => ({ ...current, [toggle.key]: event.target.checked }))
+                  }
                   type="checkbox"
                 />
                 <span>
                   <span className="block font-bold">{toggle.label}</span>
-                  <span className="mt-1 block text-sm leading-relaxed text-muted">{toggle.detail}</span>
+                  <span className="mt-1 block text-sm leading-relaxed text-muted">
+                    {toggle.detail}
+                  </span>
                 </span>
               </label>
             ))}
           </div>
 
           <div>
-            <ActionButton className={primaryButtonClass} type="submit" pending={isSaving} pendingLabel="Saving">
+            <ActionButton
+              className={primaryButtonClass}
+              type="submit"
+              pending={isSaving}
+              pendingLabel="Saving"
+            >
               Save landing page settings
             </ActionButton>
           </div>

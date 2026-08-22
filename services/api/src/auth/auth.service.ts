@@ -204,13 +204,24 @@ export class AuthService {
     const referredById = await this.resolveReferrerId(referralCode, email);
 
     const user = await this.prisma.user.create({
-      data: { email, passwordHash, firstName, lastName, referralCode: generateReferralCode(), referredById },
+      data: {
+        email,
+        passwordHash,
+        firstName,
+        lastName,
+        referralCode: generateReferralCode(),
+        referredById,
+      },
     });
 
     await this.reconcileReferralInvites(email, referredById, user.id);
     await this.issueEmailVerification(user);
 
-    const { ticket, expiresInSeconds } = await this.otp.issueWithTicket(user.id, OtpPurpose.REGISTRATION, user.email);
+    const { ticket, expiresInSeconds } = await this.otp.issueWithTicket(
+      user.id,
+      OtpPurpose.REGISTRATION,
+      user.email,
+    );
     return { otpRequired: true, ticket, expiresInSeconds };
   }
 
@@ -224,7 +235,11 @@ export class AuthService {
    * actionable once the person has registered elsewhere (or with no
    * referral at all).
    */
-  private async reconcileReferralInvites(email: string, referredById: string | undefined, newUserId: string): Promise<void> {
+  private async reconcileReferralInvites(
+    email: string,
+    referredById: string | undefined,
+    newUserId: string,
+  ): Promise<void> {
     const matchingInvites = await this.prisma.referralInvite.findMany({
       where: { email: { equals: email, mode: 'insensitive' } },
       select: { id: true, inviterId: true },
@@ -252,7 +267,10 @@ export class AuthService {
    * must not be rejected only because the inviter and invitee both use Gmail
    * or another shared provider.
    */
-  private async resolveReferrerId(referralCode: string | undefined, newUserEmail: string): Promise<string | undefined> {
+  private async resolveReferrerId(
+    referralCode: string | undefined,
+    newUserEmail: string,
+  ): Promise<string | undefined> {
     if (!referralCode) {
       return undefined;
     }
@@ -289,7 +307,11 @@ export class AuthService {
 
     this.assertActive(user);
 
-    const { ticket, expiresInSeconds } = await this.otp.issueWithTicket(user.id, OtpPurpose.LOGIN, user.email);
+    const { ticket, expiresInSeconds } = await this.otp.issueWithTicket(
+      user.id,
+      OtpPurpose.LOGIN,
+      user.email,
+    );
     return { otpRequired: true, ticket, expiresInSeconds };
   }
 
@@ -314,7 +336,10 @@ export class AuthService {
       // startup bonus.
       const [, { count }] = await this.prisma.$transaction([
         this.prisma.otpCode.update({ where: { id: row.id }, data: { consumedAt: new Date() } }),
-        this.prisma.user.updateMany({ where: { id: row.userId, emailVerified: null }, data: { emailVerified: new Date() } }),
+        this.prisma.user.updateMany({
+          where: { id: row.userId, emailVerified: null },
+          data: { emailVerified: new Date() },
+        }),
       ]);
       const user = await this.prisma.user.findUniqueOrThrow({ where: { id: row.userId } });
       const isFirstVerification = count > 0;
@@ -329,10 +354,19 @@ export class AuthService {
           select: { email: true },
         });
         if (inviter?.email) {
-          const inviteeName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email;
+          const inviteeName =
+            [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email;
           void this.mail
-            .sendReferralJoinNotification({ inviterEmail: inviter.email, inviteeEmail: user.email, inviteeName })
-            .catch((err) => this.logger.warn(`Failed to send referral-join notification to inviter ${inviter.email}: ${err instanceof Error ? err.message : String(err)}`));
+            .sendReferralJoinNotification({
+              inviterEmail: inviter.email,
+              inviteeEmail: user.email,
+              inviteeName,
+            })
+            .catch((err) =>
+              this.logger.warn(
+                `Failed to send referral-join notification to inviter ${inviter.email}: ${err instanceof Error ? err.message : String(err)}`,
+              ),
+            );
         }
       }
 
@@ -371,7 +405,9 @@ export class AuthService {
    */
   private assertActive(user: User): void {
     if (user.status !== UserStatus.ACTIVE) {
-      throw new UnauthorizedException('This account has been ' + (user.status === UserStatus.BLOCKED ? 'blocked' : 'suspended'));
+      throw new UnauthorizedException(
+        'This account has been ' + (user.status === UserStatus.BLOCKED ? 'blocked' : 'suspended'),
+      );
     }
   }
 
@@ -390,7 +426,11 @@ export class AuthService {
     });
 
     await this.prisma.emailVerificationToken.create({
-      data: { userId: user.id, tokenHash: hash, expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS) },
+      data: {
+        userId: user.id,
+        tokenHash: hash,
+        expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS),
+      },
     });
 
     await this.mail.sendMagicLinkEmail(email, token);
@@ -398,13 +438,18 @@ export class AuthService {
 
   async consumeMagicLink(token: string): Promise<AuthResult> {
     const hash = hashToken(token);
-    const record = await this.prisma.emailVerificationToken.findUnique({ where: { tokenHash: hash } });
+    const record = await this.prisma.emailVerificationToken.findUnique({
+      where: { tokenHash: hash },
+    });
     if (!record || record.usedAt || record.expiresAt < new Date()) {
       throw new UnauthorizedException('Invalid or expired magic link');
     }
 
     const [{ count }] = await this.prisma.$transaction([
-      this.prisma.user.updateMany({ where: { id: record.userId, emailVerified: null }, data: { emailVerified: new Date() } }),
+      this.prisma.user.updateMany({
+        where: { id: record.userId, emailVerified: null },
+        data: { emailVerified: new Date() },
+      }),
       this.prisma.emailVerificationToken.update({
         where: { id: record.id },
         data: { usedAt: new Date() },
@@ -418,7 +463,9 @@ export class AuthService {
     }
 
     let account = await this.prisma.linkedAccount.findUnique({
-      where: { provider_providerAccountId: { provider: AuthProvider.EMAIL, providerAccountId: user.email } },
+      where: {
+        provider_providerAccountId: { provider: AuthProvider.EMAIL, providerAccountId: user.email },
+      },
     });
     if (!account) {
       account = await this.prisma.linkedAccount.create({
@@ -453,7 +500,9 @@ export class AuthService {
     }
 
     if (record.revokedAt) {
-      this.logger.warn(`Refresh token reuse detected for family=${record.familyId}; revoking family`);
+      this.logger.warn(
+        `Refresh token reuse detected for family=${record.familyId}; revoking family`,
+      );
       await this.prisma.refreshToken.updateMany({
         where: { familyId: record.familyId, revokedAt: null },
         data: { revokedAt: new Date() },
@@ -517,7 +566,11 @@ export class AuthService {
 
     const { token, hash } = generateOpaqueToken();
     await this.prisma.passwordResetToken.create({
-      data: { userId: user.id, tokenHash: hash, expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS) },
+      data: {
+        userId: user.id,
+        tokenHash: hash,
+        expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
+      },
     });
 
     await this.mail.sendPasswordResetEmail(email, token);
@@ -534,7 +587,10 @@ export class AuthService {
 
     await this.prisma.$transaction([
       this.prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
-      this.prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+      this.prisma.passwordResetToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
       // Resetting the password invalidates all existing sessions.
       this.prisma.refreshToken.updateMany({
         where: { userId: record.userId, revokedAt: null },
@@ -548,14 +604,20 @@ export class AuthService {
   private async issueEmailVerification(user: User): Promise<void> {
     const { token, hash } = generateOpaqueToken();
     await this.prisma.emailVerificationToken.create({
-      data: { userId: user.id, tokenHash: hash, expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS) },
+      data: {
+        userId: user.id,
+        tokenHash: hash,
+        expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS),
+      },
     });
     await this.mail.sendEmailVerificationEmail(user.email, token);
   }
 
   async verifyEmail(token: string): Promise<void> {
     const hash = hashToken(token);
-    const record = await this.prisma.emailVerificationToken.findUnique({ where: { tokenHash: hash } });
+    const record = await this.prisma.emailVerificationToken.findUnique({
+      where: { tokenHash: hash },
+    });
     if (!record || record.usedAt || record.expiresAt < new Date()) {
       throw new UnauthorizedException('Invalid or expired verification token');
     }
@@ -566,8 +628,14 @@ export class AuthService {
     // the same account are verified concurrently and would otherwise both
     // see emailVerified as null and double-grant the startup bonus.
     const [{ count }] = await this.prisma.$transaction([
-      this.prisma.user.updateMany({ where: { id: record.userId, emailVerified: null }, data: { emailVerified: new Date() } }),
-      this.prisma.emailVerificationToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+      this.prisma.user.updateMany({
+        where: { id: record.userId, emailVerified: null },
+        data: { emailVerified: new Date() },
+      }),
+      this.prisma.emailVerificationToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
     ]);
     const isFirstVerification = count > 0;
 
@@ -586,7 +654,10 @@ export class AuthService {
   // --- Profile / onboarding -------------------------------------------------
 
   async getProfile(userId: string): Promise<PublicUser> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { dialect: true, dialectVariant: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { dialect: true, dialectVariant: true },
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -639,10 +710,16 @@ export class AuthService {
     // verification, but it must at least point at a real variant of the
     // right dialect.
     if (dialectVariantId) {
-      const effectiveDialectId = dialectId ?? (await this.prisma.user.findUniqueOrThrow({ where: { id: userId } })).dialectId;
-      const variant = await this.prisma.dialectVariant.findUnique({ where: { id: dialectVariantId } });
+      const effectiveDialectId =
+        dialectId ??
+        (await this.prisma.user.findUniqueOrThrow({ where: { id: userId } })).dialectId;
+      const variant = await this.prisma.dialectVariant.findUnique({
+        where: { id: dialectVariantId },
+      });
       if (!variant || variant.dialectId !== effectiveDialectId) {
-        throw new UnprocessableEntityException('Dialect variant does not belong to the given dialect');
+        throw new UnprocessableEntityException(
+          'Dialect variant does not belong to the given dialect',
+        );
       }
     }
 
@@ -685,7 +762,10 @@ export class AuthService {
     if (!isValidPhoneNumber(phoneNumber)) {
       throw new UnprocessableEntityException('Enter a valid phone number in international format');
     }
-    const existing = await this.prisma.user.findUnique({ where: { phoneNumber }, select: { id: true } });
+    const existing = await this.prisma.user.findUnique({
+      where: { phoneNumber },
+      select: { id: true },
+    });
     if (existing && existing.id !== userId) {
       throw new ConflictException('This phone number is already verified on another account');
     }
@@ -694,7 +774,10 @@ export class AuthService {
     if (await this.platformSettings.isSmslive247NativeOtpEnabled()) {
       const smsSenderId = await this.platformSettings.getSmsSenderId();
       const { expiresAt } = await createSmslive247Otp(phoneNumber, smsSenderId ?? undefined);
-      const expiresInSeconds = Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000));
+      const expiresInSeconds = Math.max(
+        0,
+        Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000),
+      );
       return { otpRequestId: SMSLIVE247_NATIVE_OTP_REQUEST_ID, expiresInSeconds };
     }
 
@@ -707,7 +790,12 @@ export class AuthService {
     );
   }
 
-  async verifyPhoneNumber(userId: string, phoneNumber: string, otpRequestId: string, code: string): Promise<PublicUser> {
+  async verifyPhoneNumber(
+    userId: string,
+    phoneNumber: string,
+    otpRequestId: string,
+    code: string,
+  ): Promise<PublicUser> {
     if (!isValidPhoneNumber(phoneNumber)) {
       throw new UnprocessableEntityException('Enter a valid phone number in international format');
     }
@@ -788,7 +876,10 @@ export class AuthService {
       throw new ConflictException('This phone number is already verified on another account');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, phoneVerifiedAt: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, phoneVerifiedAt: true },
+    });
     if (!user) throw new NotFoundException('User not found');
     if (user.phoneVerifiedAt) {
       throw new ConflictException('Your phone number is already verified');
@@ -828,7 +919,10 @@ export class AuthService {
             expiresAt,
           },
         }),
-        this.prisma.user.update({ where: { id: userId }, data: { phoneNumber, phoneVerifiedAt: null } }),
+        this.prisma.user.update({
+          where: { id: userId },
+          data: { phoneNumber, phoneVerifiedAt: null },
+        }),
       ]);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -849,7 +943,12 @@ export class AuthService {
   async markManualPhoneVerificationSent(userId: string, requestId: string) {
     await this.expireManualPhoneVerificationRequests();
     const request = await this.prisma.manualPhoneVerificationRequest.findFirst({
-      where: { id: requestId, userId, status: ManualPhoneVerificationStatus.PENDING, expiresAt: { gt: new Date() } },
+      where: {
+        id: requestId,
+        userId,
+        status: ManualPhoneVerificationStatus.PENDING,
+        expiresAt: { gt: new Date() },
+      },
       select: { id: true },
     });
     if (!request) {
@@ -918,7 +1017,9 @@ export class AuthService {
 
   async verifyManualPhoneVerificationRequest(adminId: string, requestId: string, code: string) {
     await this.expireManualPhoneVerificationRequests();
-    const request = await this.prisma.manualPhoneVerificationRequest.findUnique({ where: { id: requestId } });
+    const request = await this.prisma.manualPhoneVerificationRequest.findUnique({
+      where: { id: requestId },
+    });
     if (!request) throw new NotFoundException('Manual verification request not found');
     if (request.status !== ManualPhoneVerificationStatus.PENDING) {
       throw new UnprocessableEntityException('This verification request is no longer pending');
@@ -928,7 +1029,9 @@ export class AuthService {
       throw new UnprocessableEntityException('This verification request has expired');
     }
     if (request.attempts >= request.maxAttempts) {
-      throw new UnauthorizedException('Too many incorrect attempts -- reject this request and ask the trainer to try again');
+      throw new UnauthorizedException(
+        'Too many incorrect attempts -- reject this request and ask the trainer to try again',
+      );
     }
 
     if (hashOtpCode(code) !== request.otpHash) {
@@ -969,7 +1072,11 @@ export class AuthService {
         // for the admin to retry once the trainer tops up, rather than
         // silently verifying for free or leaving a half-applied state.
         if (request.feeTokenAmount.gt(0)) {
-          const wallet = await tx.wallet.upsert({ where: { userId: request.userId }, create: { userId: request.userId }, update: {} });
+          const wallet = await tx.wallet.upsert({
+            where: { userId: request.userId },
+            create: { userId: request.userId },
+            update: {},
+          });
           const debited = await tx.wallet.updateMany({
             where: { userId: request.userId, balance: { gte: request.feeTokenAmount } },
             data: { balance: { decrement: request.feeTokenAmount } },
@@ -1004,7 +1111,16 @@ export class AuthService {
     const item = await this.prisma.manualPhoneVerificationRequest.findUniqueOrThrow({
       where: { id: requestId },
       include: {
-        user: { select: { id: true, email: true, firstName: true, lastName: true, phoneNumber: true, phoneVerifiedAt: true } },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phoneNumber: true,
+            phoneVerifiedAt: true,
+          },
+        },
         verifiedByAdmin: { select: { id: true, email: true, firstName: true, lastName: true } },
       },
     });
@@ -1035,7 +1151,9 @@ export class AuthService {
   }
 
   async rejectManualPhoneVerificationRequest(adminId: string, requestId: string) {
-    const request = await this.prisma.manualPhoneVerificationRequest.findUnique({ where: { id: requestId } });
+    const request = await this.prisma.manualPhoneVerificationRequest.findUnique({
+      where: { id: requestId },
+    });
     if (!request) throw new NotFoundException('Manual verification request not found');
     if (request.status !== ManualPhoneVerificationStatus.PENDING) {
       throw new UnprocessableEntityException('This verification request is no longer pending');
@@ -1059,7 +1177,16 @@ export class AuthService {
     const item = await this.prisma.manualPhoneVerificationRequest.findUniqueOrThrow({
       where: { id: requestId },
       include: {
-        user: { select: { id: true, email: true, firstName: true, lastName: true, phoneNumber: true, phoneVerifiedAt: true } },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phoneNumber: true,
+            phoneVerifiedAt: true,
+          },
+        },
         verifiedByAdmin: { select: { id: true, email: true, firstName: true, lastName: true } },
       },
     });
@@ -1090,7 +1217,11 @@ export class AuthService {
 
   // --- Admin: user management ------------------------------------------------
 
-  async listUsers(filters: { role?: Role; status?: UserStatus; search?: string }): Promise<PublicUser[]> {
+  async listUsers(filters: {
+    role?: Role;
+    status?: UserStatus;
+    search?: string;
+  }): Promise<PublicUser[]> {
     const search = filters.search?.trim();
     const users = await this.prisma.user.findMany({
       where: {
@@ -1118,7 +1249,11 @@ export class AuthService {
   }
 
   async updateUserRole(userId: string, role: Role): Promise<PublicUser> {
-    const user = await this.prisma.user.update({ where: { id: userId }, data: { role }, include: { dialect: true, dialectVariant: true } });
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { role },
+      include: { dialect: true, dialectVariant: true },
+    });
     return toPublicUser(user);
   }
 
@@ -1129,7 +1264,11 @@ export class AuthService {
    * again.
    */
   async updateUserStatus(userId: string, status: UserStatus): Promise<PublicUser> {
-    const user = await this.prisma.user.update({ where: { id: userId }, data: { status }, include: { dialect: true, dialectVariant: true } });
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { status },
+      include: { dialect: true, dialectVariant: true },
+    });
 
     if (status !== UserStatus.ACTIVE) {
       await this.prisma.refreshToken.updateMany({
@@ -1162,7 +1301,10 @@ export class AuthService {
    * (not just role=DISTRIBUTOR).
    */
   async getUserActivity(userId: string, params: { page: number; pageSize: number }) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { wallet: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { wallet: true },
+    });
     if (!user) throw new NotFoundException('User not found');
     if (!user.wallet) {
       return { items: [], page: params.page, pageSize: params.pageSize, total: 0, totalPages: 1 };
@@ -1190,7 +1332,8 @@ export class AuthService {
   }
 
   async requestUserLockOtp(adminId: string, userId: string, status: UserStatus) {
-    if (userId === adminId) throw new BadRequestException('You cannot suspend or block your own account');
+    if (userId === adminId)
+      throw new BadRequestException('You cannot suspend or block your own account');
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
     const contextHash = adminActionContextHash({ action: 'user-lock', userId, status });
     return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
@@ -1207,8 +1350,15 @@ export class AuthService {
    * not go through this path -- see the controller's OTP gate, which only
    * applies to the two disabling values.
    */
-  async lockUser(adminId: string, userId: string, status: UserStatus, otpRequestId?: string, code?: string): Promise<PublicUser> {
-    if (userId === adminId) throw new BadRequestException('You cannot suspend or block your own account');
+  async lockUser(
+    adminId: string,
+    userId: string,
+    status: UserStatus,
+    otpRequestId?: string,
+    code?: string,
+  ): Promise<PublicUser> {
+    if (userId === adminId)
+      throw new BadRequestException('You cannot suspend or block your own account');
 
     if (await this.platformSettings.isAdminPayoutOtpEnabled()) {
       if (!otpRequestId || !code) {
@@ -1223,26 +1373,51 @@ export class AuthService {
       });
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { wallet: true, dialect: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { wallet: true, dialect: true },
+    });
     if (!user) throw new NotFoundException('User not found');
 
-    const updated = await this.prisma.user.update({ where: { id: userId }, data: { status }, include: { dialect: true, dialectVariant: true } });
-    await this.prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { status },
+      include: { dialect: true, dialectVariant: true },
+    });
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
 
     if (user.wallet) {
       const openWithdrawals = await this.prisma.withdrawalRequest.findMany({
-        where: { walletId: user.wallet.id, status: { in: [WithdrawalStatus.PENDING, WithdrawalStatus.APPROVED] } },
+        where: {
+          walletId: user.wallet.id,
+          status: { in: [WithdrawalStatus.PENDING, WithdrawalStatus.APPROVED] },
+        },
       });
       for (const withdrawal of openWithdrawals) {
         await this.prisma.$transaction([
           this.prisma.withdrawalRequest.update({
             where: { id: withdrawal.id },
-            data: { status: WithdrawalStatus.REJECTED, resolvedAt: new Date(), adminNote: 'Auto-rejected: account locked by admin' },
+            data: {
+              status: WithdrawalStatus.REJECTED,
+              resolvedAt: new Date(),
+              adminNote: 'Auto-rejected: account locked by admin',
+            },
           }),
           this.prisma.ledgerEntry.create({
-            data: { walletId: withdrawal.walletId, type: 'WITHDRAWAL_REVERSED', amount: withdrawal.tokenAmount, reference: withdrawal.id },
+            data: {
+              walletId: withdrawal.walletId,
+              type: 'WITHDRAWAL_REVERSED',
+              amount: withdrawal.tokenAmount,
+              reference: withdrawal.id,
+            },
           }),
-          this.prisma.wallet.update({ where: { id: withdrawal.walletId }, data: { balance: { increment: withdrawal.tokenAmount } } }),
+          this.prisma.wallet.update({
+            where: { id: withdrawal.walletId },
+            data: { balance: { increment: withdrawal.tokenAmount } },
+          }),
         ]);
       }
     }
@@ -1290,10 +1465,17 @@ export class AuthService {
    * auditHold* fields, so a trainer who was independently SUSPENDED/BLOCKED
    * stays that way even after their audit hold is released.
    */
-  async releaseAuditHold(adminId: string, userId: string, otpRequestId?: string, code?: string): Promise<PublicUser> {
+  async releaseAuditHold(
+    adminId: string,
+    userId: string,
+    otpRequestId?: string,
+    code?: string,
+  ): Promise<PublicUser> {
     if (await this.platformSettings.isAdminPayoutOtpEnabled()) {
       if (!otpRequestId || !code) {
-        throw new UnprocessableEntityException('OTP verification is required to release this audit hold');
+        throw new UnprocessableEntityException(
+          'OTP verification is required to release this audit hold',
+        );
       }
       await this.otp.verify({
         otpRequestId,
@@ -1321,7 +1503,9 @@ export class AuthService {
     try {
       await this.mail.sendAuditHoldReleasedEmail(user.email);
     } catch (err) {
-      this.logger.error(`Failed to send audit-hold-released email for user=${userId}: ${(err as Error).message}`);
+      this.logger.error(
+        `Failed to send audit-hold-released email for user=${userId}: ${(err as Error).message}`,
+      );
     }
 
     return toPublicUser(updated);
@@ -1344,7 +1528,12 @@ export class AuthService {
    * subscription pools -- so deleting a user can never silently orphan or
    * relabel content someone else may be relying on the authorship of.
    */
-  async deleteUser(adminId: string, userId: string, otpRequestId?: string, code?: string): Promise<{ id: string; deleted: boolean }> {
+  async deleteUser(
+    adminId: string,
+    userId: string,
+    otpRequestId?: string,
+    code?: string,
+  ): Promise<{ id: string; deleted: boolean }> {
     if (userId === adminId) throw new BadRequestException('You cannot delete your own account');
 
     if (await this.platformSettings.isAdminPayoutOtpEnabled()) {
@@ -1406,7 +1595,9 @@ export class AuthService {
       try {
         await this.storage.deleteObject(audioBucket, audioKey);
       } catch (err) {
-        this.logger.warn(`Failed to delete audio object during user deletion: bucket=${audioBucket} key=${audioKey} err=${err}`);
+        this.logger.warn(
+          `Failed to delete audio object during user deletion: bucket=${audioBucket} key=${audioKey} err=${err}`,
+        );
       }
     }
   }

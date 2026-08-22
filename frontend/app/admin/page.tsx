@@ -26,7 +26,11 @@ import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { formatCompactTokens, formatCompactUsd } from '@/lib/format';
-import { useGetAdminLeaderboardQuery, useGetAdminStatsQuery, useGetReferralsQuery } from '@/store/api';
+import {
+  useGetAdminLeaderboardQuery,
+  useGetAdminStatsQuery,
+  useGetReferralsQuery,
+} from '@/store/api';
 
 type StatTone = 'blue' | 'purple' | 'green' | 'amber' | 'cyan' | 'rose';
 
@@ -117,7 +121,9 @@ export default function AdminDashboardPage() {
     {
       key: 'coverage',
       label: 'Coverage',
-      value: stats ? `${formatCount(stats.countriesCount)} / ${formatCount(stats.dialectsCount)}` : loadingValue,
+      value: stats
+        ? `${formatCount(stats.countriesCount)} / ${formatCount(stats.dialectsCount)}`
+        : loadingValue,
       hint: 'Countries / dialects',
       icon: Globe2,
       tone: 'green',
@@ -126,7 +132,9 @@ export default function AdminDashboardPage() {
       key: 'blog',
       label: 'Blog posts',
       value: stats ? formatCount(stats.blogPostsCount) : loadingValue,
-      hint: stats ? `${formatCount(stats.publishedBlogPostsCount)} published, ${formatCount(stats.draftBlogPostsCount)} draft` : undefined,
+      hint: stats
+        ? `${formatCount(stats.publishedBlogPostsCount)} published, ${formatCount(stats.draftBlogPostsCount)} draft`
+        : undefined,
       icon: Newspaper,
       tone: 'amber',
     },
@@ -240,7 +248,9 @@ export default function AdminDashboardPage() {
       key: 'pendingWithdrawals',
       label: 'Pending withdrawals',
       value: stats ? formatCount(stats.pendingWithdrawals) : loadingValue,
-      hint: stats ? `${formatCompactTokens(stats.pendingWithdrawalTokens)} awaiting review` : undefined,
+      hint: stats
+        ? `${formatCompactTokens(stats.pendingWithdrawalTokens)} awaiting review`
+        : undefined,
       icon: Clock3,
       tone: 'rose',
     },
@@ -256,7 +266,9 @@ export default function AdminDashboardPage() {
       key: 'rewardPools',
       label: 'Reward pools',
       value: stats ? formatCount(stats.activeSubscriptionPools) : loadingValue,
-      hint: stats ? `${formatCompactUsd(stats.activeSubscriptionPoolUsd)} active funding` : undefined,
+      hint: stats
+        ? `${formatCompactUsd(stats.activeSubscriptionPoolUsd)} active funding`
+        : undefined,
       icon: Database,
       tone: 'blue',
     },
@@ -333,24 +345,40 @@ export default function AdminDashboardPage() {
           <div className="grid content-start gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
             <h2 className="text-lg font-black">Operations queue</h2>
             <div className="grid gap-3 sm:grid-cols-3">
-              <QueueItem label="Withdrawals" value={stats ? formatCount(stats.pendingWithdrawals) : loadingValue} />
-              <QueueItem label="Pending deposits" value={stats ? formatCount(stats.pendingDeposits) : loadingValue} />
-              <QueueItem label="Pending word scores" value={stats ? formatCount(stats.wordRecordingsPending) : loadingValue} />
+              <QueueItem
+                label="Withdrawals"
+                value={stats ? formatCount(stats.pendingWithdrawals) : loadingValue}
+              />
+              <QueueItem
+                label="Pending deposits"
+                value={stats ? formatCount(stats.pendingDeposits) : loadingValue}
+              />
+              <QueueItem
+                label="Pending word scores"
+                value={stats ? formatCount(stats.wordRecordingsPending) : loadingValue}
+              />
             </div>
           </div>
 
           <div className="grid content-start gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
             <h2 className="text-lg font-black">Recent referrers</h2>
             {!referrals && <p className="text-muted">Loading...</p>}
-            {referrals && referrals.length === 0 && <p className="text-muted">No referral bonuses yet.</p>}
+            {referrals && referrals.length === 0 && (
+              <p className="text-muted">No referral bonuses yet.</p>
+            )}
             <div className="grid gap-3">
               {referrals?.slice(0, 5).map((r) => (
-                <div className="flex items-start justify-between gap-3 border-b border-line pb-3 last:border-0 last:pb-0" key={r.referralCode}>
+                <div
+                  className="flex items-start justify-between gap-3 border-b border-line pb-3 last:border-0 last:pb-0"
+                  key={r.referralCode}
+                >
                   <div className="min-w-0">
                     <p className="truncate font-extrabold">{r.referrerEmail}</p>
                     <p className="text-sm text-muted">{r.referredUsers.length} referred</p>
                   </div>
-                  <p className="shrink-0 font-bold text-accent">{formatCompactTokens(r.totalCommission)}</p>
+                  <p className="shrink-0 font-bold text-accent">
+                    {formatCompactTokens(r.totalCommission)}
+                  </p>
                 </div>
               ))}
             </div>
@@ -380,7 +408,9 @@ function MetricCard({ card }: { card: DashboardCard }) {
     <div className="grid min-h-32 content-between gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-bold text-muted">{card.label}</p>
-        <span className={`grid size-9 shrink-0 place-items-center rounded-full ${toneClass[card.tone]}`}>
+        <span
+          className={`grid size-9 shrink-0 place-items-center rounded-full ${toneClass[card.tone]}`}
+        >
           <Icon className="size-4" aria-hidden="true" />
         </span>
       </div>
@@ -430,7 +460,10 @@ function LeaderboardPanel({
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-black">{title}</h2>
         <div className="flex items-center gap-3">
-          <Link className="text-sm font-bold text-accent no-underline hover:text-accent-dark" href={viewAllHref}>
+          <Link
+            className="text-sm font-bold text-accent no-underline hover:text-accent-dark"
+            href={viewAllHref}
+          >
             View all
           </Link>
           <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#efe8fe] text-[#7B3BF0]">
@@ -442,7 +475,10 @@ function LeaderboardPanel({
         {loading && <p className="text-muted">Loading...</p>}
         {!loading && rows?.length === 0 && <p className="text-muted">{emptyLabel}</p>}
         {rows?.map((row, index) => (
-          <div className="grid gap-3 rounded-lg border border-line bg-surface p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center" key={row.id}>
+          <div
+            className="grid gap-3 rounded-lg border border-line bg-surface p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
+            key={row.id}
+          >
             <div className="grid size-9 place-items-center rounded-full bg-white text-sm font-black text-accent shadow-sm">
               {index + 1}
             </div>

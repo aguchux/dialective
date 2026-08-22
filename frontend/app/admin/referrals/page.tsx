@@ -24,15 +24,20 @@ export default function AdminReferralsPage() {
         <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
           <h2 className="text-2xl leading-snug">Referrers</h2>
           {isLoadingReferrals && <p className="text-muted">Loading...</p>}
-          {referrals && referrals.length === 0 && <p className="text-muted">No referral bonuses yet.</p>}
+          {referrals && referrals.length === 0 && (
+            <p className="text-muted">No referral bonuses yet.</p>
+          )}
           {referrals && referrals.length > 0 && (
             <div className="grid gap-2">
               {referrals.map((r) => (
-                <div className="grid gap-1 rounded-lg border border-line bg-surface p-4" key={r.referralCode}>
+                <div
+                  className="grid gap-1 rounded-lg border border-line bg-surface p-4"
+                  key={r.referralCode}
+                >
                   <p className="font-extrabold">{r.referrerEmail}</p>
                   <p className="text-sm text-muted">
-                    {r.referredUsers.length} referred &middot; {r.bonusEventCount} bonus events &middot; earned{' '}
-                    {r.totalCommission} DL
+                    {r.referredUsers.length} referred &middot; {r.bonusEventCount} bonus events
+                    &middot; earned {r.totalCommission} DL
                   </p>
                 </div>
               ))}

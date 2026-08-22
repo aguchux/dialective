@@ -1,16 +1,25 @@
 import numpy as np
 
-from quality import clipping_ratio, compute_quality_score, crest_factor_db, spectral_rolloff_hz
+from quality import (
+    clipping_ratio,
+    compute_quality_score,
+    crest_factor_db,
+    spectral_rolloff_hz,
+)
 from noise import SAMPLE_RATE
 
 
-def sine_wave(freq: float, duration_s: float, amplitude: float, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+def sine_wave(
+    freq: float, duration_s: float, amplitude: float, sample_rate: int = SAMPLE_RATE
+) -> np.ndarray:
     t = np.linspace(0, duration_s, int(sample_rate * duration_s), endpoint=False)
     return amplitude * np.sin(2 * np.pi * freq * t)
 
 
 def test_clipping_ratio_detects_clipped_samples():
-    data = np.clip(sine_wave(180, 1.0, 2.0), -1.0, 1.0)  # amplitude 2.0 clipped to [-1, 1] -> heavy clipping
+    data = np.clip(
+        sine_wave(180, 1.0, 2.0), -1.0, 1.0
+    )  # amplitude 2.0 clipped to [-1, 1] -> heavy clipping
     assert clipping_ratio(data) > 0.3
 
 

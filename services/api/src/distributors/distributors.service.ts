@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { LedgerEntryType, OtpPurpose, Prisma, Role, UserStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
@@ -64,10 +70,16 @@ export class DistributorsService {
    * distributor may fund them (see allocateToSubDistributor); admin funds
    * top-level distributors only.
    */
-  async allocateTokens(adminId: string, distributorId: string, dto: CreateDistributorAllocationDto) {
+  async allocateTokens(
+    adminId: string,
+    distributorId: string,
+    dto: CreateDistributorAllocationDto,
+  ) {
     const distributor = await this.prisma.user.findUnique({ where: { id: distributorId } });
     if (distributor?.promotedById) {
-      throw new ForbiddenException('This distributor was promoted by another distributor -- only they can fund this account');
+      throw new ForbiddenException(
+        'This distributor was promoted by another distributor -- only they can fund this account',
+      );
     }
     return this.allocate(adminId, distributorId, dto);
   }
@@ -77,7 +89,11 @@ export class DistributorsService {
    * ownership is `promotedById === callerId`, set once at promotion time
    * (see promoteSubDistributor) and never touched here.
    */
-  async allocateToSubDistributor(callerId: string, subDistributorId: string, dto: CreateDistributorAllocationDto) {
+  async allocateToSubDistributor(
+    callerId: string,
+    subDistributorId: string,
+    dto: CreateDistributorAllocationDto,
+  ) {
     const subDistributor = await this.prisma.user.findUnique({ where: { id: subDistributorId } });
     if (!subDistributor || subDistributor.promotedById !== callerId) {
       throw new NotFoundException('Sub-distributor not found');
@@ -85,13 +101,20 @@ export class DistributorsService {
     return this.allocate(callerId, subDistributorId, dto);
   }
 
-  private async allocate(grantedById: string, distributorId: string, dto: CreateDistributorAllocationDto) {
+  private async allocate(
+    grantedById: string,
+    distributorId: string,
+    dto: CreateDistributorAllocationDto,
+  ) {
     const settings = await this.settingsRow();
     if (!settings.enabled || !settings.bulkAllocationEnabled) {
       throw new UnprocessableEntityException('Distributor bulk allocation is disabled');
     }
 
-    const distributor = await this.prisma.user.findUnique({ where: { id: distributorId }, include: { wallet: true } });
+    const distributor = await this.prisma.user.findUnique({
+      where: { id: distributorId },
+      include: { wallet: true },
+    });
     if (!distributor || distributor.role !== Role.DISTRIBUTOR) {
       throw new NotFoundException('Distributor not found');
     }
@@ -124,7 +147,10 @@ export class DistributorsService {
           reference: allocation.id,
         },
       });
-      await tx.wallet.update({ where: { id: wallet.id }, data: { balance: { increment: tokenAmount } } });
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: { increment: tokenAmount } },
+      });
       return allocation;
     });
 
@@ -175,7 +201,9 @@ export class DistributorsService {
     });
     if (subDistributors.length === 0) return [];
 
-    const walletIds = subDistributors.map((d) => d.wallet?.id).filter((id): id is string => Boolean(id));
+    const walletIds = subDistributors
+      .map((d) => d.wallet?.id)
+      .filter((id): id is string => Boolean(id));
     const entries = walletIds.length
       ? await this.prisma.ledgerEntry.findMany({
           where: { walletId: { in: walletIds } },
@@ -184,7 +212,10 @@ export class DistributorsService {
       : [];
     const totalsByWallet = new Map<string, { credit: Prisma.Decimal; debit: Prisma.Decimal }>();
     for (const entry of entries) {
-      const totals = totalsByWallet.get(entry.walletId) ?? { credit: new Decimal(0), debit: new Decimal(0) };
+      const totals = totalsByWallet.get(entry.walletId) ?? {
+        credit: new Decimal(0),
+        debit: new Decimal(0),
+      };
       if (entry.amount.gte(0)) totals.credit = totals.credit.add(entry.amount);
       else totals.debit = totals.debit.add(entry.amount.abs());
       totalsByWallet.set(entry.walletId, totals);
@@ -207,8 +238,15 @@ export class DistributorsService {
   }
 
   /** Ownership-scoped activity feed, mirrors getActivity but for a sub-distributor owned by the caller. */
-  async getSubDistributorActivity(callerId: string, subDistributorId: string, params: { page: number; pageSize: number }) {
-    const user = await this.prisma.user.findUnique({ where: { id: subDistributorId }, include: { wallet: true } });
+  async getSubDistributorActivity(
+    callerId: string,
+    subDistributorId: string,
+    params: { page: number; pageSize: number },
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: subDistributorId },
+      include: { wallet: true },
+    });
     if (!user || user.promotedById !== callerId) {
       throw new NotFoundException('Sub-distributor not found');
     }
@@ -244,14 +282,24 @@ export class DistributorsService {
       throw new NotFoundException('Sub-distributor not found');
     }
 
-    const updated = await this.prisma.user.update({ where: { id: subDistributorId }, data: { status } });
+    const updated = await this.prisma.user.update({
+      where: { id: subDistributorId },
+      data: { status },
+    });
     if (status !== UserStatus.ACTIVE) {
-      await this.prisma.refreshToken.updateMany({ where: { userId: subDistributorId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: subDistributorId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     }
     return { id: updated.id, status: updated.status };
   }
 
-  async requestSubDistributorAdjustmentOtp(callerId: string, subDistributorId: string, dto: AdjustSubDistributorWalletDto) {
+  async requestSubDistributorAdjustmentOtp(
+    callerId: string,
+    subDistributorId: string,
+    dto: AdjustSubDistributorWalletDto,
+  ) {
     const [caller, target] = await Promise.all([
       this.prisma.user.findUniqueOrThrow({ where: { id: callerId } }),
       this.prisma.user.findUnique({ where: { id: subDistributorId } }),
@@ -265,7 +313,12 @@ export class DistributorsService {
       amount: dto.amount,
       reference: dto.reference,
     });
-    return this.otp.issueForUser(callerId, OtpPurpose.SUB_DISTRIBUTOR_ADJUSTMENT, caller.email, contextHash);
+    return this.otp.issueForUser(
+      callerId,
+      OtpPurpose.SUB_DISTRIBUTOR_ADJUSTMENT,
+      caller.email,
+      contextHash,
+    );
   }
 
   /**
@@ -277,8 +330,15 @@ export class DistributorsService {
    * conditional updateMany's WHERE clause makes that check atomic with the
    * write, same guard shape as the wallet-lock pattern used for TASK_LOCK.
    */
-  async adjustSubDistributorWallet(callerId: string, subDistributorId: string, dto: AdjustSubDistributorWalletDto) {
-    const target = await this.prisma.user.findUnique({ where: { id: subDistributorId }, include: { wallet: true } });
+  async adjustSubDistributorWallet(
+    callerId: string,
+    subDistributorId: string,
+    dto: AdjustSubDistributorWalletDto,
+  ) {
+    const target = await this.prisma.user.findUnique({
+      where: { id: subDistributorId },
+      include: { wallet: true },
+    });
     if (!target || target.promotedById !== callerId) {
       throw new NotFoundException('Sub-distributor not found');
     }
@@ -291,7 +351,9 @@ export class DistributorsService {
       reference: dto.reference,
     });
     if (!dto.otpRequestId || !dto.code) {
-      throw new UnprocessableEntityException('OTP verification is required to adjust a sub-distributor wallet');
+      throw new UnprocessableEntityException(
+        'OTP verification is required to adjust a sub-distributor wallet',
+      );
     }
     await this.otp.verify({
       otpRequestId: dto.otpRequestId,
@@ -301,23 +363,38 @@ export class DistributorsService {
       contextHash,
     });
 
-    const wallet = target.wallet ?? (await this.prisma.wallet.create({ data: { userId: target.id } }));
+    const wallet =
+      target.wallet ?? (await this.prisma.wallet.create({ data: { userId: target.id } }));
 
     const result = await this.prisma.$transaction(async (tx) => {
       const entry = await tx.ledgerEntry.create({
-        data: { walletId: wallet.id, type: LedgerEntryType.SUB_DISTRIBUTOR_ADJUSTMENT, amount, reference: dto.reference.trim() },
+        data: {
+          walletId: wallet.id,
+          type: LedgerEntryType.SUB_DISTRIBUTOR_ADJUSTMENT,
+          amount,
+          reference: dto.reference.trim(),
+        },
       });
       const updated = await tx.wallet.updateMany({
-        where: amount.isNegative() ? { id: wallet.id, balance: { gte: amount.abs() } } : { id: wallet.id },
+        where: amount.isNegative()
+          ? { id: wallet.id, balance: { gte: amount.abs() } }
+          : { id: wallet.id },
         data: { balance: { increment: amount } },
       });
       if (updated.count === 0) {
-        throw new UnprocessableEntityException('This debit would take the sub-distributor below a zero balance');
+        throw new UnprocessableEntityException(
+          'This debit would take the sub-distributor below a zero balance',
+        );
       }
       return entry;
     });
 
-    return { id: result.id, amount: amount.toString(), reference: result.reference, createdAt: result.createdAt };
+    return {
+      id: result.id,
+      amount: amount.toString(),
+      reference: result.reference,
+      createdAt: result.createdAt,
+    };
   }
 
   /**
@@ -346,8 +423,16 @@ export class DistributorsService {
     return {
       items: rows.map((row) => ({
         ...this.serializeAllocation(row),
-        distributor: { id: row.distributor.id, name: displayName(row.distributor), email: row.distributor.email },
-        grantedBy: { id: row.grantedBy.id, name: displayName(row.grantedBy), email: row.grantedBy.email },
+        distributor: {
+          id: row.distributor.id,
+          name: displayName(row.distributor),
+          email: row.distributor.email,
+        },
+        grantedBy: {
+          id: row.grantedBy.id,
+          name: displayName(row.grantedBy),
+          email: row.grantedBy.email,
+        },
       })),
       page: params.page,
       pageSize: params.pageSize,
@@ -373,7 +458,9 @@ export class DistributorsService {
     });
     if (distributors.length === 0) return [];
 
-    const walletIds = distributors.map((d) => d.wallet?.id).filter((id): id is string => Boolean(id));
+    const walletIds = distributors
+      .map((d) => d.wallet?.id)
+      .filter((id): id is string => Boolean(id));
     const entries = walletIds.length
       ? await this.prisma.ledgerEntry.findMany({
           where: { walletId: { in: walletIds } },
@@ -382,7 +469,10 @@ export class DistributorsService {
       : [];
     const totalsByWallet = new Map<string, { credit: Prisma.Decimal; debit: Prisma.Decimal }>();
     for (const entry of entries) {
-      const totals = totalsByWallet.get(entry.walletId) ?? { credit: new Decimal(0), debit: new Decimal(0) };
+      const totals = totalsByWallet.get(entry.walletId) ?? {
+        credit: new Decimal(0),
+        debit: new Decimal(0),
+      };
       if (entry.amount.gte(0)) totals.credit = totals.credit.add(entry.amount);
       else totals.debit = totals.debit.add(entry.amount.abs());
       totalsByWallet.set(entry.walletId, totals);
@@ -412,7 +502,10 @@ export class DistributorsService {
    * from the admin distributors table's per-row action.
    */
   async getActivity(distributorId: string, params: { page: number; pageSize: number }) {
-    const user = await this.prisma.user.findUnique({ where: { id: distributorId }, include: { wallet: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: distributorId },
+      include: { wallet: true },
+    });
     if (!user || user.role !== Role.DISTRIBUTOR) {
       throw new NotFoundException('Distributor not found');
     }
@@ -442,21 +535,26 @@ export class DistributorsService {
   }
 
   async dashboard(userId: string) {
-    const [settings, user, allocations, sellOffers, buyRequests, releasedTrades] = await Promise.all([
-      this.settingsRow(),
-      this.prisma.user.findUnique({
-        where: { id: userId },
-        include: { wallet: true },
-      }),
-      this.prisma.distributorAllocation.findMany({
-        where: { distributorId: userId },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-      }),
-      this.prisma.p2PTokenOffer.count({ where: { userId, type: 'SELL', status: { in: ['ACTIVE', 'RESERVED'] } } }),
-      this.prisma.p2PTokenOffer.count({ where: { userId, type: 'BUY', status: { in: ['ACTIVE', 'RESERVED'] } } }),
-      this.prisma.p2PTokenTrade.count({ where: { sellerId: userId, status: 'RELEASED' } }),
-    ]);
+    const [settings, user, allocations, sellOffers, buyRequests, releasedTrades] =
+      await Promise.all([
+        this.settingsRow(),
+        this.prisma.user.findUnique({
+          where: { id: userId },
+          include: { wallet: true },
+        }),
+        this.prisma.distributorAllocation.findMany({
+          where: { distributorId: userId },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        }),
+        this.prisma.p2PTokenOffer.count({
+          where: { userId, type: 'SELL', status: { in: ['ACTIVE', 'RESERVED'] } },
+        }),
+        this.prisma.p2PTokenOffer.count({
+          where: { userId, type: 'BUY', status: { in: ['ACTIVE', 'RESERVED'] } },
+        }),
+        this.prisma.p2PTokenTrade.count({ where: { sellerId: userId, status: 'RELEASED' } }),
+      ]);
     if (!user || user.role !== Role.DISTRIBUTOR) {
       throw new NotFoundException('Distributor not found');
     }
@@ -464,12 +562,17 @@ export class DistributorsService {
     const bonusEntries = await this.prisma.ledgerEntry.findMany({
       where: {
         wallet: { userId },
-        type: { in: [LedgerEntryType.DISTRIBUTOR_FUNDING_BONUS, LedgerEntryType.DISTRIBUTOR_PAYOUT_BONUS] },
+        type: {
+          in: [LedgerEntryType.DISTRIBUTOR_FUNDING_BONUS, LedgerEntryType.DISTRIBUTOR_PAYOUT_BONUS],
+        },
       },
       select: { amount: true, reference: true },
     });
     const bonusByLevel = summarizeBonusesByLevel(bonusEntries);
-    const totalBonuses = bonusByLevel.reduce((sum, level) => sum.add(new Decimal(level.amount)), new Decimal(0));
+    const totalBonuses = bonusByLevel.reduce(
+      (sum, level) => sum.add(new Decimal(level.amount)),
+      new Decimal(0),
+    );
 
     return {
       settings: this.serializeSettings(settings),
@@ -499,7 +602,10 @@ export class DistributorsService {
   }
 
   async network(userId: string) {
-    const root = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true } });
+    const root = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
     if (!root || root.role !== Role.DISTRIBUTOR) {
       throw new NotFoundException('Distributor not found');
     }
@@ -510,10 +616,16 @@ export class DistributorsService {
     // Falls back to 0 when the whole distributor system is off, so the view
     // reads as "no network" rather than silently showing 5 levels anyway.
     const settings = await this.settingsRow();
-    const maxDepth = settings.enabled && settings.multiLevelReferralEnabled ? Math.min(5, Math.max(0, settings.maxReferralDepth)) : 0;
+    const maxDepth =
+      settings.enabled && settings.multiLevelReferralEnabled
+        ? Math.min(5, Math.max(0, settings.maxReferralDepth))
+        : 0;
     const tree = maxDepth > 0 ? await this.loadNetworkLevels(userId, maxDepth) : [];
     const flat = flattenNetwork(tree);
-    const totalTokenBalance = flat.reduce((sum, node) => sum.add(new Decimal(node.tokenBalance)), new Decimal(0));
+    const totalTokenBalance = flat.reduce(
+      (sum, node) => sum.add(new Decimal(node.tokenBalance)),
+      new Decimal(0),
+    );
     return {
       maxDepth,
       directMembers: tree.length,
@@ -587,7 +699,15 @@ export class DistributorsService {
     };
   }
 
-  private serializeAllocation(row: { id: string; distributorId: string; grantedById: string; tokenAmount: Prisma.Decimal; discountRate: Prisma.Decimal; note: string | null; createdAt: Date }) {
+  private serializeAllocation(row: {
+    id: string;
+    distributorId: string;
+    grantedById: string;
+    tokenAmount: Prisma.Decimal;
+    discountRate: Prisma.Decimal;
+    note: string | null;
+    createdAt: Date;
+  }) {
     return {
       id: row.id,
       distributorId: row.distributorId,

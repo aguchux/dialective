@@ -19,7 +19,8 @@ export class AnthropicProvider implements LlmProvider {
       model: MODEL,
       max_tokens: 2048,
       temperature: 0.9,
-      system: 'You respond with ONLY a raw JSON array. No markdown fences, no prose, no explanation -- the entire response body must be valid JSON parseable by JSON.parse().',
+      system:
+        'You respond with ONLY a raw JSON array. No markdown fences, no prose, no explanation -- the entire response body must be valid JSON parseable by JSON.parse().',
       messages: [{ role: 'user', content: prompt }],
     });
     const block = message.content.find((item) => item.type === 'text');

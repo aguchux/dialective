@@ -15,7 +15,9 @@ class FakeModel:
         return np.array([[1 - self.proba_live, self.proba_live]])
 
 
-def sine_wave(freq: float, duration_s: float, amplitude: float, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+def sine_wave(
+    freq: float, duration_s: float, amplitude: float, sample_rate: int = SAMPLE_RATE
+) -> np.ndarray:
     t = np.linspace(0, duration_s, int(sample_rate * duration_s), endpoint=False)
     return amplitude * np.sin(2 * np.pi * freq * t)
 

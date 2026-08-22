@@ -29,17 +29,27 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * schema.prisma's AudioRetentionRule doc comment for the full precedence
  * rationale.
  */
-export function resolveRule(rules: Rule[], dialectTag: string, dialectCountryId: string | null): Rule | null {
+export function resolveRule(
+  rules: Rule[],
+  dialectTag: string,
+  dialectCountryId: string | null,
+): Rule | null {
   const enabled = rules.filter((r) => r.enabled);
   const matches = (r: Rule) =>
     (r.dialectTag === null || r.dialectTag === dialectTag) &&
     (r.countryId === null || r.countryId === dialectCountryId);
 
-  const bothScoped = enabled.find((r) => r.dialectTag !== null && r.countryId !== null && matches(r));
+  const bothScoped = enabled.find(
+    (r) => r.dialectTag !== null && r.countryId !== null && matches(r),
+  );
   if (bothScoped) return bothScoped;
-  const dialectOnly = enabled.find((r) => r.dialectTag !== null && r.countryId === null && matches(r));
+  const dialectOnly = enabled.find(
+    (r) => r.dialectTag !== null && r.countryId === null && matches(r),
+  );
   if (dialectOnly) return dialectOnly;
-  const countryOnly = enabled.find((r) => r.dialectTag === null && r.countryId !== null && matches(r));
+  const countryOnly = enabled.find(
+    (r) => r.dialectTag === null && r.countryId !== null && matches(r),
+  );
   if (countryOnly) return countryOnly;
   const catchAll = enabled.find((r) => r.dialectTag === null && r.countryId === null);
   return catchAll ?? null;
@@ -71,7 +81,14 @@ export class RetentionService {
           audioDeletedAt: null,
           OR: [{ settledAt: { not: null } }, { refundedAt: { not: null } }],
         },
-        select: { id: true, dialectTag: true, audioBucket: true, audioKey: true, settledAt: true, refundedAt: true },
+        select: {
+          id: true,
+          dialectTag: true,
+          audioBucket: true,
+          audioKey: true,
+          settledAt: true,
+          refundedAt: true,
+        },
       }),
       this.prisma.wordRecording.findMany({
         where: {
@@ -79,7 +96,14 @@ export class RetentionService {
           audioDeletedAt: null,
           OR: [{ settledAt: { not: null } }, { refundedAt: { not: null } }],
         },
-        select: { id: true, dialectTag: true, audioBucket: true, audioKey: true, settledAt: true, refundedAt: true },
+        select: {
+          id: true,
+          dialectTag: true,
+          audioBucket: true,
+          audioKey: true,
+          settledAt: true,
+          refundedAt: true,
+        },
       }),
     ]);
 
@@ -106,7 +130,11 @@ export class RetentionService {
   ): Promise<boolean> {
     if (!row.audioBucket || !row.audioKey) return false;
 
-    const rule = resolveRule(rules, row.dialectTag, countryIdByDialectTag.get(row.dialectTag) ?? null);
+    const rule = resolveRule(
+      rules,
+      row.dialectTag,
+      countryIdByDialectTag.get(row.dialectTag) ?? null,
+    );
     if (!rule) return false;
 
     const terminalAt = row.settledAt ?? row.refundedAt;
@@ -118,7 +146,9 @@ export class RetentionService {
     try {
       await this.storage.deleteObject(row.audioBucket, row.audioKey);
     } catch (err) {
-      this.logger.warn(`Failed to delete audio object: kind=${kind} id=${row.id} bucket=${row.audioBucket} key=${row.audioKey} err=${err}`);
+      this.logger.warn(
+        `Failed to delete audio object: kind=${kind} id=${row.id} bucket=${row.audioBucket} key=${row.audioKey} err=${err}`,
+      );
       return false;
     }
 

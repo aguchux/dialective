@@ -7,13 +7,7 @@
 // prompt-audio-service).
 
 export type ConversationSessionStatus =
-  | 'connecting'
-  | 'idle'
-  | 'listening'
-  | 'thinking'
-  | 'speaking'
-  | 'error'
-  | 'ended';
+  'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error' | 'ended';
 
 export interface ConversationSession {
   id: string;

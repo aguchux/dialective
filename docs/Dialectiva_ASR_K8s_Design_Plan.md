@@ -1,4 +1,5 @@
 # Dialectiva ASR Pipeline — Design Plan
+
 ### CPU-Only MVP Architecture Using Vosk on Kubernetes
 
 ---
@@ -65,21 +66,22 @@ This document specifies the design for Dialectiva's **voice scoring pipeline MVP
 
 ## 4. Components
 
-| Component | Type | Runs on | Notes |
-|---|---|---|---|
-| API service | Deployment + HPA (CPU) | Always-on | Task assignment, wallet, auth |
-| Object storage | External (S3/GCS) or MinIO StatefulSet | Always-on | Raw audio, durable |
-| Redis Streams | StatefulSet | Always-on, small | Job queue + consumer groups |
-| Vosk ASR workers | Deployment, **KEDA-scaled 0→N** | On-demand, CPU only | Pulls jobs, transcribes, writes result |
-| Consensus scoring service | Deployment + HPA (CPU) | Low, steady load | Compares transcripts within a dialect/prompt cluster |
-| PostgreSQL | Managed DB or StatefulSet | Always-on | Source of truth for scores/ledger |
-| Batch settlement job | CronJob (every 12–24h) | Scheduled | Finalizes scores → triggers payouts |
+| Component                 | Type                                   | Runs on             | Notes                                                |
+| ------------------------- | -------------------------------------- | ------------------- | ---------------------------------------------------- |
+| API service               | Deployment + HPA (CPU)                 | Always-on           | Task assignment, wallet, auth                        |
+| Object storage            | External (S3/GCS) or MinIO StatefulSet | Always-on           | Raw audio, durable                                   |
+| Redis Streams             | StatefulSet                            | Always-on, small    | Job queue + consumer groups                          |
+| Vosk ASR workers          | Deployment, **KEDA-scaled 0→N**        | On-demand, CPU only | Pulls jobs, transcribes, writes result               |
+| Consensus scoring service | Deployment + HPA (CPU)                 | Low, steady load    | Compares transcripts within a dialect/prompt cluster |
+| PostgreSQL                | Managed DB or StatefulSet              | Always-on           | Source of truth for scores/ledger                    |
+| Batch settlement job      | CronJob (every 12–24h)                 | Scheduled           | Finalizes scores → triggers payouts                  |
 
 ---
 
 ## 5. Vosk Worker Design
 
 ### 5.1 Responsibilities
+
 1. Pop a job from the Redis stream (`{submission_id, audio_url, dialect_tag, prompt_text}`).
 2. Download audio from object storage.
 3. Run pre-filter checks: duration bounds, silence ratio, clipping/noise floor — reject obviously bad clips before spending ASR time.
@@ -167,7 +169,7 @@ if __name__ == "__main__":
     main()
 ```
 
-*(Illustrative — add retry/error handling, structured logging, and metrics before production use.)*
+_(Illustrative — add retry/error handling, structured logging, and metrics before production use.)_
 
 ---
 
@@ -192,7 +194,7 @@ spec:
       containers:
         - name: redis
           image: redis:7.2-alpine
-          args: ["--appendonly", "yes"]
+          args: ['--appendonly', 'yes']
           ports: [{ containerPort: 6379 }]
           volumeMounts:
             - name: redis-data
@@ -200,7 +202,7 @@ spec:
   volumeClaimTemplates:
     - metadata: { name: redis-data }
       spec:
-        accessModes: ["ReadWriteOnce"]
+        accessModes: ['ReadWriteOnce']
         resources: { requests: { storage: 5Gi } }
 ```
 
@@ -223,8 +225,8 @@ spec:
         - name: vosk-worker
           image: your-registry/vosk-worker:latest
           resources:
-            requests: { cpu: "500m", memory: "512Mi" }
-            limits:   { cpu: "1",    memory: "1Gi" }
+            requests: { cpu: '500m', memory: '512Mi' }
+            limits: { cpu: '1', memory: '1Gi' }
           env:
             - name: REDIS_HOST
               value: redis
@@ -248,7 +250,7 @@ spec:
         address: redis.default.svc.cluster.local:6379
         stream: asr-jobs
         consumerGroup: asr-workers
-        pendingEntriesCount: "5"
+        pendingEntriesCount: '5'
 ```
 
 ### 6.3 Consensus scoring service
@@ -270,8 +272,8 @@ spec:
         - name: consensus-scorer
           image: your-registry/consensus-scorer:latest
           resources:
-            requests: { cpu: "250m", memory: "256Mi" }
-            limits:   { cpu: "500m", memory: "512Mi" }
+            requests: { cpu: '250m', memory: '256Mi' }
+            limits: { cpu: '500m', memory: '512Mi' }
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -299,7 +301,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: asr-model-repo-pvc
 spec:
-  accessModes: ["ReadOnlyMany"]
+  accessModes: ['ReadOnlyMany']
   resources:
     requests: { storage: 5Gi }
   storageClassName: standard
@@ -313,7 +315,7 @@ kind: CronJob
 metadata:
   name: score-settlement
 spec:
-  schedule: "0 */12 * * *"     # every 12 hours
+  schedule: '0 */12 * * *' # every 12 hours
   jobTemplate:
     spec:
       template:
@@ -323,7 +325,7 @@ spec:
             - name: settlement
               image: your-registry/settlement-job:latest
               resources:
-                requests: { cpu: "250m", memory: "256Mi" }
+                requests: { cpu: '250m', memory: '256Mi' }
 ```
 
 ---
@@ -338,17 +340,17 @@ Since a single "gold standard" pronunciation doesn't exist for a dialect, scorin
 4. A submission's score = its average similarity to the cluster consensus, adjusted by the Vosk word-confidence values.
 5. Flag statistical outliers for human QA sampling rather than auto-rejecting (protects against penalizing genuine dialect variation vs. actual bad-faith submissions).
 
-**Vosk-specific caveat:** since Vosk's language coverage is limited, cross-dialect comparison is only meaningful if the *same* base model is used consistently across a dialect cluster — don't mix models mid-comparison, or the consensus signal breaks.
+**Vosk-specific caveat:** since Vosk's language coverage is limited, cross-dialect comparison is only meaningful if the _same_ base model is used consistently across a dialect cluster — don't mix models mid-comparison, or the consensus signal breaks.
 
 ---
 
 ## 8. Upgrade Path Beyond MVP (Reference — Not This Phase)
 
-| Trigger | Action |
-|---|---|
-| Pilot proves the product loop (Phase 0 exit) | Introduce Whisper/faster-whisper as a CPU or small-GPU option for languages Vosk covers poorly |
-| Enough verified dialect-tagged audio accumulated per dialect | Begin fine-tuning Wav2Vec2-XLSR-53 or MMS per dialect cluster (requires GPU node pool, `Job`/training pipeline — see prior discussion) |
-| Fine-tuned models available | Swap the ASR worker's model backend behind the same queue interface — architecture doesn't need to change, only the worker image/model artifact |
+| Trigger                                                      | Action                                                                                                                                          |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pilot proves the product loop (Phase 0 exit)                 | Introduce Whisper/faster-whisper as a CPU or small-GPU option for languages Vosk covers poorly                                                  |
+| Enough verified dialect-tagged audio accumulated per dialect | Begin fine-tuning Wav2Vec2-XLSR-53 or MMS per dialect cluster (requires GPU node pool, `Job`/training pipeline — see prior discussion)          |
+| Fine-tuned models available                                  | Swap the ASR worker's model backend behind the same queue interface — architecture doesn't need to change, only the worker image/model artifact |
 
 This is why the design keeps ASR transcription, pre-filtering, and consensus scoring as **separate services**: Vosk can be replaced without touching the queue, database, or scoring logic.
 
@@ -356,12 +358,12 @@ This is why the design keeps ASR transcription, pre-filtering, and consensus sco
 
 ## 9. Storage Summary (Recap)
 
-| Data | Store | MVP size estimate |
-|---|---|---|
-| Raw audio | S3/MinIO | Single-digit GB at pilot scale |
-| Vosk model | PVC (ReadOnlyMany) | ~50MB–1.8GB depending on model variant |
-| Scores/ledger/metadata | Postgres | <1GB at pilot scale |
-| Queue state | Redis (AOF) | <1GB |
+| Data                   | Store              | MVP size estimate                      |
+| ---------------------- | ------------------ | -------------------------------------- |
+| Raw audio              | S3/MinIO           | Single-digit GB at pilot scale         |
+| Vosk model             | PVC (ReadOnlyMany) | ~50MB–1.8GB depending on model variant |
+| Scores/ledger/metadata | Postgres           | <1GB at pilot scale                    |
+| Queue state            | Redis (AOF)        | <1GB                                   |
 
 No GPU node pool, no NVIDIA device plugin, no model-serving framework (Triton) needed for this phase — all components run on standard CPU nodes.
 
