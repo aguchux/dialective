@@ -67,9 +67,9 @@ Add `http://localhost:3000` too if testing the frontend locally against the real
 
 ## Ingress / DNS
 
-`pgadmin.dialectlibrary.com` and `api.dialectlibrary.com` must point (A/CNAME) at the ingress controller's external IP. TLS is issued automatically via cert-manager (`letsencrypt-prod` ClusterIssuer) — that ClusterIssuer must already exist in the cluster; it's not created by these manifests. Requires an nginx ingress controller (`ingressClassName: nginx`).
+`pgadmin.dialectlibrary.com`, `api.dialectlibrary.com`, and `livekit.dialectlibrary.com` must point (A/CNAME) at the ingress controller's external IP. TLS is issued automatically via cert-manager (`letsencrypt-prod` ClusterIssuer) — that ClusterIssuer must already exist in the cluster; it's not created by these manifests. Requires an nginx ingress controller (`ingressClassName: nginx`). `livekit.dialectlibrary.com` fronts `livekit-server`'s WS signaling only — its WebRTC media (UDP) goes through the separate `livekit-rtc` LoadBalancer Service, not the ingress controller (see `k8s/base/livekit-service.yaml`).
 
-`dialectlibrary.com` (the frontend, apex domain) is **not** in this cluster — it's a Vercel deployment (`/frontend`). Point it at Vercel's DNS target per the Vercel project's domain settings, not at the ingress controller.
+`dialectlibrary.com` (the frontend, apex domain) and `labs.dialectlibrary.com` (`chatdialect/apps/web`) are **not** in this cluster — both are Vercel deployments (`/frontend` and `chatdialect/`, respectively, two separate Vercel projects). Point each at its own Vercel DNS target per that project's domain settings, not at the ingress controller.
 
 ## Frontend (Vercel) env vars
 
@@ -80,6 +80,19 @@ Set these in the Vercel project settings, not in this repo's secrets (which only
 - `API_BASE_URL` — `https://api.dialectlibrary.com` (Vercel can't reach the cluster's internal `http://api` Service DNS)
 - `NEXT_PUBLIC_API_BASE_URL` — same as above, exposed client-side
 - `OAUTH_CALLBACK_SECRET` — must match `secrets/auth.env`'s `oauth_callback_secret` / `api`'s `auth-creds` value exactly
+
+## ChatDialect (Vercel) env vars
+
+`chatdialect/apps/web` is a second, separate Vercel project at
+`labs.dialectlibrary.com` — see `chatdialect/README.md`. Set these in
+*that* Vercel project's settings, not here:
+
+- `NEXT_PUBLIC_DIALECT_LIBRARY_API_URL` — `https://api.dialectlibrary.com/api/v1`
+- `NEXT_PUBLIC_APP_URL` — `https://labs.dialectlibrary.com`
+
+`labs.dialectlibrary.com` is already included in this cluster's
+`CORS_ALLOWED_ORIGINS` (`k8s/overlays/prod/configs/api.env`) so `api`
+accepts requests from it once the domain is live.
 
 ## Apply
 

@@ -11,8 +11,9 @@ whole plan.
 `chatdialect/` is a self-contained monorepo-within-the-repo — its own
 `package.json` workspace root (`apps/web`, `packages/*`), not part of the
 root `dialectiva` `package.json`'s npm workspaces. `apps/web` deploys as
-its **own, separate Vercel project**, independent from `/frontend`
-(the Dialect Library platform's own Next.js app, deployed separately).
+its **own, separate Vercel project at `labs.dialectlibrary.com`**,
+independent from `/frontend` (the Dialect Library platform's own Next.js
+app, deployed separately to `dialectlibrary.com`).
 
 **There is no `chatdialect/apps/api`.** Every backend/API concern lives in
 the existing `services/api` NestJS app — see
@@ -88,8 +89,9 @@ features; custom WebRTC implementation.
 
 ## Deployment
 
-`apps/web` deploys to its own, separate Vercel project (never merged into
-`/frontend`). `apps/agent` and self-hosted LiveKit deploy into this repo's
+`apps/web` deploys to its own, separate Vercel project at
+`labs.dialectlibrary.com` (never merged into `/frontend`, which is
+`dialectlibrary.com`). `apps/agent` and self-hosted LiveKit deploy into this repo's
 **existing k8s cluster** (`k8s/base/chatdialect-agent-deployment.yaml`,
 `livekit-deployment.yaml`/`livekit-service.yaml`/`livekit-ingress.yaml`) —
 this was a deliberate choice over a separate host (Fly.io/Railway/LiveKit

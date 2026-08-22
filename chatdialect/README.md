@@ -58,16 +58,21 @@ optimization.
 
 ## Deployment
 
-`apps/web` deploys to Vercel as its own project, rooted at this directory
-(`chatdialect/`, not `apps/web`) — Vercel's Root Directory setting must
-point here so `npm install` resolves the npm workspace
-(`@chatdialect/shared-types`, `@chatdialect/avatar-protocol`,
-`@chatdialect/config`) that `apps/web` depends on. `vercel.json` (this
-directory) sets `buildCommand`/`devCommand` to run `-w apps/web` and
-`outputDirectory` to `apps/web/.next` accordingly — do not point Root
-Directory at `apps/web` itself, or the workspace packages won't resolve.
-Required env vars on Vercel: `NEXT_PUBLIC_DIALECT_LIBRARY_API_URL`
-(`services/api`'s deployed URL) and `NEXT_PUBLIC_APP_URL`.
+`apps/web` deploys to Vercel as its own project at
+**`labs.dialectlibrary.com`**, rooted at this directory (`chatdialect/`,
+not `apps/web`) — Vercel's Root Directory setting must point here so
+`npm install` resolves the npm workspace (`@chatdialect/shared-types`,
+`@chatdialect/avatar-protocol`, `@chatdialect/config`) that `apps/web`
+depends on. `vercel.json` (this directory) sets `buildCommand`/
+`devCommand` to run `-w apps/web` and `outputDirectory` to
+`apps/web/.next` accordingly — do not point Root Directory at `apps/web`
+itself, or the workspace packages won't resolve. Required env vars on
+Vercel: `NEXT_PUBLIC_DIALECT_LIBRARY_API_URL` (`services/api`'s deployed
+URL) and `NEXT_PUBLIC_APP_URL=https://labs.dialectlibrary.com`.
+`labs.dialectlibrary.com` is already in `services/api`'s
+`CORS_ALLOWED_ORIGINS` (`k8s/overlays/prod/configs/api.env`) — the actual
+DNS record and Vercel domain attachment are the only remaining steps once
+the Vercel project exists.
 
 `apps/agent` and self-hosted LiveKit deploy into the main repo's existing
 k8s cluster —
