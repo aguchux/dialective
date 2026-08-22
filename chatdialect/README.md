@@ -58,8 +58,19 @@ optimization.
 
 ## Deployment
 
-`apps/web` deploys to Vercel as its own project. `apps/agent` and
-self-hosted LiveKit deploy into the main repo's existing k8s cluster —
+`apps/web` deploys to Vercel as its own project, rooted at this directory
+(`chatdialect/`, not `apps/web`) — Vercel's Root Directory setting must
+point here so `npm install` resolves the npm workspace
+(`@chatdialect/shared-types`, `@chatdialect/avatar-protocol`,
+`@chatdialect/config`) that `apps/web` depends on. `vercel.json` (this
+directory) sets `buildCommand`/`devCommand` to run `-w apps/web` and
+`outputDirectory` to `apps/web/.next` accordingly — do not point Root
+Directory at `apps/web` itself, or the workspace packages won't resolve.
+Required env vars on Vercel: `NEXT_PUBLIC_DIALECT_LIBRARY_API_URL`
+(`services/api`'s deployed URL) and `NEXT_PUBLIC_APP_URL`.
+
+`apps/agent` and self-hosted LiveKit deploy into the main repo's existing
+k8s cluster —
 see `k8s/base/chatdialect-agent-deployment.yaml`,
 `k8s/base/livekit-deployment.yaml`, and `k8s/overlays/prod/{configs,secrets}/
 {chatdialect-agent,livekit}.env.example` for the manifests and required
