@@ -1253,6 +1253,30 @@ export class AuthService {
     return toPublicUser(updated);
   }
 
+  /**
+   * Every trainer currently on an active audit hold, for the admin "Audit
+   * queue" list. Fetches every candidate row (auditHoldAt set) and filters
+   * with the same isOnAuditHold check used everywhere else, rather than
+   * trying to express its release-after-hold comparison as a Prisma
+   * where-clause -- this population is inherently small (bounded by how
+   * often PlatformSettings.auditHoldEveryNSubmissions triggers), so an
+   * in-app filter over a handful of rows is simpler and less error-prone
+   * than duplicating isOnAuditHold's date-comparison logic in raw SQL.
+   */
+  async listAuditHoldUsers(): Promise<PublicUser[]> {
+    const candidates = await this.prisma.user.findMany({
+      where: { auditHoldAt: { not: null } },
+      include: {
+        dialect: true,
+        dialectVariant: true,
+        wallet: { select: { balance: true } },
+        _count: { select: { submissions: true, wordRecordings: true } },
+      },
+      orderBy: { auditHoldAt: 'desc' },
+    });
+    return candidates.filter(isOnAuditHold).map(toPublicUser);
+  }
+
   async requestAuditHoldReleaseOtp(adminId: string, userId: string) {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
     const contextHash = adminActionContextHash({ action: 'audit-hold-release', userId });

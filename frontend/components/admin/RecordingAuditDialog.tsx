@@ -204,13 +204,20 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
         <p className="break-words text-2xl font-black">{recording.promptText}</p>
       </div>
 
-      {recording.responseText && (
+      {(recording.asrTranscript || recording.responseText) && (
         <div className="grid gap-1 text-center">
-          <p className="text-sm font-bold text-white/60">Trainer&rsquo;s response</p>
-          {recording.asrWordDetail && recording.asrWordDetail.length > 0 ? (
-            <TranscriptWords words={recording.asrWordDetail} currentTime={currentTime} onSeek={seekTo} />
+          <p className="text-sm font-bold text-white/60">Spoken response (ASR transcript)</p>
+          {recording.asrTranscript ? (
+            recording.asrWordDetail && recording.asrWordDetail.length > 0 ? (
+              <TranscriptWords words={recording.asrWordDetail} currentTime={currentTime} onSeek={seekTo} />
+            ) : (
+              <p className="break-words text-lg font-bold">{recording.asrTranscript}</p>
+            )
           ) : (
-            <p className="break-words text-lg font-bold">{recording.responseText}</p>
+            <p className="break-words text-sm italic text-white/50">Not yet transcribed.</p>
+          )}
+          {recording.kind === 'word' && recording.responseText && recording.responseText !== recording.asrTranscript && (
+            <p className="mt-1 break-words text-sm text-white/50">Typed answer: {recording.responseText}</p>
           )}
         </div>
       )}

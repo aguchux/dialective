@@ -24,6 +24,7 @@ function setup(
     user: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       upsert: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -532,6 +533,42 @@ describe('AuthService.rejectManualPhoneVerificationRequest', () => {
     expect(prisma.wallet.update).not.toHaveBeenCalled();
     expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
     expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.listAuditHoldUsers', () => {
+  it('returns only users whose hold is still active, filtering out released ones', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findMany.mockResolvedValue([
+      { id: 'user-1', email: 'active-hold@b.com', auditHoldAt: new Date('2026-01-02'), auditHoldReleasedAt: null, dialect: null, dialectVariant: null },
+      { id: 'user-2', email: 'released@b.com', auditHoldAt: new Date('2026-01-01'), auditHoldReleasedAt: new Date('2026-01-05'), dialect: null, dialectVariant: null },
+    ]);
+
+    const result = await service.listAuditHoldUsers();
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { auditHoldAt: { not: null } } }),
+    );
+    expect(result.map((u) => u.id)).toEqual(['user-1']);
+    expect(result[0].onAuditHold).toBe(true);
+  });
+
+  it('re-includes a user whose hold retriggered after an earlier release', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findMany.mockResolvedValue([
+      { id: 'user-1', email: 'a@b.com', auditHoldAt: new Date('2026-02-01'), auditHoldReleasedAt: new Date('2026-01-05'), dialect: null, dialectVariant: null },
+    ]);
+
+    const result = await service.listAuditHoldUsers();
+
+    expect(result.map((u) => u.id)).toEqual(['user-1']);
+  });
+
+  it('returns an empty list when no one is on hold', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+
+    await expect(service.listAuditHoldUsers()).resolves.toEqual([]);
   });
 });
 

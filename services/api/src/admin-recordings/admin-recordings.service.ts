@@ -282,6 +282,7 @@ export class AdminRecordingsService {
             ? (recording.word?.text ?? recording.translationText)
             : `Translate: ${recording.translationText}`,
       responseText: recording.translationText,
+      asrTranscript: recording.transcript,
       dialectTag: recording.dialectTag,
       status: recording.status,
       tokensSpent: recording.tokensSpent.toString(),
@@ -328,6 +329,7 @@ export class AdminRecordingsService {
       direction: null,
       promptText: submission.prompt.text,
       responseText: submission.transcript,
+      asrTranscript: submission.transcript, // same field as responseText here -- Submission's responseText already IS the ASR transcript, unlike WordRecording's (which is the typed answer). Kept as a separate always-populated field so the frontend can read one consistent "ASR transcript" property across both kinds.
       dialectTag: submission.dialectTag,
       status: submission.status,
       tokensSpent: submission.tokensSpent.toString(),

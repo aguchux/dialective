@@ -23,6 +23,7 @@ const navItems = [
   { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
   { href: '/admin/words', label: 'Words', icon: WordsIcon },
   { href: '/admin/recordings', label: 'Recordings', icon: RecordingsIcon },
+  { href: '/admin/audit-hold', label: 'Audit Queue', icon: AuditQueueIcon },
   { href: '/admin/phone-verifications', label: 'Phone Verifications', icon: PhoneIcon },
   { href: '/admin/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
   { href: '/admin/referrals', label: 'Referrals', icon: ReferralIcon },
@@ -318,6 +319,20 @@ function RecordingsIcon() {
       <path d="M5 10a7 7 0 0 0 14 0" strokeLinecap="round" />
       <path d="M12 17v4" strokeLinecap="round" />
       <path d="M8 21h8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function AuditQueueIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="M9 9h.01" strokeLinecap="round" />
+      <path d="M12.5 9H16" strokeLinecap="round" />
+      <path d="M9 13h.01" strokeLinecap="round" />
+      <path d="M12.5 13H16" strokeLinecap="round" />
+      <path d="M9 17h.01" strokeLinecap="round" />
+      <path d="M12.5 17H16" strokeLinecap="round" />
     </svg>
   );
 }

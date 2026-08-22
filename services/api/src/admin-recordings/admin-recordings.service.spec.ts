@@ -142,6 +142,42 @@ describe('AdminRecordingsService', () => {
       expect(result.totalPages).toBe(1);
       expect(result.items[0].trainer).toEqual({ id: 'trainer-1', email: 't@example.com', firstName: 'A', lastName: 'B' });
     });
+
+    it('exposes the ASR transcript separately from the typed answer for word recordings', async () => {
+      prisma.wordRecording.findMany.mockResolvedValue([
+        {
+          id: 'word-1', createdAt: new Date('2026-01-01'), direction: 'ENGLISH_TO_DIALECT', dialectTag: 'ig',
+          translationText: 'nnọọ', transcript: 'nno', word: { text: 'welcome' }, prompt: null, audioBucket: 'b', audioKey: 'k',
+          status: 'SCORED', tokensSpent: { toString: () => '1' }, rawScore: null, score: null, noiseScore: null,
+          qualityScore: null, livenessScore: null, compositeScore: null, payoutTokenAmount: null,
+          adminAuditStatus: null, adminAuditedAt: null, scoredAt: null, settledAt: null,
+        },
+      ]);
+      prisma.wordRecording.count.mockResolvedValue(1);
+
+      const result = await service.listAll({ kind: 'word', page: 1, pageSize: 20, sortBy: 'createdAt', sortDir: 'desc' } as never);
+
+      expect(result.items[0].responseText).toBe('nnọọ');
+      expect(result.items[0].asrTranscript).toBe('nno');
+    });
+
+    it('sets asrTranscript equal to responseText for submissions (both already come from the ASR transcript)', async () => {
+      prisma.submission.findMany.mockResolvedValue([
+        {
+          id: 'sub-2', createdAt: new Date('2026-01-01'), dialectTag: 'ig', transcript: 'hello there',
+          prompt: { text: 'Say hello' }, audioBucket: 'b', audioKey: 'k', status: 'SETTLED',
+          tokensSpent: { toString: () => '1' }, rawScore: null, score: null, noiseScore: null, qualityScore: null,
+          livenessScore: null, compositeScore: null, payoutTokenAmount: null, rejectionReason: null,
+          adminAuditStatus: null, adminAuditedAt: null, scoredAt: null, settledAt: null,
+        },
+      ]);
+      prisma.submission.count.mockResolvedValue(1);
+
+      const result = await service.listAll({ kind: 'submission', page: 1, pageSize: 20, sortBy: 'createdAt', sortDir: 'desc' } as never);
+
+      expect(result.items[0].responseText).toBe('hello there');
+      expect(result.items[0].asrTranscript).toBe('hello there');
+    });
   });
 
   describe('audit', () => {

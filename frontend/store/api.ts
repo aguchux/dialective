@@ -1138,6 +1138,7 @@ export interface AdminRecordingSummary {
   direction: 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD' | null;
   promptText: string;
   responseText: string | null;
+  asrTranscript: string | null;
   dialectTag: string;
   status: 'PENDING' | 'TRANSCRIBED' | 'REJECTED' | 'SCORED' | 'SETTLED' | 'EXPIRED';
   tokensSpent: string;
@@ -2046,6 +2047,10 @@ export const dialectivaApi = createApi({
       }),
       providesTags: ['Users'],
     }),
+    getAuditHoldQueue: builder.query<PublicUser[], void>({
+      query: () => '/auth/admin/users/audit-hold-queue',
+      providesTags: ['Users'],
+    }),
     listAdminManualPhoneVerifications: builder.query<
       ManualPhoneVerificationPage,
       { status?: ManualPhoneVerificationStatus; page?: number; pageSize?: number } | void
@@ -2440,6 +2445,7 @@ export const {
   useListAdminP2PDisputesQuery,
   useResolveP2PDisputeMutation,
   useGetUsersQuery,
+  useGetAuditHoldQueueQuery,
   useListAdminManualPhoneVerificationsQuery,
   useVerifyAdminManualPhoneVerificationMutation,
   useRejectAdminManualPhoneVerificationMutation,

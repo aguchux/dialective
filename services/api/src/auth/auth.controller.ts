@@ -202,6 +202,17 @@ export class AuthController {
     return this.auth.listUsers({ role, status, search });
   }
 
+  // Admin audit queue: every trainer currently on an active automatic audit
+  // hold (see AuthService.listAuditHoldUsers). Fixed segment must be
+  // registered before the admin/users/:id/* routes below so Nest doesn't
+  // try to match "audit-hold-queue" as a :id param.
+  @Get('admin/users/audit-hold-queue')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  listAuditHoldUsers() {
+    return this.auth.listAuditHoldUsers();
+  }
+
   @Patch('admin/users/:id/role')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
