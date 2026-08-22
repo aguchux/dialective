@@ -28,7 +28,14 @@ export function ConversationRoom({ apiBaseUrl }: ConversationRoomProps) {
     setConnecting(true);
     setError(null);
     try {
-      const token = await getLiveKitToken(apiBaseUrl);
+      // A fresh room per conversation, not the fixed "chatdialect-demo"
+      // default -- LiveKit's automatic agent dispatch fires once per room
+      // creation, so reusing one persistent room name means only the very
+      // first-ever join can trigger dispatch; every later visitor joins a
+      // room the agent was never assigned to (confirmed live: 5 straight
+      // joins to the same roomID, none dispatched, worker sat idle).
+      const room = `chatdialect-${crypto.randomUUID()}`;
+      const token = await getLiveKitToken(apiBaseUrl, room);
       setSession(token);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start conversation');
