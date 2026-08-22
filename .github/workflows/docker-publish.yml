@@ -20,6 +20,7 @@ on:
       - "models/registry.yaml"
       - "models/asr-registry.yaml"
       - "models/tts-registry.yaml"
+      - "chatdialect/apps/agent/**"
       - ".github/workflows/docker-publish.yml"
   workflow_dispatch:
 
@@ -72,6 +73,15 @@ jobs:
           - service: quality-gate-worker
             context: .
             image: quality-gate-worker
+          # chatdialect-agent is self-contained (no @dialectiva/db or
+          # models/*.yaml dependency, unlike the Dialect Library services
+          # above) -- context is its own directory, not repo root. Image
+          # name is golojan/dialect-chatdialect-agent, not
+          # golojan/chatdialect-agent, to keep the golojan/dialect-* prefix
+          # convention even though chatdialect/ is a separate product.
+          - service: chatdialect-agent
+            context: chatdialect/apps/agent
+            image: chatdialect-agent
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,7 +99,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
-          file: services/${{ matrix.service }}/Dockerfile
+          file: ${{ matrix.service == 'chatdialect-agent' && 'chatdialect/apps/agent/Dockerfile' || format('services/{0}/Dockerfile', matrix.service) }}
           target: ${{ matrix.target }}
           push: true
           tags: |

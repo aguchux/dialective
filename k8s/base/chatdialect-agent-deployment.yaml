@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: chatdialect-agent
-          image: golojan/chatdialect-agent:latest
+          image: golojan/dialect-chatdialect-agent:latest
           env:
             - name: LIVEKIT_URL
               valueFrom:
