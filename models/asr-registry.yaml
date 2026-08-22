@@ -30,3 +30,7 @@ ha:
   stream: asr-jobs-whisper
   checkpoint: NCAIR1/Hausa-ASR
 
+nae:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: NCAIR1/NigerianAccentedEnglish
