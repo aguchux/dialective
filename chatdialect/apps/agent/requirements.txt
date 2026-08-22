@@ -1,0 +1,9 @@
+livekit-agents==1.7.0
+openai==1.51.0
+transformers==4.44.2
+torch==2.4.0
+scipy==1.14.0
+soundfile==0.12.1
+python-dotenv==1.0.1
+pytest==8.3.3
+pytest-asyncio==0.24.0

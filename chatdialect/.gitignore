@@ -1,0 +1,9 @@
+node_modules/
+.next/
+*.tsbuildinfo
+.env
+apps/agent/.venv/
+apps/agent/__pycache__/
+apps/agent/**/__pycache__/
+apps/agent/.pytest_cache/
+apps/agent/.mypy_cache/

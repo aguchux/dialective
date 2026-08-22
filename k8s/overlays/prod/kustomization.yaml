@@ -37,6 +37,9 @@ secretGenerator:
   - name: sms-creds
     envs:
       - secrets/sms.env
+  - name: livekit-creds
+    envs:
+      - secrets/livekit.env
 
 configMapGenerator:
   - name: api-config
@@ -63,3 +66,6 @@ configMapGenerator:
   - name: pgadmin-config
     envs:
       - configs/pgadmin.env
+  - name: chatdialect-agent-config
+    envs:
+      - configs/chatdialect-agent.env

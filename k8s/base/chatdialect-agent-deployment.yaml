@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatdialect-agent
+  labels:
+    app: chatdialect-agent
+spec:
+  # No autoscaling (KEDA or HPA) -- livekit-agents workers hold a persistent
+  # connection to livekit-server and receive job dispatches over it, so
+  # scaling is about adding more long-lived worker processes, not reacting
+  # to a queue depth metric like the Redis Streams workers do. Start at a
+  # single stable replica, same reasoning as whisper-worker's current
+  # single-replica posture (see k8s/base/whisper-worker-deployment.yaml).
+  replicas: 0
+  selector:
+    matchLabels:
+      app: chatdialect-agent
+  template:
+    metadata:
+      labels:
+        app: chatdialect-agent
+    spec:
+      containers:
+        - name: chatdialect-agent
+          image: golojan/chatdialect-agent:latest
+          env:
+            - name: LIVEKIT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: chatdialect-agent-config
+                  key: livekit_url
+            - name: WHISPER_MODEL_CHECKPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: chatdialect-agent-config
+                  key: whisper_model_checkpoint
+            - name: MMS_TTS_CHECKPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: chatdialect-agent-config
+                  key: mms_tts_checkpoint
+            - name: HF_HOME
+              value: /models
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-creds
+                  key: api_key
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-creds
+                  key: api_secret
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-creds
+                  key: openai_api_key
+          volumeMounts:
+            - name: chatdialect-model-repo
+              mountPath: /models
+              readOnly: false
+      volumes:
+        - name: chatdialect-model-repo
+          persistentVolumeClaim:
+            claimName: chatdialect-model-repo-pvc

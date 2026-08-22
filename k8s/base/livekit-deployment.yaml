@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit-server
+  labels:
+    app: livekit-server
+spec:
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: livekit-server
+  template:
+    metadata:
+      labels:
+        app: livekit-server
+    spec:
+      containers:
+        - name: livekit-server
+          image: livekit/livekit-server:latest
+          args: ["--config", "/etc/livekit/livekit.yaml"]
+          env:
+            # JSON map form of LiveKit's `keys:` config block -- lets the
+            # API key/secret come from a Secret instead of being baked into
+            # the (non-secret) ConfigMap-mounted livekit.yaml.
+            - name: LIVEKIT_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-creds
+                  key: livekit_keys_json
+          ports:
+            - name: ws
+              containerPort: 7880
+            - name: rtc-tcp
+              containerPort: 7881
+            - name: rtc-udp-0
+              containerPort: 50000
+              protocol: UDP
+          volumeMounts:
+            - name: livekit-config
+              mountPath: /etc/livekit
+              readOnly: true
+      volumes:
+        - name: livekit-config
+          configMap:
+            name: livekit-server-config

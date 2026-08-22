@@ -10,6 +10,11 @@ const API_PREFIX = 'api/v1';
 function parseAllowedOrigins(): string[] {
   // Default matches the Vercel-hosted frontend's custom domain (see
   // /frontend, deployed separately from this repo's k8s manifests).
+  // chatdialect/apps/web is a second, separate Vercel-hosted Next.js app
+  // (see chatdialect/docs/CHATDIALECT_MVP_PLAN.md) that also calls this
+  // api (ChatDialectController) -- once it has a real domain, add it to
+  // the CORS_ALLOWED_ORIGINS env var in k8s/overlays/prod/configs/api.env,
+  // not here (never hardcode a second domain into this default).
   const raw = process.env.CORS_ALLOWED_ORIGINS ?? 'https://dialectlibrary.com,https://www.dialectlibrary.com';
   return raw
     .split(',')

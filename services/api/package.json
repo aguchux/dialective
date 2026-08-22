@@ -36,6 +36,7 @@
     "js-yaml": "^4.1.0",
     "jsonwebtoken": "^9.0.2",
     "libphonenumber-js": "^1.13.10",
+    "livekit-server-sdk": "^2.18.0",
     "openai": "^7.4.0",
     "reflect-metadata": "^0.2.2",
     "resend": "^4.0.0",

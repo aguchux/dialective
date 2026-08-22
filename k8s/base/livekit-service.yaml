@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit-server
+spec:
+  type: ClusterIP
+  selector:
+    app: livekit-server
+  ports:
+    - name: ws
+      port: 80
+      targetPort: 7880
+---
+# Separate LoadBalancer Service: WebRTC media (UDP) can't be routed through
+# the nginx Ingress used for livekit-server's WS signaling (see
+# livekit-ingress.yaml) -- it needs its own externally-reachable IP.
+# port_range_start/end in livekit-configmap.yaml is deliberately narrowed to
+# 50000-50009 (10 ports) so each can be listed explicitly here -- a
+# Kubernetes Service can't express a port *range*, only individual ports.
+# Widen both together if concurrent-call volume outgrows 10 connections per
+# node. rtc-tcp (7881) is LiveKit's fallback transport when a client's
+# network blocks UDP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit-rtc
+  annotations:
+    service.beta.kubernetes.io/do-loadbalancer-name: "livekit-rtc"
+spec:
+  type: LoadBalancer
+  selector:
+    app: livekit-server
+  ports:
+    - name: rtc-tcp
+      port: 7881
+      targetPort: 7881
+      protocol: TCP
+    - name: rtc-udp-50000
+      port: 50000
+      targetPort: 50000
+      protocol: UDP
+    - name: rtc-udp-50001
+      port: 50001
+      targetPort: 50001
+      protocol: UDP
+    - name: rtc-udp-50002
+      port: 50002
+      targetPort: 50002
+      protocol: UDP
+    - name: rtc-udp-50003
+      port: 50003
+      targetPort: 50003
+      protocol: UDP
+    - name: rtc-udp-50004
+      port: 50004
+      targetPort: 50004
+      protocol: UDP
+    - name: rtc-udp-50005
+      port: 50005
+      targetPort: 50005
+      protocol: UDP
+    - name: rtc-udp-50006
+      port: 50006
+      targetPort: 50006
+      protocol: UDP
+    - name: rtc-udp-50007
+      port: 50007
+      targetPort: 50007
+      protocol: UDP
+    - name: rtc-udp-50008
+      port: 50008
+      targetPort: 50008
+      protocol: UDP
+    - name: rtc-udp-50009
+      port: 50009
+      targetPort: 50009
+      protocol: UDP

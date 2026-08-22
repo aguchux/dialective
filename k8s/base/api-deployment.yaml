@@ -234,6 +234,21 @@ spec:
                 secretKeyRef:
                   name: sms-creds
                   key: smslive247_sender_id
+            - name: LIVEKIT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: livekit_url
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-creds
+                  key: api_key
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-creds
+                  key: api_secret
           readinessProbe:
             httpGet:
               path: /health

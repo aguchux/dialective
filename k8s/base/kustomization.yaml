@@ -12,9 +12,15 @@ resources:
   - model-pvc.yaml
   - tts-model-pvc.yaml
   - whisper-model-pvc.yaml
+  - chatdialect-model-pvc.yaml
   - api-deployment.yaml
   - api-hpa.yaml
   - api-ingress.yaml
+  - livekit-configmap.yaml
+  - livekit-deployment.yaml
+  - livekit-service.yaml
+  - livekit-ingress.yaml
+  - chatdialect-agent-deployment.yaml
   - vosk-worker-deployment.yaml
   - vosk-worker-keda.yaml
   - whisper-worker-deployment.yaml

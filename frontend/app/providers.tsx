@@ -7,6 +7,7 @@ import { StoreProvider } from '@/store/Providers';
 import { onAuthMaintenance } from '@/lib/auth-maintenance-signal';
 import { TawkToWidget } from '@/components/TawkToWidget';
 import { RequireNameDialog } from '@/components/RequireNameDialog';
+import { PwaServiceWorker } from '@/components/PwaServiceWorker';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -22,6 +23,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         storageKey="trainer-dashboard-theme"
       >
         <StoreProvider>
+          <PwaServiceWorker />
           <TawkToWidget />
           <RequireNameDialog />
           {children}

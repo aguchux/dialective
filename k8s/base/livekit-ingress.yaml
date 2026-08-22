@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: livekit-server
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # LiveKit's signaling protocol upgrades ws:// to wss:// over this same
+    # HTTP(S) connection -- nginx proxies it like any other Upgrade request,
+    # no special websocket annotation needed beyond a generous timeout for
+    # long-lived connections.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - livekit.dialectlibrary.com
+      secretName: livekit-tls
+  rules:
+    - host: livekit.dialectlibrary.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: livekit-server
+                port:
+                  number: 80
