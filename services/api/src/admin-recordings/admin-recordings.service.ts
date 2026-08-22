@@ -13,6 +13,16 @@ export type RecordingKind = 'word' | 'submission';
 
 export type WordDetail = { word: string; start: number; end: number; conf: number | null };
 
+/** Shape of Submission/WordRecording.prosodyMetrics, written by quality-gate-worker's expression.py when PlatformSettings.speechExpressionEnabled is on. */
+export type ProsodyMetrics = {
+  speechRateEstimate: number | null;
+  meanPitchHz: number | null;
+  pitchStdHz: number | null;
+  meanRmsDb: number | null;
+  rmsStdDb: number | null;
+  pauseRatio: number | null;
+};
+
 /**
  * Admin-facing recording audit: lets an admin page through one trainer's
  * WordRecording + Submission rows (merged into a single chronological
@@ -280,6 +290,14 @@ export class AdminRecordingsService {
       noiseScore: recording.noiseScore?.toString() ?? null,
       qualityScore: recording.qualityScore?.toString() ?? null,
       livenessScore: recording.livenessScore?.toString() ?? null,
+      emotion: recording.emotion,
+      emotionConfidence: recording.emotionConfidence?.toString() ?? null,
+      tone: recording.tone,
+      style: recording.style,
+      speed: recording.speed,
+      energy: recording.energy,
+      prosodyMetrics: recording.prosodyMetrics as ProsodyMetrics | null,
+      expressionCheckedAt: recording.expressionCheckedAt,
       compositeScore: recording.compositeScore?.toString() ?? null,
       payoutTokenAmount: recording.payoutTokenAmount?.toString() ?? null,
       audioUrl:
@@ -318,6 +336,14 @@ export class AdminRecordingsService {
       noiseScore: submission.noiseScore?.toString() ?? null,
       qualityScore: submission.qualityScore?.toString() ?? null,
       livenessScore: submission.livenessScore?.toString() ?? null,
+      emotion: submission.emotion,
+      emotionConfidence: submission.emotionConfidence?.toString() ?? null,
+      tone: submission.tone,
+      style: submission.style,
+      speed: submission.speed,
+      energy: submission.energy,
+      prosodyMetrics: submission.prosodyMetrics as ProsodyMetrics | null,
+      expressionCheckedAt: submission.expressionCheckedAt,
       compositeScore: submission.compositeScore?.toString() ?? null,
       payoutTokenAmount: submission.payoutTokenAmount?.toString() ?? null,
       audioUrl:

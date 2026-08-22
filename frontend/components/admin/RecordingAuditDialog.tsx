@@ -247,6 +247,30 @@ export function RecordingCard({ recording, trainerId }: { recording: AdminRecord
         <ScoreStat label="Liveness" value={recording.livenessScore} />
       </div>
 
+      {recording.emotion && (
+        <div className="mx-auto grid max-w-md gap-1 rounded-lg bg-white/5 px-4 py-3 text-center text-sm text-white/70">
+          <p className="text-xs font-bold uppercase text-white/40">
+            Speech expression <span className="normal-case">(descriptive only -- never affects payout)</span>
+          </p>
+          <p className="font-bold text-white">
+            {recording.emotion}
+            {recording.emotionConfidence ? ` (${Math.round(Number(recording.emotionConfidence) * 100)}%)` : ''}
+            {recording.tone ? ` · ${recording.tone}` : ''}
+            {recording.style ? ` · ${recording.style}` : ''}
+            {recording.speed ? ` · ${recording.speed}` : ''}
+            {recording.energy ? ` · ${recording.energy}` : ''}
+          </p>
+          {recording.prosodyMetrics && (
+            <p className="text-xs text-white/50">
+              {recording.prosodyMetrics.meanPitchHz !== null && `Pitch: ${recording.prosodyMetrics.meanPitchHz.toFixed(0)}Hz `}
+              {recording.prosodyMetrics.meanRmsDb !== null && `· Energy: ${recording.prosodyMetrics.meanRmsDb.toFixed(1)}dB `}
+              {recording.prosodyMetrics.pauseRatio !== null &&
+                `· Pauses: ${Math.round(recording.prosodyMetrics.pauseRatio * 100)}%`}
+            </p>
+          )}
+        </div>
+      )}
+
       {recording.payoutTokenAmount && (
         <p className="text-center text-sm font-bold text-white/60">
           Paid out: <span className="text-white">{recording.payoutTokenAmount} DL</span>

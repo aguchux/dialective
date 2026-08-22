@@ -200,6 +200,12 @@ export class PlatformSettingsService {
     return row.spellingNormalizationEnabled;
   }
 
+  /** Master kill switch for quality-gate-worker's optional emotion/prosody analysis pass (services/quality-gate-worker/expression.py). Purely descriptive -- never feeds compositeScore/payout. */
+  async isSpeechExpressionEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.speechExpressionEnabled;
+  }
+
   async getSpellingNormalizationProviderOrder(): Promise<string> {
     const row = await this.getRow();
     return row.spellingNormalizationProviderOrder;
@@ -508,6 +514,7 @@ export class PlatformSettingsService {
       qualityWeightLiveness: row.qualityWeightLiveness.toString(),
       qualityWeightAsrMatch: row.qualityWeightAsrMatch.toString(),
       spellingNormalizationEnabled: row.spellingNormalizationEnabled,
+      speechExpressionEnabled: row.speechExpressionEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
       smsSenderId: row.smsSenderId,
@@ -591,6 +598,7 @@ export class PlatformSettingsService {
     qualityWeightLiveness?: number;
     qualityWeightAsrMatch?: number;
     spellingNormalizationEnabled?: boolean;
+    speechExpressionEnabled?: boolean;
     spellingNormalizationProviderOrder?: string;
     sentenceRebuildEnabled?: boolean;
     smsSenderId?: string | null;
@@ -835,6 +843,7 @@ export class PlatformSettingsService {
       qualityWeightLiveness: row.qualityWeightLiveness.toString(),
       qualityWeightAsrMatch: row.qualityWeightAsrMatch.toString(),
       spellingNormalizationEnabled: row.spellingNormalizationEnabled,
+      speechExpressionEnabled: row.speechExpressionEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
       smsSenderId: row.smsSenderId,

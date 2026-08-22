@@ -858,6 +858,7 @@ export interface PlatformSettings {
   qualityWeightLiveness: string;
   qualityWeightAsrMatch: string;
   spellingNormalizationEnabled: boolean;
+  speechExpressionEnabled: boolean;
   spellingNormalizationProviderOrder: string;
   sentenceRebuildEnabled: boolean;
   smsSenderId: string | null;
@@ -936,6 +937,7 @@ export interface PlatformSettingsInput {
   qualityWeightLiveness?: number;
   qualityWeightAsrMatch?: number;
   spellingNormalizationEnabled?: boolean;
+  speechExpressionEnabled?: boolean;
   spellingNormalizationProviderOrder?: string;
   sentenceRebuildEnabled?: boolean;
   smsSenderId?: string;
@@ -1114,6 +1116,21 @@ export interface WordDetail {
   conf: number | null;
 }
 
+export type SpeechEmotion = 'NEUTRAL' | 'HAPPY' | 'SAD' | 'ANGRY' | 'FEARFUL' | 'SURPRISED' | 'DISGUSTED';
+export type SpeechTone = 'FORMAL' | 'CASUAL' | 'EMPHATIC' | 'FLAT';
+export type SpeechStyle = 'CONVERSATIONAL' | 'READ_ALOUD' | 'EXPRESSIVE';
+export type SpeechSpeed = 'SLOW' | 'NORMAL' | 'FAST';
+export type SpeechEnergy = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface ProsodyMetrics {
+  speechRateEstimate: number | null;
+  meanPitchHz: number | null;
+  pitchStdHz: number | null;
+  meanRmsDb: number | null;
+  rmsStdDb: number | null;
+  pauseRatio: number | null;
+}
+
 export interface AdminRecordingSummary {
   id: string;
   kind: RecordingKind;
@@ -1129,6 +1146,14 @@ export interface AdminRecordingSummary {
   noiseScore: string | null;
   qualityScore: string | null;
   livenessScore: string | null;
+  emotion: SpeechEmotion | null;
+  emotionConfidence: string | null;
+  tone: SpeechTone | null;
+  style: SpeechStyle | null;
+  speed: SpeechSpeed | null;
+  energy: SpeechEnergy | null;
+  prosodyMetrics: ProsodyMetrics | null;
+  expressionCheckedAt: string | null;
   compositeScore: string | null;
   payoutTokenAmount: string | null;
   audioUrl: string | null;

@@ -244,6 +244,12 @@ export class UpdatePlatformSettingsDto {
   @IsBoolean()
   spellingNormalizationEnabled?: boolean;
 
+  // Master kill switch for quality-gate-worker's optional emotion/prosody
+  // analysis pass -- purely descriptive, never feeds compositeScore/payout.
+  @IsOptional()
+  @IsBoolean()
+  speechExpressionEnabled?: boolean;
+
   // Same permutation constraint/validation shape as llmProviderOrder.
   @IsOptional()
   @IsString()

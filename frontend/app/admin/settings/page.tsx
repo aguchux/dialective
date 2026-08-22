@@ -8,6 +8,7 @@ import { ReferralBonusSettingsPanel } from './ReferralBonusSettingsPanel';
 import { TrainingTasksSettingsPanel } from './TrainingTasksSettingsPanel';
 import { WordGenerationSettingsPanel } from './WordGenerationSettingsPanel';
 import { QualityGateSettingsPanel } from './QualityGateSettingsPanel';
+import { SpeechExpressionSettingsPanel } from './SpeechExpressionSettingsPanel';
 import { SpellingNormalizationSettingsPanel } from './SpellingNormalizationSettingsPanel';
 import { P2PMarketSettingsPanel } from './P2PMarketSettingsPanel';
 import { SmsSettingsPanel } from './SmsSettingsPanel';
@@ -29,6 +30,7 @@ const groups = [
   { key: 'liveChat', label: 'Live Chat' },
   { key: 'wordGeneration', label: 'Word Generation' },
   { key: 'qualityGate', label: 'Voice Quality Gate' },
+  { key: 'speechExpression', label: 'Speech Expression' },
   { key: 'spellingNormalization', label: 'Spelling Normalization' },
   { key: 'p2pMarket', label: 'P2P Market' },
   { key: 'sms', label: 'SMS Providers' },
@@ -79,6 +81,7 @@ export default function AdminSettingsPage() {
             {active === 'liveChat' && <LiveChatSettingsPanel />}
             {active === 'wordGeneration' && <WordGenerationSettingsPanel />}
             {active === 'qualityGate' && <QualityGateSettingsPanel />}
+            {active === 'speechExpression' && <SpeechExpressionSettingsPanel />}
             {active === 'spellingNormalization' && <SpellingNormalizationSettingsPanel />}
             {active === 'p2pMarket' && <P2PMarketSettingsPanel />}
             {active === 'sms' && <SmsSettingsPanel />}

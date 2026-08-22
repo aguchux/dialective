@@ -6,7 +6,8 @@ import subprocess
 import redis
 import soundfile as sf
 
-from db import build_db_connection, reject_submission, write_scores
+from db import build_db_connection, get_speech_expression_enabled, reject_submission, write_expression, write_scores
+from expression import bucket_energy, bucket_speed, compute_emotion, extract_prosody_metrics, load_emotion_model
 from liveness import compute_liveness_score, load_model
 from noise import compute_noise_score
 from quality import compute_quality_score
@@ -62,15 +63,34 @@ def prefilter_ok(audio_path: str, max_duration_s: float | None = None) -> tuple[
     return True, None
 
 
-def compute_scores(audio_path: str, liveness_model) -> tuple[float, float, float]:
+def compute_scores(audio_path: str, liveness_model, *, expression_enabled: bool, emotion_model) -> dict:
+    """
+    Returns a dict rather than a fixed tuple -- the expression fields are
+    conditional on expression_enabled, so a growing tuple stopped scaling
+    once a 4th/5th value became optional rather than always-present.
+    """
     data, sr = sf.read(audio_path)
-    noise_score = compute_noise_score(data, sr)
-    quality_score = compute_quality_score(data, sr)
-    liveness_score = compute_liveness_score(data, sr, model=liveness_model)
-    return noise_score, quality_score, liveness_score
+    result = {
+        "noise_score": compute_noise_score(data, sr),
+        "quality_score": compute_quality_score(data, sr),
+        "liveness_score": compute_liveness_score(data, sr, model=liveness_model),
+    }
+    if expression_enabled:
+        prosody = extract_prosody_metrics(data, sr)
+        emotion_label, emotion_confidence = compute_emotion(data, sr, model=emotion_model)
+        result["expression"] = {
+            "emotion": emotion_label,
+            "emotion_confidence": emotion_confidence,
+            "tone": None,  # tone/style are not derivable from acoustic-only signal analysis alone in this first pass -- left null until a classifier for them exists, same "computed but not every field populated" posture as asrConfidence being null for Whisper
+            "style": None,
+            "speed": bucket_speed(prosody["speechRateEstimate"]),
+            "energy": bucket_energy(prosody["meanRmsDb"]),
+            "prosody_metrics": prosody,
+        }
+    return result
 
 
-def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model):
+def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model, emotion_model):
     def handle(_msg_id: str, fields: dict) -> None:
         job = fields if not fields.get("data") else json.loads(fields["data"])
         record_kind = job["record_kind"]
@@ -105,15 +125,30 @@ def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model):
                     logger.warning("word_recording=%s failed prefilter (%s); leaving scores unset", record_id, reason)
                 return
 
-            noise_score, quality_score, liveness_score = compute_scores(wav_path, liveness_model)
+            expression_enabled = get_speech_expression_enabled(db_conn)
+            scores = compute_scores(wav_path, liveness_model, expression_enabled=expression_enabled, emotion_model=emotion_model)
             write_scores(
                 db_conn,
                 record_kind,
                 record_id,
-                noise_score=noise_score,
-                quality_score=quality_score,
-                liveness_score=liveness_score,
+                noise_score=scores["noise_score"],
+                quality_score=scores["quality_score"],
+                liveness_score=scores["liveness_score"],
             )
+            if expression_enabled:
+                expr = scores["expression"]
+                write_expression(
+                    db_conn,
+                    record_kind,
+                    record_id,
+                    emotion=expr["emotion"],
+                    emotion_confidence=expr["emotion_confidence"],
+                    tone=expr["tone"],
+                    style=expr["style"],
+                    speed=expr["speed"],
+                    energy=expr["energy"],
+                    prosody_metrics=expr["prosody_metrics"],
+                )
 
             asr_stream = job.get("asr_stream")
             if asr_stream:
@@ -158,10 +193,16 @@ def main() -> None:
     s3 = build_spaces_client()
     db_conn = build_db_connection()
     liveness_model = load_model()
+    # Loaded unconditionally at startup (this pod is long-lived, KEDA-scaled)
+    # rather than lazily on first use -- speechExpressionEnabled is checked
+    # per-job instead (see get_speech_expression_enabled), so a toggle takes
+    # effect without a worker restart while still paying the model-load cost
+    # only once per pod lifetime.
+    emotion_model = load_emotion_model()
 
     consumer = StreamConsumer(redis_client, QUALITY_GATE_STREAM, CONSUMER_GROUP, CONSUMER_NAME)
     logger.info("quality-gate-worker consuming stream=%s group=%s", QUALITY_GATE_STREAM, CONSUMER_GROUP)
-    consumer.run(make_handler(s3, redis_client, db_conn, liveness_model))
+    consumer.run(make_handler(s3, redis_client, db_conn, liveness_model, emotion_model))
 
 
 if __name__ == "__main__":

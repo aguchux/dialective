@@ -83,6 +83,14 @@ function scoreCell(value: string | null): string {
   return value ? Number(value).toFixed(0) : '—';
 }
 
+function expressionCell(rec: AdminRecordingSummary): string {
+  if (!rec.emotion) return '—';
+  const parts: string[] = [rec.emotion];
+  if (rec.tone) parts.push(rec.tone);
+  if (rec.speed) parts.push(rec.speed);
+  return parts.join(' · ');
+}
+
 export default function AdminRecordingsPage() {
   const [kind, setKind] = useState<RecordingKind>('word');
   const [page, setPage] = useState(1);
@@ -243,7 +251,7 @@ export default function AdminRecordingsPage() {
           ) : data && data.items.length > 0 ? (
             <>
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[1360px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[1480px] border-collapse text-left text-sm">
                   <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                     <tr>
                       <th className="px-5 py-3.5" scope="col">Play</th>
@@ -256,6 +264,7 @@ export default function AdminRecordingsPage() {
                       <th className="px-5 py-3.5" scope="col">Noise</th>
                       <th className="px-5 py-3.5" scope="col">Quality</th>
                       <th className="px-5 py-3.5" scope="col">Liveness</th>
+                      <th className="px-5 py-3.5" scope="col">Expression</th>
                       <SortableHeader field="payoutTokenAmount" label="Payout" active={sortBy} onClick={toggleSort} dir={sortDir} />
                       <th className="px-5 py-3.5" scope="col">Audit</th>
                       <th className="px-5 py-3.5" scope="col"><span className="sr-only">Actions</span></th>
@@ -276,6 +285,7 @@ export default function AdminRecordingsPage() {
                         <td className="px-5 py-3.5 tabular-nums text-muted">{scoreCell(rec.noiseScore)}</td>
                         <td className="px-5 py-3.5 tabular-nums text-muted">{scoreCell(rec.qualityScore)}</td>
                         <td className="px-5 py-3.5 tabular-nums text-muted">{scoreCell(rec.livenessScore)}</td>
+                        <td className="px-5 py-3.5 text-muted">{expressionCell(rec)}</td>
                         <td className="px-5 py-3.5 tabular-nums text-muted">{rec.payoutTokenAmount ? `${rec.payoutTokenAmount} DL` : '—'}</td>
                         <td className="px-5 py-3.5">
                           <AuditBadge status={rec.adminAuditStatus} />
@@ -316,6 +326,7 @@ export default function AdminRecordingsPage() {
                       <span>Noise: {scoreCell(rec.noiseScore)}</span>
                       <span>Quality: {scoreCell(rec.qualityScore)}</span>
                       <span>Liveness: {scoreCell(rec.livenessScore)}</span>
+                      {rec.emotion && <span>Expression: {expressionCell(rec)}</span>}
                       {rec.payoutTokenAmount && <span>{rec.payoutTokenAmount} DL</span>}
                     </div>
                     <button

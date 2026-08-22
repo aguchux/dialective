@@ -36,6 +36,20 @@ describe('PlatformSettingsService.getTawkToWidget', () => {
   });
 });
 
+describe('PlatformSettingsService.isSpeechExpressionEnabled', () => {
+  it('returns false by default', async () => {
+    const { service } = setup({ speechExpressionEnabled: false });
+
+    await expect(service.isSpeechExpressionEnabled()).resolves.toBe(false);
+  });
+
+  it('returns true once an admin turns it on', async () => {
+    const { service } = setup({ speechExpressionEnabled: true });
+
+    await expect(service.isSpeechExpressionEnabled()).resolves.toBe(true);
+  });
+});
+
 describe('PlatformSettingsService.getLandingVisibility', () => {
   it('maps each landingShow* column to its stat key', async () => {
     const { service } = setup({

@@ -576,7 +576,15 @@ model Submission {
   noiseScore        Decimal?         @db.Decimal(5, 2) // 0-100, quality-gate-worker's SNR-derived estimate; null until the gate has run
   qualityScore      Decimal?         @db.Decimal(5, 2) // 0-100, quality-gate-worker's clipping/artifact composite; null until the gate has run
   livenessScore     Decimal?         @db.Decimal(5, 2) // 0-100, quality-gate-worker's live-human-voice classifier confidence; null until the gate has run
-  compositeScore    Decimal?         @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore (PlatformSettings.qualityWeight*), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled
+  emotion             SpeechEmotion? // speech-expression analysis's top predicted emotion class; null until computed, purely descriptive -- never affects compositeScore/payout (see PlatformSettings.speechExpressionEnabled doc comment)
+  emotionConfidence   Decimal?       @db.Decimal(5, 4) // 0-1 confidence of `emotion`'s predicted class (softmax max), same scale convention as asrConfidence
+  tone                SpeechTone?    // descriptive only, same posture as `emotion`
+  style               SpeechStyle?   // descriptive only, same posture as `emotion`
+  speed               SpeechSpeed?   // descriptive bucket derived from prosodyMetrics.speechRateEstimate; descriptive only
+  energy              SpeechEnergy?  // descriptive bucket derived from prosodyMetrics.meanRmsDb; descriptive only
+  prosodyMetrics      Json?          // {speechRateEstimate, meanPitchHz, pitchStdHz, meanRmsDb, rmsStdDb, pauseRatio}, all null-safe floats; numeric companion to the bucketed fields above, same "measured but never scored" posture as asrWordDetail's Json-blob convention
+  expressionCheckedAt DateTime?      // when speech-expression analysis last wrote the fields above; null until it has run (or the feature is off) -- distinct from qualityGateCheckedAt since the two may diverge later even though the same worker currently writes both
+  compositeScore    Decimal?         @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore (PlatformSettings.qualityWeight*), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled. Emotion/prosody fields above are deliberately excluded from this blend.
   qualityGateCheckedAt DateTime?     // when quality-gate-worker last wrote noise/quality/livenessScore
   payoutTokenAmount Decimal?         @db.Decimal(20, 8) // computed at settlement, null until SETTLED
   scoredAt          DateTime?
@@ -690,6 +698,45 @@ enum RecordingNoiseRating {
   QUIET
 }
 
+/// Speech-expression metadata (Phase 1 of docs/Dialect-Library-Speech-Expression-Metadata-Plan.md)
+/// -- quality-gate-worker's optional emotion/prosody analysis pass, gated by
+/// PlatformSettings.speechExpressionEnabled. Purely descriptive: never feeds
+/// compositeScore or payout (see that field's doc comment on Submission/WordRecording).
+enum SpeechEmotion {
+  NEUTRAL
+  HAPPY
+  SAD
+  ANGRY
+  FEARFUL
+  SURPRISED
+  DISGUSTED
+}
+
+enum SpeechTone {
+  FORMAL
+  CASUAL
+  EMPHATIC
+  FLAT
+}
+
+enum SpeechStyle {
+  CONVERSATIONAL
+  READ_ALOUD
+  EXPRESSIVE
+}
+
+enum SpeechSpeed {
+  SLOW
+  NORMAL
+  FAST
+}
+
+enum SpeechEnergy {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 /// Admin manual audit outcome for a Submission/WordRecording -- distinct from
 /// isOutlier (Submission-only, machine-set by consensus-scorer as a QA hint)
 /// and rejectionReason (machine-set ASR prefilter). Null means not yet
@@ -793,7 +840,15 @@ model WordRecording {
   noiseScore        Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's SNR-derived estimate; null until the gate has run
   qualityScore      Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's clipping/artifact composite; null until the gate has run
   livenessScore     Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's live-human-voice classifier confidence; null until the gate has run
-  compositeScore    Decimal? @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore+asrMatchScore (PlatformSettings.qualityWeight*, computeWordRecordingCompositeScore), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled
+  emotion             SpeechEmotion? // speech-expression analysis's top predicted emotion class; null until computed, purely descriptive -- never affects compositeScore/payout (see PlatformSettings.speechExpressionEnabled doc comment)
+  emotionConfidence   Decimal?       @db.Decimal(5, 4) // 0-1 confidence of `emotion`'s predicted class (softmax max), same scale convention as asrConfidence
+  tone                SpeechTone?    // descriptive only, same posture as `emotion`
+  style               SpeechStyle?   // descriptive only, same posture as `emotion`
+  speed               SpeechSpeed?   // descriptive bucket derived from prosodyMetrics.speechRateEstimate; descriptive only
+  energy              SpeechEnergy?  // descriptive bucket derived from prosodyMetrics.meanRmsDb; descriptive only
+  prosodyMetrics      Json?          // {speechRateEstimate, meanPitchHz, pitchStdHz, meanRmsDb, rmsStdDb, pauseRatio}, all null-safe floats; numeric companion to the bucketed fields above, same "measured but never scored" posture as asrWordDetail's Json-blob convention
+  expressionCheckedAt DateTime?      // when speech-expression analysis last wrote the fields above; null until it has run (or the feature is off) -- distinct from qualityGateCheckedAt since the two may diverge later even though the same worker currently writes both
+  compositeScore    Decimal? @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore+asrMatchScore (PlatformSettings.qualityWeight*, computeWordRecordingCompositeScore), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled. Emotion/prosody fields above are deliberately excluded from this blend.
   qualityGateCheckedAt DateTime? // when quality-gate-worker last wrote noise/quality/livenessScore
   payoutTokenAmount Decimal? @db.Decimal(20, 8) // computed at settlement, null until SETTLED
   scoredAt          DateTime?
@@ -1260,6 +1315,7 @@ model PlatformSettings {
   qualityWeightLiveness    Decimal  @default(15) @db.Decimal(5, 2) // weight (%) given to livenessScore in compositeScore's blend -- the four qualityWeight* fields must sum to 100, validated in PlatformSettingsService.update
   qualityWeightAsrMatch    Decimal  @default(0) @db.Decimal(5, 2) // weight (%) given to WordRecording.asrMatchScore in computeWordRecordingCompositeScore's blend -- WordRecording-only signal (Submission's ASR IS its consensus signal already, so this never applies there). Deliberately NOT part of the four qualityWeight*'s sum-to-100 group: defaults to 0 so this feature ships inert until an admin opts in, additive rather than carved out of the existing four's budget. Validated independently (>= 0) in PlatformSettingsService.update
   spellingNormalizationEnabled Boolean @default(false) // master kill switch for AI spelling normalization on ENGLISH_TO_DIALECT word recordings; writes WordRecording.normalizedTranslationText only, never affects scoring
+  speechExpressionEnabled Boolean @default(false) // master kill switch for the speech-expression analysis pass (emotion/tone/style/speed/energy/prosodyMetrics) in quality-gate-worker. When false, the worker skips the analysis entirely (not "computes but hides" -- unlike qualityGateEnabled, there's no downstream scoring use for this to gate, and emotion classification has a real per-job CPU cost worth skipping when unused). Purely descriptive/informational output -- deliberately has NO qualityWeight* counterpart and never feeds compositeScore/payout (see docs/Dialect-Library-Speech-Expression-Metadata-Plan.md's "never permanently bake into scoring" principle)
   spellingNormalizationProviderOrder String @default("openai,deepseek,anthropic") // CSV fallback-try order for spelling normalization, same permutation rules as llmProviderOrder
   sentenceRebuildEnabled   Boolean  @default(false) // master kill switch for the SENTENCE_REBUILD word-training exercise; WordsService.nextAssignment never offers it when false
   smsSenderId              String? // Overrides TERMII_SENDER_ID/SMSLIVE247_SENDER_ID/AFRICASTALKING_SENDER_ID for every SMS provider (Termii, SMSLive247, Africa's Talking, and SMSLive247's native-OTP route) when set -- null/unset falls back to each provider's own env var, so this stays a no-op until an admin fills it in. Twilio has no equivalent (it sends from a purchased phone number, not a named sender ID).

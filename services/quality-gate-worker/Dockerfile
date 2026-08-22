@@ -10,9 +10,10 @@ COPY services/quality-gate-worker/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Unlike Vosk/Whisper's GB-scale models (PVC + initContainer/lazy-download),
-# the liveness classifier is a KB-scale joblib artifact -- baked directly
-# into the image, no PVC needed. See models/README.md for provenance notes.
-COPY services/quality-gate-worker/streams.py services/quality-gate-worker/spaces.py services/quality-gate-worker/db.py services/quality-gate-worker/noise.py services/quality-gate-worker/quality.py services/quality-gate-worker/liveness.py services/quality-gate-worker/worker.py ./
+# the liveness/emotion classifiers are KB-scale joblib artifacts -- baked
+# directly into the image, no PVC needed. See models/README.md for provenance notes.
+COPY services/quality-gate-worker/streams.py services/quality-gate-worker/spaces.py services/quality-gate-worker/db.py services/quality-gate-worker/noise.py services/quality-gate-worker/quality.py services/quality-gate-worker/liveness.py services/quality-gate-worker/expression.py services/quality-gate-worker/worker.py ./
 COPY services/quality-gate-worker/models/liveness_classifier.joblib ./models/liveness_classifier.joblib
+COPY services/quality-gate-worker/models/emotion_classifier.joblib ./models/emotion_classifier.joblib
 
 CMD ["python3", "worker.py"]
