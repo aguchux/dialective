@@ -36,6 +36,9 @@ async def test_synthesize_returns_expected_duration_and_sample_rate():
     assert result.duration == 2.0  # 32000 samples / 16000 Hz
     assert isinstance(result.audio, bytes)
     assert len(result.audio) > 0
+    # pcm_s16le is raw int16 samples, no WAV header -- exactly 2 bytes per
+    # sample, unlike `audio` which carries WAV-container overhead.
+    assert len(result.pcm_s16le) == 32000 * 2
 
 
 async def test_synthesize_leaves_viseme_and_timing_fields_none():

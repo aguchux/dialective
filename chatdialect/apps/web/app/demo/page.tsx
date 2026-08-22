@@ -1,14 +1,18 @@
-// Placeholder for the doc §18 "/demo" main ChatDialect experience.
-// Real content (avatar canvas, transcript, mic controls, LiveKit room
-// connection) is Phase 1/2 work -- this plan only bootstraps the route so
-// Phase 0's acceptance criteria ("web app starts", "no AI or avatar
-// required yet") can be verified.
+import { getDialectLibraryApiUrl } from '@chatdialect/config';
+import { ConversationRoom } from '../../features/conversation/ConversationRoom';
+
+// Phase 1 vertical slice (docs/CHATDIALECT_MVP_PLAN.md §20): a working
+// voice conversation in /demo with transcripts, no avatar dependency.
+// Avatar rendering is Phase 2 -- see ConversationRoom.tsx for why agent
+// state/transcripts come from @livekit/components-react's hooks rather
+// than hand-rolled room event listeners.
 export default function DemoPage() {
+  const apiBaseUrl = getDialectLibraryApiUrl();
+
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      <p className="text-neutral-500">
-        ChatDialect demo -- voice conversation and avatar not wired up yet.
-      </p>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-8 p-8">
+      <h1 className="text-2xl font-semibold">ChatDialect demo</h1>
+      <ConversationRoom apiBaseUrl={apiBaseUrl} />
     </main>
   );
 }

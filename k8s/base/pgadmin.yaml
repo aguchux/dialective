@@ -20,6 +20,14 @@ metadata:
     app: pgadmin
 spec:
   replicas: 1
+  # RollingUpdate (the default) briefly runs old+new pods together, but
+  # pgadmin-data-pvc is ReadWriteOnce -- the new pod can never attach the
+  # volume while the old one holds it, deadlocking any rollout (confirmed
+  # live: FailedAttachVolume "Multi-Attach error", old pod CrashLoopBackOff,
+  # new pod stuck ContainerCreating indefinitely). Recreate tears down the
+  # old pod first so the volume is free before the new one starts.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: pgadmin

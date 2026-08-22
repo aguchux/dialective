@@ -39,6 +39,23 @@ not as a new app under this directory. `apps/web` reaches it via
 - All three sit behind `SpeechToTextProvider`/`LanguageModelProvider`/
   `TextToSpeechProvider` interfaces (doc §29) — never import a concrete
   provider class outside `providers/`.
+- **`providers/*_adapter.py`** wrap each provider to satisfy
+  `livekit.agents.{stt,llm,tts}`'s plugin protocol, so `AgentSession`
+  (`agent.py`) gets its built-in VAD/turn-detection/interruption handling
+  for free instead of it being hand-rolled — pattern taken directly from
+  the official `livekit-plugins-openai` package (downloaded and read its
+  `stt.py`/`tts.py` as the reference, since this isn't documented outside
+  the source). Two non-obvious things learned building these: (1)
+  `livekit.agents.tts.AudioEmitter` only self-decodes pushed bytes when
+  `mime_type` starts with `audio/pcm`/`audio/raw` — `MmsTtsProvider`
+  therefore exposes raw `pcm_s16le` samples on `SpeechSynthesisResult`
+  alongside the WAV-wrapped `audio` field, and `tts_adapter.py` pushes the
+  PCM one, not the WAV; (2) `OpenAIGPTProvider.respond()`'s validated
+  `{text, emotion}` result doesn't fit `llm.LLM.chat()`'s plain-text-chunk
+  protocol, so `llm_adapter.py` emits the emotion tag via
+  `ChoiceDelta.extra["emotion"]` instead of inventing a side channel —
+  nothing consumes it yet (no avatar until Phase 2/3), but it's there for
+  when something does.
 
 ## Hard scope guardrails (doc §3 — do not expand into these)
 

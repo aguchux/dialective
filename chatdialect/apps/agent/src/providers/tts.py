@@ -18,6 +18,14 @@ class SpeechSynthesisResult:
     does expose real viseme/timing data populates these fields without any
     change needed downstream, since AvatarController (packages/avatar-
     protocol) already consumes a normalized viseme shape either way.
+
+    `pcm_s16le` carries the same audio as `audio`, but as raw signed
+    16-bit little-endian PCM samples (no WAV container) -- kept alongside
+    `audio` because livekit.agents.tts.AudioEmitter (tts_adapter.py) only
+    decodes pushed bytes itself when mime_type is audio/pcm*; anything
+    else, including audio/wav, is pushed through unrecognized and produces
+    zero audio frames. `audio` (the WAV) stays the primary field for any
+    caller that just wants a standalone playable file.
     """
 
     audio: bytes
@@ -26,6 +34,7 @@ class SpeechSynthesisResult:
     visemes: list[dict] | None = None
     word_timings: list[dict] | None = None
     phoneme_timings: list[dict] | None = None
+    pcm_s16le: bytes = b""
 
 
 class TextToSpeechProvider(ABC):
@@ -54,7 +63,12 @@ class MmsTtsProvider(TextToSpeechProvider):
         self._model = VitsModel.from_pretrained(checkpoint).to(_DEVICE)
         self._tokenizer = VitsTokenizer.from_pretrained(checkpoint)
 
+    @property
+    def sample_rate(self) -> int:
+        return self._model.config.sampling_rate
+
     async def synthesize(self, text: str) -> SpeechSynthesisResult:
+        import numpy as np
         import torch
 
         inputs = self._tokenizer(text, return_tensors="pt")
@@ -69,6 +83,12 @@ class MmsTtsProvider(TextToSpeechProvider):
         import scipy.io.wavfile
 
         scipy.io.wavfile.write(buf, rate=sample_rate, data=waveform)
+
+        pcm_s16le = (np.clip(waveform, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
+
         return SpeechSynthesisResult(
-            audio=buf.getvalue(), duration=duration, sample_rate=sample_rate
+            audio=buf.getvalue(),
+            duration=duration,
+            sample_rate=sample_rate,
+            pcm_s16le=pcm_s16le,
         )
