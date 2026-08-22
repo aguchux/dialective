@@ -57,6 +57,24 @@ not as a new app under this directory. `apps/web` reaches it via
   nothing consumes it yet (no avatar until Phase 2/3), but it's there for
   when something does.
 
+## Avatar asset (doc §21/§28, correction)
+
+**Ready Player Me is no longer available** — Netflix acquired it and shut
+down public access on 2026-01-31, after the plan's original provider
+decision was made. No free/CC0 GLB with the facial morph targets (blink,
+jaw, smile) Phase 2 needs was found among standard sample-model sources
+either (Khronos's samples are geometry/rig test cases, not usable
+character faces). `apps/web/features/avatar/AvatarFace.tsx` is therefore a
+**procedural placeholder face** — primitive meshes (sphere head, eye/brow/
+mouth meshes) driven directly by Three.js transforms in a `useFrame` loop,
+no external GLB/VRM file at all. It fully satisfies doc §21's acceptance
+list (blink, jaw open/close, smile, emotion mapping, state transitions,
+responsive canvas). `useAvatarController.ts`/`AvatarController`
+(`packages/avatar-protocol`) are unaffected by this — a real rigged asset
+can replace `AvatarFace.tsx`'s mesh construction later without touching
+the controller interface or anything that calls it (Phase 3's
+conversation-to-avatar wiring, `/dev/avatar`'s controls).
+
 ## Hard scope guardrails (doc §3 — do not expand into these)
 
 photorealistic generated humans; video-avatar streaming; full-body
