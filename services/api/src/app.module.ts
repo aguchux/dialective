@@ -22,6 +22,7 @@ import { DistributorsModule } from "./distributors/distributors.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { AdminRecordingsModule } from "./admin-recordings/admin-recordings.module";
 import { DatasetStorageModule } from "./dataset-storage/dataset-storage.module";
+import { ApiAccessTokensModule } from "./api-access-tokens/api-access-tokens.module";
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { DatasetStorageModule } from "./dataset-storage/dataset-storage.module";
     NotificationsModule,
     AdminRecordingsModule,
     DatasetStorageModule,
+    ApiAccessTokensModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

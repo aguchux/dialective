@@ -68,6 +68,11 @@ spec:
                 secretKeyRef:
                   name: hf-creds
                   key: hf_token
+            - name: API_TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auth-creds
+                  key: api_token_encryption_key
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

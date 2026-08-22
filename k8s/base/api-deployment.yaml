@@ -114,6 +114,11 @@ spec:
                 secretKeyRef:
                   name: auth-creds
                   key: oauth_callback_secret
+            - name: API_TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auth-creds
+                  key: api_token_encryption_key
             - name: FRONTEND_URL
               valueFrom:
                 configMapKeyRef:

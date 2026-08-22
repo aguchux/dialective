@@ -6,7 +6,7 @@ import subprocess
 import redis
 from transformers import pipeline
 
-from db import build_db_connection, update_submission_result, update_word_recording_result
+from db import build_db_connection, get_hf_token, update_submission_result, update_word_recording_result
 from model_registry import UnsupportedDialectError, load_registry, resolve_checkpoint
 from spaces import build_spaces_client
 from streams import StreamConsumer, publish
@@ -34,16 +34,48 @@ _registry = load_registry()
 _pipeline_cache: dict[str, "pipeline"] = {}
 
 
-def get_pipeline(dialect_tag: str):
+def get_pipeline(dialect_tag: str, db_conn):
+    """
+    hf_token is resolved per-call (not once at startup) so a token an admin
+    saves/rotates via the API Access Tokens settings tab takes effect for the
+    next uncached dialect without a pod restart -- see db.py's get_hf_token,
+    which has its own short TTL cache so this isn't a DB round-trip on every
+    job. Passed explicitly as pipeline()'s `token` kwarg rather than relying
+    on transformers' own HF_TOKEN env var lookup, since the token may now
+    live only in Postgres (ApiAccessToken), never touching this process's
+    environment at all.
+    """
     if dialect_tag not in _pipeline_cache:
         checkpoint = resolve_checkpoint(dialect_tag, _registry)
-        _pipeline_cache[dialect_tag] = pipeline(
-            task="automatic-speech-recognition",
-            model=checkpoint,
-            device=_DEVICE,
-            model_kwargs={"cache_dir": _MODEL_CACHE_DIR},
-            return_timestamps="word",
-        )
+        try:
+            _pipeline_cache[dialect_tag] = pipeline(
+                task="automatic-speech-recognition",
+                model=checkpoint,
+                device=_DEVICE,
+                model_kwargs={"cache_dir": _MODEL_CACHE_DIR},
+                return_timestamps="word",
+                token=get_hf_token(db_conn),
+            )
+        except Exception as exc:
+            # A gated/private HF repo with a missing-or-unauthorized token
+            # raises deep inside transformers/huggingface_hub (GatedRepoError
+            # wrapped in an OSError) -- streams.py's handler already logs the
+            # full traceback on failure, but that's easy to miss in a
+            # KEDA-scaled-to-zero worker's logs between bursts. This
+            # single greppable line (ASR_CHECKPOINT_AUTH_FAILURE) is what
+            # should be alerted on, since every job for this dialect will
+            # keep failing identically until the token is fixed -- unlike a
+            # one-off transient error, retrying does not help.
+            if "gated repo" in str(exc).lower() or "401" in str(exc) or "403" in str(exc):
+                logger.error(
+                    "ASR_CHECKPOINT_AUTH_FAILURE dialect=%s checkpoint=%s -- Hugging Face rejected the request "
+                    "(gated repo or missing/invalid token). Every ASR job for this dialect will keep failing until "
+                    "the token is fixed in Admin Settings > API Access Tokens or HF_TOKEN. error=%s",
+                    dialect_tag,
+                    checkpoint,
+                    exc,
+                )
+            raise
     return _pipeline_cache[dialect_tag]
 
 
@@ -131,7 +163,7 @@ def handle_word_recording_job(s3, db_conn, job: dict) -> None:
             return
 
         try:
-            asr = get_pipeline(dialect_tag)
+            asr = get_pipeline(dialect_tag, db_conn)
         except UnsupportedDialectError:
             logger.info("No whisper checkpoint for dialect=%s; skipping ASR for word_recording=%s", dialect_tag, word_recording_id)
             return
@@ -176,7 +208,7 @@ def make_handler(s3, redis_client: redis.Redis, db_conn):
                 return
 
             try:
-                asr = get_pipeline(dialect_tag)
+                asr = get_pipeline(dialect_tag, db_conn)
             except UnsupportedDialectError:
                 write_result(redis_client, submission_id, status="unsupported_dialect", dialect_tag=dialect_tag)
                 write_submission_row(db_conn, submission_id, "unsupported_dialect")

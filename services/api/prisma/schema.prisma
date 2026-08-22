@@ -129,6 +129,7 @@ model User {
   distributorAllocationsGranted DistributorAllocation[] @relation("DistributorAllocationsGranted")
   notifications UserNotification[]
   authoredSystemUpdates SystemUpdate[] @relation("SystemUpdateAuthor")
+  apiAccessTokensUpdated ApiAccessToken[] @relation("ApiAccessTokenUpdatedBy")
 
   @@index([promotedById])
   @@map("users")
@@ -1352,6 +1353,36 @@ model PlatformSettings {
   createdAt                DateTime @default(now())
 
   @@map("platform_settings")
+}
+
+/// Admin-editable third-party API credentials (Admin Settings -> "API Access
+/// Tokens" tab) -- e.g. the Hugging Face token whisper-worker needs to pull
+/// gated NCAIR1 Whisper checkpoints. Deliberately a separate table, not more
+/// columns on PlatformSettings: every PlatformSettings field is echoed back
+/// verbatim by getForAdmin()/update(), which is fine for a sender ID but
+/// wrong for a bearer token (must never round-trip to the frontend in
+/// plaintext after save). `key` is a small fixed vocabulary (e.g.
+/// "huggingface"), not user-defined -- see ApiAccessTokensService's KNOWN_KEYS.
+/// `value` is AES-256-GCM ciphertext (see crypto.util.ts), keyed by the
+/// API_TOKEN_ENCRYPTION_KEY env var that both api and whisper-worker read;
+/// `iv`/`authTag` are the per-encryption nonce/tag GCM requires to decrypt.
+/// `lastFour` is plaintext -- the last 4 characters of the real token, kept
+/// only so the admin UI can show "...a1b2" without ever decrypting for
+/// display. No OTP gate on writes (see SettingsController's instant-save
+/// posture for the rest of admin settings) -- this is a credential swap, not
+/// a funds-movement action.
+model ApiAccessToken {
+  key             String   @id // e.g. "huggingface" -- see ApiAccessTokensService.KNOWN_KEYS
+  encryptedValue  String // AES-256-GCM ciphertext, base64
+  iv              String // base64, unique per encryption
+  authTag         String // base64 GCM auth tag
+  lastFour        String // last 4 chars of the real token, plaintext, display-only
+  updatedByUserId String?
+  updatedBy       User?    @relation("ApiAccessTokenUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@map("api_access_tokens")
 }
 
 /// One row per "Subscribe to voice data" form submission from the landing

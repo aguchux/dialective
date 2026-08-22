@@ -2,10 +2,60 @@ import json
 import logging
 import os
 import re
+import time
 
 import psycopg2
 
+from token_crypto import decrypt_token
+
 logger = logging.getLogger(__name__)
+
+# Cached for HF_TOKEN_CACHE_TTL_S per worker process, same reasoning/shape as
+# quality-gate-worker's get_speech_expression_enabled: avoids a DB round-trip
+# on every job (get_pipeline is called per-job, per-dialect) while still
+# picking up an admin's token rotation (Admin Settings -> "API Access
+# Tokens") without a pod restart, bounded by this TTL.
+_hf_token_cache: tuple[str | None, float] | None = None
+HF_TOKEN_CACHE_TTL_S = 5.0
+
+
+def get_hf_token(conn) -> str | None:
+    """
+    Reads and decrypts the Hugging Face token from ApiAccessToken (key=
+    'huggingface'), written by the admin API's ApiAccessTokensService.set()
+    -- see services/api/src/common/token-crypto.util.ts for the encryption
+    side and token_crypto.py for this side. Falls back to the HF_TOKEN env
+    var when no row exists yet, so an existing deployment's k8s-Secret-based
+    token keeps working unchanged until an admin explicitly saves one via
+    the new Settings tab (same "DB overrides env var" posture as
+    PlatformSettingsService's getters). Returns None (not raising) when
+    neither source is set -- get_pipeline()/pipeline() will surface the
+    resulting 401/403 from Hugging Face itself if the checkpoint actually
+    needs auth.
+    """
+    global _hf_token_cache
+    now = time.monotonic()
+    if _hf_token_cache is not None:
+        cached_value, cached_at = _hf_token_cache
+        if now - cached_at < HF_TOKEN_CACHE_TTL_S:
+            return cached_value
+
+    value = os.environ.get('HF_TOKEN')
+    with conn.cursor() as cur:
+        cur.execute('SELECT "encryptedValue", "iv", "authTag" FROM api_access_tokens WHERE key = %s', ('huggingface',))
+        row = cur.fetchone()
+    if row:
+        passphrase = os.environ.get('API_TOKEN_ENCRYPTION_KEY')
+        if not passphrase:
+            logger.warning('ApiAccessToken row exists for huggingface but API_TOKEN_ENCRYPTION_KEY is unset; falling back to HF_TOKEN env var')
+        else:
+            try:
+                value = decrypt_token(row[0], row[1], row[2], passphrase)
+            except Exception:
+                logger.exception('Failed to decrypt ApiAccessToken for huggingface; falling back to HF_TOKEN env var')
+
+    _hf_token_cache = (value, now)
+    return value
 
 # Data-layer-only access against tables api's Prisma migrations own -- this
 # worker never runs DDL/migrations of its own. See AGENTS.md "Database

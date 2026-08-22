@@ -18,6 +18,7 @@ import { DistributorSettingsPanel } from './DistributorSettingsPanel';
 import { LiveChatSettingsPanel } from './LiveChatSettingsPanel';
 import { DatasetStorageSettingsPanel } from './DatasetStorageSettingsPanel';
 import { LandingPageSettingsPanel } from './LandingPageSettingsPanel';
+import { ApiAccessTokensSettingsPanel } from './ApiAccessTokensSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
@@ -36,6 +37,7 @@ const groups = [
   { key: 'sms', label: 'SMS Providers' },
   { key: 'withdrawals', label: 'Crypto Withdrawals' },
   { key: 'datasetStorage', label: 'Dataset & Storage' },
+  { key: 'apiAccessTokens', label: 'API Access Tokens' },
 ] as const;
 
 type GroupKey = (typeof groups)[number]['key'];
@@ -87,6 +89,7 @@ export default function AdminSettingsPage() {
             {active === 'sms' && <SmsSettingsPanel />}
             {active === 'withdrawals' && <WithdrawalSettingsPanel />}
             {active === 'datasetStorage' && <DatasetStorageSettingsPanel />}
+            {active === 'apiAccessTokens' && <ApiAccessTokensSettingsPanel />}
           </div>
         </div>
       </div>

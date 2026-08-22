@@ -816,6 +816,14 @@ export interface LeaderboardPage<T> {
   totalPages: number;
 }
 
+export interface ApiAccessTokenSummary {
+  key: string;
+  isSet: boolean;
+  lastFour: string | null;
+  updatedAt: string | null;
+  updatedByEmail: string | null;
+}
+
 export interface PlatformSettings {
   tokenUsdRate: string | null;
   minWithdrawalTokens: string | null;
@@ -1495,7 +1503,7 @@ const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptio
 export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
   baseQuery: baseQueryWithMaintenanceSignal,
-  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'RequiredCourses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'AdminRecordings', 'AudioRetentionRules', 'DataAccessLeads', 'P2P', 'Profile', 'Notifications'],
+  tagTypes: ['Auth', 'Wallet', 'ReferralSettings', 'DistributorSettings', 'DistributorDashboard', 'DistributorAllocations', 'DistributorList', 'DistributorActivity', 'SubDistributorList', 'SubDistributorActivity', 'Users', 'AdminCountries', 'AdminDialects', 'PlatformSettings', 'BlogPosts', 'Courses', 'RequiredCourses', 'Pools', 'Submissions', 'AdminWords', 'AdminPrompts', 'AdminRecordings', 'AudioRetentionRules', 'DataAccessLeads', 'P2P', 'Profile', 'Notifications', 'ApiAccessTokens'],
   endpoints: (builder) => ({
     register: builder.mutation<PendingOtp, { firstName: string; lastName: string; email: string; password: string; referralCode?: string }>({
       query: (body) => ({
@@ -2249,6 +2257,18 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['PlatformSettings'],
     }),
+    getApiAccessTokens: builder.query<ApiAccessTokenSummary[], void>({
+      query: () => '/admin/api-access-tokens',
+      providesTags: ['ApiAccessTokens'],
+    }),
+    setApiAccessToken: builder.mutation<ApiAccessTokenSummary, { key: string; value: string }>({
+      query: ({ key, value }) => ({ url: `/admin/api-access-tokens/${key}`, method: 'PUT', body: { value } }),
+      invalidatesTags: ['ApiAccessTokens'],
+    }),
+    deleteApiAccessToken: builder.mutation<{ removed: boolean }, string>({
+      query: (key) => ({ url: `/admin/api-access-tokens/${key}`, method: 'DELETE' }),
+      invalidatesTags: ['ApiAccessTokens'],
+    }),
     getAdminWords: builder.query<AdminWordsPage, { page: number; pageSize: number; search?: string; partOfSpeech?: PartOfSpeech }>({
       query: ({ page, pageSize, search, partOfSpeech }) => ({ url: '/words/admin', params: { page, pageSize, search, partOfSpeech } }),
       providesTags: ['AdminWords'],
@@ -2488,6 +2508,9 @@ export const {
   useGetPlatformSettingsQuery,
   useGetPublicClientSettingsQuery,
   useUpdatePlatformSettingsMutation,
+  useGetApiAccessTokensQuery,
+  useSetApiAccessTokenMutation,
+  useDeleteApiAccessTokenMutation,
   useGetAdminWordsQuery,
   useDeleteWordMutation,
   useGetAdminPromptsQuery,
