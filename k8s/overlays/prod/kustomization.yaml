@@ -31,6 +31,12 @@ secretGenerator:
   - name: nowpayments-creds
     envs:
       - secrets/nowpayments.env
+  - name: flutterwave-creds
+    envs:
+      - secrets/flutterwave.env
+  - name: payout-crypto-creds
+    envs:
+      - secrets/payout-crypto.env
   - name: llm-creds
     envs:
       - secrets/llm.env

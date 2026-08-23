@@ -347,6 +347,24 @@ export class UpdatePlatformSettingsDto {
   allowedWithdrawalNetworks?: string;
 
   @IsOptional()
+  @IsBoolean()
+  isFlutterwaveFundingEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isFlutterwavePayoutsEnabled?: boolean;
+
+  // CSV of ISO 4217 currency codes; validated in PlatformSettingsService.update.
+  @IsOptional()
+  @IsString()
+  allowedFlutterwaveCurrencies?: string;
+
+  // CSV of ISO 3166-1 alpha-2 country codes; validated in PlatformSettingsService.update.
+  @IsOptional()
+  @IsString()
+  allowedFlutterwaveCountries?: string;
+
+  @IsOptional()
   @IsString()
   withdrawalFeeMode?: string;
 

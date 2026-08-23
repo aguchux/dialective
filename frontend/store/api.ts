@@ -435,6 +435,29 @@ export interface AdminWithdrawalRequest {
   adminNote: string | null;
   createdAt: string;
   resolvedAt: string | null;
+  payoutMethod?: PayoutMethod;
+}
+
+export type PayoutMethod = 'CRYPTO' | 'BANK' | 'MOBILE_MONEY';
+export type PayoutAccountType = 'BANK' | 'MOBILE_MONEY' | 'STABLECOIN_WALLET';
+export type PayoutAccountVerificationStatus = 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'FAILED';
+
+export interface PayoutAccount {
+  id: string;
+  type: PayoutAccountType;
+  country: string;
+  currency: string;
+  provider: string;
+  isDefault: boolean;
+  verificationStatus: PayoutAccountVerificationStatus;
+  bankCode: string | null;
+  bankName: string | null;
+  accountNumberMasked: string | null;
+  accountName: string | null;
+  mobileMoneyNetwork: string | null;
+  mobileMoneyNumberMasked: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
 }
 
 export type ReserveHealthStatus = 'HEALTHY' | 'WATCH' | 'RESTRICTED' | 'CRITICAL';
@@ -1649,6 +1672,7 @@ export const dialectivaApi = createApi({
     'Notifications',
     'ApiAccessTokens',
     'Tokenomics',
+    'PayoutAccounts',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -1947,6 +1971,34 @@ export const dialectivaApi = createApi({
     >({
       query: (params) => ({ url: '/admin/withdrawals', params: params ?? undefined }),
       providesTags: ['Wallet'],
+    }),
+    listPayoutAccounts: builder.query<PayoutAccount[], void>({
+      query: () => ({ url: '/payout-accounts' }),
+      providesTags: ['PayoutAccounts'],
+    }),
+    createPayoutAccount: builder.mutation<
+      PayoutAccount,
+      {
+        type: 'BANK' | 'MOBILE_MONEY';
+        country: string;
+        currency: string;
+        bankCode?: string;
+        accountNumber?: string;
+        mobileMoneyNetwork?: string;
+        mobileMoneyNumber?: string;
+        isDefault?: boolean;
+      }
+    >({
+      query: (body) => ({ url: '/payout-accounts', method: 'POST', body }),
+      invalidatesTags: ['PayoutAccounts'],
+    }),
+    updatePayoutAccount: builder.mutation<PayoutAccount, { id: string; isDefault: boolean }>({
+      query: ({ id, ...body }) => ({ url: `/payout-accounts/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['PayoutAccounts'],
+    }),
+    deletePayoutAccount: builder.mutation<{ deleted: boolean }, string>({
+      query: (id) => ({ url: `/payout-accounts/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['PayoutAccounts'],
     }),
     getTokenomicsStatus: builder.query<TokenomicsStatus, void>({
       query: () => ({ url: '/tokenomics/status' }),
@@ -2971,6 +3023,10 @@ export const {
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
   useListAdminWithdrawalsQuery,
+  useListPayoutAccountsQuery,
+  useCreatePayoutAccountMutation,
+  useUpdatePayoutAccountMutation,
+  useDeletePayoutAccountMutation,
   useGetTokenomicsStatusQuery,
   useGetValuationHistoryQuery,
   useRecalculateValuationMutation,

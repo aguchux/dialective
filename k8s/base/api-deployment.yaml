@@ -169,6 +169,31 @@ spec:
                 secretKeyRef:
                   name: nowpayments-creds
                   key: nowpayments_payout_password
+            - name: FLUTTERWAVE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-creds
+                  key: flutterwave_secret_key
+            - name: FLUTTERWAVE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-creds
+                  key: flutterwave_public_key
+            - name: FLUTTERWAVE_WEBHOOK_SECRET_HASH
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-creds
+                  key: flutterwave_webhook_secret_hash
+            - name: FLUTTERWAVE_ENVIRONMENT
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-creds
+                  key: flutterwave_environment
+            - name: PAYOUT_ACCOUNT_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: payout-crypto-creds
+                  key: payout_account_encryption_key
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:

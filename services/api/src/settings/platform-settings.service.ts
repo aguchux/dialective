@@ -332,6 +332,32 @@ export class PlatformSettingsService {
       .filter(Boolean);
   }
 
+  async isFlutterwaveFundingEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.isFlutterwaveFundingEnabled;
+  }
+
+  async isFlutterwavePayoutsEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.isFlutterwavePayoutsEnabled;
+  }
+
+  async getAllowedFlutterwaveCurrencies(): Promise<string[]> {
+    const row = await this.getRow();
+    return row.allowedFlutterwaveCurrencies
+      .split(',')
+      .map((v) => v.trim().toUpperCase())
+      .filter(Boolean);
+  }
+
+  async getAllowedFlutterwaveCountries(): Promise<string[]> {
+    const row = await this.getRow();
+    return row.allowedFlutterwaveCountries
+      .split(',')
+      .map((v) => v.trim().toUpperCase())
+      .filter(Boolean);
+  }
+
   async getWithdrawalFeeSettings(): Promise<{
     mode: string;
     tokenAmount: number;
@@ -588,6 +614,10 @@ export class PlatformSettingsService {
       nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
       allowedWithdrawalNetworks: row.allowedWithdrawalNetworks,
+      isFlutterwaveFundingEnabled: row.isFlutterwaveFundingEnabled,
+      isFlutterwavePayoutsEnabled: row.isFlutterwavePayoutsEnabled,
+      allowedFlutterwaveCurrencies: row.allowedFlutterwaveCurrencies,
+      allowedFlutterwaveCountries: row.allowedFlutterwaveCountries,
       withdrawalFeeMode: row.withdrawalFeeMode,
       withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
       withdrawalFeePercent: row.withdrawalFeePercent.toString(),
@@ -676,6 +706,10 @@ export class PlatformSettingsService {
     nowPaymentsPayoutsEnabled?: boolean;
     allowedWithdrawalCurrencies?: string;
     allowedWithdrawalNetworks?: string;
+    isFlutterwaveFundingEnabled?: boolean;
+    isFlutterwavePayoutsEnabled?: boolean;
+    allowedFlutterwaveCurrencies?: string;
+    allowedFlutterwaveCountries?: string;
     withdrawalFeeMode?: string;
     withdrawalFeeTokenAmount?: number;
     withdrawalFeePercent?: number;
@@ -799,6 +833,30 @@ export class PlatformSettingsService {
 
     if (data.withdrawalFeeMode && !['platform', 'user'].includes(data.withdrawalFeeMode)) {
       throw new BadRequestException('withdrawalFeeMode must be "platform" or "user"');
+    }
+
+    if (data.allowedFlutterwaveCurrencies !== undefined) {
+      const tokens = data.allowedFlutterwaveCurrencies
+        .split(',')
+        .map((v) => v.trim().toUpperCase())
+        .filter(Boolean);
+      if (tokens.length === 0 || !tokens.every((t) => /^[A-Z]{3}$/.test(t))) {
+        throw new BadRequestException(
+          'allowedFlutterwaveCurrencies must be a non-empty CSV of 3-letter ISO 4217 currency codes',
+        );
+      }
+    }
+
+    if (data.allowedFlutterwaveCountries !== undefined) {
+      const tokens = data.allowedFlutterwaveCountries
+        .split(',')
+        .map((v) => v.trim().toUpperCase())
+        .filter(Boolean);
+      if (tokens.length === 0 || !tokens.every((t) => /^[A-Z]{2}$/.test(t))) {
+        throw new BadRequestException(
+          'allowedFlutterwaveCountries must be a non-empty CSV of 2-letter ISO 3166-1 alpha-2 country codes',
+        );
+      }
     }
 
     if (data.manualPhoneVerificationWhatsappNumber !== undefined) {
@@ -961,6 +1019,10 @@ export class PlatformSettingsService {
       nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
       allowedWithdrawalNetworks: row.allowedWithdrawalNetworks,
+      isFlutterwaveFundingEnabled: row.isFlutterwaveFundingEnabled,
+      isFlutterwavePayoutsEnabled: row.isFlutterwavePayoutsEnabled,
+      allowedFlutterwaveCurrencies: row.allowedFlutterwaveCurrencies,
+      allowedFlutterwaveCountries: row.allowedFlutterwaveCountries,
       withdrawalFeeMode: row.withdrawalFeeMode,
       withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
       withdrawalFeePercent: row.withdrawalFeePercent.toString(),

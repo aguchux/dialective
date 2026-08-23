@@ -134,6 +134,7 @@ model User {
   notifications                    UserNotification[]
   authoredSystemUpdates            SystemUpdate[]                   @relation("SystemUpdateAuthor")
   apiAccessTokensUpdated           ApiAccessToken[]                 @relation("ApiAccessTokenUpdatedBy")
+  payoutAccounts                   PayoutAccount[]
 
   @@index([promotedById])
   @@index([originCountryId])
@@ -1187,7 +1188,8 @@ model Deposit {
   confirmedAt       DateTime?
   lastIpnAt         DateTime?
 
-  ipnEvents NowPaymentsIpnEvent[]
+  ipnEvents     NowPaymentsIpnEvent[]
+  webhookEvents FlutterwaveWebhookEvent[]
 
   @@index([walletId])
   @@map("deposits")
@@ -1252,11 +1254,33 @@ model WithdrawalRequest {
   createdAt             DateTime         @default(now())
   resolvedAt            DateTime?
 
-  providerEvents NowPaymentsPayoutEvent[]
+  // Fiat rail (Flutterwave) -- payoutMethod disambiguates which
+  // destination-column group below is authoritative for this row; CRYPTO
+  // rows leave all of these null and keep using destinationAddress/
+  // destinationCurrency/destinationNetwork above. payoutAccountId is a
+  // snapshot pointer (details are copied onto the columns below at request
+  // time, not live-joined), matching how destinationCurrency/
+  // destinationNetwork already snapshot rather than reference live config.
+  payoutMethod                          PayoutMethod   @default(CRYPTO)
+  payoutAccountId                       String?
+  payoutAccount                         PayoutAccount? @relation(fields: [payoutAccountId], references: [id], onDelete: SetNull)
+  destinationBankCode                   String?
+  destinationBankName                   String?
+  destinationAccountNumberEncryptedJson Json?
+  destinationAccountNumberMasked        String?
+  destinationAccountName                String?
+  destinationMobileNetwork              String?
+  destinationMobileNumberEncryptedJson  Json?
+  destinationMobileNumberMasked         String?
+  destinationCountry                    String?
+
+  providerEvents            NowPaymentsPayoutEvent[]
+  providerEventsFlutterwave FlutterwavePayoutEvent[] @relation("FlutterwavePayoutEvents")
 
   @@index([walletId])
   @@index([status])
   @@index([providerPayoutId])
+  @@index([payoutAccountId])
   @@map("withdrawal_requests")
 }
 
@@ -1282,6 +1306,121 @@ model NowPaymentsPayoutEvent {
   @@index([withdrawalRequestId])
   @@index([providerPayoutId])
   @@map("nowpayments_payout_events")
+}
+
+enum PayoutMethod {
+  CRYPTO
+  BANK
+  MOBILE_MONEY
+}
+
+enum PayoutAccountType {
+  BANK
+  MOBILE_MONEY
+  STABLECOIN_WALLET
+}
+
+enum PayoutAccountVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+/// A trainer's saved, reusable fiat payout destination (Flutterwave bank
+/// transfer or mobile money), created once via /payout-accounts and
+/// referenced by id from WithdrawalRequest at withdrawal time -- a snapshot
+/// of its resolved details is copied onto the WithdrawalRequest row, not a
+/// live join, so a later edit/delete never retroactively changes a pending
+/// withdrawal's destination (see WithdrawalRequest.payoutAccountId).
+/// Account/phone numbers are AES-256-GCM encrypted at rest
+/// (payout-crypto.util.ts) -- only the masked form is ever read back for
+/// display; the STABLECOIN_WALLET group is reserved for a future unified
+/// payout-account model and is not populated by any code path yet.
+model PayoutAccount {
+  id                 String                          @id @default(uuid())
+  userId             String
+  user               User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type               PayoutAccountType
+  country            String // ISO 3166-1 alpha-2, e.g. "NG"
+  currency           String // ISO 4217, e.g. "NGN"
+  provider           String                          @default("flutterwave")
+  isDefault          Boolean                         @default(false)
+  verificationStatus PayoutAccountVerificationStatus @default(UNVERIFIED)
+
+  // BANK
+  bankCode                   String?
+  bankName                   String?
+  accountNumberEncryptedJson Json?
+  accountNumberMasked        String?
+  accountName                String? // resolved from the provider at creation time, re-checked before every payout
+
+  // MOBILE_MONEY
+  mobileMoneyNetwork             String?
+  mobileMoneyNumberEncryptedJson Json?
+  mobileMoneyNumberMasked        String?
+
+  // STABLECOIN_WALLET (reserved, unused by Stages 1-3)
+  stablecoinAsset     String?
+  stablecoinNetwork   String?
+  walletAddress       String?
+  walletAddressMasked String?
+
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  withdrawals WithdrawalRequest[]
+
+  @@index([userId])
+  @@index([userId, isDefault])
+  @@map("payout_accounts")
+}
+
+/// Every distinct, signature-verified Flutterwave webhook payload (funding
+/// side) -- mirrors NowPaymentsIpnEvent's role for the crypto rail, kept as
+/// a separate table (not a shared/generalized provider-discriminated table)
+/// so this new rail cannot risk the already-working NOWPayments read/write
+/// paths.
+model FlutterwaveWebhookEvent {
+  id              String    @id @default(uuid())
+  eventHash       String    @unique
+  txRef           String?
+  depositId       String?
+  deposit         Deposit?  @relation(fields: [depositId], references: [id], onDelete: SetNull)
+  flutterwaveTxId String?
+  eventType       String?
+  providerStatus  String?
+  payload         Json
+  processingError String?
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+
+  @@index([depositId])
+  @@index([flutterwaveTxId])
+  @@map("flutterwave_webhook_events")
+}
+
+/// Every Flutterwave transfer create/status-poll/webhook response we
+/// persist for audit and reconciliation -- mirrors NowPaymentsPayoutEvent's
+/// role for the crypto rail. eventHash dedupes an inbound webhook delivery;
+/// app-initiated writes (create/poll, not inbound callbacks) get a freshly
+/// generated one so every row still has a stable identity.
+model FlutterwavePayoutEvent {
+  id                  String             @id @default(uuid())
+  eventHash           String             @unique
+  withdrawalRequestId String?
+  withdrawalRequest   WithdrawalRequest? @relation("FlutterwavePayoutEvents", fields: [withdrawalRequestId], references: [id], onDelete: SetNull)
+  providerPayoutId    String?
+  eventType           String
+  providerStatus      String?
+  payload             Json
+  processingError     String?
+  receivedAt          DateTime           @default(now())
+
+  @@index([withdrawalRequestId])
+  @@index([providerPayoutId])
+  @@map("flutterwave_payout_events")
 }
 
 enum P2POfferType {
@@ -1524,6 +1663,10 @@ model PlatformSettings {
   withdrawalFeeTokenAmount               Decimal   @default(0) @db.Decimal(20, 8) // flat token fee deducted from payout when withdrawalFeeMode="user" and this is > 0 (takes precedence over withdrawalFeePercent if both are set)
   withdrawalFeePercent                   Decimal   @default(0) @db.Decimal(5, 2) // percentage fee (0-100) deducted from payout when withdrawalFeeMode="user" and withdrawalFeeTokenAmount is 0
   autoSubmitAfterApproval                Boolean   @default(false) // when true, admin/withdrawals/:id/approve immediately submits to NOWPayments in the same call instead of leaving it APPROVED for a separate submit step -- defaults off per the payout-automation plan's explicit caution
+  isFlutterwaveFundingEnabled            Boolean   @default(false) // master kill switch -- when false, wallet/deposits/flutterwave rejects new funding requests outright; off by default until Flutterwave credentials/allow-lists are configured
+  isFlutterwavePayoutsEnabled            Boolean   @default(false) // when false, admin/withdrawals/:id/submit-flutterwave is disabled -- admins can still resolve fiat withdrawals manually (outcome=paid) while this is off
+  allowedFlutterwaveCurrencies           String    @default("NGN,GHS,KES,UGX,ZAR,TZS") // CSV of currencies a fiat withdrawal/deposit's currency may be, validated app-side
+  allowedFlutterwaveCountries            String    @default("NG,GH,KE,UG,ZA,TZ") // CSV of ISO 3166-1 alpha-2 countries a PayoutAccount/deposit's country may be, validated app-side
   authMaintenanceEnabled                 Boolean   @default(false) // master switch for the maintenance window; the five scope flags below decide what it actually blocks while on. PlatformSettingsService auto-clears this the first time any check runs after authMaintenanceUntil passes, so the admin toggle self-resets rather than staying on indefinitely
   authMaintenanceUntil                   DateTime? // scheduled end of the maintenance window
   authMaintenanceMessage                 String? // optional admin-authored note shown alongside the countdown on the login/signup pages and the logged-out notice
