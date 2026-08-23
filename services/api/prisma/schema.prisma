@@ -903,6 +903,188 @@ enum LedgerEntryType {
   P2P_ESCROW_CREDIT
 }
 
+/// The reserve engine is deliberately separate from the legacy Wallet and
+/// LedgerEntry models. Wallet remains the compatibility balance while token
+/// mutations are progressively moved to TokenAccount/TokenLedgerEntry.
+enum TokenAccountKind {
+  USER
+  TREASURY
+  BURN
+}
+
+enum TokenOperationType {
+  MINT
+  TRANSFER
+  LOCK
+  UNLOCK
+  BURN
+  REDEEM
+  ADJUSTMENT
+  TREASURY_ALLOCATION
+}
+
+enum TokenOperationStatus {
+  PENDING
+  SETTLED
+  REVERSED
+  CANCELLED
+}
+
+enum ReserveTransactionType {
+  INITIAL_RESERVE
+  PAYMENT_FUNDING
+  BUSINESS_REVENUE
+  RESERVE_ALLOCATION
+  REDEMPTION
+  FEE
+  REFUND
+  REVERSAL
+  ADJUSTMENT
+  OTHER
+}
+
+enum ReserveTransactionStatus {
+  PENDING
+  ELIGIBLE
+  EXCLUDED
+  REVERSED
+}
+
+enum ReserveDirection {
+  CREDIT
+  DEBIT
+}
+
+model TokenomicsPolicy {
+  id                          String   @id @default("default")
+  baseCurrency                String   @default("USD")
+  enabled                     Boolean  @default(true)
+  mintingPaused               Boolean  @default(false)
+  valuationIntervalMinutes    Int      @default(1440)
+  maxIncreaseRate             Decimal  @default(0.05) @db.Decimal(8, 6)
+  maxDecreaseRate             Decimal  @default(0.05) @db.Decimal(8, 6)
+  dailyEmissionBudgetUsd      Decimal  @default(0) @db.Decimal(20, 8)
+  healthyCoverageThreshold    Decimal  @default(1) @db.Decimal(8, 6)
+  watchCoverageThreshold      Decimal  @default(0.8) @db.Decimal(8, 6)
+  restrictedCoverageThreshold Decimal  @default(0.6) @db.Decimal(8, 6)
+  updatedAt                   DateTime @updatedAt
+  createdAt                   DateTime @default(now())
+
+  @@map("tokenomics_policies")
+}
+
+model TokenAccount {
+  id        String           @id @default(uuid())
+  /// Stable internal key: treasury, burn, or user:<User.id>.
+  code      String           @unique
+  kind      TokenAccountKind
+  userId    String?          @unique
+  available Decimal          @default(0) @db.Decimal(20, 8)
+  locked    Decimal          @default(0) @db.Decimal(20, 8)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  entries TokenLedgerEntry[]
+
+  @@index([kind])
+  @@map("token_accounts")
+}
+
+model TokenOperation {
+  id             String               @id @default(uuid())
+  type           TokenOperationType
+  status         TokenOperationStatus @default(SETTLED)
+  idempotencyKey String               @unique
+  reference      String?
+  reason         String?
+  policyVersion  String?
+  metadata       Json?
+  createdAt      DateTime             @default(now())
+  settledAt      DateTime?
+
+  entries TokenLedgerEntry[]
+
+  @@index([type, createdAt])
+  @@map("token_operations")
+}
+
+model TokenLedgerEntry {
+  id             String         @id @default(uuid())
+  accountId      String
+  account        TokenAccount   @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  operationId    String
+  operation      TokenOperation @relation(fields: [operationId], references: [id], onDelete: Restrict)
+  availableDelta Decimal        @default(0) @db.Decimal(20, 8)
+  lockedDelta    Decimal        @default(0) @db.Decimal(20, 8)
+  createdAt      DateTime       @default(now())
+
+  @@unique([accountId, operationId])
+  @@index([operationId])
+  @@map("token_ledger_entries")
+}
+
+model ReserveAccount {
+  id        String   @id @default(uuid())
+  provider  String
+  asset     String
+  network   String   @default("")
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions ReserveTransaction[]
+
+  @@unique([provider, asset, network])
+  @@map("reserve_accounts")
+}
+
+model ReserveTransaction {
+  id                String                   @id @default(uuid())
+  reserveAccountId  String
+  reserveAccount    ReserveAccount           @relation(fields: [reserveAccountId], references: [id], onDelete: Restrict)
+  type              ReserveTransactionType
+  status            ReserveTransactionStatus @default(PENDING)
+  direction         ReserveDirection
+  /// Original provider amount; the asset is defined by ReserveAccount.
+  amount            Decimal                  @db.Decimal(20, 8)
+  /// Signed eligibility is derived from direction; this is always a
+  /// positive USD-normalized amount before that sign is applied.
+  eligibleUsdAmount Decimal                  @db.Decimal(20, 8)
+  normalizationRate Decimal                  @db.Decimal(20, 8)
+  providerReference String?
+  sourceReference   String?
+  idempotencyKey    String                   @unique
+  reason            String?
+  metadata          Json?
+  createdAt         DateTime                 @default(now())
+  settledAt         DateTime?
+
+  @@index([status, createdAt])
+  @@index([providerReference])
+  @@index([sourceReference])
+  @@map("reserve_transactions")
+}
+
+model ValuationSnapshot {
+  id                     String   @id @default(uuid())
+  eligibleReserveUsd     Decimal  @db.Decimal(20, 8)
+  redeemableSupply       Decimal  @db.Decimal(20, 8)
+  totalMinted            Decimal  @db.Decimal(20, 8)
+  circulatingSupply      Decimal  @db.Decimal(20, 8)
+  treasurySupply         Decimal  @db.Decimal(20, 8)
+  lockedSupply           Decimal  @db.Decimal(20, 8)
+  burnedSupply           Decimal  @db.Decimal(20, 8)
+  rawValueUsd            Decimal  @db.Decimal(20, 8)
+  previousPublishedValue Decimal? @db.Decimal(20, 8)
+  publishedValueUsd      Decimal  @db.Decimal(20, 8)
+  coverageRatio          Decimal? @db.Decimal(20, 8)
+  policyVersion          String
+  createdAt              DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("valuation_snapshots")
+}
+
 model DistributorSettings {
   id                        String   @id @default("default")
   enabled                   Boolean  @default(false)

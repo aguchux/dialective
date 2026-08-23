@@ -24,6 +24,7 @@ import { AdminRecordingsModule } from './admin-recordings/admin-recordings.modul
 import { DatasetStorageModule } from './dataset-storage/dataset-storage.module';
 import { ApiAccessTokensModule } from './api-access-tokens/api-access-tokens.module';
 import { ChatDialectModule } from './chatdialect/chatdialect.module';
+import { TokenomicsModule } from './tokenomics/tokenomics.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { ChatDialectModule } from './chatdialect/chatdialect.module';
     DatasetStorageModule,
     ApiAccessTokensModule,
     ChatDialectModule,
+    TokenomicsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

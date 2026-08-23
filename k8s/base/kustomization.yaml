@@ -36,3 +36,4 @@ resources:
   - fx-rate-cronjob.yaml
   - withdrawal-reconcile-cronjob.yaml
   - audio-retention-cronjob.yaml
+  - tokenomics-valuation-cronjob.yaml

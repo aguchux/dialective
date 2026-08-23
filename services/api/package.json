@@ -8,6 +8,7 @@
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "withdrawal-reconcile": "node dist/withdrawal-reconcile.js",
+    "tokenomics-valuation": "node dist/tokenomics-valuation.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",

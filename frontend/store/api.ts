@@ -437,6 +437,40 @@ export interface AdminWithdrawalRequest {
   resolvedAt: string | null;
 }
 
+export type ReserveHealthStatus = 'HEALTHY' | 'WATCH' | 'RESTRICTED' | 'CRITICAL';
+
+export interface TokenomicsSupply {
+  totalMinted: number;
+  circulating: number;
+  treasury: number;
+  locked: number;
+  burned: number;
+  redeemable: number;
+}
+
+export interface TokenomicsStatus {
+  baseCurrency: string;
+  enabled: boolean;
+  mintingPaused: boolean;
+  eligibleReserveUsd: number;
+  publishedValueUsd: number;
+  rawValueUsd: number | null;
+  coverageRatio: number | null;
+  reserveHealthStatus: ReserveHealthStatus;
+  supply: TokenomicsSupply;
+  lastValuationAt: string | null;
+}
+
+export interface ValuationSnapshotRow {
+  id: string;
+  publishedValueUsd: string;
+  rawValueUsd: string;
+  coverageRatio: string | null;
+  eligibleReserveUsd: string;
+  redeemableSupply: string;
+  createdAt: string;
+}
+
 export type LedgerEntryType =
   | 'DEPOSIT'
   | 'TRAINING_PAYOUT'
@@ -1556,6 +1590,7 @@ export const dialectivaApi = createApi({
     'Profile',
     'Notifications',
     'ApiAccessTokens',
+    'Tokenomics',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -1854,6 +1889,33 @@ export const dialectivaApi = createApi({
     >({
       query: (params) => ({ url: '/admin/withdrawals', params: params ?? undefined }),
       providesTags: ['Wallet'],
+    }),
+    getTokenomicsStatus: builder.query<TokenomicsStatus, void>({
+      query: () => ({ url: '/tokenomics/status' }),
+      providesTags: ['Tokenomics'],
+    }),
+    getValuationHistory: builder.query<ValuationSnapshotRow[], { limit?: number } | void>({
+      query: (params) => ({ url: '/valuation/history', params: params ?? undefined }),
+      providesTags: ['Tokenomics'],
+    }),
+    recalculateValuation: builder.mutation<ValuationSnapshotRow, void>({
+      query: () => ({ url: '/admin/tokenomics/valuation/recalculate', method: 'POST' }),
+      invalidatesTags: ['Tokenomics'],
+    }),
+    pauseMinting: builder.mutation<{ mintingPaused: boolean }, void>({
+      query: () => ({ url: '/admin/tokenomics/pause', method: 'POST' }),
+      invalidatesTags: ['Tokenomics'],
+    }),
+    resumeMinting: builder.mutation<{ mintingPaused: boolean }, void>({
+      query: () => ({ url: '/admin/tokenomics/resume', method: 'POST' }),
+      invalidatesTags: ['Tokenomics'],
+    }),
+    burnTokens: builder.mutation<
+      unknown,
+      { accountCode: string; amount: number; idempotencyKey: string; reason?: string }
+    >({
+      query: (body) => ({ url: '/admin/tokens/burn', method: 'POST', body }),
+      invalidatesTags: ['Tokenomics'],
     }),
     requestWithdrawalResolveOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
@@ -2807,6 +2869,12 @@ export const {
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
   useListAdminWithdrawalsQuery,
+  useGetTokenomicsStatusQuery,
+  useGetValuationHistoryQuery,
+  useRecalculateValuationMutation,
+  usePauseMintingMutation,
+  useResumeMintingMutation,
+  useBurnTokensMutation,
   useRequestWithdrawalResolveOtpMutation,
   useApproveWithdrawalMutation,
   useSubmitWithdrawalToNowPaymentsMutation,

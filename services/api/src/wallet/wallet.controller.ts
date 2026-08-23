@@ -66,6 +66,7 @@ import {
   adminActionContextHash,
 } from './otp-context.util';
 import { MailService } from '../mail/mail.service';
+import { TokenomicsService } from '../tokenomics/tokenomics.service';
 
 const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.TRAINING_PAYOUT,
@@ -122,6 +123,7 @@ export class WalletController {
     private readonly platformSettings: PlatformSettingsService,
     private readonly otp: OtpService,
     private readonly mail: MailService,
+    private readonly tokenomics?: TokenomicsService,
   ) {}
 
   private async getOrCreateWallet(userId: string) {
@@ -130,6 +132,10 @@ export class WalletController {
       return existing;
     }
     return this.prisma.wallet.create({ data: { userId } });
+  }
+
+  private async getCurrentTokenUsdRate() {
+    return this.tokenomics?.getCurrentPublishedValue() ?? this.platformSettings.getTokenUsdRate();
   }
 
   private async getReferralSettings() {
@@ -165,7 +171,7 @@ export class WalletController {
   async getWallet(@Req() req: AuthenticatedRequest) {
     const [wallet, tokenUsdRate, localCurrency, taskTokenCost] = await Promise.all([
       this.getOrCreateWallet(req.user.sub),
-      this.platformSettings.getTokenUsdRate(),
+      this.getCurrentTokenUsdRate(),
       this.getLocalCurrency(req.user.sub),
       this.platformSettings.getTaskTokenCost(),
     ]);
@@ -347,7 +353,7 @@ export class WalletController {
       inviteExpirySeconds,
       minWithdrawalTokens,
     ] = await Promise.all([
-      this.platformSettings.getTokenUsdRate(),
+      this.getCurrentTokenUsdRate(),
       this.getLocalCurrency(req.user.sub),
       this.platformSettings.getTaskTokenCost(),
       this.platformSettings.getScoringSlaMinutes(),
@@ -593,7 +599,7 @@ export class WalletController {
     });
 
     const wallet = await this.getOrCreateWallet(req.user.sub);
-    const rate = await this.platformSettings.getTokenUsdRate();
+    const rate = await this.getCurrentTokenUsdRate();
     const tokenAmount = usdToTokens(body.usdAmount, rate);
 
     const deposit = await this.prisma.deposit.create({
@@ -765,6 +771,21 @@ export class WalletController {
         data: { balance: { increment: deposit.tokenAmount } },
       });
 
+      // The provider payment is an immutable reserve event. Wallet credit is
+      // retained for compatibility during the token-account cut-over, while
+      // reserve accounting is written in the same transaction as the IPN.
+      if (this.tokenomics) {
+        await this.tokenomics.recordConfirmedNowPaymentsDepositTx(tx, {
+          depositId: deposit.id,
+          providerChargeId: deposit.providerChargeId,
+          providerPaymentId,
+          currency: deposit.currency,
+          usdAmount: deposit.usdAmount,
+          actuallyPaid,
+          payCurrency: ipnString(body.pay_currency),
+        });
+      }
+
       for (const entry of fundingBonuses.entries) {
         await tx.ledgerEntry.create({ data: entry });
         await tx.wallet.update({
@@ -897,7 +918,7 @@ export class WalletController {
       }),
     });
 
-    const rate = await this.platformSettings.getTokenUsdRate();
+    const rate = await this.getCurrentTokenUsdRate();
     const usdtAmount = tokensToUsdt(body.tokenAmount, rate);
     const withdrawalId = randomUUID();
 
@@ -1551,7 +1572,7 @@ export class WalletController {
         where: { settledAt: { not: null } },
         _sum: { payoutTokenAmount: true },
       }),
-      this.platformSettings.getTokenUsdRate(),
+      this.getCurrentTokenUsdRate(),
       this.prisma.blogPost.count(),
       this.prisma.blogPost.count({ where: { status: BlogPostStatus.PUBLISHED } }),
       this.prisma.blogPost.count({ where: { status: BlogPostStatus.DRAFT } }),

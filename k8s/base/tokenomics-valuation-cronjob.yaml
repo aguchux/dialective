@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tokenomics-valuation
+spec:
+  # Matches TokenomicsPolicy.valuationIntervalMinutes' default (1440 = daily).
+  # This is a static k8s schedule -- changing valuationIntervalMinutes in the
+  # DB does NOT propagate here automatically; update this value + redeploy
+  # if the desired cadence changes. See services/api/src/tokenomics-valuation.ts.
+  schedule: '0 0 * * *'
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: tokenomics-valuation
+              image: golojan/dialect-api:latest
+              command: ['node', 'dist/tokenomics-valuation.js']
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-creds
+                      key: connection_string
