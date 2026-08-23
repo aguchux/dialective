@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { ArrowLeft } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import {
   normalizeErrorMessage,
   useCreatePayoutAccountMutation,
@@ -181,6 +182,10 @@ function AddPayoutAccountDialog() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    if (type === 'BANK' && !bankCode) {
+      setError('Select a bank.');
+      return;
+    }
     try {
       await createAccount({
         type,
@@ -252,21 +257,16 @@ function AddPayoutAccountDialog() {
             <>
               <label className="grid gap-1.5 text-sm font-bold">
                 Bank
-                <select
+                <SearchableSelect
                   className={inputClass}
-                  onChange={(event) => setBankCode(event.target.value)}
-                  required
+                  emptyLabel="No banks match your search"
+                  loading={isLoadingBanks}
+                  loadingLabel="Loading banks..."
+                  onChange={setBankCode}
+                  options={(banks ?? []).map((bank) => ({ value: bank.code, label: bank.name }))}
+                  placeholder="Search for a bank"
                   value={bankCode}
-                >
-                  <option disabled value="">
-                    {isLoadingBanks ? 'Loading banks...' : 'Select a bank'}
-                  </option>
-                  {banks?.map((bank) => (
-                    <option key={bank.code} value={bank.code}>
-                      {bank.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
               <label className="grid gap-1.5 text-sm font-bold">
                 Account number
