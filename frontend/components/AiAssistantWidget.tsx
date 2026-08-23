@@ -1,0 +1,165 @@
+'use client';
+
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Bot, MessageCircle, Send, X } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import {
+  useChatWithAssistantMutation,
+  useGetAssistantThreadQuery,
+  useGetPublicClientSettingsQuery,
+} from '@/store/api';
+import { ActionButton } from '@/components/ui/ActionButton';
+
+type ChatMessage = { role: 'user' | 'assistant'; content: string };
+
+const AUTH_PATHS = new Set([
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-email',
+  '/magic-link',
+]);
+
+export function AiAssistantWidget() {
+  const pathname = usePathname();
+  const { status } = useSession();
+  const { data: settings } = useGetPublicClientSettingsQuery();
+  const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [open, setOpen] = useState(false);
+  const [send, { isLoading, error }] = useChatWithAssistantMutation();
+  const { data: thread } = useGetAssistantThreadQuery(undefined, {
+    skip: status !== 'authenticated',
+  });
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const enabled = settings?.supportChatMode === 'AI' && !AUTH_PATHS.has(pathname);
+  const prompt = useMemo(() => input.trim(), [input]);
+
+  useEffect(() => {
+    if (status === 'authenticated' && thread) {
+      setChat(thread.messages.map(({ role, content }) => ({ role, content })));
+    }
+  }, [status, thread]);
+
+  useEffect(() => {
+    transcriptRef.current?.scrollTo({
+      top: transcriptRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
+  }, [chat, isLoading]);
+
+  if (!enabled) return null;
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!prompt || isLoading) return;
+    const next = [...chat, { role: 'user' as const, content: prompt }];
+    setChat(next);
+    setInput('');
+    try {
+      const response = await send({ message: prompt, history: chat.slice(-8) }).unwrap();
+      setChat((current) => [...current, { role: 'assistant', content: response.message }]);
+    } catch {
+      // The error is shown inline, while the user message remains available
+      // for a deliberate retry instead of being silently discarded.
+    }
+  }
+
+  return (
+    <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] right-4 z-40 flex items-end gap-3 lg:bottom-6 lg:right-6">
+      <section
+        aria-hidden={!open}
+        aria-label="Dialect Library assistant"
+        className={`fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-50 flex h-[min(78dvh,680px)] flex-col overflow-hidden rounded-t-xl border border-line bg-white shadow-2xl transition-transform duration-300 ease-out lg:inset-y-0 lg:right-0 lg:left-auto lg:h-full lg:w-[min(520px,42vw)] lg:rounded-none lg:border-y-0 ${
+          open
+            ? 'translate-x-0 translate-y-0'
+            : 'pointer-events-none translate-y-full lg:translate-y-0 lg:translate-x-full'
+        }`}
+      >
+        <header className="flex items-center justify-between border-b border-line bg-surface-muted px-4 py-3">
+          <div className="flex items-center gap-2 font-black">
+            <Bot className="size-5 text-accent" />
+            Dialect Library assistant
+          </div>
+          <button
+            aria-label="Close assistant"
+            className="rounded p-1 hover:bg-white"
+            onClick={() => setOpen(false)}
+            type="button"
+          >
+            <X className="size-5" />
+          </button>
+        </header>
+        <div
+          className="flex-1 space-y-3 overflow-y-auto p-4 text-sm leading-relaxed"
+          ref={transcriptRef}
+        >
+          {chat.length === 0 && (
+            <p className="text-muted">
+              Ask about getting started, training, earnings, courses, or platform navigation.
+            </p>
+          )}
+          {chat.map((item, index) => (
+            <div
+              key={`${item.role}-${index}`}
+              className={
+                item.role === 'user'
+                  ? 'ml-8 rounded-lg bg-accent px-3 py-2 text-white'
+                  : 'mr-5 rounded-lg bg-surface-muted px-3 py-2 text-ink'
+              }
+            >
+              {renderMessage(item.content)}
+            </div>
+          ))}
+          {isLoading && <p className="text-muted">Thinking...</p>}
+          {Boolean(error) && (
+            <p className="text-danger">The assistant could not respond. Please try again.</p>
+          )}
+        </div>
+        <form className="flex gap-2 border-t border-line p-3" onSubmit={submit}>
+          <input
+            aria-label="Ask a question"
+            className="min-w-0 flex-1 rounded-lg border border-line px-3 py-2"
+            maxLength={1600}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Ask a question"
+            value={input}
+          />
+          <ActionButton
+            aria-label="Send message"
+            className="inline-flex size-10 items-center justify-center rounded-lg bg-accent text-white disabled:opacity-60"
+            pending={isLoading}
+            pendingLabel=""
+            type="submit"
+          >
+            <Send className="size-4" />
+          </ActionButton>
+        </form>
+      </section>
+      <button
+        aria-label="Open assistant"
+        className="inline-flex size-12 items-center justify-center rounded-full bg-accent text-white shadow-lg hover:bg-accent-dark"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <MessageCircle className="size-6" />
+      </button>
+    </div>
+  );
+}
+
+function renderMessage(content: string) {
+  const parts = content.split(/(\[[^\]]+\]\(\/[A-Za-z0-9_/?=&-]*\))/g);
+  return parts.map((part, index) => {
+    const match = /^\[([^\]]+)\]\((\/[A-Za-z0-9_/?=&-]*)\)$/.exec(part);
+    if (!match) return <span key={index}>{part}</span>;
+    return (
+      <Link className="font-bold underline" href={match[2]} key={index}>
+        {match[1]}
+      </Link>
+    );
+  });
+}

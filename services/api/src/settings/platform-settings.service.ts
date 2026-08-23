@@ -306,6 +306,12 @@ export class PlatformSettingsService {
     };
   }
 
+  async getSupportChatSettings(): Promise<{ mode: 'NONE' | 'TAWK' | 'AI' }> {
+    const row = await this.getRow();
+    const mode = row.supportChatMode.toUpperCase();
+    return { mode: mode === 'AI' || mode === 'NONE' ? mode : 'TAWK' };
+  }
+
   async isCryptoWithdrawalsEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.cryptoWithdrawalsEnabled;
@@ -578,6 +584,7 @@ export class PlatformSettingsService {
       tawkToEnabled: row.tawkToEnabled,
       tawkToPropertyId: row.tawkToPropertyId,
       tawkToWidgetId: row.tawkToWidgetId,
+      supportChatMode: row.supportChatMode,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
       auditHoldEveryNSubmissions: row.auditHoldEveryNSubmissions,
@@ -670,6 +677,7 @@ export class PlatformSettingsService {
     tawkToEnabled?: boolean;
     tawkToPropertyId?: string | null;
     tawkToWidgetId?: string | null;
+    supportChatMode?: string;
     wordStuckTimeoutMinutes?: number;
     scoringSlaMinutes?: number;
     auditHoldEveryNSubmissions?: number;
@@ -766,6 +774,10 @@ export class PlatformSettingsService {
           'llmProviderOrder must list openai, deepseek, and anthropic exactly once each',
         );
       }
+    }
+
+    if (data.supportChatMode && !['NONE', 'TAWK', 'AI'].includes(data.supportChatMode)) {
+      throw new BadRequestException('supportChatMode must be NONE, TAWK, or AI');
     }
 
     if (data.spellingNormalizationProviderOrder) {
@@ -983,6 +995,7 @@ export class PlatformSettingsService {
       tawkToEnabled: row.tawkToEnabled,
       tawkToPropertyId: row.tawkToPropertyId,
       tawkToWidgetId: row.tawkToWidgetId,
+      supportChatMode: row.supportChatMode,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
       auditHoldEveryNSubmissions: row.auditHoldEveryNSubmissions,
@@ -1062,6 +1075,7 @@ export class PlatformSettingsService {
       dictationRecordingMaxTimeoutSeconds,
       authMaintenance,
       tawkTo,
+      supportChat,
       manualPhone,
       phoneVerificationRequired,
     ] = await Promise.all([
@@ -1073,6 +1087,7 @@ export class PlatformSettingsService {
       this.getDictationRecordingMaxTimeoutSeconds(),
       this.getAuthMaintenanceStatus(),
       this.getTawkToWidget(),
+      this.getSupportChatSettings(),
       this.getManualPhoneVerificationSettings(),
       this.isPhoneVerificationRequired(),
     ]);
@@ -1100,6 +1115,7 @@ export class PlatformSettingsService {
       tawkToEnabled: tawkTo.enabled,
       tawkToPropertyId: tawkTo.propertyId,
       tawkToWidgetId: tawkTo.widgetId,
+      supportChatMode: supportChat.mode,
     };
   }
 }

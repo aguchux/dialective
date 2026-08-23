@@ -77,7 +77,7 @@ export function TawkToWidget() {
   const pathname = usePathname();
   const { data: settings } = useGetPublicClientSettingsQuery();
   const { data: session, status } = useSession();
-  const enabled = settings?.tawkToEnabled ?? false;
+  const enabled = settings?.supportChatMode === 'TAWK' && (settings?.tawkToEnabled ?? false);
   const propertyId = settings?.tawkToPropertyId ?? null;
   const widgetId = settings?.tawkToWidgetId ?? null;
   const isDashboardRoute =
@@ -94,7 +94,6 @@ export function TawkToWidget() {
   // The embed is global so it can persist after client-side navigation. Hide
   // an already-loaded widget immediately when a user enters any role dashboard.
   useEffect(() => {
-    if (!enabled) return;
     if (shouldShowWidget) {
       return whenTawkReady((api) => api.showWidget?.());
     }

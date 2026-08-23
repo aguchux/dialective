@@ -143,6 +143,11 @@ export class UpdatePlatformSettingsDto {
   tawkToWidgetId?: string;
 
   @IsOptional()
+  @IsString()
+  @Matches(/^(NONE|TAWK|AI)$/)
+  supportChatMode?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   wordStuckTimeoutMinutes?: number;

@@ -135,10 +135,34 @@ model User {
   authoredSystemUpdates            SystemUpdate[]                   @relation("SystemUpdateAuthor")
   apiAccessTokensUpdated           ApiAccessToken[]                 @relation("ApiAccessTokenUpdatedBy")
   payoutAccounts                   PayoutAccount[]
+  assistantConversation            AssistantConversation?
 
   @@index([promotedById])
   @@index([originCountryId])
   @@map("users")
+}
+
+model AssistantConversation {
+  id        String             @id @default(uuid())
+  userId    String             @unique
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  messages  AssistantMessage[]
+
+  @@map("assistant_conversations")
+}
+
+model AssistantMessage {
+  id             String                @id @default(uuid())
+  conversationId String
+  conversation   AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  createdAt      DateTime              @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("assistant_messages")
 }
 
 enum SystemUpdateKind {
@@ -1623,6 +1647,7 @@ model PlatformSettings {
   tawkToEnabled                          Boolean   @default(false) // master switch for the Tawk.to live-chat widget; the frontend only loads the widget script when this is true AND both IDs below are set
   tawkToPropertyId                       String? // Tawk.to "Property ID" from the widget's embed snippet -- the first path segment of https://embed.tawk.to/<propertyId>/<widgetId>
   tawkToWidgetId                         String? // Tawk.to "Widget ID" from the same embed snippet -- the second path segment
+  supportChatMode                        String    @default("TAWK") // NONE | TAWK | AI; TAWK remains the compatibility default for existing deployments
   wordStuckTimeoutMinutes                Int       @default(1440) // minutes an ENGLISH_TO_DIALECT WordRecording can stay PENDING (unmatched by reverse-validation) before settlement-job auto-refunds its locked tokens
   scoringSlaMinutes                      Int       @default(60) // minutes a Submission/WordRecording can stay unscored before settlement-job resolves it via noFailOnTrainEnabled (synthetic score) or a plain refund
   auditHoldEveryNSubmissions             Int       @default(500) // WordsService.createRecording puts a trainer on audit hold every time their lifetime WordRecording count crosses a multiple of this; 0 disables the feature entirely (no automatic holds)

@@ -1690,6 +1690,7 @@ export const dialectivaApi = createApi({
     'Notifications',
     'ApiAccessTokens',
     'Tokenomics',
+    'AssistantThread',
     'PayoutAccounts',
   ],
   endpoints: (builder) => ({
@@ -2887,10 +2888,26 @@ export const dialectivaApi = createApi({
       query: () => '/settings/public',
     }),
     chatWithAssistant: builder.mutation<
-      { message: string },
+      { message: string; persistent: boolean },
       { message: string; history: Array<{ role: 'user' | 'assistant'; content: string }> }
     >({
       query: (body) => ({ url: '/assistant/chat', method: 'POST', body }),
+      invalidatesTags: ['AssistantThread'],
+    }),
+    getAssistantThread: builder.query<
+      {
+        persistent: boolean;
+        messages: Array<{
+          id: string;
+          role: 'user' | 'assistant';
+          content: string;
+          createdAt: string;
+        }>;
+      },
+      void
+    >({
+      query: () => '/assistant/thread',
+      providesTags: ['AssistantThread'],
     }),
     updatePlatformSettings: builder.mutation<PlatformSettings, PlatformSettingsInput>({
       query: (body) => ({
@@ -3210,6 +3227,7 @@ export const {
   useGetPlatformSettingsQuery,
   useGetPublicClientSettingsQuery,
   useChatWithAssistantMutation,
+  useGetAssistantThreadQuery,
   useUpdatePlatformSettingsMutation,
   useGetApiAccessTokensQuery,
   useSetApiAccessTokenMutation,

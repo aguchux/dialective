@@ -6,6 +6,7 @@ import { ThemeProvider } from 'next-themes';
 import { StoreProvider } from '@/store/Providers';
 import { onAuthMaintenance } from '@/lib/auth-maintenance-signal';
 import { TawkToWidget } from '@/components/TawkToWidget';
+import { AiAssistantWidget } from '@/components/AiAssistantWidget';
 import { RequireNameDialog } from '@/components/RequireNameDialog';
 import { PwaServiceWorker } from '@/components/PwaServiceWorker';
 
@@ -25,6 +26,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <StoreProvider>
           <PwaServiceWorker />
           <TawkToWidget />
+          <AiAssistantWidget />
           <RequireNameDialog />
           {children}
         </StoreProvider>

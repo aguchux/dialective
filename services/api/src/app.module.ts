@@ -25,6 +25,7 @@ import { DatasetStorageModule } from './dataset-storage/dataset-storage.module';
 import { ApiAccessTokensModule } from './api-access-tokens/api-access-tokens.module';
 import { ChatDialectModule } from './chatdialect/chatdialect.module';
 import { TokenomicsModule } from './tokenomics/tokenomics.module';
+import { AssistantModule } from './assistant/assistant.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { TokenomicsModule } from './tokenomics/tokenomics.module';
     ApiAccessTokensModule,
     ChatDialectModule,
     TokenomicsModule,
+    AssistantModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
