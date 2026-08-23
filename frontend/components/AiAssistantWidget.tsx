@@ -11,8 +11,9 @@ import {
   useGetPublicClientSettingsQuery,
 } from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { Avatar } from '@/components/dashboard/shared';
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string };
+type ChatMessage = { role: 'user' | 'assistant'; content: string; createdAt: string };
 
 const AUTH_PATHS = new Set([
   '/login',
@@ -25,7 +26,7 @@ const AUTH_PATHS = new Set([
 
 export function AiAssistantWidget() {
   const pathname = usePathname();
-  const { status } = useSession();
+  const { status, data: session } = useSession();
   const { data: settings } = useGetPublicClientSettingsQuery();
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -45,7 +46,7 @@ export function AiAssistantWidget() {
 
   useEffect(() => {
     if (status === 'authenticated' && thread) {
-      setChat(thread.messages.map(({ role, content }) => ({ role, content })));
+      setChat(thread.messages.map(({ role, content, createdAt }) => ({ role, content, createdAt })));
     }
   }, [status, thread]);
 
@@ -61,12 +62,23 @@ export function AiAssistantWidget() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!prompt || isLoading) return;
-    const next = [...chat, { role: 'user' as const, content: prompt }];
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: prompt,
+      createdAt: new Date().toISOString(),
+    };
+    const next = [...chat, userMessage];
     setChat(next);
     setInput('');
     try {
-      const response = await send({ message: prompt, history: chat.slice(-8) }).unwrap();
-      setChat((current) => [...current, { role: 'assistant', content: response.message }]);
+      const response = await send({
+        message: prompt,
+        history: chat.slice(-8).map(({ role, content }) => ({ role, content })),
+      }).unwrap();
+      setChat((current) => [
+        ...current,
+        { role: 'assistant', content: response.message, createdAt: new Date().toISOString() },
+      ]);
     } catch {
       // The error is shown inline, while the user message remains available
       // for a deliberate retry instead of being silently discarded.
@@ -119,18 +131,38 @@ export function AiAssistantWidget() {
               Ask about getting started, training, earnings, courses, or platform navigation.
             </p>
           )}
-          {chat.map((item, index) => (
-            <div
-              key={`${item.role}-${index}`}
-              className={
-                item.role === 'user'
-                  ? 'ml-8 rounded-lg bg-accent px-3 py-2 text-white'
-                  : 'mr-5 rounded-lg bg-surface-muted px-3 py-2 text-ink'
-              }
-            >
-              {renderMessage(item.content)}
-            </div>
-          ))}
+          {chat.map((item, index) => {
+            const isUser = item.role === 'user';
+            return (
+              <div
+                key={`${item.role}-${index}`}
+                className={`flex items-end gap-2 ${isUser ? 'flex-row-reverse' : ''}`}
+              >
+                {isUser ? (
+                  <Avatar email={session?.user?.email ?? 'You'} image={session?.user?.image} />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-white"
+                  >
+                    <Bot className="size-4" />
+                  </span>
+                )}
+                <div className={`flex max-w-[80%] flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
+                  <div
+                    className={
+                      isUser
+                        ? 'rounded-lg bg-accent px-3 py-2 text-white'
+                        : 'rounded-lg bg-surface-muted px-3 py-2 text-ink'
+                    }
+                  >
+                    {renderMessage(item.content)}
+                  </div>
+                  <span className="px-1 text-xs text-muted">{formatTime(item.createdAt)}</span>
+                </div>
+              </div>
+            );
+          })}
           {isLoading && <p className="text-muted">Thinking...</p>}
           {Boolean(error) && (
             <p className="text-danger">The assistant could not respond. Please try again.</p>
@@ -165,6 +197,12 @@ export function AiAssistantWidget() {
         <MessageCircle className="size-6" />
       </button>
     </div>
+  );
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' }).format(
+    new Date(value),
   );
 }
 
