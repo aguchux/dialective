@@ -95,6 +95,7 @@ import {
   useCreateFlutterwaveDepositMutation,
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
+  useListPayoutAccountsQuery,
   WithdrawalCurrency,
   WithdrawalNetwork,
   useGetEarningHistoryQuery,
@@ -3409,16 +3410,19 @@ function WithdrawTokensDialog({
   balance: string;
   minWithdrawalTokens: string;
 }) {
+  const [method, setMethod] = useState<'crypto' | 'fiat'>('crypto');
   const [amount, setAmount] = useState(minWithdrawalTokens);
   const [destinationAddress, setDestinationAddress] = useState('');
   const [destinationCurrency, setDestinationCurrency] = useState<WithdrawalCurrency>('USDT');
   const [destinationNetwork, setDestinationNetwork] = useState<WithdrawalNetwork>('TRC20');
   const [addressConfirmed, setAddressConfirmed] = useState(false);
+  const [payoutAccountId, setPayoutAccountId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [requestOtp, { isLoading: isRequestingOtp }] = useRequestWithdrawalOtpMutation();
   const [createWithdrawal, { isLoading: isSubmitting }] = useCreateWithdrawalMutation();
+  const { data: payoutAccounts } = useListPayoutAccountsQuery();
 
   const addressLooksValid =
     destinationAddress.length === 0 ||
@@ -3438,6 +3442,27 @@ function WithdrawTokensDialog({
   async function submitDetails(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
+    if (method === 'fiat') {
+      if (!payoutAccountId) {
+        setMessage('Choose a payout method before continuing.');
+        return;
+      }
+      try {
+        const result = await requestOtp({
+          tokenAmount: Number(amount),
+          payoutMethod:
+            payoutAccounts?.find((a) => a.id === payoutAccountId)?.type === 'MOBILE_MONEY'
+              ? 'MOBILE_MONEY'
+              : 'BANK',
+          payoutAccountId,
+        }).unwrap();
+        setOtpRequestId(result.otpRequestId);
+      } catch (error) {
+        setMessage(normalizeErrorMessage(error, 'Could not send a confirmation code.'));
+      }
+      return;
+    }
+
     if (!addressLooksValid) {
       setMessage(`That doesn't look like a valid ${destinationNetwork} address.`);
       return;
@@ -3464,19 +3489,33 @@ function WithdrawTokensDialog({
     if (!otpRequestId) return;
     setMessage(null);
     try {
-      await createWithdrawal({
-        tokenAmount: Number(amount),
-        destinationAddress,
-        destinationCurrency,
-        destinationNetwork,
-        otpRequestId,
-        code,
-      }).unwrap();
+      if (method === 'fiat') {
+        await createWithdrawal({
+          tokenAmount: Number(amount),
+          payoutMethod:
+            payoutAccounts?.find((a) => a.id === payoutAccountId)?.type === 'MOBILE_MONEY'
+              ? 'MOBILE_MONEY'
+              : 'BANK',
+          payoutAccountId,
+          otpRequestId,
+          code,
+        }).unwrap();
+        setPayoutAccountId('');
+      } else {
+        await createWithdrawal({
+          tokenAmount: Number(amount),
+          destinationAddress,
+          destinationCurrency,
+          destinationNetwork,
+          otpRequestId,
+          code,
+        }).unwrap();
+        setDestinationAddress('');
+        setAddressConfirmed(false);
+      }
       setMessage(null);
       setOtpRequestId(null);
       setAmount(minWithdrawalTokens);
-      setDestinationAddress('');
-      setAddressConfirmed(false);
       setCode('');
     } catch (error) {
       setMessage(normalizeErrorMessage(error, 'Could not submit this withdrawal.'));
@@ -3539,6 +3578,31 @@ function WithdrawTokensDialog({
           description={`Available balance: ${formatTokens(balance)} DL.`}
         >
           <form className="grid gap-4" onSubmit={submitDetails}>
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-bold">Payout method</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    { value: 'crypto', label: 'Stablecoin' },
+                    { value: 'fiat', label: 'Bank / Mobile Money' },
+                  ] as const
+                ).map((option) => (
+                  <label
+                    className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border font-extrabold ${method === option.value ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
+                    key={option.value}
+                  >
+                    <input
+                      className="sr-only"
+                      checked={method === option.value}
+                      name="withdrawMethod"
+                      onChange={() => setMethod(option.value)}
+                      type="radio"
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <label className="grid gap-1.5 text-sm font-bold">
               Amount in DL
               <input
@@ -3551,75 +3615,112 @@ function WithdrawTokensDialog({
                 value={amount}
               />
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            {method === 'crypto' ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="grid gap-1.5 text-sm font-bold">
+                    Currency
+                    <select
+                      className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                      onChange={(event) => updateCurrency(event.target.value as WithdrawalCurrency)}
+                      value={destinationCurrency}
+                    >
+                      {Object.keys(WITHDRAWAL_NETWORKS_BY_CURRENCY).map((currency) => (
+                        <option key={currency} value={currency}>
+                          {currency}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5 text-sm font-bold">
+                    Network
+                    <select
+                      className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                      onChange={(event) => updateNetwork(event.target.value as WithdrawalNetwork)}
+                      value={destinationNetwork}
+                    >
+                      {WITHDRAWAL_NETWORKS_BY_CURRENCY[destinationCurrency].map((network) => (
+                        <option key={network} value={network}>
+                          {network}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label className="grid gap-1.5 text-sm font-bold">
+                  {destinationCurrency} destination address ({destinationNetwork})
+                  <input
+                    className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                    onChange={(event) => {
+                      setDestinationAddress(event.target.value.trim());
+                      setAddressConfirmed(false);
+                    }}
+                    placeholder={
+                      destinationNetwork === 'TRC20'
+                        ? 'T...'
+                        : destinationNetwork === 'SOL'
+                          ? 'Base58 address'
+                          : '0x...'
+                    }
+                    required
+                    type="text"
+                    value={destinationAddress}
+                  />
+                  {!addressLooksValid && (
+                    <span className="text-xs font-bold text-danger">
+                      Doesn&apos;t look like a valid {destinationNetwork} address.
+                    </span>
+                  )}
+                </label>
+                <label className="flex items-start gap-2.5 text-sm font-bold">
+                  <input
+                    checked={addressConfirmed}
+                    className="mt-0.5 size-4 shrink-0 accent-accent"
+                    onChange={(event) => setAddressConfirmed(event.target.checked)}
+                    required
+                    type="checkbox"
+                  />
+                  <span className="font-semibold leading-snug text-muted">
+                    I confirm that the {destinationCurrency} address above is on the{' '}
+                    {destinationNetwork} network, belongs to my own account, and I have
+                    double-checked it is correct. Funds sent to a wrong or unsupported network
+                    cannot be recovered.
+                  </span>
+                </label>
+              </>
+            ) : (payoutAccounts?.length ?? 0) === 0 ? (
+              <p className="rounded-lg border border-line bg-surface p-4 text-sm">
+                You don&apos;t have a saved payout method yet.{' '}
+                <Link className="font-bold text-accent" href="/dashboard/payout-accounts">
+                  Add one first
+                </Link>
+                .
+              </p>
+            ) : (
               <label className="grid gap-1.5 text-sm font-bold">
-                Currency
+                Payout account
                 <select
                   className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                  onChange={(event) => updateCurrency(event.target.value as WithdrawalCurrency)}
-                  value={destinationCurrency}
+                  onChange={(event) => setPayoutAccountId(event.target.value)}
+                  required
+                  value={payoutAccountId}
                 >
-                  {Object.keys(WITHDRAWAL_NETWORKS_BY_CURRENCY).map((currency) => (
-                    <option key={currency} value={currency}>
-                      {currency}
+                  <option disabled value="">
+                    Select a payout account
+                  </option>
+                  {payoutAccounts?.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.type === 'BANK'
+                        ? `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`
+                        : `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`}
                     </option>
                   ))}
                 </select>
+                <Link className="text-xs font-bold text-accent" href="/dashboard/payout-accounts">
+                  Manage payout methods
+                </Link>
               </label>
-              <label className="grid gap-1.5 text-sm font-bold">
-                Network
-                <select
-                  className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                  onChange={(event) => updateNetwork(event.target.value as WithdrawalNetwork)}
-                  value={destinationNetwork}
-                >
-                  {WITHDRAWAL_NETWORKS_BY_CURRENCY[destinationCurrency].map((network) => (
-                    <option key={network} value={network}>
-                      {network}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <label className="grid gap-1.5 text-sm font-bold">
-              {destinationCurrency} destination address ({destinationNetwork})
-              <input
-                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                onChange={(event) => {
-                  setDestinationAddress(event.target.value.trim());
-                  setAddressConfirmed(false);
-                }}
-                placeholder={
-                  destinationNetwork === 'TRC20'
-                    ? 'T...'
-                    : destinationNetwork === 'SOL'
-                      ? 'Base58 address'
-                      : '0x...'
-                }
-                required
-                type="text"
-                value={destinationAddress}
-              />
-              {!addressLooksValid && (
-                <span className="text-xs font-bold text-danger">
-                  Doesn&apos;t look like a valid {destinationNetwork} address.
-                </span>
-              )}
-            </label>
-            <label className="flex items-start gap-2.5 text-sm font-bold">
-              <input
-                checked={addressConfirmed}
-                className="mt-0.5 size-4 shrink-0 accent-accent"
-                onChange={(event) => setAddressConfirmed(event.target.checked)}
-                required
-                type="checkbox"
-              />
-              <span className="font-semibold leading-snug text-muted">
-                I confirm that the {destinationCurrency} address above is on the{' '}
-                {destinationNetwork} network, belongs to my own account, and I have double-checked
-                it is correct. Funds sent to a wrong or unsupported network cannot be recovered.
-              </span>
-            </label>
+            )}
             {message && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
                 {message}
@@ -3627,7 +3728,11 @@ function WithdrawTokensDialog({
             )}
             <ActionButton
               className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
-              disabled={!addressLooksValid || !addressConfirmed}
+              disabled={
+                method === 'crypto'
+                  ? !addressLooksValid || !addressConfirmed
+                  : (payoutAccounts?.length ?? 0) === 0
+              }
               pending={isRequestingOtp}
               pendingLabel="Sending code"
               type="submit"

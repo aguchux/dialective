@@ -436,6 +436,13 @@ export interface AdminWithdrawalRequest {
   createdAt: string;
   resolvedAt: string | null;
   payoutMethod?: PayoutMethod;
+  destinationBankCode?: string | null;
+  destinationBankName?: string | null;
+  destinationAccountNumberMasked?: string | null;
+  destinationAccountName?: string | null;
+  destinationMobileNetwork?: string | null;
+  destinationMobileNumberMasked?: string | null;
+  destinationCountry?: string | null;
 }
 
 export type PayoutMethod = 'CRYPTO' | 'BANK' | 'MOBILE_MONEY';
@@ -1014,6 +1021,10 @@ export interface PlatformSettings {
   nowPaymentsPayoutsEnabled: boolean;
   allowedWithdrawalCurrencies: string;
   allowedWithdrawalNetworks: string;
+  isFlutterwaveFundingEnabled: boolean;
+  isFlutterwavePayoutsEnabled: boolean;
+  allowedFlutterwaveCurrencies: string;
+  allowedFlutterwaveCountries: string;
   withdrawalFeeMode: string;
   withdrawalFeeTokenAmount: string;
   withdrawalFeePercent: string;
@@ -1094,6 +1105,10 @@ export interface PlatformSettingsInput {
   nowPaymentsPayoutsEnabled?: boolean;
   allowedWithdrawalCurrencies?: string;
   allowedWithdrawalNetworks?: string;
+  isFlutterwaveFundingEnabled?: boolean;
+  isFlutterwavePayoutsEnabled?: boolean;
+  allowedFlutterwaveCurrencies?: string;
+  allowedFlutterwaveCountries?: string;
   withdrawalFeeMode?: string;
   withdrawalFeeTokenAmount?: number;
   withdrawalFeePercent?: number;
@@ -1965,9 +1980,11 @@ export const dialectivaApi = createApi({
       { otpRequestId: string; expiresInSeconds: number },
       {
         tokenAmount: number;
-        destinationAddress: string;
-        destinationCurrency: WithdrawalCurrency;
-        destinationNetwork: WithdrawalNetwork;
+        destinationAddress?: string;
+        destinationCurrency?: WithdrawalCurrency;
+        destinationNetwork?: WithdrawalNetwork;
+        payoutMethod?: PayoutMethod;
+        payoutAccountId?: string;
       }
     >({
       query: (body) => ({ url: '/wallet/withdrawals/otp', method: 'POST', body }),
@@ -1976,9 +1993,11 @@ export const dialectivaApi = createApi({
       { withdrawalId: string; status: string },
       {
         tokenAmount: number;
-        destinationAddress: string;
-        destinationCurrency: WithdrawalCurrency;
-        destinationNetwork: WithdrawalNetwork;
+        destinationAddress?: string;
+        destinationCurrency?: WithdrawalCurrency;
+        destinationNetwork?: WithdrawalNetwork;
+        payoutMethod?: PayoutMethod;
+        payoutAccountId?: string;
         otpRequestId: string;
         code: string;
       }
@@ -2143,6 +2162,27 @@ export const dialectivaApi = createApi({
     >({
       query: (id) => ({ url: `/admin/withdrawals/${id}/refresh-nowpayments`, method: 'POST' }),
       invalidatesTags: ['Wallet'],
+    }),
+    submitWithdrawalToFlutterwave: builder.mutation<
+      { withdrawalId: string; status: string; providerPayoutId?: string },
+      { id: string; otpRequestId?: string; code?: string; adminNote?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/admin/withdrawals/${id}/submit-flutterwave`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['Wallet'],
+    }),
+    refreshWithdrawalStatusFlutterwave: builder.mutation<
+      { withdrawalId: string; status: string; providerPayoutId: string },
+      string
+    >({
+      query: (id) => ({ url: `/admin/withdrawals/${id}/refresh-flutterwave`, method: 'POST' }),
+      invalidatesTags: ['Wallet'],
+    }),
+    listBanks: builder.query<{ code: string; name: string }[], string>({
+      query: (country) => ({ url: `/banks/${country}` }),
     }),
     resolveWithdrawal: builder.mutation<
       { withdrawalId: string; status: string },
@@ -3072,6 +3112,9 @@ export const {
   useSubmitWithdrawalToNowPaymentsMutation,
   useVerifyWithdrawalPayoutMutation,
   useRefreshWithdrawalStatusMutation,
+  useSubmitWithdrawalToFlutterwaveMutation,
+  useRefreshWithdrawalStatusFlutterwaveMutation,
+  useListBanksQuery,
   useResolveWithdrawalMutation,
   useGetMeQuery,
   useUpdateProfileMutation,

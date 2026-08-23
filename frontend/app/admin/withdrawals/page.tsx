@@ -11,9 +11,11 @@ import {
   useGetPlatformSettingsQuery,
   useListAdminWithdrawalsQuery,
   useRefreshWithdrawalStatusMutation,
+  useRefreshWithdrawalStatusFlutterwaveMutation,
   useRequestWithdrawalResolveOtpMutation,
   useResolveWithdrawalMutation,
   useSubmitWithdrawalToNowPaymentsMutation,
+  useSubmitWithdrawalToFlutterwaveMutation,
   useVerifyWithdrawalPayoutMutation,
   WithdrawalStatus,
 } from '@/store/api';
@@ -50,12 +52,19 @@ export default function AdminWithdrawalsPage() {
         <div>
           <h1 className="text-3xl font-black">Withdrawals</h1>
           <p className="mt-2 text-muted">
-            Review, approve, and submit crypto withdrawal payouts via NOWPayments.
+            Review, approve, and submit crypto (NOWPayments) and fiat (Flutterwave) withdrawal
+            payouts.
           </p>
           {platformSettings && !platformSettings.nowPaymentsPayoutsEnabled && (
             <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
-              NOWPayments payouts are disabled in Settings -- withdrawals can still be approved and
-              rejected, but not submitted to the provider until this is turned on.
+              NOWPayments payouts are disabled in Settings -- crypto withdrawals can still be
+              approved and rejected, but not submitted to the provider until this is turned on.
+            </p>
+          )}
+          {platformSettings && !platformSettings.isFlutterwavePayoutsEnabled && (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+              Flutterwave payouts are disabled in Settings -- fiat withdrawals can still be
+              approved and rejected, but not submitted to the provider until this is turned on.
             </p>
           )}
         </div>
@@ -123,13 +132,22 @@ function WithdrawalRow({
   withdrawal: AdminWithdrawalRequest;
   otpRequired: boolean;
 }) {
-  const [refresh, { isLoading: refreshing }] = useRefreshWithdrawalStatusMutation();
+  const isCrypto = !withdrawal.payoutMethod || withdrawal.payoutMethod === 'CRYPTO';
+  const [refreshNowPayments, { isLoading: refreshingNowPayments }] =
+    useRefreshWithdrawalStatusMutation();
+  const [refreshFlutterwave, { isLoading: refreshingFlutterwave }] =
+    useRefreshWithdrawalStatusFlutterwaveMutation();
+  const refreshing = refreshingNowPayments || refreshingFlutterwave;
   const [error, setError] = useState('');
 
   async function handleRefresh() {
     setError('');
     try {
-      await refresh(withdrawal.id).unwrap();
+      if (isCrypto) {
+        await refreshNowPayments(withdrawal.id).unwrap();
+      } else {
+        await refreshFlutterwave(withdrawal.id).unwrap();
+      }
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not refresh status'));
     }
@@ -158,12 +176,23 @@ function WithdrawalRow({
           {withdrawal.usdtAmount} {withdrawal.destinationCurrency}
         </p>
       </td>
-      <td
-        className="max-w-56 truncate px-4 py-3 font-mono text-xs"
-        title={withdrawal.destinationAddress}
-      >
-        {withdrawal.destinationAddress}
-        <p className="font-sans text-xs text-muted">{withdrawal.destinationNetwork}</p>
+      <td className="max-w-56 truncate px-4 py-3 font-mono text-xs">
+        {withdrawal.payoutMethod && withdrawal.payoutMethod !== 'CRYPTO' ? (
+          <>
+            {withdrawal.destinationAccountNumberMasked ?? withdrawal.destinationMobileNumberMasked}
+            <p className="font-sans text-xs text-muted">
+              {withdrawal.destinationBankName ??
+                withdrawal.destinationMobileNetwork ??
+                withdrawal.payoutMethod}
+              {withdrawal.destinationAccountName ? ` · ${withdrawal.destinationAccountName}` : ''}
+            </p>
+          </>
+        ) : (
+          <>
+            <span title={withdrawal.destinationAddress}>{withdrawal.destinationAddress}</span>
+            <p className="font-sans text-xs text-muted">{withdrawal.destinationNetwork}</p>
+          </>
+        )}
       </td>
       <td className="px-4 py-3 text-xs text-muted">
         {withdrawal.providerPayoutId ? (
@@ -226,7 +255,15 @@ function WithdrawalActions({
       </div>
     );
   }
-  if (withdrawal.status === 'PROCESSING' && withdrawal.providerPayoutId) {
+  if (
+    withdrawal.status === 'PROCESSING' &&
+    withdrawal.providerPayoutId &&
+    (!withdrawal.payoutMethod || withdrawal.payoutMethod === 'CRYPTO')
+  ) {
+    // Flutterwave has no confirmed equivalent to NOWPayments' 2FA payout
+    // verification step -- fiat PROCESSING withdrawals rely on the webhook
+    // and the "Refresh status" link already rendered in the destination
+    // column instead.
     return <WithdrawalVerifyDialog withdrawal={withdrawal} />;
   }
   if (withdrawal.status === 'FAILED') {
@@ -261,8 +298,8 @@ const actionCopy: Record<ActionKind, { title: string; description: string; confi
       confirmLabel: 'Approve',
     },
     submit: {
-      title: 'Submit to NOWPayments',
-      description: 'This sends the payout request to NOWPayments now.',
+      title: 'Submit payout',
+      description: 'This sends the payout request to the provider now.',
       confirmLabel: 'Submit payout',
     },
     paid: {
@@ -294,9 +331,14 @@ function WithdrawalActionDialog({
   const [adminNote, setAdminNote] = useState('');
   const [error, setError] = useState('');
 
+  const isCrypto = !withdrawal.payoutMethod || withdrawal.payoutMethod === 'CRYPTO';
   const [requestOtp, { isLoading: requestingOtp }] = useRequestWithdrawalResolveOtpMutation();
   const [approve, { isLoading: approving }] = useApproveWithdrawalMutation();
-  const [submit, { isLoading: submitting }] = useSubmitWithdrawalToNowPaymentsMutation();
+  const [submitNowPayments, { isLoading: submittingNowPayments }] =
+    useSubmitWithdrawalToNowPaymentsMutation();
+  const [submitFlutterwave, { isLoading: submittingFlutterwave }] =
+    useSubmitWithdrawalToFlutterwaveMutation();
+  const submitting = submittingNowPayments || submittingFlutterwave;
   const [resolve, { isLoading: resolving }] = useResolveWithdrawalMutation();
 
   const pending = requestingOtp || approving || submitting || resolving;
@@ -313,7 +355,9 @@ function WithdrawalActionDialog({
     if (action === 'approve')
       return approve({ id: withdrawal.id, adminNote, ...(otp ?? {}) }).unwrap();
     if (action === 'submit')
-      return submit({ id: withdrawal.id, adminNote, ...(otp ?? {}) }).unwrap();
+      return isCrypto
+        ? submitNowPayments({ id: withdrawal.id, adminNote, ...(otp ?? {}) }).unwrap()
+        : submitFlutterwave({ id: withdrawal.id, adminNote, ...(otp ?? {}) }).unwrap();
     if (action === 'paid')
       return resolve({ id: withdrawal.id, outcome: 'paid', adminNote, ...(otp ?? {}) }).unwrap();
     return resolve({ id: withdrawal.id, outcome: 'rejected', adminNote }).unwrap();
@@ -375,12 +419,29 @@ function WithdrawalActionDialog({
                 <span className="font-bold">Amount:</span> {withdrawal.tokenAmount} DL (
                 {withdrawal.usdtAmount} {withdrawal.destinationCurrency})
               </p>
-              <p className="break-all">
-                <span className="font-bold">Address:</span> {withdrawal.destinationAddress}
-              </p>
-              <p>
-                <span className="font-bold">Network:</span> {withdrawal.destinationNetwork}
-              </p>
+              {isCrypto ? (
+                <>
+                  <p className="break-all">
+                    <span className="font-bold">Address:</span> {withdrawal.destinationAddress}
+                  </p>
+                  <p>
+                    <span className="font-bold">Network:</span> {withdrawal.destinationNetwork}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="break-all">
+                    <span className="font-bold">Account:</span>{' '}
+                    {withdrawal.destinationAccountNumberMasked ??
+                      withdrawal.destinationMobileNumberMasked}
+                    {withdrawal.destinationAccountName ? ` (${withdrawal.destinationAccountName})` : ''}
+                  </p>
+                  <p>
+                    <span className="font-bold">Bank / network:</span>{' '}
+                    {withdrawal.destinationBankName ?? withdrawal.destinationMobileNetwork}
+                  </p>
+                </>
+              )}
               <p>
                 <span className="font-bold">Withdrawal ID:</span>{' '}
                 <span className="font-mono text-xs">{withdrawal.id}</span>

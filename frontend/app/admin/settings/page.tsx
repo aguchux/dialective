@@ -13,6 +13,7 @@ import { SpellingNormalizationSettingsPanel } from './SpellingNormalizationSetti
 import { P2PMarketSettingsPanel } from './P2PMarketSettingsPanel';
 import { SmsSettingsPanel } from './SmsSettingsPanel';
 import { WithdrawalSettingsPanel } from './WithdrawalSettingsPanel';
+import { FlutterwaveSettingsPanel } from './FlutterwaveSettingsPanel';
 import { MaintenanceSettingsPanel } from './MaintenanceSettingsPanel';
 import { DistributorSettingsPanel } from './DistributorSettingsPanel';
 import { LiveChatSettingsPanel } from './LiveChatSettingsPanel';
@@ -36,6 +37,7 @@ const groups = [
   { key: 'p2pMarket', label: 'P2P Market' },
   { key: 'sms', label: 'SMS Providers' },
   { key: 'withdrawals', label: 'Crypto Withdrawals' },
+  { key: 'flutterwave', label: 'Flutterwave (Fiat)' },
   { key: 'datasetStorage', label: 'Dataset & Storage' },
   { key: 'apiAccessTokens', label: 'API Access Tokens' },
 ] as const;
@@ -93,6 +95,7 @@ export default function AdminSettingsPage() {
             {active === 'p2pMarket' && <P2PMarketSettingsPanel />}
             {active === 'sms' && <SmsSettingsPanel />}
             {active === 'withdrawals' && <WithdrawalSettingsPanel />}
+            {active === 'flutterwave' && <FlutterwaveSettingsPanel />}
             {active === 'datasetStorage' && <DatasetStorageSettingsPanel />}
             {active === 'apiAccessTokens' && <ApiAccessTokensSettingsPanel />}
           </div>

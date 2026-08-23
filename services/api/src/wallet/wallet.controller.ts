@@ -1490,10 +1490,47 @@ export class WalletController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async listWithdrawalsForAdmin(@Query('status') status?: WithdrawalStatus) {
+    // Explicit select rather than a bare findMany -- the destination*
+    // EncryptedJson columns must never reach the client, even to an admin;
+    // decryption only ever happens server-side at submit-flutterwave's call
+    // site.
     return this.prisma.withdrawalRequest.findMany({
       where: status ? { status } : undefined,
       orderBy: { createdAt: 'asc' },
-      include: { wallet: { include: { user: { select: { email: true } } } } },
+      select: {
+        id: true,
+        walletId: true,
+        wallet: { include: { user: { select: { email: true } } } },
+        tokenAmount: true,
+        usdtAmount: true,
+        destinationAddress: true,
+        destinationCurrency: true,
+        destinationNetwork: true,
+        status: true,
+        approvedByAdminId: true,
+        approvedAt: true,
+        provider: true,
+        providerPayoutId: true,
+        providerStatus: true,
+        providerCurrency: true,
+        providerNetwork: true,
+        providerAddress: true,
+        providerError: true,
+        submittedToProviderAt: true,
+        providerSettledAt: true,
+        adminNote: true,
+        createdAt: true,
+        resolvedAt: true,
+        payoutMethod: true,
+        payoutAccountId: true,
+        destinationBankCode: true,
+        destinationBankName: true,
+        destinationAccountNumberMasked: true,
+        destinationAccountName: true,
+        destinationMobileNetwork: true,
+        destinationMobileNumberMasked: true,
+        destinationCountry: true,
+      },
     });
   }
 
@@ -1956,6 +1993,17 @@ export class WalletController {
       status: this.mapFlutterwaveTransferStatus(result.status),
       providerPayoutId: result.transferId,
     };
+  }
+
+  /**
+   * Thin proxy over FlutterwaveService.listBanks -- any authenticated
+   * trainer can look up bank codes for the "add payout account" form
+   * without needing Flutterwave's secret key client-side.
+   */
+  @Get('banks/:country')
+  @UseGuards(JwtAuthGuard)
+  async listBanks(@Param('country') country: string) {
+    return this.flutterwave.listBanks(country);
   }
 
   @Post('admin/withdrawals/:id/resolve')
