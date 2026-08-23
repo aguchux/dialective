@@ -62,3 +62,24 @@ export function formatCompactLocalCurrency(value: number | string, currencyCode:
   if (!formatter) return `${compactNumberFormatter.format(Number(value))} ${currencyCode}`;
   return formatter.format(Number(value));
 }
+
+const exactCurrencyFormatters = new Map<string, Intl.NumberFormat>();
+
+/** e.g. formatLocalCurrency(137110, "NGN") -> "₦137,110.00" -- exact (no compaction), for figures a user must confirm before acting on, unlike formatCompactLocalCurrency's at-a-glance summary use. */
+export function formatLocalCurrency(value: number | string, currencyCode: string) {
+  let formatter = exactCurrencyFormatters.get(currencyCode);
+  if (!formatter) {
+    try {
+      formatter = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currencyCode,
+        maximumFractionDigits: 2,
+      });
+    } catch {
+      formatter = undefined;
+    }
+    if (formatter) exactCurrencyFormatters.set(currencyCode, formatter);
+  }
+  if (!formatter) return `${Number(value).toFixed(2)} ${currencyCode}`;
+  return formatter.format(Number(value));
+}

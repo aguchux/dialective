@@ -239,7 +239,12 @@ export class SettlementService {
           ...ops,
           this.prisma.submission.update({
             where: { id: submission.id },
-            data: { compositeScore, payoutTokenAmount: payout, settledAt: new Date() },
+            data: {
+              status: 'SETTLED',
+              compositeScore,
+              payoutTokenAmount: payout,
+              settledAt: new Date(),
+            },
           }),
         ]);
 
@@ -337,7 +342,12 @@ export class SettlementService {
           ...ops,
           this.prisma.wordRecording.update({
             where: { id: recording.id },
-            data: { compositeScore, payoutTokenAmount: payout, settledAt: new Date() },
+            data: {
+              status: 'SETTLED',
+              compositeScore,
+              payoutTokenAmount: payout,
+              settledAt: new Date(),
+            },
           }),
         ]);
 

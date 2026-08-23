@@ -1,3 +1,12 @@
+jest.mock('@dialectiva/db', () => {
+  const actual = jest.requireActual('@dialectiva/db');
+  return {
+    ...actual,
+    computeTrainingPayout: jest.fn(() => ({ toNumber: () => 1 })),
+    creditTrainingPayoutOps: jest.fn().mockResolvedValue({ ops: [] }),
+  };
+});
+
 import { SettlementService } from './settlement.service';
 
 /**
@@ -92,5 +101,87 @@ describe('SettlementService resolveTimedOutScoring', () => {
     expect(result.scoredCount).toBe(0);
     expect(result.refundedCount).toBe(1);
     expect(prisma.submission.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('SettlementService settlement state', () => {
+  function buildPrismaMock() {
+    return {
+      submission: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'sub-1',
+            userId: 'user-1',
+            tokensSpent: { toNumber: () => 5 },
+            rawScore: null,
+            score: { toNumber: () => 80 },
+            noiseScore: null,
+            qualityScore: null,
+            livenessScore: null,
+          },
+        ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      wordRecording: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'recording-1',
+            userId: 'user-1',
+            tokensSpent: { toNumber: () => 5 },
+            rawScore: null,
+            score: { toNumber: () => 80 },
+            noiseScore: null,
+            qualityScore: null,
+            livenessScore: null,
+            asrMatchScore: null,
+          },
+        ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      ledgerEntry: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      wallet: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+    };
+  }
+
+  const qualityWeights = { consensus: 100, noise: 0, quality: 0, liveness: 0 };
+  const scoreRange = { min: 0, max: 100 };
+
+  it('marks a settled submission as SETTLED with its payout timestamp', async () => {
+    const prisma = buildPrismaMock();
+    const service = new SettlementService(prisma as never);
+
+    // @ts-expect-error -- private method under test
+    await service.settleSubmissions(1, false, qualityWeights, scoreRange, 0);
+
+    expect(prisma.submission.update).toHaveBeenCalledWith({
+      where: { id: 'sub-1' },
+      data: expect.objectContaining({
+        status: 'SETTLED',
+        payoutTokenAmount: expect.anything(),
+        settledAt: expect.any(Date),
+      }),
+    });
+  });
+
+  it('marks a settled word recording as SETTLED with its payout timestamp', async () => {
+    const prisma = buildPrismaMock();
+    const service = new SettlementService(prisma as never);
+
+    // @ts-expect-error -- private method under test
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0);
+
+    expect(prisma.wordRecording.update).toHaveBeenCalledWith({
+      where: { id: 'recording-1' },
+      data: expect.objectContaining({
+        status: 'SETTLED',
+        payoutTokenAmount: expect.anything(),
+        settledAt: expect.any(Date),
+      }),
+    });
   });
 });

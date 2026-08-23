@@ -42,7 +42,12 @@ import {
 import { BrandLogo } from '@/components/BrandLogo';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
-import { formatCompactLocalCurrency, formatCompactNumber, formatCompactUsd } from '@/lib/format';
+import {
+  formatCompactLocalCurrency,
+  formatCompactNumber,
+  formatCompactUsd,
+  formatLocalCurrency,
+} from '@/lib/format';
 import { resolveDialectName, useDialectName } from '@/lib/dialect-name';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
 import { DictationDialog } from '@/components/trainer/DictationDialog';
@@ -96,6 +101,7 @@ import {
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
   useListPayoutAccountsQuery,
+  LocalCurrency,
   WithdrawalCurrency,
   WithdrawalNetwork,
   useGetEarningHistoryQuery,
@@ -835,6 +841,8 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
           <WithdrawTokensDialog
             balance={data.balance}
             minWithdrawalTokens={data.minWithdrawalTokens}
+            tokenUsdRate={data.tokenUsdRate}
+            localCurrency={data.localCurrency}
           />
           <FundTokensDialog />
         </div>
@@ -3406,9 +3414,13 @@ const WITHDRAWAL_ADDRESS_PATTERNS: Record<WithdrawalNetwork, RegExp> = {
 function WithdrawTokensDialog({
   balance,
   minWithdrawalTokens,
+  tokenUsdRate,
+  localCurrency,
 }: {
   balance: string;
   minWithdrawalTokens: string;
+  tokenUsdRate: number;
+  localCurrency: LocalCurrency | null;
 }) {
   const [method, setMethod] = useState<'crypto' | 'fiat'>('crypto');
   const [amount, setAmount] = useState(minWithdrawalTokens);
@@ -3418,6 +3430,7 @@ function WithdrawTokensDialog({
   const [addressConfirmed, setAddressConfirmed] = useState(false);
   const [payoutAccountId, setPayoutAccountId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [stage, setStage] = useState<'details' | 'confirm' | 'code'>('details');
   const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [requestOtp, { isLoading: isRequestingOtp }] = useRequestWithdrawalOtpMutation();
@@ -3427,6 +3440,10 @@ function WithdrawTokensDialog({
   const addressLooksValid =
     destinationAddress.length === 0 ||
     WITHDRAWAL_ADDRESS_PATTERNS[destinationNetwork].test(destinationAddress.trim());
+  const amountNumber = Number(amount) || 0;
+  const usdAmount = amountNumber * tokenUsdRate;
+  const localAmount = localCurrency ? usdAmount * Number(localCurrency.usdExchangeRate) : null;
+  const selectedPayoutAccount = payoutAccounts?.find((a) => a.id === payoutAccountId);
 
   function updateCurrency(currency: WithdrawalCurrency) {
     setDestinationCurrency(currency);
@@ -3439,7 +3456,7 @@ function WithdrawTokensDialog({
     setAddressConfirmed(false);
   }
 
-  async function submitDetails(event: FormEvent) {
+  function submitDetails(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
     if (method === 'fiat') {
@@ -3447,38 +3464,39 @@ function WithdrawTokensDialog({
         setMessage('Choose a payout method before continuing.');
         return;
       }
-      try {
+    } else {
+      if (!addressLooksValid) {
+        setMessage(`That doesn't look like a valid ${destinationNetwork} address.`);
+        return;
+      }
+      if (!addressConfirmed) {
+        setMessage('Confirm the destination address before continuing.');
+        return;
+      }
+    }
+    setStage('confirm');
+  }
+
+  async function confirmAndRequestOtp() {
+    setMessage(null);
+    try {
+      if (method === 'fiat') {
         const result = await requestOtp({
-          tokenAmount: Number(amount),
-          payoutMethod:
-            payoutAccounts?.find((a) => a.id === payoutAccountId)?.type === 'MOBILE_MONEY'
-              ? 'MOBILE_MONEY'
-              : 'BANK',
+          tokenAmount: amountNumber,
+          payoutMethod: selectedPayoutAccount?.type === 'MOBILE_MONEY' ? 'MOBILE_MONEY' : 'BANK',
           payoutAccountId,
         }).unwrap();
         setOtpRequestId(result.otpRequestId);
-      } catch (error) {
-        setMessage(normalizeErrorMessage(error, 'Could not send a confirmation code.'));
+      } else {
+        const result = await requestOtp({
+          tokenAmount: amountNumber,
+          destinationAddress,
+          destinationCurrency,
+          destinationNetwork,
+        }).unwrap();
+        setOtpRequestId(result.otpRequestId);
       }
-      return;
-    }
-
-    if (!addressLooksValid) {
-      setMessage(`That doesn't look like a valid ${destinationNetwork} address.`);
-      return;
-    }
-    if (!addressConfirmed) {
-      setMessage('Confirm the destination address before continuing.');
-      return;
-    }
-    try {
-      const result = await requestOtp({
-        tokenAmount: Number(amount),
-        destinationAddress,
-        destinationCurrency,
-        destinationNetwork,
-      }).unwrap();
-      setOtpRequestId(result.otpRequestId);
+      setStage('code');
     } catch (error) {
       setMessage(normalizeErrorMessage(error, 'Could not send a confirmation code.'));
     }
@@ -3491,11 +3509,8 @@ function WithdrawTokensDialog({
     try {
       if (method === 'fiat') {
         await createWithdrawal({
-          tokenAmount: Number(amount),
-          payoutMethod:
-            payoutAccounts?.find((a) => a.id === payoutAccountId)?.type === 'MOBILE_MONEY'
-              ? 'MOBILE_MONEY'
-              : 'BANK',
+          tokenAmount: amountNumber,
+          payoutMethod: selectedPayoutAccount?.type === 'MOBILE_MONEY' ? 'MOBILE_MONEY' : 'BANK',
           payoutAccountId,
           otpRequestId,
           code,
@@ -3503,7 +3518,7 @@ function WithdrawTokensDialog({
         setPayoutAccountId('');
       } else {
         await createWithdrawal({
-          tokenAmount: Number(amount),
+          tokenAmount: amountNumber,
           destinationAddress,
           destinationCurrency,
           destinationNetwork,
@@ -3514,6 +3529,7 @@ function WithdrawTokensDialog({
         setAddressConfirmed(false);
       }
       setMessage(null);
+      setStage('details');
       setOtpRequestId(null);
       setAmount(minWithdrawalTokens);
       setCode('');
@@ -3523,6 +3539,7 @@ function WithdrawTokensDialog({
   }
 
   function reset() {
+    setStage('details');
     setOtpRequestId(null);
     setCode('');
     setMessage(null);
@@ -3540,7 +3557,7 @@ function WithdrawTokensDialog({
           <span className="sm:hidden">Withdraw</span>
         </button>
       </DialogTrigger>
-      {otpRequestId ? (
+      {stage === 'code' ? (
         <DialogContent
           title="Enter your code"
           description="We emailed a 6-digit code to confirm this withdrawal."
@@ -3571,6 +3588,70 @@ function WithdrawTokensDialog({
               Confirm withdrawal
             </ActionButton>
           </form>
+        </DialogContent>
+      ) : stage === 'confirm' ? (
+        <DialogContent
+          title="Confirm withdrawal amount"
+          description="Double-check these figures -- once you send the code, this amount is what will be debited and paid out."
+        >
+          <div className="grid gap-4">
+            <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
+              <ConfirmRow label="You withdraw" value={`${formatTokens(amountNumber)} DL`} />
+              <ConfirmRow label="Estimated value" value={formatUsd(usdAmount)} />
+              {method === 'fiat' && localCurrency && localAmount !== null && (
+                <ConfirmRow
+                  label={`You receive (${localCurrency.code})`}
+                  value={formatLocalCurrency(localAmount, localCurrency.code)}
+                  emphasize
+                />
+              )}
+              {method === 'fiat' && selectedPayoutAccount && (
+                <ConfirmRow
+                  label="Payout account"
+                  value={
+                    selectedPayoutAccount.type === 'BANK'
+                      ? `${selectedPayoutAccount.bankName ?? selectedPayoutAccount.bankCode} · ${selectedPayoutAccount.accountNumberMasked}`
+                      : `${selectedPayoutAccount.mobileMoneyNetwork} · ${selectedPayoutAccount.mobileMoneyNumberMasked}`
+                  }
+                />
+              )}
+              {method === 'crypto' && (
+                <ConfirmRow
+                  label="Destination"
+                  value={`${destinationCurrency} (${destinationNetwork}) · ${destinationAddress}`}
+                />
+              )}
+            </div>
+            {method === 'fiat' && (
+              <p className="text-xs leading-relaxed text-muted">
+                The local currency amount is estimated from the current exchange rate and may
+                differ slightly from what your bank or mobile money provider credits.
+              </p>
+            )}
+            {message && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                {message}
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className="min-h-11 rounded-lg border border-line bg-surface px-4 font-extrabold text-ink hover:bg-surface-muted"
+                onClick={() => setStage('details')}
+                type="button"
+              >
+                Back
+              </button>
+              <ActionButton
+                className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+                onClick={confirmAndRequestOtp}
+                pending={isRequestingOtp}
+                pendingLabel="Sending code"
+                type="button"
+              >
+                Confirm &amp; send code
+              </ActionButton>
+            </div>
+          </div>
         </DialogContent>
       ) : (
         <DialogContent
@@ -3614,6 +3695,15 @@ function WithdrawTokensDialog({
                 type="number"
                 value={amount}
               />
+              {amountNumber > 0 && (
+                <span className="text-xs font-semibold text-muted">
+                  ≈ {formatUsd(usdAmount)}
+                  {method === 'fiat' &&
+                    localCurrency &&
+                    localAmount !== null &&
+                    ` · ≈ ${formatLocalCurrency(localAmount, localCurrency.code)}`}
+                </span>
+              )}
             </label>
             {method === 'crypto' ? (
               <>
@@ -3726,23 +3816,40 @@ function WithdrawTokensDialog({
                 {message}
               </p>
             )}
-            <ActionButton
-              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+            <button
+              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
               disabled={
                 method === 'crypto'
                   ? !addressLooksValid || !addressConfirmed
                   : (payoutAccounts?.length ?? 0) === 0
               }
-              pending={isRequestingOtp}
-              pendingLabel="Sending code"
               type="submit"
             >
-              Send confirmation code
-            </ActionButton>
+              Review withdrawal
+            </button>
           </form>
         </DialogContent>
       )}
     </Dialog>
+  );
+}
+
+function ConfirmRow({
+  label,
+  value,
+  emphasize = false,
+}: {
+  label: string;
+  value: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-sm font-semibold text-muted">{label}</span>
+      <span className={emphasize ? 'text-lg font-black text-ink' : 'font-bold text-ink'}>
+        {value}
+      </span>
+    </div>
   );
 }
 
