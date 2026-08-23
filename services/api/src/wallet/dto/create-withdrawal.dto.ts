@@ -35,7 +35,9 @@ export class CreateWithdrawalDto {
   @IsIn(['CRYPTO', 'BANK', 'MOBILE_MONEY'])
   payoutMethod?: 'CRYPTO' | 'BANK' | 'MOBILE_MONEY';
 
-  @ValidateIf((dto: CreateWithdrawalDto) => Boolean(dto.payoutMethod) && dto.payoutMethod !== 'CRYPTO')
+  @ValidateIf(
+    (dto: CreateWithdrawalDto) => Boolean(dto.payoutMethod) && dto.payoutMethod !== 'CRYPTO',
+  )
   @IsUUID()
   payoutAccountId?: string;
 

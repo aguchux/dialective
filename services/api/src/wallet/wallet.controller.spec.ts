@@ -360,7 +360,10 @@ describe('WalletController Flutterwave webhook', () => {
       if (typeof input === 'function') return (input as (tx: unknown) => unknown)(prisma);
       return Promise.all(input as Promise<unknown>[]);
     });
-    const flutterwave = { verifyWebhookSignature: jest.fn().mockReturnValue(true), getWebhookEventHash: jest.fn().mockReturnValue('transfer-event-hash') };
+    const flutterwave = {
+      verifyWebhookSignature: jest.fn().mockReturnValue(true),
+      getWebhookEventHash: jest.fn().mockReturnValue('transfer-event-hash'),
+    };
     const controller = new WalletController(
       prisma as never,
       {} as never,
@@ -702,7 +705,9 @@ describe('WalletController Flutterwave payout submission', () => {
       return Promise.all(input as Promise<unknown>[]);
     });
     const flutterwave = {
-      resolveAccount: jest.fn().mockResolvedValue({ accountNumber: '0690000032', accountName: 'John Doe' }),
+      resolveAccount: jest
+        .fn()
+        .mockResolvedValue({ accountNumber: '0690000032', accountName: 'John Doe' }),
       createTransfer: jest
         .fn()
         .mockResolvedValue({ transferId: 'transfer-1', status: 'NEW', raw: {} }),
@@ -749,18 +754,18 @@ describe('WalletController Flutterwave payout submission', () => {
       accountName: 'Someone Else',
     });
 
-    await expect(
-      controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {}),
-    ).rejects.toThrow('no longer matches');
+    await expect(controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {})).rejects.toThrow(
+      'no longer matches',
+    );
     expect(flutterwave.createTransfer).not.toHaveBeenCalled();
   });
 
   it('refuses to submit a FAILED withdrawal directly -- it must be re-approved first', async () => {
     const { controller, flutterwave, req } = setup(baseFiatWithdrawal({ status: 'FAILED' }));
 
-    await expect(
-      controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {}),
-    ).rejects.toThrow('Only approved withdrawals can be submitted to Flutterwave');
+    await expect(controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {})).rejects.toThrow(
+      'Only approved withdrawals can be submitted to Flutterwave',
+    );
     expect(flutterwave.createTransfer).not.toHaveBeenCalled();
   });
 
@@ -781,14 +786,16 @@ describe('WalletController Flutterwave payout submission', () => {
     );
     prisma.withdrawalRequest.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(
-      controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {}),
-    ).rejects.toThrow('already being submitted');
+    await expect(controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {})).rejects.toThrow(
+      'already being submitted',
+    );
     expect(flutterwave.createTransfer).not.toHaveBeenCalled();
   });
 
   it('marks the withdrawal FAILED (does not throw a lost update) when createTransfer rejects', async () => {
-    const { controller, prisma, flutterwave, req } = setup(baseFiatWithdrawal({ status: 'APPROVED' }));
+    const { controller, prisma, flutterwave, req } = setup(
+      baseFiatWithdrawal({ status: 'APPROVED' }),
+    );
     flutterwave.createTransfer.mockRejectedValue(new Error('provider unreachable'));
 
     await expect(controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {})).rejects.toThrow(

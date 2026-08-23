@@ -4,9 +4,11 @@ describe('WithdrawalReconciliationService', () => {
   function setup(processingByProvider: Record<string, Record<string, unknown>[]>) {
     const prisma: any = {
       withdrawalRequest: {
-        findMany: jest.fn().mockImplementation(({ where }: { where: { provider: string } }) =>
-          Promise.resolve(processingByProvider[where.provider] ?? []),
-        ),
+        findMany: jest
+          .fn()
+          .mockImplementation(({ where }: { where: { provider: string } }) =>
+            Promise.resolve(processingByProvider[where.provider] ?? []),
+          ),
         update: jest.fn().mockResolvedValue({}),
       },
       nowPaymentsPayoutEvent: { create: jest.fn().mockResolvedValue({}) },
@@ -39,8 +41,20 @@ describe('WithdrawalReconciliationService', () => {
 
     const result = await service.run();
 
-    expect(result.nowpayments).toEqual({ checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 });
-    expect(result.flutterwave).toEqual({ checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 });
+    expect(result.nowpayments).toEqual({
+      checked: 0,
+      paid: 0,
+      failed: 0,
+      stillProcessing: 0,
+      stale: 0,
+    });
+    expect(result.flutterwave).toEqual({
+      checked: 0,
+      paid: 0,
+      failed: 0,
+      stillProcessing: 0,
+      stale: 0,
+    });
     expect(prisma.withdrawalRequest.findMany).not.toHaveBeenCalled();
   });
 
@@ -129,7 +143,11 @@ describe('WithdrawalReconciliationService', () => {
     const { service, prisma, flutterwave } = setup({
       flutterwave: [{ id: 'w2', providerPayoutId: 't1', submittedToProviderAt: new Date() }],
     });
-    flutterwave.getTransferStatus.mockResolvedValue({ transferId: 't1', status: 'FAILED', raw: {} });
+    flutterwave.getTransferStatus.mockResolvedValue({
+      transferId: 't1',
+      status: 'FAILED',
+      raw: {},
+    });
 
     const result = await service.run();
 
@@ -143,7 +161,11 @@ describe('WithdrawalReconciliationService', () => {
     const { service, prisma, flutterwave } = setup({
       flutterwave: [{ id: 'w2', providerPayoutId: 't1', submittedToProviderAt: new Date() }],
     });
-    flutterwave.getTransferStatus.mockResolvedValue({ transferId: 't1', status: 'PENDING', raw: {} });
+    flutterwave.getTransferStatus.mockResolvedValue({
+      transferId: 't1',
+      status: 'PENDING',
+      raw: {},
+    });
 
     const result = await service.run();
 

@@ -85,7 +85,7 @@ Set these in the Vercel project settings, not in this repo's secrets (which only
 
 `chatdialect/apps/web` is a second, separate Vercel project at
 `labs.dialectlibrary.com` — see `chatdialect/README.md`. Set these in
-*that* Vercel project's settings, not here:
+_that_ Vercel project's settings, not here:
 
 - `NEXT_PUBLIC_DIALECT_LIBRARY_API_URL` — `https://api.dialectlibrary.com/api/v1`
 - `NEXT_PUBLIC_APP_URL` — `https://labs.dialectlibrary.com`

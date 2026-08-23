@@ -1102,7 +1102,9 @@ export class WalletController {
       where: { id: reference },
     });
     if (!withdrawal) {
-      this.logger.warn(`Flutterwave transfer webhook did not match a withdrawal: reference=${reference}`);
+      this.logger.warn(
+        `Flutterwave transfer webhook did not match a withdrawal: reference=${reference}`,
+      );
       return { received: true, matched: false };
     }
 
@@ -1117,9 +1119,7 @@ export class WalletController {
       status ?? null,
       data ?? {},
     );
-    this.logger.log(
-      `Flutterwave transfer webhook status=${status} withdrawal=${withdrawal.id}`,
-    );
+    this.logger.log(`Flutterwave transfer webhook status=${status} withdrawal=${withdrawal.id}`);
     return { received: true, status };
   }
 
@@ -1248,7 +1248,11 @@ export class WalletController {
    * allow-list. Resolves and returns the trainer's own PayoutAccount so
    * callers don't re-fetch it.
    */
-  private async validateFiatWithdrawalRequest(userId: string, tokenAmount: number, payoutAccountId: string) {
+  private async validateFiatWithdrawalRequest(
+    userId: string,
+    tokenAmount: number,
+    payoutAccountId: string,
+  ) {
     if (!(await this.platformSettings.isFlutterwavePayoutsEnabled())) {
       throw new UnprocessableEntityException('Fiat withdrawals are currently disabled');
     }
@@ -1339,8 +1343,7 @@ export class WalletController {
     const destinationCurrency = body.destinationCurrency ?? 'USDT';
     const destinationNetwork = body.destinationNetwork ?? 'TRC20';
 
-    let payoutAccount: Awaited<ReturnType<typeof this.validateFiatWithdrawalRequest>> | null =
-      null;
+    let payoutAccount: Awaited<ReturnType<typeof this.validateFiatWithdrawalRequest>> | null = null;
     let otpRow: { id: string };
     if (isFiat) {
       payoutAccount = await this.validateFiatWithdrawalRequest(
@@ -1399,7 +1402,8 @@ export class WalletController {
     // rather than referencing a live config row.
     const fiatSnapshot = payoutAccount
       ? {
-          payoutMethod: payoutAccount.type === 'BANK' ? PayoutMethod.BANK : PayoutMethod.MOBILE_MONEY,
+          payoutMethod:
+            payoutAccount.type === 'BANK' ? PayoutMethod.BANK : PayoutMethod.MOBILE_MONEY,
           payoutAccountId: payoutAccount.id,
           destinationCountry: payoutAccount.country,
           ...(payoutAccount.type === 'BANK'
@@ -1407,8 +1411,7 @@ export class WalletController {
                 destinationBankCode: payoutAccount.bankCode,
                 destinationBankName: payoutAccount.bankName,
                 destinationAccountNumberEncryptedJson: payoutAccount.accountNumberEncryptedJson as
-                  | Prisma.InputJsonValue
-                  | undefined,
+                  Prisma.InputJsonValue | undefined,
                 destinationAccountNumberMasked: payoutAccount.accountNumberMasked,
                 destinationAccountName: payoutAccount.accountName,
               }
@@ -1987,7 +1990,13 @@ export class WalletController {
     }
 
     const result = await this.flutterwave.getTransferStatus(withdrawal.providerPayoutId);
-    await this.recordFlutterwavePayoutStatus(id, result.transferId, 'status', result.status, result.raw);
+    await this.recordFlutterwavePayoutStatus(
+      id,
+      result.transferId,
+      'status',
+      result.status,
+      result.raw,
+    );
     return {
       withdrawalId: id,
       status: this.mapFlutterwaveTransferStatus(result.status),

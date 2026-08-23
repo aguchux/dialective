@@ -84,7 +84,9 @@ export class AssistantService implements OnModuleDestroy {
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       this.logger.error(`Assistant LLM call failed: ${detail}`);
-      throw new BadGatewayException('The assistant is temporarily unavailable. Please try again shortly.');
+      throw new BadGatewayException(
+        'The assistant is temporarily unavailable. Please try again shortly.',
+      );
     }
     const sanitized = sanitizeAnswer(answer);
     if (userId) {
@@ -216,9 +218,7 @@ export class AssistantService implements OnModuleDestroy {
  * trust more than an ordinary user turn, making it a stronger prompt-
  * injection vector than a same-content user message.
  */
-function sanitizeGuestHistory(
-  history: AssistantHistoryMessageDto[],
-): AssistantHistoryMessageDto[] {
+function sanitizeGuestHistory(history: AssistantHistoryMessageDto[]): AssistantHistoryMessageDto[] {
   return history.filter((item) => item.role === 'user');
 }
 

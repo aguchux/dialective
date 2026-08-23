@@ -35,7 +35,12 @@ const secondaryButtonClass =
 
 export default function PayoutAccountsPage() {
   const { status } = useSession();
-  const { data: accounts, isLoading, isError, error } = useListPayoutAccountsQuery(undefined, {
+  const {
+    data: accounts,
+    isLoading,
+    isError,
+    error,
+  } = useListPayoutAccountsQuery(undefined, {
     skip: status !== 'authenticated',
   });
   const [updateAccount] = useUpdatePayoutAccountMutation();
@@ -66,7 +71,10 @@ export default function PayoutAccountsPage() {
 
   return (
     <div className="mx-auto grid max-w-2xl gap-6 p-4 sm:p-6">
-      <Link className="inline-flex items-center gap-1.5 text-sm font-bold text-accent" href="/dashboard">
+      <Link
+        className="inline-flex items-center gap-1.5 text-sm font-bold text-accent"
+        href="/dashboard"
+      >
         <ArrowLeft className="size-4" aria-hidden="true" /> Back to dashboard
       </Link>
 
@@ -103,7 +111,9 @@ export default function PayoutAccountsPage() {
           >
             <div className="flex items-center justify-between gap-2">
               <p className="font-extrabold">
-                {account.type === 'BANK' ? account.bankName ?? account.bankCode : account.mobileMoneyNetwork}
+                {account.type === 'BANK'
+                  ? (account.bankName ?? account.bankCode)
+                  : account.mobileMoneyNetwork}
               </p>
               {account.isDefault && (
                 <span className="rounded-md bg-accent-soft px-2.5 py-1 text-xs font-extrabold text-accent-dark">
@@ -112,7 +122,9 @@ export default function PayoutAccountsPage() {
               )}
             </div>
             <p className="text-sm text-muted">
-              {account.type === 'BANK' ? account.accountNumberMasked : account.mobileMoneyNumberMasked}
+              {account.type === 'BANK'
+                ? account.accountNumberMasked
+                : account.mobileMoneyNumberMasked}
               {account.accountName ? ` · ${account.accountName}` : ''}
             </p>
             {account.type === 'MOBILE_MONEY' && account.verificationStatus === 'UNVERIFIED' && (

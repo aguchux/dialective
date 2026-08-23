@@ -386,11 +386,11 @@ policyVersion
 
 Example:
 
-| Date | Reserve | Redeemable DL | Raw Value | Published Value |
-|---|---:|---:|---:|---:|
-| Day 1 | $100,000 | 1,000,000 | $0.1000 | $0.1000 |
-| Day 2 | $110,000 | 1,020,000 | $0.1078 | $0.1050 |
-| Day 3 | $112,000 | 1,030,000 | $0.1087 | $0.1087 |
+| Date  |  Reserve | Redeemable DL | Raw Value | Published Value |
+| ----- | -------: | ------------: | --------: | --------------: |
+| Day 1 | $100,000 |     1,000,000 |   $0.1000 |         $0.1000 |
+| Day 2 | $110,000 |     1,020,000 |   $0.1078 |         $0.1050 |
+| Day 3 | $112,000 |     1,030,000 |   $0.1087 |         $0.1087 |
 
 Historical rates must never be overwritten.
 
@@ -621,12 +621,12 @@ Reserve Coverage = 100%
 
 Initial recommended policy:
 
-| Coverage | Status | Suggested Action |
-|---|---|---|
-| 100%+ | Healthy | Normal minting |
-| 80–99% | Watch | Slightly reduced emissions |
-| 60–79% | Restricted | Significantly reduce emissions |
-| Below 60% | Critical | Pause or heavily restrict redeemable DL minting |
+| Coverage  | Status     | Suggested Action                                |
+| --------- | ---------- | ----------------------------------------------- |
+| 100%+     | Healthy    | Normal minting                                  |
+| 80–99%    | Watch      | Slightly reduced emissions                      |
+| 60–79%    | Restricted | Significantly reduce emissions                  |
+| Below 60% | Critical   | Pause or heavily restrict redeemable DL minting |
 
 These values must be configurable.
 

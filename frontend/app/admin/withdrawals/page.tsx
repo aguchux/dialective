@@ -63,8 +63,8 @@ export default function AdminWithdrawalsPage() {
           )}
           {platformSettings && !platformSettings.isFlutterwavePayoutsEnabled && (
             <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
-              Flutterwave payouts are disabled in Settings -- fiat withdrawals can still be
-              approved and rejected, but not submitted to the provider until this is turned on.
+              Flutterwave payouts are disabled in Settings -- fiat withdrawals can still be approved
+              and rejected, but not submitted to the provider until this is turned on.
             </p>
           )}
         </div>
@@ -434,7 +434,9 @@ function WithdrawalActionDialog({
                     <span className="font-bold">Account:</span>{' '}
                     {withdrawal.destinationAccountNumberMasked ??
                       withdrawal.destinationMobileNumberMasked}
-                    {withdrawal.destinationAccountName ? ` (${withdrawal.destinationAccountName})` : ''}
+                    {withdrawal.destinationAccountName
+                      ? ` (${withdrawal.destinationAccountName})`
+                      : ''}
                   </p>
                   <p>
                     <span className="font-bold">Bank / network:</span>{' '}
