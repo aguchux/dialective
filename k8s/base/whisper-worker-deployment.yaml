@@ -78,6 +78,20 @@ spec:
                 secretKeyRef:
                   name: postgres-creds
                   key: connection_string
+          resources:
+            # Sized around observed usage -- an eviction incident on
+            # 2026-08-23 found a single instance at ~2.7Gi with no limit set,
+            # which drove its node into MemoryPressure and evicted ~30
+            # replica pods it had spawned trying to reschedule. The request
+            # gives normal operation (model load + inference) headroom above
+            # that observed figure; the limit caps a leak/runaway so it gets
+            # OOMKilled on its own instead of taking the whole node down.
+            requests:
+              cpu: 500m
+              memory: 2560Mi
+            limits:
+              cpu: "2"
+              memory: 3584Mi
           volumeMounts:
             - name: whisper-model-repo
               mountPath: /models

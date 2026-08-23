@@ -1,7 +1,20 @@
 name: Deploy Prisma migrations + seed to production
 
-# Manual-only: build docker-publish.yml first, then release the matching
-# immutable image tag against the production database.
+# Runs two ways:
+#  - workflow_call: docker-publish.yml invokes this automatically on every
+#    push to main, once it has pushed a new dialect-api-prisma image -- see
+#    that workflow's "prisma-deploy" job. This is the path that keeps a
+#    schema change from ever landing on main without also landing in the
+#    production database (this workflow's own history is the reason that
+#    matters: prisma-migrate.yml's auto-triggered "Prisma build and migrate"
+#    job only ever validates against a throwaway CI Postgres container and
+#    reports success regardless of production state, which reads
+#    deceptively like a real deploy but never was one). `prisma migrate
+#    deploy` is already a safe no-op when nothing new needs applying, so
+#    running this on every push costs nothing when there's no schema change.
+#  - workflow_dispatch: manual escape hatch, e.g. to re-run a release
+#    against an older image tag, or to seed/migrate outside the normal
+#    push-to-main flow.
 on:
   workflow_dispatch:
     inputs:
@@ -9,6 +22,15 @@ on:
         description: "dialect-api-prisma image tag (prefer a commit SHA)"
         required: true
         default: "latest"
+  workflow_call:
+    inputs:
+      image_tag:
+        description: "dialect-api-prisma image tag (prefer a commit SHA)"
+        required: true
+        type: string
+    secrets:
+      KUBE_CONFIG:
+        required: true
 
 concurrency:
   group: prisma-deploy-prod

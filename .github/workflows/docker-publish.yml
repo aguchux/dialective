@@ -107,3 +107,25 @@ jobs:
             golojan/dialect-${{ matrix.image }}:${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # A schema change merged to main but never released to production reads
+  # exactly like a working deploy -- prisma-migrate.yml's CI job only ever
+  # validates against a throwaway Postgres container, and its green check
+  # gives no signal about production's actual state. This job closes that
+  # gap by releasing the just-built dialect-api-prisma image (pinned to this
+  # commit's SHA, not :latest -- see prisma-deploy.yml's own image-tag
+  # comment) against the live database automatically, on every push to main,
+  # immediately after the image that would otherwise silently expect the new
+  # columns is live. Runs unconditionally rather than trying to detect
+  # "did this push touch prisma/" from commit metadata (github.event.commits
+  # is unreliable across squash-merges/force-pushes/multi-commit pushes) --
+  # `prisma migrate deploy` is already a safe no-op when there is nothing
+  # new to apply, so that's the correct place to decide, not this filter.
+  prisma-deploy:
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/prisma-deploy.yml
+    with:
+      image_tag: ${{ github.sha }}
+    secrets:
+      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}

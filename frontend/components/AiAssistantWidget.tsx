@@ -36,6 +36,11 @@ export function AiAssistantWidget() {
   });
   const transcriptRef = useRef<HTMLDivElement>(null);
   const enabled = settings?.supportChatMode === 'AI' && !AUTH_PATHS.has(pathname);
+  // TrainerDashboard's MobileNavigation (fixed bottom tab bar, h-16 == 4rem)
+  // only renders on /dashboard itself -- everywhere else the widget should
+  // sit flush at the true viewport bottom, not leave a phantom gap for a
+  // nav bar that isn't there.
+  const clearsBottomNav = pathname === '/dashboard';
   const prompt = useMemo(() => input.trim(), [input]);
 
   useEffect(() => {
@@ -68,12 +73,24 @@ export function AiAssistantWidget() {
     }
   }
 
+  const launcherBottomClass = clearsBottomNav
+    ? 'bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)]'
+    : 'bottom-[calc(env(safe-area-inset-bottom)+0.75rem)]';
+  const panelBottomClass = clearsBottomNav
+    ? 'bottom-[calc(4rem+env(safe-area-inset-bottom))]'
+    : 'bottom-[env(safe-area-inset-bottom)]';
+
   return (
-    <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] right-4 z-40 flex items-end gap-3 lg:bottom-6 lg:right-6">
+    // z-1000: above LandingHeader's z-900 (the highest header/nav z-index
+    // in the app) -- this widget is a floating overlay and must never render
+    // underneath page chrome, on any route.
+    <div
+      className={`fixed right-4 z-1000 flex items-end gap-3 lg:bottom-6 lg:right-6 ${launcherBottomClass}`}
+    >
       <section
         aria-hidden={!open}
         aria-label="Dialect Library assistant"
-        className={`fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-50 flex h-[min(78dvh,680px)] flex-col overflow-hidden rounded-t-xl border border-line bg-white shadow-2xl transition-transform duration-300 ease-out lg:inset-y-0 lg:right-0 lg:left-auto lg:h-full lg:w-[min(520px,42vw)] lg:rounded-none lg:border-y-0 ${
+        className={`fixed inset-x-0 z-1000 flex h-[min(78dvh,680px)] flex-col overflow-hidden rounded-t-xl border border-line bg-white shadow-2xl transition-transform duration-300 ease-out lg:inset-y-0 lg:right-0 lg:left-auto lg:h-full lg:w-[min(520px,42vw)] lg:rounded-none lg:border-y-0 ${panelBottomClass} ${
           open
             ? 'translate-x-0 translate-y-0'
             : 'pointer-events-none translate-y-full lg:translate-y-0 lg:translate-x-full'
