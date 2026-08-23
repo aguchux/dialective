@@ -8,6 +8,7 @@ export interface PublicUser {
   role: 'TRAINER' | 'ADMIN' | 'PARTNER';
   status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
   emailVerified: boolean;
+  originCountryId: string | null;
   countryId: string | null;
   dialectId: string | null;
   dialectTag: string | null;

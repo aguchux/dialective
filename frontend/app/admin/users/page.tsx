@@ -13,6 +13,7 @@ import {
   useCreateAdminWalletAdjustmentMutation,
   useCreateTrainingPayoutMutation,
   useGetPlatformSettingsQuery,
+  useGetCountriesQuery,
   useGetUsersQuery,
   useRequestAdminWalletAdjustmentOtpMutation,
   useRequestTrainingPayoutOtpMutation,
@@ -77,10 +78,12 @@ export default function AdminUsersPage() {
     status: statusFilter || undefined,
     search: search || undefined,
   });
+  const { data: countries } = useGetCountriesQuery();
   const [updateRole] = useUpdateUserRoleMutation();
   const [updateStatus] = useUpdateUserStatusMutation();
 
   const selfId = session?.user?.id;
+  const countryNameById = new Map(countries?.map((country) => [country.id, country.name]));
 
   async function changeRole(id: string, role: string) {
     setError(null);
@@ -112,6 +115,16 @@ export default function AdminUsersPage() {
       header: 'User',
       sortValue: (u) => `${u.firstName ?? ''} ${u.lastName ?? ''} ${u.email}`,
       render: (u) => <UserIdentityCell selfId={selfId} user={u} />,
+    },
+    {
+      key: 'originCountry',
+      header: 'Country of origin',
+      sortValue: (u) => countryNameById.get(u.originCountryId ?? '') ?? '',
+      render: (u) => (
+        <span className="text-sm font-semibold text-muted">
+          {countryNameById.get(u.originCountryId ?? '') ?? 'Not set'}
+        </span>
+      ),
     },
     {
       key: 'role',

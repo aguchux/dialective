@@ -3,6 +3,10 @@ import { IsBoolean, IsOptional, IsUUID, Length, ValidateIf } from 'class-validat
 export class UpdateProfileDto {
   @IsOptional()
   @IsUUID()
+  originCountryId?: string;
+
+  @IsOptional()
+  @IsUUID()
   countryId?: string;
 
   @IsOptional()

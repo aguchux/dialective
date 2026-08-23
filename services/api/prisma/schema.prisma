@@ -47,13 +47,13 @@ enum ReferralInviteStatus {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  firstName     String?
-  lastName      String?
-  email         String   @unique
-  passwordHash  String? // null for OAuth/magic-link-only accounts
-  role          Role     @default(TRAINER)
-  status        UserStatus @default(ACTIVE)
+  id                            String          @id @default(uuid())
+  firstName                     String?
+  lastName                      String?
+  email                         String          @unique
+  passwordHash                  String? // null for OAuth/magic-link-only accounts
+  role                          Role            @default(TRAINER)
+  status                        UserStatus      @default(ACTIVE)
   // Automatic compliance hold, distinct from `status` (admin-driven
   // suspend/block) -- set by WordsService.createRecording the moment a
   // trainer's lifetime WordRecording count crosses a multiple of
@@ -63,29 +63,33 @@ model User {
   // recent work and explicitly releases the hold -- see
   // auditHoldReleasedAt/By below. Re-triggers at every next multiple of the
   // threshold regardless of how many holds/releases happened before it.
-  auditHoldAt   DateTime?
-  auditHoldReleasedAt   DateTime?
-  auditHoldReleasedById String?
-  auditHoldReleasedBy   User?    @relation("AuditHoldReleasedBy", fields: [auditHoldReleasedById], references: [id], onDelete: SetNull)
-  auditHoldReleases     User[]   @relation("AuditHoldReleasedBy")
-  emailVerified DateTime?
-  phoneNumber     String?   @unique // E.164 international format, e.g. "+2348012345678"
-  phoneVerifiedAt DateTime?
-  emailNotificationsEnabled Boolean @default(true)
-  smsNotificationsEnabled   Boolean @default(true)
-  marketingNotificationsEnabled Boolean @default(false)
-  blogNewsNotificationsEnabled  Boolean @default(false)
-  courseNotificationsEnabled    Boolean @default(false)
-  countryId     String?
-  country       Country? @relation(fields: [countryId], references: [id])
-  dialectId     String?
-  dialect       Dialect? @relation(fields: [dialectId], references: [id])
-  dialectVariantId String? // optional sub-dialect (e.g. Izzi under Igbo) -- see DialectVariant. Never set without dialectId; enforced in AuthService.updateProfile, not at the schema level.
-  dialectVariant   DialectVariant? @relation(fields: [dialectVariantId], references: [id])
-  referralCode  String   @unique // every user is a potential referrer; generated at registration
-  referredById  String?
-  referredBy    User?    @relation("Referrals", fields: [referredById], references: [id])
-  referrals     User[]   @relation("Referrals")
+  auditHoldAt                   DateTime?
+  auditHoldReleasedAt           DateTime?
+  auditHoldReleasedById         String?
+  auditHoldReleasedBy           User?           @relation("AuditHoldReleasedBy", fields: [auditHoldReleasedById], references: [id], onDelete: SetNull)
+  auditHoldReleases             User[]          @relation("AuditHoldReleasedBy")
+  emailVerified                 DateTime?
+  phoneNumber                   String?         @unique // E.164 international format, e.g. "+2348012345678"
+  phoneVerifiedAt               DateTime?
+  emailNotificationsEnabled     Boolean         @default(true)
+  smsNotificationsEnabled       Boolean         @default(true)
+  marketingNotificationsEnabled Boolean         @default(false)
+  blogNewsNotificationsEnabled  Boolean         @default(false)
+  courseNotificationsEnabled    Boolean         @default(false)
+  // Country of origin is account identity data. It is distinct from
+  // countryId below, which scopes the dialect/content the trainer works on.
+  originCountryId               String?
+  originCountry                 Country?        @relation("UserOriginCountry", fields: [originCountryId], references: [id])
+  countryId                     String?
+  country                       Country?        @relation(fields: [countryId], references: [id])
+  dialectId                     String?
+  dialect                       Dialect?        @relation(fields: [dialectId], references: [id])
+  dialectVariantId              String? // optional sub-dialect (e.g. Izzi under Igbo) -- see DialectVariant. Never set without dialectId; enforced in AuthService.updateProfile, not at the schema level.
+  dialectVariant                DialectVariant? @relation(fields: [dialectVariantId], references: [id])
+  referralCode                  String          @unique // every user is a potential referrer; generated at registration
+  referredById                  String?
+  referredBy                    User?           @relation("Referrals", fields: [referredById], references: [id])
+  referrals                     User[]          @relation("Referrals")
   // Set only when a DISTRIBUTOR promotes one of their own direct referrals
   // (referredById === promotedById at promotion time) to role=DISTRIBUTOR via
   // DistributorsService.promoteSubDistributor. Distinct from referredById: a
@@ -95,43 +99,44 @@ model User {
   // so promotedById is the actual ownership/authorization key for "may this
   // distributor fund/block/credit/debit that sub-distributor," never
   // referredById alone. Never cleared once set, even if status changes.
-  promotedById  String?
-  promotedBy    User?    @relation("SubDistributorPromotions", fields: [promotedById], references: [id])
-  subDistributors User[] @relation("SubDistributorPromotions")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  promotedById                  String?
+  promotedBy                    User?           @relation("SubDistributorPromotions", fields: [promotedById], references: [id])
+  subDistributors               User[]          @relation("SubDistributorPromotions")
+  createdAt                     DateTime        @default(now())
+  updatedAt                     DateTime        @updatedAt
 
-  accounts       LinkedAccount[]
-  refreshTokens  RefreshToken[]
-  passwordResets PasswordResetToken[]
-  emailVerifications EmailVerificationToken[]
-  otpCodes       OtpCode[]
-  manualPhoneVerificationRequests ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationUser")
+  accounts                         LinkedAccount[]
+  refreshTokens                    RefreshToken[]
+  passwordResets                   PasswordResetToken[]
+  emailVerifications               EmailVerificationToken[]
+  otpCodes                         OtpCode[]
+  manualPhoneVerificationRequests  ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationUser")
   manualPhoneVerificationsReviewed ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationAdmin")
-  wallet         Wallet?
-  blogPosts      BlogPost[]
-  authoredCourses Course[]
-  courseProgress CourseProgress[]
-  submissions    Submission[]
-  trainingSessions TrainingSession[]
-  wordRecordings WordRecording[]
-  subscriptionPoolsOpened SubscriptionPool[] @relation("SubscriptionPoolOpenedBy")
-  dataAccessLeadsContacted DataAccessLead[] @relation("DataAccessLeadContactedBy")
-  paymentMethods UserPaymentMethod[]
-  p2pOffers      P2PTokenOffer[]
-  p2pBuyerTrades P2PTokenTrade[] @relation("P2PBuyerTrades")
-  p2pSellerTrades P2PTokenTrade[] @relation("P2PSellerTrades")
-  p2pDisputesRaised P2PDispute[] @relation("P2PDisputesRaised")
-  p2pDisputesResolved P2PDispute[] @relation("P2PDisputesResolved")
-  referralInvitesSent ReferralInvite[] @relation("ReferralInvitesSent")
-  referralInviteJoined ReferralInvite[] @relation("ReferralInviteJoined")
-  distributorAllocations DistributorAllocation[] @relation("DistributorAllocations")
-  distributorAllocationsGranted DistributorAllocation[] @relation("DistributorAllocationsGranted")
-  notifications UserNotification[]
-  authoredSystemUpdates SystemUpdate[] @relation("SystemUpdateAuthor")
-  apiAccessTokensUpdated ApiAccessToken[] @relation("ApiAccessTokenUpdatedBy")
+  wallet                           Wallet?
+  blogPosts                        BlogPost[]
+  authoredCourses                  Course[]
+  courseProgress                   CourseProgress[]
+  submissions                      Submission[]
+  trainingSessions                 TrainingSession[]
+  wordRecordings                   WordRecording[]
+  subscriptionPoolsOpened          SubscriptionPool[]               @relation("SubscriptionPoolOpenedBy")
+  dataAccessLeadsContacted         DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
+  paymentMethods                   UserPaymentMethod[]
+  p2pOffers                        P2PTokenOffer[]
+  p2pBuyerTrades                   P2PTokenTrade[]                  @relation("P2PBuyerTrades")
+  p2pSellerTrades                  P2PTokenTrade[]                  @relation("P2PSellerTrades")
+  p2pDisputesRaised                P2PDispute[]                     @relation("P2PDisputesRaised")
+  p2pDisputesResolved              P2PDispute[]                     @relation("P2PDisputesResolved")
+  referralInvitesSent              ReferralInvite[]                 @relation("ReferralInvitesSent")
+  referralInviteJoined             ReferralInvite[]                 @relation("ReferralInviteJoined")
+  distributorAllocations           DistributorAllocation[]          @relation("DistributorAllocations")
+  distributorAllocationsGranted    DistributorAllocation[]          @relation("DistributorAllocationsGranted")
+  notifications                    UserNotification[]
+  authoredSystemUpdates            SystemUpdate[]                   @relation("SystemUpdateAuthor")
+  apiAccessTokensUpdated           ApiAccessToken[]                 @relation("ApiAccessTokenUpdatedBy")
 
   @@index([promotedById])
+  @@index([originCountryId])
   @@map("users")
 }
 
@@ -149,16 +154,16 @@ enum SystemUpdateSourceType {
 }
 
 model SystemUpdate {
-  id          String                 @id @default(uuid())
-  kind        SystemUpdateKind
-  sourceType  SystemUpdateSourceType @default(MANUAL)
-  sourceId    String?
-  title       String
-  message     String
-  href        String?
-  authorId    String?
-  author      User?                  @relation("SystemUpdateAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-  createdAt   DateTime               @default(now())
+  id            String                 @id @default(uuid())
+  kind          SystemUpdateKind
+  sourceType    SystemUpdateSourceType @default(MANUAL)
+  sourceId      String?
+  title         String
+  message       String
+  href          String?
+  authorId      String?
+  author        User?                  @relation("SystemUpdateAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt     DateTime               @default(now())
   notifications UserNotification[]
 
   @@unique([sourceType, sourceId])
@@ -213,21 +218,23 @@ model ReferralInvite {
   @@map("referral_invites")
 }
 
-/// Onboarding country choice. A user's dialect (see Dialect) must belong to
-/// their chosen country -- enforced in AuthService.updateProfile, not at the
-/// schema level, since Prisma has no cross-FK check constraint.
+/// Countries used for both a user's country of origin and dialect coverage.
+/// A user's selected training dialect must belong to their selected training
+/// country -- enforced in AuthService.updateProfile, not at the schema level,
+/// since Prisma has no cross-FK check constraint.
 model Country {
-  id                   String    @id @default(uuid())
-  code                 String    @unique // ISO 3166-1 alpha-2, e.g. "NG", "US"
-  name                 String
-  llmGenerationEnabled Boolean   @default(false) // opts this country's dialects into word-generator-job's translation sweep; a dialect only participates when both this AND Dialect.llmGenerationEnabled are true
-  currencyCode         String    @default("USD") // ISO 4217, e.g. "NGN", "KES" -- what wallet balances and P2P offers display in for this country's users
-  usdExchangeRate      Decimal?  @db.Decimal(18, 6) // units of currencyCode per 1 USD; null until fx-rate-job's first successful fetch or an admin sets one manually
-  exchangeRateSource   String    @default("LIVE") // "LIVE" (fx-rate-job may overwrite usdExchangeRate) or "MANUAL" (admin-set, fx-rate-job skips this row until reset)
+  id                    String               @id @default(uuid())
+  code                  String               @unique // ISO 3166-1 alpha-2, e.g. "NG", "US"
+  name                  String
+  llmGenerationEnabled  Boolean              @default(false) // opts this country's dialects into word-generator-job's translation sweep; a dialect only participates when both this AND Dialect.llmGenerationEnabled are true
+  currencyCode          String               @default("USD") // ISO 4217, e.g. "NGN", "KES" -- what wallet balances and P2P offers display in for this country's users
+  usdExchangeRate       Decimal?             @db.Decimal(18, 6) // units of currencyCode per 1 USD; null until fx-rate-job's first successful fetch or an admin sets one manually
+  exchangeRateSource    String               @default("LIVE") // "LIVE" (fx-rate-job may overwrite usdExchangeRate) or "MANUAL" (admin-set, fx-rate-job skips this row until reset)
   exchangeRateUpdatedAt DateTime? // last time usdExchangeRate changed (live fetch or admin edit) -- shown in UI so a stale rate is visible, not silently trusted
-  dialects             Dialect[]
-  users                User[]
-  audioRetentionRules  AudioRetentionRule[]
+  dialects              Dialect[]
+  users                 User[]
+  originUsers           User[]               @relation("UserOriginCountry")
+  audioRetentionRules   AudioRetentionRule[]
 
   @@map("countries")
 }
@@ -261,13 +268,13 @@ model AudioRetentionRule {
 /// -- this table is the source of truth for that list going forward, not a
 /// parallel/competing enum.
 model Dialect {
-  id                   String  @id @default(uuid())
-  tag                  String  @unique
+  id                   String           @id @default(uuid())
+  tag                  String           @unique
   name                 String
   countryId            String
-  llmGenerationEnabled Boolean @default(false) // per-dialect override within an enabled country -- lets admin exclude one dialect without disabling the whole country
+  llmGenerationEnabled Boolean          @default(false) // per-dialect override within an enabled country -- lets admin exclude one dialect without disabling the whole country
   keyboardLayout       String? // space-separated dialect-specific characters/diacritics for the inline virtual keyboard on the word-training spelling input; admin-edited, optionally AI-drafted via POST /geo/admin/dialects/:id/generate-keyboard-layout
-  country              Country @relation(fields: [countryId], references: [id])
+  country              Country          @relation(fields: [countryId], references: [id])
   users                User[]
   variants             DialectVariant[]
 
@@ -293,9 +300,9 @@ model DialectVariant {
   name      String
   createdAt DateTime @default(now())
 
-  users           User[]
-  wordRecordings  WordRecording[]
-  submissions     Submission[]
+  users          User[]
+  wordRecordings WordRecording[]
+  submissions    Submission[]
 
   @@unique([dialectId, tag])
   @@index([dialectId])
@@ -322,15 +329,15 @@ model LinkedAccount {
 /// (not deleted) so reuse-of-a-revoked-token can be detected and treated as
 /// a signal to revoke the whole family. See AGENTS.md "Authentication".
 model RefreshToken {
-  id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash   String    @unique
-  familyId    String // shared across a rotation chain; revoking one revokes the family
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  replacedBy  String? // tokenHash of the token that replaced this one, if rotated
-  createdAt   DateTime  @default(now())
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  familyId   String // shared across a rotation chain; revoking one revokes the family
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String? // tokenHash of the token that replaced this one, if rotated
+  createdAt  DateTime  @default(now())
 
   @@index([userId])
   @@index([familyId])
@@ -438,12 +445,12 @@ model ManualPhoneVerificationRequest {
 }
 
 enum SubmissionStatus {
-  PENDING     // ASR not yet completed
+  PENDING // ASR not yet completed
   TRANSCRIBED // ASR ok, awaiting quorum/scoring
-  REJECTED    // ASR prefilter/unreadable/unsupported-dialect rejection
-  SCORED      // consensus-scorer wrote a score
-  SETTLED     // settlement-job paid it out
-  EXPIRED     // settlement-job's scoring SLA elapsed with no quorum reached; tokens refunded, terminal state
+  REJECTED // ASR prefilter/unreadable/unsupported-dialect rejection
+  SCORED // consensus-scorer wrote a score
+  SETTLED // settlement-job paid it out
+  EXPIRED // settlement-job's scoring SLA elapsed with no quorum reached; tokens refunded, terminal state
 }
 
 /// Where a Prompt's text came from -- SEED (hand-picked services/api/prisma/
@@ -553,48 +560,48 @@ model PromptTranslation {
 /// schema; other services access it only via the generated Prisma client
 /// (packages/db), never their own migrations.
 model Submission {
-  id                String           @id @default(uuid())
-  userId            String
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  promptId          String
-  prompt            Prompt           @relation(fields: [promptId], references: [id], onDelete: Restrict)
-  dialectTag        String
-  dialectVariantId  String? // optional sub-dialect label (see DialectVariant) -- never changes prompt selection or scoring, purely descriptive
-  dialectVariant    DialectVariant?  @relation(fields: [dialectVariantId], references: [id])
-  audioBucket       String?
-  audioKey          String?
-  audioDeletedAt    DateTime? // set by audio-retention-job when it purges the Spaces object per an AudioRetentionRule; audioBucket/audioKey are nulled at the same time. Transcript/scores/asrWordDetail are never touched -- this only ever removes the replayable audio.
-  status            SubmissionStatus @default(PENDING)
-  transcript        String?
-  asrConfidence     Decimal?         @db.Decimal(5, 4) // mean per-word confidence, 0-1; null when the engine has none (Whisper)
-  asrEngine         String?          // "vosk" | "whisper"
-  asrWordDetail     Json?            // [{word, start, end, conf}], seconds; conf is null for Whisper-origin rows (no per-word confidence signal), populated for Vosk
-  rejectionReason   String?          // duration_out_of_range | mostly_silence | unreadable_audio | unsupported_dialect
-  tokensSpent       Decimal          @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
-  rawScore          Decimal?         @db.Decimal(5, 2) // 0.00-100.00 original consensus agreement before any admin score-range weighting/clamp; used for partner data queries
-  score             Decimal?         @db.Decimal(5, 2) // 0.00-100.00 platform score used by trainer UI/payout flow; null until SCORED
-  isOutlier         Boolean          @default(false) // flagged for human QA review, never auto-rejected -- see AGENTS.md "Consensus scoring"
-  noiseScore        Decimal?         @db.Decimal(5, 2) // 0-100, quality-gate-worker's SNR-derived estimate; null until the gate has run
-  qualityScore      Decimal?         @db.Decimal(5, 2) // 0-100, quality-gate-worker's clipping/artifact composite; null until the gate has run
-  livenessScore     Decimal?         @db.Decimal(5, 2) // 0-100, quality-gate-worker's live-human-voice classifier confidence; null until the gate has run
-  emotion             SpeechEmotion? // speech-expression analysis's top predicted emotion class; null until computed, purely descriptive -- never affects compositeScore/payout (see PlatformSettings.speechExpressionEnabled doc comment)
-  emotionConfidence   Decimal?       @db.Decimal(5, 4) // 0-1 confidence of `emotion`'s predicted class (softmax max), same scale convention as asrConfidence
-  tone                SpeechTone?    // descriptive only, same posture as `emotion`
-  style               SpeechStyle?   // descriptive only, same posture as `emotion`
-  speed               SpeechSpeed?   // descriptive bucket derived from prosodyMetrics.speechRateEstimate; descriptive only
-  energy              SpeechEnergy?  // descriptive bucket derived from prosodyMetrics.meanRmsDb; descriptive only
-  prosodyMetrics      Json?          // {speechRateEstimate, meanPitchHz, pitchStdHz, meanRmsDb, rmsStdDb, pauseRatio}, all null-safe floats; numeric companion to the bucketed fields above, same "measured but never scored" posture as asrWordDetail's Json-blob convention
-  expressionCheckedAt DateTime?      // when speech-expression analysis last wrote the fields above; null until it has run (or the feature is off) -- distinct from qualityGateCheckedAt since the two may diverge later even though the same worker currently writes both
-  compositeScore    Decimal?         @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore (PlatformSettings.qualityWeight*), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled. Emotion/prosody fields above are deliberately excluded from this blend.
-  qualityGateCheckedAt DateTime?     // when quality-gate-worker last wrote noise/quality/livenessScore
-  payoutTokenAmount Decimal?         @db.Decimal(20, 8) // computed at settlement, null until SETTLED
-  scoredAt          DateTime?
-  settledAt         DateTime?
-  refundedAt        DateTime?        // set once settlement-job has released a REJECTED submission's lock back to balance
-  adminAuditStatus  AdminAuditStatus? // null = not yet reviewed; see AdminAuditStatus doc comment
-  adminAuditedAt    DateTime?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  id                   String            @id @default(uuid())
+  userId               String
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  promptId             String
+  prompt               Prompt            @relation(fields: [promptId], references: [id], onDelete: Restrict)
+  dialectTag           String
+  dialectVariantId     String? // optional sub-dialect label (see DialectVariant) -- never changes prompt selection or scoring, purely descriptive
+  dialectVariant       DialectVariant?   @relation(fields: [dialectVariantId], references: [id])
+  audioBucket          String?
+  audioKey             String?
+  audioDeletedAt       DateTime? // set by audio-retention-job when it purges the Spaces object per an AudioRetentionRule; audioBucket/audioKey are nulled at the same time. Transcript/scores/asrWordDetail are never touched -- this only ever removes the replayable audio.
+  status               SubmissionStatus  @default(PENDING)
+  transcript           String?
+  asrConfidence        Decimal?          @db.Decimal(5, 4) // mean per-word confidence, 0-1; null when the engine has none (Whisper)
+  asrEngine            String? // "vosk" | "whisper"
+  asrWordDetail        Json? // [{word, start, end, conf}], seconds; conf is null for Whisper-origin rows (no per-word confidence signal), populated for Vosk
+  rejectionReason      String? // duration_out_of_range | mostly_silence | unreadable_audio | unsupported_dialect
+  tokensSpent          Decimal           @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
+  rawScore             Decimal?          @db.Decimal(5, 2) // 0.00-100.00 original consensus agreement before any admin score-range weighting/clamp; used for partner data queries
+  score                Decimal?          @db.Decimal(5, 2) // 0.00-100.00 platform score used by trainer UI/payout flow; null until SCORED
+  isOutlier            Boolean           @default(false) // flagged for human QA review, never auto-rejected -- see AGENTS.md "Consensus scoring"
+  noiseScore           Decimal?          @db.Decimal(5, 2) // 0-100, quality-gate-worker's SNR-derived estimate; null until the gate has run
+  qualityScore         Decimal?          @db.Decimal(5, 2) // 0-100, quality-gate-worker's clipping/artifact composite; null until the gate has run
+  livenessScore        Decimal?          @db.Decimal(5, 2) // 0-100, quality-gate-worker's live-human-voice classifier confidence; null until the gate has run
+  emotion              SpeechEmotion? // speech-expression analysis's top predicted emotion class; null until computed, purely descriptive -- never affects compositeScore/payout (see PlatformSettings.speechExpressionEnabled doc comment)
+  emotionConfidence    Decimal?          @db.Decimal(5, 4) // 0-1 confidence of `emotion`'s predicted class (softmax max), same scale convention as asrConfidence
+  tone                 SpeechTone? // descriptive only, same posture as `emotion`
+  style                SpeechStyle? // descriptive only, same posture as `emotion`
+  speed                SpeechSpeed? // descriptive bucket derived from prosodyMetrics.speechRateEstimate; descriptive only
+  energy               SpeechEnergy? // descriptive bucket derived from prosodyMetrics.meanRmsDb; descriptive only
+  prosodyMetrics       Json? // {speechRateEstimate, meanPitchHz, pitchStdHz, meanRmsDb, rmsStdDb, pauseRatio}, all null-safe floats; numeric companion to the bucketed fields above, same "measured but never scored" posture as asrWordDetail's Json-blob convention
+  expressionCheckedAt  DateTime? // when speech-expression analysis last wrote the fields above; null until it has run (or the feature is off) -- distinct from qualityGateCheckedAt since the two may diverge later even though the same worker currently writes both
+  compositeScore       Decimal?          @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore (PlatformSettings.qualityWeight*), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled. Emotion/prosody fields above are deliberately excluded from this blend.
+  qualityGateCheckedAt DateTime? // when quality-gate-worker last wrote noise/quality/livenessScore
+  payoutTokenAmount    Decimal?          @db.Decimal(20, 8) // computed at settlement, null until SETTLED
+  scoredAt             DateTime?
+  settledAt            DateTime?
+  refundedAt           DateTime? // set once settlement-job has released a REJECTED submission's lock back to balance
+  adminAuditStatus     AdminAuditStatus? // null = not yet reviewed; see AdminAuditStatus doc comment
+  adminAuditedAt       DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
   @@index([promptId, dialectTag])
   @@index([status])
@@ -647,10 +654,10 @@ model Word {
   partOfSpeech PartOfSpeech? // English part of speech; null until LLM-classified (word-generator-job) or backfilled
   createdAt    DateTime      @default(now())
 
-  recordings WordRecording[]
+  recordings          WordRecording[]
   trainingAssignments WordTrainingAssignment[]
-  translations WordTranslation[]
-  promptWords  PromptWord[]
+  translations        WordTranslation[]
+  promptWords         PromptWord[]
 
   @@map("words")
 }
@@ -750,13 +757,13 @@ enum AdminAuditStatus {
 }
 
 model TrainingSession {
-  id             String   @id @default(uuid())
-  userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  termsVersion   String
-  consentedAt    DateTime
-  startedAt      DateTime @default(now())
-  endedAt        DateTime?
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  termsVersion String
+  consentedAt  DateTime
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
 
   assignments WordTrainingAssignment[]
   recordings  WordRecording[]
@@ -771,9 +778,9 @@ model WordTrainingAssignment {
   id                String                @id @default(uuid())
   sessionId         String
   session           TrainingSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  wordId            String?               // required for ENGLISH_TO_DIALECT/DIALECT_TO_ENGLISH, null for SENTENCE_REBUILD
+  wordId            String? // required for ENGLISH_TO_DIALECT/DIALECT_TO_ENGLISH, null for SENTENCE_REBUILD
   word              Word?                 @relation(fields: [wordId], references: [id], onDelete: Cascade)
-  promptId          String?               // required for SENTENCE_REBUILD, null otherwise
+  promptId          String? // required for SENTENCE_REBUILD, null otherwise
   prompt            Prompt?               @relation(fields: [promptId], references: [id], onDelete: Cascade)
   direction         WordTrainingDirection
   sourceRecordingId String?
@@ -805,59 +812,59 @@ model WordTrainingAssignment {
 ///     WordsService.scoreReverseValidatedSource. Until then it stays PENDING
 ///     and is excluded from settlement, same as an un-quorum'd Submission.
 model WordRecording {
-  id                String           @id @default(uuid())
-  wordId            String? // null for SENTENCE_REBUILD (points at a Prompt via promptId instead)
-  word              Word?            @relation(fields: [wordId], references: [id], onDelete: Cascade)
-  promptId          String? // set for SENTENCE_REBUILD, null otherwise
-  prompt            Prompt?          @relation(fields: [promptId], references: [id], onDelete: Cascade)
-  userId            String?
-  user              User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-  sessionId         String?
-  session           TrainingSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-  assignmentId      String?  @unique
-  assignment        WordTrainingAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
-  direction         WordTrainingDirection @default(ENGLISH_TO_DIALECT)
-  dialectTag        String
-  dialectVariantId  String? // optional sub-dialect label (see DialectVariant) -- never changes prompt selection or scoring, purely descriptive
-  dialectVariant    DialectVariant?  @relation(fields: [dialectVariantId], references: [id])
-  translationText   String
+  id                        String                  @id @default(uuid())
+  wordId                    String? // null for SENTENCE_REBUILD (points at a Prompt via promptId instead)
+  word                      Word?                   @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  promptId                  String? // set for SENTENCE_REBUILD, null otherwise
+  prompt                    Prompt?                 @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  userId                    String?
+  user                      User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId                 String?
+  session                   TrainingSession?        @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  assignmentId              String?                 @unique
+  assignment                WordTrainingAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  direction                 WordTrainingDirection   @default(ENGLISH_TO_DIALECT)
+  dialectTag                String
+  dialectVariantId          String? // optional sub-dialect label (see DialectVariant) -- never changes prompt selection or scoring, purely descriptive
+  dialectVariant            DialectVariant?         @relation(fields: [dialectVariantId], references: [id])
+  translationText           String
   normalizedTranslationText String? // AI spelling-normalization of translationText (PlatformSettings.spellingNormalizationEnabled), ENGLISH_TO_DIALECT only -- informational only, never feeds validationScore/score
-  audioBucket       String? // null for SENTENCE_REBUILD (no audio step) or after audio-retention-job purges it
-  audioKey          String? // null for SENTENCE_REBUILD (no audio step) or after audio-retention-job purges it
-  audioDeletedAt    DateTime? // set by audio-retention-job when it purges the Spaces object per an AudioRetentionRule; audioBucket/audioKey are nulled at the same time. translationText/scores are never touched.
-  submittedOrder    Int[]    @default([]) // SENTENCE_REBUILD only: PromptWord.position values in the order the trainer tapped them, compared against the natural 0..n-1 order for exact-match scoring
-  durationMs        Int?
-  noiseRating       RecordingNoiseRating?
-  validationScore   Decimal? @db.Decimal(5, 4) // 0-1 exact-match score, DIALECT_TO_ENGLISH only
-  status            SubmissionStatus @default(PENDING) // PENDING|SCORED|SETTLED only -- no consensus/quorum concept, TRANSCRIBED/REJECTED unused here. ASR (below) never gates or delays reaching SCORED -- it's an async annotation, same posture as noise/quality/livenessScore.
-  tokensSpent       Decimal  @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
-  rawScore          Decimal? @db.Decimal(5, 2) // 0.00-100.00 original exact-match/reverse-validation score before any admin score-range weighting/clamp; used for partner data queries
-  score             Decimal? @db.Decimal(5, 2) // 0.00-100.00 platform score, same scale as Submission.score; null until SCORED
-  transcript        String? // ASR transcript of the spoken audio (ENGLISH_TO_DIALECT/DIALECT_TO_ENGLISH only -- SENTENCE_REBUILD has no audio step); null until vosk-worker/whisper-worker's ASR pass completes, may remain null forever for an unsupported dialect
-  asrEngine         String? // "vosk" | "whisper", whichever transcribed this row -- see models/asr-registry.yaml
-  asrConfidence     Decimal? @db.Decimal(5, 4) // mean per-word confidence, 0-1; null when the engine has none (Whisper) -- same semantics as Submission.asrConfidence
-  asrWordDetail     Json? // [{word, start, end, conf}], seconds; conf null for Whisper-origin rows -- same shape as Submission.asrWordDetail
-  asrMatchScore     Decimal? @db.Decimal(5, 2) // 0-100, how closely the ASR transcript matches translationText (normalized comparison, computed by the worker at ASR-write time) -- feeds computeWordRecordingCompositeScore via PlatformSettings.qualityWeightAsrMatch (default 0, opt-in); never affects validationScore/score/status directly
-  noiseScore        Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's SNR-derived estimate; null until the gate has run
-  qualityScore      Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's clipping/artifact composite; null until the gate has run
-  livenessScore     Decimal? @db.Decimal(5, 2) // 0-100, quality-gate-worker's live-human-voice classifier confidence; null until the gate has run
-  emotion             SpeechEmotion? // speech-expression analysis's top predicted emotion class; null until computed, purely descriptive -- never affects compositeScore/payout (see PlatformSettings.speechExpressionEnabled doc comment)
-  emotionConfidence   Decimal?       @db.Decimal(5, 4) // 0-1 confidence of `emotion`'s predicted class (softmax max), same scale convention as asrConfidence
-  tone                SpeechTone?    // descriptive only, same posture as `emotion`
-  style               SpeechStyle?   // descriptive only, same posture as `emotion`
-  speed               SpeechSpeed?   // descriptive bucket derived from prosodyMetrics.speechRateEstimate; descriptive only
-  energy              SpeechEnergy?  // descriptive bucket derived from prosodyMetrics.meanRmsDb; descriptive only
-  prosodyMetrics      Json?          // {speechRateEstimate, meanPitchHz, pitchStdHz, meanRmsDb, rmsStdDb, pauseRatio}, all null-safe floats; numeric companion to the bucketed fields above, same "measured but never scored" posture as asrWordDetail's Json-blob convention
-  expressionCheckedAt DateTime?      // when speech-expression analysis last wrote the fields above; null until it has run (or the feature is off) -- distinct from qualityGateCheckedAt since the two may diverge later even though the same worker currently writes both
-  compositeScore    Decimal? @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore+asrMatchScore (PlatformSettings.qualityWeight*, computeWordRecordingCompositeScore), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled. Emotion/prosody fields above are deliberately excluded from this blend.
-  qualityGateCheckedAt DateTime? // when quality-gate-worker last wrote noise/quality/livenessScore
-  payoutTokenAmount Decimal? @db.Decimal(20, 8) // computed at settlement, null until SETTLED
-  scoredAt          DateTime?
-  settledAt         DateTime?
-  refundedAt        DateTime? // set once settlement-job releases a stuck-timeout ENGLISH_TO_DIALECT recording's lock back to balance
-  adminAuditStatus  AdminAuditStatus? // null = not yet reviewed; see AdminAuditStatus doc comment
-  adminAuditedAt    DateTime?
-  createdAt         DateTime @default(now())
+  audioBucket               String? // null for SENTENCE_REBUILD (no audio step) or after audio-retention-job purges it
+  audioKey                  String? // null for SENTENCE_REBUILD (no audio step) or after audio-retention-job purges it
+  audioDeletedAt            DateTime? // set by audio-retention-job when it purges the Spaces object per an AudioRetentionRule; audioBucket/audioKey are nulled at the same time. translationText/scores are never touched.
+  submittedOrder            Int[]                   @default([]) // SENTENCE_REBUILD only: PromptWord.position values in the order the trainer tapped them, compared against the natural 0..n-1 order for exact-match scoring
+  durationMs                Int?
+  noiseRating               RecordingNoiseRating?
+  validationScore           Decimal?                @db.Decimal(5, 4) // 0-1 exact-match score, DIALECT_TO_ENGLISH only
+  status                    SubmissionStatus        @default(PENDING) // PENDING|SCORED|SETTLED only -- no consensus/quorum concept, TRANSCRIBED/REJECTED unused here. ASR (below) never gates or delays reaching SCORED -- it's an async annotation, same posture as noise/quality/livenessScore.
+  tokensSpent               Decimal                 @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
+  rawScore                  Decimal?                @db.Decimal(5, 2) // 0.00-100.00 original exact-match/reverse-validation score before any admin score-range weighting/clamp; used for partner data queries
+  score                     Decimal?                @db.Decimal(5, 2) // 0.00-100.00 platform score, same scale as Submission.score; null until SCORED
+  transcript                String? // ASR transcript of the spoken audio (ENGLISH_TO_DIALECT/DIALECT_TO_ENGLISH only -- SENTENCE_REBUILD has no audio step); null until vosk-worker/whisper-worker's ASR pass completes, may remain null forever for an unsupported dialect
+  asrEngine                 String? // "vosk" | "whisper", whichever transcribed this row -- see models/asr-registry.yaml
+  asrConfidence             Decimal?                @db.Decimal(5, 4) // mean per-word confidence, 0-1; null when the engine has none (Whisper) -- same semantics as Submission.asrConfidence
+  asrWordDetail             Json? // [{word, start, end, conf}], seconds; conf null for Whisper-origin rows -- same shape as Submission.asrWordDetail
+  asrMatchScore             Decimal?                @db.Decimal(5, 2) // 0-100, how closely the ASR transcript matches translationText (normalized comparison, computed by the worker at ASR-write time) -- feeds computeWordRecordingCompositeScore via PlatformSettings.qualityWeightAsrMatch (default 0, opt-in); never affects validationScore/score/status directly
+  noiseScore                Decimal?                @db.Decimal(5, 2) // 0-100, quality-gate-worker's SNR-derived estimate; null until the gate has run
+  qualityScore              Decimal?                @db.Decimal(5, 2) // 0-100, quality-gate-worker's clipping/artifact composite; null until the gate has run
+  livenessScore             Decimal?                @db.Decimal(5, 2) // 0-100, quality-gate-worker's live-human-voice classifier confidence; null until the gate has run
+  emotion                   SpeechEmotion? // speech-expression analysis's top predicted emotion class; null until computed, purely descriptive -- never affects compositeScore/payout (see PlatformSettings.speechExpressionEnabled doc comment)
+  emotionConfidence         Decimal?                @db.Decimal(5, 4) // 0-1 confidence of `emotion`'s predicted class (softmax max), same scale convention as asrConfidence
+  tone                      SpeechTone? // descriptive only, same posture as `emotion`
+  style                     SpeechStyle? // descriptive only, same posture as `emotion`
+  speed                     SpeechSpeed? // descriptive bucket derived from prosodyMetrics.speechRateEstimate; descriptive only
+  energy                    SpeechEnergy? // descriptive bucket derived from prosodyMetrics.meanRmsDb; descriptive only
+  prosodyMetrics            Json? // {speechRateEstimate, meanPitchHz, pitchStdHz, meanRmsDb, rmsStdDb, pauseRatio}, all null-safe floats; numeric companion to the bucketed fields above, same "measured but never scored" posture as asrWordDetail's Json-blob convention
+  expressionCheckedAt       DateTime? // when speech-expression analysis last wrote the fields above; null until it has run (or the feature is off) -- distinct from qualityGateCheckedAt since the two may diverge later even though the same worker currently writes both
+  compositeScore            Decimal?                @db.Decimal(5, 2) // weighted blend of score+noiseScore+qualityScore+livenessScore+asrMatchScore (PlatformSettings.qualityWeight*, computeWordRecordingCompositeScore), clamped into [minScoreRange, maxScoreRange] -- this, not score, feeds computeTrainingPayout once qualityGateEnabled. Emotion/prosody fields above are deliberately excluded from this blend.
+  qualityGateCheckedAt      DateTime? // when quality-gate-worker last wrote noise/quality/livenessScore
+  payoutTokenAmount         Decimal?                @db.Decimal(20, 8) // computed at settlement, null until SETTLED
+  scoredAt                  DateTime?
+  settledAt                 DateTime?
+  refundedAt                DateTime? // set once settlement-job releases a stuck-timeout ENGLISH_TO_DIALECT recording's lock back to balance
+  adminAuditStatus          AdminAuditStatus? // null = not yet reviewed; see AdminAuditStatus doc comment
+  adminAuditedAt            DateTime?
+  createdAt                 DateTime                @default(now())
 
   @@index([wordId])
   @@index([promptId])
@@ -897,33 +904,33 @@ enum LedgerEntryType {
 }
 
 model DistributorSettings {
-  id                         String   @id @default("default")
-  enabled                    Boolean  @default(false)
-  bulkAllocationEnabled      Boolean  @default(false)
-  defaultBulkDiscountRate    Decimal  @default(0) @db.Decimal(8, 6)
-  multiLevelReferralEnabled  Boolean  @default(false)
-  maxReferralDepth           Int      @default(1)
-  level1Rate                 Decimal  @default(0.05) @db.Decimal(8, 6)
-  level2Rate                 Decimal  @default(0.02) @db.Decimal(8, 6)
-  level3Rate                 Decimal  @default(0.01) @db.Decimal(8, 6)
-  level4Rate                 Decimal  @default(0.002) @db.Decimal(8, 6)
-  level5Rate                 Decimal  @default(0.0003) @db.Decimal(8, 6)
-  updatedAt                  DateTime @updatedAt
-  createdAt                  DateTime @default(now())
+  id                        String   @id @default("default")
+  enabled                   Boolean  @default(false)
+  bulkAllocationEnabled     Boolean  @default(false)
+  defaultBulkDiscountRate   Decimal  @default(0) @db.Decimal(8, 6)
+  multiLevelReferralEnabled Boolean  @default(false)
+  maxReferralDepth          Int      @default(1)
+  level1Rate                Decimal  @default(0.05) @db.Decimal(8, 6)
+  level2Rate                Decimal  @default(0.02) @db.Decimal(8, 6)
+  level3Rate                Decimal  @default(0.01) @db.Decimal(8, 6)
+  level4Rate                Decimal  @default(0.002) @db.Decimal(8, 6)
+  level5Rate                Decimal  @default(0.0003) @db.Decimal(8, 6)
+  updatedAt                 DateTime @updatedAt
+  createdAt                 DateTime @default(now())
 
   @@map("distributor_settings")
 }
 
 model DistributorAllocation {
-  id             String   @id @default(uuid())
-  distributorId  String
-  distributor    User     @relation("DistributorAllocations", fields: [distributorId], references: [id], onDelete: Cascade)
-  grantedById    String
-  grantedBy      User     @relation("DistributorAllocationsGranted", fields: [grantedById], references: [id], onDelete: Restrict)
-  tokenAmount    Decimal  @db.Decimal(20, 8)
-  discountRate   Decimal  @default(0) @db.Decimal(8, 6)
-  note           String?
-  createdAt      DateTime @default(now())
+  id            String   @id @default(uuid())
+  distributorId String
+  distributor   User     @relation("DistributorAllocations", fields: [distributorId], references: [id], onDelete: Cascade)
+  grantedById   String
+  grantedBy     User     @relation("DistributorAllocationsGranted", fields: [grantedById], references: [id], onDelete: Restrict)
+  tokenAmount   Decimal  @db.Decimal(20, 8)
+  discountRate  Decimal  @default(0) @db.Decimal(8, 6)
+  note          String?
+  createdAt     DateTime @default(now())
 
   @@index([distributorId, createdAt])
   @@index([grantedById, createdAt])
@@ -970,33 +977,33 @@ model LedgerEntry {
   wallet    Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
   type      LedgerEntryType
   amount    Decimal         @db.Decimal(20, 8) // positive=credit, negative=debit, tokens
-  reference String          // Deposit.id or WithdrawalRequest.id this entry backs
+  reference String // Deposit.id or WithdrawalRequest.id this entry backs
   createdAt DateTime        @default(now())
 
-  @@index([walletId])
   @@unique([walletId, type, reference])
+  @@index([walletId])
   @@map("ledger_entries")
 }
 
 /// One row per NOWPayments invoice. Created `pending` when checkout is
 /// issued, and credited only after a signature-verified `finished` IPN.
 model Deposit {
-  id               String    @id @default(uuid())
-  walletId         String
-  wallet           Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  provider         String    @default("nowpayments")
-  providerChargeId String    @unique
+  id                String    @id @default(uuid())
+  walletId          String
+  wallet            Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  provider          String    @default("nowpayments")
+  providerChargeId  String    @unique
   providerPaymentId String?
-  providerStatus   String?
-  currency         String // USDC | USDT
-  usdAmount        Decimal   @db.Decimal(20, 8)
-  tokenAmount      Decimal   @db.Decimal(20, 8)
-  actuallyPaid     Decimal?  @db.Decimal(20, 8)
-  payCurrency      String?
-  status           String    @default("pending") // pending | partially_paid | confirmed | expired | failed | refunded
-  createdAt        DateTime  @default(now())
-  confirmedAt      DateTime?
-  lastIpnAt        DateTime?
+  providerStatus    String?
+  currency          String // USDC | USDT
+  usdAmount         Decimal   @db.Decimal(20, 8)
+  tokenAmount       Decimal   @db.Decimal(20, 8)
+  actuallyPaid      Decimal?  @db.Decimal(20, 8)
+  payCurrency       String?
+  status            String    @default("pending") // pending | partially_paid | confirmed | expired | failed | refunded
+  createdAt         DateTime  @default(now())
+  confirmedAt       DateTime?
+  lastIpnAt         DateTime?
 
   ipnEvents NowPaymentsIpnEvent[]
 
@@ -1008,16 +1015,16 @@ model Deposit {
 /// complete notification history makes non-final status changes observable
 /// and lets support reconcile a payment without relying on application logs.
 model NowPaymentsIpnEvent {
-  id                String   @id @default(uuid())
-  eventHash         String   @unique
+  id                String    @id @default(uuid())
+  eventHash         String    @unique
   orderId           String?
   depositId         String?
-  deposit           Deposit? @relation(fields: [depositId], references: [id], onDelete: SetNull)
+  deposit           Deposit?  @relation(fields: [depositId], references: [id], onDelete: SetNull)
   providerPaymentId String?
   paymentStatus     String?
   payload           Json
   processingError   String?
-  receivedAt        DateTime @default(now())
+  receivedAt        DateTime  @default(now())
   processedAt       DateTime?
 
   @@index([depositId])
@@ -1038,30 +1045,30 @@ model NowPaymentsIpnEvent {
 /// the payout was actually submitted to the provider -- submittedToProviderAt
 /// marks that separate, later step.
 model WithdrawalRequest {
-  id                  String           @id @default(uuid())
-  walletId            String
-  wallet              Wallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  tokenAmount         Decimal          @db.Decimal(20, 8)
-  usdtAmount          Decimal          @db.Decimal(20, 8)
-  destinationAddress  String
-  destinationCurrency String           @default("USDT") // user's chosen payout currency, validated at request time against PlatformSettings.allowedWithdrawalCurrencies
-  destinationNetwork  String           @default("TRC20") // user's chosen payout network, validated at request time against PlatformSettings.allowedWithdrawalNetworks
-  status              WithdrawalStatus @default(PENDING)
-  approvedByAdminId   String?
-  approvedAt          DateTime?
-  provider            String?
-  providerPayoutId    String?          @unique
-  providerStatus      String?
-  providerCurrency    String?
-  providerNetwork     String?
-  providerAddress     String?
-  providerPayload     Json?
-  providerError       String?
+  id                    String           @id @default(uuid())
+  walletId              String
+  wallet                Wallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  tokenAmount           Decimal          @db.Decimal(20, 8)
+  usdtAmount            Decimal          @db.Decimal(20, 8)
+  destinationAddress    String
+  destinationCurrency   String           @default("USDT") // user's chosen payout currency, validated at request time against PlatformSettings.allowedWithdrawalCurrencies
+  destinationNetwork    String           @default("TRC20") // user's chosen payout network, validated at request time against PlatformSettings.allowedWithdrawalNetworks
+  status                WithdrawalStatus @default(PENDING)
+  approvedByAdminId     String?
+  approvedAt            DateTime?
+  provider              String?
+  providerPayoutId      String?          @unique
+  providerStatus        String?
+  providerCurrency      String?
+  providerNetwork       String?
+  providerAddress       String?
+  providerPayload       Json?
+  providerError         String?
   submittedToProviderAt DateTime?
-  providerSettledAt   DateTime?
-  adminNote           String?
-  createdAt           DateTime         @default(now())
-  resolvedAt          DateTime?
+  providerSettledAt     DateTime?
+  adminNote             String?
+  createdAt             DateTime         @default(now())
+  resolvedAt            DateTime?
 
   providerEvents NowPaymentsPayoutEvent[]
 
@@ -1079,8 +1086,8 @@ model WithdrawalRequest {
 /// writes (create/verify/status polls, which aren't inbound callbacks) get a
 /// freshly generated one instead so every row still has a stable identity.
 model NowPaymentsPayoutEvent {
-  id                  String            @id @default(uuid())
-  eventHash           String            @unique
+  id                  String             @id @default(uuid())
+  eventHash           String             @unique
   withdrawalRequestId String?
   withdrawalRequest   WithdrawalRequest? @relation(fields: [withdrawalRequestId], references: [id], onDelete: SetNull)
   providerPayoutId    String?
@@ -1088,7 +1095,7 @@ model NowPaymentsPayoutEvent {
   providerStatus      String?
   payload             Json
   processingError     String?
-  receivedAt          DateTime          @default(now())
+  receivedAt          DateTime           @default(now())
 
   @@index([withdrawalRequestId])
   @@index([providerPayoutId])
@@ -1162,7 +1169,7 @@ model UserPaymentMethod {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  offers P2PTokenOffer[]
+  offers       P2PTokenOffer[]
   sellerTrades P2PTokenTrade[] @relation("P2PTradeSellerPaymentMethod")
 
   @@index([userId, enabled])
@@ -1170,25 +1177,25 @@ model UserPaymentMethod {
 }
 
 model P2PTokenOffer {
-  id              String          @id @default(uuid())
-  type            P2POfferType
-  userId          String
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenAmount     Decimal         @db.Decimal(20, 8)
-  remainingTokens Decimal         @db.Decimal(20, 8)
-  fiatAmount      Decimal         @db.Decimal(20, 8)
-  fiatCurrency    String
-  paymentMethod   String
-  paymentMethodId String?
+  id               String             @id @default(uuid())
+  type             P2POfferType
+  userId           String
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenAmount      Decimal            @db.Decimal(20, 8)
+  remainingTokens  Decimal            @db.Decimal(20, 8)
+  fiatAmount       Decimal            @db.Decimal(20, 8)
+  fiatCurrency     String
+  paymentMethod    String
+  paymentMethodId  String?
   paymentMethodRef UserPaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
-  status          P2POfferStatus  @default(ACTIVE)
-  expiresAt       DateTime
-  completedAt     DateTime?
-  cancelledAt     DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  status           P2POfferStatus     @default(ACTIVE)
+  expiresAt        DateTime
+  completedAt      DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
-  trades          P2PTokenTrade[]
+  trades P2PTokenTrade[]
 
   @@index([type, status, expiresAt])
   @@index([userId, status])
@@ -1196,31 +1203,31 @@ model P2PTokenOffer {
 }
 
 model P2PTokenTrade {
-  id              String          @id @default(uuid())
-  offerId         String
-  offer           P2PTokenOffer   @relation(fields: [offerId], references: [id], onDelete: Restrict)
-  buyerId         String
-  buyer           User            @relation("P2PBuyerTrades", fields: [buyerId], references: [id], onDelete: Cascade)
-  sellerId        String
-  seller          User            @relation("P2PSellerTrades", fields: [sellerId], references: [id], onDelete: Cascade)
-  sellerPaymentMethodId String?
-  sellerPaymentMethod UserPaymentMethod? @relation("P2PTradeSellerPaymentMethod", fields: [sellerPaymentMethodId], references: [id], onDelete: SetNull)
-  tokenAmount     Decimal         @db.Decimal(20, 8)
-  fiatAmount      Decimal         @db.Decimal(20, 8)
-  fiatCurrency    String
-  paymentMethod   String
-  status          P2PTradeStatus  @default(AWAITING_PAYMENT)
-  paymentDeadlineAt DateTime
+  id                      String             @id @default(uuid())
+  offerId                 String
+  offer                   P2PTokenOffer      @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  buyerId                 String
+  buyer                   User               @relation("P2PBuyerTrades", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId                String
+  seller                  User               @relation("P2PSellerTrades", fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerPaymentMethodId   String?
+  sellerPaymentMethod     UserPaymentMethod? @relation("P2PTradeSellerPaymentMethod", fields: [sellerPaymentMethodId], references: [id], onDelete: SetNull)
+  tokenAmount             Decimal            @db.Decimal(20, 8)
+  fiatAmount              Decimal            @db.Decimal(20, 8)
+  fiatCurrency            String
+  paymentMethod           String
+  status                  P2PTradeStatus     @default(AWAITING_PAYMENT)
+  paymentDeadlineAt       DateTime
   cancelRequestedByUserId String?
-  cancelAvailableAt DateTime?
-  paidAt          DateTime?
-  releasedAt      DateTime?
-  cancelledAt     DateTime?
-  disputedAt      DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  cancelAvailableAt       DateTime?
+  paidAt                  DateTime?
+  releasedAt              DateTime?
+  cancelledAt             DateTime?
+  disputedAt              DateTime?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
 
-  dispute         P2PDispute?
+  dispute P2PDispute?
 
   @@index([buyerId, status, createdAt])
   @@index([sellerId, status, createdAt])
@@ -1230,19 +1237,19 @@ model P2PTokenTrade {
 }
 
 model P2PDispute {
-  id               String           @id @default(uuid())
-  tradeId          String           @unique
-  trade            P2PTokenTrade    @relation(fields: [tradeId], references: [id], onDelete: Cascade)
-  raisedByUserId   String
-  raisedByUser     User             @relation("P2PDisputesRaised", fields: [raisedByUserId], references: [id], onDelete: Cascade)
-  reason           String
-  evidenceUrl      String?
-  status           P2PDisputeStatus @default(OPEN)
+  id                String           @id @default(uuid())
+  tradeId           String           @unique
+  trade             P2PTokenTrade    @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  raisedByUserId    String
+  raisedByUser      User             @relation("P2PDisputesRaised", fields: [raisedByUserId], references: [id], onDelete: Cascade)
+  reason            String
+  evidenceUrl       String?
+  status            P2PDisputeStatus @default(OPEN)
   resolvedByAdminId String?
-  resolvedByAdmin  User?            @relation("P2PDisputesResolved", fields: [resolvedByAdminId], references: [id], onDelete: SetNull)
-  resolutionNote   String?
-  createdAt        DateTime         @default(now())
-  resolvedAt       DateTime?
+  resolvedByAdmin   User?            @relation("P2PDisputesResolved", fields: [resolvedByAdminId], references: [id], onDelete: SetNull)
+  resolutionNote    String?
+  createdAt         DateTime         @default(now())
+  resolvedAt        DateTime?
 
   @@index([status, createdAt])
   @@map("p2p_disputes")
@@ -1272,85 +1279,85 @@ model ReferralSettings {
 /// unchanged until an admin explicitly overrides a value from the Settings
 /// UI. Same id:'default' singleton-row pattern as ReferralSettings.
 model PlatformSettings {
-  id                       String   @id @default("default")
-  tokenUsdRate             Decimal? @db.Decimal(10, 6) // overrides TOKEN_USD_RATE when set
-  minWithdrawalTokens      Decimal? @db.Decimal(20, 8) // overrides MIN_WITHDRAWAL_TOKENS when set
-  resendFromAddress        String? // overrides RESEND_FROM_ADDRESS when set
-  leadsNotificationAddress String? // overrides LEADS_NOTIFICATION_ADDRESS when set
-  referralCookiePersistSeconds Int? // overrides REFERRAL_COOKIE_PERSIST_SECONDS when set; how long referral attribution cookie persists on register flows
-  referralInviteExpirySeconds Int? // overrides REFERRAL_INVITE_EXPIRY_SECONDS when set; pending invite lifetime before lazy deletion
-  wordTrainingRecordingTimeoutSeconds Int? // overrides WORD_TRAINING_RECORDING_TIMEOUT_SECONDS when set; per-WORD recording seconds in the trainer live recording flow -- the frontend multiplies this by the assignment's word count (splitting promptText on whitespace) to get the round's total countdown, so a 5s/word setting gives a 1-word assignment 5s and a 5-word sentence 25s
+  id                                     String    @id @default("default")
+  tokenUsdRate                           Decimal?  @db.Decimal(10, 6) // overrides TOKEN_USD_RATE when set
+  minWithdrawalTokens                    Decimal?  @db.Decimal(20, 8) // overrides MIN_WITHDRAWAL_TOKENS when set
+  resendFromAddress                      String? // overrides RESEND_FROM_ADDRESS when set
+  leadsNotificationAddress               String? // overrides LEADS_NOTIFICATION_ADDRESS when set
+  referralCookiePersistSeconds           Int? // overrides REFERRAL_COOKIE_PERSIST_SECONDS when set; how long referral attribution cookie persists on register flows
+  referralInviteExpirySeconds            Int? // overrides REFERRAL_INVITE_EXPIRY_SECONDS when set; pending invite lifetime before lazy deletion
+  wordTrainingRecordingTimeoutSeconds    Int? // overrides WORD_TRAINING_RECORDING_TIMEOUT_SECONDS when set; per-WORD recording seconds in the trainer live recording flow -- the frontend multiplies this by the assignment's word count (splitting promptText on whitespace) to get the round's total countdown, so a 5s/word setting gives a 1-word assignment 5s and a 5-word sentence 25s
   wordTrainingRecordingMaxTimeoutSeconds Int? // overrides WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS when set; hard ceiling on the total per-round countdown after the per-word multiplication, so an unusually long prompt can't produce a runaway timer
-  dictationRecordingTimeoutSeconds Int? // overrides DICTATION_RECORDING_TIMEOUT_SECONDS when set; per-WORD recording seconds in the dictation (Submission) flow -- same per-word x wordCount pattern as wordTrainingRecordingTimeoutSeconds, computed server-side (submissions/prompts controllers) since the resulting max_duration_s also gates quality-gate-worker's prefilter, not just the frontend countdown
-  dictationRecordingMaxTimeoutSeconds Int? // overrides DICTATION_RECORDING_MAX_TIMEOUT_SECONDS when set; hard ceiling on the dictation round's total countdown/duration gate after the per-word multiplication, so a paragraph-length prompt can't produce an unbounded recording window
-  trainingPayoutBonusCapMultiple Decimal? @db.Decimal(5, 2) // overrides TRAINING_PAYOUT_BONUS_CAP_MULTIPLE when set; caps the score-scaled bonus at this multiple of tokensSpent (see computeTrainingPayout)
-  taskTokenCost            Decimal? @db.Decimal(20, 8) // overrides TASK_TOKEN_COST when set; tokens debited from a trainer's wallet per submission
-  reverseWordTrainingEnabled Boolean @default(false)
-  adminPayoutOtpEnabled    Boolean @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
-  phoneVerificationRequired Boolean @default(true) // when false: phone numbers can be saved without SMS verification, the standing phoneVerifiedAt gate is skipped for withdrawals and P2P trading, and P2P offer create/accept require an emailed OTP instead (see P2pService.createOffer/acceptOffer) -- withdrawals already have their own per-transaction email OTP regardless of this flag
-  manualPhoneVerificationEnabled Boolean @default(true) // lets trainers request admin-assisted WhatsApp phone verification when SMS delivery is unreliable
-  manualPhoneVerificationFeeTokens Decimal @default(1) @db.Decimal(20, 8) // DL fee charged when a trainer creates a manual WhatsApp verification request
-  manualPhoneVerificationWhatsappNumber String @default("1234567890") // admin-operated WhatsApp number trainers are instructed to message with their generated code
-  startupBonusAmount      Decimal? @db.Decimal(20, 8) // one-time DL amount credited (as a STARTUP_BONUS ledger entry) the first time a user verifies their email; null or 0 means the bonus is off
-  tawkToEnabled            Boolean  @default(false) // master switch for the Tawk.to live-chat widget; the frontend only loads the widget script when this is true AND both IDs below are set
-  tawkToPropertyId         String? // Tawk.to "Property ID" from the widget's embed snippet -- the first path segment of https://embed.tawk.to/<propertyId>/<widgetId>
-  tawkToWidgetId           String? // Tawk.to "Widget ID" from the same embed snippet -- the second path segment
-  wordStuckTimeoutMinutes  Int      @default(1440) // minutes an ENGLISH_TO_DIALECT WordRecording can stay PENDING (unmatched by reverse-validation) before settlement-job auto-refunds its locked tokens
-  scoringSlaMinutes        Int      @default(60) // minutes a Submission/WordRecording can stay unscored before settlement-job resolves it via noFailOnTrainEnabled (synthetic score) or a plain refund
-  auditHoldEveryNSubmissions Int    @default(500) // WordsService.createRecording puts a trainer on audit hold every time their lifetime WordRecording count crosses a multiple of this; 0 disables the feature entirely (no automatic holds)
-  settlementDelayMinutes   Int      @default(0) // minutes settlement-job waits after scoredAt before crediting a SCORED submission/wordRecording's payout -- 0 settles as soon as the next run sees it scored; can be set well past 24h (1440) for a longer admin review window
-  noFailOnTrainEnabled     Boolean  @default(false) // when true, a task still unscored past scoringSlaMinutes is paid out at a random score in [minScoreRange, maxScoreRange] instead of just refunded -- guarantees payment for completed work even if consensus/reverse-validation never resolves it
-  minScoreRange            Decimal  @default(10) @db.Decimal(5, 2) // lower bound (%) of every scored payout's bonus -- random synthetic-timeout scores are drawn from this range; real (consensus/exact-match) scores' compositeScore is clamped into this range too once qualityGateEnabled
-  maxScoreRange            Decimal  @default(30) @db.Decimal(5, 2) // upper bound (%) of every scored payout's bonus -- see minScoreRange
-  llmGenerationEnabled     Boolean  @default(false) // master kill switch for word-generator-job; job no-ops when false
-  llmProviderOrder         String   @default("openai,deepseek,anthropic") // CSV fallback-try order, must be a permutation of {openai,deepseek,anthropic}, validated app-side
-  llmWordsPerItem          Int      @default(1) // 1 = single word -> Word table; 2-5 = short phrase -> Prompt table (dialectTag 'en-us')
-  llmItemsPerRun           Int      @default(15) // batch size requested from the LLM per scheduled run
-  llmMaxTotalGeneratedItems Int     @default(5000) // hard global cap on generated source content volume (Word rows when llmWordsPerItem=1, otherwise en-us Prompt rows); word-generator-job stops generating brand-new content once this total is reached
-  llmMaxPoolPerDialect     Int      @default(50) // gate on total content pool size, not just batch size: word-generator-job skips generating new Prompt/Word translations for a dialect once that dialect's combined active-Prompt + translated-Word count reaches this ceiling. Consensus scoring and peer reverse-validation both need multiple trainers submitting the *same* prompt/word -- an unbounded pool spread across too few trainers means no single item ever accumulates enough submissions to score, so the pool per dialect is grown deliberately (raise this setting) as that dialect's active trainer base grows, not automatically every run
-  llmBackfillItemsPerDialectPerRun Int @default(10) // per scheduled run, how many pre-existing English Word/Prompt rows (oldest first) a single under-cap dialect may have translated into it, before word-generator-job moves on to generating brand-new English content. Without this, a newly-enabled dialect starts its pool at 0 and only grows via the shared trickle of NEW content each run (llmItemsPerRun), staying permanently behind dialects enabled earlier -- this lets it instead catch up by draining the existing backlog, bounded so one far-behind dialect can't consume an entire run's LLM budget
-  qualityGateEnabled       Boolean  @default(false) // master kill switch for the quality-gate-worker's effect on payout; worker still runs and records noise/quality/livenessScore when false, but compositeScore computation falls back to the raw score (today's behavior) until enabled
-  qualityWeightConsensus   Decimal  @default(60) @db.Decimal(5, 2) // weight (%) given to the real score (consensus agreement / exact-match) in compositeScore's blend
-  qualityWeightNoise       Decimal  @default(15) @db.Decimal(5, 2) // weight (%) given to noiseScore in compositeScore's blend
-  qualityWeightQuality     Decimal  @default(10) @db.Decimal(5, 2) // weight (%) given to qualityScore in compositeScore's blend
-  qualityWeightLiveness    Decimal  @default(15) @db.Decimal(5, 2) // weight (%) given to livenessScore in compositeScore's blend -- the four qualityWeight* fields must sum to 100, validated in PlatformSettingsService.update
-  qualityWeightAsrMatch    Decimal  @default(0) @db.Decimal(5, 2) // weight (%) given to WordRecording.asrMatchScore in computeWordRecordingCompositeScore's blend -- WordRecording-only signal (Submission's ASR IS its consensus signal already, so this never applies there). Deliberately NOT part of the four qualityWeight*'s sum-to-100 group: defaults to 0 so this feature ships inert until an admin opts in, additive rather than carved out of the existing four's budget. Validated independently (>= 0) in PlatformSettingsService.update
-  spellingNormalizationEnabled Boolean @default(false) // master kill switch for AI spelling normalization on ENGLISH_TO_DIALECT word recordings; writes WordRecording.normalizedTranslationText only, never affects scoring
-  speechExpressionEnabled Boolean @default(false) // master kill switch for the speech-expression analysis pass (emotion/tone/style/speed/energy/prosodyMetrics) in quality-gate-worker. When false, the worker skips the analysis entirely (not "computes but hides" -- unlike qualityGateEnabled, there's no downstream scoring use for this to gate, and emotion classification has a real per-job CPU cost worth skipping when unused). Purely descriptive/informational output -- deliberately has NO qualityWeight* counterpart and never feeds compositeScore/payout (see docs/Dialect-Library-Speech-Expression-Metadata-Plan.md's "never permanently bake into scoring" principle)
-  spellingNormalizationProviderOrder String @default("openai,deepseek,anthropic") // CSV fallback-try order for spelling normalization, same permutation rules as llmProviderOrder
-  sentenceRebuildEnabled   Boolean  @default(false) // master kill switch for the SENTENCE_REBUILD word-training exercise; WordsService.nextAssignment never offers it when false
-  smsSenderId              String? // Overrides TERMII_SENDER_ID/SMSLIVE247_SENDER_ID/AFRICASTALKING_SENDER_ID for every SMS provider (Termii, SMSLive247, Africa's Talking, and SMSLive247's native-OTP route) when set -- null/unset falls back to each provider's own env var, so this stays a no-op until an admin fills it in. Twilio has no equivalent (it sends from a purchased phone number, not a named sender ID).
-  smsProviderOrder         String   @default("termii,twilio,africastalking") // CSV fallback-try order for phone-verification SMS OTPs, must be a permutation of {termii,twilio,africastalking}, validated app-side like llmProviderOrder -- smslive247 is not a fallback-chain member (see smslive247NativeOtpEnabled), it can't fire-and-forget an arbitrary code on their OTP-compliant route
-  smslive247NativeOtpEnabled Boolean @default(false) // when true, phone verification (Profile > Phone number) bypasses OtpCode/the SMS fallback chain entirely and uses SMSLive247's own token-generate/verify API end-to-end, since their OTP-compliant route generates the code itself and verifies it on their side, not ours
-  smsTransactionalProviderOrder String @default("termii,twilio,africastalking,smslive247") // CSV fallback-try order for P2P trade-notification SMS (not OTP) -- separate from smsProviderOrder since smslive247 CAN send ordinary notification text via their generic route, only their OTP route rejects OTP-shaped messages
-  p2pSmsTradeCreatedEnabled   Boolean @default(false) // SMS both parties when a P2P trade is created (acceptOffer)
-  p2pSmsPaymentMarkedEnabled  Boolean @default(false) // SMS the seller when the buyer marks a trade paid (markPaid)
-  p2pSmsTokensReleasedEnabled Boolean @default(false) // SMS the buyer when the seller releases tokens (release)
-  p2pSmsCancelledEnabled      Boolean @default(false) // SMS the seller when a trade is cancelled/expired/refunded (cancelTrade, refundTradeToSeller, dispute resolved to seller) and the non-raiser when a dispute is raised (raiseDispute)
-  cryptoWithdrawalsEnabled Boolean @default(true) // master kill switch -- when false, both wallet/withdrawals/otp and wallet/withdrawals reject new withdrawal requests outright
-  nowPaymentsPayoutsEnabled Boolean @default(false) // when false, admin/withdrawals/:id/submit-nowpayments is disabled -- admins can still resolve withdrawals manually (outcome=paid) while this is off, which is the safe default until payout credentials/allow-lists are configured
-  allowedWithdrawalCurrencies String @default("USDT") // CSV of currencies a withdrawal's destinationCurrency may be, validated app-side against NowPaymentsService's supported set (USDT, USDC)
-  allowedWithdrawalNetworks String @default("TRC20") // CSV of networks a withdrawal's destinationNetwork may be for its chosen currency, validated app-side against NowPaymentsService's supported set (TRC20, ERC20, BEP20, SOL, POLYGON)
-  withdrawalFeeMode        String   @default("platform") // "platform" (fee absorbed by platform, user receives full tokenAmount worth) or "user" (fee deducted from the payout, see withdrawalFeeTokenAmount/withdrawalFeePercent)
-  withdrawalFeeTokenAmount Decimal  @default(0) @db.Decimal(20, 8) // flat token fee deducted from payout when withdrawalFeeMode="user" and this is > 0 (takes precedence over withdrawalFeePercent if both are set)
-  withdrawalFeePercent     Decimal  @default(0) @db.Decimal(5, 2) // percentage fee (0-100) deducted from payout when withdrawalFeeMode="user" and withdrawalFeeTokenAmount is 0
-  autoSubmitAfterApproval  Boolean  @default(false) // when true, admin/withdrawals/:id/approve immediately submits to NOWPayments in the same call instead of leaving it APPROVED for a separate submit step -- defaults off per the payout-automation plan's explicit caution
-  authMaintenanceEnabled   Boolean  @default(false) // master switch for the maintenance window; the five scope flags below decide what it actually blocks while on. PlatformSettingsService auto-clears this the first time any check runs after authMaintenanceUntil passes, so the admin toggle self-resets rather than staying on indefinitely
-  authMaintenanceUntil     DateTime? // scheduled end of the maintenance window
-  authMaintenanceMessage   String? // optional admin-authored note shown alongside the countdown on the login/signup pages and the logged-out notice
-  authMaintenanceBlockLogin   Boolean @default(true) // blocks POST /auth/login (credentials + OTP-issuance step) while maintenance is enabled
-  authMaintenanceBlockSignup  Boolean @default(true) // blocks POST /auth/register and /auth/magic-link/request (magic-link request creates the account on first use, so it's signup, not just login) while maintenance is enabled
-  authMaintenanceBlockSessions Boolean @default(false) // when true, JwtAuthGuard rejects already-authenticated requests too (not just new login/signup), logging every active session out until the window ends -- subject to the role excludes below
-  authMaintenanceExcludeAdmin   Boolean @default(true) // when authMaintenanceBlockSessions is on, ADMIN-role sessions are still exempted by default so an admin can reach Settings to end maintenance early
-  authMaintenanceExcludePartner Boolean @default(false) // when authMaintenanceBlockSessions is on, whether PARTNER-role sessions are exempted too
-  registerRateLimitPerHour Int? // overrides REGISTER_RATE_LIMIT_PER_HOUR when set; max POST /auth/register requests per IP per rolling hour (see PlatformRateLimitGuard)
-  landingShowCountries     Boolean  @default(true) // per-card visibility toggles for the landing page's 5-stat row (GeoController.getStats/LandingStats) -- hiding a stat only affects display, never stops it being computed
-  landingShowDialects      Boolean  @default(true)
-  landingShowTrainers      Boolean  @default(true)
-  landingShowPoolVolume    Boolean  @default(true)
-  landingShowPayout        Boolean  @default(true)
-  updatedAt                DateTime @updatedAt
-  createdAt                DateTime @default(now())
+  dictationRecordingTimeoutSeconds       Int? // overrides DICTATION_RECORDING_TIMEOUT_SECONDS when set; per-WORD recording seconds in the dictation (Submission) flow -- same per-word x wordCount pattern as wordTrainingRecordingTimeoutSeconds, computed server-side (submissions/prompts controllers) since the resulting max_duration_s also gates quality-gate-worker's prefilter, not just the frontend countdown
+  dictationRecordingMaxTimeoutSeconds    Int? // overrides DICTATION_RECORDING_MAX_TIMEOUT_SECONDS when set; hard ceiling on the dictation round's total countdown/duration gate after the per-word multiplication, so a paragraph-length prompt can't produce an unbounded recording window
+  trainingPayoutBonusCapMultiple         Decimal?  @db.Decimal(5, 2) // overrides TRAINING_PAYOUT_BONUS_CAP_MULTIPLE when set; caps the score-scaled bonus at this multiple of tokensSpent (see computeTrainingPayout)
+  taskTokenCost                          Decimal?  @db.Decimal(20, 8) // overrides TASK_TOKEN_COST when set; tokens debited from a trainer's wallet per submission
+  reverseWordTrainingEnabled             Boolean   @default(false)
+  adminPayoutOtpEnabled                  Boolean   @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
+  phoneVerificationRequired              Boolean   @default(true) // when false: phone numbers can be saved without SMS verification, the standing phoneVerifiedAt gate is skipped for withdrawals and P2P trading, and P2P offer create/accept require an emailed OTP instead (see P2pService.createOffer/acceptOffer) -- withdrawals already have their own per-transaction email OTP regardless of this flag
+  manualPhoneVerificationEnabled         Boolean   @default(true) // lets trainers request admin-assisted WhatsApp phone verification when SMS delivery is unreliable
+  manualPhoneVerificationFeeTokens       Decimal   @default(1) @db.Decimal(20, 8) // DL fee charged when a trainer creates a manual WhatsApp verification request
+  manualPhoneVerificationWhatsappNumber  String    @default("1234567890") // admin-operated WhatsApp number trainers are instructed to message with their generated code
+  startupBonusAmount                     Decimal?  @db.Decimal(20, 8) // one-time DL amount credited (as a STARTUP_BONUS ledger entry) the first time a user verifies their email; null or 0 means the bonus is off
+  tawkToEnabled                          Boolean   @default(false) // master switch for the Tawk.to live-chat widget; the frontend only loads the widget script when this is true AND both IDs below are set
+  tawkToPropertyId                       String? // Tawk.to "Property ID" from the widget's embed snippet -- the first path segment of https://embed.tawk.to/<propertyId>/<widgetId>
+  tawkToWidgetId                         String? // Tawk.to "Widget ID" from the same embed snippet -- the second path segment
+  wordStuckTimeoutMinutes                Int       @default(1440) // minutes an ENGLISH_TO_DIALECT WordRecording can stay PENDING (unmatched by reverse-validation) before settlement-job auto-refunds its locked tokens
+  scoringSlaMinutes                      Int       @default(60) // minutes a Submission/WordRecording can stay unscored before settlement-job resolves it via noFailOnTrainEnabled (synthetic score) or a plain refund
+  auditHoldEveryNSubmissions             Int       @default(500) // WordsService.createRecording puts a trainer on audit hold every time their lifetime WordRecording count crosses a multiple of this; 0 disables the feature entirely (no automatic holds)
+  settlementDelayMinutes                 Int       @default(0) // minutes settlement-job waits after scoredAt before crediting a SCORED submission/wordRecording's payout -- 0 settles as soon as the next run sees it scored; can be set well past 24h (1440) for a longer admin review window
+  noFailOnTrainEnabled                   Boolean   @default(false) // when true, a task still unscored past scoringSlaMinutes is paid out at a random score in [minScoreRange, maxScoreRange] instead of just refunded -- guarantees payment for completed work even if consensus/reverse-validation never resolves it
+  minScoreRange                          Decimal   @default(10) @db.Decimal(5, 2) // lower bound (%) of every scored payout's bonus -- random synthetic-timeout scores are drawn from this range; real (consensus/exact-match) scores' compositeScore is clamped into this range too once qualityGateEnabled
+  maxScoreRange                          Decimal   @default(30) @db.Decimal(5, 2) // upper bound (%) of every scored payout's bonus -- see minScoreRange
+  llmGenerationEnabled                   Boolean   @default(false) // master kill switch for word-generator-job; job no-ops when false
+  llmProviderOrder                       String    @default("openai,deepseek,anthropic") // CSV fallback-try order, must be a permutation of {openai,deepseek,anthropic}, validated app-side
+  llmWordsPerItem                        Int       @default(1) // 1 = single word -> Word table; 2-5 = short phrase -> Prompt table (dialectTag 'en-us')
+  llmItemsPerRun                         Int       @default(15) // batch size requested from the LLM per scheduled run
+  llmMaxTotalGeneratedItems              Int       @default(5000) // hard global cap on generated source content volume (Word rows when llmWordsPerItem=1, otherwise en-us Prompt rows); word-generator-job stops generating brand-new content once this total is reached
+  llmMaxPoolPerDialect                   Int       @default(50) // gate on total content pool size, not just batch size: word-generator-job skips generating new Prompt/Word translations for a dialect once that dialect's combined active-Prompt + translated-Word count reaches this ceiling. Consensus scoring and peer reverse-validation both need multiple trainers submitting the *same* prompt/word -- an unbounded pool spread across too few trainers means no single item ever accumulates enough submissions to score, so the pool per dialect is grown deliberately (raise this setting) as that dialect's active trainer base grows, not automatically every run
+  llmBackfillItemsPerDialectPerRun       Int       @default(10) // per scheduled run, how many pre-existing English Word/Prompt rows (oldest first) a single under-cap dialect may have translated into it, before word-generator-job moves on to generating brand-new English content. Without this, a newly-enabled dialect starts its pool at 0 and only grows via the shared trickle of NEW content each run (llmItemsPerRun), staying permanently behind dialects enabled earlier -- this lets it instead catch up by draining the existing backlog, bounded so one far-behind dialect can't consume an entire run's LLM budget
+  qualityGateEnabled                     Boolean   @default(false) // master kill switch for the quality-gate-worker's effect on payout; worker still runs and records noise/quality/livenessScore when false, but compositeScore computation falls back to the raw score (today's behavior) until enabled
+  qualityWeightConsensus                 Decimal   @default(60) @db.Decimal(5, 2) // weight (%) given to the real score (consensus agreement / exact-match) in compositeScore's blend
+  qualityWeightNoise                     Decimal   @default(15) @db.Decimal(5, 2) // weight (%) given to noiseScore in compositeScore's blend
+  qualityWeightQuality                   Decimal   @default(10) @db.Decimal(5, 2) // weight (%) given to qualityScore in compositeScore's blend
+  qualityWeightLiveness                  Decimal   @default(15) @db.Decimal(5, 2) // weight (%) given to livenessScore in compositeScore's blend -- the four qualityWeight* fields must sum to 100, validated in PlatformSettingsService.update
+  qualityWeightAsrMatch                  Decimal   @default(0) @db.Decimal(5, 2) // weight (%) given to WordRecording.asrMatchScore in computeWordRecordingCompositeScore's blend -- WordRecording-only signal (Submission's ASR IS its consensus signal already, so this never applies there). Deliberately NOT part of the four qualityWeight*'s sum-to-100 group: defaults to 0 so this feature ships inert until an admin opts in, additive rather than carved out of the existing four's budget. Validated independently (>= 0) in PlatformSettingsService.update
+  spellingNormalizationEnabled           Boolean   @default(false) // master kill switch for AI spelling normalization on ENGLISH_TO_DIALECT word recordings; writes WordRecording.normalizedTranslationText only, never affects scoring
+  speechExpressionEnabled                Boolean   @default(false) // master kill switch for the speech-expression analysis pass (emotion/tone/style/speed/energy/prosodyMetrics) in quality-gate-worker. When false, the worker skips the analysis entirely (not "computes but hides" -- unlike qualityGateEnabled, there's no downstream scoring use for this to gate, and emotion classification has a real per-job CPU cost worth skipping when unused). Purely descriptive/informational output -- deliberately has NO qualityWeight* counterpart and never feeds compositeScore/payout (see docs/Dialect-Library-Speech-Expression-Metadata-Plan.md's "never permanently bake into scoring" principle)
+  spellingNormalizationProviderOrder     String    @default("openai,deepseek,anthropic") // CSV fallback-try order for spelling normalization, same permutation rules as llmProviderOrder
+  sentenceRebuildEnabled                 Boolean   @default(false) // master kill switch for the SENTENCE_REBUILD word-training exercise; WordsService.nextAssignment never offers it when false
+  smsSenderId                            String? // Overrides TERMII_SENDER_ID/SMSLIVE247_SENDER_ID/AFRICASTALKING_SENDER_ID for every SMS provider (Termii, SMSLive247, Africa's Talking, and SMSLive247's native-OTP route) when set -- null/unset falls back to each provider's own env var, so this stays a no-op until an admin fills it in. Twilio has no equivalent (it sends from a purchased phone number, not a named sender ID).
+  smsProviderOrder                       String    @default("termii,twilio,africastalking") // CSV fallback-try order for phone-verification SMS OTPs, must be a permutation of {termii,twilio,africastalking}, validated app-side like llmProviderOrder -- smslive247 is not a fallback-chain member (see smslive247NativeOtpEnabled), it can't fire-and-forget an arbitrary code on their OTP-compliant route
+  smslive247NativeOtpEnabled             Boolean   @default(false) // when true, phone verification (Profile > Phone number) bypasses OtpCode/the SMS fallback chain entirely and uses SMSLive247's own token-generate/verify API end-to-end, since their OTP-compliant route generates the code itself and verifies it on their side, not ours
+  smsTransactionalProviderOrder          String    @default("termii,twilio,africastalking,smslive247") // CSV fallback-try order for P2P trade-notification SMS (not OTP) -- separate from smsProviderOrder since smslive247 CAN send ordinary notification text via their generic route, only their OTP route rejects OTP-shaped messages
+  p2pSmsTradeCreatedEnabled              Boolean   @default(false) // SMS both parties when a P2P trade is created (acceptOffer)
+  p2pSmsPaymentMarkedEnabled             Boolean   @default(false) // SMS the seller when the buyer marks a trade paid (markPaid)
+  p2pSmsTokensReleasedEnabled            Boolean   @default(false) // SMS the buyer when the seller releases tokens (release)
+  p2pSmsCancelledEnabled                 Boolean   @default(false) // SMS the seller when a trade is cancelled/expired/refunded (cancelTrade, refundTradeToSeller, dispute resolved to seller) and the non-raiser when a dispute is raised (raiseDispute)
+  cryptoWithdrawalsEnabled               Boolean   @default(true) // master kill switch -- when false, both wallet/withdrawals/otp and wallet/withdrawals reject new withdrawal requests outright
+  nowPaymentsPayoutsEnabled              Boolean   @default(false) // when false, admin/withdrawals/:id/submit-nowpayments is disabled -- admins can still resolve withdrawals manually (outcome=paid) while this is off, which is the safe default until payout credentials/allow-lists are configured
+  allowedWithdrawalCurrencies            String    @default("USDT") // CSV of currencies a withdrawal's destinationCurrency may be, validated app-side against NowPaymentsService's supported set (USDT, USDC)
+  allowedWithdrawalNetworks              String    @default("TRC20") // CSV of networks a withdrawal's destinationNetwork may be for its chosen currency, validated app-side against NowPaymentsService's supported set (TRC20, ERC20, BEP20, SOL, POLYGON)
+  withdrawalFeeMode                      String    @default("platform") // "platform" (fee absorbed by platform, user receives full tokenAmount worth) or "user" (fee deducted from the payout, see withdrawalFeeTokenAmount/withdrawalFeePercent)
+  withdrawalFeeTokenAmount               Decimal   @default(0) @db.Decimal(20, 8) // flat token fee deducted from payout when withdrawalFeeMode="user" and this is > 0 (takes precedence over withdrawalFeePercent if both are set)
+  withdrawalFeePercent                   Decimal   @default(0) @db.Decimal(5, 2) // percentage fee (0-100) deducted from payout when withdrawalFeeMode="user" and withdrawalFeeTokenAmount is 0
+  autoSubmitAfterApproval                Boolean   @default(false) // when true, admin/withdrawals/:id/approve immediately submits to NOWPayments in the same call instead of leaving it APPROVED for a separate submit step -- defaults off per the payout-automation plan's explicit caution
+  authMaintenanceEnabled                 Boolean   @default(false) // master switch for the maintenance window; the five scope flags below decide what it actually blocks while on. PlatformSettingsService auto-clears this the first time any check runs after authMaintenanceUntil passes, so the admin toggle self-resets rather than staying on indefinitely
+  authMaintenanceUntil                   DateTime? // scheduled end of the maintenance window
+  authMaintenanceMessage                 String? // optional admin-authored note shown alongside the countdown on the login/signup pages and the logged-out notice
+  authMaintenanceBlockLogin              Boolean   @default(true) // blocks POST /auth/login (credentials + OTP-issuance step) while maintenance is enabled
+  authMaintenanceBlockSignup             Boolean   @default(true) // blocks POST /auth/register and /auth/magic-link/request (magic-link request creates the account on first use, so it's signup, not just login) while maintenance is enabled
+  authMaintenanceBlockSessions           Boolean   @default(false) // when true, JwtAuthGuard rejects already-authenticated requests too (not just new login/signup), logging every active session out until the window ends -- subject to the role excludes below
+  authMaintenanceExcludeAdmin            Boolean   @default(true) // when authMaintenanceBlockSessions is on, ADMIN-role sessions are still exempted by default so an admin can reach Settings to end maintenance early
+  authMaintenanceExcludePartner          Boolean   @default(false) // when authMaintenanceBlockSessions is on, whether PARTNER-role sessions are exempted too
+  registerRateLimitPerHour               Int? // overrides REGISTER_RATE_LIMIT_PER_HOUR when set; max POST /auth/register requests per IP per rolling hour (see PlatformRateLimitGuard)
+  landingShowCountries                   Boolean   @default(true) // per-card visibility toggles for the landing page's 5-stat row (GeoController.getStats/LandingStats) -- hiding a stat only affects display, never stops it being computed
+  landingShowDialects                    Boolean   @default(true)
+  landingShowTrainers                    Boolean   @default(true)
+  landingShowPoolVolume                  Boolean   @default(true)
+  landingShowPayout                      Boolean   @default(true)
+  updatedAt                              DateTime  @updatedAt
+  createdAt                              DateTime  @default(now())
 
   @@map("platform_settings")
 }
@@ -1391,17 +1398,17 @@ model ApiAccessToken {
 /// self-serve subscription flow yet; this just captures interest for
 /// manual follow-up (MailService notifies an admin address on submit).
 model DataAccessLead {
-  id                 String   @id @default(uuid())
-  name               String
-  email              String
-  organization       String?
-  website            String?
+  id                  String    @id @default(uuid())
+  name                String
+  email               String
+  organization        String?
+  website             String?
   countriesInterested String?
-  contactedAt        DateTime?
-  contactNote        String?
-  contactedByUserId  String?
-  contactedBy        User?    @relation("DataAccessLeadContactedBy", fields: [contactedByUserId], references: [id], onDelete: SetNull)
-  createdAt          DateTime @default(now())
+  contactedAt         DateTime?
+  contactNote         String?
+  contactedByUserId   String?
+  contactedBy         User?     @relation("DataAccessLeadContactedBy", fields: [contactedByUserId], references: [id], onDelete: SetNull)
+  createdAt           DateTime  @default(now())
 
   subscriptionPools SubscriptionPool[]
 
@@ -1415,21 +1422,21 @@ model DataAccessLead {
 /// Editor.js-backed editorial content. `excerpt` is derived by BlogService
 /// from the first non-empty paragraph and is the canonical SEO description.
 model BlogPost {
-  id              String         @id @default(uuid())
-  slug            String         @unique // always `${slugified title}-${id}`; regenerated on title change
-  title           String
-  content         Json
-  excerpt         String
-  coverImageUrl   String?
-  coverImageKey   String?
-  coverImageAlt   String?
-  status          BlogPostStatus @default(DRAFT)
-  sortOrder       Int            @default(0)
-  authorId        String
-  author          User           @relation(fields: [authorId], references: [id], onDelete: Restrict)
-  publishedAt     DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id            String         @id @default(uuid())
+  slug          String         @unique // always `${slugified title}-${id}`; regenerated on title change
+  title         String
+  content       Json
+  excerpt       String
+  coverImageUrl String?
+  coverImageKey String?
+  coverImageAlt String?
+  status        BlogPostStatus @default(DRAFT)
+  sortOrder     Int            @default(0)
+  authorId      String
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  publishedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   @@index([status, sortOrder])
   @@index([publishedAt])
@@ -1437,7 +1444,7 @@ model BlogPost {
 }
 
 enum CourseVisibility {
-  PUBLIC  // no login required -- study route is the public /learn/{slug}/view viewer, progress is never tracked (no CourseProgress row, since there's no authenticated user to attach one to)
+  PUBLIC // no login required -- study route is the public /learn/{slug}/view viewer, progress is never tracked (no CourseProgress row, since there's no authenticated user to attach one to)
   PRIVATE // default -- study route is the protected /dashboard/learn/{slug} viewer, requires login, tracks CourseProgress per trainer
 }
 
@@ -1448,25 +1455,25 @@ enum CourseVisibility {
 /// shape, not a polymorphic block type. Reuses BlogPostStatus rather than a
 /// duplicate enum since the draft/published semantics are identical.
 model Course {
-  id            String           @id @default(uuid())
-  slug          String           @unique // always `${slugified title}-${id}`; regenerated on title change, same as BlogPost.slug
-  title         String
-  summary       String // admin-typed short description for catalog cards -- no paragraph to derive it from like BlogPost.excerpt
-  coverImageUrl String?
-  coverImageKey String?
-  coverImageAlt String?
-  slides        Json
-  status        BlogPostStatus   @default(DRAFT)
-  visibility    CourseVisibility @default(PRIVATE) // PUBLIC courses skip the login wall entirely -- see CourseVisibility doc comment
-  required      Boolean          @default(false) // when true (and PUBLISHED), every trainer must complete this course (CourseProgress.completedAt set) before starting a word-training session or submitting a sentence -- see CoursesService.getIncompleteRequiredCourses and its call sites in WordsService.startSession / SubmissionsController.create
-  completionRewardTokens Decimal? @db.Decimal(20, 8) // one-time DL credited on first completion; null/0 means no reward -- see CoursesService.saveProgress's COURSE_COMPLETION_REWARD credit
-  sortOrder     Int              @default(0)
-  authorId      String
-  author        User             @relation(fields: [authorId], references: [id], onDelete: Restrict)
-  publishedAt   DateTime?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  progress      CourseProgress[]
+  id                     String           @id @default(uuid())
+  slug                   String           @unique // always `${slugified title}-${id}`; regenerated on title change, same as BlogPost.slug
+  title                  String
+  summary                String // admin-typed short description for catalog cards -- no paragraph to derive it from like BlogPost.excerpt
+  coverImageUrl          String?
+  coverImageKey          String?
+  coverImageAlt          String?
+  slides                 Json
+  status                 BlogPostStatus   @default(DRAFT)
+  visibility             CourseVisibility @default(PRIVATE) // PUBLIC courses skip the login wall entirely -- see CourseVisibility doc comment
+  required               Boolean          @default(false) // when true (and PUBLISHED), every trainer must complete this course (CourseProgress.completedAt set) before starting a word-training session or submitting a sentence -- see CoursesService.getIncompleteRequiredCourses and its call sites in WordsService.startSession / SubmissionsController.create
+  completionRewardTokens Decimal?         @db.Decimal(20, 8) // one-time DL credited on first completion; null/0 means no reward -- see CoursesService.saveProgress's COURSE_COMPLETION_REWARD credit
+  sortOrder              Int              @default(0)
+  authorId               String
+  author                 User             @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  publishedAt            DateTime?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  progress               CourseProgress[]
 
   @@index([status, sortOrder])
   @@index([status, required])

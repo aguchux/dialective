@@ -2058,6 +2058,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     null,
   );
 
+  const [originCountryId, setOriginCountryId] = useState('');
   const [countryId, setCountryId] = useState('');
   const [dialectId, setDialectId] = useState('');
   const [dialectVariantId, setDialectVariantId] = useState('');
@@ -2072,12 +2073,14 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
 
   useEffect(() => {
     if (!me) return;
+    setOriginCountryId((current) => current || me.originCountryId || '');
     setCountryId((current) => current || me.countryId || '');
     setDialectId((current) => current || me.dialectId || '');
     setDialectVariantId((current) => current || me.dialectVariantId || '');
   }, [me]);
 
   const dialectDirty =
+    originCountryId !== (me?.originCountryId ?? '') ||
     countryId !== (me?.countryId ?? '') ||
     dialectId !== (me?.dialectId ?? '') ||
     dialectVariantId !== (me?.dialectVariantId ?? '');
@@ -2097,18 +2100,23 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     event.preventDefault();
     setDialectMessage(null);
     setDialectError(null);
-    if (!countryId || !dialectId) {
-      setDialectError('Choose a country and a dialect.');
+    if (!originCountryId || !countryId || !dialectId) {
+      setDialectError('Choose your country of origin, training country, and dialect.');
       return;
     }
     try {
       const profile = await updateDialectProfile({
+        originCountryId,
         countryId,
         dialectId,
         dialectVariantId: dialectVariantId || '',
       }).unwrap();
-      await update({ dialectTag: profile.dialectTag, countryId: profile.countryId });
-      setDialectMessage('Dialect updated.');
+      await update({
+        dialectTag: profile.dialectTag,
+        originCountryId: profile.originCountryId,
+        countryId: profile.countryId,
+      });
+      setDialectMessage('Country of origin and dialect updated.');
     } catch (err) {
       setDialectError(normalizeErrorMessage(err, 'Unable to update your dialect.'));
     }
@@ -2704,10 +2712,29 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={saveDialect}>
           <SectionTitle
             title="Dialect"
-            subtitle="The country and dialect you train in. Changing this switches which words and prompts you're assigned."
+            subtitle="Your country of origin identifies your account. Training country and dialect determine which words and prompts you receive."
           />
           <label className="grid gap-1.5 text-sm font-bold">
-            Country
+            Country of origin
+            <select
+              className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+              disabled={isLoadingCountries}
+              onChange={(event) => setOriginCountryId(event.target.value)}
+              required
+              value={originCountryId}
+            >
+              <option value="">
+                {isLoadingCountries ? 'Loading...' : 'Select your country of origin'}
+              </option>
+              {countries?.map((country) => (
+                <option key={country.id} value={country.id}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1.5 text-sm font-bold">
+            Training country
             <select
               className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
               disabled={isLoadingCountries}
@@ -2734,7 +2761,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
             >
               <option value="">
                 {!countryId
-                  ? 'Select a country first'
+                  ? 'Select a training country first'
                   : isLoadingDialects
                     ? 'Loading...'
                     : 'Select a dialect'}
@@ -2776,12 +2803,12 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
           <div>
             <ActionButton
               className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!dialectDirty || !countryId || !dialectId}
+              disabled={!dialectDirty || !originCountryId || !countryId || !dialectId}
               pending={dialectSaving}
               pendingLabel="Saving"
               type="submit"
             >
-              Save dialect
+              Save country and dialect
             </ActionButton>
           </div>
         </form>

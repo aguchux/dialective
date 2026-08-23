@@ -72,6 +72,7 @@ export interface PublicUser {
   emailVerified: boolean;
   phoneNumber: string | null;
   phoneVerified: boolean;
+  originCountryId: string | null;
   countryId: string | null;
   dialectId: string | null;
   dialectTag: string | null;
@@ -110,6 +111,7 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     emailVerified: user.emailVerified !== null,
     phoneNumber: user.phoneNumber,
     phoneVerified: user.phoneVerifiedAt !== null,
+    originCountryId: user.originCountryId,
     countryId: user.countryId,
     dialectId: user.dialectId,
     dialectTag: user.dialect?.tag ?? null,
@@ -117,7 +119,11 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     dialectVariantTag: user.dialectVariant?.tag ?? null,
     onboardingComplete:
       user.role !== Role.TRAINER ||
-      (user.countryId !== null && user.dialectId !== null && !!user.firstName && !!user.lastName),
+      (user.originCountryId !== null &&
+        user.countryId !== null &&
+        user.dialectId !== null &&
+        !!user.firstName &&
+        !!user.lastName),
     referralCode: user.referralCode,
     emailNotificationsEnabled: user.emailNotificationsEnabled,
     smsNotificationsEnabled: user.smsNotificationsEnabled,
@@ -667,6 +673,7 @@ export class AuthService {
   async updateProfile(
     userId: string,
     fields: {
+      originCountryId?: string;
       countryId?: string;
       dialectId?: string;
       dialectVariantId?: string | null;
@@ -680,6 +687,7 @@ export class AuthService {
     },
   ): Promise<PublicUser> {
     const {
+      originCountryId,
       countryId,
       dialectId,
       dialectVariantId,
@@ -691,6 +699,18 @@ export class AuthService {
       blogNewsNotificationsEnabled,
       courseNotificationsEnabled,
     } = fields;
+
+    if (originCountryId) {
+      const originCountry = await this.prisma.country.findUnique({
+        where: { id: originCountryId },
+        select: { id: true },
+      });
+      if (!originCountry) {
+        throw new UnprocessableEntityException(
+          'Country of origin does not match an existing country',
+        );
+      }
+    }
 
     if (countryId || dialectId) {
       if (!countryId || !dialectId) {
@@ -726,6 +746,7 @@ export class AuthService {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
+        ...(originCountryId ? { originCountryId } : {}),
         ...(countryId && dialectId ? { countryId, dialectId } : {}),
         // Changing dialectId without an explicit variant clears the old
         // one -- a variant of the previous dialect can never be valid for

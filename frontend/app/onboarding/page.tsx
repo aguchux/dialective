@@ -26,14 +26,15 @@ export default function OnboardingPage() {
   const { data: session, status, update } = useSession();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [countryId, setCountryId] = useState('');
+  const [originCountryId, setOriginCountryId] = useState('');
+  const [trainingCountryId, setTrainingCountryId] = useState('');
   const [dialectId, setDialectId] = useState('');
   const [dialectVariantId, setDialectVariantId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
-  const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(countryId, {
-    skip: !countryId,
+  const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(trainingCountryId, {
+    skip: !trainingCountryId,
   });
   const { data: dialectVariants } = useGetDialectVariantsQuery(dialectId, { skip: !dialectId });
   const [updateProfile, { isLoading: isSubmitting }] = useUpdateProfileMutation();
@@ -54,7 +55,7 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     setDialectId('');
-  }, [countryId]);
+  }, [trainingCountryId]);
 
   useEffect(() => {
     setDialectVariantId('');
@@ -67,13 +68,14 @@ export default function OnboardingPage() {
       setError('Enter your first and last name to continue.');
       return;
     }
-    if (!countryId || !dialectId) {
-      setError('Choose a country and a dialect to continue.');
+    if (!originCountryId || !trainingCountryId || !dialectId) {
+      setError('Choose your country of origin, training country, and dialect to continue.');
       return;
     }
     try {
       const profile = await updateProfile({
-        countryId,
+        originCountryId,
+        countryId: trainingCountryId,
         dialectId,
         ...(dialectVariantId ? { dialectVariantId } : {}),
         ...(needsName ? { firstName: firstName.trim(), lastName: lastName.trim() } : {}),
@@ -81,6 +83,7 @@ export default function OnboardingPage() {
       await update({
         onboardingComplete: profile.onboardingComplete,
         dialectTag: profile.dialectTag,
+        originCountryId: profile.originCountryId,
         countryId: profile.countryId,
         firstName: profile.firstName,
         lastName: profile.lastName,
@@ -110,8 +113,8 @@ export default function OnboardingPage() {
         <Notice>
           {session?.user?.email ? `Welcome, ${session.user.email}. ` : ''}
           {needsName
-            ? "Tell us your name, then choose your country and the dialect you'd like to train first. You can change this later."
-            : "Choose your country and the dialect you'd like to train first. You can change this later."}
+            ? "Tell us your name, country of origin, and the dialect you'd like to train first. You can change your training dialect later."
+            : "Choose your country of origin and the dialect you'd like to train first. You can change your training dialect later."}
         </Notice>
 
         <form className="grid gap-2.5" onSubmit={handleSubmit}>
@@ -141,16 +144,22 @@ export default function OnboardingPage() {
             </>
           )}
 
-          <label htmlFor="onboarding-country">Country</label>
+          <label htmlFor="onboarding-origin-country">Country of origin</label>
           <select
             className={selectClass}
-            id="onboarding-country"
-            value={countryId}
-            onChange={(e) => setCountryId(e.target.value)}
+            id="onboarding-origin-country"
+            value={originCountryId}
+            onChange={(e) => {
+              const value = e.target.value;
+              setOriginCountryId(value);
+              setTrainingCountryId((current) => current || value);
+            }}
             disabled={isLoadingCountries}
             required
           >
-            <option value="">{isLoadingCountries ? 'Loading...' : 'Select a country'}</option>
+            <option value="">
+              {isLoadingCountries ? 'Loading...' : 'Select your country of origin'}
+            </option>
             {countries?.map((country) => (
               <option key={country.id} value={country.id}>
                 {country.name}
@@ -158,18 +167,37 @@ export default function OnboardingPage() {
             ))}
           </select>
 
-          <label htmlFor="onboarding-dialect">Dialect</label>
+          <label htmlFor="onboarding-training-country">Training country</label>
+          <select
+            className={selectClass}
+            id="onboarding-training-country"
+            value={trainingCountryId}
+            onChange={(e) => setTrainingCountryId(e.target.value)}
+            disabled={isLoadingCountries}
+            required
+          >
+            <option value="">
+              {isLoadingCountries ? 'Loading...' : 'Select the dialect country'}
+            </option>
+            {countries?.map((country) => (
+              <option key={country.id} value={country.id}>
+                {country.name}
+              </option>
+            ))}
+          </select>
+
+          <label htmlFor="onboarding-dialect">Dialect to train</label>
           <select
             className={selectClass}
             id="onboarding-dialect"
             value={dialectId}
             onChange={(e) => setDialectId(e.target.value)}
-            disabled={!countryId || isLoadingDialects}
+            disabled={!trainingCountryId || isLoadingDialects}
             required
           >
             <option value="">
-              {!countryId
-                ? 'Select a country first'
+              {!trainingCountryId
+                ? 'Select a training country first'
                 : isLoadingDialects
                   ? 'Loading...'
                   : 'Select a dialect'}

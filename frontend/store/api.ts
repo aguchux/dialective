@@ -14,6 +14,7 @@ export interface PublicUser {
   emailVerified: boolean;
   phoneNumber: string | null;
   phoneVerified: boolean;
+  originCountryId: string | null;
   countryId: string | null;
   dialectId: string | null;
   dialectTag: string | null;
@@ -1930,6 +1931,7 @@ export const dialectivaApi = createApi({
     updateProfile: builder.mutation<
       PublicUser,
       {
+        originCountryId?: string;
         countryId?: string;
         dialectId?: string;
         dialectVariantId?: string;
