@@ -15,6 +15,7 @@ import {
   RaiseDisputeDto,
   ResolveDisputeDto,
   UpdateP2PMarketSettingsDto,
+  UpdateP2pPaymentInstructionsDto,
   UpsertPaymentMethodDto,
 } from './dto/p2p.dto';
 
@@ -36,6 +37,24 @@ export class P2PController {
   @Get('payment-methods')
   listPaymentMethods(@Req() req: AuthenticatedRequest) {
     return this.p2p.listPaymentMethods(req.user.sub);
+  }
+
+  @Get('payment-methods/banks/:country')
+  listBanks(@Param('country') country: string) {
+    return this.p2p.listBanks(country);
+  }
+
+  @Get('payment-instructions')
+  getPaymentInstructions(@Req() req: AuthenticatedRequest) {
+    return this.p2p.getP2pPaymentInstructions(req.user.sub);
+  }
+
+  @Patch('payment-instructions')
+  updatePaymentInstructions(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: UpdateP2pPaymentInstructionsDto,
+  ) {
+    return this.p2p.updateP2pPaymentInstructions(req.user.sub, body);
   }
 
   @Post('payment-methods/otp')

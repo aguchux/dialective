@@ -6,13 +6,10 @@ export function paymentMethodContextHash(
 ): string {
   return hashContext({
     id: input.id ?? '',
-    label: normalized(input.label),
     methodType: normalized(input.methodType).toUpperCase(),
     fiatCurrency: normalized(input.fiatCurrency).toUpperCase(),
-    bankName: normalized(input.bankName),
-    accountName: normalized(input.accountName),
+    bankCode: normalized(input.bankCode),
     accountNumber: normalized(input.accountNumber),
-    instructions: normalized(input.instructions),
     enabled: String(input.enabled ?? true),
   });
 }

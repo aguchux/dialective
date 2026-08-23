@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { SmsService } from '../sms/sms.service';
 import { tokensToLocalCurrency } from '../wallet/currency-rate.util';
+import { FlutterwaveService } from '../wallet/flutterwave.service';
 import {
   AcceptOfferDto,
   CreateOfferDto,
@@ -31,6 +32,7 @@ import {
   RaiseDisputeDto,
   ResolveDisputeDto,
   UpdateP2PMarketSettingsDto,
+  UpdateP2pPaymentInstructionsDto,
   UpsertPaymentMethodDto,
 } from './dto/p2p.dto';
 import { paymentMethodContextHash } from './p2p-otp-context.util';
@@ -50,6 +52,7 @@ export class P2PService {
     private readonly otp: OtpService,
     private readonly platformSettings: PlatformSettingsService,
     private readonly sms: SmsService,
+    private readonly flutterwave: FlutterwaveService,
   ) {}
 
   async getSettings() {
@@ -155,6 +158,27 @@ export class P2PService {
       where: { userId },
       orderBy: [{ enabled: 'desc' }, { createdAt: 'desc' }],
     });
+  }
+
+  listBanks(country: string) {
+    return this.flutterwave.listBanks(country);
+  }
+
+  async getP2pPaymentInstructions(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { p2pPaymentInstructions: true },
+    });
+    return { p2pPaymentInstructions: user.p2pPaymentInstructions };
+  }
+
+  async updateP2pPaymentInstructions(userId: string, dto: UpdateP2pPaymentInstructionsDto) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { p2pPaymentInstructions: dto.p2pPaymentInstructions?.trim() || null },
+      select: { p2pPaymentInstructions: true },
+    });
+    return user;
   }
 
   async requestPaymentMethodOtp(userId: string, dto: RequestPaymentMethodOtpDto) {
@@ -284,13 +308,8 @@ export class P2PService {
   async createPaymentMethod(userId: string, dto: UpsertPaymentMethodDto) {
     await this.requirePhoneVerified(userId, 'adding a payment method');
     await this.verifyPaymentMethodOtp(userId, dto);
-    return this.prisma.userPaymentMethod.create({
-      data: {
-        userId,
-        ...paymentMethodData(dto),
-        enabled: dto.enabled ?? true,
-      },
-    });
+    const data = await this.resolvedPaymentMethodData(userId, dto);
+    return this.prisma.userPaymentMethod.create({ data: { userId, ...data } });
   }
 
   async updatePaymentMethod(userId: string, id: string, dto: UpsertPaymentMethodDto) {
@@ -298,7 +317,34 @@ export class P2PService {
     const method = await this.prisma.userPaymentMethod.findFirst({ where: { id, userId } });
     if (!method) throw new NotFoundException('Payment method not found');
     await this.verifyPaymentMethodOtp(userId, { ...dto, id });
-    return this.prisma.userPaymentMethod.update({ where: { id }, data: paymentMethodData(dto) });
+    const data = await this.resolvedPaymentMethodData(userId, dto);
+    return this.prisma.userPaymentMethod.update({ where: { id }, data });
+  }
+
+  /** Bank name and account holder name are never trusted from the client -- both are always resolved fresh from Flutterwave so a payment method can only ever point at a real, verified account. */
+  private async resolvedPaymentMethodData(userId: string, dto: UpsertPaymentMethodDto) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { country: { select: { code: true } } },
+    });
+    const countryCode = user.country?.code ?? 'NG';
+    const banks = await this.flutterwave.listBanks(countryCode);
+    const bank = banks.find((b) => b.code === dto.bankCode);
+    if (!bank) throw new BadRequestException('Select a valid bank');
+    const resolved = await this.flutterwave.resolveAccount({
+      accountBank: dto.bankCode,
+      accountNumber: dto.accountNumber,
+    });
+    return {
+      label: bank.name,
+      methodType: dto.methodType.trim().toUpperCase(),
+      fiatCurrency: dto.fiatCurrency.trim().toUpperCase(),
+      bankCode: dto.bankCode,
+      bankName: bank.name,
+      accountName: resolved.accountName,
+      accountNumber: resolved.accountNumber,
+      enabled: dto.enabled ?? true,
+    };
   }
 
   async deletePaymentMethod(userId: string, id: string) {
@@ -1091,7 +1137,7 @@ const userSelect = { select: { id: true, firstName: true, lastName: true, email:
 const tradeInclude = {
   offer: true,
   buyer: userSelect,
-  seller: userSelect,
+  seller: { select: { id: true, firstName: true, lastName: true, email: true, p2pPaymentInstructions: true } },
   sellerPaymentMethod: true,
   dispute: true,
 } satisfies Prisma.P2PTokenTradeInclude;
@@ -1105,19 +1151,6 @@ function csvIncludes(csv: string, value: string) {
     .split(',')
     .map((item) => item.trim().toUpperCase())
     .includes(value.trim().toUpperCase());
-}
-
-function paymentMethodData(dto: UpsertPaymentMethodDto) {
-  return {
-    label: dto.label.trim(),
-    methodType: dto.methodType.trim().toUpperCase(),
-    fiatCurrency: dto.fiatCurrency.trim().toUpperCase(),
-    bankName: dto.bankName?.trim() || null,
-    accountName: dto.accountName?.trim() || null,
-    accountNumber: dto.accountNumber?.trim() || null,
-    instructions: dto.instructions?.trim() || null,
-    enabled: dto.enabled ?? true,
-  };
 }
 
 function serializeSettings(row: Awaited<ReturnType<P2PService['settingsRow']>>) {
@@ -1168,6 +1201,7 @@ function serializeTrade(
     fiatCurrency: trade.fiatCurrency,
     paymentMethod: trade.paymentMethod,
     sellerPaymentMethod: isParticipant ? trade.sellerPaymentMethod : null,
+    sellerPaymentInstructions: isParticipant ? trade.seller.p2pPaymentInstructions : null,
     status: trade.status,
     paymentDeadlineAt: trade.paymentDeadlineAt,
     cancelRequestedByUserId: trade.cancelRequestedByUserId,

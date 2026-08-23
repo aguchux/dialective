@@ -674,6 +674,9 @@ function TradeCard({
             {trade.sellerPaymentMethod.bankName} · {trade.sellerPaymentMethod.accountName} ·{' '}
             {trade.sellerPaymentMethod.accountNumber}
           </p>
+          {trade.sellerPaymentInstructions && (
+            <p className="mt-1 text-muted">{trade.sellerPaymentInstructions}</p>
+          )}
         </div>
       )}
       {trade.status === 'AWAITING_PAYMENT' && (

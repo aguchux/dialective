@@ -603,10 +603,10 @@ export interface UserPaymentMethod {
   label: string;
   methodType: string;
   fiatCurrency: string;
+  bankCode: string | null;
   bankName: string | null;
   accountName: string | null;
   accountNumber: string | null;
-  instructions: string | null;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -614,13 +614,10 @@ export interface UserPaymentMethod {
 
 export interface PaymentMethodInput {
   id?: string;
-  label: string;
   methodType: string;
   fiatCurrency: string;
-  bankName?: string;
-  accountName?: string;
-  accountNumber?: string;
-  instructions?: string;
+  bankCode: string;
+  accountNumber: string;
   enabled?: boolean;
 }
 
@@ -695,6 +692,7 @@ export interface P2PTrade {
   fiatCurrency: string;
   paymentMethod: string;
   sellerPaymentMethod: UserPaymentMethod | null;
+  sellerPaymentInstructions: string | null;
   status: P2PTradeStatus;
   paymentDeadlineAt: string;
   cancelRequestedByUserId: string | null;
@@ -1749,6 +1747,20 @@ export const dialectivaApi = createApi({
     getP2PPaymentMethods: builder.query<UserPaymentMethod[], void>({
       query: () => '/p2p/payment-methods',
       providesTags: ['P2P'],
+    }),
+    listP2PBanks: builder.query<{ code: string; name: string }[], string>({
+      query: (country) => `/p2p/payment-methods/banks/${country}`,
+    }),
+    getP2PPaymentInstructions: builder.query<{ p2pPaymentInstructions: string | null }, void>({
+      query: () => '/p2p/payment-instructions',
+      providesTags: ['P2P'],
+    }),
+    updateP2PPaymentInstructions: builder.mutation<
+      { p2pPaymentInstructions: string | null },
+      { p2pPaymentInstructions: string }
+    >({
+      query: (body) => ({ url: '/p2p/payment-instructions', method: 'PATCH', body }),
+      invalidatesTags: ['P2P'],
     }),
     requestP2PPaymentMethodOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
@@ -3079,6 +3091,9 @@ export const {
   useGetP2PSettingsQuery,
   useGetP2PReferenceRateQuery,
   useGetP2PPaymentMethodsQuery,
+  useListP2PBanksQuery,
+  useGetP2PPaymentInstructionsQuery,
+  useUpdateP2PPaymentInstructionsMutation,
   useRequestP2PPaymentMethodOtpMutation,
   useCreateP2PPaymentMethodMutation,
   useUpdateP2PPaymentMethodMutation,

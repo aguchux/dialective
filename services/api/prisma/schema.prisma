@@ -102,6 +102,10 @@ model User {
   promotedById                  String?
   promotedBy                    User?           @relation("SubDistributorPromotions", fields: [promotedById], references: [id])
   subDistributors               User[]          @relation("SubDistributorPromotions")
+  // Global instructions shown to a P2P buyer alongside whichever of this
+  // user's payment methods a trade uses (e.g. preferred payment window or
+  // reference format) -- one note per user, not per payment method.
+  p2pPaymentInstructions        String?
   createdAt                     DateTime        @default(now())
   updatedAt                     DateTime        @updatedAt
 
@@ -1508,10 +1512,10 @@ model UserPaymentMethod {
   label         String
   methodType    String
   fiatCurrency  String
+  bankCode      String?
   bankName      String?
   accountName   String?
   accountNumber String?
-  instructions  String?
   enabled       Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

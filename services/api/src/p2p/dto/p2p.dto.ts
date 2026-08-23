@@ -17,31 +17,19 @@ import { P2PDisputeStatus, P2POfferStatus, P2POfferType, P2PTradeStatus } from '
 export class UpsertPaymentMethodDto {
   @IsString()
   @IsNotEmpty()
-  label!: string;
-
-  @IsString()
-  @IsNotEmpty()
   methodType!: string;
 
   @IsString()
   @IsNotEmpty()
   fiatCurrency!: string;
 
-  @IsOptional()
   @IsString()
-  bankName?: string;
+  @IsNotEmpty()
+  bankCode!: string;
 
-  @IsOptional()
   @IsString()
-  accountName?: string;
-
-  @IsOptional()
-  @IsString()
-  accountNumber?: string;
-
-  @IsOptional()
-  @IsString()
-  instructions?: string;
+  @IsNotEmpty()
+  accountNumber!: string;
 
   @IsOptional()
   @IsBoolean()
@@ -62,35 +50,29 @@ export class RequestPaymentMethodOtpDto {
 
   @IsString()
   @IsNotEmpty()
-  label!: string;
-
-  @IsString()
-  @IsNotEmpty()
   methodType!: string;
 
   @IsString()
   @IsNotEmpty()
   fiatCurrency!: string;
 
-  @IsOptional()
   @IsString()
-  bankName?: string;
+  @IsNotEmpty()
+  bankCode!: string;
 
-  @IsOptional()
   @IsString()
-  accountName?: string;
-
-  @IsOptional()
-  @IsString()
-  accountNumber?: string;
-
-  @IsOptional()
-  @IsString()
-  instructions?: string;
+  @IsNotEmpty()
+  accountNumber!: string;
 
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+}
+
+export class UpdateP2pPaymentInstructionsDto {
+  @IsOptional()
+  @IsString()
+  p2pPaymentInstructions?: string;
 }
 
 export class CreateOfferDto {

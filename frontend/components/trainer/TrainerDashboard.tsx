@@ -44,6 +44,7 @@ import {
 import { BrandLogo } from '@/components/BrandLogo';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import {
   formatCompactLocalCurrency,
   formatCompactNumber,
@@ -84,6 +85,9 @@ import {
   useGetDialectsQuery,
   useGetDialectVariantsQuery,
   useGetP2PPaymentMethodsQuery,
+  useListP2PBanksQuery,
+  useGetP2PPaymentInstructionsQuery,
+  useUpdateP2PPaymentInstructionsMutation,
   useGetP2PReferenceRateQuery,
   useGetIncompleteRequiredCoursesQuery,
   useGetMeQuery,
@@ -2016,28 +2020,57 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
 function ProfileView({ session, update }: { session: Session; update: SessionUpdateFn }) {
   const [firstName, setFirstName] = useState(session.user.firstName ?? '');
   const [lastName, setLastName] = useState(session.user.lastName ?? '');
-  const [bankName, setBankName] = useState('');
-  const [accountName, setAccountName] = useState('');
+  const [bankCode, setBankCode] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
-  const [instructions, setInstructions] = useState('');
   const [paymentOtpRequestId, setPaymentOtpRequestId] = useState('');
   const [paymentOtpCode, setPaymentOtpCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updateProfile, { isLoading }] = useUpdateProfileMutation();
   const { data: me } = useGetMeQuery();
+  const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
+  const paymentCountryCode =
+    countries?.find((country) => country.id === me?.countryId)?.code ?? 'NG';
   const { data: methods = [] } = useGetP2PPaymentMethodsQuery();
+  const { data: p2pBanks, isLoading: isLoadingP2pBanks } = useListP2PBanksQuery(
+    paymentCountryCode,
+    { skip: !me },
+  );
   const [requestPaymentOtp, { isLoading: paymentOtpSending }] =
     useRequestP2PPaymentMethodOtpMutation();
   const [createPaymentMethod, { isLoading: paymentCreating }] = useCreateP2PPaymentMethodMutation();
   const [updatePaymentMethod, { isLoading: paymentUpdating }] = useUpdateP2PPaymentMethodMutation();
   const [deletePaymentMethod, { isLoading: paymentDeleting }] = useDeleteP2PPaymentMethodMutation();
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [editingPaymentMethodId, setEditingPaymentMethodId] = useState<string | 'new' | null>(null);
   const editingMethod =
     editingPaymentMethodId && editingPaymentMethodId !== 'new'
       ? methods.find((method) => method.id === editingPaymentMethodId)
       : undefined;
   const paymentSaving = paymentCreating || paymentUpdating;
+  const { data: paymentInstructionsData } = useGetP2PPaymentInstructionsQuery();
+  const [p2pPaymentInstructions, setP2pPaymentInstructions] = useState('');
+  const [updateP2pPaymentInstructions, { isLoading: instructionsSaving }] =
+    useUpdateP2PPaymentInstructionsMutation();
+  useEffect(() => {
+    setP2pPaymentInstructions(paymentInstructionsData?.p2pPaymentInstructions ?? '');
+  }, [paymentInstructionsData?.p2pPaymentInstructions]);
+  const instructionsDirty =
+    p2pPaymentInstructions.trim() !== (paymentInstructionsData?.p2pPaymentInstructions ?? '');
+
+  async function saveP2pPaymentInstructions(event: FormEvent) {
+    event.preventDefault();
+    setMessage(null);
+    setError(null);
+    try {
+      await updateP2pPaymentInstructions({
+        p2pPaymentInstructions: p2pPaymentInstructions.trim(),
+      }).unwrap();
+      setMessage('P2P payment instructions updated.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not update payment instructions.'));
+    }
+  }
   const { data: referenceRate } = useGetP2PReferenceRateQuery();
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
   const phoneVerificationRequired = publicSettings?.phoneVerificationRequired ?? true;
@@ -2083,7 +2116,6 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [dialectVariantId, setDialectVariantId] = useState('');
   const [dialectMessage, setDialectMessage] = useState<string | null>(null);
   const [dialectError, setDialectError] = useState<string | null>(null);
-  const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
   const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(countryId, {
     skip: !countryId,
   });
@@ -2145,36 +2177,23 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     firstName.trim() !== (session.user.firstName ?? '') ||
     lastName.trim() !== (session.user.lastName ?? '');
   const paymentPayload = {
-    label: bankName.trim() || 'Bank transfer',
     methodType: 'BANK_TRANSFER',
     fiatCurrency: editingMethod?.fiatCurrency ?? referenceRate?.currencyCode ?? 'NGN',
-    bankName: bankName.trim(),
-    accountName: accountName.trim(),
+    bankCode: bankCode.trim(),
     accountNumber: accountNumber.trim(),
-    instructions: instructions.trim() || undefined,
     enabled: true,
   };
   const paymentDirty =
     !editingMethod ||
-    bankName.trim() !== (editingMethod.bankName ?? '') ||
-    accountName.trim() !== (editingMethod.accountName ?? '') ||
-    accountNumber.trim() !== (editingMethod.accountNumber ?? '') ||
-    instructions.trim() !== (editingMethod.instructions ?? '');
+    bankCode.trim() !== (editingMethod.bankCode ?? '') ||
+    accountNumber.trim() !== (editingMethod.accountNumber ?? '');
 
   useEffect(() => {
-    setBankName(editingMethod?.bankName ?? '');
-    setAccountName(editingMethod?.accountName ?? '');
+    setBankCode(editingMethod?.bankCode ?? '');
     setAccountNumber(editingMethod?.accountNumber ?? '');
-    setInstructions(editingMethod?.instructions ?? '');
     setPaymentOtpRequestId('');
     setPaymentOtpCode('');
-  }, [
-    editingPaymentMethodId,
-    editingMethod?.bankName,
-    editingMethod?.accountName,
-    editingMethod?.accountNumber,
-    editingMethod?.instructions,
-  ]);
+  }, [editingPaymentMethodId, editingMethod?.bankCode, editingMethod?.accountNumber]);
 
   function updatePaymentField(setter: (value: string) => void, value: string) {
     setter(value);
@@ -2339,10 +2358,21 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       setPaymentOtpRequestId('');
       setPaymentOtpCode('');
       setEditingPaymentMethodId(null);
+      setPaymentDialogOpen(false);
       setMessage('Payment method saved.');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not save payment method.'));
     }
+  }
+
+  function openAddPaymentDialog() {
+    setEditingPaymentMethodId('new');
+    setPaymentDialogOpen(true);
+  }
+
+  function openEditPaymentDialog(id: string) {
+    setEditingPaymentMethodId(id);
+    setPaymentDialogOpen(true);
   }
 
   async function removePaymentMethod(id: string) {
@@ -2350,7 +2380,10 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     setError(null);
     try {
       await deletePaymentMethod(id).unwrap();
-      if (editingPaymentMethodId === id) setEditingPaymentMethodId(null);
+      if (editingPaymentMethodId === id) {
+        setEditingPaymentMethodId(null);
+        setPaymentDialogOpen(false);
+      }
       setMessage('Payment method removed.');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not remove payment method.'));
@@ -2658,7 +2691,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
         <div className={`${cardClass} grid gap-4 p-5`}>
           <SectionTitle
             title="Payment methods"
-            subtitle="Stored in Profile and protected by email 2FA for every edit. Add multiple bank accounts and choose which one to use per offer."
+            subtitle="Verified with your bank via Flutterwave and protected by email 2FA for every edit. Add multiple accounts and choose which one to use per offer."
           />
           {!phoneVerified && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
@@ -2685,7 +2718,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                     <button
                       className="min-h-9 rounded-lg border border-line px-3 text-sm font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={!phoneVerified}
-                      onClick={() => setEditingPaymentMethodId(method.id)}
+                      onClick={() => openEditPaymentDialog(method.id)}
                       type="button"
                     >
                       Edit
@@ -2704,16 +2737,41 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               ))}
             </ul>
           )}
-          {editingPaymentMethodId ? (
-            <form className="grid gap-4" onSubmit={savePaymentMethod}>
-              <fieldset className="contents" disabled={!phoneVerified}>
+          <button
+            className="min-h-11 justify-self-start rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!phoneVerified}
+            onClick={openAddPaymentDialog}
+            type="button"
+          >
+            + Add bank account
+          </button>
+
+          <Dialog
+            onOpenChange={(open) => {
+              setPaymentDialogOpen(open);
+              if (!open) setEditingPaymentMethodId(null);
+            }}
+            open={paymentDialogOpen}
+          >
+            <DialogContent
+              description="Bank details are verified with your bank via Flutterwave and encrypted -- only used to show buyers where to pay you."
+              title={editingMethod ? 'Edit bank account' : 'Add a bank account'}
+            >
+              <form className="grid gap-4" onSubmit={savePaymentMethod}>
                 <label className="grid gap-1.5 text-sm font-bold">
-                  Bank name
-                  <input
+                  Bank
+                  <SearchableSelect
                     className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                    onChange={(event) => updatePaymentField(setBankName, event.target.value)}
-                    required
-                    value={bankName}
+                    emptyLabel="No banks match your search"
+                    loading={isLoadingP2pBanks}
+                    loadingLabel="Loading banks..."
+                    onChange={(value) => updatePaymentField(setBankCode, value)}
+                    options={(p2pBanks ?? []).map((bank) => ({
+                      value: bank.code,
+                      label: bank.name,
+                    }))}
+                    placeholder="Search for a bank"
+                    value={bankCode}
                   />
                 </label>
                 <label className="grid gap-1.5 text-sm font-bold">
@@ -2726,24 +2784,10 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                     value={accountNumber}
                   />
                 </label>
-                <label className="grid gap-1.5 text-sm font-bold">
-                  Account name
-                  <input
-                    className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                    onChange={(event) => updatePaymentField(setAccountName, event.target.value)}
-                    required
-                    value={accountName}
-                  />
-                </label>
-                <label className="grid gap-1.5 text-sm font-bold">
-                  Notes <span className="font-normal text-muted">(optional)</span>
-                  <textarea
-                    className="min-h-20 resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-ink outline-none focus:border-accent"
-                    onChange={(event) => updatePaymentField(setInstructions, event.target.value)}
-                    placeholder="Anything a buyer should know before paying, e.g. preferred payment window or reference format"
-                    value={instructions}
-                  />
-                </label>
+                <p className="text-xs text-muted">
+                  We&apos;ll verify this account with your bank and show buyers the account
+                  holder&apos;s name -- no need to type it yourself.
+                </p>
                 {paymentOtpRequestId ? (
                   <label className="grid gap-1.5 text-sm font-bold">
                     Email verification code
@@ -2757,22 +2801,22 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                     />
                   </label>
                 ) : null}
-                <div className="flex flex-wrap gap-2">
+                {error && (
+                  <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                    {error}
+                  </p>
+                )}
+                <div className="flex flex-wrap justify-end gap-2">
                   <button
                     className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted"
-                    onClick={() => setEditingPaymentMethodId(null)}
+                    onClick={() => setPaymentDialogOpen(false)}
                     type="button"
                   >
                     Cancel
                   </button>
                   <ActionButton
                     className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={
-                      !paymentDirty ||
-                      !bankName.trim() ||
-                      !accountName.trim() ||
-                      !accountNumber.trim()
-                    }
+                    disabled={!paymentDirty || !bankCode.trim() || !accountNumber.trim()}
                     onClick={() => void requestPaymentMethodOtp()}
                     pending={paymentOtpSending}
                     pendingLabel="Sending"
@@ -2784,25 +2828,41 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                     className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={!paymentDirty || !paymentOtpRequestId || !paymentOtpCode.trim()}
                     pending={paymentSaving}
-                    pendingLabel="Saving"
+                    pendingLabel="Verifying & saving"
                     type="submit"
                   >
-                    Save bank details
+                    Save bank account
                   </ActionButton>
                 </div>
-              </fieldset>
-            </form>
-          ) : (
-            <button
-              className="min-h-11 justify-self-start rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!phoneVerified}
-              onClick={() => setEditingPaymentMethodId('new')}
-              type="button"
-            >
-              + Add bank account
-            </button>
-          )}
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
+
+        <form className={`${cardClass} grid gap-4 p-5`} onSubmit={saveP2pPaymentInstructions}>
+          <SectionTitle
+            title="P2P payment note"
+            subtitle="Shown to buyers on every P2P trade, no matter which of your bank accounts is used."
+          />
+          <label className="grid gap-1.5 text-sm font-bold">
+            Notes <span className="font-normal text-muted">(optional)</span>
+            <textarea
+              className="min-h-20 resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-ink outline-none focus:border-accent"
+              onChange={(event) => setP2pPaymentInstructions(event.target.value)}
+              placeholder="Anything a buyer should know before paying, e.g. preferred payment window or reference format"
+              value={p2pPaymentInstructions}
+            />
+          </label>
+          <ActionButton
+            className="min-h-11 justify-self-start rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!instructionsDirty}
+            pending={instructionsSaving}
+            pendingLabel="Saving"
+            type="submit"
+          >
+            Save note
+          </ActionButton>
+        </form>
 
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={saveDialect}>
           <SectionTitle
