@@ -29,6 +29,7 @@ import {
   BlogPostStatus,
   LedgerEntryType,
   OtpPurpose,
+  PayoutMethod,
   Prisma,
   ReferralInviteStatus,
   Role,
@@ -68,7 +69,9 @@ import {
   withdrawalContextHash,
   depositContextHash,
   adminActionContextHash,
+  fiatWithdrawalContextHash,
 } from './otp-context.util';
+import { decryptPayoutField } from '../common/payout-crypto.util';
 import { MailService } from '../mail/mail.service';
 import { TokenomicsService } from '../tokenomics/tokenomics.service';
 
@@ -93,6 +96,12 @@ const NOWPAYMENTS_PAYOUT_FAILED_STATUSES = new Set([
   'cancelled',
   'canceled',
 ]);
+
+// Flutterwave v3 transfer status enum: NEW, PENDING, FAILED, SUCCESSFUL,
+// CANCELLED, INITIATED. Anything not in these two sets (NEW/PENDING/
+// INITIATED) maps to PROCESSING.
+const FLUTTERWAVE_TRANSFER_FINISHED_STATUSES = new Set(['successful']);
+const FLUTTERWAVE_TRANSFER_FAILED_STATUSES = new Set(['failed', 'cancelled']);
 
 // How many top-ranked rows the dedicated /admin/leaderboard page ranks and
 // paginates through -- see buildEarnersRanking's doc comment for why a
@@ -966,7 +975,7 @@ export class WalletController {
    * against a re-serialized, sorted parsed body and needs no raw body at
    * all. Handles both charge (funding) and transfer (payout) event types
    * on one URL, since that's the typical single-webhook Flutterwave
-   * dashboard setup; Stage 3 will add the transfer.completed branch here.
+   * dashboard setup.
    */
   @Post('wallet/webhooks/flutterwave')
   @HttpCode(HttpStatus.OK)
@@ -987,8 +996,10 @@ export class WalletController {
     const eventType = flwString(body.event);
     const data = body.data as Record<string, unknown> | undefined;
 
-    // Only funding (charge.completed) events are handled in Stage 2; a
-    // transfer.completed branch is added in Stage 3 alongside payouts.
+    if (eventType === 'transfer.completed') {
+      return this.handleFlutterwaveTransferWebhook(rawBody, eventType, data);
+    }
+
     if (eventType !== 'charge.completed' || !data) {
       return { received: true, matched: false };
     }
@@ -1049,6 +1060,67 @@ export class WalletController {
       where: { id: eventId },
       data: { depositId, processedAt: new Date(), processingError },
     });
+  }
+
+  /**
+   * Payout-side counterpart to the charge.completed branch above -- dedupes
+   * via FlutterwavePayoutEvent.eventHash (a distinct table from
+   * FlutterwaveWebhookEvent, matching how NOWPayments already keeps its
+   * IPN/payout event tables separate), looks up WithdrawalRequest by
+   * reference (== WithdrawalRequest.id, as set in createTransfer's params),
+   * and reuses recordFlutterwavePayoutStatus so a webhook delivery and a
+   * manual refresh-flutterwave poll converge on the exact same status
+   * mapping/write path.
+   */
+  private async handleFlutterwaveTransferWebhook(
+    rawBody: Buffer,
+    eventType: string,
+    data: Record<string, unknown> | undefined,
+  ) {
+    const transferId = flwString(data?.id);
+    const reference = flwString(data?.reference);
+    const status = flwString(data?.status)?.toLowerCase();
+    const eventHash = this.flutterwave.getWebhookEventHash(rawBody);
+
+    const event = await this.prisma.flutterwavePayoutEvent.upsert({
+      where: { eventHash },
+      update: {},
+      create: {
+        eventHash,
+        withdrawalRequestId: undefined,
+        providerPayoutId: transferId,
+        eventType,
+        providerStatus: status,
+        payload: (data ?? {}) as Prisma.InputJsonValue,
+      },
+    });
+
+    if (!reference) {
+      return { received: true, matched: false };
+    }
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({
+      where: { id: reference },
+    });
+    if (!withdrawal) {
+      this.logger.warn(`Flutterwave transfer webhook did not match a withdrawal: reference=${reference}`);
+      return { received: true, matched: false };
+    }
+
+    await this.prisma.flutterwavePayoutEvent.update({
+      where: { id: event.id },
+      data: { withdrawalRequestId: withdrawal.id },
+    });
+    await this.recordFlutterwavePayoutStatus(
+      withdrawal.id,
+      transferId ?? withdrawal.providerPayoutId ?? '',
+      'webhook',
+      status ?? null,
+      data ?? {},
+    );
+    this.logger.log(
+      `Flutterwave transfer webhook status=${status} withdrawal=${withdrawal.id}`,
+    );
+    return { received: true, status };
   }
 
   /**
@@ -1168,6 +1240,57 @@ export class WalletController {
     }
   }
 
+  /**
+   * Fiat counterpart to validateWithdrawalRequest -- parallel rather than a
+   * branch inside the same method, since the checks genuinely differ
+   * (allowed currency/country vs allowed currency/network) and mixing them
+   * risks a currency check silently applying to the wrong provider's
+   * allow-list. Resolves and returns the trainer's own PayoutAccount so
+   * callers don't re-fetch it.
+   */
+  private async validateFiatWithdrawalRequest(userId: string, tokenAmount: number, payoutAccountId: string) {
+    if (!(await this.platformSettings.isFlutterwavePayoutsEnabled())) {
+      throw new UnprocessableEntityException('Fiat withdrawals are currently disabled');
+    }
+    const minTokens = await this.platformSettings.getMinWithdrawalTokens();
+    if (tokenAmount < minTokens) {
+      throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
+    }
+
+    const payoutAccount = await this.prisma.payoutAccount.findUnique({
+      where: { id: payoutAccountId },
+    });
+    if (!payoutAccount || payoutAccount.userId !== userId) {
+      throw new NotFoundException('Payout account not found');
+    }
+    const [allowedCurrencies, allowedCountries] = await Promise.all([
+      this.platformSettings.getAllowedFlutterwaveCurrencies(),
+      this.platformSettings.getAllowedFlutterwaveCountries(),
+    ]);
+    if (!allowedCurrencies.includes(payoutAccount.currency.toUpperCase())) {
+      throw new UnprocessableEntityException(
+        `${payoutAccount.currency} is not an allowed withdrawal currency`,
+      );
+    }
+    if (!allowedCountries.includes(payoutAccount.country.toUpperCase())) {
+      throw new UnprocessableEntityException(
+        `${payoutAccount.country} is not an allowed withdrawal country`,
+      );
+    }
+
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.emailVerified) {
+      throw new UnprocessableEntityException('Verify your email before requesting a withdrawal');
+    }
+    if ((await this.platformSettings.isPhoneVerificationRequired()) && !user.phoneVerifiedAt) {
+      throw new UnprocessableEntityException(
+        'Verify your phone number before requesting a withdrawal',
+      );
+    }
+
+    return payoutAccount;
+  }
+
   @Post('wallet/withdrawals/otp')
   @UseGuards(JwtAuthGuard, UserThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
@@ -1175,6 +1298,21 @@ export class WalletController {
     @Req() req: AuthenticatedRequest,
     @Body() body: RequestWithdrawalOtpDto,
   ) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+
+    if (body.payoutMethod && body.payoutMethod !== 'CRYPTO') {
+      await this.validateFiatWithdrawalRequest(
+        req.user.sub,
+        body.tokenAmount,
+        body.payoutAccountId!,
+      );
+      const contextHash = fiatWithdrawalContextHash({
+        tokenAmount: body.tokenAmount,
+        payoutAccountId: body.payoutAccountId!,
+      });
+      return this.otp.issueForUser(req.user.sub, OtpPurpose.WITHDRAWAL, user.email, contextHash);
+    }
+
     const destinationCurrency = body.destinationCurrency ?? 'USDT';
     const destinationNetwork = body.destinationNetwork ?? 'TRC20';
     await this.validateWithdrawalRequest(
@@ -1184,10 +1322,9 @@ export class WalletController {
       destinationNetwork,
     );
 
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
     const contextHash = withdrawalContextHash({
       tokenAmount: body.tokenAmount,
-      destinationAddress: body.destinationAddress,
+      destinationAddress: body.destinationAddress!,
       destinationCurrency,
       destinationNetwork,
     });
@@ -1198,40 +1335,91 @@ export class WalletController {
   @UseGuards(JwtAuthGuard, UserThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
   async createWithdrawal(@Req() req: AuthenticatedRequest, @Body() body: CreateWithdrawalDto) {
+    const isFiat = Boolean(body.payoutMethod && body.payoutMethod !== 'CRYPTO');
     const destinationCurrency = body.destinationCurrency ?? 'USDT';
     const destinationNetwork = body.destinationNetwork ?? 'TRC20';
-    await this.validateWithdrawalRequest(
-      req.user.sub,
-      body.tokenAmount,
-      destinationCurrency,
-      destinationNetwork,
-    );
 
-    const wallet = await this.getOrCreateWallet(req.user.sub);
-
-    // Read-only validation here; the actual consume write joins the debit
-    // transaction below so a crash between "OTP consumed" and "debit
-    // applied" can't happen. contextHash re-derived from the submitted body
-    // (not trusted from the client) -- a mismatch means this code was
-    // issued for a different amount/destination/currency/network than
-    // what's being submitted now, which is exactly the tamper/replay case
-    // this binding closes.
-    const otpRow = await this.otp.verifyWithoutConsuming({
-      otpRequestId: body.otpRequestId,
-      userId: req.user.sub,
-      purpose: OtpPurpose.WITHDRAWAL,
-      code: body.code,
-      contextHash: withdrawalContextHash({
-        tokenAmount: body.tokenAmount,
-        destinationAddress: body.destinationAddress,
+    let payoutAccount: Awaited<ReturnType<typeof this.validateFiatWithdrawalRequest>> | null =
+      null;
+    let otpRow: { id: string };
+    if (isFiat) {
+      payoutAccount = await this.validateFiatWithdrawalRequest(
+        req.user.sub,
+        body.tokenAmount,
+        body.payoutAccountId!,
+      );
+      otpRow = await this.otp.verifyWithoutConsuming({
+        otpRequestId: body.otpRequestId,
+        userId: req.user.sub,
+        purpose: OtpPurpose.WITHDRAWAL,
+        code: body.code,
+        contextHash: fiatWithdrawalContextHash({
+          tokenAmount: body.tokenAmount,
+          payoutAccountId: body.payoutAccountId!,
+        }),
+      });
+    } else {
+      await this.validateWithdrawalRequest(
+        req.user.sub,
+        body.tokenAmount,
         destinationCurrency,
         destinationNetwork,
-      }),
-    });
+      );
+      // Read-only validation here; the actual consume write joins the debit
+      // transaction below so a crash between "OTP consumed" and "debit
+      // applied" can't happen. contextHash re-derived from the submitted
+      // body (not trusted from the client) -- a mismatch means this code
+      // was issued for a different amount/destination/currency/network
+      // than what's being submitted now, which is exactly the
+      // tamper/replay case this binding closes.
+      otpRow = await this.otp.verifyWithoutConsuming({
+        otpRequestId: body.otpRequestId,
+        userId: req.user.sub,
+        purpose: OtpPurpose.WITHDRAWAL,
+        code: body.code,
+        contextHash: withdrawalContextHash({
+          tokenAmount: body.tokenAmount,
+          destinationAddress: body.destinationAddress!,
+          destinationCurrency,
+          destinationNetwork,
+        }),
+      });
+    }
 
+    const wallet = await this.getOrCreateWallet(req.user.sub);
     const rate = await this.getCurrentTokenUsdRate();
     const usdtAmount = tokensToUsdt(body.tokenAmount, rate);
     const withdrawalId = randomUUID();
+
+    // A snapshot of the PayoutAccount's resolved details onto the
+    // WithdrawalRequest row at request time, not a live join -- a later
+    // edit/delete of the PayoutAccount must never retroactively change a
+    // pending withdrawal's destination, matching how destinationCurrency/
+    // destinationNetwork already snapshot the crypto path's chosen values
+    // rather than referencing a live config row.
+    const fiatSnapshot = payoutAccount
+      ? {
+          payoutMethod: payoutAccount.type === 'BANK' ? PayoutMethod.BANK : PayoutMethod.MOBILE_MONEY,
+          payoutAccountId: payoutAccount.id,
+          destinationCountry: payoutAccount.country,
+          ...(payoutAccount.type === 'BANK'
+            ? {
+                destinationBankCode: payoutAccount.bankCode,
+                destinationBankName: payoutAccount.bankName,
+                destinationAccountNumberEncryptedJson: payoutAccount.accountNumberEncryptedJson as
+                  | Prisma.InputJsonValue
+                  | undefined,
+                destinationAccountNumberMasked: payoutAccount.accountNumberMasked,
+                destinationAccountName: payoutAccount.accountName,
+              }
+            : {
+                destinationMobileNetwork: payoutAccount.mobileMoneyNetwork,
+                destinationMobileNumberEncryptedJson:
+                  payoutAccount.mobileMoneyNumberEncryptedJson as Prisma.InputJsonValue | undefined,
+                destinationMobileNumberMasked: payoutAccount.mobileMoneyNumberMasked,
+              }),
+        }
+      : {};
 
     // updateMany's WHERE (not just a read-then-compare) is what makes this
     // safe under concurrent requests -- two simultaneous withdrawal calls
@@ -1250,10 +1438,11 @@ export class WalletController {
           walletId: wallet.id,
           tokenAmount: body.tokenAmount,
           usdtAmount,
-          destinationAddress: body.destinationAddress,
-          destinationCurrency,
-          destinationNetwork,
+          destinationAddress: isFiat ? '' : body.destinationAddress!,
+          destinationCurrency: isFiat ? payoutAccount!.currency : destinationCurrency,
+          destinationNetwork: isFiat ? '' : destinationNetwork,
           status: WithdrawalStatus.PENDING,
+          ...fiatSnapshot,
         },
       }),
       this.prisma.ledgerEntry.create({
@@ -1377,7 +1566,9 @@ export class WalletController {
     this.logger.log(`Withdrawal approved: admin=${req.user.sub} withdrawal=${id}`);
 
     if (await this.platformSettings.isAutoSubmitAfterApprovalEnabled()) {
-      return this.submitWithdrawalToNowPayments(req, id, body);
+      return withdrawal.payoutMethod === PayoutMethod.CRYPTO
+        ? this.submitWithdrawalToNowPayments(req, id, body)
+        : this.submitWithdrawalToFlutterwave(req, id, body);
     }
 
     return { withdrawalId: id, status: approved.status };
@@ -1581,6 +1772,192 @@ export class WalletController {
     };
   }
 
+  @Post('admin/withdrawals/:id/submit-flutterwave')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async submitWithdrawalToFlutterwave(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: SubmitWithdrawalPayoutDto,
+  ) {
+    if (!(await this.platformSettings.isFlutterwavePayoutsEnabled())) {
+      throw new UnprocessableEntityException('Flutterwave payouts are currently disabled');
+    }
+
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
+    if (!withdrawal) {
+      throw new NotFoundException('Withdrawal request not found');
+    }
+    if (withdrawal.status !== WithdrawalStatus.APPROVED) {
+      // Same reasoning as submit-nowpayments: a FAILED withdrawal must go
+      // back through approve (a fresh, logged, OTP-gated checkpoint)
+      // rather than being resubmitted directly here.
+      throw new UnprocessableEntityException(
+        'Only approved withdrawals can be submitted to Flutterwave -- re-approve failed withdrawals before retrying',
+      );
+    }
+    if (withdrawal.providerPayoutId) {
+      return this.refreshFlutterwaveWithdrawalStatus(id);
+    }
+    if (withdrawal.payoutMethod === PayoutMethod.CRYPTO) {
+      throw new UnprocessableEntityException('This withdrawal is not a fiat payout');
+    }
+
+    await this.verifyAdminPayoutOtpIfEnabled(
+      req.user.sub,
+      withdrawal,
+      body.otpRequestId,
+      body.code,
+    );
+
+    // Same atomic-claim pattern as submit-nowpayments -- only the request
+    // that wins this update proceeds to createTransfer.
+    const claim = await this.prisma.withdrawalRequest.updateMany({
+      where: { id, status: WithdrawalStatus.APPROVED, providerPayoutId: null },
+      data: { providerStatus: 'submitting' },
+    });
+    if (claim.count === 0) {
+      throw new UnprocessableEntityException(
+        'This withdrawal is already being submitted or was already submitted',
+      );
+    }
+
+    try {
+      // Re-resolve the bank account immediately before transferring (JC-8)
+      // -- bank details can go stale between the request-time snapshot and
+      // submit time. A mismatched resolved name requires manual admin
+      // review rather than silently proceeding. No resolve equivalent is
+      // confirmed for mobile money in Flutterwave v3, so this check only
+      // applies to BANK withdrawals.
+      let accountNumber: string;
+      if (withdrawal.destinationBankCode && withdrawal.destinationAccountNumberEncryptedJson) {
+        accountNumber = decryptPayoutField(
+          withdrawal.destinationAccountNumberEncryptedJson as unknown as {
+            encryptedValue: string;
+            iv: string;
+            authTag: string;
+          },
+        );
+        const resolved = await this.flutterwave.resolveAccount({
+          accountBank: withdrawal.destinationBankCode,
+          accountNumber,
+        });
+        if (resolved.accountName !== withdrawal.destinationAccountName) {
+          throw new UnprocessableEntityException(
+            'The resolved account name no longer matches the saved payout account -- manual review required before this payout can proceed',
+          );
+        }
+      } else if (
+        withdrawal.destinationMobileNetwork &&
+        withdrawal.destinationMobileNumberEncryptedJson
+      ) {
+        accountNumber = decryptPayoutField(
+          withdrawal.destinationMobileNumberEncryptedJson as unknown as {
+            encryptedValue: string;
+            iv: string;
+            authTag: string;
+          },
+        );
+      } else {
+        throw new UnprocessableEntityException('Withdrawal is missing fiat destination details');
+      }
+
+      const transfer = await this.flutterwave.createTransfer({
+        accountBank: withdrawal.destinationBankCode ?? withdrawal.destinationMobileNetwork!,
+        accountNumber,
+        amount: withdrawal.usdtAmount.toNumber(),
+        currency: withdrawal.destinationCurrency,
+        narration: `Dialect Library trainer payout: ${withdrawal.id}`,
+        reference: withdrawal.id,
+        beneficiaryName: withdrawal.destinationAccountName ?? undefined,
+      });
+
+      await this.prisma.$transaction([
+        this.prisma.withdrawalRequest.update({
+          where: { id },
+          data: {
+            status: this.mapFlutterwaveTransferStatus(transfer.status),
+            provider: 'flutterwave',
+            providerPayoutId: transfer.transferId,
+            providerStatus: transfer.status ?? 'created',
+            providerPayload: transfer.raw as Prisma.InputJsonValue,
+            providerError: null,
+            submittedToProviderAt: new Date(),
+            providerSettledAt: this.isFlutterwaveTransferFinished(transfer.status)
+              ? new Date()
+              : null,
+            resolvedAt: this.isFlutterwaveTransferFinished(transfer.status) ? new Date() : null,
+            adminNote: body.adminNote,
+          },
+        }),
+        this.prisma.flutterwavePayoutEvent.create({
+          data: {
+            eventHash: randomUUID(),
+            withdrawalRequestId: id,
+            providerPayoutId: transfer.transferId,
+            eventType: 'create',
+            providerStatus: transfer.status,
+            payload: transfer.raw as Prisma.InputJsonValue,
+          },
+        }),
+      ]);
+      this.logger.log(
+        `Withdrawal submitted to Flutterwave: admin=${req.user.sub} withdrawal=${id} providerPayoutId=${transfer.transferId}`,
+      );
+
+      return {
+        withdrawalId: id,
+        status: this.mapFlutterwaveTransferStatus(transfer.status),
+        providerPayoutId: transfer.transferId,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.prisma.withdrawalRequest.update({
+        where: { id },
+        data: {
+          status: WithdrawalStatus.FAILED,
+          provider: 'flutterwave',
+          providerError: message,
+          adminNote: body.adminNote,
+        },
+      });
+      await this.prisma.flutterwavePayoutEvent.create({
+        data: {
+          eventHash: randomUUID(),
+          withdrawalRequestId: id,
+          eventType: 'create_failed',
+          payload: { message },
+          processingError: message,
+        },
+      });
+      this.logger.error(
+        `Withdrawal submit-to-Flutterwave failed: admin=${req.user.sub} withdrawal=${id}: ${message}`,
+      );
+      throw err;
+    }
+  }
+
+  @Post('admin/withdrawals/:id/refresh-flutterwave')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async refreshFlutterwaveWithdrawalStatus(@Param('id') id: string) {
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
+    if (!withdrawal) {
+      throw new NotFoundException('Withdrawal request not found');
+    }
+    if (!withdrawal.providerPayoutId) {
+      throw new UnprocessableEntityException('Withdrawal has not been submitted to Flutterwave');
+    }
+
+    const result = await this.flutterwave.getTransferStatus(withdrawal.providerPayoutId);
+    await this.recordFlutterwavePayoutStatus(id, result.transferId, 'status', result.status, result.raw);
+    return {
+      withdrawalId: id,
+      status: this.mapFlutterwaveTransferStatus(result.status),
+      providerPayoutId: result.transferId,
+    };
+  }
+
   @Post('admin/withdrawals/:id/resolve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -1739,6 +2116,56 @@ export class WalletController {
         },
       }),
       this.prisma.nowPaymentsPayoutEvent.create({
+        data: {
+          eventHash: randomUUID(),
+          withdrawalRequestId: withdrawalId,
+          providerPayoutId,
+          eventType,
+          providerStatus,
+          payload: payload as Prisma.InputJsonValue,
+        },
+      }),
+    ]);
+  }
+
+  private mapFlutterwaveTransferStatus(status: string | null | undefined): WithdrawalStatus {
+    const normalized = status?.toLowerCase();
+    if (normalized && FLUTTERWAVE_TRANSFER_FINISHED_STATUSES.has(normalized))
+      return WithdrawalStatus.PAID;
+    if (normalized && FLUTTERWAVE_TRANSFER_FAILED_STATUSES.has(normalized))
+      return WithdrawalStatus.FAILED;
+    return WithdrawalStatus.PROCESSING;
+  }
+
+  private isFlutterwaveTransferFinished(status: string | null | undefined): boolean {
+    const normalized = status?.toLowerCase();
+    return Boolean(normalized && FLUTTERWAVE_TRANSFER_FINISHED_STATUSES.has(normalized));
+  }
+
+  private async recordFlutterwavePayoutStatus(
+    withdrawalId: string,
+    providerPayoutId: string,
+    eventType: string,
+    providerStatus: string | null,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const status = this.mapFlutterwaveTransferStatus(providerStatus);
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.withdrawalRequest.update({
+        where: { id: withdrawalId },
+        data: {
+          status,
+          provider: 'flutterwave',
+          providerPayoutId,
+          providerStatus: providerStatus ?? undefined,
+          providerPayload: payload as Prisma.InputJsonValue,
+          providerError: null,
+          providerSettledAt: status === WithdrawalStatus.PAID ? now : undefined,
+          resolvedAt: status === WithdrawalStatus.PAID ? now : undefined,
+        },
+      }),
+      this.prisma.flutterwavePayoutEvent.create({
         data: {
           eventHash: randomUUID(),
           withdrawalRequestId: withdrawalId,

@@ -1,45 +1,58 @@
 import { WithdrawalReconciliationService } from './withdrawal-reconciliation.service';
 
 describe('WithdrawalReconciliationService', () => {
-  function setup(processing: Record<string, unknown>[]) {
+  function setup(processingByProvider: Record<string, Record<string, unknown>[]>) {
     const prisma: any = {
       withdrawalRequest: {
-        findMany: jest.fn().mockResolvedValue(processing),
+        findMany: jest.fn().mockImplementation(({ where }: { where: { provider: string } }) =>
+          Promise.resolve(processingByProvider[where.provider] ?? []),
+        ),
         update: jest.fn().mockResolvedValue({}),
       },
       nowPaymentsPayoutEvent: { create: jest.fn().mockResolvedValue({}) },
+      flutterwavePayoutEvent: { create: jest.fn().mockResolvedValue({}) },
     };
     prisma.$transaction = jest.fn(async (ops: unknown[]) => Promise.all(ops as Promise<unknown>[]));
 
     const nowPayments = { getPayoutStatus: jest.fn() };
-    const platformSettings = { isNowPaymentsPayoutsEnabled: jest.fn().mockResolvedValue(true) };
+    const flutterwave = { getTransferStatus: jest.fn() };
+    const platformSettings = {
+      isNowPaymentsPayoutsEnabled: jest.fn().mockResolvedValue(true),
+      isFlutterwavePayoutsEnabled: jest.fn().mockResolvedValue(true),
+    };
     const service = new WithdrawalReconciliationService(
       prisma as never,
       nowPayments as never,
+      flutterwave as never,
       platformSettings as never,
     );
-    return { service, prisma, nowPayments, platformSettings };
+    return { service, prisma, nowPayments, flutterwave, platformSettings };
   }
 
-  it('does nothing when NOWPayments payouts are disabled', async () => {
-    const { service, prisma, platformSettings } = setup([{ id: 'w1', providerPayoutId: 'p1' }]);
+  it('does nothing for either provider when both are disabled', async () => {
+    const { service, prisma, platformSettings } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1' }],
+      flutterwave: [{ id: 'w2', providerPayoutId: 't1' }],
+    });
     platformSettings.isNowPaymentsPayoutsEnabled.mockResolvedValue(false);
+    platformSettings.isFlutterwavePayoutsEnabled.mockResolvedValue(false);
 
     const result = await service.run();
 
-    expect(result).toEqual({ checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 });
+    expect(result.nowpayments).toEqual({ checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 });
+    expect(result.flutterwave).toEqual({ checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 });
     expect(prisma.withdrawalRequest.findMany).not.toHaveBeenCalled();
   });
 
-  it('marks a withdrawal PAID when the provider reports a finished status', async () => {
-    const { service, prisma, nowPayments } = setup([
-      { id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() },
-    ]);
+  it('marks a NOWPayments withdrawal PAID when the provider reports a finished status', async () => {
+    const { service, prisma, nowPayments } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() }],
+    });
     nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'finished', raw: {} });
 
     const result = await service.run();
 
-    expect(result.paid).toBe(1);
+    expect(result.nowpayments.paid).toBe(1);
     expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'w1' },
@@ -48,15 +61,15 @@ describe('WithdrawalReconciliationService', () => {
     );
   });
 
-  it('marks a withdrawal FAILED only when the provider reports a terminal failure status', async () => {
-    const { service, prisma, nowPayments } = setup([
-      { id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() },
-    ]);
+  it('marks a NOWPayments withdrawal FAILED only on a terminal failure status', async () => {
+    const { service, prisma, nowPayments } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() }],
+    });
     nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'rejected', raw: {} });
 
     const result = await service.run();
 
-    expect(result.failed).toBe(1);
+    expect(result.nowpayments.failed).toBe(1);
     expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: 'FAILED', providerError: 'rejected' }),
@@ -64,43 +77,97 @@ describe('WithdrawalReconciliationService', () => {
     );
   });
 
-  it('leaves the withdrawal PROCESSING (does not mark FAILED) when a status poll throws -- transient errors are not terminal failures', async () => {
-    const { service, prisma, nowPayments } = setup([
-      { id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() },
-    ]);
+  it('leaves a NOWPayments withdrawal PROCESSING when a status poll throws', async () => {
+    const { service, prisma, nowPayments } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() }],
+    });
     nowPayments.getPayoutStatus.mockRejectedValue(new Error('network timeout'));
 
     const result = await service.run();
 
-    expect(result.checked).toBe(1);
-    expect(result.failed).toBe(0);
-    expect(result.paid).toBe(0);
+    expect(result.nowpayments.checked).toBe(1);
+    expect(result.nowpayments.failed).toBe(0);
+    expect(result.nowpayments.paid).toBe(0);
     expect(prisma.withdrawalRequest.update).not.toHaveBeenCalled();
   });
 
-  it('still-processing status keeps the row PROCESSING and does not touch balances', async () => {
-    const { service, prisma, nowPayments } = setup([
-      { id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() },
-    ]);
+  it('flags a NOWPayments withdrawal as stale when PROCESSING for more than 24h', async () => {
+    const staleDate = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    const { service, nowPayments } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: staleDate }],
+    });
     nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'sending', raw: {} });
 
     const result = await service.run();
 
-    expect(result.stillProcessing).toBe(1);
+    expect(result.nowpayments.stale).toBe(1);
+  });
+
+  it('marks a Flutterwave withdrawal PAID when the provider reports SUCCESSFUL', async () => {
+    const { service, prisma, flutterwave } = setup({
+      flutterwave: [{ id: 'w2', providerPayoutId: 't1', submittedToProviderAt: new Date() }],
+    });
+    flutterwave.getTransferStatus.mockResolvedValue({
+      transferId: 't1',
+      status: 'SUCCESSFUL',
+      raw: {},
+    });
+
+    const result = await service.run();
+
+    expect(result.flutterwave.paid).toBe(1);
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'w2' },
+        data: expect.objectContaining({ status: 'PAID' }),
+      }),
+    );
+    expect(prisma.flutterwavePayoutEvent.create).toHaveBeenCalled();
+  });
+
+  it('marks a Flutterwave withdrawal FAILED on a terminal failure status', async () => {
+    const { service, prisma, flutterwave } = setup({
+      flutterwave: [{ id: 'w2', providerPayoutId: 't1', submittedToProviderAt: new Date() }],
+    });
+    flutterwave.getTransferStatus.mockResolvedValue({ transferId: 't1', status: 'FAILED', raw: {} });
+
+    const result = await service.run();
+
+    expect(result.flutterwave.failed).toBe(1);
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) }),
+    );
+  });
+
+  it('leaves a Flutterwave withdrawal PROCESSING for a NEW/PENDING status', async () => {
+    const { service, prisma, flutterwave } = setup({
+      flutterwave: [{ id: 'w2', providerPayoutId: 't1', submittedToProviderAt: new Date() }],
+    });
+    flutterwave.getTransferStatus.mockResolvedValue({ transferId: 't1', status: 'PENDING', raw: {} });
+
+    const result = await service.run();
+
+    expect(result.flutterwave.stillProcessing).toBe(1);
     expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'PROCESSING' }) }),
     );
   });
 
-  it('flags a withdrawal as stale when it has been PROCESSING for more than 24h', async () => {
-    const staleDate = new Date(Date.now() - 25 * 60 * 60 * 1000);
-    const { service, nowPayments } = setup([
-      { id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: staleDate },
-    ]);
-    nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'sending', raw: {} });
+  it('polls NOWPayments and Flutterwave independently in the same run', async () => {
+    const { service, nowPayments, flutterwave } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() }],
+      flutterwave: [{ id: 'w2', providerPayoutId: 't1', submittedToProviderAt: new Date() }],
+    });
+    nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'finished', raw: {} });
+    flutterwave.getTransferStatus.mockResolvedValue({
+      transferId: 't1',
+      status: 'SUCCESSFUL',
+      raw: {},
+    });
 
     const result = await service.run();
 
-    expect(result.stale).toBe(1);
+    expect(result.nowpayments.paid).toBe(1);
+    expect(result.flutterwave.paid).toBe(1);
   });
 });

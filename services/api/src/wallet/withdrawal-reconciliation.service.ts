@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { NowPaymentsService } from './nowpayments.service';
+import { FlutterwaveService } from './flutterwave.service';
 
 const NOWPAYMENTS_PAYOUT_FINISHED_STATUSES = new Set([
   'finished',
@@ -19,18 +20,32 @@ const NOWPAYMENTS_PAYOUT_FAILED_STATUSES = new Set([
   'cancelled',
   'canceled',
 ]);
+const FLUTTERWAVE_TRANSFER_FINISHED_STATUSES = new Set(['successful']);
+const FLUTTERWAVE_TRANSFER_FAILED_STATUSES = new Set(['failed', 'cancelled']);
 
 /** How long a PROCESSING withdrawal can go without a status change before it's logged as stuck (payout-automation plan point 9's "alert/log if stale too long"). */
 const STALE_PROCESSING_HOURS = 24;
 
+interface ReconcileTally {
+  checked: number;
+  paid: number;
+  failed: number;
+  stillProcessing: number;
+  stale: number;
+}
+
 /**
- * Background reconciliation for withdrawals submitted to NOWPayments
- * (payout-automation plan point 9). Run on a schedule via
+ * Background reconciliation for withdrawals submitted to NOWPayments or
+ * Flutterwave (payout-automation plan point 9). Run on a schedule via
  * `npm run withdrawal-reconcile` / the withdrawal-reconcile k8s CronJob --
  * a standalone one-shot invocation of this service, same shape as
  * settlement-job's SettlementService.run(), kept inside services/api
- * (rather than a separate service) so it can reuse NowPaymentsService's
- * auth/client code instead of duplicating it.
+ * (rather than a separate service) so it can reuse NowPaymentsService's/
+ * FlutterwaveService's auth/client code instead of duplicating it. Each
+ * provider gets its own poll loop (filtered by `provider` on the query and
+ * gated by that provider's own kill switch) rather than one generic loop,
+ * since the two providers' status-mapping and payout-event tables are
+ * already kept separate everywhere else in this codebase.
  */
 @Injectable()
 export class WithdrawalReconciliationService {
@@ -39,23 +54,30 @@ export class WithdrawalReconciliationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly nowPayments: NowPaymentsService,
+    private readonly flutterwave: FlutterwaveService,
     private readonly platformSettings: PlatformSettingsService,
   ) {}
 
-  async run(): Promise<{
-    checked: number;
-    paid: number;
-    failed: number;
-    stillProcessing: number;
-    stale: number;
-  }> {
+  async run(): Promise<{ nowpayments: ReconcileTally; flutterwave: ReconcileTally }> {
+    const [nowpayments, flutterwave] = await Promise.all([
+      this.runNowPayments(),
+      this.runFlutterwave(),
+    ]);
+    return { nowpayments, flutterwave };
+  }
+
+  private async runNowPayments(): Promise<ReconcileTally> {
     if (!(await this.platformSettings.isNowPaymentsPayoutsEnabled())) {
       this.logger.log('NOWPayments payouts disabled -- skipping reconciliation');
       return { checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 };
     }
 
     const processing = await this.prisma.withdrawalRequest.findMany({
-      where: { status: WithdrawalStatus.PROCESSING, providerPayoutId: { not: null } },
+      where: {
+        status: WithdrawalStatus.PROCESSING,
+        provider: 'nowpayments',
+        providerPayoutId: { not: null },
+      },
       select: { id: true, providerPayoutId: true, submittedToProviderAt: true },
     });
 
@@ -68,7 +90,7 @@ export class WithdrawalReconciliationService {
     for (const withdrawal of processing) {
       try {
         const result = await this.nowPayments.getPayoutStatus(withdrawal.providerPayoutId!);
-        const status = this.mapProviderPayoutStatus(result.status);
+        const status = this.mapNowPaymentsStatus(result.status);
 
         if (status === WithdrawalStatus.PROCESSING) {
           stillProcessing += 1;
@@ -86,7 +108,7 @@ export class WithdrawalReconciliationService {
           failed += 1;
         }
 
-        await this.recordStatus(
+        await this.recordNowPaymentsStatus(
           withdrawal.id,
           withdrawal.providerPayoutId!,
           status,
@@ -104,12 +126,73 @@ export class WithdrawalReconciliationService {
     }
 
     this.logger.log(
-      `Withdrawal reconciliation: checked=${processing.length} paid=${paid} failed=${failed} stillProcessing=${stillProcessing} stale=${stale}`,
+      `NOWPayments withdrawal reconciliation: checked=${processing.length} paid=${paid} failed=${failed} stillProcessing=${stillProcessing} stale=${stale}`,
     );
     return { checked: processing.length, paid, failed, stillProcessing, stale };
   }
 
-  private mapProviderPayoutStatus(status: string | null | undefined): WithdrawalStatus {
+  private async runFlutterwave(): Promise<ReconcileTally> {
+    if (!(await this.platformSettings.isFlutterwavePayoutsEnabled())) {
+      this.logger.log('Flutterwave payouts disabled -- skipping reconciliation');
+      return { checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 };
+    }
+
+    const processing = await this.prisma.withdrawalRequest.findMany({
+      where: {
+        status: WithdrawalStatus.PROCESSING,
+        provider: 'flutterwave',
+        providerPayoutId: { not: null },
+      },
+      select: { id: true, providerPayoutId: true, submittedToProviderAt: true },
+    });
+
+    let paid = 0;
+    let failed = 0;
+    let stillProcessing = 0;
+    let stale = 0;
+    const now = Date.now();
+
+    for (const withdrawal of processing) {
+      try {
+        const result = await this.flutterwave.getTransferStatus(withdrawal.providerPayoutId!);
+        const status = this.mapFlutterwaveStatus(result.status);
+
+        if (status === WithdrawalStatus.PROCESSING) {
+          stillProcessing += 1;
+          const submittedAt = withdrawal.submittedToProviderAt?.getTime();
+          const staleForHours = submittedAt ? (now - submittedAt) / (60 * 60 * 1000) : 0;
+          if (staleForHours > STALE_PROCESSING_HOURS) {
+            stale += 1;
+            this.logger.warn(
+              `Withdrawal stuck PROCESSING for ${staleForHours.toFixed(1)}h: withdrawal=${withdrawal.id} providerPayoutId=${withdrawal.providerPayoutId}`,
+            );
+          }
+        } else if (status === WithdrawalStatus.PAID) {
+          paid += 1;
+        } else {
+          failed += 1;
+        }
+
+        await this.recordFlutterwaveStatus(
+          withdrawal.id,
+          withdrawal.providerPayoutId!,
+          status,
+          result.status,
+          result.raw,
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Reconciliation poll failed for withdrawal=${withdrawal.id}: ${message}`);
+      }
+    }
+
+    this.logger.log(
+      `Flutterwave withdrawal reconciliation: checked=${processing.length} paid=${paid} failed=${failed} stillProcessing=${stillProcessing} stale=${stale}`,
+    );
+    return { checked: processing.length, paid, failed, stillProcessing, stale };
+  }
+
+  private mapNowPaymentsStatus(status: string | null | undefined): WithdrawalStatus {
     const normalized = status?.toLowerCase();
     if (normalized && NOWPAYMENTS_PAYOUT_FINISHED_STATUSES.has(normalized))
       return WithdrawalStatus.PAID;
@@ -118,7 +201,16 @@ export class WithdrawalReconciliationService {
     return WithdrawalStatus.PROCESSING;
   }
 
-  private async recordStatus(
+  private mapFlutterwaveStatus(status: string | null | undefined): WithdrawalStatus {
+    const normalized = status?.toLowerCase();
+    if (normalized && FLUTTERWAVE_TRANSFER_FINISHED_STATUSES.has(normalized))
+      return WithdrawalStatus.PAID;
+    if (normalized && FLUTTERWAVE_TRANSFER_FAILED_STATUSES.has(normalized))
+      return WithdrawalStatus.FAILED;
+    return WithdrawalStatus.PROCESSING;
+  }
+
+  private async recordNowPaymentsStatus(
     withdrawalId: string,
     providerPayoutId: string,
     status: WithdrawalStatus,
@@ -142,6 +234,42 @@ export class WithdrawalReconciliationService {
         },
       }),
       this.prisma.nowPaymentsPayoutEvent.create({
+        data: {
+          eventHash: randomUUID(),
+          withdrawalRequestId: withdrawalId,
+          providerPayoutId,
+          eventType: 'reconcile',
+          providerStatus,
+          payload: payload as Prisma.InputJsonValue,
+        },
+      }),
+    ]);
+  }
+
+  private async recordFlutterwaveStatus(
+    withdrawalId: string,
+    providerPayoutId: string,
+    status: WithdrawalStatus,
+    providerStatus: string | null,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.withdrawalRequest.update({
+        where: { id: withdrawalId },
+        data: {
+          status,
+          providerStatus: providerStatus ?? undefined,
+          providerPayload: payload as Prisma.InputJsonValue,
+          providerError:
+            status === WithdrawalStatus.FAILED
+              ? (providerStatus ?? 'provider reported a terminal failure')
+              : null,
+          providerSettledAt: status === WithdrawalStatus.PAID ? now : undefined,
+          resolvedAt: status === WithdrawalStatus.PAID ? now : undefined,
+        },
+      }),
+      this.prisma.flutterwavePayoutEvent.create({
         data: {
           eventHash: randomUUID(),
           withdrawalRequestId: withdrawalId,

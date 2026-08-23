@@ -5,10 +5,11 @@ import { WithdrawalReconciliationService } from './wallet/withdrawal-reconciliat
 
 /**
  * One-shot entrypoint for the withdrawal-reconcile k8s CronJob -- polls
- * NOWPayments for every PROCESSING withdrawal and updates status
- * (payout-automation plan point 9). Same "createApplicationContext, run,
- * exit" shape as settlement-job's main.ts, but lives in services/api since
- * it needs WalletModule's NowPaymentsService/PlatformSettingsService.
+ * NOWPayments and Flutterwave for every PROCESSING withdrawal and updates
+ * status (payout-automation plan point 9). Same "createApplicationContext,
+ * run, exit" shape as settlement-job's main.ts, but lives in services/api
+ * since it needs WalletModule's NowPaymentsService/FlutterwaveService/
+ * PlatformSettingsService.
  */
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);

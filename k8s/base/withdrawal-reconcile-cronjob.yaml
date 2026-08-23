@@ -43,3 +43,13 @@ spec:
                     secretKeyRef:
                       name: nowpayments-creds
                       key: nowpayments_payout_password
+                - name: FLUTTERWAVE_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: flutterwave-creds
+                      key: flutterwave_secret_key
+                - name: FLUTTERWAVE_WEBHOOK_SECRET_HASH
+                  valueFrom:
+                    secretKeyRef:
+                      name: flutterwave-creds
+                      key: flutterwave_webhook_secret_hash

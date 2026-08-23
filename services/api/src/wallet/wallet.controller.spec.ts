@@ -1,4 +1,5 @@
 import { WalletController } from './wallet.controller';
+import { encryptPayoutField } from '../common/payout-crypto.util';
 
 jest.mock('@dialectiva/db', () => ({
   ...jest.requireActual('@dialectiva/db'),
@@ -327,15 +328,64 @@ describe('WalletController Flutterwave webhook', () => {
     expect(tx.ledgerEntry.create).not.toHaveBeenCalled();
   });
 
-  it('ignores non-charge event types', async () => {
+  it('ignores unrecognized event types', async () => {
     const { controller, prisma } = setup();
-    const req = chargeCompletedRequest({}, { event: 'transfer.completed' });
+    const req = chargeCompletedRequest({}, { event: 'subscription.cancelled' });
 
     await expect(controller.handleFlutterwaveWebhook(req)).resolves.toEqual({
       received: true,
       matched: false,
     });
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('routes transfer.completed events to the payout webhook path and updates the matching withdrawal', async () => {
+    const transferBody = {
+      event: 'transfer.completed',
+      data: { id: 55, reference: 'withdrawal-1', status: 'SUCCESSFUL' },
+    };
+    const transferRawBody = Buffer.from(JSON.stringify(transferBody));
+    const prisma: any = {
+      flutterwavePayoutEvent: {
+        upsert: jest.fn().mockResolvedValue({ id: 'fw-payout-event-1' }),
+        update: jest.fn().mockResolvedValue({}),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      withdrawalRequest: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'withdrawal-1', providerPayoutId: '55' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    prisma.$transaction = jest.fn(async (input: unknown) => {
+      if (typeof input === 'function') return (input as (tx: unknown) => unknown)(prisma);
+      return Promise.all(input as Promise<unknown>[]);
+    });
+    const flutterwave = { verifyWebhookSignature: jest.fn().mockReturnValue(true), getWebhookEventHash: jest.fn().mockReturnValue('transfer-event-hash') };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      flutterwave as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    const req = {
+      rawBody: transferRawBody,
+      body: transferBody,
+      headers: { 'verif-hash': 'valid-hash' },
+    } as unknown as Parameters<WalletController['handleFlutterwaveWebhook']>[0];
+
+    await expect(controller.handleFlutterwaveWebhook(req)).resolves.toEqual({
+      received: true,
+      status: 'successful',
+    });
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'withdrawal-1' },
+        data: expect.objectContaining({ status: 'PAID' }),
+      }),
+    );
   });
 });
 
@@ -595,6 +645,176 @@ describe('WalletController withdrawal payout automation', () => {
     const [[call]] = otp.verify.mock.calls;
     expect(typeof call.contextHash).toBe('string');
     expect(call.contextHash.length).toBeGreaterThan(0);
+  });
+});
+
+describe('WalletController Flutterwave payout submission', () => {
+  const decimal = (value: number) => ({ toNumber: () => value, toString: () => String(value) });
+
+  beforeEach(() => {
+    process.env.PAYOUT_ACCOUNT_ENCRYPTION_KEY = 'test-payout-encryption-key';
+  });
+  afterEach(() => {
+    delete process.env.PAYOUT_ACCOUNT_ENCRYPTION_KEY;
+  });
+
+  function encryptedAccountNumberFixture() {
+    return encryptPayoutField('0690000032');
+  }
+
+  function baseFiatWithdrawal(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'withdrawal-1',
+      walletId: 'wallet-1',
+      tokenAmount: decimal(100),
+      usdtAmount: decimal(10),
+      destinationAddress: '',
+      destinationCurrency: 'NGN',
+      destinationNetwork: '',
+      payoutMethod: 'BANK',
+      destinationBankCode: '044',
+      destinationBankName: 'Access Bank',
+      destinationAccountNumberEncryptedJson: encryptedAccountNumberFixture(),
+      destinationAccountNumberMasked: '****1234',
+      destinationAccountName: 'John Doe',
+      status: 'PENDING',
+      providerPayoutId: null,
+      ...overrides,
+    };
+  }
+
+  function setup(withdrawal: Record<string, unknown>) {
+    const prisma: any = {
+      withdrawalRequest: {
+        findUnique: jest.fn().mockResolvedValue(withdrawal),
+        findUniqueOrThrow: jest.fn().mockResolvedValue(withdrawal),
+        update: jest
+          .fn()
+          .mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+            Promise.resolve({ ...withdrawal, ...data }),
+          ),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      flutterwavePayoutEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    prisma.$transaction = jest.fn(async (input: unknown) => {
+      if (typeof input === 'function') return (input as (tx: unknown) => unknown)(prisma);
+      return Promise.all(input as Promise<unknown>[]);
+    });
+    const flutterwave = {
+      resolveAccount: jest.fn().mockResolvedValue({ accountNumber: '0690000032', accountName: 'John Doe' }),
+      createTransfer: jest
+        .fn()
+        .mockResolvedValue({ transferId: 'transfer-1', status: 'NEW', raw: {} }),
+      getTransferStatus: jest
+        .fn()
+        .mockResolvedValue({ transferId: 'transfer-1', status: 'NEW', raw: {} }),
+    };
+    const platformSettings = {
+      isFlutterwavePayoutsEnabled: jest.fn().mockResolvedValue(true),
+      isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false),
+    };
+    const otp = { verify: jest.fn().mockResolvedValue({}) };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      flutterwave as never,
+      platformSettings as never,
+      otp as never,
+      {} as never,
+    );
+    const req = { user: { sub: 'admin-1' } } as never;
+    return { controller, prisma, flutterwave, platformSettings, otp, req };
+  }
+
+  it('resolves the account before transferring and proceeds when the name matches', async () => {
+    const { controller, flutterwave, req } = setup(baseFiatWithdrawal({ status: 'APPROVED' }));
+
+    const result = await controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {});
+
+    expect(flutterwave.resolveAccount).toHaveBeenCalledWith({
+      accountBank: '044',
+      accountNumber: expect.any(String),
+    });
+    expect(flutterwave.createTransfer).toHaveBeenCalledWith(
+      expect.objectContaining({ accountBank: '044', currency: 'NGN', reference: 'withdrawal-1' }),
+    );
+    expect(result).toMatchObject({ withdrawalId: 'withdrawal-1', providerPayoutId: 'transfer-1' });
+  });
+
+  it('refuses to transfer when the resolved account name no longer matches the saved snapshot', async () => {
+    const { controller, flutterwave, req } = setup(baseFiatWithdrawal({ status: 'APPROVED' }));
+    flutterwave.resolveAccount.mockResolvedValue({
+      accountNumber: '0690000032',
+      accountName: 'Someone Else',
+    });
+
+    await expect(
+      controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {}),
+    ).rejects.toThrow('no longer matches');
+    expect(flutterwave.createTransfer).not.toHaveBeenCalled();
+  });
+
+  it('refuses to submit a FAILED withdrawal directly -- it must be re-approved first', async () => {
+    const { controller, flutterwave, req } = setup(baseFiatWithdrawal({ status: 'FAILED' }));
+
+    await expect(
+      controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {}),
+    ).rejects.toThrow('Only approved withdrawals can be submitted to Flutterwave');
+    expect(flutterwave.createTransfer).not.toHaveBeenCalled();
+  });
+
+  it('does not call createTransfer again when the withdrawal already has a providerPayoutId', async () => {
+    const { controller, flutterwave, req } = setup(
+      baseFiatWithdrawal({ status: 'APPROVED', providerPayoutId: 'transfer-1' }),
+    );
+
+    await controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {});
+
+    expect(flutterwave.createTransfer).not.toHaveBeenCalled();
+    expect(flutterwave.getTransferStatus).toHaveBeenCalledWith('transfer-1');
+  });
+
+  it('rejects submission when the atomic claim loses a race (concurrent submit calls)', async () => {
+    const { controller, prisma, flutterwave, req } = setup(
+      baseFiatWithdrawal({ status: 'APPROVED' }),
+    );
+    prisma.withdrawalRequest.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {}),
+    ).rejects.toThrow('already being submitted');
+    expect(flutterwave.createTransfer).not.toHaveBeenCalled();
+  });
+
+  it('marks the withdrawal FAILED (does not throw a lost update) when createTransfer rejects', async () => {
+    const { controller, prisma, flutterwave, req } = setup(baseFiatWithdrawal({ status: 'APPROVED' }));
+    flutterwave.createTransfer.mockRejectedValue(new Error('provider unreachable'));
+
+    await expect(controller.submitWithdrawalToFlutterwave(req, 'withdrawal-1', {})).rejects.toThrow(
+      'provider unreachable',
+    );
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) }),
+    );
+  });
+
+  it('refresh-flutterwave maps a SUCCESSFUL transfer status to PAID', async () => {
+    const { controller, prisma, flutterwave } = setup(
+      baseFiatWithdrawal({ status: 'PROCESSING', providerPayoutId: 'transfer-1' }),
+    );
+    flutterwave.getTransferStatus.mockResolvedValue({
+      transferId: 'transfer-1',
+      status: 'SUCCESSFUL',
+      raw: {},
+    });
+
+    const result = await controller.refreshFlutterwaveWithdrawalStatus('withdrawal-1');
+
+    expect(result.status).toBe('PAID');
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'PAID' }) }),
+    );
   });
 });
 

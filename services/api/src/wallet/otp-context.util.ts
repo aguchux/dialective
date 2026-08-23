@@ -26,6 +26,19 @@ export function depositContextHash(input: { usdAmount: number; currency: string 
 }
 
 /**
+ * Fiat-withdrawal counterpart to withdrawalContextHash -- binds to
+ * tokenAmount + payoutAccountId instead of a freshly-typed destination
+ * address/currency/network, since a fiat withdrawal references a saved
+ * PayoutAccount rather than accepting destination details inline.
+ */
+export function fiatWithdrawalContextHash(input: {
+  tokenAmount: number;
+  payoutAccountId: string;
+}): string {
+  return hashContext({ tokenAmount: input.tokenAmount, payoutAccountId: input.payoutAccountId });
+}
+
+/**
  * Binds an admin-payout OTP (admin/training-payouts, admin/withdrawals/:id/
  * approve|resolve|submit-nowpayments) to the exact action AND the exact
  * transaction details being confirmed -- same anti-replay reasoning as
