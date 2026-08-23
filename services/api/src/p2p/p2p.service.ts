@@ -301,6 +301,21 @@ export class P2PService {
     return this.prisma.userPaymentMethod.update({ where: { id }, data: paymentMethodData(dto) });
   }
 
+  async deletePaymentMethod(userId: string, id: string) {
+    const method = await this.prisma.userPaymentMethod.findFirst({ where: { id, userId } });
+    if (!method) throw new NotFoundException('Payment method not found');
+    const openUsage = await this.prisma.p2PTokenOffer.count({
+      where: { paymentMethodId: id, status: { in: OPEN_OFFER_STATUSES } },
+    });
+    if (openUsage > 0) {
+      throw new UnprocessableEntityException(
+        'This payment method is used by an open offer -- cancel or complete it first',
+      );
+    }
+    await this.prisma.userPaymentMethod.delete({ where: { id } });
+    return { id };
+  }
+
   async createOffer(userId: string, dto: CreateOfferDto) {
     await this.requireVerifiedForTrading(
       userId,

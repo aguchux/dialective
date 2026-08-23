@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Role } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -58,6 +58,11 @@ export class P2PController {
     @Body() body: UpsertPaymentMethodDto,
   ) {
     return this.p2p.updatePaymentMethod(req.user.sub, id, body);
+  }
+
+  @Delete('payment-methods/:id')
+  deletePaymentMethod(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.p2p.deletePaymentMethod(req.user.sub, id);
   }
 
   @Get('offers')

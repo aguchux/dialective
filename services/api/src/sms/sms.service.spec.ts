@@ -13,10 +13,11 @@ describe('SmsService', () => {
     jest.restoreAllMocks();
   });
 
-  it('sendOtp uses the OTP provider order (smsProviderOrder), never smslive247', async () => {
+  it('sends transactional OTPs as the code only, using SMSLive247 first', async () => {
     platformSettings.getForAdmin.mockResolvedValue({
       smsProviderOrder: 'twilio,termii,africastalking',
-      smsTransactionalProviderOrder: 'termii,twilio,africastalking,smslive247',
+      smsTransactionalOtpEnabled: true,
+      smsTransactionalProviderOrder: 'smslive247,termii,twilio,africastalking',
     });
     const sendSpy = jest
       .spyOn((service as any).chain, 'send')
@@ -26,8 +27,8 @@ describe('SmsService', () => {
 
     expect(sendSpy).toHaveBeenCalledWith(
       '+2348012345678',
-      expect.stringContaining('123456'),
-      ['twilio', 'termii', 'africastalking'],
+      '123456',
+      ['smslive247', 'termii', 'twilio', 'africastalking'],
       undefined,
     );
   });
@@ -54,6 +55,7 @@ describe('SmsService', () => {
   it('passes the admin-configured smsSenderId through to the fallback chain', async () => {
     platformSettings.getForAdmin.mockResolvedValue({
       smsProviderOrder: 'termii,twilio,africastalking',
+      smsTransactionalOtpEnabled: true,
       smsTransactionalProviderOrder: 'termii,twilio,africastalking,smslive247',
       smsSenderId: 'Dialect',
     });
@@ -65,9 +67,29 @@ describe('SmsService', () => {
 
     expect(sendSpy).toHaveBeenCalledWith(
       '+2348012345678',
-      expect.stringContaining('123456'),
-      ['termii', 'twilio', 'africastalking'],
+      '123456',
+      ['termii', 'twilio', 'africastalking', 'smslive247'],
       'Dialect',
+    );
+  });
+
+  it('uses the legacy explanatory OTP path only when transactional OTP is disabled', async () => {
+    platformSettings.getForAdmin.mockResolvedValue({
+      smsProviderOrder: 'twilio,termii,africastalking',
+      smsTransactionalOtpEnabled: false,
+      smsTransactionalProviderOrder: 'smslive247,termii,twilio,africastalking',
+    });
+    const sendSpy = jest
+      .spyOn((service as any).chain, 'send')
+      .mockResolvedValue({ provider: 'twilio' });
+
+    await service.sendOtp('+2348012345678', '123456');
+
+    expect(sendSpy).toHaveBeenCalledWith(
+      '+2348012345678',
+      expect.stringContaining('123456'),
+      ['twilio', 'termii', 'africastalking'],
+      undefined,
     );
   });
 });

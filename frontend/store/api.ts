@@ -443,6 +443,8 @@ export interface AdminWithdrawalRequest {
   destinationMobileNetwork?: string | null;
   destinationMobileNumberMasked?: string | null;
   destinationCountry?: string | null;
+  fiatAmount?: string | null;
+  fiatUsdExchangeRate?: string | null;
 }
 
 export type PayoutMethod = 'CRYPTO' | 'BANK' | 'MOBILE_MONEY';
@@ -1012,6 +1014,7 @@ export interface PlatformSettings {
   smsSenderId: string | null;
   smsProviderOrder: string;
   smslive247NativeOtpEnabled: boolean;
+  smsTransactionalOtpEnabled: boolean;
   smsTransactionalProviderOrder: string;
   p2pSmsTradeCreatedEnabled: boolean;
   p2pSmsPaymentMarkedEnabled: boolean;
@@ -1096,6 +1099,7 @@ export interface PlatformSettingsInput {
   smsSenderId?: string;
   smsProviderOrder?: string;
   smslive247NativeOtpEnabled?: boolean;
+  smsTransactionalOtpEnabled?: boolean;
   smsTransactionalProviderOrder?: string;
   p2pSmsTradeCreatedEnabled?: boolean;
   p2pSmsPaymentMarkedEnabled?: boolean;
@@ -1761,6 +1765,10 @@ export const dialectivaApi = createApi({
       { id: string; body: VerifiedPaymentMethodInput }
     >({
       query: ({ id, body }) => ({ url: `/p2p/payment-methods/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['P2P'],
+    }),
+    deleteP2PPaymentMethod: builder.mutation<{ id: string }, string>({
+      query: (id) => ({ url: `/p2p/payment-methods/${id}`, method: 'DELETE' }),
       invalidatesTags: ['P2P'],
     }),
     listP2POffers: builder.query<
@@ -3074,6 +3082,7 @@ export const {
   useRequestP2PPaymentMethodOtpMutation,
   useCreateP2PPaymentMethodMutation,
   useUpdateP2PPaymentMethodMutation,
+  useDeleteP2PPaymentMethodMutation,
   useListP2POffersQuery,
   useListMyP2POffersQuery,
   useGetP2PTraderProfileQuery,

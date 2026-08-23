@@ -48,16 +48,16 @@ describe('parseSmsTransactionalProviderOrder', () => {
 
   it('falls back to the default order for an invalid/incomplete list', () => {
     expect(parseSmsTransactionalProviderOrder('termii,twilio,africastalking')).toEqual([
+      'smslive247',
       'termii',
       'twilio',
       'africastalking',
-      'smslive247',
     ]);
     expect(parseSmsTransactionalProviderOrder('not,a,provider,at,all')).toEqual([
+      'smslive247',
       'termii',
       'twilio',
       'africastalking',
-      'smslive247',
     ]);
   });
 });

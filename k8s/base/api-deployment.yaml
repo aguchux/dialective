@@ -259,6 +259,12 @@ spec:
                 secretKeyRef:
                   name: sms-creds
                   key: smslive247_sender_id
+            - name: SMSLIVE247_ROUTE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: smslive247_route_id
+                  optional: true
             - name: LIVEKIT_URL
               valueFrom:
                 configMapKeyRef:

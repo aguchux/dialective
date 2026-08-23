@@ -1297,6 +1297,8 @@ model WithdrawalRequest {
   destinationMobileNumberEncryptedJson  Json?
   destinationMobileNumberMasked         String?
   destinationCountry                    String?
+  fiatAmount                            Decimal?        @db.Decimal(20, 8) // local-currency payout amount, snapshotted from usdtAmount at the request-time USD->fiat rate; null for crypto withdrawals
+  fiatUsdExchangeRate                   Decimal?        @db.Decimal(18, 6) // local-currency units per USD used to calculate fiatAmount; retained for payout/audit reproducibility
 
   providerEvents            NowPaymentsPayoutEvent[]
   providerEventsFlutterwave FlutterwavePayoutEvent[] @relation("FlutterwavePayoutEvents")
@@ -1675,7 +1677,8 @@ model PlatformSettings {
   smsSenderId                            String? // Overrides TERMII_SENDER_ID/SMSLIVE247_SENDER_ID/AFRICASTALKING_SENDER_ID for every SMS provider (Termii, SMSLive247, Africa's Talking, and SMSLive247's native-OTP route) when set -- null/unset falls back to each provider's own env var, so this stays a no-op until an admin fills it in. Twilio has no equivalent (it sends from a purchased phone number, not a named sender ID).
   smsProviderOrder                       String    @default("termii,twilio,africastalking") // CSV fallback-try order for phone-verification SMS OTPs, must be a permutation of {termii,twilio,africastalking}, validated app-side like llmProviderOrder -- smslive247 is not a fallback-chain member (see smslive247NativeOtpEnabled), it can't fire-and-forget an arbitrary code on their OTP-compliant route
   smslive247NativeOtpEnabled             Boolean   @default(false) // when true, phone verification (Profile > Phone number) bypasses OtpCode/the SMS fallback chain entirely and uses SMSLive247's own token-generate/verify API end-to-end, since their OTP-compliant route generates the code itself and verifies it on their side, not ours
-  smsTransactionalProviderOrder          String    @default("termii,twilio,africastalking,smslive247") // CSV fallback-try order for P2P trade-notification SMS (not OTP) -- separate from smsProviderOrder since smslive247 CAN send ordinary notification text via their generic route, only their OTP route rejects OTP-shaped messages
+  smsTransactionalOtpEnabled             Boolean   @default(true) // sends application-generated SMS OTPs through the transactional provider chain as the raw code only; SMSLive247 is first by default. When false, phone verification may use SMSLive247's native token API or the legacy OTP chain.
+  smsTransactionalProviderOrder          String    @default("smslive247,termii,twilio,africastalking") // CSV fallback-try order for transactional SMS and direct-code OTP delivery; SMSLive247 is first by default and the other providers are fallbacks.
   p2pSmsTradeCreatedEnabled              Boolean   @default(false) // SMS both parties when a P2P trade is created (acceptOffer)
   p2pSmsPaymentMarkedEnabled             Boolean   @default(false) // SMS the seller when the buyer marks a trade paid (markPaid)
   p2pSmsTokensReleasedEnabled            Boolean   @default(false) // SMS the buyer when the seller releases tokens (release)

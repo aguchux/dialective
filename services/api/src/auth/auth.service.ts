@@ -774,8 +774,9 @@ export class AuthService {
    * Issues an SMS OTP to a candidate phone number, context-bound so the
    * code can't later be redeemed against a different number. Never trust
    * client-side E.164 validation alone -- re-validated here. When
-   * smslive247NativeOtpEnabled is on, bypasses OtpCode/the SMS fallback
-   * chain entirely and uses SMSLive247's own token-generate API instead --
+   * SMSLive247 native OTP is selected while transactional OTP is off,
+   * bypassing OtpCode/the SMS fallback chain entirely and using
+   * SMSLive247's own token-generate API instead --
    * see smslive247-native-otp.ts's doc comment for why (their OTP-compliant
    * route generates the code itself; we never see or store it).
    */
@@ -792,7 +793,11 @@ export class AuthService {
     }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
 
-    if (await this.platformSettings.isSmslive247NativeOtpEnabled()) {
+    const [smslive247NativeOtpEnabled, smsTransactionalOtpEnabled] = await Promise.all([
+      this.platformSettings.isSmslive247NativeOtpEnabled(),
+      this.platformSettings.isSmsTransactionalOtpEnabled(),
+    ]);
+    if (smslive247NativeOtpEnabled && !smsTransactionalOtpEnabled) {
       const smsSenderId = await this.platformSettings.getSmsSenderId();
       const { expiresAt } = await createSmslive247Otp(phoneNumber, smsSenderId ?? undefined);
       const expiresInSeconds = Math.max(

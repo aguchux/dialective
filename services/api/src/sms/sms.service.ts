@@ -34,10 +34,15 @@ export class SmsService {
 
   async sendOtp(toE164: string, code: string): Promise<void> {
     const settings = await this.platformSettings.getForAdmin();
-    const order = parseSmsProviderOrder(settings.smsProviderOrder);
+    const useTransactionalRoute = settings.smsTransactionalOtpEnabled;
+    const order = useTransactionalRoute
+      ? parseSmsTransactionalProviderOrder(settings.smsTransactionalProviderOrder)
+      : parseSmsProviderOrder(settings.smsProviderOrder);
     await this.chain.send(
       toE164,
-      `Your Dialect Library verification code is ${code}. It expires in 10 minutes.`,
+      useTransactionalRoute
+        ? code
+        : `Your Dialect Library verification code is ${code}. It expires in 10 minutes.`,
       order,
       settings.smsSenderId ?? undefined,
     );

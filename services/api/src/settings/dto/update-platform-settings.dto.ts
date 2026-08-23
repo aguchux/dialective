@@ -306,6 +306,10 @@ export class UpdatePlatformSettingsDto {
   @IsBoolean()
   smslive247NativeOtpEnabled?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  smsTransactionalOtpEnabled?: boolean;
+
   // 4 comma-separated tokens from {termii,twilio,africastalking,smslive247};
   // exact permutation validated in PlatformSettingsService.update. Separate
   // from smsProviderOrder -- smslive247 CAN send ordinary notification

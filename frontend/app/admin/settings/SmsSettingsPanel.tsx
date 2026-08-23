@@ -25,10 +25,10 @@ const PROVIDER_LABELS: Record<SmsTransactionalProviderKey, string> = {
 
 const DEFAULT_ORDER: SmsProviderKey[] = ['termii', 'twilio', 'africastalking'];
 const DEFAULT_TRANSACTIONAL_ORDER: SmsTransactionalProviderKey[] = [
+  'smslive247',
   'termii',
   'twilio',
   'africastalking',
-  'smslive247',
 ];
 
 function parseOrder(csv: string): SmsProviderKey[] {
@@ -56,6 +56,7 @@ export function SmsSettingsPanel() {
   const [smsSenderId, setSmsSenderId] = useState('');
   const [order, setOrder] = useState<SmsProviderKey[]>(DEFAULT_ORDER);
   const [smslive247NativeOtpEnabled, setSmslive247NativeOtpEnabled] = useState(false);
+  const [smsTransactionalOtpEnabled, setSmsTransactionalOtpEnabled] = useState(true);
   const [transactionalOrder, setTransactionalOrder] = useState<SmsTransactionalProviderKey[]>(
     DEFAULT_TRANSACTIONAL_ORDER,
   );
@@ -71,6 +72,7 @@ export function SmsSettingsPanel() {
     setSmsSenderId(settings.smsSenderId ?? '');
     setOrder(parseOrder(settings.smsProviderOrder));
     setSmslive247NativeOtpEnabled(settings.smslive247NativeOtpEnabled);
+    setSmsTransactionalOtpEnabled(settings.smsTransactionalOtpEnabled);
     setTransactionalOrder(parseTransactionalOrder(settings.smsTransactionalProviderOrder));
     setP2pSmsTradeCreatedEnabled(settings.p2pSmsTradeCreatedEnabled);
     setP2pSmsPaymentMarkedEnabled(settings.p2pSmsPaymentMarkedEnabled);
@@ -113,6 +115,7 @@ export function SmsSettingsPanel() {
         smsSenderId: smsSenderId.trim(),
         smsProviderOrder: order.join(','),
         smslive247NativeOtpEnabled,
+        smsTransactionalOtpEnabled,
         smsTransactionalProviderOrder: transactionalOrder.join(','),
         p2pSmsTradeCreatedEnabled,
         p2pSmsPaymentMarkedEnabled,
@@ -193,6 +196,30 @@ export function SmsSettingsPanel() {
           <div>
             <label
               className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="sms-transactional-otp-enabled"
+            >
+              <input
+                checked={smsTransactionalOtpEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="sms-transactional-otp-enabled"
+                onChange={(event) => setSmsTransactionalOtpEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Send OTP through transactional SMS</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Uses the transactional provider order below, with SMSLive247 first. The message
+                  is the six-digit code only, for example 908822. The platform still controls OTP
+                  expiry and verification. Turn this off only to use the legacy OTP chain or
+                  SMSLive247&apos;s native token flow.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
               htmlFor="smslive247-native-otp-enabled"
             >
               <input
@@ -205,22 +232,19 @@ export function SmsSettingsPanel() {
               <span>
                 <span className="block font-bold">Use SMSLive247&apos;s native OTP flow</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  SMSLive247&apos;s general SMS route rejects any message containing an OTP-shaped
-                  code, so it can&apos;t join the fallback chain above. When on, phone verification
-                  bypasses the fallback chain entirely and uses SMSLive247&apos;s own
+                  When transactional OTP above is off, phone verification bypasses the legacy
+                  fallback chain entirely and uses SMSLive247&apos;s own
                   token-generate/verify API end-to-end -- SMSLive247 generates and checks the code
-                  on their side, not ours. When off (default), phone verification uses the fallback
-                  chain above.
+                  on their side, not ours.
                 </span>
               </span>
             </label>
           </div>
 
           <div className="border-t border-line pt-5">
-            <h3 className="text-lg font-black">Transactional SMS (P2P trade notifications)</h3>
+            <h3 className="text-lg font-black">Transactional SMS provider order</h3>
             <p className="mt-1 text-sm leading-relaxed text-muted">
-              Plain notification text, not OTP -- SMSLive247 can join this fallback chain since only
-              their OTP route rejects OTP-shaped messages.
+              Used for P2P trade notifications and, when enabled above, direct-code OTP delivery.
             </p>
           </div>
 

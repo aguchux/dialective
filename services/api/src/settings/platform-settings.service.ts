@@ -236,6 +236,11 @@ export class PlatformSettingsService {
     return row.smslive247NativeOtpEnabled;
   }
 
+  async isSmsTransactionalOtpEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.smsTransactionalOtpEnabled;
+  }
+
   async getSmsTransactionalProviderOrder(): Promise<string> {
     const row = await this.getRow();
     return row.smsTransactionalProviderOrder;
@@ -612,6 +617,7 @@ export class PlatformSettingsService {
       smsSenderId: row.smsSenderId,
       smsProviderOrder: row.smsProviderOrder,
       smslive247NativeOtpEnabled: row.smslive247NativeOtpEnabled,
+      smsTransactionalOtpEnabled: row.smsTransactionalOtpEnabled,
       smsTransactionalProviderOrder: row.smsTransactionalProviderOrder,
       p2pSmsTradeCreatedEnabled: row.p2pSmsTradeCreatedEnabled,
       p2pSmsPaymentMarkedEnabled: row.p2pSmsPaymentMarkedEnabled,
@@ -705,6 +711,7 @@ export class PlatformSettingsService {
     smsSenderId?: string | null;
     smsProviderOrder?: string;
     smslive247NativeOtpEnabled?: boolean;
+    smsTransactionalOtpEnabled?: boolean;
     smsTransactionalProviderOrder?: string;
     p2pSmsTradeCreatedEnabled?: boolean;
     p2pSmsPaymentMarkedEnabled?: boolean;
@@ -1023,6 +1030,7 @@ export class PlatformSettingsService {
       smsSenderId: row.smsSenderId,
       smsProviderOrder: row.smsProviderOrder,
       smslive247NativeOtpEnabled: row.smslive247NativeOtpEnabled,
+      smsTransactionalOtpEnabled: row.smsTransactionalOtpEnabled,
       smsTransactionalProviderOrder: row.smsTransactionalProviderOrder,
       p2pSmsTradeCreatedEnabled: row.p2pSmsTradeCreatedEnabled,
       p2pSmsPaymentMarkedEnabled: row.p2pSmsPaymentMarkedEnabled,

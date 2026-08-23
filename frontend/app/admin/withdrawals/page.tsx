@@ -172,9 +172,23 @@ function WithdrawalRow({
       <td className="px-4 py-3">{withdrawal.wallet.user.email}</td>
       <td className="px-4 py-3">
         {withdrawal.tokenAmount} DL
-        <p className="text-xs text-muted">
-          {withdrawal.usdtAmount} {withdrawal.destinationCurrency}
-        </p>
+        {isCrypto ? (
+          <p className="text-xs text-muted">
+            {withdrawal.usdtAmount} {withdrawal.destinationCurrency}
+          </p>
+        ) : withdrawal.fiatAmount ? (
+          <p className="text-xs text-muted">
+            {Number(withdrawal.fiatAmount).toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}{' '}
+            {withdrawal.destinationCurrency}
+            {withdrawal.fiatUsdExchangeRate && (
+              <span> · 1 USD = {withdrawal.fiatUsdExchangeRate}</span>
+            )}
+          </p>
+        ) : (
+          <p className="text-xs text-amber-700">Fiat conversion unavailable</p>
+        )}
       </td>
       <td className="max-w-56 truncate px-4 py-3 font-mono text-xs">
         {withdrawal.payoutMethod && withdrawal.payoutMethod !== 'CRYPTO' ? (
@@ -417,7 +431,12 @@ function WithdrawalActionDialog({
               </p>
               <p>
                 <span className="font-bold">Amount:</span> {withdrawal.tokenAmount} DL (
-                {withdrawal.usdtAmount} {withdrawal.destinationCurrency})
+                {isCrypto
+                  ? `${withdrawal.usdtAmount} ${withdrawal.destinationCurrency}`
+                  : withdrawal.fiatAmount
+                    ? `${Number(withdrawal.fiatAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${withdrawal.destinationCurrency}`
+                    : 'Fiat conversion unavailable'}
+                )
               </p>
               {isCrypto ? (
                 <>

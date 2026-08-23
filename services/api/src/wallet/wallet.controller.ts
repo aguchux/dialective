@@ -1295,6 +1295,39 @@ export class WalletController {
     return payoutAccount;
   }
 
+  /**
+   * Fiat withdrawals stay USD-denominated in the ledger, but Flutterwave
+   * receives the local-currency amount. Snapshot both the converted amount
+   * and rate at request time so an FX refresh cannot change an approved
+   * payout or make the admin table disagree with the provider submission.
+   */
+  private async getFiatWithdrawalConversion(
+    destinationCountry: string,
+    destinationCurrency: string,
+    usdAmount: number | Prisma.Decimal,
+  ) {
+    const country = await this.prisma.country.findUnique({
+      where: { code: destinationCountry.toUpperCase() },
+      select: { currencyCode: true, usdExchangeRate: true },
+    });
+    if (!country?.usdExchangeRate) {
+      throw new UnprocessableEntityException(
+        'No exchange rate is available for this payout country yet -- try again shortly',
+      );
+    }
+    if (country.currencyCode.toUpperCase() !== destinationCurrency.toUpperCase()) {
+      throw new UnprocessableEntityException(
+        'The payout account currency does not match its country currency configuration',
+      );
+    }
+
+    const rate = country.usdExchangeRate;
+    return {
+      fiatAmount: new Prisma.Decimal(usdAmount).mul(rate).toDecimalPlaces(2),
+      fiatUsdExchangeRate: rate,
+    };
+  }
+
   @Post('wallet/withdrawals/otp')
   @UseGuards(JwtAuthGuard, UserThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
@@ -1392,6 +1425,13 @@ export class WalletController {
     const wallet = await this.getOrCreateWallet(req.user.sub);
     const rate = await this.getCurrentTokenUsdRate();
     const usdtAmount = tokensToUsdt(body.tokenAmount, rate);
+    const fiatConversion = payoutAccount
+      ? await this.getFiatWithdrawalConversion(
+          payoutAccount.country,
+          payoutAccount.currency,
+          usdtAmount,
+        )
+      : null;
     const withdrawalId = randomUUID();
 
     // A snapshot of the PayoutAccount's resolved details onto the
@@ -1445,6 +1485,7 @@ export class WalletController {
           destinationCurrency: isFiat ? payoutAccount!.currency : destinationCurrency,
           destinationNetwork: isFiat ? '' : destinationNetwork,
           status: WithdrawalStatus.PENDING,
+          ...(fiatConversion ?? {}),
           ...fiatSnapshot,
         },
       }),
@@ -1533,6 +1574,8 @@ export class WalletController {
         destinationMobileNetwork: true,
         destinationMobileNumberMasked: true,
         destinationCountry: true,
+        fiatAmount: true,
+        fiatUsdExchangeRate: true,
       },
     });
   }
@@ -1902,10 +1945,25 @@ export class WalletController {
         throw new UnprocessableEntityException('Withdrawal is missing fiat destination details');
       }
 
+      if (!withdrawal.fiatAmount && !withdrawal.destinationCountry) {
+        throw new UnprocessableEntityException(
+          'Withdrawal is missing its payout country and cannot be converted to fiat',
+        );
+      }
+      const fiatConversion = withdrawal.fiatAmount
+        ? {
+            fiatAmount: withdrawal.fiatAmount,
+            fiatUsdExchangeRate: withdrawal.fiatUsdExchangeRate,
+          }
+        : await this.getFiatWithdrawalConversion(
+            withdrawal.destinationCountry!,
+            withdrawal.destinationCurrency,
+            withdrawal.usdtAmount,
+          );
       const transfer = await this.flutterwave.createTransfer({
         accountBank: withdrawal.destinationBankCode ?? withdrawal.destinationMobileNetwork!,
         accountNumber,
-        amount: withdrawal.usdtAmount.toNumber(),
+        amount: fiatConversion.fiatAmount.toNumber(),
         currency: withdrawal.destinationCurrency,
         narration: `Dialect Library trainer payout: ${withdrawal.id}`,
         reference: withdrawal.id,
@@ -1922,6 +1980,9 @@ export class WalletController {
             providerStatus: transfer.status ?? 'created',
             providerPayload: transfer.raw as Prisma.InputJsonValue,
             providerError: null,
+            // Legacy fiat rows did not retain their conversion. Persist the
+            // one resolved above before recording the provider submission.
+            ...(withdrawal.fiatAmount ? {} : fiatConversion),
             submittedToProviderAt: new Date(),
             providerSettledAt: this.isFlutterwaveTransferFinished(transfer.status)
               ? new Date()

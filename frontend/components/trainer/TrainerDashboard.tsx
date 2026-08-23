@@ -16,6 +16,7 @@ import {
   BadgeCheck,
   Banknote,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -35,6 +36,7 @@ import {
   Sparkles,
   Square,
   Star,
+  Trash2,
   User as UserIcon,
   Users,
   WalletCards,
@@ -112,6 +114,7 @@ import {
   useGetWalletActivityQuery,
   useSendReferralInviteMutation,
   useUpdateP2PPaymentMethodMutation,
+  useDeleteP2PPaymentMethodMutation,
   useUpdateProfileMutation,
 } from '@/store/api';
 import type { Session } from 'next-auth';
@@ -2028,7 +2031,12 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     useRequestP2PPaymentMethodOtpMutation();
   const [createPaymentMethod, { isLoading: paymentCreating }] = useCreateP2PPaymentMethodMutation();
   const [updatePaymentMethod, { isLoading: paymentUpdating }] = useUpdateP2PPaymentMethodMutation();
-  const primaryMethod = methods.find((method) => method.enabled);
+  const [deletePaymentMethod, { isLoading: paymentDeleting }] = useDeleteP2PPaymentMethodMutation();
+  const [editingPaymentMethodId, setEditingPaymentMethodId] = useState<string | 'new' | null>(null);
+  const editingMethod =
+    editingPaymentMethodId && editingPaymentMethodId !== 'new'
+      ? methods.find((method) => method.id === editingPaymentMethodId)
+      : undefined;
   const paymentSaving = paymentCreating || paymentUpdating;
   const { data: referenceRate } = useGetP2PReferenceRateQuery();
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
@@ -2137,9 +2145,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     firstName.trim() !== (session.user.firstName ?? '') ||
     lastName.trim() !== (session.user.lastName ?? '');
   const paymentPayload = {
-    label: 'Bank transfer',
+    label: bankName.trim() || 'Bank transfer',
     methodType: 'BANK_TRANSFER',
-    fiatCurrency: primaryMethod?.fiatCurrency ?? referenceRate?.currencyCode ?? 'NGN',
+    fiatCurrency: editingMethod?.fiatCurrency ?? referenceRate?.currencyCode ?? 'NGN',
     bankName: bankName.trim(),
     accountName: accountName.trim(),
     accountNumber: accountNumber.trim(),
@@ -2147,24 +2155,25 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     enabled: true,
   };
   const paymentDirty =
-    bankName.trim() !== (primaryMethod?.bankName ?? '') ||
-    accountName.trim() !== (primaryMethod?.accountName ?? '') ||
-    accountNumber.trim() !== (primaryMethod?.accountNumber ?? '') ||
-    instructions.trim() !== (primaryMethod?.instructions ?? '');
+    !editingMethod ||
+    bankName.trim() !== (editingMethod.bankName ?? '') ||
+    accountName.trim() !== (editingMethod.accountName ?? '') ||
+    accountNumber.trim() !== (editingMethod.accountNumber ?? '') ||
+    instructions.trim() !== (editingMethod.instructions ?? '');
 
   useEffect(() => {
-    setBankName(primaryMethod?.bankName ?? '');
-    setAccountName(primaryMethod?.accountName ?? '');
-    setAccountNumber(primaryMethod?.accountNumber ?? '');
-    setInstructions(primaryMethod?.instructions ?? '');
+    setBankName(editingMethod?.bankName ?? '');
+    setAccountName(editingMethod?.accountName ?? '');
+    setAccountNumber(editingMethod?.accountNumber ?? '');
+    setInstructions(editingMethod?.instructions ?? '');
     setPaymentOtpRequestId('');
     setPaymentOtpCode('');
   }, [
-    primaryMethod?.id,
-    primaryMethod?.bankName,
-    primaryMethod?.accountName,
-    primaryMethod?.accountNumber,
-    primaryMethod?.instructions,
+    editingPaymentMethodId,
+    editingMethod?.bankName,
+    editingMethod?.accountName,
+    editingMethod?.accountNumber,
+    editingMethod?.instructions,
   ]);
 
   function updatePaymentField(setter: (value: string) => void, value: string) {
@@ -2299,7 +2308,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     setMessage(null);
     setError(null);
     try {
-      const otp = await requestPaymentOtp({ ...paymentPayload, id: primaryMethod?.id }).unwrap();
+      const otp = await requestPaymentOtp({ ...paymentPayload, id: editingMethod?.id }).unwrap();
       setPaymentOtpRequestId(otp.otpRequestId);
       setPaymentOtpCode('');
       setMessage('Verification code sent to your email.');
@@ -2322,16 +2331,29 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
         otpRequestId: paymentOtpRequestId,
         code: paymentOtpCode.trim(),
       };
-      if (primaryMethod) {
-        await updatePaymentMethod({ id: primaryMethod.id, body }).unwrap();
+      if (editingMethod) {
+        await updatePaymentMethod({ id: editingMethod.id, body }).unwrap();
       } else {
         await createPaymentMethod(body).unwrap();
       }
       setPaymentOtpRequestId('');
       setPaymentOtpCode('');
+      setEditingPaymentMethodId(null);
       setMessage('Payment method saved.');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not save payment method.'));
+    }
+  }
+
+  async function removePaymentMethod(id: string) {
+    setMessage(null);
+    setError(null);
+    try {
+      await deletePaymentMethod(id).unwrap();
+      if (editingPaymentMethodId === id) setEditingPaymentMethodId(null);
+      setMessage('Payment method removed.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not remove payment method.'));
     }
   }
 
@@ -2633,92 +2655,154 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
           )}
         </form>
 
-        <form className={`${cardClass} grid gap-4 p-5`} onSubmit={savePaymentMethod}>
+        <div className={`${cardClass} grid gap-4 p-5`}>
           <SectionTitle
-            title="Payment method"
-            subtitle="Stored in Profile and protected by email 2FA for every edit."
+            title="Payment methods"
+            subtitle="Stored in Profile and protected by email 2FA for every edit. Add multiple bank accounts and choose which one to use per offer."
           />
           {!phoneVerified && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
               Verify your phone number above before adding a payment method.
             </p>
           )}
-          <fieldset className="contents" disabled={!phoneVerified}>
-            <label className="grid gap-1.5 text-sm font-bold">
-              Bank name
-              <input
-                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                onChange={(event) => updatePaymentField(setBankName, event.target.value)}
-                required
-                value={bankName}
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm font-bold">
-              Account number
-              <input
-                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                inputMode="numeric"
-                onChange={(event) => updatePaymentField(setAccountNumber, event.target.value)}
-                required
-                value={accountNumber}
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm font-bold">
-              Account name
-              <input
-                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                onChange={(event) => updatePaymentField(setAccountName, event.target.value)}
-                required
-                value={accountName}
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm font-bold">
-              Notes <span className="font-normal text-muted">(optional)</span>
-              <textarea
-                className="min-h-20 resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-ink outline-none focus:border-accent"
-                onChange={(event) => updatePaymentField(setInstructions, event.target.value)}
-                placeholder="Anything a buyer should know before paying, e.g. preferred payment window or reference format"
-                value={instructions}
-              />
-            </label>
-            {paymentOtpRequestId ? (
-              <label className="grid gap-1.5 text-sm font-bold">
-                Email verification code
-                <input
-                  className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                  inputMode="numeric"
-                  maxLength={8}
-                  onChange={(event) => setPaymentOtpCode(event.target.value)}
-                  required
-                  value={paymentOtpCode}
-                />
-              </label>
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              <ActionButton
-                className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={
-                  !paymentDirty || !bankName.trim() || !accountName.trim() || !accountNumber.trim()
-                }
-                onClick={() => void requestPaymentMethodOtp()}
-                pending={paymentOtpSending}
-                pendingLabel="Sending"
-                type="button"
-              >
-                Email code
-              </ActionButton>
-              <ActionButton
-                className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!paymentDirty || !paymentOtpRequestId || !paymentOtpCode.trim()}
-                pending={paymentSaving}
-                pendingLabel="Saving"
-                type="submit"
-              >
-                Save bank details
-              </ActionButton>
-            </div>
-          </fieldset>
-        </form>
+          {methods.length > 0 && (
+            <ul className="grid gap-2">
+              {methods.map((method) => (
+                <li
+                  key={method.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2.5"
+                >
+                  <div className="grid gap-0.5 overflow-hidden">
+                    <span className="truncate font-extrabold text-ink">{method.bankName}</span>
+                    <span className="truncate text-sm text-muted">
+                      {method.accountName} ·{' '}
+                      {method.accountNumber
+                        ? `****${method.accountNumber.slice(-4)}`
+                        : 'No account number'}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 gap-1.5">
+                    <button
+                      className="min-h-9 rounded-lg border border-line px-3 text-sm font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={!phoneVerified}
+                      onClick={() => setEditingPaymentMethodId(method.id)}
+                      type="button"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      aria-label={`Remove ${method.bankName}`}
+                      className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-line text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-red-950"
+                      disabled={paymentDeleting}
+                      onClick={() => void removePaymentMethod(method.id)}
+                      type="button"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {editingPaymentMethodId ? (
+            <form className="grid gap-4" onSubmit={savePaymentMethod}>
+              <fieldset className="contents" disabled={!phoneVerified}>
+                <label className="grid gap-1.5 text-sm font-bold">
+                  Bank name
+                  <input
+                    className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                    onChange={(event) => updatePaymentField(setBankName, event.target.value)}
+                    required
+                    value={bankName}
+                  />
+                </label>
+                <label className="grid gap-1.5 text-sm font-bold">
+                  Account number
+                  <input
+                    className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                    inputMode="numeric"
+                    onChange={(event) => updatePaymentField(setAccountNumber, event.target.value)}
+                    required
+                    value={accountNumber}
+                  />
+                </label>
+                <label className="grid gap-1.5 text-sm font-bold">
+                  Account name
+                  <input
+                    className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                    onChange={(event) => updatePaymentField(setAccountName, event.target.value)}
+                    required
+                    value={accountName}
+                  />
+                </label>
+                <label className="grid gap-1.5 text-sm font-bold">
+                  Notes <span className="font-normal text-muted">(optional)</span>
+                  <textarea
+                    className="min-h-20 resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-ink outline-none focus:border-accent"
+                    onChange={(event) => updatePaymentField(setInstructions, event.target.value)}
+                    placeholder="Anything a buyer should know before paying, e.g. preferred payment window or reference format"
+                    value={instructions}
+                  />
+                </label>
+                {paymentOtpRequestId ? (
+                  <label className="grid gap-1.5 text-sm font-bold">
+                    Email verification code
+                    <input
+                      className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                      inputMode="numeric"
+                      maxLength={8}
+                      onChange={(event) => setPaymentOtpCode(event.target.value)}
+                      required
+                      value={paymentOtpCode}
+                    />
+                  </label>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted"
+                    onClick={() => setEditingPaymentMethodId(null)}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <ActionButton
+                    className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={
+                      !paymentDirty ||
+                      !bankName.trim() ||
+                      !accountName.trim() ||
+                      !accountNumber.trim()
+                    }
+                    onClick={() => void requestPaymentMethodOtp()}
+                    pending={paymentOtpSending}
+                    pendingLabel="Sending"
+                    type="button"
+                  >
+                    Email code
+                  </ActionButton>
+                  <ActionButton
+                    className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!paymentDirty || !paymentOtpRequestId || !paymentOtpCode.trim()}
+                    pending={paymentSaving}
+                    pendingLabel="Saving"
+                    type="submit"
+                  >
+                    Save bank details
+                  </ActionButton>
+                </div>
+              </fieldset>
+            </form>
+          ) : (
+            <button
+              className="min-h-11 justify-self-start rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!phoneVerified}
+              onClick={() => setEditingPaymentMethodId('new')}
+              type="button"
+            >
+              + Add bank account
+            </button>
+          )}
+        </div>
 
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={saveDialect}>
           <SectionTitle
@@ -3430,12 +3514,14 @@ function WithdrawTokensDialog({
   const [addressConfirmed, setAddressConfirmed] = useState(false);
   const [payoutAccountId, setPayoutAccountId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [stage, setStage] = useState<'details' | 'confirm' | 'code'>('details');
+  const [stage, setStage] = useState<'details' | 'confirm' | 'code' | 'success'>('details');
   const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
   const [code, setCode] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [requestOtp, { isLoading: isRequestingOtp }] = useRequestWithdrawalOtpMutation();
   const [createWithdrawal, { isLoading: isSubmitting }] = useCreateWithdrawalMutation();
   const { data: payoutAccounts } = useListPayoutAccountsQuery();
+  const router = useRouter();
 
   const addressLooksValid =
     destinationAddress.length === 0 ||
@@ -3529,7 +3615,7 @@ function WithdrawTokensDialog({
         setAddressConfirmed(false);
       }
       setMessage(null);
-      setStage('details');
+      setStage('success');
       setOtpRequestId(null);
       setAmount(minWithdrawalTokens);
       setCode('');
@@ -3545,8 +3631,20 @@ function WithdrawTokensDialog({
     setMessage(null);
   }
 
+  function handleSuccessClose() {
+    setDialogOpen(false);
+    reset();
+    router.push('/dashboard?view=tokens');
+  }
+
   return (
-    <Dialog onOpenChange={(open) => !open && reset()}>
+    <Dialog
+      onOpenChange={(open) => {
+        setDialogOpen(open);
+        if (!open) reset();
+      }}
+      open={dialogOpen}
+    >
       <DialogTrigger asChild>
         <button
           className="mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-3 text-sm font-extrabold text-ink hover:bg-surface-muted md:px-4"
@@ -3557,7 +3655,30 @@ function WithdrawTokensDialog({
           <span className="sm:hidden">Withdraw</span>
         </button>
       </DialogTrigger>
-      {stage === 'code' ? (
+      {stage === 'success' ? (
+        <DialogContent
+          title="Withdrawal submitted"
+          description="Your withdrawal request has been received and is now being processed."
+        >
+          <div className="grid gap-4">
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-line bg-surface p-6 text-center">
+              <CheckCircle2 className="size-12 text-accent" aria-hidden="true" />
+              <p className="font-extrabold">Your withdrawal is on its way.</p>
+              <p className="text-sm leading-relaxed text-muted">
+                We&apos;ll update the status in your recent activity as it progresses.
+              </p>
+            </div>
+            <button
+              autoFocus
+              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+              onClick={handleSuccessClose}
+              type="button"
+            >
+              OK
+            </button>
+          </div>
+        </DialogContent>
+      ) : stage === 'code' ? (
         <DialogContent
           title="Enter your code"
           description="We emailed a 6-digit code to confirm this withdrawal."

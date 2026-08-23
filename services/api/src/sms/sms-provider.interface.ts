@@ -51,16 +51,15 @@ export function parseSmsProviderOrder(csv: string): SmsProviderKey[] {
 
 /**
  * Fallback-chain-eligible providers for plain transactional/notification
- * SMS (P2P trade updates, not OTP) -- unlike SMS_OTP_FALLBACK_PROVIDER_KEYS,
- * smslive247 IS included here: their generic /api/v5/sms route only
- * rejects messages containing OTP-shaped numbers, which ordinary
- * notification text never does.
+ * SMS, including direct-code OTP when transactional OTP is enabled. This
+ * chain includes SMSLive247 and is separately configurable from the legacy
+ * explanatory OTP route.
  */
 export const SMS_TRANSACTIONAL_PROVIDER_KEYS: SmsProviderKey[] = [
+  'smslive247',
   'termii',
   'twilio',
   'africastalking',
-  'smslive247',
 ];
 
 const DEFAULT_TRANSACTIONAL_PROVIDER_ORDER: SmsProviderKey[] = SMS_TRANSACTIONAL_PROVIDER_KEYS;
