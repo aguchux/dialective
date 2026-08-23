@@ -471,6 +471,64 @@ export interface ValuationSnapshotRow {
   createdAt: string;
 }
 
+export interface ReserveTransactionRow {
+  id: string;
+  type: string;
+  status: string;
+  direction: 'CREDIT' | 'DEBIT';
+  amount: string;
+  eligibleUsdAmount: string;
+  providerReference: string | null;
+  sourceReference: string | null;
+  reason: string | null;
+  createdAt: string;
+  settledAt: string | null;
+  reserveAccount: { provider: string; asset: string; network: string; currency: string };
+}
+
+export interface TokenLedgerEntryRow {
+  id: string;
+  accountId: string;
+  availableDelta: string;
+  lockedDelta: string;
+  createdAt: string;
+  account: { code: string; kind: 'USER' | 'TREASURY' | 'BURN' };
+}
+
+export interface TokenOperationRow {
+  id: string;
+  type: string;
+  status: string;
+  reference: string | null;
+  reason: string | null;
+  createdAt: string;
+  settledAt: string | null;
+  entries: TokenLedgerEntryRow[];
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface TokenomicsPolicy {
+  id: string;
+  baseCurrency: string;
+  enabled: boolean;
+  mintingPaused: boolean;
+  valuationIntervalMinutes: number;
+  maxIncreaseRate: string;
+  maxDecreaseRate: string;
+  healthyCoverageThreshold: string;
+  watchCoverageThreshold: string;
+  restrictedCoverageThreshold: string;
+  updatedAt: string;
+  createdAt: string;
+}
+
 export type LedgerEntryType =
   | 'DEPOSIT'
   | 'TRAINING_PAYOUT'
@@ -1917,6 +1975,50 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/admin/tokens/burn', method: 'POST', body }),
       invalidatesTags: ['Tokenomics'],
     }),
+    listReserveTransactions: builder.query<
+      PaginatedResult<ReserveTransactionRow>,
+      {
+        page?: number;
+        pageSize?: number;
+        type?: string;
+        status?: string;
+        direction?: string;
+      } | void
+    >({
+      query: (params) => ({
+        url: '/admin/tokenomics/reserve-transactions',
+        params: params ?? undefined,
+      }),
+      providesTags: ['Tokenomics'],
+    }),
+    listTokenOperations: builder.query<
+      PaginatedResult<TokenOperationRow>,
+      { page?: number; pageSize?: number; type?: string; status?: string } | void
+    >({
+      query: (params) => ({
+        url: '/admin/tokenomics/token-operations',
+        params: params ?? undefined,
+      }),
+      providesTags: ['Tokenomics'],
+    }),
+    getTokenomicsPolicy: builder.query<TokenomicsPolicy, void>({
+      query: () => ({ url: '/admin/tokenomics/policy' }),
+      providesTags: ['Tokenomics'],
+    }),
+    updateTokenomicsPolicy: builder.mutation<
+      TokenomicsPolicy,
+      Partial<{
+        valuationIntervalMinutes: number;
+        maxIncreaseRate: number;
+        maxDecreaseRate: number;
+        healthyCoverageThreshold: number;
+        watchCoverageThreshold: number;
+        restrictedCoverageThreshold: number;
+      }>
+    >({
+      query: (body) => ({ url: '/admin/tokenomics/policy', method: 'POST', body }),
+      invalidatesTags: ['Tokenomics'],
+    }),
     requestWithdrawalResolveOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
       string
@@ -2875,6 +2977,10 @@ export const {
   usePauseMintingMutation,
   useResumeMintingMutation,
   useBurnTokensMutation,
+  useListReserveTransactionsQuery,
+  useListTokenOperationsQuery,
+  useGetTokenomicsPolicyQuery,
+  useUpdateTokenomicsPolicyMutation,
   useRequestWithdrawalResolveOtpMutation,
   useApproveWithdrawalMutation,
   useSubmitWithdrawalToNowPaymentsMutation,

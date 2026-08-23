@@ -8,6 +8,9 @@ import { LockTokensDto } from './dto/lock-tokens.dto';
 import { UnlockTokensDto } from './dto/unlock-tokens.dto';
 import { BurnTokensDto } from './dto/burn-tokens.dto';
 import { ValuationHistoryQueryDto } from './dto/valuation-history-query.dto';
+import { ListReserveTransactionsDto } from './dto/list-reserve-transactions.dto';
+import { ListTokenOperationsDto } from './dto/list-token-operations.dto';
+import { UpdateTokenomicsPolicyDto } from './dto/update-tokenomics-policy.dto';
 
 @Controller()
 export class TokenomicsController {
@@ -66,5 +69,33 @@ export class TokenomicsController {
   @Roles(Role.ADMIN)
   resume() {
     return this.tokenomics.setMintingPaused(false);
+  }
+
+  @Get('admin/tokenomics/reserve-transactions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  listReserveTransactions(@Query() query: ListReserveTransactionsDto) {
+    return this.tokenomics.listReserveTransactions(query);
+  }
+
+  @Get('admin/tokenomics/token-operations')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  listTokenOperations(@Query() query: ListTokenOperationsDto) {
+    return this.tokenomics.listTokenOperations(query);
+  }
+
+  @Get('admin/tokenomics/policy')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  getPolicy() {
+    return this.tokenomics.getPolicy();
+  }
+
+  @Post('admin/tokenomics/policy')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  updatePolicy(@Body() dto: UpdateTokenomicsPolicyDto) {
+    return this.tokenomics.updatePolicy(dto);
   }
 }

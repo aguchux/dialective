@@ -15,6 +15,11 @@ import {
   useRecalculateValuationMutation,
   useResumeMintingMutation,
 } from '@/store/api';
+import { ValuationChart } from './ValuationChart';
+import { ReserveLedgerSection } from './ReserveLedgerSection';
+import { TokenOperationsSection } from './TokenOperationsSection';
+import { PolicySettingsPanel } from './PolicySettingsPanel';
+import { inputClass, primaryButtonClass, secondaryButtonClass } from './shared';
 
 const statCardIconBg: Record<string, string> = {
   value: 'bg-[#e8f0fe] text-[#3B6DF0]',
@@ -34,13 +39,6 @@ const healthBadgeClass: Record<ReserveHealthStatus, string> = {
   RESTRICTED: 'bg-[#fde8e8] text-[#D94848]',
   CRITICAL: 'bg-[#fde8e8] text-white [background-color:#D94848]',
 };
-
-const inputClass =
-  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
-const primaryButtonClass =
-  'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
-const secondaryButtonClass =
-  'inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
 
 export default function AdminTokenomicsPage() {
   const {
@@ -222,6 +220,8 @@ export default function AdminTokenomicsPage() {
           )}
         </section>
 
+        <ValuationChart history={history} isLoading={isLoadingHistory} />
+
         <section className="grid gap-4">
           <h2 className="text-2xl leading-snug">Valuation history</h2>
           <div className="overflow-x-auto rounded-lg border border-line bg-white">
@@ -265,6 +265,12 @@ export default function AdminTokenomicsPage() {
             </table>
           </div>
         </section>
+
+        <ReserveLedgerSection />
+
+        <TokenOperationsSection />
+
+        <PolicySettingsPanel />
       </div>
     </AdminShell>
   );

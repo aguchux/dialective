@@ -209,4 +209,147 @@ describe('TokenomicsService', () => {
       );
     });
   });
+
+  describe('listReserveTransactions', () => {
+    function makePrisma() {
+      return {
+        reserveTransaction: {
+          findMany: jest.fn().mockResolvedValue([]),
+          count: jest.fn().mockResolvedValue(0),
+        },
+      };
+    }
+
+    it('computes skip from page and pageSize', async () => {
+      const prisma = makePrisma();
+      const service = new TokenomicsService(prisma as never, {} as never);
+
+      await service.listReserveTransactions({ page: 2, pageSize: 20 });
+      expect(prisma.reserveTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 20, take: 20 }),
+      );
+    });
+
+    it.each([
+      [45, 20, 3],
+      [0, 20, 1],
+      [20, 20, 1],
+      [21, 20, 2],
+    ])('total=%d pageSize=%d -> totalPages=%d', async (total, pageSize, totalPages) => {
+      const prisma = makePrisma();
+      prisma.reserveTransaction.count.mockResolvedValue(total);
+      const service = new TokenomicsService(prisma as never, {} as never);
+
+      const result = await service.listReserveTransactions({ page: 1, pageSize });
+      expect(result.totalPages).toBe(totalPages);
+    });
+
+    it('passes only the supplied filters through to where', async () => {
+      const prisma = makePrisma();
+      const service = new TokenomicsService(prisma as never, {} as never);
+
+      await service.listReserveTransactions({
+        page: 1,
+        pageSize: 20,
+        type: ReserveTransactionType.FEE,
+      });
+      expect(prisma.reserveTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { type: ReserveTransactionType.FEE, status: undefined, direction: undefined },
+        }),
+      );
+    });
+  });
+
+  describe('listTokenOperations', () => {
+    function makePrisma() {
+      return {
+        tokenOperation: {
+          findMany: jest.fn().mockResolvedValue([]),
+          count: jest.fn().mockResolvedValue(0),
+        },
+      };
+    }
+
+    it('computes skip from page and pageSize', async () => {
+      const prisma = makePrisma();
+      const service = new TokenomicsService(prisma as never, {} as never);
+
+      await service.listTokenOperations({ page: 3, pageSize: 10 });
+      expect(prisma.tokenOperation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 20, take: 10 }),
+      );
+    });
+
+    it('passes only the supplied filters through to where', async () => {
+      const prisma = makePrisma();
+      const service = new TokenomicsService(prisma as never, {} as never);
+
+      await service.listTokenOperations({ page: 1, pageSize: 20 });
+      expect(prisma.tokenOperation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { type: undefined, status: undefined } }),
+      );
+    });
+  });
+
+  describe('updatePolicy', () => {
+    function makePolicy(overrides: Record<string, string> = {}) {
+      return {
+        healthyCoverageThreshold: new Prisma.Decimal(overrides.healthy ?? '1'),
+        watchCoverageThreshold: new Prisma.Decimal(overrides.watch ?? '0.8'),
+        restrictedCoverageThreshold: new Prisma.Decimal(overrides.restricted ?? '0.6'),
+      };
+    }
+
+    it('rejects when the merged thresholds violate healthy >= watch >= restricted', async () => {
+      const policy = makePolicy();
+      const prisma = {
+        tokenomicsPolicy: {
+          upsert: jest.fn().mockResolvedValue(policy),
+          update: jest.fn(),
+        },
+      };
+      const service = new TokenomicsService(prisma as never, {} as never);
+
+      // Only restrictedCoverageThreshold supplied, raised above the existing
+      // watchCoverageThreshold -- proves the merge-with-current-values path
+      // is exercised, not just an all-three-supplied case.
+      await expect(service.updatePolicy({ restrictedCoverageThreshold: 0.9 })).rejects.toThrow(
+        'Coverage thresholds must satisfy healthy >= watch >= restricted',
+      );
+      expect(prisma.tokenomicsPolicy.update).not.toHaveBeenCalled();
+    });
+
+    it('accepts a partial update and merges against current values', async () => {
+      const policy = makePolicy();
+      const prisma = {
+        tokenomicsPolicy: {
+          upsert: jest.fn().mockResolvedValue(policy),
+          update: jest.fn().mockResolvedValue(policy),
+        },
+      };
+      const service = new TokenomicsService(prisma as never, {} as never);
+
+      await service.updatePolicy({ watchCoverageThreshold: 0.7 });
+      expect(prisma.tokenomicsPolicy.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'default' },
+          data: expect.objectContaining({ watchCoverageThreshold: 0.7 }),
+        }),
+      );
+    });
+
+    it.each([0, 1])('accepts boundary maxIncreaseRate value %d', async (value) => {
+      const policy = makePolicy();
+      const prisma = {
+        tokenomicsPolicy: {
+          upsert: jest.fn().mockResolvedValue(policy),
+          update: jest.fn().mockResolvedValue(policy),
+        },
+      };
+      const service = new TokenomicsService(prisma as never, {} as never);
+
+      await expect(service.updatePolicy({ maxIncreaseRate: value })).resolves.toBeDefined();
+    });
+  });
 });

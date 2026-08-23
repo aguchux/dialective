@@ -11,6 +11,9 @@ import {
 } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { ListReserveTransactionsDto } from './dto/list-reserve-transactions.dto';
+import { ListTokenOperationsDto } from './dto/list-token-operations.dto';
+import { UpdateTokenomicsPolicyDto } from './dto/update-tokenomics-policy.dto';
 
 type DbClient = PrismaService | Prisma.TransactionClient;
 
@@ -368,7 +371,94 @@ export class TokenomicsService {
     });
   }
 
-  private async ensurePolicy() {
+  async listReserveTransactions(query: ListReserveTransactionsDto) {
+    const where: Prisma.ReserveTransactionWhereInput = {
+      type: query.type,
+      status: query.status,
+      direction: query.direction,
+    };
+    const skip = (query.page - 1) * query.pageSize;
+    const [items, total] = await Promise.all([
+      this.prisma.reserveTransaction.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: query.pageSize,
+        include: {
+          reserveAccount: {
+            select: { provider: true, asset: true, network: true, currency: true },
+          },
+        },
+      }),
+      this.prisma.reserveTransaction.count({ where }),
+    ]);
+    return {
+      items,
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+    };
+  }
+
+  async listTokenOperations(query: ListTokenOperationsDto) {
+    const where: Prisma.TokenOperationWhereInput = { type: query.type, status: query.status };
+    const skip = (query.page - 1) * query.pageSize;
+    const [items, total] = await Promise.all([
+      this.prisma.tokenOperation.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: query.pageSize,
+        include: { entries: { include: { account: { select: { code: true, kind: true } } } } },
+      }),
+      this.prisma.tokenOperation.count({ where }),
+    ]);
+    return {
+      items,
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+    };
+  }
+
+  async getPolicy() {
+    return this.ensurePolicy();
+  }
+
+  async updatePolicy(input: UpdateTokenomicsPolicyDto) {
+    const current = await this.ensurePolicy();
+    const merged = {
+      healthyCoverageThreshold:
+        input.healthyCoverageThreshold ?? current.healthyCoverageThreshold.toNumber(),
+      watchCoverageThreshold:
+        input.watchCoverageThreshold ?? current.watchCoverageThreshold.toNumber(),
+      restrictedCoverageThreshold:
+        input.restrictedCoverageThreshold ?? current.restrictedCoverageThreshold.toNumber(),
+    };
+    if (!(
+      merged.healthyCoverageThreshold >= merged.watchCoverageThreshold &&
+      merged.watchCoverageThreshold >= merged.restrictedCoverageThreshold
+    )) {
+      throw new BadRequestException(
+        'Coverage thresholds must satisfy healthy >= watch >= restricted',
+      );
+    }
+    return this.prisma.tokenomicsPolicy.update({
+      where: { id: 'default' },
+      data: {
+        valuationIntervalMinutes: input.valuationIntervalMinutes,
+        maxIncreaseRate: input.maxIncreaseRate,
+        maxDecreaseRate: input.maxDecreaseRate,
+        healthyCoverageThreshold: input.healthyCoverageThreshold,
+        watchCoverageThreshold: input.watchCoverageThreshold,
+        restrictedCoverageThreshold: input.restrictedCoverageThreshold,
+      },
+    });
+  }
+
+  async ensurePolicy() {
     return this.prisma.tokenomicsPolicy.upsert({
       where: { id: 'default' },
       update: {},
