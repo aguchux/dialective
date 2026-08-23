@@ -91,6 +91,8 @@ import {
   useRequestP2PPaymentMethodOtpMutation,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
+  useRequestFlutterwaveDepositOtpMutation,
+  useCreateFlutterwaveDepositMutation,
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
   WithdrawalCurrency,
@@ -3154,22 +3156,49 @@ function ScoresView() {
   );
 }
 
+const FLUTTERWAVE_FUNDING_COUNTRIES: { code: string; currency: string; label: string }[] = [
+  { code: 'NG', currency: 'NGN', label: 'Nigeria (NGN)' },
+  { code: 'GH', currency: 'GHS', label: 'Ghana (GHS)' },
+  { code: 'KE', currency: 'KES', label: 'Kenya (KES)' },
+  { code: 'UG', currency: 'UGX', label: 'Uganda (UGX)' },
+  { code: 'ZA', currency: 'ZAR', label: 'South Africa (ZAR)' },
+  { code: 'TZ', currency: 'TZS', label: 'Tanzania (TZS)' },
+];
+
 function FundTokensDialog() {
+  const [method, setMethod] = useState<'crypto' | 'fiat'>('crypto');
   const [amount, setAmount] = useState('10');
   const [currency, setCurrency] = useState<'USDC' | 'USDT'>('USDT');
+  const [countryCode, setCountryCode] = useState(FLUTTERWAVE_FUNDING_COUNTRIES[0].code);
   const [message, setMessage] = useState<string | null>(null);
   const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [requestOtp, { isLoading: isRequestingOtp }] = useRequestDepositOtpMutation();
   const [createDeposit, { isLoading: isCreating }] = useCreateTokenDepositMutation();
+  const [requestFlutterwaveOtp, { isLoading: isRequestingFlutterwaveOtp }] =
+    useRequestFlutterwaveDepositOtpMutation();
+  const [createFlutterwaveDeposit, { isLoading: isCreatingFlutterwave }] =
+    useCreateFlutterwaveDepositMutation();
+
+  const selectedCountry =
+    FLUTTERWAVE_FUNDING_COUNTRIES.find((c) => c.code === countryCode) ??
+    FLUTTERWAVE_FUNDING_COUNTRIES[0];
 
   async function submitAmount(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
     try {
       const usdAmount = Number(amount);
-      const result = await requestOtp({ usdAmount, currency }).unwrap();
-      setOtpRequestId(result.otpRequestId);
+      if (method === 'crypto') {
+        const result = await requestOtp({ usdAmount, currency }).unwrap();
+        setOtpRequestId(result.otpRequestId);
+      } else {
+        const result = await requestFlutterwaveOtp({
+          usdAmount,
+          currency: selectedCountry.currency,
+        }).unwrap();
+        setOtpRequestId(result.otpRequestId);
+      }
     } catch (error) {
       setMessage(normalizeErrorMessage(error, 'Could not send a confirmation code.'));
     }
@@ -3180,13 +3209,24 @@ function FundTokensDialog() {
     if (!otpRequestId) return;
     setMessage(null);
     try {
-      const result = await createDeposit({
-        usdAmount: Number(amount),
-        currency,
-        otpRequestId,
-        code,
-      }).unwrap();
-      window.location.assign(result.hostedCheckoutUrl);
+      if (method === 'crypto') {
+        const result = await createDeposit({
+          usdAmount: Number(amount),
+          currency,
+          otpRequestId,
+          code,
+        }).unwrap();
+        window.location.assign(result.hostedCheckoutUrl);
+      } else {
+        const result = await createFlutterwaveDeposit({
+          usdAmount: Number(amount),
+          currency: selectedCountry.currency,
+          country: selectedCountry.code,
+          otpRequestId,
+          code,
+        }).unwrap();
+        window.location.assign(result.hostedCheckoutUrl);
+      }
     } catch (error) {
       setMessage(normalizeErrorMessage(error, 'Could not start DL funding.'));
     }
@@ -3197,6 +3237,9 @@ function FundTokensDialog() {
     setCode('');
     setMessage(null);
   }
+
+  const isRequestingCode = method === 'crypto' ? isRequestingOtp : isRequestingFlutterwaveOtp;
+  const isOpeningCheckout = method === 'crypto' ? isCreating : isCreatingFlutterwave;
 
   return (
     <Dialog onOpenChange={(open) => !open && reset()}>
@@ -3234,7 +3277,7 @@ function FundTokensDialog() {
             <ActionButton
               className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
               disabled={code.length !== 6}
-              pending={isCreating}
+              pending={isOpeningCheckout}
               pendingLabel="Opening checkout"
               type="submit"
             >
@@ -3243,8 +3286,36 @@ function FundTokensDialog() {
           </form>
         </DialogContent>
       ) : (
-        <DialogContent title="Fund DL" description="Continue to secure USDC or USDT checkout.">
+        <DialogContent
+          title="Fund DL"
+          description="Continue to secure checkout for your chosen payment method."
+        >
           <form className="grid gap-4" onSubmit={submitAmount}>
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-bold">Payment method</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    { value: 'crypto', label: 'Stablecoin' },
+                    { value: 'fiat', label: 'Bank / Mobile Money' },
+                  ] as const
+                ).map((option) => (
+                  <label
+                    className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border font-extrabold ${method === option.value ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
+                    key={option.value}
+                  >
+                    <input
+                      className="sr-only"
+                      checked={method === option.value}
+                      name="method"
+                      onChange={() => setMethod(option.value)}
+                      type="radio"
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <label className="grid gap-1.5 text-sm font-bold">
               Amount in USD
               <input
@@ -3257,26 +3328,43 @@ function FundTokensDialog() {
                 value={amount}
               />
             </label>
-            <fieldset className="grid gap-2">
-              <legend className="mb-1 text-sm font-bold">Payment currency</legend>
-              <div className="grid grid-cols-2 gap-2">
-                {(['USDT', 'USDC'] as const).map((option) => (
-                  <label
-                    className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border font-extrabold ${currency === option ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
-                    key={option}
-                  >
-                    <input
-                      className="sr-only"
-                      checked={currency === option}
-                      name="currency"
-                      onChange={() => setCurrency(option)}
-                      type="radio"
-                    />
-                    {option}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            {method === 'crypto' ? (
+              <fieldset className="grid gap-2">
+                <legend className="mb-1 text-sm font-bold">Payment currency</legend>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['USDT', 'USDC'] as const).map((option) => (
+                    <label
+                      className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border font-extrabold ${currency === option ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
+                      key={option}
+                    >
+                      <input
+                        className="sr-only"
+                        checked={currency === option}
+                        name="currency"
+                        onChange={() => setCurrency(option)}
+                        type="radio"
+                      />
+                      {option}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ) : (
+              <label className="grid gap-1.5 text-sm font-bold">
+                Country
+                <select
+                  className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                  onChange={(event) => setCountryCode(event.target.value)}
+                  value={countryCode}
+                >
+                  {FLUTTERWAVE_FUNDING_COUNTRIES.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {message && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
                 {message}
@@ -3284,7 +3372,7 @@ function FundTokensDialog() {
             )}
             <ActionButton
               className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
-              pending={isRequestingOtp}
+              pending={isRequestingCode}
               pendingLabel="Sending code"
               type="submit"
             >

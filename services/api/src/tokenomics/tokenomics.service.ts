@@ -27,6 +27,14 @@ export interface ConfirmedNowPaymentsReserveInput {
   payCurrency?: string | null;
 }
 
+export interface ConfirmedFlutterwaveReserveInput {
+  depositId: string;
+  flutterwaveTxId: string;
+  txRef: string;
+  currency: string;
+  usdAmount: Prisma.Decimal | number | string;
+}
+
 export interface LockUnlockInput {
   amount: Prisma.Decimal | number | string;
   idempotencyKey: string;
@@ -96,6 +104,58 @@ export class TokenomicsService {
           providerPaymentId: input.providerPaymentId ?? null,
           requestedCurrency: input.currency,
           payCurrency: input.payCurrency ?? null,
+        },
+        settledAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Parallel to recordConfirmedNowPaymentsDepositTx rather than a shared,
+   * provider-parametrized method -- keeps this new rail from touching the
+   * already-working NOWPayments reserve-crediting path (same reasoning as
+   * FlutterwaveWebhookEvent/FlutterwavePayoutEvent being separate tables
+   * rather than a generic discriminated one).
+   */
+  async recordConfirmedFlutterwaveDeposit(input: ConfirmedFlutterwaveReserveInput) {
+    return this.prisma.$transaction((tx) => this.recordConfirmedFlutterwaveDepositTx(tx, input));
+  }
+
+  async recordConfirmedFlutterwaveDepositTx(
+    tx: Prisma.TransactionClient,
+    input: ConfirmedFlutterwaveReserveInput,
+  ) {
+    const asset = input.currency.toUpperCase();
+    const reserveAccount = await tx.reserveAccount.upsert({
+      where: { provider_asset_network: { provider: 'flutterwave', asset, network: '' } },
+      update: {},
+      create: { provider: 'flutterwave', asset, network: '', currency: 'USD' },
+    });
+
+    const normalizedUsd = new Prisma.Decimal(input.usdAmount);
+    if (normalizedUsd.lte(0)) {
+      throw new BadRequestException('A confirmed provider payment must have a positive amount');
+    }
+
+    return tx.reserveTransaction.upsert({
+      where: { idempotencyKey: `flutterwave:deposit:${input.depositId}` },
+      update: {},
+      create: {
+        reserveAccountId: reserveAccount.id,
+        type: ReserveTransactionType.PAYMENT_FUNDING,
+        status: ReserveTransactionStatus.ELIGIBLE,
+        direction: ReserveDirection.CREDIT,
+        amount: normalizedUsd,
+        eligibleUsdAmount: normalizedUsd,
+        normalizationRate: new Prisma.Decimal(1),
+        providerReference: input.flutterwaveTxId,
+        sourceReference: input.depositId,
+        idempotencyKey: `flutterwave:deposit:${input.depositId}`,
+        reason: 'Signature-verified Flutterwave payment',
+        metadata: {
+          flutterwaveTxId: input.flutterwaveTxId,
+          txRef: input.txRef,
+          currency: input.currency,
         },
         settledAt: new Date(),
       },

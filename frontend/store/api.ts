@@ -773,6 +773,7 @@ export interface PublicClientSettings {
   tawkToEnabled: boolean;
   tawkToPropertyId: string | null;
   tawkToWidgetId: string | null;
+  supportChatMode: 'NONE' | 'TAWK' | 'AI';
 }
 
 export type EarningsChartRange = 'week' | 'month' | 'year';
@@ -976,6 +977,7 @@ export interface PlatformSettings {
   tawkToEnabled: boolean;
   tawkToPropertyId: string | null;
   tawkToWidgetId: string | null;
+  supportChatMode: 'NONE' | 'TAWK' | 'AI';
   wordStuckTimeoutMinutes: number;
   scoringSlaMinutes: number;
   auditHoldEveryNSubmissions: number;
@@ -1055,6 +1057,7 @@ export interface PlatformSettingsInput {
   tawkToEnabled?: boolean;
   tawkToPropertyId?: string;
   tawkToWidgetId?: string;
+  supportChatMode?: 'NONE' | 'TAWK' | 'AI';
   wordStuckTimeoutMinutes?: number;
   scoringSlaMinutes?: number;
   auditHoldEveryNSubmissions?: number;
@@ -1939,6 +1942,24 @@ export const dialectivaApi = createApi({
       { usdAmount: number; currency: 'USDC' | 'USDT'; otpRequestId: string; code: string }
     >({
       query: (body) => ({ url: '/wallet/deposits', method: 'POST', body }),
+    }),
+    requestFlutterwaveDepositOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { usdAmount: number; currency: string }
+    >({
+      query: (body) => ({ url: '/wallet/deposits/flutterwave/otp', method: 'POST', body }),
+    }),
+    createFlutterwaveDeposit: builder.mutation<
+      { depositId: string; hostedCheckoutUrl: string },
+      { usdAmount: number; currency: string; country: string; otpRequestId: string; code: string }
+    >({
+      query: (body) => ({ url: '/wallet/deposits/flutterwave', method: 'POST', body }),
+    }),
+    verifyFlutterwaveDeposit: builder.query<
+      { depositId: string; status: string; credited: boolean },
+      string
+    >({
+      query: (id) => ({ url: `/wallet/deposits/flutterwave/${id}/verify` }),
     }),
     requestWithdrawalOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
@@ -2825,6 +2846,12 @@ export const dialectivaApi = createApi({
     getPublicClientSettings: builder.query<PublicClientSettings, void>({
       query: () => '/settings/public',
     }),
+    chatWithAssistant: builder.mutation<
+      { message: string },
+      { message: string; history: Array<{ role: 'user' | 'assistant'; content: string }> }
+    >({
+      query: (body) => ({ url: '/assistant/chat', method: 'POST', body }),
+    }),
     updatePlatformSettings: builder.mutation<PlatformSettings, PlatformSettingsInput>({
       query: (body) => ({
         url: '/admin/platform-settings',
@@ -3020,6 +3047,9 @@ export const {
   useSubmitWordRecordingMutation,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
+  useRequestFlutterwaveDepositOtpMutation,
+  useCreateFlutterwaveDepositMutation,
+  useLazyVerifyFlutterwaveDepositQuery,
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
   useListAdminWithdrawalsQuery,
@@ -3136,6 +3166,7 @@ export const {
   useGenerateDialectKeyboardLayoutMutation,
   useGetPlatformSettingsQuery,
   useGetPublicClientSettingsQuery,
+  useChatWithAssistantMutation,
   useUpdatePlatformSettingsMutation,
   useGetApiAccessTokensQuery,
   useSetApiAccessTokenMutation,

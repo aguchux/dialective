@@ -79,6 +79,7 @@ describe('WalletController NOWPayments IPN', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
     return { controller, prisma, tx };
   }
@@ -158,6 +159,186 @@ describe('WalletController NOWPayments IPN', () => {
   });
 });
 
+describe('WalletController Flutterwave webhook', () => {
+  const rawBody = Buffer.from(JSON.stringify({ event: 'charge.completed' }));
+
+  function chargeCompletedRequest(
+    dataOverrides: Record<string, unknown> = {},
+    bodyOverrides: Record<string, unknown> = {},
+  ) {
+    const body = {
+      event: 'charge.completed',
+      data: {
+        id: 998877,
+        tx_ref: 'deposit-flw-1',
+        status: 'successful',
+        amount: 5000,
+        currency: 'NGN',
+        ...dataOverrides,
+      },
+      ...bodyOverrides,
+    };
+    return {
+      rawBody,
+      body,
+      headers: { 'verif-hash': 'valid-hash' },
+    } as unknown as Parameters<WalletController['handleFlutterwaveWebhook']>[0];
+  }
+
+  function setup(eventOverrides: Record<string, unknown> = {}) {
+    const event = { id: 'fw-event-1', processedAt: null, ...eventOverrides };
+    const tx = {
+      deposit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
+      wallet: { update: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma: any = {
+      flutterwaveWebhookEvent: {
+        upsert: jest.fn().mockResolvedValue(event),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      deposit: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'deposit-1',
+          walletId: 'wallet-1',
+          providerChargeId: 'deposit-flw-1',
+          currency: 'NGN',
+          usdAmount: { toString: () => '10' },
+          tokenAmount: 100,
+          status: 'pending',
+        }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'deposit-1',
+          walletId: 'wallet-1',
+          providerChargeId: 'deposit-flw-1',
+          currency: 'NGN',
+          usdAmount: { toString: () => '10' },
+          tokenAmount: 100,
+          status: 'pending',
+          wallet: { user: { id: 'user-1', referredById: null } },
+        }),
+      },
+      referralSettings: {
+        upsert: jest
+          .fn()
+          .mockResolvedValue({ fundingBonusEnabled: false, fundingBonusRate: { gt: () => false } }),
+      },
+      distributorSettings: {
+        upsert: jest.fn().mockResolvedValue({
+          enabled: false,
+          multiLevelReferralEnabled: false,
+          maxReferralDepth: 0,
+        }),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'user-1', referredById: null }),
+      },
+    };
+    prisma.$transaction = jest.fn(async (input: unknown) => {
+      if (typeof input === 'function') return (input as (tx: unknown) => unknown)(tx);
+      return Promise.all(input as Promise<unknown>[]);
+    });
+    const flutterwave = {
+      verifyWebhookSignature: jest.fn().mockReturnValue(true),
+      getWebhookEventHash: jest.fn().mockReturnValue('fw-event-hash'),
+    };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      flutterwave as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { controller, prisma, tx, flutterwave };
+  }
+
+  it('credits a successful charge in one atomic transaction', async () => {
+    const { controller, prisma, tx } = setup();
+    const req = chargeCompletedRequest();
+
+    await expect(controller.handleFlutterwaveWebhook(req)).resolves.toEqual({
+      received: true,
+      credited: true,
+      status: 'successful',
+    });
+    expect(prisma.deposit.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { providerChargeId: 'deposit-flw-1' } }),
+    );
+    expect(tx.deposit.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'deposit-1', status: { not: 'confirmed' } } }),
+    );
+    expect(tx.ledgerEntry.create).toHaveBeenCalledTimes(1);
+    expect(tx.wallet.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a request with no raw body before touching the database', async () => {
+    const { controller, prisma } = setup();
+    const req = {
+      ...chargeCompletedRequest(),
+      rawBody: undefined,
+    } as unknown as Parameters<WalletController['handleFlutterwaveWebhook']>[0];
+
+    await expect(controller.handleFlutterwaveWebhook(req)).rejects.toThrow(
+      'Missing raw request body',
+    );
+    expect(prisma.flutterwaveWebhookEvent.upsert).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid signature before persistence', async () => {
+    const { controller, prisma, flutterwave } = setup();
+    flutterwave.verifyWebhookSignature.mockReturnValue(false);
+
+    await expect(controller.handleFlutterwaveWebhook(chargeCompletedRequest())).rejects.toThrow(
+      'Invalid webhook signature',
+    );
+    expect(prisma.flutterwaveWebhookEvent.upsert).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges an already processed duplicate without touching the deposit', async () => {
+    const { controller, prisma } = setup({ processedAt: new Date() });
+
+    await expect(controller.handleFlutterwaveWebhook(chargeCompletedRequest())).resolves.toEqual({
+      received: true,
+      duplicate: true,
+    });
+    expect(prisma.deposit.findUnique).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('does not credit a non-successful charge status', async () => {
+    const { controller, prisma, tx } = setup();
+
+    await expect(
+      controller.handleFlutterwaveWebhook(chargeCompletedRequest({ status: 'failed' })),
+    ).resolves.toEqual({ received: true, matched: false });
+    expect(prisma.deposit.findUnique).not.toHaveBeenCalled();
+    expect(tx.ledgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges without crediting when no deposit matches the tx_ref', async () => {
+    const { controller, prisma, tx } = setup();
+    prisma.deposit.findUnique.mockResolvedValue(null);
+
+    await expect(controller.handleFlutterwaveWebhook(chargeCompletedRequest())).resolves.toEqual({
+      received: true,
+      matched: false,
+    });
+    expect(tx.ledgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('ignores non-charge event types', async () => {
+    const { controller, prisma } = setup();
+    const req = chargeCompletedRequest({}, { event: 'transfer.completed' });
+
+    await expect(controller.handleFlutterwaveWebhook(req)).resolves.toEqual({
+      received: true,
+      matched: false,
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
 describe('WalletController withdrawal payout automation', () => {
   const decimal = (value: number) => ({ toNumber: () => value, toString: () => String(value) });
 
@@ -219,6 +400,7 @@ describe('WalletController withdrawal payout automation', () => {
     const controller = new WalletController(
       prisma as never,
       nowPayments as never,
+      {} as never,
       platformSettings as never,
       otp as never,
       {} as never,
@@ -319,6 +501,7 @@ describe('WalletController withdrawal payout automation', () => {
     const controllerWithFailingProvider = new WalletController(
       prisma as never,
       nowPayments as never,
+      {} as never,
       platformSettings as never,
       otp as never,
       {} as never,
@@ -439,6 +622,7 @@ describe('WalletController earning history', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await expect(
@@ -528,6 +712,7 @@ describe('WalletController admin leaderboard', () => {
     };
     const controller = new WalletController(
       prisma as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -671,6 +856,7 @@ describe('WalletController paginated leaderboard', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
     return { controller, prisma };
   }
@@ -743,6 +929,7 @@ describe('WalletController admin training payouts', () => {
     const controller = new WalletController(
       prisma as never,
       {} as never,
+      {} as never,
       platformSettings as never,
       {} as never,
       mail as never,
@@ -804,6 +991,7 @@ describe('WalletController admin wallet adjustments', () => {
     const mail = { sendTrainingPayoutCreditedEmail: jest.fn() };
     const controller = new WalletController(
       prisma as never,
+      {} as never,
       {} as never,
       platformSettings as never,
       otp as never,

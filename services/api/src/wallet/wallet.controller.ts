@@ -18,6 +18,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
@@ -44,7 +45,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { OtpService } from '../otp/otp.service';
 import { NowPaymentsService } from './nowpayments.service';
+import { FlutterwaveService } from './flutterwave.service';
 import { CreateDepositDto } from './dto/create-deposit.dto';
+import { CreateFlutterwaveDepositDto } from './dto/create-flutterwave-deposit.dto';
+import { RequestFlutterwaveDepositOtpDto } from './dto/request-flutterwave-deposit-otp.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { RequestWithdrawalOtpDto } from './dto/request-withdrawal-otp.dto';
 import { RequestDepositOtpDto } from './dto/request-deposit-otp.dto';
@@ -120,6 +124,7 @@ export class WalletController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly nowPayments: NowPaymentsService,
+    private readonly flutterwave: FlutterwaveService,
     private readonly platformSettings: PlatformSettingsService,
     private readonly otp: OtpService,
     private readonly mail: MailService,
@@ -638,6 +643,143 @@ export class WalletController {
     return { depositId: deposit.id, hostedCheckoutUrl: invoice.invoiceUrl };
   }
 
+  @Post('wallet/deposits/flutterwave/otp')
+  @UseGuards(JwtAuthGuard, UserThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
+  async requestFlutterwaveDepositOtp(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: RequestFlutterwaveDepositOtpDto,
+  ) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    // Same context-hash shape as the crypto deposit flow -- usdAmount and
+    // currency are what economically matter, so this reuses
+    // depositContextHash as-is rather than a Flutterwave-specific variant.
+    const contextHash = depositContextHash({ usdAmount: body.usdAmount, currency: body.currency });
+    return this.otp.issueForUser(req.user.sub, OtpPurpose.DEPOSIT, user.email, contextHash);
+  }
+
+  /**
+   * Sibling to createDeposit (which stays NOWPayments-only) rather than a
+   * branch inside it -- keeps each provider's request/response shape
+   * independently typed, matching the withdrawal side's
+   * submit-nowpayments/submit-flutterwave sibling pattern. The trainer's
+   * usdAmount stays the accounting-of-record figure (deposit/withdrawal
+   * accounting is USD-denominated throughout this codebase, see
+   * currency-rate.util.ts's doc comment); it is converted to the target
+   * fiat currency only at the point of calling Flutterwave, using
+   * Country.usdExchangeRate, since Flutterwave charges the user in their
+   * local currency.
+   */
+  @Post('wallet/deposits/flutterwave')
+  @UseGuards(JwtAuthGuard, UserThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60 * 60 * 1000 } })
+  async createFlutterwaveDeposit(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: CreateFlutterwaveDepositDto,
+  ) {
+    if (!(await this.platformSettings.isFlutterwaveFundingEnabled())) {
+      throw new UnprocessableEntityException('Fiat funding is currently disabled');
+    }
+
+    await this.otp.verify({
+      otpRequestId: body.otpRequestId,
+      userId: req.user.sub,
+      purpose: OtpPurpose.DEPOSIT,
+      code: body.code,
+      contextHash: depositContextHash({ usdAmount: body.usdAmount, currency: body.currency }),
+    });
+
+    const allowedCurrencies = await this.platformSettings.getAllowedFlutterwaveCurrencies();
+    if (!allowedCurrencies.includes(body.currency.toUpperCase())) {
+      throw new UnprocessableEntityException(`${body.currency} is not an allowed funding currency`);
+    }
+    const allowedCountries = await this.platformSettings.getAllowedFlutterwaveCountries();
+    if (!allowedCountries.includes(body.country.toUpperCase())) {
+      throw new UnprocessableEntityException(`${body.country} is not an allowed funding country`);
+    }
+
+    const country = await this.prisma.country.findUnique({ where: { code: body.country } });
+    if (!country?.usdExchangeRate) {
+      throw new UnprocessableEntityException(
+        'No exchange rate is available for this country yet -- try again shortly',
+      );
+    }
+
+    const wallet = await this.getOrCreateWallet(req.user.sub);
+    const rate = await this.getCurrentTokenUsdRate();
+    const tokenAmount = usdToTokens(body.usdAmount, rate);
+    const localAmount = body.usdAmount * country.usdExchangeRate.toNumber();
+
+    const deposit = await this.prisma.deposit.create({
+      data: {
+        walletId: wallet.id,
+        provider: 'flutterwave',
+        providerChargeId: `pending-${randomUUID()}`, // replaced once we have a real tx_ref
+        currency: body.currency,
+        usdAmount: body.usdAmount,
+        tokenAmount,
+        status: 'pending',
+      },
+    });
+
+    const frontend = process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
+    const redirectUrl = new URL('/wallet/funding/flutterwave/callback', frontend).toString();
+    const txRef = `deposit-${deposit.id}`;
+
+    let payment;
+    try {
+      payment = await this.flutterwave.createPayment({
+        amount: Number(localAmount.toFixed(2)),
+        currency: body.currency.toUpperCase(),
+        txRef,
+        redirectUrl,
+        customerEmail: req.user.email,
+      });
+    } catch (err) {
+      await this.prisma.deposit.update({ where: { id: deposit.id }, data: { status: 'failed' } });
+      throw err;
+    }
+
+    await this.prisma.deposit.update({
+      where: { id: deposit.id },
+      data: { providerChargeId: txRef },
+    });
+
+    return { depositId: deposit.id, hostedCheckoutUrl: payment.link };
+  }
+
+  /**
+   * Belt-and-suspenders alongside the webhook (doc SS32: "never credit
+   * funding based only on frontend redirect success") -- the frontend
+   * callback page calls this after Flutterwave redirects back, re-verifying
+   * server-side via the same reference the deposit was created with. Either
+   * this call or the webhook may arrive first; both funnel through the same
+   * status!=='confirmed' guard, so whichever lands first credits and the
+   * other becomes a no-op.
+   */
+  @Get('wallet/deposits/flutterwave/:id/verify')
+  @UseGuards(JwtAuthGuard)
+  async verifyFlutterwaveDeposit(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { id },
+      include: { wallet: true },
+    });
+    if (!deposit || deposit.wallet.userId !== req.user.sub) {
+      throw new NotFoundException('Deposit not found');
+    }
+    if (deposit.status === 'confirmed') {
+      return { depositId: deposit.id, status: 'confirmed', credited: true };
+    }
+
+    const verification = await this.flutterwave.verifyPaymentByReference(deposit.providerChargeId);
+    if (verification.status !== 'successful') {
+      return { depositId: deposit.id, status: verification.status ?? 'pending', credited: false };
+    }
+
+    const result = await this.creditFlutterwaveDeposit(deposit.id, verification);
+    return { depositId: deposit.id, status: 'confirmed', credited: result };
+  }
+
   /**
    * NOWPayments can't send a JWT, so this route carries no JwtAuthGuard --
    * trust is instead established by verifying the HMAC-SHA512 signature
@@ -811,6 +953,175 @@ export class WalletController {
     await this.prisma.nowPaymentsIpnEvent.update({
       where: { id: eventId },
       data: { depositId, processedAt: new Date(), processingError },
+    });
+  }
+
+  /**
+   * No JwtAuthGuard -- Flutterwave can't send a JWT, trust comes from
+   * verifyWebhookSignature instead (see flutterwave.service.ts's doc
+   * comment on the two header schemes it checks). Needs the raw request
+   * body (main.ts's `rawBody: true`), not the parsed one, since
+   * Flutterwave's HMAC-SHA256 signature is documented as being computed
+   * over raw bytes -- unlike NOWPayments' IPN signature, which verifies
+   * against a re-serialized, sorted parsed body and needs no raw body at
+   * all. Handles both charge (funding) and transfer (payout) event types
+   * on one URL, since that's the typical single-webhook Flutterwave
+   * dashboard setup; Stage 3 will add the transfer.completed branch here.
+   */
+  @Post('wallet/webhooks/flutterwave')
+  @HttpCode(HttpStatus.OK)
+  async handleFlutterwaveWebhook(@Req() req: Request & { rawBody?: Buffer }) {
+    const rawBody = req.rawBody;
+    if (!rawBody) {
+      throw new UnauthorizedException('Missing raw request body');
+    }
+    const headers: Record<string, string | undefined> = {
+      'verif-hash': req.headers['verif-hash'] as string | undefined,
+      'flutterwave-signature': req.headers['flutterwave-signature'] as string | undefined,
+    };
+    if (!this.flutterwave.verifyWebhookSignature(rawBody, headers)) {
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const eventType = flwString(body.event);
+    const data = body.data as Record<string, unknown> | undefined;
+
+    // Only funding (charge.completed) events are handled in Stage 2; a
+    // transfer.completed branch is added in Stage 3 alongside payouts.
+    if (eventType !== 'charge.completed' || !data) {
+      return { received: true, matched: false };
+    }
+
+    const txRef = flwString(data.tx_ref);
+    const flutterwaveTxId = flwString(data.id);
+    const status = flwString(data.status)?.toLowerCase();
+    const eventHash = this.flutterwave.getWebhookEventHash(rawBody);
+
+    const event = await this.prisma.flutterwaveWebhookEvent.upsert({
+      where: { eventHash },
+      update: {},
+      create: {
+        eventHash,
+        txRef,
+        flutterwaveTxId,
+        eventType,
+        providerStatus: status,
+        payload: body as Prisma.InputJsonValue,
+      },
+    });
+    if (event.processedAt) {
+      return { received: true, duplicate: true };
+    }
+
+    if (!txRef || status !== 'successful') {
+      await this.completeFlutterwaveWebhookEvent(event.id, undefined, 'Not a successful charge');
+      return { received: true, matched: false };
+    }
+
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { providerChargeId: txRef },
+    });
+    if (!deposit) {
+      this.logger.warn(`Flutterwave webhook did not match a deposit: tx_ref=${txRef}`);
+      await this.completeFlutterwaveWebhookEvent(event.id, undefined, 'Deposit not found');
+      return { received: true, matched: false };
+    }
+
+    const credited = await this.creditFlutterwaveDeposit(deposit.id, {
+      flutterwaveTxId: flutterwaveTxId ?? txRef,
+      txRef,
+      status: status ?? null,
+    });
+    await this.completeFlutterwaveWebhookEvent(event.id, deposit.id);
+    this.logger.log(
+      `Flutterwave webhook status=${status} deposit=${deposit.id} credited=${credited}`,
+    );
+    return { received: true, credited, status };
+  }
+
+  private async completeFlutterwaveWebhookEvent(
+    eventId: string,
+    depositId?: string,
+    processingError?: string,
+  ) {
+    await this.prisma.flutterwaveWebhookEvent.update({
+      where: { id: eventId },
+      data: { depositId, processedAt: new Date(), processingError },
+    });
+  }
+
+  /**
+   * Shared by the webhook and the frontend-redirect verify endpoint -- both
+   * arrive at "a provider-confirmed successful payment for this deposit,"
+   * whichever gets there first credits, the other is a no-op via the
+   * status!=='confirmed' atomic claim (same updateMany-guarded pattern
+   * NOWPayments' handler uses).
+   */
+  private async creditFlutterwaveDeposit(
+    depositId: string,
+    verification: { flutterwaveTxId: string; txRef: string | null; status: string | null },
+  ): Promise<boolean> {
+    const deposit = await this.prisma.deposit.findUniqueOrThrow({
+      where: { id: depositId },
+      include: { wallet: { include: { user: true } } },
+    });
+
+    const fundingBonuses = await creditFundingReferralBonusesOps(
+      this.prisma,
+      deposit.wallet.user.id,
+      deposit.tokenAmount,
+      deposit.id,
+    );
+
+    return this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const claimed = await tx.deposit.updateMany({
+        where: { id: deposit.id, status: { not: 'confirmed' } },
+        data: {
+          status: 'confirmed',
+          confirmedAt: now,
+          providerPaymentId: verification.flutterwaveTxId,
+          providerStatus: verification.status,
+          lastIpnAt: now,
+        },
+      });
+      if (claimed.count === 0) {
+        return false;
+      }
+
+      await tx.ledgerEntry.create({
+        data: {
+          walletId: deposit.walletId,
+          type: 'DEPOSIT',
+          amount: deposit.tokenAmount,
+          reference: deposit.id,
+        },
+      });
+      await tx.wallet.update({
+        where: { id: deposit.walletId },
+        data: { balance: { increment: deposit.tokenAmount } },
+      });
+
+      if (this.tokenomics) {
+        await this.tokenomics.recordConfirmedFlutterwaveDepositTx(tx, {
+          depositId: deposit.id,
+          flutterwaveTxId: verification.flutterwaveTxId,
+          txRef: deposit.providerChargeId,
+          currency: deposit.currency,
+          usdAmount: deposit.usdAmount,
+        });
+      }
+
+      for (const entry of fundingBonuses.entries) {
+        await tx.ledgerEntry.create({ data: entry });
+        await tx.wallet.update({
+          where: { id: entry.walletId },
+          data: { balance: { increment: entry.amount } },
+        });
+      }
+
+      return true;
     });
   }
 
@@ -2009,6 +2320,16 @@ export class WalletController {
       };
     });
   }
+}
+
+function flwString(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
 }
 
 function ipnString(value: unknown): string | undefined {

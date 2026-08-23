@@ -25,7 +25,14 @@ function parseAllowedOrigins(): string[] {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true populates req.rawBody (a Buffer) alongside the normal
+  // parsed req.body on every request -- needed by the Flutterwave webhook
+  // handler, whose HMAC-SHA256 signature is documented as being computed
+  // over the raw request bytes, not a re-serialization of the parsed JSON
+  // (unlike NOWPayments' IPN signature, which verifies against sorted
+  // parsed JSON and needs no raw body at all). Harmless for every other
+  // route -- they just never read req.rawBody.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.use(helmet());
 
