@@ -1,5 +1,6 @@
 import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
+import type { PayoutProvider, ProviderPayoutStatus } from './payout-provider.interface';
 
 const FLUTTERWAVE_API_BASE = 'https://api.flutterwave.com/v3';
 
@@ -62,7 +63,7 @@ export interface ResolveAccountResult {
  * surfaced as a generic BadGatewayException.
  */
 @Injectable()
-export class FlutterwaveService {
+export class FlutterwaveService implements PayoutProvider {
   private readonly logger = new Logger(FlutterwaveService.name);
 
   private get secretKey(): string {
@@ -238,6 +239,12 @@ export class FlutterwaveService {
       headers: this.authHeaders(),
     });
     return this.parseTransferResponse(res, 'getTransferStatus', transferId);
+  }
+
+  /** PayoutProvider adapter -- Flutterwave's own vocabulary is "transfer", not "payout". */
+  async getPayoutStatus(transferId: string): Promise<ProviderPayoutStatus> {
+    const { transferId: payoutId, status, raw } = await this.getTransferStatus(transferId);
+    return { payoutId, status, raw };
   }
 
   private async parseTransferResponse(

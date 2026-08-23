@@ -1,5 +1,6 @@
 import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
+import type { PayoutProvider, ProviderPayoutStatus } from './payout-provider.interface';
 
 const NOWPAYMENTS_API_BASE = 'https://api.nowpayments.io/v1';
 const NOWPAYMENTS_PAY_CURRENCIES = {
@@ -33,11 +34,7 @@ export interface CreatePayoutResult {
   raw: Record<string, unknown>;
 }
 
-export interface PayoutStatusResult {
-  payoutId: string;
-  status: string | null;
-  raw: Record<string, unknown>;
-}
+export type PayoutStatusResult = ProviderPayoutStatus;
 
 /**
  * Thin wrapper around NOWPayments' hosted-invoice API -- same "one class
@@ -51,7 +48,7 @@ export interface PayoutStatusResult {
  * notifies us via IPN webhook.
  */
 @Injectable()
-export class NowPaymentsService {
+export class NowPaymentsService implements PayoutProvider {
   private readonly logger = new Logger(NowPaymentsService.name);
 
   private get apiKey(): string {
