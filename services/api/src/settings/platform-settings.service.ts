@@ -369,6 +369,16 @@ export class PlatformSettingsService {
       .filter(Boolean);
   }
 
+  async isKycRequiredForWithdrawals(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.isKycRequiredForWithdrawals;
+  }
+
+  async getKycMinWithdrawalTokens(): Promise<number> {
+    const row = await this.getRow();
+    return row.kycMinWithdrawalTokens.toNumber();
+  }
+
   async getWithdrawalFeeSettings(): Promise<{
     mode: string;
     tokenAmount: number;
@@ -635,6 +645,8 @@ export class PlatformSettingsService {
       withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
       withdrawalFeePercent: row.withdrawalFeePercent.toString(),
       autoSubmitAfterApproval: row.autoSubmitAfterApproval,
+      isKycRequiredForWithdrawals: row.isKycRequiredForWithdrawals,
+      kycMinWithdrawalTokens: row.kycMinWithdrawalTokens.toString(),
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,
@@ -729,6 +741,8 @@ export class PlatformSettingsService {
     withdrawalFeeTokenAmount?: number;
     withdrawalFeePercent?: number;
     autoSubmitAfterApproval?: boolean;
+    isKycRequiredForWithdrawals?: boolean;
+    kycMinWithdrawalTokens?: number;
     authMaintenanceEnabled?: boolean;
     authMaintenanceUntil?: Date | null;
     authMaintenanceMessage?: string | null;
@@ -1048,6 +1062,8 @@ export class PlatformSettingsService {
       withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
       withdrawalFeePercent: row.withdrawalFeePercent.toString(),
       autoSubmitAfterApproval: row.autoSubmitAfterApproval,
+      isKycRequiredForWithdrawals: row.isKycRequiredForWithdrawals,
+      kycMinWithdrawalTokens: row.kycMinWithdrawalTokens.toString(),
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,
@@ -1086,6 +1102,8 @@ export class PlatformSettingsService {
       supportChat,
       manualPhone,
       phoneVerificationRequired,
+      isKycRequiredForWithdrawals,
+      kycMinWithdrawalTokens,
     ] = await Promise.all([
       this.getReferralCookiePersistSeconds(),
       this.getReferralInviteExpirySeconds(),
@@ -1098,6 +1116,8 @@ export class PlatformSettingsService {
       this.getSupportChatSettings(),
       this.getManualPhoneVerificationSettings(),
       this.isPhoneVerificationRequired(),
+      this.isKycRequiredForWithdrawals(),
+      this.getKycMinWithdrawalTokens(),
     ]);
     return {
       referralCookiePersistSeconds,
@@ -1124,6 +1144,8 @@ export class PlatformSettingsService {
       tawkToPropertyId: tawkTo.propertyId,
       tawkToWidgetId: tawkTo.widgetId,
       supportChatMode: supportChat.mode,
+      isKycRequiredForWithdrawals,
+      kycMinWithdrawalTokens: kycMinWithdrawalTokens.toString(),
     };
   }
 }

@@ -4,6 +4,15 @@ import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 import { getCurrentSession } from '@/lib/client-session';
 import { notifyAuthMaintenance } from '@/lib/auth-maintenance-signal';
 
+export type KycStatus =
+  | 'NOT_STARTED'
+  | 'IN_PROGRESS'
+  | 'IN_REVIEW'
+  | 'APPROVED'
+  | 'DECLINED'
+  | 'ABANDONED'
+  | 'EXPIRED';
+
 export interface PublicUser {
   id: string;
   firstName: string | null;
@@ -14,6 +23,8 @@ export interface PublicUser {
   emailVerified: boolean;
   phoneNumber: string | null;
   phoneVerified: boolean;
+  kycStatus: KycStatus;
+  kycVerifiedAt: string | null;
   originCountryId: string | null;
   countryId: string | null;
   dialectId: string | null;
@@ -469,6 +480,30 @@ export interface PayoutAccount {
   createdAt: string;
 }
 
+export interface KycVerification {
+  id: string;
+  userId: string;
+  user: { id: string; email: string; firstName: string | null; lastName: string | null };
+  provider: string;
+  status: KycStatus;
+  documentType: string | null;
+  documentNumberMasked: string | null;
+  faceMatchScore: string | null;
+  livenessScore: string | null;
+  declineReason: string | null;
+  webhookReceivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KycVerificationList {
+  items: KycVerification[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export type ReserveHealthStatus = 'HEALTHY' | 'WATCH' | 'RESTRICTED' | 'CRITICAL';
 
 export interface TokenomicsSupply {
@@ -781,6 +816,8 @@ export interface PublicClientSettings {
   tawkToPropertyId: string | null;
   tawkToWidgetId: string | null;
   supportChatMode: 'NONE' | 'TAWK' | 'AI';
+  isKycRequiredForWithdrawals: boolean;
+  kycMinWithdrawalTokens: string;
 }
 
 export type EarningsChartRange = 'week' | 'month' | 'year';
@@ -1030,6 +1067,8 @@ export interface PlatformSettings {
   withdrawalFeeTokenAmount: string;
   withdrawalFeePercent: string;
   autoSubmitAfterApproval: boolean;
+  isKycRequiredForWithdrawals: boolean;
+  kycMinWithdrawalTokens: string;
   authMaintenanceEnabled: boolean;
   authMaintenanceUntil: string | null;
   authMaintenanceMessage: string | null;
@@ -1115,6 +1154,8 @@ export interface PlatformSettingsInput {
   withdrawalFeeTokenAmount?: number;
   withdrawalFeePercent?: number;
   autoSubmitAfterApproval?: boolean;
+  isKycRequiredForWithdrawals?: boolean;
+  kycMinWithdrawalTokens?: number;
   authMaintenanceEnabled?: boolean;
   authMaintenanceUntil?: string | null;
   authMaintenanceMessage?: string | null;
@@ -1694,6 +1735,7 @@ export const dialectivaApi = createApi({
     'Tokenomics',
     'AssistantThread',
     'PayoutAccounts',
+    'Kyc',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -2060,6 +2102,29 @@ export const dialectivaApi = createApi({
     deletePayoutAccount: builder.mutation<{ deleted: boolean }, string>({
       query: (id) => ({ url: `/payout-accounts/${id}`, method: 'DELETE' }),
       invalidatesTags: ['PayoutAccounts'],
+    }),
+    createKycSession: builder.mutation<{ sessionId: string; url: string }, void>({
+      query: () => ({ url: '/kyc/session', method: 'POST' }),
+      invalidatesTags: ['Kyc', 'Profile'],
+    }),
+    getKycStatus: builder.query<{ kycStatus: KycStatus; kycVerifiedAt: string | null }, void>({
+      query: () => '/kyc/status',
+      providesTags: ['Kyc'],
+    }),
+    listKycVerifications: builder.query<
+      KycVerificationList,
+      { status?: KycStatus; page?: number; pageSize?: number } | void
+    >({
+      query: (params) => ({ url: '/admin/kyc', params: params ?? undefined }),
+      providesTags: ['Kyc'],
+    }),
+    getKycVerification: builder.query<KycVerification, string>({
+      query: (id) => `/admin/kyc/${id}`,
+      providesTags: ['Kyc'],
+    }),
+    refreshKycVerification: builder.mutation<KycVerification, string>({
+      query: (id) => ({ url: `/admin/kyc/${id}/refresh`, method: 'POST' }),
+      invalidatesTags: ['Kyc'],
     }),
     getTokenomicsStatus: builder.query<TokenomicsStatus, void>({
       query: () => ({ url: '/tokenomics/status' }),
@@ -3138,6 +3203,11 @@ export const {
   useCreatePayoutAccountMutation,
   useUpdatePayoutAccountMutation,
   useDeletePayoutAccountMutation,
+  useCreateKycSessionMutation,
+  useGetKycStatusQuery,
+  useListKycVerificationsQuery,
+  useGetKycVerificationQuery,
+  useRefreshKycVerificationMutation,
   useGetTokenomicsStatusQuery,
   useGetValuationHistoryQuery,
   useRecalculateValuationMutation,

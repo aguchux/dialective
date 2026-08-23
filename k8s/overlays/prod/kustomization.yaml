@@ -37,6 +37,12 @@ secretGenerator:
   - name: payout-crypto-creds
     envs:
       - secrets/payout-crypto.env
+  - name: didit-creds
+    envs:
+      - secrets/didit.env
+  - name: kyc-crypto-creds
+    envs:
+      - secrets/kyc-crypto.env
   - name: llm-creds
     envs:
       - secrets/llm.env

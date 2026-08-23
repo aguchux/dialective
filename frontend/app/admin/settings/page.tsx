@@ -14,6 +14,7 @@ import { P2PMarketSettingsPanel } from './P2PMarketSettingsPanel';
 import { SmsSettingsPanel } from './SmsSettingsPanel';
 import { WithdrawalSettingsPanel } from './WithdrawalSettingsPanel';
 import { FlutterwaveSettingsPanel } from './FlutterwaveSettingsPanel';
+import { KycSettingsPanel } from './KycSettingsPanel';
 import { MaintenanceSettingsPanel } from './MaintenanceSettingsPanel';
 import { DistributorSettingsPanel } from './DistributorSettingsPanel';
 import { LiveChatSettingsPanel } from './LiveChatSettingsPanel';
@@ -38,6 +39,7 @@ const groups = [
   { key: 'sms', label: 'SMS Providers' },
   { key: 'withdrawals', label: 'Crypto Withdrawals' },
   { key: 'flutterwave', label: 'Flutterwave (Fiat)' },
+  { key: 'kyc', label: 'Identity Verification' },
   { key: 'datasetStorage', label: 'Dataset & Storage' },
   { key: 'apiAccessTokens', label: 'API Access Tokens' },
 ] as const;
@@ -96,6 +98,7 @@ export default function AdminSettingsPage() {
             {active === 'sms' && <SmsSettingsPanel />}
             {active === 'withdrawals' && <WithdrawalSettingsPanel />}
             {active === 'flutterwave' && <FlutterwaveSettingsPanel />}
+            {active === 'kyc' && <KycSettingsPanel />}
             {active === 'datasetStorage' && <DatasetStorageSettingsPanel />}
             {active === 'apiAccessTokens' && <ApiAccessTokensSettingsPanel />}
           </div>

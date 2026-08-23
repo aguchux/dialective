@@ -72,6 +72,8 @@ export interface PublicUser {
   emailVerified: boolean;
   phoneNumber: string | null;
   phoneVerified: boolean;
+  kycStatus: string;
+  kycVerifiedAt: string | null;
   originCountryId: string | null;
   countryId: string | null;
   dialectId: string | null;
@@ -111,6 +113,8 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     emailVerified: user.emailVerified !== null,
     phoneNumber: user.phoneNumber,
     phoneVerified: user.phoneVerifiedAt !== null,
+    kycStatus: user.kycStatus,
+    kycVerifiedAt: user.kycVerifiedAt?.toISOString() ?? null,
     originCountryId: user.originCountryId,
     countryId: user.countryId,
     dialectId: user.dialectId,

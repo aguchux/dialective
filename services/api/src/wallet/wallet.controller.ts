@@ -1238,6 +1238,23 @@ export class WalletController {
         'Verify your phone number before requesting a withdrawal',
       );
     }
+    await this.requireKycIfNeeded(user.kycStatus, tokenAmount);
+  }
+
+  /**
+   * Shared by validateWithdrawalRequest and validateFiatWithdrawalRequest --
+   * both already have `user` in hand from their own findUniqueOrThrow call,
+   * so this takes the already-fetched kycStatus rather than re-querying.
+   */
+  private async requireKycIfNeeded(kycStatus: string, tokenAmount: number): Promise<void> {
+    if (!(await this.platformSettings.isKycRequiredForWithdrawals())) return;
+    const kycMinTokens = await this.platformSettings.getKycMinWithdrawalTokens();
+    if (tokenAmount < kycMinTokens) return;
+    if (kycStatus !== 'APPROVED') {
+      throw new UnprocessableEntityException(
+        'Complete identity verification before requesting a withdrawal',
+      );
+    }
   }
 
   /**
@@ -1291,6 +1308,7 @@ export class WalletController {
         'Verify your phone number before requesting a withdrawal',
       );
     }
+    await this.requireKycIfNeeded(user.kycStatus, tokenAmount);
 
     return payoutAccount;
   }

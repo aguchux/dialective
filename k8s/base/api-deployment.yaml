@@ -194,6 +194,26 @@ spec:
                 secretKeyRef:
                   name: payout-crypto-creds
                   key: payout_account_encryption_key
+            - name: DIDIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: didit-creds
+                  key: didit_api_key
+            - name: DIDIT_WORKFLOW_ID
+              valueFrom:
+                secretKeyRef:
+                  name: didit-creds
+                  key: didit_workflow_id
+            - name: DIDIT_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: didit-creds
+                  key: didit_webhook_secret
+            - name: KYC_DOCUMENT_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kyc-crypto-creds
+                  key: kyc_document_encryption_key
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:

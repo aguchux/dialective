@@ -71,6 +71,12 @@ model User {
   emailVerified                 DateTime?
   phoneNumber                   String?         @unique // E.164 international format, e.g. "+2348012345678"
   phoneVerifiedAt               DateTime?
+  // Denormalized read-cache of the latest resolved KycVerification (the
+  // KycVerification table is the source of truth/history) -- lets
+  // wallet.controller.ts's withdrawal gate check identity status without a
+  // join on every request.
+  kycStatus                     KycStatus       @default(NOT_STARTED)
+  kycVerifiedAt                 DateTime?
   emailNotificationsEnabled     Boolean         @default(true)
   smsNotificationsEnabled       Boolean         @default(true)
   marketingNotificationsEnabled Boolean         @default(false)
@@ -139,6 +145,7 @@ model User {
   authoredSystemUpdates            SystemUpdate[]                   @relation("SystemUpdateAuthor")
   apiAccessTokensUpdated           ApiAccessToken[]                 @relation("ApiAccessTokenUpdatedBy")
   payoutAccounts                   PayoutAccount[]
+  kycVerifications                 KycVerification[]
   assistantConversation            AssistantConversation?
 
   @@index([promotedById])
@@ -471,6 +478,47 @@ model ManualPhoneVerificationRequest {
   @@index([phoneNumber, status])
   @@index([verifiedByAdminId])
   @@map("manual_phone_verification_requests")
+}
+
+/// Mirrors Didit's own status vocabulary directly so the webhook handler
+/// never needs a translation layer between their value and ours.
+enum KycStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  IN_REVIEW
+  APPROVED
+  DECLINED
+  ABANDONED
+  EXPIRED
+}
+
+/// One row per verification attempt (a trainer can retry after DECLINED/
+/// EXPIRED) -- full history kept for compliance review, unlike User.kycStatus
+/// below which is a denormalized read-cache of the latest resolved attempt so
+/// withdrawal gating doesn't need a join on every request.
+model KycVerification {
+  id                    String    @id @default(uuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider              String    @default("didit")
+  providerSessionId     String    @unique
+  status                KycStatus @default(NOT_STARTED)
+  documentType          String?
+  documentNumberMasked  String?
+  faceMatchScore        Decimal?  @db.Decimal(5, 2)
+  livenessScore         Decimal?  @db.Decimal(5, 2)
+  // Full Didit decision payload (document number, name, DOB, etc.) --
+  // AES-256-GCM encrypted via kyc-crypto.util.ts, never stored plaintext.
+  // The columns above are the masked/display subset admins actually need.
+  decisionEncryptedJson Json?
+  declineReason         String?
+  webhookReceivedAt     DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("kyc_verifications")
 }
 
 enum SubmissionStatus {
@@ -1695,6 +1743,8 @@ model PlatformSettings {
   withdrawalFeeTokenAmount               Decimal   @default(0) @db.Decimal(20, 8) // flat token fee deducted from payout when withdrawalFeeMode="user" and this is > 0 (takes precedence over withdrawalFeePercent if both are set)
   withdrawalFeePercent                   Decimal   @default(0) @db.Decimal(5, 2) // percentage fee (0-100) deducted from payout when withdrawalFeeMode="user" and withdrawalFeeTokenAmount is 0
   autoSubmitAfterApproval                Boolean   @default(false) // when true, admin/withdrawals/:id/approve immediately submits to NOWPayments in the same call instead of leaving it APPROVED for a separate submit step -- defaults off per the payout-automation plan's explicit caution
+  isKycRequiredForWithdrawals            Boolean   @default(false) // master kill switch -- when true, validateWithdrawalRequest (crypto + fiat) requires User.kycStatus="APPROVED" once tokenAmount >= kycMinWithdrawalTokens; off by default until Didit credentials are configured
+  kycMinWithdrawalTokens                 Decimal   @default(0) @db.Decimal(20, 8) // withdrawals below this amount skip the KYC gate even when isKycRequiredForWithdrawals is on -- lets ops require KYC only above a threshold without a code change
   isFlutterwaveFundingEnabled            Boolean   @default(false) // master kill switch -- when false, wallet/deposits/flutterwave rejects new funding requests outright; off by default until Flutterwave credentials/allow-lists are configured
   isFlutterwavePayoutsEnabled            Boolean   @default(false) // when false, admin/withdrawals/:id/submit-flutterwave is disabled -- admins can still resolve fiat withdrawals manually (outcome=paid) while this is off
   allowedFlutterwaveCurrencies           String    @default("NGN,GHS,KES,UGX,ZAR,TZS") // CSV of currencies a fiat withdrawal/deposit's currency may be, validated app-side

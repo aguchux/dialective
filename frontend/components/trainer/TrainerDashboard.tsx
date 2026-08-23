@@ -98,6 +98,8 @@ import {
   useRequestManualPhoneVerificationMutation,
   useMarkManualPhoneVerificationSentMutation,
   useGetPublicClientSettingsQuery,
+  useGetKycStatusQuery,
+  useCreateKycSessionMutation,
   ManualPhoneVerificationRequestResult,
   useRequestP2PPaymentMethodOtpMutation,
   useRequestDepositOtpMutation,
@@ -2028,6 +2030,20 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [error, setError] = useState<string | null>(null);
   const [updateProfile, { isLoading }] = useUpdateProfileMutation();
   const { data: me } = useGetMeQuery();
+  const { data: kycStatusData } = useGetKycStatusQuery();
+  const [createKycSession, { isLoading: isStartingKyc }] = useCreateKycSessionMutation();
+  const kycStatus = kycStatusData?.kycStatus ?? 'NOT_STARTED';
+
+  async function startKycVerification() {
+    setError(null);
+    try {
+      const session = await createKycSession().unwrap();
+      window.location.href = session.url;
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not start identity verification.'));
+    }
+  }
+
   const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
   const paymentCountryCode =
     countries?.find((country) => country.id === me?.countryId)?.code ?? 'NG';
@@ -2687,6 +2703,44 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
             </div>
           )}
         </form>
+
+        <div className={`${cardClass} grid gap-4 p-5`}>
+          <SectionTitle
+            title="Identity verification"
+            subtitle="A quick ID scan and selfie, verified by Didit -- required before your first withdrawal above the platform's threshold."
+          />
+          {kycStatus === 'APPROVED' ? (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              You&apos;re verified.
+            </p>
+          ) : kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              Verification in progress -- we&apos;re reviewing your ID and selfie.
+            </p>
+          ) : (
+            <>
+              {(kycStatus === 'DECLINED' || kycStatus === 'ABANDONED' || kycStatus === 'EXPIRED') && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                  Your last verification didn&apos;t go through. Try again below.
+                </p>
+              )}
+              {error && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                  {error}
+                </p>
+              )}
+              <ActionButton
+                className="min-h-11 justify-self-start rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void startKycVerification()}
+                pending={isStartingKyc}
+                pendingLabel="Starting"
+                type="button"
+              >
+                Verify now
+              </ActionButton>
+            </>
+          )}
+        </div>
 
         <div className={`${cardClass} grid gap-4 p-5`}>
           <SectionTitle
@@ -3581,6 +3635,9 @@ function WithdrawTokensDialog({
   const [requestOtp, { isLoading: isRequestingOtp }] = useRequestWithdrawalOtpMutation();
   const [createWithdrawal, { isLoading: isSubmitting }] = useCreateWithdrawalMutation();
   const { data: payoutAccounts } = useListPayoutAccountsQuery();
+  const { data: kycStatusData } = useGetKycStatusQuery();
+  const { data: publicSettings } = useGetPublicClientSettingsQuery();
+  const [createKycSession, { isLoading: isStartingKyc }] = useCreateKycSessionMutation();
   const router = useRouter();
 
   const addressLooksValid =
@@ -3590,6 +3647,21 @@ function WithdrawTokensDialog({
   const usdAmount = amountNumber * tokenUsdRate;
   const localAmount = localCurrency ? usdAmount * Number(localCurrency.usdExchangeRate) : null;
   const selectedPayoutAccount = payoutAccounts?.find((a) => a.id === payoutAccountId);
+  const kycRequired =
+    (publicSettings?.isKycRequiredForWithdrawals ?? false) &&
+    amountNumber >= Number(publicSettings?.kycMinWithdrawalTokens ?? '0');
+  const kycStatus = kycStatusData?.kycStatus ?? 'NOT_STARTED';
+  const kycBlocked = kycRequired && kycStatus !== 'APPROVED';
+
+  async function startKycVerification() {
+    setMessage(null);
+    try {
+      const session = await createKycSession().unwrap();
+      window.location.href = session.url;
+    } catch (error) {
+      setMessage(normalizeErrorMessage(error, 'Could not start identity verification.'));
+    }
+  }
 
   function updateCurrency(currency: WithdrawalCurrency) {
     setDestinationCurrency(currency);
@@ -3715,7 +3787,58 @@ function WithdrawTokensDialog({
           <span className="sm:hidden">Withdraw</span>
         </button>
       </DialogTrigger>
-      {stage === 'success' ? (
+      {kycBlocked ? (
+        <DialogContent
+          title="Verify your identity"
+          description="A quick ID scan and selfie confirms it's really you before your first withdrawal."
+        >
+          <div className="grid gap-4">
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-line bg-surface p-6 text-center">
+              <ShieldIcon className="size-12 text-accent" aria-hidden="true" />
+              {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
+                <>
+                  <p className="font-extrabold">Verification in progress.</p>
+                  <p className="text-sm leading-relaxed text-muted">
+                    We&apos;re reviewing your ID and selfie. This usually takes a few minutes --
+                    check back shortly.
+                  </p>
+                </>
+              ) : kycStatus === 'DECLINED' || kycStatus === 'ABANDONED' || kycStatus === 'EXPIRED' ? (
+                <>
+                  <p className="font-extrabold">Verification didn&apos;t go through.</p>
+                  <p className="text-sm leading-relaxed text-muted">
+                    Contact support if you think this is a mistake, or try again below.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-extrabold">Identity verification required.</p>
+                  <p className="text-sm leading-relaxed text-muted">
+                    Withdrawals above {publicSettings?.kycMinWithdrawalTokens ?? 0} DL require a
+                    one-time ID + selfie check.
+                  </p>
+                </>
+              )}
+            </div>
+            {message && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                {message}
+              </p>
+            )}
+            {kycStatus !== 'IN_PROGRESS' && kycStatus !== 'IN_REVIEW' && (
+              <ActionButton
+                className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void startKycVerification()}
+                pending={isStartingKyc}
+                pendingLabel="Starting"
+                type="button"
+              >
+                Verify now
+              </ActionButton>
+            )}
+          </div>
+        </DialogContent>
+      ) : stage === 'success' ? (
         <DialogContent
           title="Withdrawal submitted"
           description="Your withdrawal request has been received and is now being processed."

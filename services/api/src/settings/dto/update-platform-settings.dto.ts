@@ -394,6 +394,15 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  isKycRequiredForWithdrawals?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  kycMinWithdrawalTokens?: number;
+
+  @IsOptional()
+  @IsBoolean()
   authMaintenanceEnabled?: boolean;
 
   // ISO 8601 timestamp, or null to clear it (e.g. when switching maintenance
