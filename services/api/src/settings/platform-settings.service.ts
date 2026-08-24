@@ -379,6 +379,11 @@ export class PlatformSettingsService {
     return row.kycMinWithdrawalTokens.toNumber();
   }
 
+  async isKycRequiredOnboarding(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.isKycRequiredOnboarding;
+  }
+
   async getWithdrawalFeeSettings(): Promise<{
     mode: string;
     tokenAmount: number;
@@ -647,6 +652,7 @@ export class PlatformSettingsService {
       autoSubmitAfterApproval: row.autoSubmitAfterApproval,
       isKycRequiredForWithdrawals: row.isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens: row.kycMinWithdrawalTokens.toString(),
+      isKycRequiredOnboarding: row.isKycRequiredOnboarding,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,
@@ -743,6 +749,7 @@ export class PlatformSettingsService {
     autoSubmitAfterApproval?: boolean;
     isKycRequiredForWithdrawals?: boolean;
     kycMinWithdrawalTokens?: number;
+    isKycRequiredOnboarding?: boolean;
     authMaintenanceEnabled?: boolean;
     authMaintenanceUntil?: Date | null;
     authMaintenanceMessage?: string | null;
@@ -1064,6 +1071,7 @@ export class PlatformSettingsService {
       autoSubmitAfterApproval: row.autoSubmitAfterApproval,
       isKycRequiredForWithdrawals: row.isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens: row.kycMinWithdrawalTokens.toString(),
+      isKycRequiredOnboarding: row.isKycRequiredOnboarding,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,
@@ -1104,6 +1112,7 @@ export class PlatformSettingsService {
       phoneVerificationRequired,
       isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens,
+      isKycRequiredOnboarding,
     ] = await Promise.all([
       this.getReferralCookiePersistSeconds(),
       this.getReferralInviteExpirySeconds(),
@@ -1118,6 +1127,7 @@ export class PlatformSettingsService {
       this.isPhoneVerificationRequired(),
       this.isKycRequiredForWithdrawals(),
       this.getKycMinWithdrawalTokens(),
+      this.isKycRequiredOnboarding(),
     ]);
     return {
       referralCookiePersistSeconds,
@@ -1146,6 +1156,7 @@ export class PlatformSettingsService {
       supportChatMode: supportChat.mode,
       isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens: kycMinWithdrawalTokens.toString(),
+      isKycRequiredOnboarding,
     };
   }
 }

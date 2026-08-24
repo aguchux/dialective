@@ -7,9 +7,11 @@ import { AuthPage, AuthPanel, Notice, Alert } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import {
   normalizeErrorMessage,
+  useCreateKycSessionMutation,
   useGetCountriesQuery,
   useGetDialectsQuery,
   useGetDialectVariantsQuery,
+  useGetPublicClientSettingsQuery,
   useUpdateProfileMutation,
 } from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
@@ -31,13 +33,27 @@ export default function OnboardingPage() {
   const [dialectId, setDialectId] = useState('');
   const [dialectVariantId, setDialectVariantId] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [stage, setStage] = useState<'form' | 'kyc'>('form');
+  const [kycError, setKycError] = useState<string | null>(null);
 
   const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
   const { data: dialects, isLoading: isLoadingDialects } = useGetDialectsQuery(trainingCountryId, {
     skip: !trainingCountryId,
   });
   const { data: dialectVariants } = useGetDialectVariantsQuery(dialectId, { skip: !dialectId });
+  const { data: publicSettings } = useGetPublicClientSettingsQuery();
   const [updateProfile, { isLoading: isSubmitting }] = useUpdateProfileMutation();
+  const [createKycSession, { isLoading: isStartingKyc }] = useCreateKycSessionMutation();
+
+  async function startKycVerification() {
+    setKycError(null);
+    try {
+      const session = await createKycSession().unwrap();
+      window.location.href = session.url;
+    } catch (err) {
+      setKycError(normalizeErrorMessage(err, 'Could not start identity verification.'));
+    }
+  }
 
   // Magic-link sign-in never collects a name (it's email-only by design),
   // so onboarding is the fallback place to require it before the trainer
@@ -88,7 +104,11 @@ export default function OnboardingPage() {
         firstName: profile.firstName,
         lastName: profile.lastName,
       });
-      window.location.href = '/dashboard';
+      if (publicSettings?.isKycRequiredOnboarding) {
+        setStage('kyc');
+      } else {
+        window.location.href = '/dashboard';
+      }
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to save your selection.'));
     }
@@ -100,6 +120,43 @@ export default function OnboardingPage() {
         <AuthPanel>
           <Breadcrumbs items={[{ label: 'Onboarding' }]} />
           <p className="text-muted">Loading...</p>
+        </AuthPanel>
+      </AuthPage>
+    );
+  }
+
+  if (stage === 'kyc') {
+    return (
+      <AuthPage>
+        <AuthPanel>
+          <Breadcrumbs items={[{ label: 'Onboarding' }, { label: 'Verify identity' }]} />
+          <h1 className="text-center text-[1.75rem] leading-tight">Verify your identity</h1>
+          <Notice>
+            A quick ID scan and selfie, verified by Didit, confirms it&apos;s really you. You can
+            do this now or later from your profile -- withdrawals above the platform&apos;s
+            threshold will still require it either way.
+          </Notice>
+          <div className="grid gap-2.5">
+            <ActionButton
+              className={primaryButtonClass}
+              onClick={() => void startKycVerification()}
+              pending={isStartingKyc}
+              pendingLabel="Starting"
+              type="button"
+            >
+              Verify now
+            </ActionButton>
+            <button
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-white px-3.5 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted dark:bg-surface-muted"
+              onClick={() => {
+                window.location.href = '/dashboard';
+              }}
+              type="button"
+            >
+              Do this later
+            </button>
+          </div>
+          {kycError && <Alert>{kycError}</Alert>}
         </AuthPanel>
       </AuthPage>
     );

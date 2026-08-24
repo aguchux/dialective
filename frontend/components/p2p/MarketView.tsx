@@ -18,6 +18,7 @@ import {
   P2PTrade,
   normalizeErrorMessage,
   useAcceptP2POfferMutation,
+  useCancelP2POfferMutation,
   useCreateP2POfferMutation,
   useGetMeQuery,
   useGetP2PPaymentMethodsQuery,
@@ -26,6 +27,7 @@ import {
   useGetP2PTraderProfileQuery,
   useGetPlatformSettingsQuery,
   useListMyP2PTradesQuery,
+  useListMyP2POffersQuery,
   useListP2POffersQuery,
   useMarkP2PTradePaidMutation,
   useRaiseP2PDisputeMutation,
@@ -43,7 +45,7 @@ import {
  * (word training, submissions, etc.) just to render this one panel.
  */
 export function MarketView() {
-  const [activeTab, setActiveTab] = useState<'SELL' | 'BUY' | 'TRADES'>('SELL');
+  const [activeTab, setActiveTab] = useState<'SELL' | 'BUY' | 'POSTS' | 'TRADES'>('SELL');
   const [offerType, setOfferType] = useState<'SELL' | 'BUY'>('SELL');
   const [tokenAmount, setTokenAmount] = useState('10');
   const [fiatAmount, setFiatAmount] = useState('10000');
@@ -55,11 +57,18 @@ export function MarketView() {
   const { data: methods = [] } = useGetP2PPaymentMethodsQuery();
   const { data: sellOffers = [] } = useListP2POffersQuery({ type: 'SELL' });
   const { data: buyOffers = [] } = useListP2POffersQuery({ type: 'BUY' });
-  const { data: trades = [] } = useListMyP2PTradesQuery();
+  const { data: myOffers = [] } = useListMyP2POffersQuery();
+  // Reads trigger the server-side expiry sweep, so a pending cancellation is
+  // finalized shortly after its grace window ends without user intervention.
+  const { data: trades = [] } = useListMyP2PTradesQuery(undefined, {
+    pollingInterval: 30_000,
+  });
   const { data: me } = useGetMeQuery();
   const { data: platformSettings } = useGetPlatformSettingsQuery();
   const [createOffer, { isLoading: offerSaving }] = useCreateP2POfferMutation();
   const [acceptOffer, { isLoading: accepting }] = useAcceptP2POfferMutation();
+  const [cancelOffer, { isLoading: cancellingOffer, originalArgs: cancellingOfferId }] =
+    useCancelP2POfferMutation();
   const [requestTradeOtp, { isLoading: tradeOtpSending }] = useRequestP2PTradeOtpMutation();
   const [markPaid, { isLoading: markingPaid, originalArgs: markingPaidId }] =
     useMarkP2PTradePaidMutation();
@@ -186,6 +195,23 @@ export function MarketView() {
       setOfferOtpCode('');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not verify this code'));
+    }
+  }
+
+  async function cancelPost(offer: P2POffer) {
+    if (
+      !window.confirm(
+        'Cancel this post? Any tokens locked for an active sell offer will be returned to your wallet.',
+      )
+    ) {
+      return;
+    }
+    setError('');
+    try {
+      await cancelOffer(offer.id).unwrap();
+      setActiveTab('POSTS');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not cancel this post'));
     }
   }
 
@@ -346,12 +372,13 @@ export function MarketView() {
           {[
             { id: 'SELL', label: 'Sell offers', count: sellOffers.length },
             { id: 'BUY', label: 'Buy requests', count: buyOffers.length },
+            { id: 'POSTS', label: 'My posts', count: myOffers.length },
             { id: 'TRADES', label: 'My trades', count: trades.length },
           ].map((tab) => (
             <button
               className={`min-h-10 whitespace-nowrap rounded-md px-4 text-sm font-extrabold ${activeTab === tab.id ? 'bg-accent text-white' : 'text-muted hover:bg-surface-muted'}`}
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as 'SELL' | 'BUY' | 'TRADES')}
+              onClick={() => setActiveTab(tab.id as 'SELL' | 'BUY' | 'POSTS' | 'TRADES')}
               type="button"
             >
               {tab.label} <span className="ml-1 opacity-80">{tab.count}</span>
@@ -366,6 +393,10 @@ export function MarketView() {
               disabled={marketDisabled}
               offers={sellOffers}
               onAccept={accept}
+              onCancel={cancelPost}
+              cancellingOfferId={cancellingOfferId}
+              cancellingOffer={cancellingOffer}
+              viewerId={me?.id}
               title="Sell offers"
             />
           )}
@@ -375,7 +406,19 @@ export function MarketView() {
               disabled={marketDisabled}
               offers={buyOffers}
               onAccept={accept}
+              onCancel={cancelPost}
+              cancellingOfferId={cancellingOfferId}
+              cancellingOffer={cancellingOffer}
+              viewerId={me?.id}
               title="Buy requests"
+            />
+          )}
+          {activeTab === 'POSTS' && (
+            <MyOfferList
+              offers={myOffers}
+              cancellingOffer={cancellingOffer}
+              cancellingOfferId={cancellingOfferId}
+              onCancel={cancelPost}
             />
           )}
           {activeTab === 'TRADES' && (
@@ -462,14 +505,22 @@ function MarketOfferList({
   title,
   offers,
   onAccept,
+  onCancel,
   accepting,
+  cancellingOffer,
+  cancellingOfferId,
   disabled,
+  viewerId,
 }: {
   title: string;
   offers: P2POffer[];
   onAccept: (offer: P2POffer) => void;
+  onCancel: (offer: P2POffer) => void;
   accepting: boolean;
+  cancellingOffer: boolean;
+  cancellingOfferId: string | undefined;
   disabled: boolean;
+  viewerId: string | undefined;
 }) {
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   return (
@@ -504,14 +555,34 @@ function MarketOfferList({
               {Number(offer.fiatAmount).toLocaleString()} {offer.fiatCurrency}
             </p>
             <p className="text-sm text-muted">Expires {formatDateTime(offer.expiresAt)}</p>
-            <button
-              className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50"
-              disabled={accepting || disabled}
-              onClick={() => onAccept(offer)}
-              type="button"
-            >
-              {offer.type === 'SELL' ? 'Buy DL' : 'Sell to buyer'}
-            </button>
+            {offer.userId === viewerId ? (
+              <div className="grid gap-2">
+                {offer.status === 'ACTIVE' ? (
+                  <ActionButton
+                    className="min-h-10 rounded-lg border border-line px-3 font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => onCancel(offer)}
+                    pending={cancellingOffer && cancellingOfferId === offer.id}
+                    pendingLabel="Cancelling"
+                    type="button"
+                  >
+                    Cancel post
+                  </ActionButton>
+                ) : (
+                  <p className="text-sm font-bold text-muted">
+                    This post has been accepted. Manage its protected cancellation in My trades.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <button
+                className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50"
+                disabled={accepting || disabled}
+                onClick={() => onAccept(offer)}
+                type="button"
+              >
+                {offer.type === 'SELL' ? 'Buy DL' : 'Sell to buyer'}
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -521,6 +592,101 @@ function MarketOfferList({
       />
     </section>
   );
+}
+
+function MyOfferList({
+  offers,
+  cancellingOffer,
+  cancellingOfferId,
+  onCancel,
+}: {
+  offers: P2POffer[];
+  cancellingOffer: boolean;
+  cancellingOfferId: string | undefined;
+  onCancel: (offer: P2POffer) => void;
+}) {
+  return (
+    <section>
+      <SectionTitle
+        title="My posts"
+        subtitle="Active, completed, expired, and cancelled posts are retained for your account history."
+      />
+      <div className="grid gap-3 md:grid-cols-2">
+        {offers.length === 0 && <EmptyPanel icon={Landmark} title="No posts yet" unframed />}
+        {offers.map((offer) => (
+          <div className={`${cardClass} grid gap-3 p-4`} key={offer.id}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-muted">
+                  {offer.type === 'SELL' ? 'Sell offer' : 'Buy request'}
+                </p>
+                <p className="text-2xl font-black">{formatCompactNumber(offer.tokenAmount)} DL</p>
+              </div>
+              <OfferStatusBadge status={offer.status} />
+            </div>
+            <p className="font-extrabold">
+              {Number(offer.fiatAmount).toLocaleString()} {offer.fiatCurrency}
+            </p>
+            <OfferHistoryMessage offer={offer} />
+            {offer.status === 'ACTIVE' && (
+              <ActionButton
+                className="min-h-10 rounded-lg border border-line px-3 font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => onCancel(offer)}
+                pending={cancellingOffer && cancellingOfferId === offer.id}
+                pendingLabel="Cancelling"
+                type="button"
+              >
+                Cancel post
+              </ActionButton>
+            )}
+            {offer.status === 'RESERVED' && (
+              <p className="text-sm font-bold text-muted">
+                Accepted by another trader. The cancellation grace window is available in My trades.
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function OfferHistoryMessage({ offer }: { offer: P2POffer }) {
+  if (offer.status === 'CANCELLED' && offer.cancelledAt) {
+    return <p className="text-sm text-muted">Cancelled {formatDateTime(offer.cancelledAt)}.</p>;
+  }
+  if (offer.status === 'COMPLETED' && offer.completedAt) {
+    return <p className="text-sm text-muted">Completed {formatDateTime(offer.completedAt)}.</p>;
+  }
+  if (offer.status === 'EXPIRED')
+    return <p className="text-sm text-muted">Expired without a trade.</p>;
+  return <p className="text-sm text-muted">Expires {formatDateTime(offer.expiresAt)}.</p>;
+}
+
+function OfferStatusBadge({ status }: { status: P2POffer['status'] }) {
+  return (
+    <span
+      className={`rounded-full px-2.5 py-1 text-xs font-black ${offerStatusBadgeClass(status)}`}
+    >
+      {status.toLowerCase()}
+    </span>
+  );
+}
+
+function offerStatusBadgeClass(status: P2POffer['status']): string {
+  switch (status) {
+    case 'COMPLETED':
+      return 'bg-emerald-100 text-emerald-800';
+    case 'CANCELLED':
+    case 'EXPIRED':
+      return 'bg-bg text-muted';
+    case 'DISPUTED':
+      return 'bg-red-100 text-red-700';
+    case 'RESERVED':
+      return 'bg-amber-100 text-amber-800';
+    default:
+      return 'bg-accent-soft text-accent';
+  }
 }
 
 function traderDisplayName(user: {

@@ -19,6 +19,7 @@ export function KycSettingsPanel() {
 
   const [requiredForWithdrawals, setRequiredForWithdrawals] = useState(false);
   const [minWithdrawalTokens, setMinWithdrawalTokens] = useState('0');
+  const [requiredOnboarding, setRequiredOnboarding] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,6 +27,7 @@ export function KycSettingsPanel() {
     if (!settings) return;
     setRequiredForWithdrawals(settings.isKycRequiredForWithdrawals);
     setMinWithdrawalTokens(settings.kycMinWithdrawalTokens);
+    setRequiredOnboarding(settings.isKycRequiredOnboarding);
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -36,6 +38,7 @@ export function KycSettingsPanel() {
       await updateSettings({
         isKycRequiredForWithdrawals: requiredForWithdrawals,
         kycMinWithdrawalTokens: Number(minWithdrawalTokens) || 0,
+        isKycRequiredOnboarding: requiredOnboarding,
       }).unwrap();
       setMessage('Identity verification settings saved.');
     } catch (err) {
@@ -58,6 +61,29 @@ export function KycSettingsPanel() {
       {isLoading && <p className="text-muted">Loading...</p>}
       {!isLoading && (
         <form className="grid gap-4 md:max-w-lg" onSubmit={handleSave}>
+          <div>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="kyc-required-onboarding"
+            >
+              <input
+                checked={requiredOnboarding}
+                className="mt-0.5 size-5 accent-accent"
+                id="kyc-required-onboarding"
+                onChange={(event) => setRequiredOnboarding(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Prompt during onboarding</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  A trainer is prompted to verify right after completing onboarding, with a "Do
+                  this later" option. Skipping has no effect beyond the withdrawal rule below --
+                  there is no separate onboarding-only lock.
+                </span>
+              </span>
+            </label>
+          </div>
+
           <div>
             <label
               className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"

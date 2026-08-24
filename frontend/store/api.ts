@@ -818,6 +818,7 @@ export interface PublicClientSettings {
   supportChatMode: 'NONE' | 'TAWK' | 'AI';
   isKycRequiredForWithdrawals: boolean;
   kycMinWithdrawalTokens: string;
+  isKycRequiredOnboarding: boolean;
 }
 
 export type EarningsChartRange = 'week' | 'month' | 'year';
@@ -1069,6 +1070,7 @@ export interface PlatformSettings {
   autoSubmitAfterApproval: boolean;
   isKycRequiredForWithdrawals: boolean;
   kycMinWithdrawalTokens: string;
+  isKycRequiredOnboarding: boolean;
   authMaintenanceEnabled: boolean;
   authMaintenanceUntil: string | null;
   authMaintenanceMessage: string | null;
@@ -1156,6 +1158,7 @@ export interface PlatformSettingsInput {
   autoSubmitAfterApproval?: boolean;
   isKycRequiredForWithdrawals?: boolean;
   kycMinWithdrawalTokens?: number;
+  isKycRequiredOnboarding?: boolean;
   authMaintenanceEnabled?: boolean;
   authMaintenanceUntil?: string | null;
   authMaintenanceMessage?: string | null;
