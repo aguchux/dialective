@@ -1012,11 +1012,19 @@ function EarningsView({
   const total = Number(data.trainingEarningsTokens) + Number(data.referralEarningsTokens);
   return (
     <div>
-      <ViewHeading
-        title="Earnings"
-        subtitle="Training payouts and referral bonuses credited to your wallet."
-        refreshing={refreshing}
-      />
+      <div className="flex items-start justify-between gap-3">
+        <ViewHeading
+          title="Earnings"
+          subtitle="Training payouts and referral bonuses credited to your wallet."
+          refreshing={refreshing}
+        />
+        <WithdrawTokensDialog
+          balance={data.balance}
+          minWithdrawalTokens={data.minWithdrawalTokens}
+          tokenUsdRate={data.tokenUsdRate}
+          localCurrency={data.localCurrency}
+        />
+      </div>
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Earnings summary">
         <MetricCard
           icon={Sparkles}
@@ -3765,8 +3773,8 @@ function WithdrawTokensDialog({
               <div className="grid grid-cols-2 gap-2">
                 {(
                   [
-                    { value: 'crypto', label: 'Stablecoin' },
                     { value: 'fiat', label: 'Bank / Mobile Money' },
+                    { value: 'crypto', label: 'Stablecoin' },
                   ] as const
                 ).map((option) => (
                   <label
