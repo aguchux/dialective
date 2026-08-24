@@ -3417,7 +3417,7 @@ function WithdrawTokensDialog({
   tokenUsdRate: number;
   localCurrency: LocalCurrency | null;
 }) {
-  const [method, setMethod] = useState<'crypto' | 'fiat'>('crypto');
+  const [method, setMethod] = useState<'crypto' | 'fiat'>('fiat');
   const [amount, setAmount] = useState(minWithdrawalTokens);
   const [destinationAddress, setDestinationAddress] = useState('');
   const [destinationCurrency, setDestinationCurrency] = useState<WithdrawalCurrency>('USDT');
