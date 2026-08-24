@@ -633,34 +633,6 @@ export type P2PTradeStatus =
   | 'EXPIRED';
 export type P2PDisputeStatus = 'OPEN' | 'RESOLVED_BUYER' | 'RESOLVED_SELLER';
 
-export interface UserPaymentMethod {
-  id: string;
-  label: string;
-  methodType: string;
-  fiatCurrency: string;
-  bankCode: string | null;
-  bankName: string | null;
-  accountName: string | null;
-  accountNumber: string | null;
-  enabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PaymentMethodInput {
-  id?: string;
-  methodType: string;
-  fiatCurrency: string;
-  bankCode: string;
-  accountNumber: string;
-  enabled?: boolean;
-}
-
-export interface VerifiedPaymentMethodInput extends PaymentMethodInput {
-  otpRequestId: string;
-  code: string;
-}
-
 export interface P2PMarketSettings {
   enabled: boolean;
   sellOffersEnabled: boolean;
@@ -696,7 +668,7 @@ export interface P2POffer {
   fiatAmount: string;
   fiatCurrency: string;
   paymentMethod: string;
-  paymentMethodDetails: UserPaymentMethod | null;
+  paymentMethodDetails: PayoutAccount | null;
   status: P2POfferStatus;
   expiresAt: string;
   completedAt: string | null;
@@ -726,7 +698,7 @@ export interface P2PTrade {
   fiatAmount: string;
   fiatCurrency: string;
   paymentMethod: string;
-  sellerPaymentMethod: UserPaymentMethod | null;
+  sellerPaymentMethod: PayoutAccount | null;
   sellerPaymentInstructions: string | null;
   status: P2PTradeStatus;
   paymentDeadlineAt: string;
@@ -1789,13 +1761,6 @@ export const dialectivaApi = createApi({
       query: () => '/p2p/reference-rate',
       providesTags: ['P2P'],
     }),
-    getP2PPaymentMethods: builder.query<UserPaymentMethod[], void>({
-      query: () => '/p2p/payment-methods',
-      providesTags: ['P2P'],
-    }),
-    listP2PBanks: builder.query<{ code: string; name: string }[], string>({
-      query: (country) => `/p2p/payment-methods/banks/${country}`,
-    }),
     getP2PPaymentInstructions: builder.query<{ p2pPaymentInstructions: string | null }, void>({
       query: () => '/p2p/payment-instructions',
       providesTags: ['P2P'],
@@ -1805,27 +1770,6 @@ export const dialectivaApi = createApi({
       { p2pPaymentInstructions: string }
     >({
       query: (body) => ({ url: '/p2p/payment-instructions', method: 'PATCH', body }),
-      invalidatesTags: ['P2P'],
-    }),
-    requestP2PPaymentMethodOtp: builder.mutation<
-      { otpRequestId: string; expiresInSeconds: number },
-      PaymentMethodInput
-    >({
-      query: (body) => ({ url: '/p2p/payment-methods/otp', method: 'POST', body }),
-    }),
-    createP2PPaymentMethod: builder.mutation<UserPaymentMethod, VerifiedPaymentMethodInput>({
-      query: (body) => ({ url: '/p2p/payment-methods', method: 'POST', body }),
-      invalidatesTags: ['P2P'],
-    }),
-    updateP2PPaymentMethod: builder.mutation<
-      UserPaymentMethod,
-      { id: string; body: VerifiedPaymentMethodInput }
-    >({
-      query: ({ id, body }) => ({ url: `/p2p/payment-methods/${id}`, method: 'PATCH', body }),
-      invalidatesTags: ['P2P'],
-    }),
-    deleteP2PPaymentMethod: builder.mutation<{ id: string }, string>({
-      query: (id) => ({ url: `/p2p/payment-methods/${id}`, method: 'DELETE' }),
       invalidatesTags: ['P2P'],
     }),
     listP2POffers: builder.query<
@@ -3158,14 +3102,8 @@ export const {
   useGetWalletQuery,
   useGetP2PSettingsQuery,
   useGetP2PReferenceRateQuery,
-  useGetP2PPaymentMethodsQuery,
-  useListP2PBanksQuery,
   useGetP2PPaymentInstructionsQuery,
   useUpdateP2PPaymentInstructionsMutation,
-  useRequestP2PPaymentMethodOtpMutation,
-  useCreateP2PPaymentMethodMutation,
-  useUpdateP2PPaymentMethodMutation,
-  useDeleteP2PPaymentMethodMutation,
   useListP2POffersQuery,
   useListMyP2POffersQuery,
   useGetP2PTraderProfileQuery,

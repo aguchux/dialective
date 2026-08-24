@@ -44,7 +44,6 @@ import {
 import { BrandLogo } from '@/components/BrandLogo';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import {
   formatCompactLocalCurrency,
   formatCompactNumber,
@@ -79,16 +78,12 @@ import {
   TrainerDashboardSummary,
   TrainerSubmissionSummary,
   normalizeErrorMessage,
-  useCreateP2PPaymentMethodMutation,
   useGetAllDialectsQuery,
   useGetCountriesQuery,
   useGetDialectsQuery,
   useGetDialectVariantsQuery,
-  useGetP2PPaymentMethodsQuery,
-  useListP2PBanksQuery,
   useGetP2PPaymentInstructionsQuery,
   useUpdateP2PPaymentInstructionsMutation,
-  useGetP2PReferenceRateQuery,
   useGetIncompleteRequiredCoursesQuery,
   useGetMeQuery,
   useResendEmailVerificationMutation,
@@ -101,7 +96,6 @@ import {
   useGetKycStatusQuery,
   useCreateKycSessionMutation,
   ManualPhoneVerificationRequestResult,
-  useRequestP2PPaymentMethodOtpMutation,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
   useRequestFlutterwaveDepositOtpMutation,
@@ -109,6 +103,7 @@ import {
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
   useListPayoutAccountsQuery,
+  useDeletePayoutAccountMutation,
   LocalCurrency,
   WithdrawalCurrency,
   WithdrawalNetwork,
@@ -119,8 +114,6 @@ import {
   useGetTrainerDashboardQuery,
   useGetWalletActivityQuery,
   useSendReferralInviteMutation,
-  useUpdateP2PPaymentMethodMutation,
-  useDeleteP2PPaymentMethodMutation,
   useUpdateProfileMutation,
 } from '@/store/api';
 import type { Session } from 'next-auth';
@@ -2022,10 +2015,6 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
 function ProfileView({ session, update }: { session: Session; update: SessionUpdateFn }) {
   const [firstName, setFirstName] = useState(session.user.firstName ?? '');
   const [lastName, setLastName] = useState(session.user.lastName ?? '');
-  const [bankCode, setBankCode] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [paymentOtpRequestId, setPaymentOtpRequestId] = useState('');
-  const [paymentOtpCode, setPaymentOtpCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updateProfile, { isLoading }] = useUpdateProfileMutation();
@@ -2045,25 +2034,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   }
 
   const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
-  const paymentCountryCode =
-    countries?.find((country) => country.id === me?.countryId)?.code ?? 'NG';
-  const { data: methods = [] } = useGetP2PPaymentMethodsQuery();
-  const { data: p2pBanks, isLoading: isLoadingP2pBanks } = useListP2PBanksQuery(
-    paymentCountryCode,
-    { skip: !me },
-  );
-  const [requestPaymentOtp, { isLoading: paymentOtpSending }] =
-    useRequestP2PPaymentMethodOtpMutation();
-  const [createPaymentMethod, { isLoading: paymentCreating }] = useCreateP2PPaymentMethodMutation();
-  const [updatePaymentMethod, { isLoading: paymentUpdating }] = useUpdateP2PPaymentMethodMutation();
-  const [deletePaymentMethod, { isLoading: paymentDeleting }] = useDeleteP2PPaymentMethodMutation();
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [editingPaymentMethodId, setEditingPaymentMethodId] = useState<string | 'new' | null>(null);
-  const editingMethod =
-    editingPaymentMethodId && editingPaymentMethodId !== 'new'
-      ? methods.find((method) => method.id === editingPaymentMethodId)
-      : undefined;
-  const paymentSaving = paymentCreating || paymentUpdating;
+  const { data: payoutAccounts = [] } = useListPayoutAccountsQuery();
+  const [deletePayoutAccount, { isLoading: payoutAccountDeleting }] =
+    useDeletePayoutAccountMutation();
   const { data: paymentInstructionsData } = useGetP2PPaymentInstructionsQuery();
   const [p2pPaymentInstructions, setP2pPaymentInstructions] = useState('');
   const [updateP2pPaymentInstructions, { isLoading: instructionsSaving }] =
@@ -2087,7 +2060,6 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       setError(normalizeErrorMessage(err, 'Could not update payment instructions.'));
     }
   }
-  const { data: referenceRate } = useGetP2PReferenceRateQuery();
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
   const phoneVerificationRequired = publicSettings?.phoneVerificationRequired ?? true;
   const manualPhoneVerificationEnabled = publicSettings?.manualPhoneVerificationEnabled ?? false;
@@ -2192,30 +2164,6 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const dirty =
     firstName.trim() !== (session.user.firstName ?? '') ||
     lastName.trim() !== (session.user.lastName ?? '');
-  const paymentPayload = {
-    methodType: 'BANK_TRANSFER',
-    fiatCurrency: editingMethod?.fiatCurrency ?? referenceRate?.currencyCode ?? 'NGN',
-    bankCode: bankCode.trim(),
-    accountNumber: accountNumber.trim(),
-    enabled: true,
-  };
-  const paymentDirty =
-    !editingMethod ||
-    bankCode.trim() !== (editingMethod.bankCode ?? '') ||
-    accountNumber.trim() !== (editingMethod.accountNumber ?? '');
-
-  useEffect(() => {
-    setBankCode(editingMethod?.bankCode ?? '');
-    setAccountNumber(editingMethod?.accountNumber ?? '');
-    setPaymentOtpRequestId('');
-    setPaymentOtpCode('');
-  }, [editingPaymentMethodId, editingMethod?.bankCode, editingMethod?.accountNumber]);
-
-  function updatePaymentField(setter: (value: string) => void, value: string) {
-    setter(value);
-    setPaymentOtpRequestId('');
-    setPaymentOtpCode('');
-  }
 
   useEffect(() => {
     if (me?.phoneNumber) setPhoneNumber(me.phoneNumber);
@@ -2339,70 +2287,14 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     }
   }
 
-  async function requestPaymentMethodOtp() {
+  async function removePayoutAccount(id: string) {
     setMessage(null);
     setError(null);
     try {
-      const otp = await requestPaymentOtp({ ...paymentPayload, id: editingMethod?.id }).unwrap();
-      setPaymentOtpRequestId(otp.otpRequestId);
-      setPaymentOtpCode('');
-      setMessage('Verification code sent to your email.');
+      await deletePayoutAccount(id).unwrap();
+      setMessage('Payout account removed.');
     } catch (err) {
-      setError(normalizeErrorMessage(err, 'Could not send verification code.'));
-    }
-  }
-
-  async function savePaymentMethod(event: FormEvent) {
-    event.preventDefault();
-    setMessage(null);
-    setError(null);
-    try {
-      if (!paymentOtpRequestId) {
-        await requestPaymentMethodOtp();
-        return;
-      }
-      const body = {
-        ...paymentPayload,
-        otpRequestId: paymentOtpRequestId,
-        code: paymentOtpCode.trim(),
-      };
-      if (editingMethod) {
-        await updatePaymentMethod({ id: editingMethod.id, body }).unwrap();
-      } else {
-        await createPaymentMethod(body).unwrap();
-      }
-      setPaymentOtpRequestId('');
-      setPaymentOtpCode('');
-      setEditingPaymentMethodId(null);
-      setPaymentDialogOpen(false);
-      setMessage('Payment method saved.');
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Could not save payment method.'));
-    }
-  }
-
-  function openAddPaymentDialog() {
-    setEditingPaymentMethodId('new');
-    setPaymentDialogOpen(true);
-  }
-
-  function openEditPaymentDialog(id: string) {
-    setEditingPaymentMethodId(id);
-    setPaymentDialogOpen(true);
-  }
-
-  async function removePaymentMethod(id: string) {
-    setMessage(null);
-    setError(null);
-    try {
-      await deletePaymentMethod(id).unwrap();
-      if (editingPaymentMethodId === id) {
-        setEditingPaymentMethodId(null);
-        setPaymentDialogOpen(false);
-      }
-      setMessage('Payment method removed.');
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Could not remove payment method.'));
+      setError(normalizeErrorMessage(err, 'Could not remove payout account.'));
     }
   }
 
@@ -2744,153 +2636,58 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
 
         <div className={`${cardClass} grid gap-4 p-5`}>
           <SectionTitle
-            title="Payment methods"
-            subtitle="Verified with your bank via Flutterwave and protected by email 2FA for every edit. Add multiple accounts and choose which one to use per offer."
+            title="Payout accounts"
+            subtitle="One saved account list, used everywhere you receive money -- token withdrawals and P2P sales alike. Verified with your bank via Flutterwave."
           />
           {!phoneVerified && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              Verify your phone number above before adding a payment method.
+              Verify your phone number above before adding a payout account.
             </p>
           )}
-          {methods.length > 0 && (
+          {payoutAccounts.length > 0 && (
             <ul className="grid gap-2">
-              {methods.map((method) => (
+              {payoutAccounts.map((account) => (
                 <li
-                  key={method.id}
+                  key={account.id}
                   className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2.5"
                 >
                   <div className="grid gap-0.5 overflow-hidden">
-                    <span className="truncate font-extrabold text-ink">{method.bankName}</span>
+                    <span className="truncate font-extrabold text-ink">
+                      {account.type === 'BANK'
+                        ? (account.bankName ?? account.bankCode)
+                        : account.mobileMoneyNetwork}
+                      {account.isDefault && (
+                        <span className="ml-2 rounded-md bg-accent-soft px-2 py-0.5 text-xs font-extrabold text-accent-dark">
+                          Default
+                        </span>
+                      )}
+                    </span>
                     <span className="truncate text-sm text-muted">
-                      {method.accountName} ·{' '}
-                      {method.accountNumber
-                        ? `****${method.accountNumber.slice(-4)}`
-                        : 'No account number'}
+                      {account.accountName ? `${account.accountName} · ` : ''}
+                      {account.type === 'BANK'
+                        ? account.accountNumberMasked
+                        : account.mobileMoneyNumberMasked}
                     </span>
                   </div>
-                  <div className="flex shrink-0 gap-1.5">
-                    <button
-                      className="min-h-9 rounded-lg border border-line px-3 text-sm font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={!phoneVerified}
-                      onClick={() => openEditPaymentDialog(method.id)}
-                      type="button"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      aria-label={`Remove ${method.bankName}`}
-                      className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-line text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-red-950"
-                      disabled={paymentDeleting}
-                      onClick={() => void removePaymentMethod(method.id)}
-                      type="button"
-                    >
-                      <Trash2 className="size-4" aria-hidden="true" />
-                    </button>
-                  </div>
+                  <button
+                    aria-label={`Remove ${account.type === 'BANK' ? (account.bankName ?? 'account') : account.mobileMoneyNetwork}`}
+                    className="grid min-h-9 min-w-9 shrink-0 place-items-center rounded-lg border border-line text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-red-950"
+                    disabled={payoutAccountDeleting}
+                    onClick={() => void removePayoutAccount(account.id)}
+                    type="button"
+                  >
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </button>
                 </li>
               ))}
             </ul>
           )}
-          <button
-            className="min-h-11 justify-self-start rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!phoneVerified}
-            onClick={openAddPaymentDialog}
-            type="button"
+          <Link
+            className={`min-h-11 w-fit rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted ${!phoneVerified ? 'pointer-events-none opacity-60' : ''} inline-flex items-center`}
+            href="/dashboard/payout-accounts"
           >
-            + Add bank account
-          </button>
-
-          <Dialog
-            onOpenChange={(open) => {
-              setPaymentDialogOpen(open);
-              if (!open) setEditingPaymentMethodId(null);
-            }}
-            open={paymentDialogOpen}
-          >
-            <DialogContent
-              description="Bank details are verified with your bank via Flutterwave and encrypted -- only used to show buyers where to pay you."
-              title={editingMethod ? 'Edit bank account' : 'Add a bank account'}
-            >
-              <form className="grid gap-4" onSubmit={savePaymentMethod}>
-                <label className="grid gap-1.5 text-sm font-bold">
-                  Bank
-                  <SearchableSelect
-                    className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                    emptyLabel="No banks match your search"
-                    loading={isLoadingP2pBanks}
-                    loadingLabel="Loading banks..."
-                    onChange={(value) => updatePaymentField(setBankCode, value)}
-                    options={(p2pBanks ?? []).map((bank) => ({
-                      value: bank.code,
-                      label: bank.name,
-                    }))}
-                    placeholder="Search for a bank"
-                    value={bankCode}
-                  />
-                </label>
-                <label className="grid gap-1.5 text-sm font-bold">
-                  Account number
-                  <input
-                    className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                    inputMode="numeric"
-                    onChange={(event) => updatePaymentField(setAccountNumber, event.target.value)}
-                    required
-                    value={accountNumber}
-                  />
-                </label>
-                <p className="text-xs text-muted">
-                  We&apos;ll verify this account with your bank and show buyers the account
-                  holder&apos;s name -- no need to type it yourself.
-                </p>
-                {paymentOtpRequestId ? (
-                  <label className="grid gap-1.5 text-sm font-bold">
-                    Email verification code
-                    <input
-                      className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                      inputMode="numeric"
-                      maxLength={8}
-                      onChange={(event) => setPaymentOtpCode(event.target.value)}
-                      required
-                      value={paymentOtpCode}
-                    />
-                  </label>
-                ) : null}
-                {error && (
-                  <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
-                    {error}
-                  </p>
-                )}
-                <div className="flex flex-wrap justify-end gap-2">
-                  <button
-                    className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted"
-                    onClick={() => setPaymentDialogOpen(false)}
-                    type="button"
-                  >
-                    Cancel
-                  </button>
-                  <ActionButton
-                    className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!paymentDirty || !bankCode.trim() || !accountNumber.trim()}
-                    onClick={() => void requestPaymentMethodOtp()}
-                    pending={paymentOtpSending}
-                    pendingLabel="Sending"
-                    type="button"
-                  >
-                    Email code
-                  </ActionButton>
-                  <ActionButton
-                    className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!paymentDirty || !paymentOtpRequestId || !paymentOtpCode.trim()}
-                    pending={paymentSaving}
-                    pendingLabel="Verifying & saving"
-                    type="submit"
-                  >
-                    Save bank account
-                  </ActionButton>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+            + Add payout account
+          </Link>
         </div>
 
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={saveP2pPaymentInstructions}>

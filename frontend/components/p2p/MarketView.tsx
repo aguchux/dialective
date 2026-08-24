@@ -21,7 +21,6 @@ import {
   useCancelP2POfferMutation,
   useCreateP2POfferMutation,
   useGetMeQuery,
-  useGetP2PPaymentMethodsQuery,
   useGetP2PReferenceRateQuery,
   useGetP2PSettingsQuery,
   useGetP2PTraderProfileQuery,
@@ -29,6 +28,7 @@ import {
   useListMyP2PTradesQuery,
   useListMyP2POffersQuery,
   useListP2POffersQuery,
+  useListPayoutAccountsQuery,
   useMarkP2PTradePaidMutation,
   useRaiseP2PDisputeMutation,
   useReleaseP2PTradeMutation,
@@ -54,7 +54,7 @@ export function MarketView() {
   const [error, setError] = useState('');
   const { data: settings } = useGetP2PSettingsQuery();
   const { data: referenceRate } = useGetP2PReferenceRateQuery();
-  const { data: methods = [] } = useGetP2PPaymentMethodsQuery();
+  const { data: payoutAccounts = [] } = useListPayoutAccountsQuery();
   const { data: sellOffers = [] } = useListP2POffersQuery({ type: 'SELL' });
   const { data: buyOffers = [] } = useListP2POffersQuery({ type: 'BUY' });
   const { data: myOffers = [] } = useListMyP2POffersQuery();
@@ -78,7 +78,14 @@ export function MarketView() {
     useRequestP2PTradeCancelMutation();
   const [raiseDispute, { isLoading: disputing, originalArgs: disputingArgs }] =
     useRaiseP2PDisputeMutation();
-  const primaryMethod = methods.find((method) => method.enabled);
+  const verifiedPayoutAccounts = payoutAccounts.filter(
+    (account) => account.verificationStatus === 'VERIFIED',
+  );
+  const [selectedPayoutAccountId, setSelectedPayoutAccountId] = useState('');
+  const primaryMethod =
+    verifiedPayoutAccounts.find((account) => account.id === selectedPayoutAccountId) ??
+    verifiedPayoutAccounts.find((account) => account.isDefault) ??
+    verifiedPayoutAccounts[0];
   const phoneVerificationRequired = platformSettings?.phoneVerificationRequired ?? true;
   const phoneVerified = me?.phoneVerified ?? false;
   // Trading is blocked on phone verification only while that requirement
@@ -301,8 +308,26 @@ export function MarketView() {
               </div>
               {offerType === 'SELL' && !primaryMethod && (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                  Add your bank details in Profile before posting a sell offer.
+                  Add a verified payout account in Profile before posting a sell offer.
                 </p>
+              )}
+              {offerType === 'SELL' && verifiedPayoutAccounts.length > 1 && (
+                <label className="grid gap-1.5 text-sm font-bold">
+                  Receive payment to
+                  <select
+                    className="min-h-11 rounded-lg border border-line bg-bg px-3"
+                    onChange={(e) => setSelectedPayoutAccountId(e.target.value)}
+                    value={primaryMethod?.id ?? ''}
+                  >
+                    {verifiedPayoutAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.type === 'BANK'
+                          ? `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`
+                          : `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
               {!phoneVerificationRequired && offerOtpRequestId && (
                 <label className="grid gap-1.5 text-sm font-bold">
@@ -837,8 +862,13 @@ function TradeCard({
         <div className="rounded-lg border border-line bg-bg p-3 text-sm">
           <p className="font-black">Seller payment details</p>
           <p>
-            {trade.sellerPaymentMethod.bankName} · {trade.sellerPaymentMethod.accountName} ·{' '}
-            {trade.sellerPaymentMethod.accountNumber}
+            {trade.sellerPaymentMethod.type === 'BANK'
+              ? (trade.sellerPaymentMethod.bankName ?? trade.sellerPaymentMethod.bankCode)
+              : trade.sellerPaymentMethod.mobileMoneyNetwork}{' '}
+            · {trade.sellerPaymentMethod.accountName ?? ''}{' '}
+            {trade.sellerPaymentMethod.type === 'BANK'
+              ? trade.sellerPaymentMethod.accountNumberMasked
+              : trade.sellerPaymentMethod.mobileMoneyNumberMasked}
           </p>
           {trade.sellerPaymentInstructions && (
             <p className="mt-1 text-muted">{trade.sellerPaymentInstructions}</p>

@@ -10,13 +10,11 @@ import {
   ListDisputesDto,
   ListOffersDto,
   ListTradesDto,
-  RequestPaymentMethodOtpDto,
   RequestP2pTradeOtpDto,
   RaiseDisputeDto,
   ResolveDisputeDto,
   UpdateP2PMarketSettingsDto,
   UpdateP2pPaymentInstructionsDto,
-  UpsertPaymentMethodDto,
 } from './dto/p2p.dto';
 
 @Controller('p2p')
@@ -34,16 +32,6 @@ export class P2PController {
     return this.p2p.getReferenceRate(req.user.sub);
   }
 
-  @Get('payment-methods')
-  listPaymentMethods(@Req() req: AuthenticatedRequest) {
-    return this.p2p.listPaymentMethods(req.user.sub);
-  }
-
-  @Get('payment-methods/banks/:country')
-  listBanks(@Param('country') country: string) {
-    return this.p2p.listBanks(country);
-  }
-
   @Get('payment-instructions')
   getPaymentInstructions(@Req() req: AuthenticatedRequest) {
     return this.p2p.getP2pPaymentInstructions(req.user.sub);
@@ -55,33 +43,6 @@ export class P2PController {
     @Body() body: UpdateP2pPaymentInstructionsDto,
   ) {
     return this.p2p.updateP2pPaymentInstructions(req.user.sub, body);
-  }
-
-  @Post('payment-methods/otp')
-  requestPaymentMethodOtp(
-    @Req() req: AuthenticatedRequest,
-    @Body() body: RequestPaymentMethodOtpDto,
-  ) {
-    return this.p2p.requestPaymentMethodOtp(req.user.sub, body);
-  }
-
-  @Post('payment-methods')
-  createPaymentMethod(@Req() req: AuthenticatedRequest, @Body() body: UpsertPaymentMethodDto) {
-    return this.p2p.createPaymentMethod(req.user.sub, body);
-  }
-
-  @Patch('payment-methods/:id')
-  updatePaymentMethod(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-    @Body() body: UpsertPaymentMethodDto,
-  ) {
-    return this.p2p.updatePaymentMethod(req.user.sub, id, body);
-  }
-
-  @Delete('payment-methods/:id')
-  deletePaymentMethod(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
-    return this.p2p.deletePaymentMethod(req.user.sub, id);
   }
 
   @Get('offers')

@@ -20,22 +20,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { SmsService } from '../sms/sms.service';
 import { tokensToLocalCurrency } from '../wallet/currency-rate.util';
-import { FlutterwaveService } from '../wallet/flutterwave.service';
 import {
   AcceptOfferDto,
   CreateOfferDto,
   ListDisputesDto,
   ListOffersDto,
   ListTradesDto,
-  RequestPaymentMethodOtpDto,
   RequestP2pTradeOtpDto,
   RaiseDisputeDto,
   ResolveDisputeDto,
   UpdateP2PMarketSettingsDto,
   UpdateP2pPaymentInstructionsDto,
-  UpsertPaymentMethodDto,
 } from './dto/p2p.dto';
-import { paymentMethodContextHash } from './p2p-otp-context.util';
 import { p2pTradeOtpContextHash } from './p2p-trade-otp-context.util';
 
 const OPEN_OFFER_STATUSES = [P2POfferStatus.ACTIVE, P2POfferStatus.RESERVED];
@@ -52,7 +48,6 @@ export class P2PService {
     private readonly otp: OtpService,
     private readonly platformSettings: PlatformSettingsService,
     private readonly sms: SmsService,
-    private readonly flutterwave: FlutterwaveService,
   ) {}
 
   async getSettings() {
@@ -153,17 +148,6 @@ export class P2PService {
     return serializeSettings(row);
   }
 
-  async listPaymentMethods(userId: string) {
-    return this.prisma.userPaymentMethod.findMany({
-      where: { userId },
-      orderBy: [{ enabled: 'desc' }, { createdAt: 'desc' }],
-    });
-  }
-
-  listBanks(country: string) {
-    return this.flutterwave.listBanks(country);
-  }
-
   async getP2pPaymentInstructions(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
@@ -179,37 +163,6 @@ export class P2PService {
       select: { p2pPaymentInstructions: true },
     });
     return user;
-  }
-
-  async requestPaymentMethodOtp(userId: string, dto: RequestPaymentMethodOtpDto) {
-    if (dto.id) {
-      const method = await this.prisma.userPaymentMethod.findFirst({
-        where: { id: dto.id, userId },
-        select: { id: true },
-      });
-      if (!method) throw new NotFoundException('Payment method not found');
-    }
-    const user = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { email: true },
-    });
-    return this.otp.issueForUser(
-      userId,
-      OtpPurpose.P2P_PAYMENT_METHOD,
-      user.email,
-      paymentMethodContextHash(dto),
-    );
-  }
-
-  /** Verify-phone gate for payment methods -- see schema.prisma's User.phoneVerifiedAt doc. Unconditional: payment methods always require phone verification regardless of phoneVerificationRequired, since they're also stacked with their own email OTP. */
-  private async requirePhoneVerified(userId: string, action: string) {
-    const user = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { phoneVerifiedAt: true },
-    });
-    if (!user.phoneVerifiedAt) {
-      throw new UnprocessableEntityException(`Verify your phone number before ${action}`);
-    }
   }
 
   async requestTradeOtp(userId: string, dto: RequestP2pTradeOtpDto) {
@@ -303,63 +256,6 @@ export class P2PService {
       this.notify(buyerId, enabled, buyerBody),
       this.notify(sellerId, enabled, sellerBody),
     ]);
-  }
-
-  async createPaymentMethod(userId: string, dto: UpsertPaymentMethodDto) {
-    await this.requirePhoneVerified(userId, 'adding a payment method');
-    await this.verifyPaymentMethodOtp(userId, dto);
-    const data = await this.resolvedPaymentMethodData(userId, dto);
-    return this.prisma.userPaymentMethod.create({ data: { userId, ...data } });
-  }
-
-  async updatePaymentMethod(userId: string, id: string, dto: UpsertPaymentMethodDto) {
-    await this.requirePhoneVerified(userId, 'editing a payment method');
-    const method = await this.prisma.userPaymentMethod.findFirst({ where: { id, userId } });
-    if (!method) throw new NotFoundException('Payment method not found');
-    await this.verifyPaymentMethodOtp(userId, { ...dto, id });
-    const data = await this.resolvedPaymentMethodData(userId, dto);
-    return this.prisma.userPaymentMethod.update({ where: { id }, data });
-  }
-
-  /** Bank name and account holder name are never trusted from the client -- both are always resolved fresh from Flutterwave so a payment method can only ever point at a real, verified account. */
-  private async resolvedPaymentMethodData(userId: string, dto: UpsertPaymentMethodDto) {
-    const user = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { country: { select: { code: true } } },
-    });
-    const countryCode = user.country?.code ?? 'NG';
-    const banks = await this.flutterwave.listBanks(countryCode);
-    const bank = banks.find((b) => b.code === dto.bankCode);
-    if (!bank) throw new BadRequestException('Select a valid bank');
-    const resolved = await this.flutterwave.resolveAccount({
-      accountBank: dto.bankCode,
-      accountNumber: dto.accountNumber,
-    });
-    return {
-      label: bank.name,
-      methodType: dto.methodType.trim().toUpperCase(),
-      fiatCurrency: dto.fiatCurrency.trim().toUpperCase(),
-      bankCode: dto.bankCode,
-      bankName: bank.name,
-      accountName: resolved.accountName,
-      accountNumber: resolved.accountNumber,
-      enabled: dto.enabled ?? true,
-    };
-  }
-
-  async deletePaymentMethod(userId: string, id: string) {
-    const method = await this.prisma.userPaymentMethod.findFirst({ where: { id, userId } });
-    if (!method) throw new NotFoundException('Payment method not found');
-    const openUsage = await this.prisma.p2PTokenOffer.count({
-      where: { paymentMethodId: id, status: { in: OPEN_OFFER_STATUSES } },
-    });
-    if (openUsage > 0) {
-      throw new UnprocessableEntityException(
-        'This payment method is used by an open offer -- cancel or complete it first',
-      );
-    }
-    await this.prisma.userPaymentMethod.delete({ where: { id } });
-    return { id };
   }
 
   async createOffer(userId: string, dto: CreateOfferDto) {
@@ -883,25 +779,13 @@ export class P2PService {
       throw new UnprocessableEntityException('Payment method is not allowed');
   }
 
+  /** P2P sell offers require a verified payout account -- same account list withdrawals use (see PayoutAccount's schema doc), but gated to VERIFIED since a P2P counterparty is trusting this destination sight-unseen. */
   private async getEnabledPaymentMethod(userId: string, id: string) {
-    const method = await this.prisma.userPaymentMethod.findFirst({
-      where: { id, userId, enabled: true },
+    const method = await this.prisma.payoutAccount.findFirst({
+      where: { id, userId, verificationStatus: 'VERIFIED' },
     });
-    if (!method) throw new NotFoundException('Enabled payment method not found');
+    if (!method) throw new NotFoundException('Verified payout account not found');
     return method;
-  }
-
-  private async verifyPaymentMethodOtp(
-    userId: string,
-    dto: UpsertPaymentMethodDto & { id?: string },
-  ) {
-    await this.otp.verify({
-      otpRequestId: dto.otpRequestId,
-      userId,
-      purpose: OtpPurpose.P2P_PAYMENT_METHOD,
-      code: dto.code,
-      contextHash: paymentMethodContextHash(dto),
-    });
   }
 
   private async enforceOpenTradeLimit(userId: string, max: number) {

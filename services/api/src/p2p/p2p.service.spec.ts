@@ -19,7 +19,6 @@ describe('P2PService trade-notification SMS', () => {
   let otp: any;
   let platformSettings: any;
   let sms: any;
-  let flutterwave: any;
   let service: P2PService;
 
   beforeEach(() => {
@@ -37,8 +36,7 @@ describe('P2PService trade-notification SMS', () => {
       isP2pSmsPaymentMarkedEnabled: jest.fn(),
     };
     sms = { sendTransactional: jest.fn().mockResolvedValue(undefined) };
-    flutterwave = { listBanks: jest.fn(), resolveAccount: jest.fn() };
-    service = new P2PService(prisma, otp, platformSettings, sms, flutterwave);
+    service = new P2PService(prisma, otp, platformSettings, sms);
     jest.spyOn(service as any, 'getTradeForUser').mockResolvedValue(trade);
   });
 

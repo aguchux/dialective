@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  P2POfferStatus,
   PayoutAccountType,
   PayoutAccountVerificationStatus,
   WithdrawalStatus,
@@ -129,6 +130,15 @@ export class PayoutAccountsController {
     if (referencedByActiveWithdrawal) {
       throw new BadRequestException(
         'This payout account is referenced by an in-progress withdrawal and cannot be deleted yet',
+      );
+    }
+    const referencedByOpenP2pOffer = await this.prisma.p2PTokenOffer.findFirst({
+      where: { paymentMethodId: id, status: { in: [P2POfferStatus.ACTIVE, P2POfferStatus.RESERVED] } },
+      select: { id: true },
+    });
+    if (referencedByOpenP2pOffer) {
+      throw new BadRequestException(
+        'This payout account is used by an open P2P offer -- cancel or complete it first',
       );
     }
     await this.prisma.payoutAccount.delete({ where: { id } });

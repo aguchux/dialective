@@ -14,61 +14,6 @@ import {
 } from 'class-validator';
 import { P2PDisputeStatus, P2POfferStatus, P2POfferType, P2PTradeStatus } from '@dialectiva/db';
 
-export class UpsertPaymentMethodDto {
-  @IsString()
-  @IsNotEmpty()
-  methodType!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  fiatCurrency!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  bankCode!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  accountNumber!: string;
-
-  @IsOptional()
-  @IsBoolean()
-  enabled?: boolean;
-
-  @IsUUID()
-  otpRequestId!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  code!: string;
-}
-
-export class RequestPaymentMethodOtpDto {
-  @IsOptional()
-  @IsUUID()
-  id?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  methodType!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  fiatCurrency!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  bankCode!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  accountNumber!: string;
-
-  @IsOptional()
-  @IsBoolean()
-  enabled?: boolean;
-}
-
 export class UpdateP2pPaymentInstructionsDto {
   @IsOptional()
   @IsString()

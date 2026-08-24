@@ -131,7 +131,6 @@ model User {
   wordRecordings                   WordRecording[]
   subscriptionPoolsOpened          SubscriptionPool[]               @relation("SubscriptionPoolOpenedBy")
   dataAccessLeadsContacted         DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
-  paymentMethods                   UserPaymentMethod[]
   p2pOffers                        P2PTokenOffer[]
   p2pBuyerTrades                   P2PTokenTrade[]                  @relation("P2PBuyerTrades")
   p2pSellerTrades                  P2PTokenTrade[]                  @relation("P2PSellerTrades")
@@ -1406,11 +1405,15 @@ enum PayoutAccountVerificationStatus {
 }
 
 /// A trainer's saved, reusable fiat payout destination (Flutterwave bank
-/// transfer or mobile money), created once via /payout-accounts and
-/// referenced by id from WithdrawalRequest at withdrawal time -- a snapshot
-/// of its resolved details is copied onto the WithdrawalRequest row, not a
-/// live join, so a later edit/delete never retroactively changes a pending
-/// withdrawal's destination (see WithdrawalRequest.payoutAccountId).
+/// transfer or mobile money), created once via /payout-accounts -- this is
+/// the single account list surfaced everywhere a trainer picks where money
+/// goes: WithdrawalRequest.payoutAccountId (withdrawal) and
+/// P2PTokenOffer.paymentMethodId/P2PTokenTrade.sellerPaymentMethodId (P2P
+/// sell side). A snapshot of its resolved details is copied onto the
+/// WithdrawalRequest row at withdrawal time, not a live join, so a later
+/// edit/delete never retroactively changes a pending withdrawal's
+/// destination; P2P instead keeps a live reference (paymentMethodId),
+/// nulled out via onDelete: SetNull if the account is later removed.
 /// Account/phone numbers are AES-256-GCM encrypted at rest
 /// (payout-crypto.util.ts) -- only the masked form is ever read back for
 /// display; the STABLECOIN_WALLET group is reserved for a future unified
@@ -1449,6 +1452,8 @@ model PayoutAccount {
   updatedAt  DateTime  @updatedAt
 
   withdrawals WithdrawalRequest[]
+  p2pOffers   P2PTokenOffer[] @relation("P2POfferPayoutAccount")
+  p2pSellerTrades P2PTokenTrade[] @relation("P2PTradeSellerPaymentMethod")
 
   @@index([userId])
   @@index([userId, isDefault])
@@ -1553,28 +1558,6 @@ model P2PMarketSettings {
   @@map("p2p_market_settings")
 }
 
-model UserPaymentMethod {
-  id            String   @id @default(uuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  label         String
-  methodType    String
-  fiatCurrency  String
-  bankCode      String?
-  bankName      String?
-  accountName   String?
-  accountNumber String?
-  enabled       Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  offers       P2PTokenOffer[]
-  sellerTrades P2PTokenTrade[] @relation("P2PTradeSellerPaymentMethod")
-
-  @@index([userId, enabled])
-  @@map("user_payment_methods")
-}
-
 model P2PTokenOffer {
   id               String             @id @default(uuid())
   type             P2POfferType
@@ -1586,7 +1569,7 @@ model P2PTokenOffer {
   fiatCurrency     String
   paymentMethod    String
   paymentMethodId  String?
-  paymentMethodRef UserPaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  paymentMethodRef PayoutAccount?     @relation("P2POfferPayoutAccount", fields: [paymentMethodId], references: [id], onDelete: SetNull)
   status           P2POfferStatus     @default(ACTIVE)
   expiresAt        DateTime
   completedAt      DateTime?
@@ -1610,7 +1593,7 @@ model P2PTokenTrade {
   sellerId                String
   seller                  User               @relation("P2PSellerTrades", fields: [sellerId], references: [id], onDelete: Cascade)
   sellerPaymentMethodId   String?
-  sellerPaymentMethod     UserPaymentMethod? @relation("P2PTradeSellerPaymentMethod", fields: [sellerPaymentMethodId], references: [id], onDelete: SetNull)
+  sellerPaymentMethod     PayoutAccount?     @relation("P2PTradeSellerPaymentMethod", fields: [sellerPaymentMethodId], references: [id], onDelete: SetNull)
   tokenAmount             Decimal            @db.Decimal(20, 8)
   fiatAmount              Decimal            @db.Decimal(20, 8)
   fiatCurrency            String
