@@ -209,6 +209,7 @@ function WithdrawalRow({
         )}
       </td>
       <td className="px-4 py-3 text-xs text-muted">
+        <p className="font-bold text-ink">{withdrawal.provider ?? '—'}</p>
         {withdrawal.providerPayoutId ? (
           <>
             <p className="font-mono">{withdrawal.providerPayoutId}</p>
