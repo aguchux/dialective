@@ -105,7 +105,7 @@ export function AiAssistantWidget() {
         className={`fixed inset-x-0 z-1000 flex h-[min(78dvh,680px)] flex-col overflow-hidden rounded-t-xl border border-line bg-white shadow-2xl transition-transform duration-300 ease-out lg:inset-y-0 lg:right-0 lg:left-auto lg:h-full lg:w-[min(520px,42vw)] lg:rounded-none lg:border-y-0 ${panelBottomClass} ${
           open
             ? 'translate-x-0 translate-y-0'
-            : 'pointer-events-none translate-y-full lg:translate-y-0 lg:translate-x-full'
+            : 'invisible pointer-events-none translate-x-0 translate-y-full lg:translate-x-full lg:translate-y-0'
         }`}
       >
         <header className="flex items-center justify-between border-b border-line bg-surface-muted px-4 py-3">
