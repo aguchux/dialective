@@ -353,6 +353,8 @@ export function TrainerDashboard() {
           onOpenChange={setLowBalanceOpen}
           open={lowBalanceOpen}
           taskTokenCost={data?.taskTokenCost ?? '0'}
+          tokenUsdRate={data?.tokenUsdRate}
+          localCurrency={data?.localCurrency}
         />
         <RequiredCoursesDialog
           courses={midSessionRequiredCourses ?? incompleteRequiredCourses ?? []}
@@ -371,10 +373,14 @@ function LowBalanceDialog({
   open,
   onOpenChange,
   taskTokenCost,
+  tokenUsdRate,
+  localCurrency,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   taskTokenCost: string;
+  tokenUsdRate?: number;
+  localCurrency?: LocalCurrency | null;
 }) {
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -382,7 +388,7 @@ function LowBalanceDialog({
         title="Fund your account to continue"
         description={`Starting a task holds ${formatTokens(taskTokenCost)} DL from your balance until it's scored. You don't have enough available DL to cover that right now.`}
       >
-        <FundTokensDialog />
+        <FundTokensDialog tokenUsdRate={tokenUsdRate} localCurrency={localCurrency} />
       </DialogContent>
     </Dialog>
   );
@@ -846,7 +852,7 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
             tokenUsdRate={data.tokenUsdRate}
             localCurrency={data.localCurrency}
           />
-          <FundTokensDialog />
+          <FundTokensDialog tokenUsdRate={data.tokenUsdRate} localCurrency={data.localCurrency} />
         </div>
       </div>
       <section className="grid gap-3 sm:grid-cols-4" aria-label="DL balance">
@@ -3177,9 +3183,15 @@ const FLUTTERWAVE_FUNDING_COUNTRIES: { code: string; currency: string; label: st
   { code: 'TZ', currency: 'TZS', label: 'Tanzania (TZS)' },
 ];
 
-function FundTokensDialog() {
+function FundTokensDialog({
+  tokenUsdRate,
+  localCurrency,
+}: {
+  tokenUsdRate?: number;
+  localCurrency?: LocalCurrency | null;
+}) {
   const [method, setMethod] = useState<'crypto' | 'fiat'>('crypto');
-  const [amount, setAmount] = useState('10');
+  const [amount, setAmount] = useState('100');
   const [currency, setCurrency] = useState<'USDC' | 'USDT'>('USDT');
   const [countryCode, setCountryCode] = useState(FLUTTERWAVE_FUNDING_COUNTRIES[0].code);
   const [message, setMessage] = useState<string | null>(null);
@@ -3196,11 +3208,19 @@ function FundTokensDialog() {
     FLUTTERWAVE_FUNDING_COUNTRIES.find((c) => c.code === countryCode) ??
     FLUTTERWAVE_FUNDING_COUNTRIES[0];
 
+  // The trainer types the DL amount they want to receive; the USD amount
+  // actually sent to checkout (crypto or Flutterwave) is derived from the
+  // live token/USD rate, same as WithdrawTokensDialog derives its USD
+  // estimate from tokenAmount -- funding just runs that conversion in the
+  // opposite direction since the backend's deposit endpoints take usdAmount.
+  const tokenAmount = Number(amount) || 0;
+  const usdAmount = tokenUsdRate ? tokenAmount * tokenUsdRate : 0;
+  const localAmount = localCurrency ? usdAmount * Number(localCurrency.usdExchangeRate) : null;
+
   async function submitAmount(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
     try {
-      const usdAmount = Number(amount);
       if (method === 'crypto') {
         const result = await requestOtp({ usdAmount, currency }).unwrap();
         setOtpRequestId(result.otpRequestId);
@@ -3223,7 +3243,7 @@ function FundTokensDialog() {
     try {
       if (method === 'crypto') {
         const result = await createDeposit({
-          usdAmount: Number(amount),
+          usdAmount,
           currency,
           otpRequestId,
           code,
@@ -3231,7 +3251,7 @@ function FundTokensDialog() {
         window.location.assign(result.hostedCheckoutUrl);
       } else {
         const result = await createFlutterwaveDeposit({
-          usdAmount: Number(amount),
+          usdAmount,
           currency: selectedCountry.currency,
           country: selectedCountry.code,
           otpRequestId,
@@ -3329,16 +3349,25 @@ function FundTokensDialog() {
               </div>
             </fieldset>
             <label className="grid gap-1.5 text-sm font-bold">
-              Amount in USD
+              Amount in DL
               <input
                 className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                min="1"
+                min="0.00000001"
                 onChange={(event) => setAmount(event.target.value)}
                 required
-                step="0.01"
+                step="any"
                 type="number"
                 value={amount}
               />
+              {tokenAmount > 0 && (
+                <span className="text-xs font-semibold text-muted">
+                  ≈ {formatUsd(usdAmount)}
+                  {method === 'fiat' &&
+                    localCurrency &&
+                    localAmount !== null &&
+                    ` · ≈ ${formatLocalCurrency(localAmount, localCurrency.code)}`}
+                </span>
+              )}
             </label>
             {method === 'crypto' ? (
               <fieldset className="grid gap-2">
@@ -3383,7 +3412,8 @@ function FundTokensDialog() {
               </p>
             )}
             <ActionButton
-              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={usdAmount <= 0}
               pending={isRequestingCode}
               pendingLabel="Sending code"
               type="submit"
