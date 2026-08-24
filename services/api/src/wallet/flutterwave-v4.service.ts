@@ -59,6 +59,8 @@ export interface CreateBankRecipientParams {
   country: RecipientCountry;
   bankCode: string;
   accountNumber: string;
+  firstName: string;
+  lastName: string;
 }
 
 export interface CreateMobileMoneyRecipientParams {
@@ -66,6 +68,8 @@ export interface CreateMobileMoneyRecipientParams {
   country: RecipientCountry;
   network: string;
   phoneNumber: string;
+  firstName: string;
+  lastName: string;
 }
 
 export type CreateRecipientParams = CreateBankRecipientParams | CreateMobileMoneyRecipientParams;
@@ -120,6 +124,20 @@ const MOBILE_MONEY_RECIPIENT_TYPE: Record<RecipientCountry, string | null> = {
   UG: 'mobile_money_ugx',
   ZA: null,
   TZ: 'mobile_money_tzs',
+};
+
+/**
+ * bank_ghs/bank_kes/bank_ugx require bank.branch in Flutterwave's schema
+ * (confirmed live -- bank_ngn/bank_zar do not). PayoutAccount never
+ * collects a bank branch from trainers today, so these three countries'
+ * BANK payouts intentionally stay on v3 until that's added to the payout
+ * account form rather than guessing a placeholder branch value into a
+ * real payout.
+ */
+const BANK_RECIPIENT_REQUIRES_BRANCH: Partial<Record<RecipientCountry, true>> = {
+  GH: true,
+  KE: true,
+  UG: true,
 };
 
 /**
@@ -364,14 +382,30 @@ export class FlutterwaveV4Service implements PayoutProvider {
 
   /** Dispatches on country + type per BANK_RECIPIENT_TYPE/MOBILE_MONEY_RECIPIENT_TYPE -- throws a clear error for an unmapped combination rather than guessing a type string. */
   async createRecipient(params: CreateRecipientParams): Promise<RecipientResult> {
+    // name.first/name.last is required for every recipient type except
+    // bank_ngn, where the field is read-only (system-resolved from the
+    // account) and sending it is rejected -- confirmed against Flutterwave's
+    // schema.
+    const name =
+      params.country === 'NG' && params.type === 'bank' ? undefined : { first: params.firstName, last: params.lastName };
+
     const body =
       params.type === 'bank'
-        ? {
-            type: requireRecipientType(BANK_RECIPIENT_TYPE, params.country, 'bank'),
-            bank: { account_number: params.accountNumber, code: params.bankCode },
-          }
+        ? (() => {
+            if (BANK_RECIPIENT_REQUIRES_BRANCH[params.country]) {
+              throw new BadGatewayException(
+                `Flutterwave v4 bank payouts to ${params.country} require a bank branch, which this payout account does not have on file -- use Flutterwave v3 for this payout instead.`,
+              );
+            }
+            return {
+              type: requireRecipientType(BANK_RECIPIENT_TYPE, params.country, 'bank'),
+              ...(name ? { name } : {}),
+              bank: { account_number: params.accountNumber, code: params.bankCode },
+            };
+          })()
         : {
             type: requireRecipientType(MOBILE_MONEY_RECIPIENT_TYPE, params.country, 'mobile money'),
+            name,
             mobile_money: { network: params.network, msisdn: params.phoneNumber },
           };
     const res = await fetch(`${this.baseUrl}/transfers/recipients`, {
@@ -403,7 +437,14 @@ export class FlutterwaveV4Service implements PayoutProvider {
     const res = await fetch(`${this.baseUrl}/transfers/senders`, {
       method: 'POST',
       headers: await this.authHeaders({ 'X-Idempotency-Key': randomUUID() }),
-      body: JSON.stringify({ type: 'generic_sender' }),
+      // generic_sender requires name.first/name.last (confirmed against
+      // Flutterwave's schema after a live 10400 REQUEST_NOT_VALID) -- this
+      // sender represents the platform itself, not a trainer, so it's a
+      // fixed identity rather than anything user-supplied.
+      body: JSON.stringify({
+        type: 'generic_sender',
+        name: { first: 'Dialect', last: 'Library' },
+      }),
     });
     const raw = await readFlutterwaveJson(res);
     if (!res.ok) {

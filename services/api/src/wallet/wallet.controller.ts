@@ -2428,6 +2428,16 @@ export class WalletController {
       let recipientId = payoutAccount.providerRecipientId;
       if (!recipientId) {
         const country = payoutAccount.country.toUpperCase() as RecipientCountry;
+        let name: { firstName: string; lastName: string };
+        if (payoutAccount.type === 'BANK' && payoutAccount.accountName) {
+          name = splitFullName(payoutAccount.accountName);
+        } else {
+          const owner = await this.prisma.user.findUniqueOrThrow({
+            where: { id: payoutAccount.userId },
+            select: { firstName: true, lastName: true },
+          });
+          name = { firstName: owner.firstName ?? 'Trainer', lastName: owner.lastName ?? 'Account' };
+        }
         const created = await this.flutterwaveV4.createRecipient(
           payoutAccount.type === 'BANK'
             ? {
@@ -2435,12 +2445,14 @@ export class WalletController {
                 country,
                 bankCode: payoutAccount.bankCode!,
                 accountNumber: accountNumber!,
+                ...name,
               }
             : {
                 type: 'mobile_money',
                 country,
                 network: payoutAccount.mobileMoneyNetwork!,
                 phoneNumber: accountNumber!,
+                ...name,
               },
         );
         recipientId = created.recipientId;
@@ -3446,6 +3458,13 @@ export class WalletController {
       };
     });
   }
+}
+
+/** Flutterwave v4 recipients want name.first/name.last; PayoutAccount.accountName is one combined string (from v3's resolveAccount) -- best-effort split on the first space, last word(s) as the surname. */
+function splitFullName(fullName: string): { firstName: string; lastName: string } {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], lastName: parts[0] };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
 }
 
 function flwString(value: unknown): string | undefined {

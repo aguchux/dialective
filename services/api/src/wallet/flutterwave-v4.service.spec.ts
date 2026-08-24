@@ -83,13 +83,7 @@ describe('FlutterwaveV4Service', () => {
       fetchSpy.mockResolvedValue(mockTokenResponse());
     });
 
-    it.each([
-      ['NG', 'bank_ngn'],
-      ['GH', 'bank_ghs'],
-      ['KE', 'bank_kes'],
-      ['UG', 'bank_ugx'],
-      ['ZA', 'bank_zar'],
-    ] as const)('resolves the correct bank recipient type for %s', async (country, expectedType) => {
+    it('resolves bank_ngn for Nigeria and omits name (read-only for this type)', async () => {
       fetchSpy.mockResolvedValueOnce(mockTokenResponse());
       fetchSpy.mockResolvedValueOnce({
         ok: true,
@@ -97,16 +91,57 @@ describe('FlutterwaveV4Service', () => {
       } as Response);
       await service.createRecipient({
         type: 'bank',
-        country,
+        country: 'NG',
         bankCode: '044',
         accountNumber: '0000000000',
+        firstName: 'Ada',
+        lastName: 'Obi',
       });
       const recipientCall = fetchSpy.mock.calls.find((call) =>
         String(call[0]).endsWith('/transfers/recipients'),
       );
       const body = JSON.parse((recipientCall![1] as RequestInit).body as string);
-      expect(body.type).toBe(expectedType);
+      expect(body.type).toBe('bank_ngn');
+      expect(body.name).toBeUndefined();
     });
+
+    it('resolves bank_zar for South Africa and includes name.first/name.last', async () => {
+      fetchSpy.mockResolvedValueOnce(mockTokenResponse());
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify({ data: { id: 'rcb_2' } }),
+      } as Response);
+      await service.createRecipient({
+        type: 'bank',
+        country: 'ZA',
+        bankCode: '000',
+        accountNumber: '0000000000',
+        firstName: 'Ada',
+        lastName: 'Obi',
+      });
+      const recipientCall = fetchSpy.mock.calls.find((call) =>
+        String(call[0]).endsWith('/transfers/recipients'),
+      );
+      const body = JSON.parse((recipientCall![1] as RequestInit).body as string);
+      expect(body.type).toBe('bank_zar');
+      expect(body.name).toEqual({ first: 'Ada', last: 'Obi' });
+    });
+
+    it.each(['GH', 'KE', 'UG'] as const)(
+      'refuses %s bank payouts (Flutterwave requires a bank branch this app does not collect)',
+      async (country) => {
+        await expect(
+          service.createRecipient({
+            type: 'bank',
+            country,
+            bankCode: '000',
+            accountNumber: '0000000000',
+            firstName: 'Ada',
+            lastName: 'Obi',
+          }),
+        ).rejects.toThrow(/require a bank branch/);
+      },
+    );
 
     it('throws a clear error for an unmapped bank recipient country (Tanzania)', async () => {
       await expect(
@@ -115,6 +150,8 @@ describe('FlutterwaveV4Service', () => {
           country: 'TZ',
           bankCode: '000',
           accountNumber: '0000000000',
+          firstName: 'Ada',
+          lastName: 'Obi',
         }),
       ).rejects.toThrow(/does not support bank payouts for TZ/);
     });
@@ -126,27 +163,32 @@ describe('FlutterwaveV4Service', () => {
           country: 'NG',
           network: 'MTN',
           phoneNumber: '08012345678',
+          firstName: 'Ada',
+          lastName: 'Obi',
         }),
       ).rejects.toThrow(/does not support mobile money payouts for NG/);
     });
 
-    it('resolves the correct mobile money recipient type for Tanzania', async () => {
+    it('resolves the correct mobile money recipient type for Tanzania and includes name', async () => {
       fetchSpy.mockResolvedValueOnce(mockTokenResponse());
       fetchSpy.mockResolvedValueOnce({
         ok: true,
-        text: async () => JSON.stringify({ data: { id: 'rcb_2' } }),
+        text: async () => JSON.stringify({ data: { id: 'rcb_3' } }),
       } as Response);
       await service.createRecipient({
         type: 'mobile_money',
         country: 'TZ',
         network: 'MTN',
         phoneNumber: '0700000000',
+        firstName: 'Ada',
+        lastName: 'Obi',
       });
       const recipientCall = fetchSpy.mock.calls.find((call) =>
         String(call[0]).endsWith('/transfers/recipients'),
       );
       const body = JSON.parse((recipientCall![1] as RequestInit).body as string);
       expect(body.type).toBe('mobile_money_tzs');
+      expect(body.name).toEqual({ first: 'Ada', last: 'Obi' });
     });
   });
 

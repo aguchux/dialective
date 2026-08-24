@@ -74,6 +74,7 @@ export class PayoutAccountsController {
               country: dto.country.toUpperCase() as RecipientCountry,
               bankCode: dto.bankCode,
               accountNumber: dto.accountNumber,
+              ...splitName(resolved.accountName),
             })
           ).recipientId
         : null;
@@ -104,16 +105,23 @@ export class PayoutAccountsController {
       // No account-resolve endpoint is confirmed for Flutterwave v3 mobile
       // money -- stored UNVERIFIED, the frontend warns the trainer to
       // double-check the number before saving.
-      const providerRecipientId = (await this.platformSettings.isFlutterwaveV4Enabled())
-        ? (
-            await this.flutterwaveV4.createRecipient({
-              type: 'mobile_money',
-              country: dto.country.toUpperCase() as RecipientCountry,
-              network: dto.mobileMoneyNetwork,
-              phoneNumber: dto.mobileMoneyNumber,
-            })
-          ).recipientId
-        : null;
+      let providerRecipientId: string | null = null;
+      if (await this.platformSettings.isFlutterwaveV4Enabled()) {
+        const user = await this.prisma.user.findUniqueOrThrow({
+          where: { id: req.user.sub },
+          select: { firstName: true, lastName: true },
+        });
+        providerRecipientId = (
+          await this.flutterwaveV4.createRecipient({
+            type: 'mobile_money',
+            country: dto.country.toUpperCase() as RecipientCountry,
+            network: dto.mobileMoneyNetwork,
+            phoneNumber: dto.mobileMoneyNumber,
+            firstName: user.firstName ?? 'Trainer',
+            lastName: user.lastName ?? 'Account',
+          })
+        ).recipientId;
+      }
       const account = await this.prisma.payoutAccount.create({
         data: {
           userId: req.user.sub,
@@ -223,4 +231,11 @@ function toPublicPayoutAccount(account: {
     lastUsedAt: account.lastUsedAt,
     createdAt: account.createdAt,
   };
+}
+
+/** Flutterwave v4 recipients want name.first/name.last; Flutterwave's own resolveAccount only returns one combined string -- best-effort split on the first space, last word(s) as the surname. */
+function splitName(fullName: string): { firstName: string; lastName: string } {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], lastName: parts[0] };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
 }
