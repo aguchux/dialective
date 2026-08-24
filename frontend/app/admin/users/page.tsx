@@ -8,6 +8,7 @@ import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { ActionButton, ActionSpinner } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
 import {
+  KycStatus,
   normalizeErrorMessage,
   PublicUser,
   useCreateAdminWalletAdjustmentMutation,
@@ -34,6 +35,24 @@ const statusStyles: Record<string, string> = {
   SUSPENDED: 'bg-[#fff3e0] text-[#8a4b0f]',
   BLOCKED: 'bg-[#fde8e8] text-[#a3242f]',
 };
+
+const kycStyles: Record<KycStatus, string> = {
+  NOT_STARTED: 'bg-slate-100 text-slate-700',
+  IN_PROGRESS: 'bg-amber-50 text-amber-700',
+  IN_REVIEW: 'bg-amber-50 text-amber-700',
+  APPROVED: 'bg-emerald-50 text-emerald-700',
+  DECLINED: 'bg-red-50 text-red-700',
+  ABANDONED: 'bg-slate-100 text-slate-700',
+  EXPIRED: 'bg-slate-100 text-slate-700',
+};
+
+function KycBadge({ status }: { status: KycStatus }) {
+  return (
+    <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${kycStyles[status]}`}>
+      {status.replace(/_/g, ' ')}
+    </span>
+  );
+}
 
 function formatTokens(value: string | number) {
   return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 4 });
@@ -161,6 +180,12 @@ export default function AdminUsersPage() {
           {u.status}
         </span>
       ),
+    },
+    {
+      key: 'kycStatus',
+      header: 'KYC (Didit)',
+      sortValue: (u) => u.kycStatus,
+      render: (u) => <KycBadge status={u.kycStatus} />,
     },
     {
       key: 'walletBalance',

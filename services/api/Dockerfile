@@ -21,7 +21,7 @@ COPY services/api/prisma.config.ts services/api/tsconfig.json ./services/api/
 COPY services/api/prisma ./services/api/prisma
 COPY services/api/src ./services/api/src
 COPY models/asr-registry.yaml ./models/asr-registry.yaml
-COPY docs/AI-Assistant-Knowledge-Base.md ./docs/AI-Assistant-Knowledge-Base.md
+COPY _aikb ./_aikb
 # packages/db must be compiled (its package.json "main" points at dist/,
 # since Python/plain-node consumers -- and this image's own runtime stage --
 # can't require() raw TypeScript) after prisma generate populates
@@ -81,7 +81,7 @@ RUN node -e " \
 "
 COPY --from=build /app/services/api/dist ./services/api/dist
 COPY models/asr-registry.yaml ./services/api/dist/models/asr-registry.yaml
-COPY --from=build /app/docs/AI-Assistant-Knowledge-Base.md ./services/api/dist/docs/AI-Assistant-Knowledge-Base.md
+COPY --from=build /app/_aikb ./services/api/dist/aikb
 WORKDIR /app/services/api
 RUN node -e "require('reflect-metadata'); require('@dialectiva/db')"
 USER node

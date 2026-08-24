@@ -32,6 +32,16 @@ const statusStyles: Record<string, string> = {
   BLOCKED: 'bg-[#fde8e8] text-[#a3242f]',
 };
 
+const kycStyles: Record<string, string> = {
+  NOT_STARTED: 'bg-slate-100 text-slate-700',
+  IN_PROGRESS: 'bg-amber-50 text-amber-700',
+  IN_REVIEW: 'bg-amber-50 text-amber-700',
+  APPROVED: 'bg-emerald-50 text-emerald-700',
+  DECLINED: 'bg-red-50 text-red-700',
+  ABANDONED: 'bg-slate-100 text-slate-700',
+  EXPIRED: 'bg-slate-100 text-slate-700',
+};
+
 function formatTokens(value: string | number) {
   return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
@@ -111,6 +121,20 @@ export default function AdminUserDetailPage() {
               <Field label="Email verified" value={user.emailVerified ? 'Yes' : 'No'} />
               <Field label="Phone" value={user.phoneNumber ?? 'Not set'} />
               <Field label="Phone verified" value={user.phoneVerified ? 'Yes' : 'No'} />
+              <Field
+                label="KYC (Didit)"
+                value={
+                  <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${kycStyles[user.kycStatus]}`}>
+                    {user.kycStatus.replace(/_/g, ' ')}
+                  </span>
+                }
+              />
+              {user.kycVerifiedAt && (
+                <Field
+                  label="KYC verified at"
+                  value={new Date(user.kycVerifiedAt).toLocaleString()}
+                />
+              )}
               <Field label="Onboarding complete" value={user.onboardingComplete ? 'Yes' : 'No'} />
               <Field label="Referral code" value={user.referralCode} />
               <Field label="Dialect" value={dialectName ?? 'Not set'} />

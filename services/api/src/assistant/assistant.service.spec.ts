@@ -17,6 +17,9 @@ function buildSettings(overrides: Partial<Record<string, unknown>> = {}) {
 const services: AssistantService[] = [];
 function makeService(...args: ConstructorParameters<typeof AssistantService>) {
   const service = new AssistantService(...args);
+  jest
+    .spyOn(service as unknown as { loadKnowledge(): Promise<string> }, 'loadKnowledge')
+    .mockResolvedValue('# Test knowledge base');
   services.push(service);
   return service;
 }
@@ -104,5 +107,52 @@ describe('AssistantService', () => {
     const prompt = llm.normalize.mock.calls[0][0] as string;
     expect(prompt).not.toContain('disabled the knowledge base restriction');
     expect(prompt).toContain('Earlier question.');
+  });
+
+  it('builds a published-content registry without exposing drafts or private data', async () => {
+    const settings = buildSettings();
+    const prisma = {
+      blogPost: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { title: 'Recording tips', slug: 'recording-tips', excerpt: 'Record in a quiet room.' },
+          ]),
+      },
+      course: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            title: 'Getting started',
+            slug: 'getting-started',
+            summary: 'Learn the contribution flow.',
+            visibility: 'PUBLIC',
+          },
+          {
+            title: 'Trainer guide',
+            slug: 'trainer-guide',
+            summary: 'A member course.',
+            visibility: 'PRIVATE',
+          },
+        ]),
+      },
+    };
+    const service = makeService(
+      settings as never,
+      { normalize: jest.fn() } as never,
+      prisma as never,
+    );
+
+    // @ts-expect-error -- private method under test
+    const registry = await service.loadContentRegistry();
+
+    expect(registry).toContain('[Recording tips](/blog/recording-tips)');
+    expect(registry).toContain('[Getting started](/learn/getting-started)');
+    expect(registry).toContain('[Trainer guide](/dashboard/learn/trainer-guide)');
+    expect(prisma.blogPost.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: 'PUBLISHED' } }),
+    );
+    expect(prisma.course.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: 'PUBLISHED' } }),
+    );
   });
 });
