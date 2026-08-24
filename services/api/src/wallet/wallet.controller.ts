@@ -714,6 +714,11 @@ export class WalletController {
       );
     }
 
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: req.user.sub },
+      select: { firstName: true, lastName: true, phoneNumber: true },
+    });
+
     const wallet = await this.getOrCreateWallet(req.user.sub);
     const rate = await this.getCurrentTokenUsdRate();
     const tokenAmount = usdToTokens(body.usdAmount, rate);
@@ -743,6 +748,8 @@ export class WalletController {
         txRef,
         redirectUrl,
         customerEmail: req.user.email,
+        customerName: [user.firstName, user.lastName].filter(Boolean).join(' ') || undefined,
+        customerPhone: user.phoneNumber ?? undefined,
       });
     } catch (err) {
       await this.prisma.deposit.update({ where: { id: deposit.id }, data: { status: 'failed' } });

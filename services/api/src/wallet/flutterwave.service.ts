@@ -102,7 +102,7 @@ export class FlutterwaveService implements PayoutProvider {
         customer: {
           email: params.customerEmail,
           name: params.customerName,
-          phonenumber: params.customerPhone,
+          phone_number: params.customerPhone,
         },
       }),
     });
