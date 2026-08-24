@@ -53,3 +53,23 @@ spec:
                     secretKeyRef:
                       name: flutterwave-creds
                       key: flutterwave_webhook_secret_hash
+                - name: FLUTTERWAVE_V4_CLIENT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: flutterwave-v4-creds
+                      key: flutterwave_v4_client_id
+                - name: FLUTTERWAVE_V4_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: flutterwave-v4-creds
+                      key: flutterwave_v4_client_secret
+                - name: FLUTTERWAVE_V4_WEBHOOK_SECRET_HASH
+                  valueFrom:
+                    secretKeyRef:
+                      name: flutterwave-v4-creds
+                      key: flutterwave_v4_webhook_secret_hash
+                - name: FLUTTERWAVE_V4_BASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: flutterwave-v4-creds
+                      key: flutterwave_v4_base_url

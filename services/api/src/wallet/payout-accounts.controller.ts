@@ -20,8 +20,10 @@ import {
 } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { encryptPayoutField, maskAccountNumber } from '../common/payout-crypto.util';
 import { FlutterwaveService } from './flutterwave.service';
+import { FlutterwaveV4Service, RecipientCountry } from './flutterwave-v4.service';
 import { CreatePayoutAccountDto } from './dto/create-payout-account.dto';
 import { UpdatePayoutAccountDto } from './dto/update-payout-account.dto';
 
@@ -36,6 +38,8 @@ export class PayoutAccountsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly flutterwave: FlutterwaveService,
+    private readonly flutterwaveV4: FlutterwaveV4Service,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   @Get()
@@ -55,10 +59,24 @@ export class PayoutAccountsController {
       if (!dto.bankCode || !dto.accountNumber) {
         throw new BadRequestException('bankCode and accountNumber are required for a bank account');
       }
+      // v3's resolveAccount remains the account-name verification source of
+      // truth even under the v4 toggle -- v4 recipient creation doesn't
+      // verify the account holder's name the same way (see
+      // FlutterwaveV4Service's createRecipient doc comment).
       const resolved = await this.flutterwave.resolveAccount({
         accountBank: dto.bankCode,
         accountNumber: dto.accountNumber,
       });
+      const providerRecipientId = (await this.platformSettings.isFlutterwaveV4Enabled())
+        ? (
+            await this.flutterwaveV4.createRecipient({
+              type: 'bank',
+              country: dto.country.toUpperCase() as RecipientCountry,
+              bankCode: dto.bankCode,
+              accountNumber: dto.accountNumber,
+            })
+          ).recipientId
+        : null;
       const account = await this.prisma.payoutAccount.create({
         data: {
           userId: req.user.sub,
@@ -71,6 +89,7 @@ export class PayoutAccountsController {
           accountNumberEncryptedJson: { ...encryptPayoutField(dto.accountNumber) },
           accountNumberMasked: maskAccountNumber(dto.accountNumber),
           accountName: resolved.accountName,
+          providerRecipientId,
         },
       });
       return toPublicPayoutAccount(account);
@@ -85,6 +104,16 @@ export class PayoutAccountsController {
       // No account-resolve endpoint is confirmed for Flutterwave v3 mobile
       // money -- stored UNVERIFIED, the frontend warns the trainer to
       // double-check the number before saving.
+      const providerRecipientId = (await this.platformSettings.isFlutterwaveV4Enabled())
+        ? (
+            await this.flutterwaveV4.createRecipient({
+              type: 'mobile_money',
+              country: dto.country.toUpperCase() as RecipientCountry,
+              network: dto.mobileMoneyNetwork,
+              phoneNumber: dto.mobileMoneyNumber,
+            })
+          ).recipientId
+        : null;
       const account = await this.prisma.payoutAccount.create({
         data: {
           userId: req.user.sub,
@@ -96,6 +125,7 @@ export class PayoutAccountsController {
           mobileMoneyNetwork: dto.mobileMoneyNetwork,
           mobileMoneyNumberEncryptedJson: { ...encryptPayoutField(dto.mobileMoneyNumber) },
           mobileMoneyNumberMasked: maskAccountNumber(dto.mobileMoneyNumber),
+          providerRecipientId,
         },
       });
       return toPublicPayoutAccount(account);

@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { NowPaymentsService } from './nowpayments.service';
 import { FlutterwaveService } from './flutterwave.service';
+import { FlutterwaveV4Service } from './flutterwave-v4.service';
 
 const NOWPAYMENTS_PAYOUT_FINISHED_STATUSES = new Set([
   'finished',
@@ -22,6 +23,10 @@ const NOWPAYMENTS_PAYOUT_FAILED_STATUSES = new Set([
 ]);
 const FLUTTERWAVE_TRANSFER_FINISHED_STATUSES = new Set(['successful']);
 const FLUTTERWAVE_TRANSFER_FAILED_STATUSES = new Set(['failed', 'cancelled']);
+// v4 transfer status enum is the same 6 values as v3 -- kept as a separate
+// constant so a future divergence doesn't require re-splitting this later.
+const FLUTTERWAVE_V4_TRANSFER_FINISHED_STATUSES = new Set(['successful']);
+const FLUTTERWAVE_V4_TRANSFER_FAILED_STATUSES = new Set(['failed', 'cancelled']);
 
 /** How long a PROCESSING withdrawal can go without a status change before it's logged as stuck (payout-automation plan point 9's "alert/log if stale too long"). */
 const STALE_PROCESSING_HOURS = 24;
@@ -55,15 +60,21 @@ export class WithdrawalReconciliationService {
     private readonly prisma: PrismaService,
     private readonly nowPayments: NowPaymentsService,
     private readonly flutterwave: FlutterwaveService,
+    private readonly flutterwaveV4: FlutterwaveV4Service,
     private readonly platformSettings: PlatformSettingsService,
   ) {}
 
-  async run(): Promise<{ nowpayments: ReconcileTally; flutterwave: ReconcileTally }> {
-    const [nowpayments, flutterwave] = await Promise.all([
+  async run(): Promise<{
+    nowpayments: ReconcileTally;
+    flutterwave: ReconcileTally;
+    flutterwaveV4: ReconcileTally;
+  }> {
+    const [nowpayments, flutterwave, flutterwaveV4] = await Promise.all([
       this.runNowPayments(),
       this.runFlutterwave(),
+      this.runFlutterwaveV4(),
     ]);
-    return { nowpayments, flutterwave };
+    return { nowpayments, flutterwave, flutterwaveV4 };
   }
 
   private async runNowPayments(): Promise<ReconcileTally> {
@@ -192,6 +203,78 @@ export class WithdrawalReconciliationService {
     return { checked: processing.length, paid, failed, stillProcessing, stale };
   }
 
+  /**
+   * v4 counterpart to runFlutterwave -- separate loop (not folded into the
+   * v3 one) since the two rails write to different WithdrawalRequest.provider
+   * tags and different payout-event tables (FlutterwaveV4TransferEvent vs
+   * FlutterwavePayoutEvent), matching the existing "each provider gets its
+   * own loop" convention this class already follows for NOWPayments vs v3.
+   * Gated by the same isFlutterwavePayoutsEnabled kill switch as v3 --
+   * there's no separate v4-only payouts toggle, only isFlutterwaveV4Enabled
+   * (which decides which rail NEW submissions use, not whether existing v4
+   * withdrawals still get reconciled).
+   */
+  private async runFlutterwaveV4(): Promise<ReconcileTally> {
+    if (!(await this.platformSettings.isFlutterwavePayoutsEnabled())) {
+      this.logger.log('Flutterwave payouts disabled -- skipping v4 reconciliation');
+      return { checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 };
+    }
+
+    const processing = await this.prisma.withdrawalRequest.findMany({
+      where: {
+        status: WithdrawalStatus.PROCESSING,
+        provider: 'flutterwave-v4',
+        providerPayoutId: { not: null },
+      },
+      select: { id: true, providerPayoutId: true, submittedToProviderAt: true },
+    });
+
+    let paid = 0;
+    let failed = 0;
+    let stillProcessing = 0;
+    let stale = 0;
+    const now = Date.now();
+
+    for (const withdrawal of processing) {
+      try {
+        const result = await this.flutterwaveV4.getTransferStatus(withdrawal.providerPayoutId!);
+        const status = this.mapFlutterwaveV4Status(result.status);
+
+        if (status === WithdrawalStatus.PROCESSING) {
+          stillProcessing += 1;
+          const submittedAt = withdrawal.submittedToProviderAt?.getTime();
+          const staleForHours = submittedAt ? (now - submittedAt) / (60 * 60 * 1000) : 0;
+          if (staleForHours > STALE_PROCESSING_HOURS) {
+            stale += 1;
+            this.logger.warn(
+              `Withdrawal stuck PROCESSING for ${staleForHours.toFixed(1)}h: withdrawal=${withdrawal.id} providerPayoutId=${withdrawal.providerPayoutId}`,
+            );
+          }
+        } else if (status === WithdrawalStatus.PAID) {
+          paid += 1;
+        } else {
+          failed += 1;
+        }
+
+        await this.recordFlutterwaveV4Status(
+          withdrawal.id,
+          withdrawal.providerPayoutId!,
+          status,
+          result.status,
+          result.raw,
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Reconciliation poll failed for withdrawal=${withdrawal.id}: ${message}`);
+      }
+    }
+
+    this.logger.log(
+      `Flutterwave v4 withdrawal reconciliation: checked=${processing.length} paid=${paid} failed=${failed} stillProcessing=${stillProcessing} stale=${stale}`,
+    );
+    return { checked: processing.length, paid, failed, stillProcessing, stale };
+  }
+
   private mapNowPaymentsStatus(status: string | null | undefined): WithdrawalStatus {
     const normalized = status?.toLowerCase();
     if (normalized && NOWPAYMENTS_PAYOUT_FINISHED_STATUSES.has(normalized))
@@ -206,6 +289,15 @@ export class WithdrawalReconciliationService {
     if (normalized && FLUTTERWAVE_TRANSFER_FINISHED_STATUSES.has(normalized))
       return WithdrawalStatus.PAID;
     if (normalized && FLUTTERWAVE_TRANSFER_FAILED_STATUSES.has(normalized))
+      return WithdrawalStatus.FAILED;
+    return WithdrawalStatus.PROCESSING;
+  }
+
+  private mapFlutterwaveV4Status(status: string | null | undefined): WithdrawalStatus {
+    const normalized = status?.toLowerCase();
+    if (normalized && FLUTTERWAVE_V4_TRANSFER_FINISHED_STATUSES.has(normalized))
+      return WithdrawalStatus.PAID;
+    if (normalized && FLUTTERWAVE_V4_TRANSFER_FAILED_STATUSES.has(normalized))
       return WithdrawalStatus.FAILED;
     return WithdrawalStatus.PROCESSING;
   }
@@ -274,6 +366,42 @@ export class WithdrawalReconciliationService {
           eventHash: randomUUID(),
           withdrawalRequestId: withdrawalId,
           providerPayoutId,
+          eventType: 'reconcile',
+          providerStatus,
+          payload: payload as Prisma.InputJsonValue,
+        },
+      }),
+    ]);
+  }
+
+  private async recordFlutterwaveV4Status(
+    withdrawalId: string,
+    transferId: string,
+    status: WithdrawalStatus,
+    providerStatus: string | null,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.withdrawalRequest.update({
+        where: { id: withdrawalId },
+        data: {
+          status,
+          providerStatus: providerStatus ?? undefined,
+          providerPayload: payload as Prisma.InputJsonValue,
+          providerError:
+            status === WithdrawalStatus.FAILED
+              ? (providerStatus ?? 'provider reported a terminal failure')
+              : null,
+          providerSettledAt: status === WithdrawalStatus.PAID ? now : undefined,
+          resolvedAt: status === WithdrawalStatus.PAID ? now : undefined,
+        },
+      }),
+      this.prisma.flutterwaveV4TransferEvent.create({
+        data: {
+          eventHash: randomUUID(),
+          withdrawalRequestId: withdrawalId,
+          transferId,
           eventType: 'reconcile',
           providerStatus,
           payload: payload as Prisma.InputJsonValue,

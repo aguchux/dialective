@@ -13,11 +13,13 @@ describe('WithdrawalReconciliationService', () => {
       },
       nowPaymentsPayoutEvent: { create: jest.fn().mockResolvedValue({}) },
       flutterwavePayoutEvent: { create: jest.fn().mockResolvedValue({}) },
+      flutterwaveV4TransferEvent: { create: jest.fn().mockResolvedValue({}) },
     };
     prisma.$transaction = jest.fn(async (ops: unknown[]) => Promise.all(ops as Promise<unknown>[]));
 
     const nowPayments = { getPayoutStatus: jest.fn() };
     const flutterwave = { getTransferStatus: jest.fn() };
+    const flutterwaveV4 = { getTransferStatus: jest.fn() };
     const platformSettings = {
       isNowPaymentsPayoutsEnabled: jest.fn().mockResolvedValue(true),
       isFlutterwavePayoutsEnabled: jest.fn().mockResolvedValue(true),
@@ -26,9 +28,10 @@ describe('WithdrawalReconciliationService', () => {
       prisma as never,
       nowPayments as never,
       flutterwave as never,
+      flutterwaveV4 as never,
       platformSettings as never,
     );
-    return { service, prisma, nowPayments, flutterwave, platformSettings };
+    return { service, prisma, nowPayments, flutterwave, flutterwaveV4, platformSettings };
   }
 
   it('does nothing for either provider when both are disabled', async () => {

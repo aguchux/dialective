@@ -791,6 +791,7 @@ export interface PublicClientSettings {
   isKycRequiredForWithdrawals: boolean;
   kycMinWithdrawalTokens: string;
   isKycRequiredOnboarding: boolean;
+  isFlutterwaveV4Enabled: boolean;
 }
 
 export type EarningsChartRange = 'week' | 'month' | 'year';
@@ -1034,6 +1035,7 @@ export interface PlatformSettings {
   allowedWithdrawalNetworks: string;
   isFlutterwaveFundingEnabled: boolean;
   isFlutterwavePayoutsEnabled: boolean;
+  isFlutterwaveV4Enabled: boolean;
   allowedFlutterwaveCurrencies: string;
   allowedFlutterwaveCountries: string;
   withdrawalFeeMode: string;
@@ -1122,6 +1124,7 @@ export interface PlatformSettingsInput {
   allowedWithdrawalNetworks?: string;
   isFlutterwaveFundingEnabled?: boolean;
   isFlutterwavePayoutsEnabled?: boolean;
+  isFlutterwaveV4Enabled?: boolean;
   allowedFlutterwaveCurrencies?: string;
   allowedFlutterwaveCountries?: string;
   withdrawalFeeMode?: string;
@@ -1975,8 +1978,19 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/wallet/deposits/flutterwave/otp', method: 'POST', body }),
     }),
     createFlutterwaveDeposit: builder.mutation<
-      { depositId: string; hostedCheckoutUrl: string },
-      { usdAmount: number; currency: string; country: string; otpRequestId: string; code: string }
+      | { depositId: string; hostedCheckoutUrl: string }
+      | { depositId: string; virtualAccount: { accountNumber: string; bankName: string; note: string | null } }
+      | { depositId: string; redirectUrl: string | null },
+      {
+        usdAmount: number;
+        currency: string;
+        country: string;
+        method?: 'bank_transfer' | 'mobile_money';
+        mobileMoneyNetwork?: string;
+        mobileMoneyNumber?: string;
+        otpRequestId: string;
+        code: string;
+      }
     >({
       query: (body) => ({ url: '/wallet/deposits/flutterwave', method: 'POST', body }),
     }),
@@ -1985,6 +1999,12 @@ export const dialectivaApi = createApi({
       string
     >({
       query: (id) => ({ url: `/wallet/deposits/flutterwave/${id}/verify` }),
+    }),
+    checkFlutterwaveDepositStatus: builder.mutation<
+      { depositId: string; status: string; credited: boolean },
+      string
+    >({
+      query: (id) => ({ url: `/wallet/deposits/flutterwave/${id}/check-status`, method: 'POST' }),
     }),
     requestWithdrawalOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
@@ -3137,6 +3157,7 @@ export const {
   useRequestFlutterwaveDepositOtpMutation,
   useCreateFlutterwaveDepositMutation,
   useLazyVerifyFlutterwaveDepositQuery,
+  useCheckFlutterwaveDepositStatusMutation,
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
   useListAdminWithdrawalsQuery,

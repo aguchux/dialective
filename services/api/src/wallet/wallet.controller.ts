@@ -47,6 +47,7 @@ import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { OtpService } from '../otp/otp.service';
 import { NowPaymentsService } from './nowpayments.service';
 import { FlutterwaveService } from './flutterwave.service';
+import { FlutterwaveV4Service, RecipientCountry } from './flutterwave-v4.service';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateFlutterwaveDepositDto } from './dto/create-flutterwave-deposit.dto';
 import { RequestFlutterwaveDepositOtpDto } from './dto/request-flutterwave-deposit-otp.dto';
@@ -103,6 +104,13 @@ const NOWPAYMENTS_PAYOUT_FAILED_STATUSES = new Set([
 const FLUTTERWAVE_TRANSFER_FINISHED_STATUSES = new Set(['successful']);
 const FLUTTERWAVE_TRANSFER_FAILED_STATUSES = new Set(['failed', 'cancelled']);
 
+// Flutterwave v4 transfer status enum: NEW, PENDING, FAILED, SUCCESSFUL,
+// CANCELLED, INITIATED -- same 6 values as v3, kept as a separate constant
+// (not shared) so a future divergence between the two API versions'
+// vocabularies doesn't require re-splitting this later.
+const FLUTTERWAVE_V4_TRANSFER_FINISHED_STATUSES = new Set(['successful']);
+const FLUTTERWAVE_V4_TRANSFER_FAILED_STATUSES = new Set(['failed', 'cancelled']);
+
 // How many top-ranked rows the dedicated /admin/leaderboard page ranks and
 // paginates through -- see buildEarnersRanking's doc comment for why a
 // leaderboard trades an exact full-table total for a fast bounded one.
@@ -134,6 +142,7 @@ export class WalletController {
     private readonly prisma: PrismaService,
     private readonly nowPayments: NowPaymentsService,
     private readonly flutterwave: FlutterwaveService,
+    private readonly flutterwaveV4: FlutterwaveV4Service,
     private readonly platformSettings: PlatformSettingsService,
     private readonly otp: OtpService,
     private readonly mail: MailService,
@@ -740,6 +749,26 @@ export class WalletController {
     const redirectUrl = new URL('/wallet/funding/flutterwave/callback', frontend).toString();
     const txRef = `deposit-${deposit.id}`;
 
+    if (await this.platformSettings.isFlutterwaveV4Enabled()) {
+      // Query param name Flutterwave itself appends on redirect is not
+      // confirmed for v4's auth_redirect scenario, so the deposit id is
+      // embedded directly in our own redirect_url instead of relying on
+      // any echoed-back reference -- the callback page reads it straight
+      // from its own query string, no guessing required.
+      const v4RedirectUrl = new URL(redirectUrl);
+      v4RedirectUrl.searchParams.set('depositId', deposit.id);
+      v4RedirectUrl.searchParams.set('provider', 'flutterwave-v4');
+      return this.createFlutterwaveV4Deposit({
+        req,
+        body,
+        user,
+        deposit,
+        localAmount,
+        redirectUrl: v4RedirectUrl.toString(),
+        reference: txRef,
+      });
+    }
+
     let payment;
     try {
       payment = await this.flutterwave.createPayment({
@@ -762,6 +791,131 @@ export class WalletController {
     });
 
     return { depositId: deposit.id, hostedCheckoutUrl: payment.link };
+  }
+
+  /**
+   * v4 funding: no hosted-checkout-link, no card. Bank transfer returns a
+   * generated virtual account (frontend shows it inline, trainer transfers
+   * manually, checkFlutterwaveDepositStatus polls); mobile money creates a
+   * payment_method + charge with the auth_redirect scenario, so the trainer
+   * still gets a redirect URL to send them to Flutterwave and land back on
+   * the existing callback page -- see FlutterwaveV4Service's doc comment
+   * for why card isn't an option here.
+   */
+  private async createFlutterwaveV4Deposit(params: {
+    req: AuthenticatedRequest;
+    body: CreateFlutterwaveDepositDto;
+    user: { firstName: string | null; lastName: string | null; phoneNumber: string | null };
+    deposit: { id: string };
+    localAmount: number;
+    redirectUrl: string;
+    reference: string;
+  }) {
+    const { req, body, user, deposit, localAmount, redirectUrl, reference } = params;
+    const currency = body.currency.toUpperCase();
+
+    try {
+      let customerId = (
+        await this.prisma.user.findUniqueOrThrow({
+          where: { id: req.user.sub },
+          select: { flutterwaveCustomerId: true },
+        })
+      ).flutterwaveCustomerId;
+      if (!customerId) {
+        const created = await this.flutterwaveV4.createCustomer({
+          email: req.user.email,
+          firstName: user.firstName ?? undefined,
+          lastName: user.lastName ?? undefined,
+          phoneNumber: user.phoneNumber ?? undefined,
+        });
+        customerId = created.customerId;
+        await this.prisma.user.update({
+          where: { id: req.user.sub },
+          data: { flutterwaveCustomerId: customerId },
+        });
+      }
+
+      if (body.method === 'mobile_money') {
+        if (!body.mobileMoneyNetwork || !body.mobileMoneyNumber) {
+          throw new UnprocessableEntityException(
+            'mobileMoneyNetwork and mobileMoneyNumber are required for a mobile money deposit',
+          );
+        }
+        const charge = await this.flutterwaveV4.createMobileMoneyCharge({
+          customerId,
+          network: body.mobileMoneyNetwork,
+          countryCode: body.country,
+          phoneNumber: body.mobileMoneyNumber,
+          amount: Number(localAmount.toFixed(2)),
+          currency,
+          reference,
+          redirectUrl,
+        });
+        await this.prisma.deposit.update({
+          where: { id: deposit.id },
+          data: { provider: 'flutterwave-v4', providerChargeId: charge.chargeId },
+        });
+        return { depositId: deposit.id, redirectUrl: charge.redirectUrl };
+      }
+
+      const virtualAccount = await this.flutterwaveV4.createVirtualAccount({
+        customerId,
+        amount: Number(localAmount.toFixed(2)),
+        currency,
+        reference,
+        narration: `Dialect Library DL funding ${deposit.id}`,
+      });
+      await this.prisma.deposit.update({
+        where: { id: deposit.id },
+        data: { provider: 'flutterwave-v4', providerChargeId: reference },
+      });
+      return {
+        depositId: deposit.id,
+        virtualAccount: {
+          accountNumber: virtualAccount.accountNumber,
+          bankName: virtualAccount.bankName,
+          note: virtualAccount.note,
+        },
+      };
+    } catch (err) {
+      await this.prisma.deposit.update({ where: { id: deposit.id }, data: { status: 'failed' } });
+      throw err;
+    }
+  }
+
+  /**
+   * Manual poll for the v4 bank-transfer path (JC-6 in the migration plan
+   * -- there's no redirect to return from, so the frontend calls this after
+   * the trainer confirms they've sent the transfer). Shares
+   * creditFlutterwaveDeposit with the v3/webhook paths -- it's keyed off
+   * Deposit.status, not provider version, so a deposit only ever gets
+   * credited once regardless of which path resolves it first.
+   */
+  @Post('wallet/deposits/flutterwave/:id/check-status')
+  @UseGuards(JwtAuthGuard)
+  async checkFlutterwaveDepositStatus(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { id },
+      include: { wallet: true },
+    });
+    if (!deposit || deposit.wallet.userId !== req.user.sub || deposit.provider !== 'flutterwave-v4') {
+      throw new NotFoundException('Deposit not found');
+    }
+    if (deposit.status === 'confirmed') {
+      return { depositId: deposit.id, status: 'confirmed', credited: true };
+    }
+
+    const charge = await this.flutterwaveV4.getCharge(deposit.providerChargeId);
+    if (charge.status !== 'succeeded') {
+      return { depositId: deposit.id, status: charge.status ?? 'pending', credited: false };
+    }
+
+    const result = await this.creditFlutterwaveDeposit(deposit.id, {
+      flutterwaveTxId: charge.chargeId,
+      txRef: deposit.providerChargeId,
+      status: charge.status,
+    });
+    return { depositId: deposit.id, status: 'confirmed', credited: result };
   }
 
   /**
@@ -1067,6 +1221,151 @@ export class WalletController {
       where: { id: eventId },
       data: { depositId, processedAt: new Date(), processingError },
     });
+  }
+
+  /**
+   * v4 counterpart to handleFlutterwaveWebhook -- separate route (not a
+   * branch inside the v3 handler) because the signature scheme and event
+   * vocabulary genuinely differ: v4 only sends flutterwave-signature (no
+   * legacy verif-hash fallback), funding fires "charge.completed" same as
+   * v3, but payouts fire "transfer.disburse"/"transfer.reversal", not v3's
+   * "transfer.completed". Writes to the separate FlutterwaveV4ChargeEvent/
+   * FlutterwaveV4TransferEvent tables, same upsert-by-eventHash dedup
+   * pattern as the v3 handler.
+   */
+  @Post('wallet/webhooks/flutterwave-v4')
+  @HttpCode(HttpStatus.OK)
+  async handleFlutterwaveV4Webhook(@Req() req: Request & { rawBody?: Buffer }) {
+    const rawBody = req.rawBody;
+    if (!rawBody) {
+      throw new UnauthorizedException('Missing raw request body');
+    }
+    const headers: Record<string, string | undefined> = {
+      'flutterwave-signature': req.headers['flutterwave-signature'] as string | undefined,
+    };
+    if (!this.flutterwaveV4.verifyWebhookSignature(rawBody, headers)) {
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const eventType = flwString(body.type) ?? flwString(body.event);
+    const data = body.data as Record<string, unknown> | undefined;
+
+    if (eventType === 'transfer.disburse' || eventType === 'transfer.reversal') {
+      return this.handleFlutterwaveV4TransferWebhook(rawBody, eventType, data);
+    }
+
+    if (eventType !== 'charge.completed' || !data) {
+      return { received: true, matched: false };
+    }
+
+    const reference = flwString(data.reference);
+    const chargeId = flwString(data.id);
+    const status = flwString(data.status)?.toLowerCase();
+    const eventHash = this.flutterwaveV4.getWebhookEventHash(rawBody);
+
+    const event = await this.prisma.flutterwaveV4ChargeEvent.upsert({
+      where: { eventHash },
+      update: {},
+      create: {
+        eventHash,
+        chargeId,
+        reference,
+        eventType,
+        providerStatus: status,
+        payload: body as Prisma.InputJsonValue,
+      },
+    });
+    if (event.processedAt) {
+      return { received: true, duplicate: true };
+    }
+
+    if (!reference || status !== 'succeeded') {
+      await this.completeFlutterwaveV4ChargeEvent(event.id, undefined, 'Not a succeeded charge');
+      return { received: true, matched: false };
+    }
+
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { providerChargeId: reference },
+    });
+    if (!deposit) {
+      this.logger.warn(`Flutterwave v4 webhook did not match a deposit: reference=${reference}`);
+      await this.completeFlutterwaveV4ChargeEvent(event.id, undefined, 'Deposit not found');
+      return { received: true, matched: false };
+    }
+
+    const credited = await this.creditFlutterwaveDeposit(deposit.id, {
+      flutterwaveTxId: chargeId ?? reference,
+      txRef: reference,
+      status: status ?? null,
+    });
+    await this.completeFlutterwaveV4ChargeEvent(event.id, deposit.id);
+    this.logger.log(
+      `Flutterwave v4 webhook status=${status} deposit=${deposit.id} credited=${credited}`,
+    );
+    return { received: true, credited, status };
+  }
+
+  private async completeFlutterwaveV4ChargeEvent(
+    eventId: string,
+    depositId?: string,
+    processingError?: string,
+  ) {
+    await this.prisma.flutterwaveV4ChargeEvent.update({
+      where: { id: eventId },
+      data: { depositId, processedAt: new Date(), processingError },
+    });
+  }
+
+  private async handleFlutterwaveV4TransferWebhook(
+    rawBody: Buffer,
+    eventType: string,
+    data: Record<string, unknown> | undefined,
+  ) {
+    const transferId = flwString(data?.id);
+    const reference = flwString(data?.reference);
+    const status = flwString(data?.status)?.toLowerCase();
+    const eventHash = this.flutterwaveV4.getWebhookEventHash(rawBody);
+
+    const event = await this.prisma.flutterwaveV4TransferEvent.upsert({
+      where: { eventHash },
+      update: {},
+      create: {
+        eventHash,
+        transferId,
+        reference,
+        eventType,
+        providerStatus: status,
+        payload: (data ?? {}) as Prisma.InputJsonValue,
+      },
+    });
+
+    if (!reference) {
+      return { received: true, matched: false };
+    }
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({
+      where: { id: reference },
+    });
+    if (!withdrawal) {
+      this.logger.warn(
+        `Flutterwave v4 transfer webhook did not match a withdrawal: reference=${reference}`,
+      );
+      return { received: true, matched: false };
+    }
+
+    await this.prisma.flutterwaveV4TransferEvent.update({
+      where: { id: event.id },
+      data: { withdrawalRequestId: withdrawal.id },
+    });
+    await this.recordFlutterwaveV4PayoutStatus(
+      withdrawal.id,
+      transferId ?? withdrawal.providerPayoutId ?? '',
+      eventType,
+      status ?? null,
+      data ?? {},
+    );
+    this.logger.log(`Flutterwave v4 transfer webhook status=${status} withdrawal=${withdrawal.id}`);
+    return { received: true, status };
   }
 
   /**
@@ -1930,6 +2229,10 @@ export class WalletController {
       );
     }
 
+    if (await this.platformSettings.isFlutterwaveV4Enabled()) {
+      return this.submitWithdrawalToFlutterwaveV4(req, id, withdrawal, body);
+    }
+
     try {
       // Re-resolve the bank account immediately before transferring (JC-8)
       // -- bank details can go stale between the request-time snapshot and
@@ -2063,6 +2366,194 @@ export class WalletController {
     }
   }
 
+  /**
+   * v4 payout submission: lazily creates/reuses PayoutAccount.
+   * providerRecipientId (JC-5 in the migration plan) and the one-time
+   * platform Sender (cached on PlatformSettings.flutterwaveV4SenderId),
+   * then submits the transfer. Bank-account-name re-verification stays on
+   * v3's resolveAccount (see JC-5's note: v4 recipient creation doesn't
+   * verify the account holder's name the way v3's resolveAccount does), so
+   * that check is kept even under the v4 toggle. Mirrors the atomic-claim/
+   * try-catch-mark-FAILED shape of the v3 method it's called from.
+   */
+  private async submitWithdrawalToFlutterwaveV4(
+    req: AuthenticatedRequest,
+    id: string,
+    withdrawal: NonNullable<Awaited<ReturnType<typeof this.prisma.withdrawalRequest.findUnique>>>,
+    body: SubmitWithdrawalPayoutDto,
+  ) {
+    try {
+      if (!withdrawal.payoutAccountId) {
+        throw new UnprocessableEntityException(
+          'This withdrawal has no saved payout account to submit under Flutterwave v4',
+        );
+      }
+      const payoutAccount = await this.prisma.payoutAccount.findUniqueOrThrow({
+        where: { id: withdrawal.payoutAccountId },
+      });
+
+      let accountNumber: string | undefined;
+      if (payoutAccount.type === 'BANK' && payoutAccount.accountNumberEncryptedJson) {
+        accountNumber = decryptPayoutField(
+          payoutAccount.accountNumberEncryptedJson as unknown as {
+            encryptedValue: string;
+            iv: string;
+            authTag: string;
+          },
+        );
+        const resolved = await this.flutterwave.resolveAccount({
+          accountBank: payoutAccount.bankCode!,
+          accountNumber,
+        });
+        if (resolved.accountName !== payoutAccount.accountName) {
+          throw new UnprocessableEntityException(
+            'The resolved account name no longer matches the saved payout account -- manual review required before this payout can proceed',
+          );
+        }
+      } else if (
+        payoutAccount.type === 'MOBILE_MONEY' &&
+        payoutAccount.mobileMoneyNumberEncryptedJson
+      ) {
+        accountNumber = decryptPayoutField(
+          payoutAccount.mobileMoneyNumberEncryptedJson as unknown as {
+            encryptedValue: string;
+            iv: string;
+            authTag: string;
+          },
+        );
+      } else {
+        throw new UnprocessableEntityException('Payout account is missing destination details');
+      }
+
+      let recipientId = payoutAccount.providerRecipientId;
+      if (!recipientId) {
+        const country = payoutAccount.country.toUpperCase() as RecipientCountry;
+        const created = await this.flutterwaveV4.createRecipient(
+          payoutAccount.type === 'BANK'
+            ? {
+                type: 'bank',
+                country,
+                bankCode: payoutAccount.bankCode!,
+                accountNumber: accountNumber!,
+              }
+            : {
+                type: 'mobile_money',
+                country,
+                network: payoutAccount.mobileMoneyNetwork!,
+                phoneNumber: accountNumber!,
+              },
+        );
+        recipientId = created.recipientId;
+        await this.prisma.payoutAccount.update({
+          where: { id: payoutAccount.id },
+          data: { providerRecipientId: recipientId },
+        });
+      }
+
+      let senderId = await this.platformSettings.getFlutterwaveV4SenderId();
+      if (!senderId) {
+        const created = await this.flutterwaveV4.createSender();
+        senderId = created.senderId;
+        await this.prisma.platformSettings.update({
+          where: { id: 'default' },
+          data: { flutterwaveV4SenderId: senderId },
+        });
+      }
+
+      if (!withdrawal.fiatAmount && !withdrawal.destinationCountry) {
+        throw new UnprocessableEntityException(
+          'Withdrawal is missing its payout country and cannot be converted to fiat',
+        );
+      }
+      const fiatConversion = withdrawal.fiatAmount
+        ? { fiatAmount: withdrawal.fiatAmount, fiatUsdExchangeRate: withdrawal.fiatUsdExchangeRate }
+        : await this.getFiatWithdrawalConversion(
+            withdrawal.destinationCountry!,
+            withdrawal.destinationCurrency,
+            withdrawal.usdtAmount,
+          );
+
+      const transfer = await this.flutterwaveV4.createTransfer({
+        recipientId,
+        senderId,
+        amount: fiatConversion.fiatAmount.toNumber(),
+        currency: withdrawal.destinationCurrency,
+        reference: withdrawal.id,
+        narration: `Dialect Library trainer payout: ${withdrawal.id}`,
+      });
+
+      await this.prisma.$transaction([
+        this.prisma.withdrawalRequest.update({
+          where: { id },
+          data: {
+            status: this.mapFlutterwaveV4TransferStatus(transfer.status),
+            provider: 'flutterwave-v4',
+            providerPayoutId: transfer.transferId,
+            providerStatus: transfer.status ?? 'created',
+            providerPayload: transfer.raw as Prisma.InputJsonValue,
+            providerError: null,
+            ...(withdrawal.fiatAmount ? {} : fiatConversion),
+            submittedToProviderAt: new Date(),
+            providerSettledAt:
+              this.mapFlutterwaveV4TransferStatus(transfer.status) === WithdrawalStatus.PAID
+                ? new Date()
+                : null,
+            resolvedAt:
+              this.mapFlutterwaveV4TransferStatus(transfer.status) === WithdrawalStatus.PAID
+                ? new Date()
+                : null,
+            adminNote: body.adminNote,
+          },
+        }),
+        this.prisma.flutterwaveV4TransferEvent.create({
+          data: {
+            eventHash: randomUUID(),
+            withdrawalRequestId: id,
+            transferId: transfer.transferId,
+            reference: withdrawal.id,
+            eventType: 'create',
+            providerStatus: transfer.status,
+            payload: transfer.raw as Prisma.InputJsonValue,
+          },
+        }),
+      ]);
+      this.logger.log(
+        `Withdrawal submitted to Flutterwave v4: admin=${req.user.sub} withdrawal=${id} providerPayoutId=${transfer.transferId}`,
+      );
+
+      return {
+        withdrawalId: id,
+        status: this.mapFlutterwaveV4TransferStatus(transfer.status),
+        providerPayoutId: transfer.transferId,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.prisma.withdrawalRequest.update({
+        where: { id },
+        data: {
+          status: WithdrawalStatus.FAILED,
+          provider: 'flutterwave-v4',
+          providerError: message,
+          adminNote: body.adminNote,
+        },
+      });
+      await this.prisma.flutterwaveV4TransferEvent.create({
+        data: {
+          eventHash: randomUUID(),
+          withdrawalRequestId: id,
+          reference: withdrawal.id,
+          eventType: 'create_failed',
+          payload: { message },
+          processingError: message,
+        },
+      });
+      this.logger.error(
+        `Withdrawal submit-to-Flutterwave-v4 failed: admin=${req.user.sub} withdrawal=${id}: ${message}`,
+      );
+      throw err;
+    }
+  }
+
   @Post('admin/withdrawals/:id/refresh-flutterwave')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -2073,6 +2564,25 @@ export class WalletController {
     }
     if (!withdrawal.providerPayoutId) {
       throw new UnprocessableEntityException('Withdrawal has not been submitted to Flutterwave');
+    }
+
+    // A withdrawal submitted under v4 must always be refreshed via v4, even
+    // if isFlutterwaveV4Enabled is later toggled off -- its own stored
+    // provider tag decides the rail, not the current setting.
+    if (withdrawal.provider === 'flutterwave-v4') {
+      const result = await this.flutterwaveV4.getTransferStatus(withdrawal.providerPayoutId);
+      await this.recordFlutterwaveV4PayoutStatus(
+        id,
+        result.transferId,
+        'status',
+        result.status,
+        result.raw,
+      );
+      return {
+        withdrawalId: id,
+        status: this.mapFlutterwaveV4TransferStatus(result.status),
+        providerPayoutId: result.transferId,
+      };
     }
 
     const result = await this.flutterwave.getTransferStatus(withdrawal.providerPayoutId);
@@ -2283,6 +2793,52 @@ export class WalletController {
   private isFlutterwaveTransferFinished(status: string | null | undefined): boolean {
     const normalized = status?.toLowerCase();
     return Boolean(normalized && FLUTTERWAVE_TRANSFER_FINISHED_STATUSES.has(normalized));
+  }
+
+  private mapFlutterwaveV4TransferStatus(status: string | null | undefined): WithdrawalStatus {
+    const normalized = status?.toLowerCase();
+    if (normalized && FLUTTERWAVE_V4_TRANSFER_FINISHED_STATUSES.has(normalized))
+      return WithdrawalStatus.PAID;
+    if (normalized && FLUTTERWAVE_V4_TRANSFER_FAILED_STATUSES.has(normalized))
+      return WithdrawalStatus.FAILED;
+    return WithdrawalStatus.PROCESSING;
+  }
+
+  /** v4 counterpart to recordFlutterwavePayoutStatus -- writes provider: 'flutterwave-v4' and the separate FlutterwaveV4TransferEvent table, used by the webhook handler, the manual refresh endpoint, and runFlutterwaveV4's reconciliation poll. */
+  private async recordFlutterwaveV4PayoutStatus(
+    withdrawalId: string,
+    transferId: string,
+    eventType: string,
+    providerStatus: string | null,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const status = this.mapFlutterwaveV4TransferStatus(providerStatus);
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.withdrawalRequest.update({
+        where: { id: withdrawalId },
+        data: {
+          status,
+          provider: 'flutterwave-v4',
+          providerPayoutId: transferId,
+          providerStatus: providerStatus ?? undefined,
+          providerPayload: payload as Prisma.InputJsonValue,
+          providerError: null,
+          providerSettledAt: status === WithdrawalStatus.PAID ? now : undefined,
+          resolvedAt: status === WithdrawalStatus.PAID ? now : undefined,
+        },
+      }),
+      this.prisma.flutterwaveV4TransferEvent.create({
+        data: {
+          eventHash: randomUUID(),
+          withdrawalRequestId: withdrawalId,
+          transferId,
+          eventType,
+          providerStatus,
+          payload: payload as Prisma.InputJsonValue,
+        },
+      }),
+    ]);
   }
 
   private async recordFlutterwavePayoutStatus(

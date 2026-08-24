@@ -34,6 +34,9 @@ secretGenerator:
   - name: flutterwave-creds
     envs:
       - secrets/flutterwave.env
+  - name: flutterwave-v4-creds
+    envs:
+      - secrets/flutterwave-v4.env
   - name: payout-crypto-creds
     envs:
       - secrets/payout-crypto.env

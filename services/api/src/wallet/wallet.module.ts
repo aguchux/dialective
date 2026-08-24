@@ -4,6 +4,7 @@ import { OtpModule } from '../otp/otp.module';
 import { MailModule } from '../mail/mail.module';
 import { NowPaymentsService } from './nowpayments.service';
 import { FlutterwaveService } from './flutterwave.service';
+import { FlutterwaveV4Service } from './flutterwave-v4.service';
 import { WalletController } from './wallet.controller';
 import { PayoutAccountsController } from './payout-accounts.controller';
 import { WithdrawalReconciliationService } from './withdrawal-reconciliation.service';
@@ -12,7 +13,7 @@ import { TokenomicsModule } from '../tokenomics/tokenomics.module';
 @Module({
   imports: [SettingsModule, OtpModule, MailModule, TokenomicsModule],
   controllers: [WalletController, PayoutAccountsController],
-  providers: [NowPaymentsService, FlutterwaveService, WithdrawalReconciliationService],
-  exports: [WithdrawalReconciliationService, FlutterwaveService],
+  providers: [NowPaymentsService, FlutterwaveService, FlutterwaveV4Service, WithdrawalReconciliationService],
+  exports: [WithdrawalReconciliationService, FlutterwaveService, FlutterwaveV4Service],
 })
 export class WalletModule {}

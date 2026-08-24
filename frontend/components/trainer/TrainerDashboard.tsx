@@ -100,6 +100,7 @@ import {
   useCreateTokenDepositMutation,
   useRequestFlutterwaveDepositOtpMutation,
   useCreateFlutterwaveDepositMutation,
+  useCheckFlutterwaveDepositStatusMutation,
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
   useListPayoutAccountsQuery,
@@ -3183,6 +3184,8 @@ const FLUTTERWAVE_FUNDING_COUNTRIES: { code: string; currency: string; label: st
   { code: 'TZ', currency: 'TZS', label: 'Tanzania (TZS)' },
 ];
 
+const MOBILE_MONEY_NETWORKS = ['MTN', 'AIRTEL', 'VODAFONE', 'TIGO'];
+
 function FundTokensDialog({
   tokenUsdRate,
   localCurrency,
@@ -3191,18 +3194,32 @@ function FundTokensDialog({
   localCurrency?: LocalCurrency | null;
 }) {
   const [method, setMethod] = useState<'crypto' | 'fiat'>('crypto');
+  const [fiatMethod, setFiatMethod] = useState<'bank_transfer' | 'mobile_money'>('bank_transfer');
   const [amount, setAmount] = useState('100');
   const [currency, setCurrency] = useState<'USDC' | 'USDT'>('USDT');
   const [countryCode, setCountryCode] = useState(FLUTTERWAVE_FUNDING_COUNTRIES[0].code);
+  const [mobileMoneyNetwork, setMobileMoneyNetwork] = useState(MOBILE_MONEY_NETWORKS[0]);
+  const [mobileMoneyNumber, setMobileMoneyNumber] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
   const [code, setCode] = useState('');
+  const [virtualAccount, setVirtualAccount] = useState<{
+    depositId: string;
+    accountNumber: string;
+    bankName: string;
+    note: string | null;
+  } | null>(null);
+  const [checkStatusMessage, setCheckStatusMessage] = useState<string | null>(null);
   const [requestOtp, { isLoading: isRequestingOtp }] = useRequestDepositOtpMutation();
   const [createDeposit, { isLoading: isCreating }] = useCreateTokenDepositMutation();
   const [requestFlutterwaveOtp, { isLoading: isRequestingFlutterwaveOtp }] =
     useRequestFlutterwaveDepositOtpMutation();
   const [createFlutterwaveDeposit, { isLoading: isCreatingFlutterwave }] =
     useCreateFlutterwaveDepositMutation();
+  const [checkFlutterwaveDepositStatus, { isLoading: isCheckingStatus }] =
+    useCheckFlutterwaveDepositStatusMutation();
+  const { data: publicSettings } = useGetPublicClientSettingsQuery();
+  const isV4Enabled = publicSettings?.isFlutterwaveV4Enabled ?? false;
 
   const selectedCountry =
     FLUTTERWAVE_FUNDING_COUNTRIES.find((c) => c.code === countryCode) ??
@@ -3249,23 +3266,55 @@ function FundTokensDialog({
           code,
         }).unwrap();
         window.location.assign(result.hostedCheckoutUrl);
-      } else {
-        const result = await createFlutterwaveDeposit({
-          usdAmount,
-          currency: selectedCountry.currency,
-          country: selectedCountry.code,
-          otpRequestId,
-          code,
-        }).unwrap();
+        return;
+      }
+      const result = await createFlutterwaveDeposit({
+        usdAmount,
+        currency: selectedCountry.currency,
+        country: selectedCountry.code,
+        ...(isV4Enabled
+          ? {
+              method: fiatMethod,
+              ...(fiatMethod === 'mobile_money' ? { mobileMoneyNetwork, mobileMoneyNumber } : {}),
+            }
+          : {}),
+        otpRequestId,
+        code,
+      }).unwrap();
+      if ('hostedCheckoutUrl' in result) {
         window.location.assign(result.hostedCheckoutUrl);
+      } else if ('redirectUrl' in result) {
+        if (result.redirectUrl) window.location.assign(result.redirectUrl);
+        else setMessage('Could not get a checkout link for this mobile money charge.');
+      } else {
+        setVirtualAccount({ depositId: result.depositId, ...result.virtualAccount });
       }
     } catch (error) {
       setMessage(normalizeErrorMessage(error, 'Could not start DL funding.'));
     }
   }
 
+  async function checkStatus() {
+    if (!virtualAccount) return;
+    setCheckStatusMessage(null);
+    try {
+      const result = await checkFlutterwaveDepositStatus(virtualAccount.depositId).unwrap();
+      if (result.credited) {
+        setCheckStatusMessage('Payment received -- your DL balance has been credited.');
+      } else {
+        setCheckStatusMessage(
+          "We haven't received your transfer yet. It can take a few minutes -- check again shortly.",
+        );
+      }
+    } catch (error) {
+      setCheckStatusMessage(normalizeErrorMessage(error, 'Could not check payment status.'));
+    }
+  }
+
   function reset() {
     setOtpRequestId(null);
+    setVirtualAccount(null);
+    setCheckStatusMessage(null);
     setCode('');
     setMessage(null);
   }
@@ -3285,7 +3334,42 @@ function FundTokensDialog({
           <span className="sm:hidden">Fund</span>
         </button>
       </DialogTrigger>
-      {otpRequestId ? (
+      {virtualAccount ? (
+        <DialogContent
+          title="Transfer to this account"
+          description="Send the exact amount to the account below -- your DL balance is credited automatically once the transfer arrives."
+        >
+          <div className="grid gap-4">
+            <div className="grid gap-1 rounded-lg border border-line bg-surface p-4">
+              <span className="text-xs font-bold uppercase tracking-wide text-muted">Bank</span>
+              <span className="font-extrabold text-ink">{virtualAccount.bankName}</span>
+              <span className="mt-2 text-xs font-bold uppercase tracking-wide text-muted">
+                Account number
+              </span>
+              <span className="text-lg font-black tracking-wide text-ink">
+                {virtualAccount.accountNumber}
+              </span>
+              {virtualAccount.note && (
+                <p className="mt-2 text-sm text-muted">{virtualAccount.note}</p>
+              )}
+            </div>
+            {checkStatusMessage && (
+              <p className="rounded-lg bg-surface-muted px-3 py-2 text-sm font-bold text-ink">
+                {checkStatusMessage}
+              </p>
+            )}
+            <ActionButton
+              className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+              onClick={() => void checkStatus()}
+              pending={isCheckingStatus}
+              pendingLabel="Checking"
+              type="button"
+            >
+              I've sent the transfer -- check status
+            </ActionButton>
+          </div>
+        </DialogContent>
+      ) : otpRequestId ? (
         <DialogContent
           title="Enter your code"
           description="We emailed a 6-digit code to confirm this purchase."
@@ -3391,20 +3475,79 @@ function FundTokensDialog({
                 </div>
               </fieldset>
             ) : (
-              <label className="grid gap-1.5 text-sm font-bold">
-                Country
-                <select
-                  className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
-                  onChange={(event) => setCountryCode(event.target.value)}
-                  value={countryCode}
-                >
-                  {FLUTTERWAVE_FUNDING_COUNTRIES.map((option) => (
-                    <option key={option.code} value={option.code}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <>
+                <label className="grid gap-1.5 text-sm font-bold">
+                  Country
+                  <select
+                    className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                    onChange={(event) => setCountryCode(event.target.value)}
+                    value={countryCode}
+                  >
+                    {FLUTTERWAVE_FUNDING_COUNTRIES.map((option) => (
+                      <option key={option.code} value={option.code}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {isV4Enabled && (
+                  <>
+                    <fieldset className="grid gap-2">
+                      <legend className="mb-1 text-sm font-bold">Fiat method</legend>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(
+                          [
+                            { value: 'bank_transfer', label: 'Bank transfer' },
+                            { value: 'mobile_money', label: 'Mobile money' },
+                          ] as const
+                        ).map((option) => (
+                          <label
+                            className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border font-extrabold ${fiatMethod === option.value ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
+                            key={option.value}
+                          >
+                            <input
+                              className="sr-only"
+                              checked={fiatMethod === option.value}
+                              name="fiatMethod"
+                              onChange={() => setFiatMethod(option.value)}
+                              type="radio"
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                    {fiatMethod === 'mobile_money' && (
+                      <>
+                        <label className="grid gap-1.5 text-sm font-bold">
+                          Network
+                          <select
+                            className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                            onChange={(event) => setMobileMoneyNetwork(event.target.value)}
+                            value={mobileMoneyNetwork}
+                          >
+                            {MOBILE_MONEY_NETWORKS.map((network) => (
+                              <option key={network} value={network}>
+                                {network}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="grid gap-1.5 text-sm font-bold">
+                          Phone number
+                          <input
+                            className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                            onChange={(event) => setMobileMoneyNumber(event.target.value.trim())}
+                            required
+                            type="tel"
+                            value={mobileMoneyNumber}
+                          />
+                        </label>
+                      </>
+                    )}
+                  </>
+                )}
+              </>
             )}
             {message && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">

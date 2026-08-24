@@ -353,6 +353,16 @@ export class PlatformSettingsService {
     return row.isFlutterwavePayoutsEnabled;
   }
 
+  async isFlutterwaveV4Enabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.isFlutterwaveV4Enabled;
+  }
+
+  async getFlutterwaveV4SenderId(): Promise<string | null> {
+    const row = await this.getRow();
+    return row.flutterwaveV4SenderId;
+  }
+
   async getAllowedFlutterwaveCurrencies(): Promise<string[]> {
     const row = await this.getRow();
     return row.allowedFlutterwaveCurrencies
@@ -644,6 +654,7 @@ export class PlatformSettingsService {
       allowedWithdrawalNetworks: row.allowedWithdrawalNetworks,
       isFlutterwaveFundingEnabled: row.isFlutterwaveFundingEnabled,
       isFlutterwavePayoutsEnabled: row.isFlutterwavePayoutsEnabled,
+      isFlutterwaveV4Enabled: row.isFlutterwaveV4Enabled,
       allowedFlutterwaveCurrencies: row.allowedFlutterwaveCurrencies,
       allowedFlutterwaveCountries: row.allowedFlutterwaveCountries,
       withdrawalFeeMode: row.withdrawalFeeMode,
@@ -741,6 +752,7 @@ export class PlatformSettingsService {
     allowedWithdrawalNetworks?: string;
     isFlutterwaveFundingEnabled?: boolean;
     isFlutterwavePayoutsEnabled?: boolean;
+    isFlutterwaveV4Enabled?: boolean;
     allowedFlutterwaveCurrencies?: string;
     allowedFlutterwaveCountries?: string;
     withdrawalFeeMode?: string;
@@ -1063,6 +1075,7 @@ export class PlatformSettingsService {
       allowedWithdrawalNetworks: row.allowedWithdrawalNetworks,
       isFlutterwaveFundingEnabled: row.isFlutterwaveFundingEnabled,
       isFlutterwavePayoutsEnabled: row.isFlutterwavePayoutsEnabled,
+      isFlutterwaveV4Enabled: row.isFlutterwaveV4Enabled,
       allowedFlutterwaveCurrencies: row.allowedFlutterwaveCurrencies,
       allowedFlutterwaveCountries: row.allowedFlutterwaveCountries,
       withdrawalFeeMode: row.withdrawalFeeMode,
@@ -1113,6 +1126,7 @@ export class PlatformSettingsService {
       isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens,
       isKycRequiredOnboarding,
+      isFlutterwaveV4Enabled,
     ] = await Promise.all([
       this.getReferralCookiePersistSeconds(),
       this.getReferralInviteExpirySeconds(),
@@ -1128,6 +1142,7 @@ export class PlatformSettingsService {
       this.isKycRequiredForWithdrawals(),
       this.getKycMinWithdrawalTokens(),
       this.isKycRequiredOnboarding(),
+      this.isFlutterwaveV4Enabled(),
     ]);
     return {
       referralCookiePersistSeconds,
@@ -1157,6 +1172,7 @@ export class PlatformSettingsService {
       isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens: kycMinWithdrawalTokens.toString(),
       isKycRequiredOnboarding,
+      isFlutterwaveV4Enabled,
     };
   }
 }

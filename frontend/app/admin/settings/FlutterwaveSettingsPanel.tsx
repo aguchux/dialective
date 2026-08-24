@@ -19,6 +19,7 @@ export function FlutterwaveSettingsPanel() {
 
   const [fundingEnabled, setFundingEnabled] = useState(false);
   const [payoutsEnabled, setPayoutsEnabled] = useState(false);
+  const [v4Enabled, setV4Enabled] = useState(false);
   const [allowedCurrencies, setAllowedCurrencies] = useState('NGN,GHS,KES,UGX,ZAR,TZS');
   const [allowedCountries, setAllowedCountries] = useState('NG,GH,KE,UG,ZA,TZ');
   const [message, setMessage] = useState<string | null>(null);
@@ -28,6 +29,7 @@ export function FlutterwaveSettingsPanel() {
     if (!settings) return;
     setFundingEnabled(settings.isFlutterwaveFundingEnabled);
     setPayoutsEnabled(settings.isFlutterwavePayoutsEnabled);
+    setV4Enabled(settings.isFlutterwaveV4Enabled);
     setAllowedCurrencies(settings.allowedFlutterwaveCurrencies);
     setAllowedCountries(settings.allowedFlutterwaveCountries);
   }, [settings]);
@@ -40,6 +42,7 @@ export function FlutterwaveSettingsPanel() {
       await updateSettings({
         isFlutterwaveFundingEnabled: fundingEnabled,
         isFlutterwavePayoutsEnabled: payoutsEnabled,
+        isFlutterwaveV4Enabled: v4Enabled,
         allowedFlutterwaveCurrencies: allowedCurrencies,
         allowedFlutterwaveCountries: allowedCountries,
       }).unwrap();
@@ -102,6 +105,34 @@ export function FlutterwaveSettingsPanel() {
                   When off, admins can still approve and manually mark fiat withdrawals paid, but
                   "Submit payout" to Flutterwave is disabled -- keep this off until Flutterwave
                   credentials are configured and tested.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="flutterwave-v4-enabled"
+            >
+              <input
+                checked={v4Enabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="flutterwave-v4-enabled"
+                onChange={(event) => setV4Enabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Use Flutterwave v4 (Customer API)</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Routes new funding/payout-account creation through Flutterwave's current API,
+                  which gives trainers real Customer records with proper first/last names. Changes
+                  the funding flow -- card is dropped (v4 card charges would require raw card
+                  numbers to reach our backend), bank transfer shows a virtual account to pay into
+                  instead of a hosted checkout link, and creating a bank/mobile-money payout
+                  account additionally registers a Flutterwave Recipient. v3 stays fully available
+                  and unaffected while this is off; a deposit/withdrawal created under v4 keeps
+                  being serviced by v4 even if this is later switched off.
                 </span>
               </span>
             </label>

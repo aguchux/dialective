@@ -77,6 +77,11 @@ model User {
   // join on every request.
   kycStatus                     KycStatus       @default(NOT_STARTED)
   kycVerifiedAt                 DateTime?
+  // Flutterwave v4 Customer id (POST /customers), created lazily on this
+  // user's first v4 funding attempt -- see FlutterwaveV4Service.createCustomer.
+  // Null for every user until the v4 rail is used at least once; unrelated to
+  // v3's stateless per-request customer object.
+  flutterwaveCustomerId         String?
   emailNotificationsEnabled     Boolean         @default(true)
   smsNotificationsEnabled       Boolean         @default(true)
   marketingNotificationsEnabled Boolean         @default(false)
@@ -1263,8 +1268,9 @@ model Deposit {
   confirmedAt       DateTime?
   lastIpnAt         DateTime?
 
-  ipnEvents     NowPaymentsIpnEvent[]
-  webhookEvents FlutterwaveWebhookEvent[]
+  ipnEvents       NowPaymentsIpnEvent[]
+  webhookEvents   FlutterwaveWebhookEvent[]
+  v4ChargeEvents  FlutterwaveV4ChargeEvent[]
 
   @@index([walletId])
   @@map("deposits")
@@ -1351,8 +1357,9 @@ model WithdrawalRequest {
   fiatAmount                            Decimal?        @db.Decimal(20, 8) // local-currency payout amount, snapshotted from usdtAmount at the request-time USD->fiat rate; null for crypto withdrawals
   fiatUsdExchangeRate                   Decimal?        @db.Decimal(18, 6) // local-currency units per USD used to calculate fiatAmount; retained for payout/audit reproducibility
 
-  providerEvents            NowPaymentsPayoutEvent[]
-  providerEventsFlutterwave FlutterwavePayoutEvent[] @relation("FlutterwavePayoutEvents")
+  providerEvents              NowPaymentsPayoutEvent[]
+  providerEventsFlutterwave   FlutterwavePayoutEvent[]   @relation("FlutterwavePayoutEvents")
+  providerEventsFlutterwaveV4 FlutterwaveV4TransferEvent[] @relation("FlutterwaveV4TransferEvents")
 
   @@index([walletId])
   @@index([status])
@@ -1428,6 +1435,11 @@ model PayoutAccount {
   provider           String                          @default("flutterwave")
   isDefault          Boolean                         @default(false)
   verificationStatus PayoutAccountVerificationStatus @default(UNVERIFIED)
+  // Flutterwave v4 Recipient id (POST /transfers/recipients), created lazily
+  // the first time a v4 payout targets this account and reused on every
+  // later withdrawal from it -- see FlutterwaveV4Service.createRecipient.
+  // Unrelated to v3's inline-per-request account_bank/account_number.
+  providerRecipientId String?
 
   // BANK
   bankCode                   String?
@@ -1504,6 +1516,55 @@ model FlutterwavePayoutEvent {
   @@index([withdrawalRequestId])
   @@index([providerPayoutId])
   @@map("flutterwave_payout_events")
+}
+
+/// v4 counterpart to FlutterwaveWebhookEvent -- kept as a separate table
+/// rather than reused, same reasoning FlutterwaveWebhookEvent's own doc
+/// comment gives for not sharing NowPaymentsIpnEvent's table: a different
+/// provider API version must not be able to risk the already-working v3
+/// read/write paths. v4 charges (bank-transfer virtual account or mobile
+/// money) fire "charge.completed"; this table is the audit/dedup log for
+/// those webhook deliveries.
+model FlutterwaveV4ChargeEvent {
+  id              String    @id @default(uuid())
+  eventHash       String    @unique
+  chargeId        String?
+  reference       String?
+  depositId       String?
+  deposit         Deposit?  @relation(fields: [depositId], references: [id], onDelete: SetNull)
+  eventType       String?
+  providerStatus  String?
+  payload         Json
+  processingError String?
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+
+  @@index([depositId])
+  @@index([chargeId])
+  @@map("flutterwave_v4_charge_events")
+}
+
+/// v4 counterpart to FlutterwavePayoutEvent -- transfers created via
+/// FlutterwaveV4Service.createTransfer (Recipient + Sender model) fire
+/// "transfer.disburse"/"transfer.reversal", not v3's "transfer.completed".
+/// Kept separate from FlutterwavePayoutEvent for the same reason
+/// FlutterwaveV4ChargeEvent is kept separate from FlutterwaveWebhookEvent.
+model FlutterwaveV4TransferEvent {
+  id                  String             @id @default(uuid())
+  eventHash           String             @unique
+  transferId          String?
+  reference           String?
+  withdrawalRequestId String?
+  withdrawalRequest   WithdrawalRequest? @relation("FlutterwaveV4TransferEvents", fields: [withdrawalRequestId], references: [id], onDelete: SetNull)
+  eventType           String?
+  providerStatus      String?
+  payload             Json
+  processingError     String?
+  receivedAt          DateTime           @default(now())
+
+  @@index([withdrawalRequestId])
+  @@index([transferId])
+  @@map("flutterwave_v4_transfer_events")
 }
 
 enum P2POfferType {
@@ -1733,6 +1794,8 @@ model PlatformSettings {
   isFlutterwavePayoutsEnabled            Boolean   @default(false) // when false, admin/withdrawals/:id/submit-flutterwave is disabled -- admins can still resolve fiat withdrawals manually (outcome=paid) while this is off
   allowedFlutterwaveCurrencies           String    @default("NGN,GHS,KES,UGX,ZAR,TZS") // CSV of currencies a fiat withdrawal/deposit's currency may be, validated app-side
   allowedFlutterwaveCountries            String    @default("NG,GH,KE,UG,ZA,TZ") // CSV of ISO 3166-1 alpha-2 countries a PayoutAccount/deposit's country may be, validated app-side
+  isFlutterwaveV4Enabled                 Boolean   @default(false) // routes fiat deposit/payout/payout-account creation through FlutterwaveV4Service (OAuth2, Customer + PaymentMethod + Charge, Recipient + Sender + Transfer) instead of the v3 hosted-checkout-link flow. Off by default -- v3 stays the active rail; a withdrawal/deposit created under v4 always continues being serviced by v4 regardless of later toggling, via its own stored provider tag ("flutterwave-v4" vs "flutterwave")
+  flutterwaveV4SenderId                  String? // Flutterwave v4 Sender id (POST /transfers/senders, type=generic_sender) -- one platform-level identity, not per-trainer, created lazily the first v4 payout is submitted and reused on every later one
   authMaintenanceEnabled                 Boolean   @default(false) // master switch for the maintenance window; the five scope flags below decide what it actually blocks while on. PlatformSettingsService auto-clears this the first time any check runs after authMaintenanceUntil passes, so the admin toggle self-resets rather than staying on indefinitely
   authMaintenanceUntil                   DateTime? // scheduled end of the maintenance window
   authMaintenanceMessage                 String? // optional admin-authored note shown alongside the countdown on the login/signup pages and the logged-out notice
