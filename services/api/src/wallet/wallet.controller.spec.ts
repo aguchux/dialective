@@ -594,12 +594,25 @@ describe('WalletController withdrawal payout automation', () => {
     expect(result.status).toBe('APPROVED');
   });
 
-  it('approve refuses a withdrawal that is not PENDING', async () => {
+  it('approve refuses a withdrawal that is not PENDING or FAILED', async () => {
     const { controller, req } = setup(baseWithdrawal({ status: 'APPROVED' }));
 
     await expect(controller.approveWithdrawal(req, 'withdrawal-1', {})).rejects.toThrow(
-      'Only pending withdrawals can be approved',
+      'Only pending or failed withdrawals can be approved',
     );
+  });
+
+  it('approve allows re-approving a FAILED withdrawal so it can be retried', async () => {
+    const { controller, prisma, req } = setup(baseWithdrawal({ status: 'FAILED' }));
+
+    const result = await controller.approveWithdrawal(req, 'withdrawal-1', {});
+
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'APPROVED', approvedByAdminId: 'admin-1' }),
+      }),
+    );
+    expect(result.status).toBe('APPROVED');
   });
 
   it('resolve(reject) refunds tokens exactly once via a single WITHDRAWAL_REVERSED ledger entry', async () => {

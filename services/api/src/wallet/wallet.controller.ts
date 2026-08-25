@@ -1950,8 +1950,11 @@ export class WalletController {
     if (!withdrawal) {
       throw new NotFoundException('Withdrawal request not found');
     }
-    if (withdrawal.status !== WithdrawalStatus.PENDING) {
-      throw new UnprocessableEntityException('Only pending withdrawals can be approved');
+    if (
+      withdrawal.status !== WithdrawalStatus.PENDING &&
+      withdrawal.status !== WithdrawalStatus.FAILED
+    ) {
+      throw new UnprocessableEntityException('Only pending or failed withdrawals can be approved');
     }
 
     await this.verifyAdminPayoutOtpIfEnabled(
