@@ -1957,6 +1957,25 @@ export class WalletController {
       throw new UnprocessableEntityException('Only pending or failed withdrawals can be approved');
     }
 
+    if (withdrawal.status === WithdrawalStatus.FAILED) {
+      // Re-approving a FAILED withdrawal must never re-debit the trainer --
+      // the original request already took the tokens out of their balance
+      // (createWithdrawal's WITHDRAWAL ledger entry) and a failed provider
+      // submission does not refund them (that only happens via reject,
+      // which writes a WITHDRAWAL_REVERSED entry). This just re-verifies
+      // that original debit is still intact and hasn't been reversed by
+      // some other path before letting the retry proceed against it.
+      const reversed = await this.prisma.ledgerEntry.findFirst({
+        where: { reference: id, type: 'WITHDRAWAL_REVERSED' },
+        select: { id: true },
+      });
+      if (reversed) {
+        throw new UnprocessableEntityException(
+          'This withdrawal was already refunded to the trainer and cannot be re-approved',
+        );
+      }
+    }
+
     await this.verifyAdminPayoutOtpIfEnabled(
       req.user.sub,
       withdrawal,

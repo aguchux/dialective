@@ -463,7 +463,15 @@ export class FlutterwaveV4Service implements PayoutProvider {
   async createTransfer(params: CreateTransferParams): Promise<TransferResult> {
     const res = await fetch(`${this.baseUrl}/transfers`, {
       method: 'POST',
-      headers: await this.authHeaders({ 'X-Idempotency-Key': randomUUID() }),
+      // Deterministic, not randomUUID() -- derived from the withdrawal's own
+      // id (params.reference) so a retry of the SAME withdrawal (e.g. after
+      // a network error, or a re-approve-and-resubmit) reuses the same
+      // idempotency key. That lets Flutterwave's own idempotency layer
+      // return the original transfer instead of creating a second real
+      // payout if the first attempt actually landed on their side.
+      headers: await this.authHeaders({
+        'X-Idempotency-Key': createHash('sha256').update(`transfer:${params.reference}`).digest('hex'),
+      }),
       body: JSON.stringify({
         action: 'instant',
         reference: params.reference,

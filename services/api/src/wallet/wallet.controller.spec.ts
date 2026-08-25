@@ -430,7 +430,10 @@ describe('WalletController withdrawal payout automation', () => {
       },
       nowPaymentsPayoutEvent: { create: jest.fn().mockResolvedValue({}) },
       wallet: { update: jest.fn().mockResolvedValue({}) },
-      ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
+      ledgerEntry: {
+        create: jest.fn().mockResolvedValue({}),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
     };
     prisma.$transaction = jest.fn(async (input: unknown) => {
       if (typeof input === 'function') return (input as (tx: unknown) => unknown)(prisma);
@@ -613,6 +616,16 @@ describe('WalletController withdrawal payout automation', () => {
       }),
     );
     expect(result.status).toBe('APPROVED');
+  });
+
+  it('approve refuses to re-approve a FAILED withdrawal that was already refunded (reject/refund race)', async () => {
+    const { controller, prisma, req } = setup(baseWithdrawal({ status: 'FAILED' }));
+    prisma.ledgerEntry.findFirst.mockResolvedValue({ id: 'ledger-1' });
+
+    await expect(controller.approveWithdrawal(req, 'withdrawal-1', {})).rejects.toThrow(
+      'already refunded to the trainer',
+    );
+    expect(prisma.withdrawalRequest.update).not.toHaveBeenCalled();
   });
 
   it('resolve(reject) refunds tokens exactly once via a single WITHDRAWAL_REVERSED ledger entry', async () => {
