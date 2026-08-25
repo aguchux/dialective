@@ -41,6 +41,7 @@ import {
   creditAdminFunding,
   creditFundingReferralBonusesOps,
   creditTrainingPayout,
+  debitReserveForFlutterwavePayoutOps,
 } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
@@ -2848,6 +2849,20 @@ export class WalletController {
   ): Promise<void> {
     const status = this.mapFlutterwaveV4TransferStatus(providerStatus);
     const now = new Date();
+    // Same reserve-debit-on-first-PAID as recordFlutterwavePayoutStatus --
+    // v4 payouts draw against the same currency-keyed ReserveAccount as v3
+    // (and as v4 funding credits), since the reserve ledger is provider-
+    // scoped ("flutterwave"), not rail-version-scoped.
+    const reserveDebitOps =
+      status === WithdrawalStatus.PAID
+        ? (
+            await debitReserveForFlutterwavePayoutOps(this.prisma, {
+              withdrawalId,
+              providerPayoutId: transferId,
+              ...(await this.getFiatWithdrawalReserveAmounts(withdrawalId)),
+            })
+          ).ops
+        : [];
     await this.prisma.$transaction([
       this.prisma.withdrawalRequest.update({
         where: { id: withdrawalId },
@@ -2872,6 +2887,7 @@ export class WalletController {
           payload: payload as Prisma.InputJsonValue,
         },
       }),
+      ...reserveDebitOps,
     ]);
   }
 
@@ -2884,6 +2900,23 @@ export class WalletController {
   ): Promise<void> {
     const status = this.mapFlutterwaveTransferStatus(providerStatus);
     const now = new Date();
+    // Debits the Tokenomics reserve ledger the moment this transfer first
+    // reaches PAID -- the missing counterpart to the reserve credit that
+    // already happens on confirmed Flutterwave funding (see
+    // TokenomicsService.recordConfirmedFlutterwaveDepositTx). Only fetched
+    // when actually needed; idempotent on withdrawalId so a later
+    // reconciliation poll that re-observes PAID on an already-debited
+    // withdrawal is a safe no-op.
+    const reserveDebitOps =
+      status === WithdrawalStatus.PAID
+        ? (
+            await debitReserveForFlutterwavePayoutOps(this.prisma, {
+              withdrawalId,
+              providerPayoutId,
+              ...(await this.getFiatWithdrawalReserveAmounts(withdrawalId)),
+            })
+          ).ops
+        : [];
     await this.prisma.$transaction([
       this.prisma.withdrawalRequest.update({
         where: { id: withdrawalId },
@@ -2908,7 +2941,26 @@ export class WalletController {
           payload: payload as Prisma.InputJsonValue,
         },
       }),
+      ...reserveDebitOps,
     ]);
+  }
+
+  /** Shared by recordFlutterwavePayoutStatus/recordFlutterwaveV4PayoutStatus -- both rails share the same WithdrawalRequest fiat snapshot fields. */
+  private async getFiatWithdrawalReserveAmounts(withdrawalId: string) {
+    const withdrawal = await this.prisma.withdrawalRequest.findUniqueOrThrow({
+      where: { id: withdrawalId },
+      select: { destinationCurrency: true, fiatAmount: true, usdtAmount: true },
+    });
+    return {
+      currency: withdrawal.destinationCurrency,
+      // .toString() rather than passing the Decimal-like value through
+      // as-is -- debitReserveForFlutterwavePayoutOps re-wraps this in its
+      // own `new Prisma.Decimal(...)`, which (unlike Decimal-to-Decimal
+      // arithmetic) only accepts a genuine Decimal/number/string, not an
+      // arbitrary object that merely has toString/toNumber methods.
+      fiatAmount: (withdrawal.fiatAmount ?? new Prisma.Decimal(0)).toString(),
+      usdAmount: withdrawal.usdtAmount.toString(),
+    };
   }
 
   /**

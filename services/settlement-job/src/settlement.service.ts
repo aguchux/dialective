@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { computeTrainingPayout, creditTrainingPayoutOps, Prisma } from '@dialectiva/db';
+import {
+  computeTrainingPayout,
+  creditTrainingPayoutOps,
+  mintTrainingPayoutOps,
+  Prisma,
+} from '@dialectiva/db';
 import { PrismaService } from './prisma/prisma.service';
 
 /** Uniform random draw in [min, max] -- a payout-fairness randomizer, not a security value, so Math.random() is fine. */
@@ -104,14 +109,21 @@ export class SettlementService {
     this.logger.log('Settlement run starting');
 
     const bonusCapMultiple = await this.getTrainingPayoutBonusCapMultiple();
-    const [qualityGateEnabled, qualityWeights, asrMatchWeight, scoreRange, settlementDelayMinutes] =
-      await Promise.all([
-        this.isQualityGateEnabled(),
-        this.getQualityWeights(),
-        this.getAsrMatchWeight(),
-        this.getScoreRange(),
-        this.getSettlementDelayMinutes(),
-      ]);
+    const [
+      qualityGateEnabled,
+      qualityWeights,
+      asrMatchWeight,
+      scoreRange,
+      settlementDelayMinutes,
+      mintingPaused,
+    ] = await Promise.all([
+      this.isQualityGateEnabled(),
+      this.getQualityWeights(),
+      this.getAsrMatchWeight(),
+      this.getScoreRange(),
+      this.getSettlementDelayMinutes(),
+      this.isTokenomicsMintingPaused(),
+    ]);
 
     const submissionResult = await this.settleSubmissions(
       bonusCapMultiple,
@@ -119,6 +131,7 @@ export class SettlementService {
       qualityWeights,
       scoreRange,
       settlementDelayMinutes,
+      mintingPaused,
     );
     const wordRecordingResult = await this.settleWordRecordings(
       bonusCapMultiple,
@@ -127,6 +140,7 @@ export class SettlementService {
       asrMatchWeight,
       scoreRange,
       settlementDelayMinutes,
+      mintingPaused,
     );
     const rejectedRefundCount = await this.refundRejectedSubmissions();
     const stuckRefundCount = await this.refundStuckWordRecordings();
@@ -167,6 +181,7 @@ export class SettlementService {
     qualityWeights: QualityWeights,
     scoreRange: { min: number; max: number },
     settlementDelayMinutes: number,
+    mintingPaused: boolean,
   ) {
     const submissions = await this.prisma.submission.findMany({
       where: {
@@ -220,6 +235,15 @@ export class SettlementService {
           payout,
           submission.id,
         );
+        // Mints into the Tokenomics engine's TokenAccount ledger alongside
+        // the legacy Wallet credit above -- see mintTrainingPayoutOps's doc
+        // comment. Paused independently of the legacy payout itself: pausing
+        // minting stops new supply from being ISSUED into the Tokenomics
+        // ledger, it does not (and must not) block trainers from actually
+        // getting paid, since the no-loss guarantee is unconditional.
+        const mintOps = mintingPaused
+          ? []
+          : (await mintTrainingPayoutOps(this.prisma, submission.userId, payout, submission.id)).ops;
 
         // Release the lock taken at submit time in the same transaction as
         // the payout credit -- no window where tokensSpent is neither
@@ -237,6 +261,7 @@ export class SettlementService {
         await this.prisma.$transaction([
           ...lockOps,
           ...ops,
+          ...mintOps,
           this.prisma.submission.update({
             where: { id: submission.id },
             data: {
@@ -273,6 +298,7 @@ export class SettlementService {
     asrMatchWeight: number,
     scoreRange: { min: number; max: number },
     settlementDelayMinutes: number,
+    mintingPaused: boolean,
   ) {
     const recordings = await this.prisma.wordRecording.findMany({
       where: {
@@ -326,6 +352,11 @@ export class SettlementService {
           payout,
           recording.id,
         );
+        // Same Tokenomics-mint-alongside-legacy-credit pattern as
+        // settleSubmissions -- see mintTrainingPayoutOps's doc comment.
+        const mintOps = mintingPaused
+          ? []
+          : (await mintTrainingPayoutOps(this.prisma, recording.userId, payout, recording.id)).ops;
 
         // Same lock-release-alongside-payout pattern as settleSubmissions,
         // same legacy-row guard.
@@ -340,6 +371,7 @@ export class SettlementService {
         await this.prisma.$transaction([
           ...lockOps,
           ...ops,
+          ...mintOps,
           this.prisma.wordRecording.update({
             where: { id: recording.id },
             data: {
@@ -732,6 +764,23 @@ export class SettlementService {
       select: { id: true },
     });
     return lock !== null;
+  }
+
+  /**
+   * Mirrors TokenomicsService.isEnabled/ensurePolicy's upsert-by-'default'-id
+   * shape (same reasoning as the other getX helpers above: this is a
+   * separate NestJS module tree from services/api, so it re-reads the row
+   * directly rather than importing TokenomicsService). Only gates whether
+   * this run mints into the Tokenomics TokenAccount ledger -- never the
+   * legacy Wallet credit trainers are actually paid from.
+   */
+  private async isTokenomicsMintingPaused(): Promise<boolean> {
+    const policy = await this.prisma.tokenomicsPolicy.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    });
+    return policy.mintingPaused;
   }
 
   /**

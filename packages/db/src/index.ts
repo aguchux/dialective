@@ -15,3 +15,4 @@ export type {
   CreditAdminFundingResult,
   CreditTrainingPayoutResult,
 } from './payouts';
+export { mintTrainingPayoutOps, debitReserveForFlutterwavePayoutOps } from './tokenomics';

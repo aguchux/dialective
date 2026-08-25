@@ -355,7 +355,17 @@ describe('WalletController Flutterwave webhook', () => {
       },
       withdrawalRequest: {
         findUnique: jest.fn().mockResolvedValue({ id: 'withdrawal-1', providerPayoutId: '55' }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          destinationCurrency: 'NGN',
+          fiatAmount: { toString: () => '5000' },
+          usdtAmount: { toString: () => '10' },
+        }),
         update: jest.fn().mockResolvedValue({}),
+      },
+      reserveAccount: { upsert: jest.fn().mockResolvedValue({ id: 'reserve-account-1' }) },
+      reserveTransaction: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
       },
     };
     prisma.$transaction = jest.fn(async (input: unknown) => {
@@ -730,6 +740,11 @@ describe('WalletController Flutterwave payout submission', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       flutterwavePayoutEvent: { create: jest.fn().mockResolvedValue({}) },
+      reserveAccount: { upsert: jest.fn().mockResolvedValue({ id: 'reserve-account-1' }) },
+      reserveTransaction: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
     };
     prisma.$transaction = jest.fn(async (input: unknown) => {
       if (typeof input === 'function') return (input as (tx: unknown) => unknown)(prisma);

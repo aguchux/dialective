@@ -4,10 +4,12 @@ jest.mock('@dialectiva/db', () => {
     ...actual,
     computeTrainingPayout: jest.fn(() => ({ toNumber: () => 1 })),
     creditTrainingPayoutOps: jest.fn().mockResolvedValue({ ops: [] }),
+    mintTrainingPayoutOps: jest.fn().mockResolvedValue({ ops: [] }),
   };
 });
 
 import { SettlementService } from './settlement.service';
+import { mintTrainingPayoutOps } from '@dialectiva/db';
 
 /**
  * Covers the bug this file fixes: resolveTimedOutScoring used to score AND
@@ -155,8 +157,11 @@ describe('SettlementService settlement state', () => {
     const prisma = buildPrismaMock();
     const service = new SettlementService(prisma as never);
 
+    // mintingPaused: true -- this test only covers the legacy Wallet credit
+    // path, not Tokenomics minting (see the settlement.service.spec.ts
+    // "settlement mints into Tokenomics" tests below for that).
     // @ts-expect-error -- private method under test
-    await service.settleSubmissions(1, false, qualityWeights, scoreRange, 0);
+    await service.settleSubmissions(1, false, qualityWeights, scoreRange, 0, true);
 
     expect(prisma.submission.update).toHaveBeenCalledWith({
       where: { id: 'sub-1' },
@@ -172,8 +177,9 @@ describe('SettlementService settlement state', () => {
     const prisma = buildPrismaMock();
     const service = new SettlementService(prisma as never);
 
+    // mintingPaused: true -- see settleSubmissions test above for why.
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
 
     expect(prisma.wordRecording.update).toHaveBeenCalledWith({
       where: { id: 'recording-1' },
@@ -183,5 +189,30 @@ describe('SettlementService settlement state', () => {
         settledAt: expect.any(Date),
       }),
     });
+  });
+
+  it('mints into the Tokenomics ledger alongside the legacy payout when minting is not paused', async () => {
+    const prisma = buildPrismaMock();
+    const service = new SettlementService(prisma as never);
+    (mintTrainingPayoutOps as jest.Mock).mockClear();
+
+    // @ts-expect-error -- private method under test
+    await service.settleSubmissions(1, false, qualityWeights, scoreRange, 0, false);
+
+    expect(mintTrainingPayoutOps).toHaveBeenCalledWith(prisma, 'user-1', expect.anything(), 'sub-1');
+  });
+
+  it('skips minting into the Tokenomics ledger when minting is paused, but still pays the trainer', async () => {
+    const prisma = buildPrismaMock();
+    const service = new SettlementService(prisma as never);
+    (mintTrainingPayoutOps as jest.Mock).mockClear();
+
+    // @ts-expect-error -- private method under test
+    await service.settleSubmissions(1, false, qualityWeights, scoreRange, 0, true);
+
+    expect(mintTrainingPayoutOps).not.toHaveBeenCalled();
+    expect(prisma.submission.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'SETTLED' }) }),
+    );
   });
 });
