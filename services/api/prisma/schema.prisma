@@ -1728,6 +1728,7 @@ model PlatformSettings {
   id                                     String    @id @default("default")
   tokenUsdRate                           Decimal?  @db.Decimal(10, 6) // overrides TOKEN_USD_RATE when set
   minWithdrawalTokens                    Decimal?  @db.Decimal(20, 8) // overrides MIN_WITHDRAWAL_TOKENS when set
+  minCompletedTasksForWithdrawal         Int? // overrides MIN_COMPLETED_TASKS_FOR_WITHDRAWAL when set; trainer must have this many SETTLED submissions+wordRecordings before any withdrawal (fiat or crypto) is allowed
   resendFromAddress                      String? // overrides RESEND_FROM_ADDRESS when set
   leadsNotificationAddress               String? // overrides LEADS_NOTIFICATION_ADDRESS when set
   referralCookiePersistSeconds           Int? // overrides REFERRAL_COOKIE_PERSIST_SECONDS when set; how long referral attribution cookie persists on register flows

@@ -980,6 +980,7 @@ export interface ApiAccessTokenSummary {
 export interface PlatformSettings {
   tokenUsdRate: string | null;
   minWithdrawalTokens: string | null;
+  minCompletedTasksForWithdrawal: number | null;
   resendFromAddress: string | null;
   leadsNotificationAddress: string | null;
   referralCookiePersistSeconds: number;
@@ -1071,6 +1072,7 @@ export interface PlatformSettings {
 export interface PlatformSettingsInput {
   tokenUsdRate?: number | null;
   minWithdrawalTokens?: number | null;
+  minCompletedTasksForWithdrawal?: number | null;
   resendFromAddress?: string | null;
   leadsNotificationAddress?: string | null;
   referralCookiePersistSeconds?: number;

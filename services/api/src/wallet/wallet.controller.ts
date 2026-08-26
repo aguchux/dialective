@@ -1541,6 +1541,7 @@ export class WalletController {
     if (tokenAmount < minTokens) {
       throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
     }
+    await this.requireMinCompletedTasksForWithdrawal(userId);
     const [allowedCurrencies, allowedNetworks] = await Promise.all([
       this.platformSettings.getAllowedWithdrawalCurrencies(),
       this.platformSettings.getAllowedWithdrawalNetworks(),
@@ -1588,6 +1589,27 @@ export class WalletController {
   }
 
   /**
+   * Shared by validateWithdrawalRequest and validateFiatWithdrawalRequest --
+   * a trainer must have this many SETTLED (actually scored + paid) tasks
+   * before any withdrawal, fiat or crypto, is allowed. Counts submissions
+   * and word recordings together since both are trainer "tasks".
+   */
+  private async requireMinCompletedTasksForWithdrawal(userId: string): Promise<void> {
+    const minTasks = await this.platformSettings.getMinCompletedTasksForWithdrawal();
+    if (minTasks <= 0) return;
+    const [submissionCount, wordRecordingCount] = await Promise.all([
+      this.prisma.submission.count({ where: { userId, status: 'SETTLED' } }),
+      this.prisma.wordRecording.count({ where: { userId, status: 'SETTLED' } }),
+    ]);
+    const completedTasks = submissionCount + wordRecordingCount;
+    if (completedTasks < minTasks) {
+      throw new UnprocessableEntityException(
+        `Complete at least ${minTasks} tasks before requesting a withdrawal (${completedTasks}/${minTasks} so far)`,
+      );
+    }
+  }
+
+  /**
    * Fiat counterpart to validateWithdrawalRequest -- parallel rather than a
    * branch inside the same method, since the checks genuinely differ
    * (allowed currency/country vs allowed currency/network) and mixing them
@@ -1607,6 +1629,7 @@ export class WalletController {
     if (tokenAmount < minTokens) {
       throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
     }
+    await this.requireMinCompletedTasksForWithdrawal(userId);
 
     const payoutAccount = await this.prisma.payoutAccount.findUnique({
       where: { id: payoutAccountId },

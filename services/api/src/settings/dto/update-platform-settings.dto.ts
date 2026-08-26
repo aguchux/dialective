@@ -45,6 +45,11 @@ export class UpdatePlatformSettingsDto {
   minWithdrawalTokens?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  minCompletedTasksForWithdrawal?: number;
+
+  @IsOptional()
   @IsString()
   @Validate(IsEmailOrNamedEmailConstraint)
   resendFromAddress?: string;

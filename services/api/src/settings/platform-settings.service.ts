@@ -143,6 +143,19 @@ export class PlatformSettingsService {
     return min;
   }
 
+  async getMinCompletedTasksForWithdrawal(): Promise<number> {
+    const row = await this.getRow();
+    if (row.minCompletedTasksForWithdrawal !== null && row.minCompletedTasksForWithdrawal !== undefined) {
+      return row.minCompletedTasksForWithdrawal;
+    }
+    const raw = process.env.MIN_COMPLETED_TASKS_FOR_WITHDRAWAL ?? '100';
+    const min = Number(raw);
+    if (!Number.isFinite(min) || min < 0) {
+      throw new Error(`Invalid MIN_COMPLETED_TASKS_FOR_WITHDRAWAL: ${raw}`);
+    }
+    return min;
+  }
+
   /** Reads fresh (not cached) -- see PlatformRateLimitGuard, which calls this on every /auth/register request and needs an admin's change to take effect without waiting out ROW_CACHE_TTL_MS. */
   async getRegisterRateLimitPerHour(): Promise<number> {
     const row = await this.fetchRow();
@@ -628,6 +641,7 @@ export class PlatformSettingsService {
     return {
       tokenUsdRate: row.tokenUsdRate?.toString() ?? null,
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
+      minCompletedTasksForWithdrawal: row.minCompletedTasksForWithdrawal ?? null,
       resendFromAddress: row.resendFromAddress,
       leadsNotificationAddress: row.leadsNotificationAddress,
       referralCookiePersistSeconds,
@@ -728,6 +742,7 @@ export class PlatformSettingsService {
   async update(data: {
     tokenUsdRate?: number | null;
     minWithdrawalTokens?: number | null;
+    minCompletedTasksForWithdrawal?: number | null;
     resendFromAddress?: string | null;
     leadsNotificationAddress?: string | null;
     referralCookiePersistSeconds?: number;
@@ -1053,6 +1068,7 @@ export class PlatformSettingsService {
     return {
       tokenUsdRate: row.tokenUsdRate?.toString() ?? null,
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
+      minCompletedTasksForWithdrawal: row.minCompletedTasksForWithdrawal ?? null,
       resendFromAddress: row.resendFromAddress,
       leadsNotificationAddress: row.leadsNotificationAddress,
       referralCookiePersistSeconds,

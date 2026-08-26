@@ -19,6 +19,7 @@ export function GeneralSettingsPanel() {
 
   const [tokenUsdRate, setTokenUsdRate] = useState('');
   const [minWithdrawalTokens, setMinWithdrawalTokens] = useState('');
+  const [minCompletedTasksForWithdrawal, setMinCompletedTasksForWithdrawal] = useState('');
   const [taskTokenCost, setTaskTokenCost] = useState('');
   const [trainingPayoutBonusCapMultiple, setTrainingPayoutBonusCapMultiple] = useState('');
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
@@ -43,6 +44,11 @@ export function GeneralSettingsPanel() {
     if (!settings) return;
     setTokenUsdRate(settings.tokenUsdRate ?? '');
     setMinWithdrawalTokens(settings.minWithdrawalTokens ?? '');
+    setMinCompletedTasksForWithdrawal(
+      settings.minCompletedTasksForWithdrawal !== null
+        ? String(settings.minCompletedTasksForWithdrawal)
+        : '',
+    );
     setTaskTokenCost(settings.taskTokenCost ?? '');
     setTrainingPayoutBonusCapMultiple(settings.trainingPayoutBonusCapMultiple ?? '');
     setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
@@ -79,6 +85,9 @@ export function GeneralSettingsPanel() {
       await updateSettings({
         ...(tokenUsdRate !== '' ? { tokenUsdRate: Number(tokenUsdRate) } : {}),
         ...(minWithdrawalTokens !== '' ? { minWithdrawalTokens: Number(minWithdrawalTokens) } : {}),
+        ...(minCompletedTasksForWithdrawal !== ''
+          ? { minCompletedTasksForWithdrawal: Number(minCompletedTasksForWithdrawal) }
+          : {}),
         ...(taskTokenCost !== '' ? { taskTokenCost: Number(taskTokenCost) } : {}),
         ...(trainingPayoutBonusCapMultiple !== ''
           ? { trainingPayoutBonusCapMultiple: Number(trainingPayoutBonusCapMultiple) }
@@ -157,6 +166,26 @@ export function GeneralSettingsPanel() {
               placeholder="Default"
               value={minWithdrawalTokens}
               onChange={(e) => setMinWithdrawalTokens(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="min-completed-tasks">
+              Minimum completed tasks (default 100)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              Trainer must have this many settled (paid) submissions + word recordings before any
+              withdrawal, fiat or crypto, is allowed.
+            </p>
+            <input
+              className={inputClass}
+              id="min-completed-tasks"
+              type="number"
+              step="1"
+              min="0"
+              placeholder="100"
+              value={minCompletedTasksForWithdrawal}
+              onChange={(e) => setMinCompletedTasksForWithdrawal(e.target.value)}
             />
           </div>
 
