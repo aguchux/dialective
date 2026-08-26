@@ -1388,6 +1388,37 @@ export interface ListAllRecordingsParams {
   maxScore?: number;
 }
 
+export interface UnsettledRow {
+  id: string;
+  kind: RecordingKind;
+  trainer: { id: string; email: string; firstName: string | null; lastName: string | null } | null;
+  tokensSpent: string;
+  score: string | null;
+  scoredAt: string;
+  pendingDelay: boolean;
+  missingScore: boolean;
+}
+
+export interface UnsettledPage {
+  items: UnsettledRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  stuckCount: number;
+}
+
+export interface SettleResult {
+  id: string;
+  payoutTokenAmount: string;
+}
+
+export interface SettleAllResult {
+  settledCount: number;
+  failedCount: number;
+  skippedDelayCount: number;
+}
+
 export type PartOfSpeech =
   | 'NOUN'
   | 'VERB'
@@ -1721,6 +1752,7 @@ export const dialectivaApi = createApi({
     'AssistantThread',
     'PayoutAccounts',
     'Kyc',
+    'AdminSettlement',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -2806,6 +2838,25 @@ export const dialectivaApi = createApi({
       query: (params) => ({ url: '/admin-recordings', params }),
       providesTags: ['AdminRecordings'],
     }),
+    getUnsettled: builder.query<
+      UnsettledPage,
+      { kind?: RecordingKind; page: number; pageSize: number }
+    >({
+      query: (params) => ({ url: '/admin-settlement/unsettled', params }),
+      providesTags: ['AdminSettlement'],
+    }),
+    settleOne: builder.mutation<SettleResult, { kind: RecordingKind; id: string; force?: boolean }>({
+      query: ({ kind, id, force }) => ({
+        url: `/admin-settlement/${kind}/${id}/settle`,
+        method: 'POST',
+        body: { force },
+      }),
+      invalidatesTags: ['AdminSettlement', 'Wallet', 'Tokenomics'],
+    }),
+    settleAll: builder.mutation<SettleAllResult, { kind?: RecordingKind; force?: boolean }>({
+      query: (body) => ({ url: '/admin-settlement/settle-all', method: 'POST', body }),
+      invalidatesTags: ['AdminSettlement', 'Wallet', 'Tokenomics'],
+    }),
     requestRecordingAuditClawbackOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
       { kind: RecordingKind; id: string }
@@ -3270,6 +3321,9 @@ export const {
   useCreateAdminWalletAdjustmentMutation,
   useGetAdminTrainerRecordingsQuery,
   useGetAdminAllRecordingsQuery,
+  useGetUnsettledQuery,
+  useSettleOneMutation,
+  useSettleAllMutation,
   useRequestRecordingAuditClawbackOtpMutation,
   useAuditRecordingMutation,
   useRequestTrainingPayoutOtpMutation,

@@ -449,6 +449,33 @@ export class PlatformSettingsService {
     return { min: row.minScoreRange.toNumber(), max: row.maxScoreRange.toNumber() };
   }
 
+  /** Mirrors settlement-job's own duplicated read of this column -- see its isQualityGateEnabled doc comment for why that duplication exists (separate deployable, can't import this service). */
+  async isQualityGateEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.qualityGateEnabled;
+  }
+
+  async getQualityWeights(): Promise<{
+    consensus: number;
+    noise: number;
+    quality: number;
+    liveness: number;
+  }> {
+    const row = await this.getRow();
+    return {
+      consensus: row.qualityWeightConsensus.toNumber(),
+      noise: row.qualityWeightNoise.toNumber(),
+      quality: row.qualityWeightQuality.toNumber(),
+      liveness: row.qualityWeightLiveness.toNumber(),
+    };
+  }
+
+  /** WordRecording-only weight -- see settlement-job's getAsrMatchWeight doc comment. */
+  async getAsrMatchWeight(): Promise<number> {
+    const row = await this.getRow();
+    return row.qualityWeightAsrMatch.toNumber();
+  }
+
   async getResendFromAddress(): Promise<string> {
     const row = await this.getRow();
     return (

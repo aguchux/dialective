@@ -257,6 +257,12 @@ export class TokenomicsService {
     return policy.enabled;
   }
 
+  /** Used by manual-settlement callers (admin force-settle) that mint outside settlement-job's own run -- same policy read settlement-job duplicates for the same purpose. */
+  async isMintingPaused(): Promise<boolean> {
+    const policy = await this.ensurePolicy();
+    return policy.mintingPaused;
+  }
+
   async setMintingPaused(paused: boolean) {
     return this.prisma.tokenomicsPolicy.update({
       where: { id: 'default' },

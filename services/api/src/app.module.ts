@@ -27,6 +27,7 @@ import { ApiAccessTokensModule } from './api-access-tokens/api-access-tokens.mod
 import { ChatDialectModule } from './chatdialect/chatdialect.module';
 import { TokenomicsModule } from './tokenomics/tokenomics.module';
 import { AssistantModule } from './assistant/assistant.module';
+import { SettlementAdminModule } from './settlement-admin/settlement-admin.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { AssistantModule } from './assistant/assistant.module';
     ChatDialectModule,
     TokenomicsModule,
     AssistantModule,
+    SettlementAdminModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
