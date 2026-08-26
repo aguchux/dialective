@@ -5,14 +5,14 @@ interface StatsVisibility {
   countries: boolean;
   dialects: boolean;
   trainers: boolean;
-  poolVolume: boolean;
+  totalRecordings: boolean;
   payout: boolean;
 }
 
 interface LandingStatsProps {
   dialectCount: number | null;
   countryCount: number | null;
-  poolVolumeUsd: number | null;
+  totalRecordings: number | null;
   totalTrainers: number | null;
   totalPayoutUsd: number | null;
   visibility: StatsVisibility;
@@ -21,7 +21,7 @@ interface LandingStatsProps {
 const VISIBILITY_KEY_BY_LABEL: Record<string, keyof StatsVisibility> = {
   Dialects: 'dialects',
   Countries: 'countries',
-  'Pool Volume': 'poolVolume',
+  'Total Recordings': 'totalRecordings',
   Trainers: 'trainers',
   Payout: 'payout',
 };
@@ -29,7 +29,7 @@ const VISIBILITY_KEY_BY_LABEL: Record<string, keyof StatsVisibility> = {
 export function LandingStats({
   dialectCount,
   countryCount,
-  poolVolumeUsd,
+  totalRecordings,
   totalTrainers,
   totalPayoutUsd,
   visibility,
@@ -43,8 +43,8 @@ export function LandingStats({
       if (stat.label === 'Countries' && countryCount !== null) {
         return { ...stat, value: String(countryCount) };
       }
-      if (stat.label === 'Pool Volume' && poolVolumeUsd !== null) {
-        return { ...stat, value: formatCompactUsd(poolVolumeUsd) };
+      if (stat.label === 'Total Recordings' && totalRecordings !== null) {
+        return { ...stat, value: totalRecordings.toLocaleString() };
       }
       if (stat.label === 'Trainers' && totalTrainers !== null) {
         return { ...stat, value: String(totalTrainers) };

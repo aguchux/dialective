@@ -187,14 +187,21 @@ export class PlatformSettingsService {
     return row.reverseWordTrainingEnabled;
   }
 
-  /** Per-card visibility for the landing page's 5-stat row -- consumed by GeoController.getStats. */
+  /**
+   * Per-card visibility for the landing page's 5-stat row -- consumed by
+   * GeoController.getStats. The DB column is still named
+   * landingShowPoolVolume (unrenamed to avoid a migration for a purely
+   * cosmetic change) but now gates the "Total Recordings" card -- the
+   * subscription-pool concept it originally named has been retired in
+   * favor of Tokenomics minting/reserve automation.
+   */
   async getLandingVisibility() {
     const row = await this.getRow();
     return {
       countries: row.landingShowCountries,
       dialects: row.landingShowDialects,
       trainers: row.landingShowTrainers,
-      poolVolume: row.landingShowPoolVolume,
+      totalRecordings: row.landingShowPoolVolume,
       payout: row.landingShowPayout,
     };
   }

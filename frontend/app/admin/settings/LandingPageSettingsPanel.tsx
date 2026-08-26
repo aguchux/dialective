@@ -15,7 +15,7 @@ const STAT_TOGGLES = [
   { key: 'countries' as const, label: 'Countries', detail: 'Active countries card' },
   { key: 'dialects' as const, label: 'Dialects', detail: 'Active tracks card' },
   { key: 'trainers' as const, label: 'Trainers', detail: 'Registered contributors card' },
-  { key: 'poolVolume' as const, label: 'Pool Volume', detail: 'Reward pool balance card' },
+  { key: 'poolVolume' as const, label: 'Total Recordings', detail: 'Voice samples submitted card' },
   { key: 'payout' as const, label: 'Payout', detail: 'Total earned by contributors card' },
 ];
 

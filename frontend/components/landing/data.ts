@@ -83,9 +83,9 @@ export const landingStats = [
     detail: 'Registered contributors',
   },
   {
-    label: 'Pool Volume',
-    value: '$0',
-    detail: 'Reward pool balance',
+    label: 'Total Recordings',
+    value: '0',
+    detail: 'Voice samples submitted',
   },
   {
     label: 'Payout',

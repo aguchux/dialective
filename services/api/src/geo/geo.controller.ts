@@ -11,7 +11,7 @@ import {
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
-import { Prisma, Role, SubscriptionPoolStatus } from '@dialectiva/db';
+import { Prisma, Role } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -60,10 +60,16 @@ export class GeoController {
   }
 
   /**
-   * Public landing-page metrics. poolVolumeUsd/totalPayoutUsd mirror the
+   * Public landing-page metrics. totalRecordings/totalPayoutUsd mirror the
    * same aggregate reads as PoolsController.summary (admin-only, in tokens)
-   * -- here converted to USD and rounded to whole dollars, since this is a
-   * public marketing figure, not an operational admin balance.
+   * for the payout figure -- here converted to USD and rounded to whole
+   * dollars, since this is a public marketing figure, not an operational
+   * admin balance. totalRecordings replaced the old "Pool Volume" card: the
+   * subscription-pool concept has been retired now that the platform runs
+   * on Tokenomics minting/reserve automation instead (see
+   * services/api/src/tokenomics), so a fixed-pool USD balance is no longer
+   * a meaningful figure to show trainers -- a running count of submitted
+   * recordings is.
    */
   @Get('stats')
   async getStats() {
@@ -71,7 +77,8 @@ export class GeoController {
       countryCount,
       dialectCount,
       totalTrainers,
-      activeAgg,
+      submissionCount,
+      wordRecordingCount,
       settledSubmissionAgg,
       settledWordAgg,
       rate,
@@ -80,10 +87,8 @@ export class GeoController {
       this.prisma.country.count(),
       this.prisma.dialect.count(),
       this.prisma.user.count({ where: { role: Role.TRAINER } }),
-      this.prisma.subscriptionPool.aggregate({
-        where: { status: SubscriptionPoolStatus.ACTIVE },
-        _sum: { usdAmount: true },
-      }),
+      this.prisma.submission.count(),
+      this.prisma.wordRecording.count(),
       this.prisma.submission.aggregate({
         where: { settledAt: { not: null } },
         _sum: { payoutTokenAmount: true },
@@ -96,7 +101,7 @@ export class GeoController {
       this.platformSettings.getLandingVisibility(),
     ]);
 
-    const poolVolumeUsd = Number(activeAgg._sum.usdAmount ?? 0);
+    const totalRecordings = submissionCount + wordRecordingCount;
     const totalSettledTokens =
       Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) +
       Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
@@ -105,7 +110,7 @@ export class GeoController {
     // Every figure is still computed regardless of visibility -- these flags
     // only tell the landing page which cards to render, they're not a
     // shortcut to skip the underlying aggregate reads.
-    return { countryCount, dialectCount, totalTrainers, poolVolumeUsd, totalPayoutUsd, visibility };
+    return { countryCount, dialectCount, totalTrainers, totalRecordings, totalPayoutUsd, visibility };
   }
 
   /**

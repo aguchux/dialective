@@ -12,7 +12,7 @@ interface GeoStatsVisibility {
   countries: boolean;
   dialects: boolean;
   trainers: boolean;
-  poolVolume: boolean;
+  totalRecordings: boolean;
   payout: boolean;
 }
 
@@ -20,7 +20,7 @@ interface GeoStats {
   countryCount: number;
   dialectCount: number;
   totalTrainers: number;
-  poolVolumeUsd: number;
+  totalRecordings: number;
   totalPayoutUsd: number;
   visibility: GeoStatsVisibility;
 }
@@ -29,7 +29,7 @@ const DEFAULT_VISIBILITY: GeoStatsVisibility = {
   countries: true,
   dialects: true,
   trainers: true,
-  poolVolume: true,
+  totalRecordings: true,
   payout: true,
 };
 
@@ -67,7 +67,7 @@ export async function LandingPage() {
   const dialectCount = geoStats?.dialectCount ?? null;
   const countryCount = geoStats?.countryCount ?? null;
   const totalTrainers = geoStats?.totalTrainers ?? null;
-  const poolVolumeUsd = geoStats?.poolVolumeUsd ?? null;
+  const totalRecordings = geoStats?.totalRecordings ?? null;
   const totalPayoutUsd = geoStats?.totalPayoutUsd ?? null;
   const visibility = geoStats?.visibility ?? DEFAULT_VISIBILITY;
 
@@ -85,7 +85,7 @@ export async function LandingPage() {
           <LandingStats
             dialectCount={dialectCount}
             countryCount={countryCount}
-            poolVolumeUsd={poolVolumeUsd}
+            totalRecordings={totalRecordings}
             totalTrainers={totalTrainers}
             totalPayoutUsd={totalPayoutUsd}
             visibility={visibility}

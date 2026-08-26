@@ -96,7 +96,7 @@ describe('PlatformSettingsService.getLandingVisibility', () => {
       countries: true,
       dialects: false,
       trainers: true,
-      poolVolume: false,
+      totalRecordings: false,
       payout: true,
     });
   });
