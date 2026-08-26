@@ -150,6 +150,13 @@ export class AuthController {
     return this.auth.updateProfile(user.sub, dto);
   }
 
+  @Post('me/pwa-install')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  recordPwaInstallation(@CurrentUser() user: AccessTokenClaims) {
+    return this.auth.recordPwaInstallation(user.sub);
+  }
+
   @Post('phone/otp')
   @UseGuards(JwtAuthGuard)
   requestPhoneOtp(@CurrentUser() user: AccessTokenClaims, @Body() dto: RequestPhoneOtpDto) {

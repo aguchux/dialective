@@ -153,9 +153,9 @@ describe('DiditService', () => {
         ),
       );
 
-      await expect(service.createSession('user-1', 'https://example.com/callback')).resolves.toEqual(
-        { sessionId: 'sess-1', url: 'https://verify.didit.me/session/sess-1' },
-      );
+      await expect(
+        service.createSession('user-1', 'https://example.com/callback'),
+      ).resolves.toEqual({ sessionId: 'sess-1', url: 'https://verify.didit.me/session/sess-1' });
     });
   });
 });

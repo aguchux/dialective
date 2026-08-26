@@ -62,19 +62,25 @@ Dialect Library is a contributor platform for voice recordings and word translat
 ## Frequently asked questions
 
 ### Who can become a trainer?
+
 Anyone who naturally speaks a supported dialect can create an account and complete onboarding. Availability depends on the platform's supported country and dialect coverage.
 
 ### Do I need AI experience?
+
 No. Natural fluency in the selected dialect and careful recording are what matter.
 
 ### What happens if a task is not scored quickly?
+
 The platform has a scoring time limit and resolution policy. Do not promise a specific outcome or date; direct the trainer to their task status and support for an account-specific concern.
 
 ### Why verify an email or phone number?
+
 Verification helps secure the account and is required for some sensitive actions. The user should only enter codes in the official platform verification form.
 
 ### Can I test recording without an account?
+
 The platform may offer a recording pipeline demonstration, but submitted training work and account rewards require an authenticated contributor account.
 
 ### Where can I read the full policies?
+
 Use the Terms of Use, Privacy Policy, and Cookie Policy links in the route registry.

@@ -30,6 +30,11 @@ export const metadata: Metadata = {
     'AI voice training',
   ],
   manifest: '/site.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Dialect Library',
+  },
   robots: {
     index: true,
     follow: true,

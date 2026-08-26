@@ -226,7 +226,9 @@ export class FlutterwaveService implements PayoutProvider {
       // attempt actually landed on their side.
       headers: {
         ...this.authHeaders(),
-        'X-Idempotency-Key': createHash('sha256').update(`transfer:${params.reference}`).digest('hex'),
+        'X-Idempotency-Key': createHash('sha256')
+          .update(`transfer:${params.reference}`)
+          .digest('hex'),
       },
       body: JSON.stringify({
         account_bank: params.accountBank,

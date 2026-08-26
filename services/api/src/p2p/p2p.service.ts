@@ -1021,7 +1021,15 @@ const userSelect = { select: { id: true, firstName: true, lastName: true, email:
 const tradeInclude = {
   offer: true,
   buyer: userSelect,
-  seller: { select: { id: true, firstName: true, lastName: true, email: true, p2pPaymentInstructions: true } },
+  seller: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      p2pPaymentInstructions: true,
+    },
+  },
   sellerPaymentMethod: true,
   dispute: true,
 } satisfies Prisma.P2PTokenTradeInclude;

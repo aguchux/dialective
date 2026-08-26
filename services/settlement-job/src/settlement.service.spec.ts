@@ -199,7 +199,12 @@ describe('SettlementService settlement state', () => {
     // @ts-expect-error -- private method under test
     await service.settleSubmissions(1, false, qualityWeights, scoreRange, 0, false);
 
-    expect(mintTrainingPayoutOps).toHaveBeenCalledWith(prisma, 'user-1', expect.anything(), 'sub-1');
+    expect(mintTrainingPayoutOps).toHaveBeenCalledWith(
+      prisma,
+      'user-1',
+      expect.anything(),
+      'sub-1',
+    );
   });
 
   it('skips minting into the Tokenomics ledger when minting is paused, but still pays the trainer', async () => {

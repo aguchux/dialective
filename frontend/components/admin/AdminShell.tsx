@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
+import { Download } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { requestPwaInstall } from '@/components/PwaInstallPrompt';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -116,6 +118,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 <DropdownMenuItem onSelect={() => router.push('/')}>
                   <HomeIcon />
                   Back to site
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => requestPwaInstall()}>
+                  <Download className="size-4" aria-hidden="true" />
+                  Install app
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>

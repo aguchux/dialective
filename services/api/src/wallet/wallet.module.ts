@@ -13,7 +13,12 @@ import { TokenomicsModule } from '../tokenomics/tokenomics.module';
 @Module({
   imports: [SettingsModule, OtpModule, MailModule, TokenomicsModule],
   controllers: [WalletController, PayoutAccountsController],
-  providers: [NowPaymentsService, FlutterwaveService, FlutterwaveV4Service, WithdrawalReconciliationService],
+  providers: [
+    NowPaymentsService,
+    FlutterwaveService,
+    FlutterwaveV4Service,
+    WithdrawalReconciliationService,
+  ],
   exports: [WithdrawalReconciliationService, FlutterwaveService, FlutterwaveV4Service],
 })
 export class WalletModule {}

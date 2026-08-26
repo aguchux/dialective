@@ -38,6 +38,7 @@ export interface PublicUser {
   marketingNotificationsEnabled: boolean;
   blogNewsNotificationsEnabled: boolean;
   courseNotificationsEnabled: boolean;
+  pwaInstalledAt: string | null;
   walletBalance?: string;
   submissionsCount?: number;
   wordRecordingsCount?: number;
@@ -788,6 +789,8 @@ export interface PublicClientSettings {
   tawkToPropertyId: string | null;
   tawkToWidgetId: string | null;
   supportChatMode: 'NONE' | 'TAWK' | 'AI';
+  pwaInstallPromptEnabled: boolean;
+  pwaInstallPromptReminderMinutes: number;
   isKycRequiredForWithdrawals: boolean;
   kycMinWithdrawalTokens: string;
   isKycRequiredOnboarding: boolean;
@@ -996,6 +999,8 @@ export interface PlatformSettings {
   tawkToPropertyId: string | null;
   tawkToWidgetId: string | null;
   supportChatMode: 'NONE' | 'TAWK' | 'AI';
+  pwaInstallPromptEnabled: boolean;
+  pwaInstallPromptReminderMinutes: number;
   wordStuckTimeoutMinutes: number;
   scoringSlaMinutes: number;
   auditHoldEveryNSubmissions: number;
@@ -1085,6 +1090,8 @@ export interface PlatformSettingsInput {
   tawkToPropertyId?: string;
   tawkToWidgetId?: string;
   supportChatMode?: 'NONE' | 'TAWK' | 'AI';
+  pwaInstallPromptEnabled?: boolean;
+  pwaInstallPromptReminderMinutes?: number;
   wordStuckTimeoutMinutes?: number;
   scoringSlaMinutes?: number;
   auditHoldEveryNSubmissions?: number;
@@ -2281,6 +2288,10 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['Profile'],
     }),
+    recordPwaInstallation: builder.mutation<{ pwaInstalledAt: string }, void>({
+      query: () => ({ url: '/auth/me/pwa-install', method: 'POST' }),
+      invalidatesTags: ['Profile'],
+    }),
     getNotifications: builder.query<NotificationsPage, { page?: number } | void>({
       query: (params) => ({ url: '/notifications', params: params ?? undefined }),
       providesTags: ['Notifications'],
@@ -3191,6 +3202,7 @@ export const {
   useResolveWithdrawalMutation,
   useGetMeQuery,
   useUpdateProfileMutation,
+  useRecordPwaInstallationMutation,
   useGetNotificationsQuery,
   useMarkNotificationReadMutation,
   useMarkAllNotificationsReadMutation,

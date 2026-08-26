@@ -46,7 +46,9 @@ export function AiAssistantWidget() {
 
   useEffect(() => {
     if (status === 'authenticated' && thread) {
-      setChat(thread.messages.map(({ role, content, createdAt }) => ({ role, content, createdAt })));
+      setChat(
+        thread.messages.map(({ role, content, createdAt }) => ({ role, content, createdAt })),
+      );
     }
   }, [status, thread]);
 
@@ -148,7 +150,9 @@ export function AiAssistantWidget() {
                     <Bot className="size-4" />
                   </span>
                 )}
-                <div className={`flex max-w-[80%] flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
+                <div
+                  className={`flex max-w-[80%] flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}
+                >
                   <div
                     className={
                       isUser

@@ -39,7 +39,9 @@ export async function mintTrainingPayoutOps(
   });
   if (existingOperation) {
     const existingEntry = await prisma.tokenLedgerEntry.findUnique({
-      where: { accountId_operationId: { accountId: account.id, operationId: existingOperation.id } },
+      where: {
+        accountId_operationId: { accountId: account.id, operationId: existingOperation.id },
+      },
     });
     if (existingEntry) {
       return { ops: [] as Prisma.PrismaPromise<unknown>[] };

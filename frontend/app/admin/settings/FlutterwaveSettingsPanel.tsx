@@ -129,10 +129,10 @@ export function FlutterwaveSettingsPanel() {
                   which gives trainers real Customer records with proper first/last names. Changes
                   the funding flow -- card is dropped (v4 card charges would require raw card
                   numbers to reach our backend), bank transfer shows a virtual account to pay into
-                  instead of a hosted checkout link, and creating a bank/mobile-money payout
-                  account additionally registers a Flutterwave Recipient. v3 stays fully available
-                  and unaffected while this is off; a deposit/withdrawal created under v4 keeps
-                  being serviced by v4 even if this is later switched off.
+                  instead of a hosted checkout link, and creating a bank/mobile-money payout account
+                  additionally registers a Flutterwave Recipient. v3 stays fully available and
+                  unaffected while this is off; a deposit/withdrawal created under v4 keeps being
+                  serviced by v4 even if this is later switched off.
                 </span>
               </span>
             </label>

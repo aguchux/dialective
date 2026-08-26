@@ -3,7 +3,10 @@
 import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useLazyVerifyFlutterwaveDepositQuery, useCheckFlutterwaveDepositStatusMutation } from '@/store/api';
+import {
+  useLazyVerifyFlutterwaveDepositQuery,
+  useCheckFlutterwaveDepositStatusMutation,
+} from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 
@@ -21,7 +24,9 @@ function FlutterwaveFundingCallbackContent() {
   const isV4 = searchParams.get('provider') === 'flutterwave-v4';
   const depositId = isV4
     ? searchParams.get('depositId')
-    : (txRef?.startsWith('deposit-') ? txRef.slice('deposit-'.length) : null);
+    : txRef?.startsWith('deposit-')
+      ? txRef.slice('deposit-'.length)
+      : null;
   const [status, setStatus] = useState<'pending' | 'success' | 'failed' | 'error'>('pending');
   const [verify] = useLazyVerifyFlutterwaveDepositQuery();
   const [checkStatus] = useCheckFlutterwaveDepositStatusMutation();

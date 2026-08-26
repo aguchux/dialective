@@ -1,4 +1,13 @@
-import { IsIn, IsNumber, IsOptional, IsString, IsUUID, Length, Matches, Min } from 'class-validator';
+import {
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Matches,
+  Min,
+} from 'class-validator';
 
 export class CreateFlutterwaveDepositDto {
   @IsNumber()

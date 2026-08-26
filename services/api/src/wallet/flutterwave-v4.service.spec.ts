@@ -40,7 +40,9 @@ describe('FlutterwaveV4Service', () => {
       } as Response);
       await service.createSender();
       const tokenCallsAfterFirst = fetchSpy.mock.calls.filter(
-        (call) => call[0] === 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
+        (call) =>
+          call[0] ===
+          'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
       ).length;
 
       fetchSpy.mockResolvedValueOnce({
@@ -49,7 +51,9 @@ describe('FlutterwaveV4Service', () => {
       } as Response);
       await service.createSender();
       const tokenCallsAfterSecond = fetchSpy.mock.calls.filter(
-        (call) => call[0] === 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
+        (call) =>
+          call[0] ===
+          'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
       ).length;
 
       expect(tokenCallsAfterFirst).toBe(1);
@@ -72,7 +76,9 @@ describe('FlutterwaveV4Service', () => {
       await service.createSender();
 
       const tokenCalls = fetchSpy.mock.calls.filter(
-        (call) => call[0] === 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
+        (call) =>
+          call[0] ===
+          'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token',
       ).length;
       expect(tokenCalls).toBe(2); // refreshed because the first token was inside the buffer
     });
@@ -216,7 +222,9 @@ describe('FlutterwaveV4Service', () => {
 
     it('is sensitive to raw body changes even with a valid HMAC key (tamper detection)', () => {
       const originalBody = Buffer.from(JSON.stringify({ amount: 100 }));
-      const signature = createHmac('sha256', webhookSecretHash).update(originalBody).digest('base64');
+      const signature = createHmac('sha256', webhookSecretHash)
+        .update(originalBody)
+        .digest('base64');
       const tamperedBody = Buffer.from(JSON.stringify({ amount: 100000 }));
       expect(
         service.verifyWebhookSignature(tamperedBody, { 'flutterwave-signature': signature }),

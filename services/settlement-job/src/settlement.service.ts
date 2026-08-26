@@ -243,7 +243,8 @@ export class SettlementService {
         // getting paid, since the no-loss guarantee is unconditional.
         const mintOps = mintingPaused
           ? []
-          : (await mintTrainingPayoutOps(this.prisma, submission.userId, payout, submission.id)).ops;
+          : (await mintTrainingPayoutOps(this.prisma, submission.userId, payout, submission.id))
+              .ops;
 
         // Release the lock taken at submit time in the same transaction as
         // the payout credit -- no window where tokensSpent is neither

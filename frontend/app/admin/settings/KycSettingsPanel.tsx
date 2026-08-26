@@ -53,8 +53,8 @@ export function KycSettingsPanel() {
         <p className="leading-relaxed text-muted">
           Controls for AI KYC verification -- ID scan, selfie, and face-match via Didit. When
           required, a trainer must reach APPROVED status before a withdrawal at or above the
-          threshold below is allowed. Verification results are decided by Didit; admins only get
-          an oversight queue.
+          threshold below is allowed. Verification results are decided by Didit; admins only get an
+          oversight queue.
         </p>
       </div>
 
@@ -76,9 +76,9 @@ export function KycSettingsPanel() {
               <span>
                 <span className="block font-bold">Prompt during onboarding</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  A trainer is prompted to verify right after completing onboarding, with a "Do
-                  this later" option. Skipping has no effect beyond the withdrawal rule below --
-                  there is no separate onboarding-only lock.
+                  A trainer is prompted to verify right after completing onboarding, with a "Do this
+                  later" option. Skipping has no effect beyond the withdrawal rule below -- there is
+                  no separate onboarding-only lock.
                 </span>
               </span>
             </label>
@@ -119,8 +119,8 @@ export function KycSettingsPanel() {
               value={minWithdrawalTokens}
             />
             <p className="text-sm leading-relaxed text-muted">
-              Withdrawals below this amount skip the KYC gate even when required above is on. Set
-              to 0 to require verification for every withdrawal.
+              Withdrawals below this amount skip the KYC gate even when required above is on. Set to
+              0 to require verification for every withdrawal.
             </p>
           </div>
 

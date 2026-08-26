@@ -15,10 +15,12 @@ import {
   Home,
   LogOut,
   ChevronDown,
+  Download,
   UserCircle,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { requestPwaInstall } from '@/components/PwaInstallPrompt';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -115,6 +117,10 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
                 <DropdownMenuItem onSelect={() => router.push('/')}>
                   <Home className="size-4" />
                   Back to site
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => requestPwaInstall()}>
+                  <Download className="size-4" />
+                  Install app
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>

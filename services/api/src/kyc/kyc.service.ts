@@ -187,7 +187,10 @@ function mapDiditStatus(status: string | undefined): KycStatus {
 }
 
 /** Parses the inline `decision` object a status.updated webhook carries -- same shape as DiditService.getDecision's fallback-poll response, so both paths converge on one DiditDecision shape before reaching applyDecision. */
-function parseWebhookDecision(status: string | undefined, decision: Record<string, unknown>): DiditDecision {
+function parseWebhookDecision(
+  status: string | undefined,
+  decision: Record<string, unknown>,
+): DiditDecision {
   const idVerifications = toArray(decision.id_verifications).map((item) => ({
     documentType: strOrNull(item.document_type),
     documentNumber: strOrNull(item.document_number),

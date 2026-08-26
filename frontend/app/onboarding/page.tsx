@@ -132,9 +132,9 @@ export default function OnboardingPage() {
           <Breadcrumbs items={[{ label: 'Onboarding' }, { label: 'Verify identity' }]} />
           <h1 className="text-center text-[1.75rem] leading-tight">Verify your identity</h1>
           <Notice>
-            A quick ID scan and selfie, verified by Didit, confirms it&apos;s really you. You can
-            do this now or later from your profile -- withdrawals above the platform&apos;s
-            threshold will still require it either way.
+            A quick ID scan and selfie, verified by Didit, confirms it&apos;s really you. You can do
+            this now or later from your profile -- withdrawals above the platform&apos;s threshold
+            will still require it either way.
           </Notice>
           <div className="grid gap-2.5">
             <ActionButton

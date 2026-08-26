@@ -21,6 +21,7 @@ import { LiveChatSettingsPanel } from './LiveChatSettingsPanel';
 import { DatasetStorageSettingsPanel } from './DatasetStorageSettingsPanel';
 import { LandingPageSettingsPanel } from './LandingPageSettingsPanel';
 import { ApiAccessTokensSettingsPanel } from './ApiAccessTokensSettingsPanel';
+import { PwaSettingsPanel } from './PwaSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
@@ -31,6 +32,7 @@ const groups = [
   { key: 'trainingTasks', label: 'Training & Tasks' },
   { key: 'notifications', label: 'Notification Settings' },
   { key: 'liveChat', label: 'Live Chat' },
+  { key: 'pwa', label: 'Web App Install' },
   { key: 'wordGeneration', label: 'Word Generation' },
   { key: 'qualityGate', label: 'Voice Quality Gate' },
   { key: 'speechExpression', label: 'Speech Expression' },
@@ -90,6 +92,7 @@ export default function AdminSettingsPage() {
             {active === 'trainingTasks' && <TrainingTasksSettingsPanel />}
             {active === 'notifications' && <NotificationSettingsPanel />}
             {active === 'liveChat' && <LiveChatSettingsPanel />}
+            {active === 'pwa' && <PwaSettingsPanel />}
             {active === 'wordGeneration' && <WordGenerationSettingsPanel />}
             {active === 'qualityGate' && <QualityGateSettingsPanel />}
             {active === 'speechExpression' && <SpeechExpressionSettingsPanel />}

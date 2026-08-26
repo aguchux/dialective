@@ -148,6 +148,16 @@ export class UpdatePlatformSettingsDto {
   supportChatMode?: string;
 
   @IsOptional()
+  @IsBoolean()
+  pwaInstallPromptEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(60)
+  @Max(10080)
+  pwaInstallPromptReminderMinutes?: number;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   wordStuckTimeoutMinutes?: number;

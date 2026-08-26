@@ -9,6 +9,7 @@ import { TawkToWidget } from '@/components/TawkToWidget';
 import { AiAssistantWidget } from '@/components/AiAssistantWidget';
 import { RequireNameDialog } from '@/components/RequireNameDialog';
 import { PwaServiceWorker } from '@/components/PwaServiceWorker';
+import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -25,6 +26,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       >
         <StoreProvider>
           <PwaServiceWorker />
+          <PwaInstallPrompt />
           <TawkToWidget />
           <AiAssistantWidget />
           <RequireNameDialog />

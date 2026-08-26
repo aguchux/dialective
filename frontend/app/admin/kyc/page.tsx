@@ -144,7 +144,10 @@ function VerificationRow({
   );
 
   return (
-    <tr className="cursor-pointer border-t border-line hover:bg-surface-muted" onClick={() => onSelect(row.id)}>
+    <tr
+      className="cursor-pointer border-t border-line hover:bg-surface-muted"
+      onClick={() => onSelect(row.id)}
+    >
       <td className="px-4 py-3">
         <div className="font-black">{name}</div>
         <div className="text-muted">{row.user.email}</div>
@@ -173,7 +176,13 @@ function VerificationRow({
   );
 }
 
-function DetailDialog({ id, onOpenChange }: { id: string | null; onOpenChange: (open: boolean) => void }) {
+function DetailDialog({
+  id,
+  onOpenChange,
+}: {
+  id: string | null;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { data: row } = useGetKycVerificationQuery(id ?? '', { skip: !id });
   const [refresh, { isLoading: refreshing }] = useRefreshKycVerificationMutation();
   const [error, setError] = useState<string | null>(null);
@@ -222,7 +231,9 @@ function DetailDialog({ id, onOpenChange }: { id: string | null; onOpenChange: (
               </p>
             )}
             {error && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">{error}</p>
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">
+                {error}
+              </p>
             )}
             {(row.status === 'IN_PROGRESS' || row.status === 'IN_REVIEW') && (
               <ActionButton

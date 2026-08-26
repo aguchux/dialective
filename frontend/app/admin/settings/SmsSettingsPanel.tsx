@@ -208,8 +208,8 @@ export function SmsSettingsPanel() {
               <span>
                 <span className="block font-bold">Send OTP through transactional SMS</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Uses the transactional provider order below, with SMSLive247 first. The message
-                  is the six-digit code only, for example 908822. The platform still controls OTP
+                  Uses the transactional provider order below, with SMSLive247 first. The message is
+                  the six-digit code only, for example 908822. The platform still controls OTP
                   expiry and verification. Turn this off only to use the legacy OTP chain or
                   SMSLive247&apos;s native token flow.
                 </span>
@@ -233,9 +233,8 @@ export function SmsSettingsPanel() {
                 <span className="block font-bold">Use SMSLive247&apos;s native OTP flow</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   When transactional OTP above is off, phone verification bypasses the legacy
-                  fallback chain entirely and uses SMSLive247&apos;s own
-                  token-generate/verify API end-to-end -- SMSLive247 generates and checks the code
-                  on their side, not ours.
+                  fallback chain entirely and uses SMSLive247&apos;s own token-generate/verify API
+                  end-to-end -- SMSLive247 generates and checks the code on their side, not ours.
                 </span>
               </span>
             </label>

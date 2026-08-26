@@ -92,7 +92,9 @@ export class DiditService {
     const sessionId = raw.session_id;
     const url = raw.url;
     if (typeof sessionId !== 'string' || typeof url !== 'string') {
-      this.logger.error(`Didit createSession response missing session_id/url: ${JSON.stringify(raw)}`);
+      this.logger.error(
+        `Didit createSession response missing session_id/url: ${JSON.stringify(raw)}`,
+      );
       throw new BadGatewayException(
         'The identity verification provider returned an invalid session response.',
       );
@@ -102,14 +104,19 @@ export class DiditService {
 
   /** Fallback poll used only by the admin "Refresh from Didit" action -- the webhook is the primary result path. */
   async getDecision(sessionId: string): Promise<DiditDecision> {
-    const res = await fetch(`${DIDIT_API_BASE}/session/${encodeURIComponent(sessionId)}/decision/`, {
-      method: 'GET',
-      headers: this.authHeaders(),
-    });
+    const res = await fetch(
+      `${DIDIT_API_BASE}/session/${encodeURIComponent(sessionId)}/decision/`,
+      {
+        method: 'GET',
+        headers: this.authHeaders(),
+      },
+    );
     const raw = await readDiditJson(res);
     if (!res.ok) {
       this.logger.error(`Didit getDecision failed: ${res.status} ${JSON.stringify(raw)}`);
-      throw new BadGatewayException('The identity verification provider could not fetch this decision.');
+      throw new BadGatewayException(
+        'The identity verification provider could not fetch this decision.',
+      );
     }
     return parseDecision(raw);
   }
@@ -135,7 +142,10 @@ export class DiditService {
     const timestampHeader = headers['x-timestamp'];
     if (!timestampHeader) return false;
     const timestamp = Number(timestampHeader);
-    if (!Number.isFinite(timestamp) || Math.abs(Date.now() / 1000 - timestamp) > WEBHOOK_MAX_AGE_SECONDS) {
+    if (
+      !Number.isFinite(timestamp) ||
+      Math.abs(Date.now() / 1000 - timestamp) > WEBHOOK_MAX_AGE_SECONDS
+    ) {
       return false;
     }
 

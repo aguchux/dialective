@@ -622,6 +622,8 @@ export class PlatformSettingsService {
       tawkToPropertyId: row.tawkToPropertyId,
       tawkToWidgetId: row.tawkToWidgetId,
       supportChatMode: row.supportChatMode,
+      pwaInstallPromptEnabled: row.pwaInstallPromptEnabled,
+      pwaInstallPromptReminderMinutes: row.pwaInstallPromptReminderMinutes,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
       auditHoldEveryNSubmissions: row.auditHoldEveryNSubmissions,
@@ -720,6 +722,8 @@ export class PlatformSettingsService {
     tawkToPropertyId?: string | null;
     tawkToWidgetId?: string | null;
     supportChatMode?: string;
+    pwaInstallPromptEnabled?: boolean;
+    pwaInstallPromptReminderMinutes?: number;
     wordStuckTimeoutMinutes?: number;
     scoringSlaMinutes?: number;
     auditHoldEveryNSubmissions?: number;
@@ -1118,6 +1122,7 @@ export class PlatformSettingsService {
   }
 
   async getPublicClientSettings() {
+    const row = await this.getRow();
     const [
       referralCookiePersistSeconds,
       referralInviteExpirySeconds,
@@ -1176,6 +1181,8 @@ export class PlatformSettingsService {
       tawkToPropertyId: tawkTo.propertyId,
       tawkToWidgetId: tawkTo.widgetId,
       supportChatMode: supportChat.mode,
+      pwaInstallPromptEnabled: row.pwaInstallPromptEnabled,
+      pwaInstallPromptReminderMinutes: row.pwaInstallPromptReminderMinutes,
       isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens: kycMinWithdrawalTokens.toString(),
       isKycRequiredOnboarding,

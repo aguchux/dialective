@@ -23,6 +23,7 @@ import {
   CircleDollarSign,
   Clock3,
   Copy,
+  Download,
   FileText as FileTextIcon,
   GraduationCap,
   Headphones,
@@ -54,6 +55,7 @@ import { resolveDialectName, useDialectName } from '@/lib/dialect-name';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
 import { DictationDialog } from '@/components/trainer/DictationDialog';
 import { MarketView } from '@/components/p2p/MarketView';
+import { requestPwaInstall } from '@/components/PwaInstallPrompt';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationListPanel } from '@/components/notifications/NotificationListPanel';
 import {
@@ -723,6 +725,9 @@ function DashboardHeader({
                 <LogOut className="size-4" aria-hidden="true" /> Logout
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => requestPwaInstall()}>
+                <Download className="size-4" aria-hidden="true" /> Install app
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/privacy')}>
                 <ShieldIcon className="size-4" aria-hidden="true" /> Privacy Policy
               </DropdownMenuItem>

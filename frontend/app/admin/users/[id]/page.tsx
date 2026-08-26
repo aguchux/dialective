@@ -124,7 +124,9 @@ export default function AdminUserDetailPage() {
               <Field
                 label="KYC (Didit)"
                 value={
-                  <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${kycStyles[user.kycStatus]}`}>
+                  <span
+                    className={`rounded-lg px-2.5 py-1 text-xs font-bold ${kycStyles[user.kycStatus]}`}
+                  >
                     {user.kycStatus.replace(/_/g, ' ')}
                   </span>
                 }

@@ -2,8 +2,7 @@ import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import type { PayoutProvider, ProviderPayoutStatus } from './payout-provider.interface';
 
-const TOKEN_URL =
-  'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token';
+const TOKEN_URL = 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token';
 const TOKEN_REFRESH_BUFFER_MS = 60_000; // refresh ~1 min before expiry, per Flutterwave's own guidance
 
 export interface CreateCustomerParams {
@@ -204,7 +203,9 @@ export class FlutterwaveV4Service implements PayoutProvider {
     });
     const raw = await readFlutterwaveJson(res);
     if (!res.ok) {
-      this.logger.error(`Flutterwave v4 token exchange failed: ${res.status} ${JSON.stringify(raw)}`);
+      this.logger.error(
+        `Flutterwave v4 token exchange failed: ${res.status} ${JSON.stringify(raw)}`,
+      );
       throw new BadGatewayException('The payment provider could not authenticate this request.');
     }
     const accessToken = raw.access_token;
@@ -242,13 +243,17 @@ export class FlutterwaveV4Service implements PayoutProvider {
     });
     const raw = await readFlutterwaveJson(res);
     if (!res.ok) {
-      this.logger.error(`Flutterwave v4 createCustomer failed: ${res.status} ${JSON.stringify(raw)}`);
+      this.logger.error(
+        `Flutterwave v4 createCustomer failed: ${res.status} ${JSON.stringify(raw)}`,
+      );
       throw new BadGatewayException('The payment provider could not create a customer record.');
     }
     const data = raw.data as Record<string, unknown> | undefined;
     const customerId = data?.id;
     if (typeof customerId !== 'string') {
-      this.logger.error(`Flutterwave v4 createCustomer response missing id: ${JSON.stringify(raw)}`);
+      this.logger.error(
+        `Flutterwave v4 createCustomer response missing id: ${JSON.stringify(raw)}`,
+      );
       throw new BadGatewayException('The payment provider returned an invalid customer response.');
     }
     return { customerId };
@@ -387,7 +392,9 @@ export class FlutterwaveV4Service implements PayoutProvider {
     // account) and sending it is rejected -- confirmed against Flutterwave's
     // schema.
     const name =
-      params.country === 'NG' && params.type === 'bank' ? undefined : { first: params.firstName, last: params.lastName };
+      params.country === 'NG' && params.type === 'bank'
+        ? undefined
+        : { first: params.firstName, last: params.lastName };
 
     const body =
       params.type === 'bank'
@@ -415,7 +422,9 @@ export class FlutterwaveV4Service implements PayoutProvider {
     });
     const raw = await readFlutterwaveJson(res);
     if (!res.ok) {
-      this.logger.error(`Flutterwave v4 createRecipient failed: ${res.status} ${JSON.stringify(raw)}`);
+      this.logger.error(
+        `Flutterwave v4 createRecipient failed: ${res.status} ${JSON.stringify(raw)}`,
+      );
       throw new BadGatewayException('The payout provider could not register this recipient.');
     }
     const data = raw.data as Record<string, unknown> | undefined;
@@ -470,7 +479,9 @@ export class FlutterwaveV4Service implements PayoutProvider {
       // return the original transfer instead of creating a second real
       // payout if the first attempt actually landed on their side.
       headers: await this.authHeaders({
-        'X-Idempotency-Key': createHash('sha256').update(`transfer:${params.reference}`).digest('hex'),
+        'X-Idempotency-Key': createHash('sha256')
+          .update(`transfer:${params.reference}`)
+          .digest('hex'),
       }),
       body: JSON.stringify({
         action: 'instant',
@@ -569,9 +580,7 @@ function toPhoneObject(phoneNumber: string): { country_code: string; number: str
   return { country_code: match[1], number: match[2] };
 }
 
-function isChargeStatus(
-  value: unknown,
-): value is 'succeeded' | 'pending' | 'failed' | 'voided' {
+function isChargeStatus(value: unknown): value is 'succeeded' | 'pending' | 'failed' | 'voided' {
   return value === 'succeeded' || value === 'pending' || value === 'failed' || value === 'voided';
 }
 

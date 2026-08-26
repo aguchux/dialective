@@ -87,6 +87,7 @@ export interface PublicUser {
   marketingNotificationsEnabled: boolean;
   blogNewsNotificationsEnabled: boolean;
   courseNotificationsEnabled: boolean;
+  pwaInstalledAt: string | null;
   walletBalance?: string;
   submissionsCount?: number;
   wordRecordingsCount?: number;
@@ -134,6 +135,7 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     marketingNotificationsEnabled: user.marketingNotificationsEnabled,
     blogNewsNotificationsEnabled: user.blogNewsNotificationsEnabled,
     courseNotificationsEnabled: user.courseNotificationsEnabled,
+    pwaInstalledAt: user.pwaInstalledAt?.toISOString() ?? null,
     ...(user.wallet ? { walletBalance: user.wallet.balance.toString() } : {}),
     ...(user._count
       ? {
@@ -672,6 +674,19 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
     return toPublicUser(user);
+  }
+
+  /** Product analytics only. A browser can report installation more than once, so retain the first confirmed install time. */
+  async recordPwaInstallation(userId: string): Promise<{ pwaInstalledAt: string }> {
+    await this.prisma.user.updateMany({
+      where: { id: userId, pwaInstalledAt: null },
+      data: { pwaInstalledAt: new Date() },
+    });
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { pwaInstalledAt: true },
+    });
+    return { pwaInstalledAt: user.pwaInstalledAt!.toISOString() };
   }
 
   async updateProfile(

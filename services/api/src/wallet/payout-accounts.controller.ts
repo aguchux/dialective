@@ -171,7 +171,10 @@ export class PayoutAccountsController {
       );
     }
     const referencedByOpenP2pOffer = await this.prisma.p2PTokenOffer.findFirst({
-      where: { paymentMethodId: id, status: { in: [P2POfferStatus.ACTIVE, P2POfferStatus.RESERVED] } },
+      where: {
+        paymentMethodId: id,
+        status: { in: [P2POfferStatus.ACTIVE, P2POfferStatus.RESERVED] },
+      },
       select: { id: true },
     });
     if (referencedByOpenP2pOffer) {

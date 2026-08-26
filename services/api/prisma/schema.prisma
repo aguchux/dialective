@@ -87,6 +87,9 @@ model User {
   marketingNotificationsEnabled Boolean         @default(false)
   blogNewsNotificationsEnabled  Boolean         @default(false)
   courseNotificationsEnabled    Boolean         @default(false)
+  // Recorded after the browser confirms the PWA was installed. This is a
+  // product-analytics marker only; it never grants access or changes auth.
+  pwaInstalledAt                 DateTime?
   // Country of origin is account identity data. It is distinct from
   // countryId below, which scopes the dialect/content the trainer works on.
   originCountryId               String?
@@ -1746,6 +1749,8 @@ model PlatformSettings {
   tawkToPropertyId                       String? // Tawk.to "Property ID" from the widget's embed snippet -- the first path segment of https://embed.tawk.to/<propertyId>/<widgetId>
   tawkToWidgetId                         String? // Tawk.to "Widget ID" from the same embed snippet -- the second path segment
   supportChatMode                        String    @default("TAWK") // NONE | TAWK | AI; TAWK remains the compatibility default for existing deployments
+  pwaInstallPromptEnabled                Boolean   @default(true) // master switch for authenticated PWA install prompts; the avatar-menu install action remains available when supported
+  pwaInstallPromptReminderMinutes        Int       @default(60) // minimum interval before a dismissed PWA install prompt may reappear on the same device/account
   wordStuckTimeoutMinutes                Int       @default(1440) // minutes an ENGLISH_TO_DIALECT WordRecording can stay PENDING (unmatched by reverse-validation) before settlement-job auto-refunds its locked tokens
   scoringSlaMinutes                      Int       @default(60) // minutes a Submission/WordRecording can stay unscored before settlement-job resolves it via noFailOnTrainEnabled (synthetic score) or a plain refund
   auditHoldEveryNSubmissions             Int       @default(500) // WordsService.createRecording puts a trainer on audit hold every time their lifetime WordRecording count crosses a multiple of this; 0 disables the feature entirely (no automatic holds)
