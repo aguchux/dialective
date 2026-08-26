@@ -488,25 +488,29 @@ export class WalletController {
   }
 
   /**
-   * Earnings bucketed for the dashboard chart: week -> 7 daily buckets,
-   * month -> 30 daily buckets, year -> 12 monthly buckets. Same earning
-   * ledger types as wallet/dashboard's monthlyEarnings, just re-bucketed on
-   * demand instead of fixed to a trailing 6 months.
+   * Earnings bucketed for the dashboard chart: today -> 12 two-hour buckets
+   * (00:00-02:00, 02:00-04:00, ... covering the current UTC day), week -> 7
+   * daily buckets, month -> 30 daily buckets, year -> 12 monthly buckets.
+   * Same earning ledger types as wallet/dashboard's monthlyEarnings, just
+   * re-bucketed on demand instead of fixed to a trailing 6 months.
    */
   @Get('wallet/earnings-chart')
   @UseGuards(JwtAuthGuard)
   async getEarningsChart(@Req() req: AuthenticatedRequest, @Query() query: GetEarningsChartDto) {
     const wallet = await this.getOrCreateWallet(req.user.sub);
     const now = new Date();
+    const isToday = query.range === 'today';
     const isYear = query.range === 'year';
     const dayCount = query.range === 'week' ? 7 : query.range === 'month' ? 30 : 0;
 
-    const since = isYear
-      ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1))
-      : new Date(
-          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (dayCount - 1)),
-        );
-    since.setUTCHours(0, 0, 0, 0);
+    const since = isToday
+      ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+      : isYear
+        ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1))
+        : new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (dayCount - 1)),
+          );
+    if (!isToday) since.setUTCHours(0, 0, 0, 0);
 
     const entries = await this.prisma.ledgerEntry.findMany({
       where: {
@@ -518,7 +522,22 @@ export class WalletController {
     });
 
     const buckets = new Map<string, number>();
-    if (isYear) {
+    if (isToday) {
+      const HOURS_PER_BUCKET = 2;
+      for (let offset = 0; offset < 24; offset += HOURS_PER_BUCKET) {
+        const bucketStart = new Date(since.getTime() + offset * 60 * 60 * 1000);
+        buckets.set(bucketStart.toISOString(), 0);
+      }
+      for (const entry of entries) {
+        const hoursSinceMidnight = Math.floor(
+          (entry.createdAt.getTime() - since.getTime()) / (60 * 60 * 1000),
+        );
+        const bucketOffset = Math.floor(hoursSinceMidnight / HOURS_PER_BUCKET) * HOURS_PER_BUCKET;
+        const bucketStart = new Date(since.getTime() + bucketOffset * 60 * 60 * 1000);
+        const key = bucketStart.toISOString();
+        buckets.set(key, (buckets.get(key) ?? 0) + Number(entry.amount));
+      }
+    } else if (isYear) {
       for (let offset = 0; offset < 12; offset += 1) {
         const month = new Date(Date.UTC(since.getUTCFullYear(), since.getUTCMonth() + offset, 1));
         buckets.set(month.toISOString().slice(0, 7), 0);
@@ -899,7 +918,11 @@ export class WalletController {
       where: { id },
       include: { wallet: true },
     });
-    if (!deposit || deposit.wallet.userId !== req.user.sub || deposit.provider !== 'flutterwave-v4') {
+    if (
+      !deposit ||
+      deposit.wallet.userId !== req.user.sub ||
+      deposit.provider !== 'flutterwave-v4'
+    ) {
       throw new NotFoundException('Deposit not found');
     }
     if (deposit.status === 'confirmed') {

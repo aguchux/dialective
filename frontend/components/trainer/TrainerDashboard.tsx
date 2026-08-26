@@ -808,7 +808,7 @@ function DashboardViewContent({
   if (activeView === 'market') return <MarketView />;
   if (activeView === 'referrals') return <ReferralsView data={data} email={email} />;
   if (activeView === 'scores') return <ScoresView />;
-  if (activeView === 'tokens') return <TokensView refreshing={refreshing} />;
+  if (activeView === 'tokens') return <TokensView data={data} refreshing={refreshing} />;
   return <HomeView data={data} refreshing={refreshing} />;
 }
 
@@ -861,12 +861,14 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
           icon={WalletCards}
           label="Available DL"
           value={formatCompactTokensValue(data.balance)}
+          subValue={formatCompactUsd(Number(data.balance) * data.tokenUsdRate)}
           tone="purple"
         />
         <MetricCard
           icon={Clock3}
           label="Held in review"
           value={formatCompactTokensValue(data.lockedBalance)}
+          subValue={formatCompactUsd(Number(data.lockedBalance) * data.tokenUsdRate)}
           tone="blue"
           compact
         />
@@ -908,22 +910,62 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
   );
 }
 
-function TokensView({ refreshing }: { refreshing: boolean }) {
+function TokensView({
+  data: summary,
+  refreshing,
+}: {
+  data: TrainerDashboardSummary;
+  refreshing: boolean;
+}) {
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const { data, isLoading, isFetching, isError, refetch } = useGetWalletActivityQuery({
     page,
     pageSize,
   });
+  const cumulativeTokens = Number(summary.balance) + Number(summary.lockedBalance);
 
   return (
     <div>
-      <ViewHeading
-        title="Tokens"
-        subtitle="Full history of your token activity."
-        refreshing={refreshing || isFetching}
-      />
-      <section className={`${cardClass} overflow-hidden`}>
+      <div className="flex items-start justify-between gap-3">
+        <ViewHeading
+          title="Tokens"
+          subtitle="Full history of your token activity."
+          refreshing={refreshing || isFetching}
+        />
+        <div className="flex shrink-0 items-center gap-2">
+          <WithdrawTokensDialog
+            balance={summary.balance}
+            minWithdrawalTokens={summary.minWithdrawalTokens}
+            tokenUsdRate={summary.tokenUsdRate}
+            localCurrency={summary.localCurrency}
+          />
+          <FundTokensDialog tokenUsdRate={summary.tokenUsdRate} localCurrency={summary.localCurrency} />
+        </div>
+      </div>
+      <section className="grid gap-3 sm:grid-cols-3" aria-label="Token balance summary">
+        <MetricCard
+          icon={WalletCards}
+          label="Cumulative tokens"
+          value={formatCompactTokensValue(cumulativeTokens)}
+          subValue={formatCompactUsd(cumulativeTokens * summary.tokenUsdRate)}
+          tone="purple"
+        />
+        <MetricCard
+          icon={CircleDollarSign}
+          label="Available balance"
+          value={formatCompactTokensValue(summary.balance)}
+          subValue={formatCompactUsd(Number(summary.balance) * summary.tokenUsdRate)}
+          tone="blue"
+        />
+        <MetricCard
+          icon={Banknote}
+          label="Estimated value"
+          value={formatCompactUsd(cumulativeTokens * summary.tokenUsdRate)}
+          tone="green"
+        />
+      </section>
+      <section className={`${cardClass} mt-6 overflow-hidden`}>
         {isLoading ? (
           <div className="grid min-h-52 place-items-center" role="status">
             <RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" />
@@ -1025,18 +1067,22 @@ function EarningsView({
           subtitle="Training payouts and referral bonuses credited to your wallet."
           refreshing={refreshing}
         />
-        <WithdrawTokensDialog
-          balance={data.balance}
-          minWithdrawalTokens={data.minWithdrawalTokens}
-          tokenUsdRate={data.tokenUsdRate}
-          localCurrency={data.localCurrency}
-        />
+        <div className="flex shrink-0 items-center gap-2">
+          <WithdrawTokensDialog
+            balance={data.balance}
+            minWithdrawalTokens={data.minWithdrawalTokens}
+            tokenUsdRate={data.tokenUsdRate}
+            localCurrency={data.localCurrency}
+          />
+          <FundTokensDialog tokenUsdRate={data.tokenUsdRate} localCurrency={data.localCurrency} />
+        </div>
       </div>
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Earnings summary">
         <MetricCard
           icon={Sparkles}
           label="Total earned"
           value={formatCompactTokensLabel(total)}
+          subValue={formatCompactUsd(total * data.tokenUsdRate)}
           tone="purple"
           compact
         />
@@ -1044,18 +1090,21 @@ function EarningsView({
           icon={Mic2}
           label="Training"
           value={formatCompactTokensValue(data.trainingEarningsTokens)}
+          subValue={formatCompactUsd(Number(data.trainingEarningsTokens) * data.tokenUsdRate)}
           tone="green"
         />
         <MetricCard
           icon={Users}
           label="Referrals"
           value={formatCompactTokensValue(data.referralEarningsTokens)}
+          subValue={formatCompactUsd(Number(data.referralEarningsTokens) * data.tokenUsdRate)}
           tone="amber"
         />
         <MetricCard
           icon={ArrowUpRight}
           label="Paid out"
           value={formatCompactTokensValue(data.paidOutTokens)}
+          subValue={formatCompactUsd(Number(data.paidOutTokens) * data.tokenUsdRate)}
           tone="blue"
         />
       </section>
@@ -2626,7 +2675,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
             </p>
           ) : (
             <>
-              {(kycStatus === 'DECLINED' || kycStatus === 'ABANDONED' || kycStatus === 'EXPIRED') && (
+              {(kycStatus === 'DECLINED' ||
+                kycStatus === 'ABANDONED' ||
+                kycStatus === 'EXPIRED') && (
                 <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
                   Your last verification didn&apos;t go through. Try again below.
                 </p>
@@ -3781,7 +3832,9 @@ function WithdrawTokensDialog({
                     check back shortly.
                   </p>
                 </>
-              ) : kycStatus === 'DECLINED' || kycStatus === 'ABANDONED' || kycStatus === 'EXPIRED' ? (
+              ) : kycStatus === 'DECLINED' ||
+                kycStatus === 'ABANDONED' ||
+                kycStatus === 'EXPIRED' ? (
                 <>
                   <p className="font-extrabold">Verification didn&apos;t go through.</p>
                   <p className="text-sm leading-relaxed text-muted">
@@ -3906,8 +3959,8 @@ function WithdrawTokensDialog({
             </div>
             {method === 'fiat' && (
               <p className="text-xs leading-relaxed text-muted">
-                The local currency amount is estimated from the current exchange rate and may
-                differ slightly from what your bank or mobile money provider credits.
+                The local currency amount is estimated from the current exchange rate and may differ
+                slightly from what your bank or mobile money provider credits.
               </p>
             )}
             {message && (
@@ -4139,12 +4192,14 @@ function MetricCard({
   icon: Icon,
   label,
   value,
+  subValue,
   tone,
   compact = false,
 }: {
   icon: typeof WalletCards;
   label: string;
   value: string;
+  subValue?: string;
   tone: 'purple' | 'green' | 'amber' | 'blue';
   compact?: boolean;
 }) {
@@ -4166,6 +4221,7 @@ function MetricCard({
         >
           {value}
         </p>
+        {subValue && <p className="mt-1 text-xs font-bold text-muted">≈ {subValue}</p>}
       </div>
     </article>
   );
@@ -4322,12 +4378,14 @@ function ActivityTableRow({ entry }: { entry: ActivityEntry }) {
 }
 
 const earningsChartRangeLabels: Record<EarningsChartRange, string> = {
+  today: 'Today',
   week: 'This week',
   month: 'This month',
   year: 'This year',
 };
 
 const earningsChartRangeSubtitles: Record<EarningsChartRange, string> = {
+  today: 'DL credited by 2-hour window, today.',
   week: 'DL credited by day, last 7 days.',
   month: 'DL credited by day, last 30 days.',
   year: 'DL credited by month, last 12 months.',
@@ -4434,6 +4492,17 @@ function formatBucketDayNumber(label: string) {
 function formatBucketLabel(label: string, range: EarningsChartRange) {
   if (!label) return '';
   if (range === 'year') return formatMonth(label);
+  if (range === 'today') {
+    // Bucket labels are full ISO timestamps (2-hour window start) for
+    // 'today', unlike the date-only labels the other ranges use.
+    const date = new Date(label);
+    if (Number.isNaN(date.getTime())) return '';
+    return new Intl.DateTimeFormat('en-GB', {
+      hour: 'numeric',
+      hour12: true,
+      timeZone: 'UTC',
+    }).format(date);
+  }
   const date = new Date(`${label}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return '';
   return new Intl.DateTimeFormat('en-GB', {

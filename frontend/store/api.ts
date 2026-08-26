@@ -794,7 +794,7 @@ export interface PublicClientSettings {
   isFlutterwaveV4Enabled: boolean;
 }
 
-export type EarningsChartRange = 'week' | 'month' | 'year';
+export type EarningsChartRange = 'today' | 'week' | 'month' | 'year';
 
 export type ManualPhoneVerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
 
