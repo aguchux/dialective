@@ -63,7 +63,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Botswana',
     dialects: [
       { tag: 'tn', name: 'Setswana' },
-      { tag: 'en-bw', name: 'English' },
       { tag: 'kalanga', name: 'Kalanga' },
     ],
   },
@@ -99,7 +98,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Cameroon',
     dialects: [
       { tag: 'fr-cm', name: 'French' },
-      { tag: 'en-cm', name: 'English (Cameroonian)' },
       { tag: 'ff-cm', name: 'Fulfulde' },
       { tag: 'ewo', name: 'Ewondo' },
       { tag: 'dua', name: 'Duala' },
@@ -194,7 +192,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Eswatini',
     dialects: [
       { tag: 'ss', name: 'Swati' },
-      { tag: 'en-sz', name: 'English' },
     ],
   },
   {
@@ -219,7 +216,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     code: 'GM',
     name: 'Gambia',
     dialects: [
-      { tag: 'en-gm', name: 'English' },
       { tag: 'wo-gm', name: 'Wolof' },
       { tag: 'man-gm', name: 'Mandinka' },
       { tag: 'ff-gm', name: 'Fulani' },
@@ -233,7 +229,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
       { tag: 'ee', name: 'Ewe' },
       { tag: 'gaa', name: 'Ga' },
       { tag: 'dag', name: 'Dagbani' },
-      { tag: 'en-gh', name: 'English' },
     ],
   },
   {
@@ -259,7 +254,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Kenya',
     dialects: [
       { tag: 'sw-ke', name: 'Swahili' },
-      { tag: 'en-ke', name: 'English' },
       { tag: 'ki', name: 'Kikuyu' },
       { tag: 'luo', name: 'Luo' },
       { tag: 'kln', name: 'Kalenjin' },
@@ -270,14 +264,12 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Lesotho',
     dialects: [
       { tag: 'st', name: 'Sesotho' },
-      { tag: 'en-ls', name: 'English' },
     ],
   },
   {
     code: 'LR',
     name: 'Liberia',
     dialects: [
-      { tag: 'en-lr', name: 'English (Liberian)' },
       { tag: 'kpe', name: 'Kpelle' },
       { tag: 'vai', name: 'Vai' },
     ],
@@ -296,7 +288,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Malawi',
     dialects: [
       { tag: 'ny', name: 'Chichewa' },
-      { tag: 'en-mw', name: 'English' },
       { tag: 'tum', name: 'Tumbuka' },
     ],
   },
@@ -323,7 +314,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Mauritius',
     dialects: [
       { tag: 'mfe', name: 'Mauritian Creole' },
-      { tag: 'en-mu', name: 'English' },
       { tag: 'fr-mu', name: 'French' },
     ],
   },
@@ -349,7 +339,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     code: 'NA',
     name: 'Namibia',
     dialects: [
-      { tag: 'en-na', name: 'English' },
       { tag: 'af-na', name: 'Afrikaans' },
       { tag: 'ndo', name: 'Oshiwambo' },
       { tag: 'her', name: 'Herero' },
@@ -385,7 +374,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     dialects: [
       { tag: 'rw', name: 'Kinyarwanda' },
       { tag: 'fr-rw', name: 'French' },
-      { tag: 'en-rw', name: 'English' },
     ],
   },
   {
@@ -411,7 +399,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Seychelles',
     dialects: [
       { tag: 'crs', name: 'Seychellois Creole' },
-      { tag: 'en-sc', name: 'English' },
       { tag: 'fr-sc', name: 'French' },
     ],
   },
@@ -420,7 +407,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Sierra Leone',
     dialects: [
       { tag: 'kri', name: 'Krio' },
-      { tag: 'en-sl', name: 'English' },
       { tag: 'men', name: 'Mende' },
       { tag: 'tem', name: 'Temne' },
     ],
@@ -440,7 +426,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
       { tag: 'zu', name: 'Zulu' },
       { tag: 'xh', name: 'Xhosa' },
       { tag: 'af-za', name: 'Afrikaans' },
-      { tag: 'en-za', name: 'English' },
       { tag: 'st-za', name: 'Sesotho' },
     ],
   },
@@ -448,7 +433,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     code: 'SS',
     name: 'South Sudan',
     dialects: [
-      { tag: 'en-ss', name: 'English' },
       { tag: 'dinka', name: 'Dinka' },
       { tag: 'nus', name: 'Nuer' },
     ],
@@ -458,7 +442,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Sudan',
     dialects: [
       { tag: 'ar-sd', name: 'Arabic (Sudanese)' },
-      { tag: 'en-sd', name: 'English' },
     ],
   },
   {
@@ -466,7 +449,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Tanzania',
     dialects: [
       { tag: 'sw-tz', name: 'Swahili' },
-      { tag: 'en-tz', name: 'English' },
       { tag: 'suk', name: 'Sukuma' },
     ],
   },
@@ -492,7 +474,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Uganda',
     dialects: [
       { tag: 'lg', name: 'Luganda' },
-      { tag: 'en-ug', name: 'English' },
       { tag: 'sw-ug', name: 'Swahili' },
       { tag: 'nyn', name: 'Runyankole' },
     ],
@@ -502,7 +483,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     name: 'Zambia',
     dialects: [
       { tag: 'bem', name: 'Bemba' },
-      { tag: 'en-zm', name: 'English' },
       { tag: 'ny-zm', name: 'Nyanja' },
       { tag: 'toi', name: 'Tonga' },
     ],
@@ -513,7 +493,6 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
     dialects: [
       { tag: 'sn', name: 'Shona' },
       { tag: 'nd', name: 'Ndebele' },
-      { tag: 'en-zw', name: 'English' },
     ],
   },
 ];
