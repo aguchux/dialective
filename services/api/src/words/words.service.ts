@@ -24,6 +24,8 @@ import { ListSubmissionsDto } from '../submissions/dto/list-submissions.dto';
 
 const RECORDINGS_BUCKET = process.env.SPACES_WORD_RECORDINGS_BUCKET ?? 'dialectiva-word-recordings';
 const TERMS_VERSION = 'voice-training-v1';
+/** A word abandoned (never recorded) this many times by the same trainer is excluded from their future picks -- see recordSkipIfAbandoned/pickEnglishToDialectWord. */
+const WORD_SKIP_BAN_THRESHOLD = 2;
 
 const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   'audio/wav': 'wav',
@@ -92,6 +94,7 @@ export class WordsService {
     if (session.endedAt) throw new ConflictException('This training session has ended');
 
     await this.assertNotOnAuditHold(userId);
+    await this.recordSkipIfAbandoned(userId, sessionId);
 
     // startSession only checks once, at session creation -- sessions have no
     // server-side TTL (see TrainingSession schema), so a trainer who was
@@ -195,6 +198,39 @@ export class WordsService {
       dialectKeyboardLayout: trainer.dialect!.keyboardLayout,
       fragments: null as { text: string; position: number }[] | null,
     };
+  }
+
+  /**
+   * A trainer calling nextAssignment while their own most recent
+   * ENGLISH_TO_DIALECT assignment in this session is still unconsumed means
+   * they clicked "Skip / next" (or otherwise abandoned it) rather than
+   * submitting a recording -- createRecording/consumeAssignment is the only
+   * other place consumedAt gets set. Bumps that word's skip count and, once
+   * it crosses WORD_SKIP_BAN_THRESHOLD, the word stops appearing in this
+   * trainer's future picks (see pickEnglishToDialectWord's excludedWordIds).
+   * Reverse-validation (DIALECT_TO_ENGLISH) and SENTENCE_REBUILD assignments
+   * self-score immediately and are never left unconsumed, so this only ever
+   * fires for the ENGLISH_TO_DIALECT live-record flow the feature targets.
+   */
+  private async recordSkipIfAbandoned(userId: string, sessionId: string): Promise<void> {
+    const lastAssignment = await this.prisma.wordTrainingAssignment.findFirst({
+      where: { sessionId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (
+      !lastAssignment ||
+      lastAssignment.consumedAt ||
+      lastAssignment.direction !== 'ENGLISH_TO_DIALECT' ||
+      !lastAssignment.wordId
+    ) {
+      return;
+    }
+
+    await this.prisma.wordSkip.upsert({
+      where: { userId_wordId: { userId, wordId: lastAssignment.wordId } },
+      create: { userId, wordId: lastAssignment.wordId, skipCount: 1 },
+      update: { skipCount: { increment: 1 } },
+    });
   }
 
   async createUploadUrl(userId: string, body: CreateWordRecordingUploadUrlDto) {
@@ -818,18 +854,34 @@ export class WordsService {
    * before every other word has had a turn).
    */
   private async pickEnglishToDialectWord(userId: string, totalWords: number) {
-    const attempted = await this.prisma.wordRecording.findMany({
-      where: { userId, direction: 'ENGLISH_TO_DIALECT', wordId: { not: null } },
-      select: { wordId: true },
-      distinct: ['wordId'],
-    });
+    const [attempted, banned] = await Promise.all([
+      this.prisma.wordRecording.findMany({
+        where: { userId, direction: 'ENGLISH_TO_DIALECT', wordId: { not: null } },
+        select: { wordId: true },
+        distinct: ['wordId'],
+      }),
+      this.prisma.wordSkip.findMany({
+        where: { userId, skipCount: { gte: WORD_SKIP_BAN_THRESHOLD } },
+        select: { wordId: true },
+      }),
+    ]);
     const attemptedIds = attempted.flatMap(({ wordId }) => (wordId ? [wordId] : []));
+    // Banned words never come back into rotation for this trainer, even once
+    // the "prefer unattempted" pool below widens back to the full bank.
+    const bannedIds = banned.map(({ wordId }) => wordId);
+    const excludedIds = [...new Set([...attemptedIds, ...bannedIds])];
 
     const unattemptedCount = await this.prisma.word.count({
-      where: { id: { notIn: attemptedIds } },
+      where: { id: { notIn: excludedIds } },
     });
-    const where = unattemptedCount > 0 ? { id: { notIn: attemptedIds } } : {};
-    const count = unattemptedCount > 0 ? unattemptedCount : totalWords;
+    const where =
+      unattemptedCount > 0
+        ? { id: { notIn: excludedIds } }
+        : bannedIds.length > 0
+          ? { id: { notIn: bannedIds } }
+          : {};
+    const count = unattemptedCount > 0 ? unattemptedCount : totalWords - bannedIds.length;
+    if (count <= 0) return null;
 
     const [word] = await this.prisma.word.findMany({
       where,

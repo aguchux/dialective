@@ -137,6 +137,7 @@ model User {
   submissions                      Submission[]
   trainingSessions                 TrainingSession[]
   wordRecordings                   WordRecording[]
+  wordSkips                        WordSkip[]
   subscriptionPoolsOpened          SubscriptionPool[]               @relation("SubscriptionPoolOpenedBy")
   dataAccessLeadsContacted         DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
   p2pOffers                        P2PTokenOffer[]
@@ -742,8 +743,29 @@ model Word {
   trainingAssignments WordTrainingAssignment[]
   translations        WordTranslation[]
   promptWords         PromptWord[]
+  skips               WordSkip[]
 
   @@map("words")
+}
+
+/// Tracks how many times a trainer has abandoned (skipped, without recording)
+/// an ENGLISH_TO_DIALECT assignment for this word -- see WordsService.
+/// nextAssignment. Once skipCount reaches the configured threshold (default
+/// 2, see PlatformSettingsService.getWordSkipBanThreshold), the word is
+/// excluded from that trainer's future assignment picks for good; there's no
+/// reset/expiry, since a word they've twice chosen not to attempt isn't
+/// coming back into rotation on its own.
+model WordSkip {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wordId     String
+  word       Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  skipCount  Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, wordId])
+  @@map("word_skips")
 }
 
 enum PartOfSpeech {

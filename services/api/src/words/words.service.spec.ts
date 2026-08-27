@@ -38,7 +38,12 @@ describe('WordsService', () => {
       wordTrainingAssignment: {
         create: jest.fn(),
         findUnique: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
+      },
+      wordSkip: {
+        findMany: jest.fn().mockResolvedValue([]),
+        upsert: jest.fn().mockResolvedValue({}),
       },
       prompt: { findMany: jest.fn().mockResolvedValue([]) },
       promptWord: {
@@ -274,6 +279,89 @@ describe('WordsService', () => {
       wordId: 'word-1',
     });
     expect(prisma.word.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+  });
+
+  describe('word skip tracking', () => {
+    beforeEach(() => {
+      settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-next',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+    });
+
+    it('bumps the skip count when the trainer abandons an unconsumed ENGLISH_TO_DIALECT assignment', async () => {
+      prisma.wordTrainingAssignment.findFirst.mockResolvedValue({
+        id: 'assignment-prev',
+        direction: 'ENGLISH_TO_DIALECT',
+        wordId: 'word-1',
+        consumedAt: null,
+      });
+
+      await service.nextAssignment(trainer.id, session.id);
+
+      expect(prisma.wordSkip.upsert).toHaveBeenCalledWith({
+        where: { userId_wordId: { userId: trainer.id, wordId: 'word-1' } },
+        create: { userId: trainer.id, wordId: 'word-1', skipCount: 1 },
+        update: { skipCount: { increment: 1 } },
+      });
+    });
+
+    it('does not bump the skip count when the last assignment was already consumed', async () => {
+      prisma.wordTrainingAssignment.findFirst.mockResolvedValue({
+        id: 'assignment-prev',
+        direction: 'ENGLISH_TO_DIALECT',
+        wordId: 'word-1',
+        consumedAt: new Date(),
+      });
+
+      await service.nextAssignment(trainer.id, session.id);
+
+      expect(prisma.wordSkip.upsert).not.toHaveBeenCalled();
+    });
+
+    it('does not bump the skip count for a non-ENGLISH_TO_DIALECT last assignment', async () => {
+      prisma.wordTrainingAssignment.findFirst.mockResolvedValue({
+        id: 'assignment-prev',
+        direction: 'SENTENCE_REBUILD',
+        wordId: null,
+        consumedAt: null,
+      });
+
+      await service.nextAssignment(trainer.id, session.id);
+
+      expect(prisma.wordSkip.upsert).not.toHaveBeenCalled();
+    });
+
+    it('excludes a word banned for repeated skips, even once the pool widens back to the full bank', async () => {
+      prisma.word.count
+        .mockResolvedValueOnce(2) // totalWords
+        .mockResolvedValueOnce(0); // unattemptedCount -- trainer has attempted both
+      prisma.wordRecording.findMany.mockResolvedValue([{ wordId: 'word-1' }, { wordId: 'word-2' }]);
+      prisma.wordSkip.findMany.mockResolvedValue([{ wordId: 'word-2' }]);
+      prisma.word.findMany.mockResolvedValue([{ id: 'word-1', text: 'welcome' }]);
+
+      await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
+        wordId: 'word-1',
+      });
+      expect(prisma.word.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { notIn: ['word-2'] } } }),
+      );
+    });
+
+    it('reports NO_WORDS_AVAILABLE once every remaining word is banned', async () => {
+      prisma.word.count
+        .mockResolvedValueOnce(1) // totalWords
+        .mockResolvedValueOnce(0); // unattemptedCount
+      prisma.wordRecording.findMany.mockResolvedValue([]);
+      prisma.wordSkip.findMany.mockResolvedValue([{ wordId: 'word-1' }]);
+
+      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
+        'NO_WORDS_AVAILABLE',
+      );
+      expect(prisma.wordTrainingAssignment.create).not.toHaveBeenCalled();
+    });
   });
 
   it('uses another trainer submission for reverse validation when enabled', async () => {
