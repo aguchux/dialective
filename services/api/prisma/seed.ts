@@ -145,7 +145,7 @@ async function main() {
       COUNTRIES.map((country) =>
         prisma.country.upsert({
           where: { code: country.code },
-          create: { code: country.code, name: country.name },
+          create: { code: country.code, name: country.name, llmGenerationEnabled: true },
           update: { name: country.name },
         }),
       ),
@@ -162,7 +162,12 @@ async function main() {
       dialects.map((dialect) =>
         prisma.dialect.upsert({
           where: { tag: dialect.tag },
-          create: { tag: dialect.tag, name: dialect.name, countryId: dialect.countryId },
+          create: {
+            tag: dialect.tag,
+            name: dialect.name,
+            countryId: dialect.countryId,
+            llmGenerationEnabled: true,
+          },
           update: { name: dialect.name, countryId: dialect.countryId },
         }),
       ),
