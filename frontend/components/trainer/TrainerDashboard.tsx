@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { skipToken } from '@reduxjs/toolkit/query/react';
 import { isValidPhoneNumber, parsePhoneNumberFromString } from 'libphonenumber-js';
 import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';
@@ -1114,7 +1115,7 @@ function EarningsView({
         />
       </section>
       <section className="mt-8">
-        <EarningsChartSection />
+        <EarningsChartSection tokenUsdRate={data.tokenUsdRate} />
       </section>
       <EarningHistoryTable tokenUsdRate={data.tokenUsdRate} />
     </div>
@@ -4396,9 +4397,10 @@ const earningsChartRangeSubtitles: Record<EarningsChartRange, string> = {
   year: 'DL credited by month, last 12 months.',
 };
 
-function EarningsChartSection() {
+function EarningsChartSection({ tokenUsdRate }: { tokenUsdRate: number }) {
   const [range, setRange] = useState<EarningsChartRange>('month');
   const { data, isFetching } = useGetEarningsChartQuery({ range });
+  const [activeBucket, setActiveBucket] = useState<EarningsChart_Bucket | null>(null);
 
   return (
     <div>
@@ -4426,7 +4428,20 @@ function EarningsChartSection() {
           ))}
         </div>
       </div>
-      <EarningsChart buckets={data?.buckets ?? []} loading={isFetching && !data} range={range} />
+      <EarningsChart
+        buckets={data?.buckets ?? []}
+        loading={isFetching && !data}
+        onSelectBucket={setActiveBucket}
+        range={range}
+      />
+      <BucketEarningsDialog
+        bucket={activeBucket}
+        onOpenChange={(open) => {
+          if (!open) setActiveBucket(null);
+        }}
+        range={range}
+        tokenUsdRate={tokenUsdRate}
+      />
     </div>
   );
 }
@@ -4435,10 +4450,12 @@ function EarningsChart({
   buckets,
   range,
   loading,
+  onSelectBucket,
 }: {
   buckets: EarningsChart_Bucket[];
   range: EarningsChartRange;
   loading: boolean;
+  onSelectBucket: (bucket: EarningsChart_Bucket) => void;
 }) {
   const max = Math.max(...buckets.map((bucket) => Number(bucket.amount)), 1);
   const dense = range !== 'year' && buckets.length > 14;
@@ -4459,9 +4476,11 @@ function EarningsChart({
         const value = Number(bucket.amount);
         const height = value > 0 ? Math.max((value / max) * 100, 8) : 2;
         return (
-          <div
-            className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"
+          <button
+            className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2 rounded-md transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
             key={bucket.label}
+            onClick={() => onSelectBucket(bucket)}
+            type="button"
           >
             {!dense && (
               <span className="text-xs font-bold text-muted">
@@ -4470,18 +4489,120 @@ function EarningsChart({
             )}
             <div
               className="flex h-[150px] w-full max-w-10 items-end rounded-md bg-surface-muted"
-              title={`${formatTokens(value)} DL`}
+              title={`${formatTokens(value)} DL -- click to see these earnings`}
             >
               <div className="w-full rounded-md bg-accent" style={{ height: `${height}%` }} />
             </div>
             <span className="text-xs font-extrabold text-muted">
               {dense ? formatBucketDayNumber(bucket.label) : formatBucketLabel(bucket.label, range)}
             </span>
-          </div>
+          </button>
         );
       })}
     </div>
   );
+}
+
+function BucketEarningsDialog({
+  bucket,
+  range,
+  tokenUsdRate,
+  onOpenChange,
+}: {
+  bucket: EarningsChart_Bucket | null;
+  range: EarningsChartRange;
+  tokenUsdRate: number;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const dateRange = bucket ? bucketDateRange(bucket.label, range) : null;
+  const { data, isLoading, isFetching, isError, refetch } = useGetEarningHistoryQuery(
+    dateRange ? { page: 1, pageSize: 50, from: dateRange.from, to: dateRange.to } : skipToken,
+  );
+
+  const heading = bucket ? bucketHeading(bucket.label, range) : '';
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={Boolean(bucket)}>
+      <DialogContent
+        description="Every training payout and referral bonus credited in this window."
+        title={heading || 'Earnings'}
+      >
+        <div className="grid max-h-[60vh] gap-3 overflow-y-auto">
+          {isLoading ? (
+            <div className="grid min-h-32 place-items-center" role="status">
+              <RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" />
+              <span className="sr-only">Loading earnings</span>
+            </div>
+          ) : isError ? (
+            <div className="grid min-h-32 place-items-center gap-3 text-center">
+              <p className="font-extrabold">Could not load earnings.</p>
+              <button
+                className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted"
+                onClick={() => void refetch()}
+                type="button"
+              >
+                Try again
+              </button>
+            </div>
+          ) : data?.items.length ? (
+            <div className="divide-y divide-line">
+              {data.items.map((entry) => (
+                <div className="grid gap-1 py-3 first:pt-0 last:pb-0" key={entry.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <EarningTypeLabel type={entry.type} />
+                    <span className="whitespace-nowrap font-black text-emerald-700 dark:text-emerald-300">
+                      +{formatTokens(entry.amount)}
+                    </span>
+                  </div>
+                  <div className="flex items-end justify-between gap-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-bold">{formatDateTime(entry.createdAt)}</p>
+                      <p className="truncate font-mono text-xs text-muted">{entry.reference}</p>
+                    </div>
+                    <span className="shrink-0 font-bold text-muted">
+                      {formatUsd(Number(entry.amount) * tokenUsdRate)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {data.total > data.items.length && (
+                <p className="pt-2 text-center text-xs font-bold text-muted">
+                  Showing the first {data.items.length} of {data.total} entries in this window.
+                </p>
+              )}
+            </div>
+          ) : (
+            <EmptyPanel icon={Clock3} title="No earnings in this window" unframed />
+          )}
+          {isFetching && !isLoading && (
+            <RefreshCw className="mx-auto size-4 animate-spin text-accent" aria-hidden="true" />
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Full, unabbreviated heading for a bucket's dialog title -- distinct from the chart's own compact axis labels (formatBucketLabel/formatBucketDayNumber). */
+function bucketHeading(label: string, range: EarningsChartRange): string {
+  if (!label) return '';
+  if (range === 'today') {
+    const start = new Date(label);
+    if (Number.isNaN(start.getTime())) return '';
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    const fmt = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: true, timeZone: 'UTC' });
+    return `${fmt.format(start)} - ${fmt.format(end)}`;
+  }
+  if (range === 'year') return formatMonth(label);
+  const date = new Date(`${label}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
 }
 
 type EarningsChart_Bucket = { label: string; amount: string };
@@ -4515,6 +4636,30 @@ function formatBucketLabel(label: string, range: EarningsChartRange) {
     month: 'short',
     timeZone: 'UTC',
   }).format(date);
+}
+
+/** Mirrors the bucket boundaries the backend's getEarningsChart computed for this label/range, so a bar's click-through filter matches exactly what's plotted. */
+function bucketDateRange(
+  label: string,
+  range: EarningsChartRange,
+): { from: string; to: string } | null {
+  if (!label) return null;
+  if (range === 'today') {
+    const start = new Date(label);
+    if (Number.isNaN(start.getTime())) return null;
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }
+  if (range === 'year') {
+    const start = new Date(`${label}-01T00:00:00Z`);
+    if (Number.isNaN(start.getTime())) return null;
+    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+    return { from: start.toISOString(), to: end.toISOString() };
+  }
+  const start = new Date(`${label}T00:00:00Z`);
+  if (Number.isNaN(start.getTime())) return null;
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { from: start.toISOString(), to: end.toISOString() };
 }
 
 function RateRow({ label, rate, enabled }: { label: string; rate: string; enabled: boolean }) {

@@ -572,6 +572,14 @@ export class WalletController {
     const where: Prisma.LedgerEntryWhereInput = {
       walletId: wallet.id,
       type: { in: EARNING_ENTRY_TYPES },
+      ...(query.from || query.to
+        ? {
+            createdAt: {
+              ...(query.from ? { gte: new Date(query.from) } : {}),
+              ...(query.to ? { lt: new Date(query.to) } : {}),
+            },
+          }
+        : {}),
     };
     const skip = (query.page - 1) * query.pageSize;
     const [entries, total] = await Promise.all([
