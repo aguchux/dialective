@@ -87,6 +87,80 @@ export async function mintTrainingPayoutOps(
 }
 
 /**
+ * Mints a trainer's one-time signup bonus into the Tokenomics engine's
+ * TokenAccount ledger, parallel to (and always called alongside)
+ * auth.service.ts's creditStartupBonus, which credits the legacy
+ * Wallet.balance that actually pays trainers. Same shape as
+ * mintTrainingPayoutOps (own idempotencyKey prefix/reason so the two never
+ * collide), added because the startup bonus was previously legacy-Wallet-only
+ * -- invisible to TokenAccount/TokenOperation, so it never showed up in the
+ * admin Tokenomics dashboard's totalMinted/supply figures despite being real,
+ * spendable, withdrawable DL.
+ */
+export async function mintStartupBonusOps(
+  prisma: PrismaClient,
+  userId: string,
+  tokenAmount: Decimal | number | string,
+  reference: string,
+) {
+  const amount = new Decimal(tokenAmount);
+  if (amount.lte(0)) {
+    return { ops: [] as Prisma.PrismaPromise<unknown>[] };
+  }
+
+  const account = await prisma.tokenAccount.upsert({
+    where: { userId },
+    update: {},
+    create: { code: `user:${userId}`, kind: 'USER', userId },
+  });
+
+  const idempotencyKey = `mint:startup-bonus:${reference}`;
+  const existingOperation = await prisma.tokenOperation.findUnique({
+    where: { idempotencyKey },
+    select: { id: true },
+  });
+  if (existingOperation) {
+    const existingEntry = await prisma.tokenLedgerEntry.findUnique({
+      where: {
+        accountId_operationId: { accountId: account.id, operationId: existingOperation.id },
+      },
+    });
+    if (existingEntry) {
+      return { ops: [] as Prisma.PrismaPromise<unknown>[] };
+    }
+  }
+
+  const operation = await prisma.tokenOperation.upsert({
+    where: { idempotencyKey },
+    update: {},
+    create: {
+      type: 'MINT',
+      status: 'SETTLED',
+      idempotencyKey,
+      reference,
+      reason: 'Signup startup bonus',
+      settledAt: new Date(),
+    },
+  });
+
+  const ops: Prisma.PrismaPromise<unknown>[] = [
+    prisma.tokenLedgerEntry.create({
+      data: {
+        accountId: account.id,
+        operationId: operation.id,
+        availableDelta: amount,
+      },
+    }),
+    prisma.tokenAccount.update({
+      where: { id: account.id },
+      data: { available: { increment: amount } },
+    }),
+  ];
+
+  return { ops };
+}
+
+/**
  * Debits the reserve ledger for a completed fiat payout (Flutterwave
  * transfer that settled), the missing counterpart to
  * TokenomicsService.recordConfirmedFlutterwaveDepositTx (which only credits

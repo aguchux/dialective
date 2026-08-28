@@ -3,8 +3,9 @@ process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? 'test-secret';
 jest.mock('@dialectiva/db', () => ({
   ...jest.requireActual('@dialectiva/db'),
   creditStartupBonus: jest.fn(),
+  mintStartupBonusOps: jest.fn().mockResolvedValue({ ops: [] }),
 }));
-import { creditStartupBonus, Prisma } from '@dialectiva/db';
+import { creditStartupBonus, mintStartupBonusOps, Prisma } from '@dialectiva/db';
 import {
   ConflictException,
   UnauthorizedException,
@@ -109,6 +110,7 @@ function setup(
   };
   const p2p = { adminCancelAllForUser: jest.fn() };
   const storage = { deleteObject: jest.fn() };
+  const tokenomics = { isMintingPaused: jest.fn().mockResolvedValue(false) };
   const service = new AuthService(
     prisma as never,
     mail as never,
@@ -116,8 +118,9 @@ function setup(
     platformSettings as never,
     p2p as never,
     storage as never,
+    tokenomics as never,
   );
-  return { service, prisma, mail, otp, platformSettings, storage };
+  return { service, prisma, mail, otp, platformSettings, storage, tokenomics };
 }
 
 describe('AuthService auth maintenance gate', () => {
@@ -185,6 +188,7 @@ describe('AuthService verifyEmail startup bonus', () => {
 
   beforeEach(() => {
     (creditStartupBonus as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (mintStartupBonusOps as jest.Mock).mockReset().mockResolvedValue({ ops: [] });
   });
 
   it('grants the startup bonus on a first-time verification when an amount is configured', async () => {
@@ -195,6 +199,36 @@ describe('AuthService verifyEmail startup bonus', () => {
     await service.verifyEmail('raw-token');
 
     expect(creditStartupBonus).toHaveBeenCalledWith(prisma, 'user-1', 25, 'signup-verification');
+  });
+
+  it('also mints the bonus into the Tokenomics engine when minting is not paused', async () => {
+    const { service, prisma, platformSettings, tokenomics } = setup();
+    setupToken(prisma);
+    platformSettings.getStartupBonusAmount.mockResolvedValue(25);
+    tokenomics.isMintingPaused.mockResolvedValue(false);
+    (mintStartupBonusOps as jest.Mock).mockResolvedValue({ ops: ['mint-op'] });
+
+    await service.verifyEmail('raw-token');
+
+    expect(mintStartupBonusOps).toHaveBeenCalledWith(
+      prisma,
+      'user-1',
+      25,
+      'signup-verification:user-1',
+    );
+    expect(prisma.$transaction).toHaveBeenCalledWith(['mint-op']);
+  });
+
+  it('skips the Tokenomics mint (but still pays the legacy bonus) when minting is paused', async () => {
+    const { service, prisma, platformSettings, tokenomics } = setup();
+    setupToken(prisma);
+    platformSettings.getStartupBonusAmount.mockResolvedValue(25);
+    tokenomics.isMintingPaused.mockResolvedValue(true);
+
+    await service.verifyEmail('raw-token');
+
+    expect(creditStartupBonus).toHaveBeenCalled();
+    expect(mintStartupBonusOps).not.toHaveBeenCalled();
   });
 
   it('does not grant a bonus when the configured amount is 0 (off)', async () => {
@@ -238,6 +272,7 @@ describe('AuthService verifyOtp (registration) startup bonus', () => {
 
   beforeEach(() => {
     (creditStartupBonus as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (mintStartupBonusOps as jest.Mock).mockReset().mockResolvedValue({ ops: [] });
   });
 
   it('grants the startup bonus on a first-time OTP verification when an amount is configured', async () => {
@@ -307,6 +342,7 @@ describe('AuthService consumeMagicLink startup bonus', () => {
 
   beforeEach(() => {
     (creditStartupBonus as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (mintStartupBonusOps as jest.Mock).mockReset().mockResolvedValue({ ops: [] });
   });
 
   it('grants the startup bonus when a magic-link signup verifies email for the first time', async () => {

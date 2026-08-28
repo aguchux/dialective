@@ -14,6 +14,7 @@ import {
   creditStartupBonus,
   LedgerEntryType,
   ManualPhoneVerificationStatus,
+  mintStartupBonusOps,
   OtpPurpose,
   Prisma,
   ReferralInviteStatus,
@@ -29,6 +30,7 @@ import { OtpService } from '../otp/otp.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { P2PService } from '../p2p/p2p.service';
 import { StorageService } from '../storage/storage.service';
+import { TokenomicsService } from '../tokenomics/tokenomics.service';
 import { createSmslive247Otp, verifySmslive247Otp } from '../sms/smslive247-native-otp';
 import { generateOpaqueToken, hashToken } from './token.util';
 import { AuthMaintenanceException } from './auth-maintenance.exception';
@@ -168,6 +170,7 @@ export class AuthService {
     private readonly platformSettings: PlatformSettingsService,
     private readonly p2p: P2PService,
     private readonly storage: StorageService,
+    private readonly tokenomics: TokenomicsService,
   ) {}
 
   /**
@@ -490,8 +493,25 @@ export class AuthService {
 
   private async grantStartupBonus(userId: string): Promise<void> {
     const bonusAmount = await this.platformSettings.getStartupBonusAmount();
-    if (bonusAmount > 0) {
-      await creditStartupBonus(this.prisma, userId, bonusAmount, 'signup-verification');
+    if (bonusAmount <= 0) return;
+
+    await creditStartupBonus(this.prisma, userId, bonusAmount, 'signup-verification');
+
+    // Mints into the Tokenomics engine's TokenAccount ledger alongside the
+    // legacy Wallet credit above -- see mintStartupBonusOps's doc comment.
+    // Paused independently of the legacy bonus itself, same reasoning as
+    // settlement-job's training-payout minting: pausing stops new supply
+    // from being issued, it must never block the trainer from actually
+    // getting their bonus.
+    if (await this.tokenomics.isMintingPaused()) return;
+    const { ops } = await mintStartupBonusOps(
+      this.prisma,
+      userId,
+      bonusAmount,
+      `signup-verification:${userId}`,
+    );
+    if (ops.length > 0) {
+      await this.prisma.$transaction(ops);
     }
   }
 

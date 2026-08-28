@@ -6,10 +6,11 @@ import { OtpModule } from '../otp/otp.module';
 import { SettingsModule } from '../settings/settings.module';
 import { P2PModule } from '../p2p/p2p.module';
 import { StorageModule } from '../storage/storage.module';
+import { TokenomicsModule } from '../tokenomics/tokenomics.module';
 import { RegisterRateLimitGuard } from '../common/guards/register-rate-limit.guard';
 
 @Module({
-  imports: [MailModule, OtpModule, SettingsModule, P2PModule, StorageModule],
+  imports: [MailModule, OtpModule, SettingsModule, P2PModule, StorageModule, TokenomicsModule],
   controllers: [AuthController],
   providers: [AuthService, RegisterRateLimitGuard],
   exports: [AuthService],
