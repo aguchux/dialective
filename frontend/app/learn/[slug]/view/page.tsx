@@ -58,7 +58,11 @@ export default async function PublicCourseViewPage({ params }: PublicCourseViewP
         </div>
       </div>
       <LandingFooter />
-      <CourseSlideViewer closeHref={`/learn/${course.slug}`} slides={course.slides} />
+      <CourseSlideViewer
+        closeHref={`/learn/${course.slug}`}
+        showCompletionScreen={false}
+        slides={course.slides}
+      />
     </main>
   );
 }

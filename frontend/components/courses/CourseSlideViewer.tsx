@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as RadixDialog from '@radix-ui/react-dialog';
-import { ArrowLeft, ArrowRight, LoaderCircle, Pause, Play, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Pause, Play, X } from 'lucide-react';
 import { BlogContent } from '@/components/blog/BlogContent';
 import { usePortalContainer } from '@/components/ui/PortalContainer';
 import { notifyFullScreenOverlay } from '@/lib/recording-signal';
@@ -25,18 +25,34 @@ type PlaybackState = 'idle' | 'playing' | 'paused';
 export function CourseSlideViewer({
   slides,
   initialIndex = 0,
+  alreadyCompleted = false,
+  courseTitle,
   onSlideChange,
+  onFinish,
   onClose,
   closeHref,
+  dashboardHref = '/dashboard?view=home',
+  showCompletionScreen = true,
 }: {
   slides: CourseSlide[];
   initialIndex?: number;
+  /** Skips straight to the completion screen instead of slide 0 -- a trainer reopening an already-finished course shouldn't be forced through it again. */
+  alreadyCompleted?: boolean;
+  /** Shown on the completion screen's thank-you copy; omitted (generic copy) when not provided, e.g. the public no-auth viewer. */
+  courseTitle?: string;
   onSlideChange?: (index: number) => void;
+  /** Fires once, when the trainer hits Finish on the last slide (not on every resume of an already-completed course -- see alreadyCompleted). */
+  onFinish?: () => void;
   onClose?: () => void;
   /** Used when there's no onClose callback available (e.g. a server-rendered host page) -- navigates here instead. */
   closeHref?: string;
+  /** Where the completion screen's "Go to Dashboard" button navigates. */
+  dashboardHref?: string;
+  /** False for the public, logged-out viewer -- no dashboard to return to, so the last slide's Finish button just closes the viewer instead of showing the completion screen. */
+  showCompletionScreen?: boolean;
 }) {
   const [index, setIndex] = useState(() => clampIndex(initialIndex, slides.length));
+  const [showCompletion, setShowCompletion] = useState(alreadyCompleted);
   const [playback, setPlayback] = useState<PlaybackState>('idle');
   const [audioProgress, setAudioProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -48,6 +64,23 @@ export function CourseSlideViewer({
       onClose();
     } else if (closeHref) {
       router.push(closeHref);
+    }
+  }
+
+  function handleFinish() {
+    onFinish?.();
+    if (showCompletionScreen) {
+      setShowCompletion(true);
+    } else {
+      handleClose();
+    }
+  }
+
+  function handleGoToDashboard() {
+    if (onClose) {
+      onClose();
+    } else {
+      router.push(dashboardHref);
     }
   }
 
@@ -110,6 +143,47 @@ export function CourseSlideViewer({
 
   if (!slide) return null;
 
+  if (showCompletion) {
+    return (
+      <RadixDialog.Root defaultOpen onOpenChange={(open) => !open && handleClose()}>
+        <RadixDialog.Portal container={container}>
+          <RadixDialog.Overlay className="fixed inset-0 z-[950] bg-black" />
+          <RadixDialog.Content
+            className="fixed inset-0 z-[960] flex flex-col items-center justify-center overflow-y-auto bg-black p-6 text-center text-white focus:outline-none"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <RadixDialog.Title className="sr-only">Course complete</RadixDialog.Title>
+            <RadixDialog.Close
+              aria-label="Close"
+              className="fixed right-4 top-4 z-20 grid size-9 place-items-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-colors hover:bg-white/20"
+            >
+              <X className="size-5" aria-hidden="true" />
+            </RadixDialog.Close>
+            <div className="grid max-w-md gap-5 place-items-center">
+              <CheckCircle2 className="size-16 text-emerald-400" aria-hidden="true" />
+              <div className="grid gap-2">
+                <h2 className="text-2xl font-black">Course complete!</h2>
+                <p className="leading-relaxed text-white/70">
+                  {courseTitle
+                    ? `Thank you for completing "${courseTitle}".`
+                    : 'Thank you for completing this course.'}{' '}
+                  Any completion reward has already been credited to your DL balance.
+                </p>
+              </div>
+              <button
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-6 font-extrabold text-white transition-colors hover:bg-accent-dark"
+                onClick={handleGoToDashboard}
+                type="button"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+          </RadixDialog.Content>
+        </RadixDialog.Portal>
+      </RadixDialog.Root>
+    );
+  }
+
   return (
     <RadixDialog.Root defaultOpen onOpenChange={(open) => !open && handleClose()}>
       <RadixDialog.Portal container={container}>
@@ -158,12 +232,11 @@ export function CourseSlideViewer({
                 <ArrowLeft className="size-4" aria-hidden="true" /> Previous
               </button>
               <button
-                className="pointer-events-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 font-extrabold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={isLast}
-                onClick={() => goTo(index + 1)}
+                className="pointer-events-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 font-extrabold text-white transition-colors hover:bg-accent-dark"
+                onClick={() => (isLast ? handleFinish() : goTo(index + 1))}
                 type="button"
               >
-                Next <ArrowRight className="size-4" aria-hidden="true" />
+                {isLast ? 'Finish' : 'Next'} <ArrowRight className="size-4" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -194,12 +267,11 @@ export function CourseSlideViewer({
                   <ArrowLeft className="size-4" aria-hidden="true" /> Previous
                 </button>
                 <button
-                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-accent font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45"
-                  disabled={isLast}
-                  onClick={() => goTo(index + 1)}
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-accent font-extrabold text-white hover:bg-accent-dark"
+                  onClick={() => (isLast ? handleFinish() : goTo(index + 1))}
                   type="button"
                 >
-                  Next <ArrowRight className="size-4" aria-hidden="true" />
+                  {isLast ? 'Finish' : 'Next'} <ArrowRight className="size-4" aria-hidden="true" />
                 </button>
               </div>
 
