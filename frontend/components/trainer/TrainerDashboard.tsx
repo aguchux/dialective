@@ -2140,6 +2140,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const manualPhoneVerificationFeeTokens = publicSettings?.manualPhoneVerificationFeeTokens ?? '1';
   const manualPhoneVerificationWhatsappNumber =
     publicSettings?.manualPhoneVerificationWhatsappNumber ?? '';
+  const manualPhoneVerificationExpiryMinutes =
+    publicSettings?.manualPhoneVerificationExpiryMinutes ?? 30;
   const phoneVerified = me?.phoneVerified ?? false;
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneOtpRequestId, setPhoneOtpRequestId] = useState('');
@@ -2647,7 +2649,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                                 Text {manualPhoneRequest.code} to{' '}
                                 {manualPhoneRequest.whatsappNumber ||
                                   manualPhoneVerificationWhatsappNumber}
-                                .
+                                . This code expires in {manualPhoneVerificationExpiryMinutes} minutes.
                               </span>
                             </div>
                             <ActionButton

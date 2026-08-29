@@ -26,10 +26,6 @@ export function GeneralSettingsPanel() {
   const [sentenceRebuildEnabled, setSentenceRebuildEnabled] = useState(false);
   const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
   const [phoneVerificationRequired, setPhoneVerificationRequired] = useState(true);
-  const [manualPhoneVerificationEnabled, setManualPhoneVerificationEnabled] = useState(true);
-  const [manualPhoneVerificationFeeTokens, setManualPhoneVerificationFeeTokens] = useState('');
-  const [manualPhoneVerificationWhatsappNumber, setManualPhoneVerificationWhatsappNumber] =
-    useState('');
   const [startupBonusAmount, setStartupBonusAmount] = useState('');
   const [wordStuckTimeoutMinutes, setWordStuckTimeoutMinutes] = useState('');
   const [scoringSlaMinutes, setScoringSlaMinutes] = useState('');
@@ -55,9 +51,6 @@ export function GeneralSettingsPanel() {
     setSentenceRebuildEnabled(settings.sentenceRebuildEnabled);
     setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
     setPhoneVerificationRequired(settings.phoneVerificationRequired);
-    setManualPhoneVerificationEnabled(settings.manualPhoneVerificationEnabled);
-    setManualPhoneVerificationFeeTokens(settings.manualPhoneVerificationFeeTokens);
-    setManualPhoneVerificationWhatsappNumber(settings.manualPhoneVerificationWhatsappNumber);
     setStartupBonusAmount(settings.startupBonusAmount ?? '');
     setWordStuckTimeoutMinutes(String(settings.wordStuckTimeoutMinutes));
     setScoringSlaMinutes(String(settings.scoringSlaMinutes));
@@ -96,11 +89,6 @@ export function GeneralSettingsPanel() {
         sentenceRebuildEnabled,
         adminPayoutOtpEnabled,
         phoneVerificationRequired,
-        manualPhoneVerificationEnabled,
-        ...(manualPhoneVerificationFeeTokens !== ''
-          ? { manualPhoneVerificationFeeTokens: Number(manualPhoneVerificationFeeTokens) }
-          : {}),
-        manualPhoneVerificationWhatsappNumber,
         ...(startupBonusAmount !== '' ? { startupBonusAmount: Number(startupBonusAmount) } : {}),
         ...(wordStuckTimeoutMinutes !== ''
           ? { wordStuckTimeoutMinutes: Number(wordStuckTimeoutMinutes) }
@@ -457,53 +445,6 @@ export function GeneralSettingsPanel() {
                 </span>
               </span>
             </label>
-          </div>
-
-          <div className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4">
-            <label
-              className="flex cursor-pointer items-start gap-3"
-              htmlFor="manual-phone-verification"
-            >
-              <input
-                checked={manualPhoneVerificationEnabled}
-                className="mt-0.5 size-5 accent-accent"
-                id="manual-phone-verification"
-                onChange={(event) => setManualPhoneVerificationEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <span>
-                <span className="block font-bold">Allow manual WhatsApp phone verification</span>
-                <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Trainers can pay a configured DL fee, see a one-time code, and send it to WhatsApp
-                  for admin verification when SMS delivery fails.
-                </span>
-              </span>
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-sm font-bold" htmlFor="manual-phone-fee">
-                Manual verification fee (DL)
-                <input
-                  className={inputClass}
-                  id="manual-phone-fee"
-                  min="0"
-                  onChange={(event) => setManualPhoneVerificationFeeTokens(event.target.value)}
-                  step="0.01"
-                  type="number"
-                  value={manualPhoneVerificationFeeTokens}
-                />
-              </label>
-              <label className="grid gap-1 text-sm font-bold" htmlFor="manual-phone-whatsapp">
-                WhatsApp number
-                <input
-                  className={inputClass}
-                  id="manual-phone-whatsapp"
-                  maxLength={40}
-                  onChange={(event) => setManualPhoneVerificationWhatsappNumber(event.target.value)}
-                  placeholder="1234567890"
-                  value={manualPhoneVerificationWhatsappNumber}
-                />
-              </label>
-            </div>
           </div>
 
           <div>

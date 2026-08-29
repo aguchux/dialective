@@ -105,7 +105,7 @@ function setup(
     getStartupBonusAmount: jest.fn().mockResolvedValue(0),
     getManualPhoneVerificationSettings: jest
       .fn()
-      .mockResolvedValue({ enabled: true, feeTokens: 1, whatsappNumber: '1234567890' }),
+      .mockResolvedValue({ enabled: true, feeTokens: 1, whatsappNumber: '1234567890', expiryMinutes: 30 }),
     isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false),
   };
   const p2p = { adminCancelAllForUser: jest.fn() };
@@ -473,6 +473,33 @@ describe('AuthService.resetPassword', () => {
 });
 
 describe('AuthService.requestManualPhoneVerification', () => {
+  it('uses the configured code expiry duration', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-29T10:00:00.000Z'));
+    try {
+      const { service, prisma, platformSettings } = setup();
+      platformSettings.getManualPhoneVerificationSettings.mockResolvedValue({
+        enabled: true,
+        feeTokens: 1,
+        whatsappNumber: '1234567890',
+        expiryMinutes: 7,
+      });
+      prisma.user.findFirst.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({ id: 'user-1', phoneVerifiedAt: null });
+      prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 0 });
+      prisma.manualPhoneVerificationRequest.findFirst.mockResolvedValue(null);
+
+      await service.requestManualPhoneVerification('user-1', '+2348012345678');
+
+      expect(prisma.manualPhoneVerificationRequest.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ expiresAt: new Date('2026-08-29T10:07:00.000Z') }),
+        }),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('rejects a user whose phone is already verified', async () => {
     const { service, prisma } = setup();
     prisma.user.findFirst.mockResolvedValue(null);

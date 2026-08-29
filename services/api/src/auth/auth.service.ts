@@ -47,7 +47,6 @@ const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000; // 15 minutes
-const MANUAL_PHONE_VERIFICATION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 export interface AuthTokens {
   accessToken: string;
@@ -963,7 +962,7 @@ export class AuthService {
     const fee = new Prisma.Decimal(settings.feeTokens);
     const requestId = randomUUID();
     const { code, hash } = generateOtpCode();
-    const expiresAt = new Date(now.getTime() + MANUAL_PHONE_VERIFICATION_TTL_MS);
+    const expiresAt = new Date(now.getTime() + settings.expiryMinutes * 60 * 1000);
 
     // No charge here -- the fee is only ever collected when an admin
     // actually confirms the OTP (see verifyManualPhoneVerificationRequest),

@@ -43,6 +43,7 @@ export function WordGenerationSettingsPanel() {
   const [maxTotalGeneratedItems, setMaxTotalGeneratedItems] = useState('5000');
   const [maxPoolPerDialect, setMaxPoolPerDialect] = useState('50');
   const [backfillItemsPerDialectPerRun, setBackfillItemsPerDialectPerRun] = useState('10');
+  const [keyboardLayoutMaxLength, setKeyboardLayoutMaxLength] = useState('1000');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,6 +56,7 @@ export function WordGenerationSettingsPanel() {
     setMaxTotalGeneratedItems(String(settings.llmMaxTotalGeneratedItems));
     setMaxPoolPerDialect(String(settings.llmMaxPoolPerDialect));
     setBackfillItemsPerDialectPerRun(String(settings.llmBackfillItemsPerDialectPerRun));
+    setKeyboardLayoutMaxLength(String(settings.keyboardLayoutMaxLength));
   }, [settings]);
 
   function setChoice(position: 0 | 1 | 2, provider: ProviderKey) {
@@ -87,6 +89,9 @@ export function WordGenerationSettingsPanel() {
         ...(maxPoolPerDialect !== '' ? { llmMaxPoolPerDialect: Number(maxPoolPerDialect) } : {}),
         ...(backfillItemsPerDialectPerRun !== ''
           ? { llmBackfillItemsPerDialectPerRun: Number(backfillItemsPerDialectPerRun) }
+          : {}),
+        ...(keyboardLayoutMaxLength !== ''
+          ? { keyboardLayoutMaxLength: Number(keyboardLayoutMaxLength) }
           : {}),
       }).unwrap();
       setMessage('Word generation settings saved.');
@@ -267,6 +272,25 @@ export function WordGenerationSettingsPanel() {
               max="500"
               value={backfillItemsPerDialectPerRun}
               onChange={(e) => setBackfillItemsPerDialectPerRun(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="keyboard-layout-max-length">
+              Keyboard layout maximum characters
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              Maximum length for a dialect&apos;s virtual keyboard character list in Coverage.
+            </p>
+            <input
+              className={inputClass}
+              id="keyboard-layout-max-length"
+              type="number"
+              step="1"
+              min="1"
+              max="10000"
+              value={keyboardLayoutMaxLength}
+              onChange={(e) => setKeyboardLayoutMaxLength(e.target.value)}
             />
           </div>
 

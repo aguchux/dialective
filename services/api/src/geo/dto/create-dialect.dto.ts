@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateDialectDto {
   @IsString()
@@ -12,6 +12,5 @@ export class CreateDialectDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(500)
   keyboardLayout?: string;
 }

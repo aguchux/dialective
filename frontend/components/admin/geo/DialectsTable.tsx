@@ -14,6 +14,7 @@ import {
   useDeleteDialectVariantMutation,
   useGenerateDialectKeyboardLayoutMutation,
   useGetAdminDialectVariantsQuery,
+  useGetPlatformSettingsQuery,
   useUpdateDialectMutation,
   useUpdateDialectVariantMutation,
 } from '@/store/api';
@@ -196,6 +197,8 @@ function EditKeyboardLayoutDialog({
   const [error, setError] = useState<string | null>(null);
   const [updateDialect, { isLoading: isSaving }] = useUpdateDialectMutation();
   const [generateLayout, { isLoading: isGenerating }] = useGenerateDialectKeyboardLayoutMutation();
+  const { data: settings } = useGetPlatformSettingsQuery();
+  const maxLength = settings?.keyboardLayoutMaxLength ?? 1000;
 
   async function handleGenerate() {
     setError(null);
@@ -235,10 +238,14 @@ function EditKeyboardLayoutDialog({
             <textarea
               className={`${inputClass} min-h-24 resize-y font-mono`}
               id="dialect-keyboard-layout"
+              maxLength={maxLength}
               onChange={(e) => setLayout(e.target.value)}
               placeholder="á à â ã ā ç ñ ..."
               value={layout}
             />
+            <p className="text-right text-xs text-muted">
+              {layout.length} / {maxLength}
+            </p>
           </div>
           <div>
             <ActionButton

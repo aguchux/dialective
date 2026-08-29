@@ -306,12 +306,14 @@ export class PlatformSettingsService {
     enabled: boolean;
     feeTokens: number;
     whatsappNumber: string;
+    expiryMinutes: number;
   }> {
     const row = await this.getRow();
     return {
       enabled: row.manualPhoneVerificationEnabled,
       feeTokens: row.manualPhoneVerificationFeeTokens.toNumber(),
       whatsappNumber: row.manualPhoneVerificationWhatsappNumber,
+      expiryMinutes: row.manualPhoneVerificationExpiryMinutes,
     };
   }
 
@@ -664,6 +666,7 @@ export class PlatformSettingsService {
       manualPhoneVerificationEnabled: row.manualPhoneVerificationEnabled,
       manualPhoneVerificationFeeTokens: row.manualPhoneVerificationFeeTokens.toString(),
       manualPhoneVerificationWhatsappNumber: row.manualPhoneVerificationWhatsappNumber,
+      manualPhoneVerificationExpiryMinutes: row.manualPhoneVerificationExpiryMinutes,
       startupBonusAmount: row.startupBonusAmount?.toString() ?? null,
       tawkToEnabled: row.tawkToEnabled,
       tawkToPropertyId: row.tawkToPropertyId,
@@ -686,6 +689,7 @@ export class PlatformSettingsService {
       llmMaxTotalGeneratedItems: row.llmMaxTotalGeneratedItems,
       llmMaxPoolPerDialect: row.llmMaxPoolPerDialect,
       llmBackfillItemsPerDialectPerRun: row.llmBackfillItemsPerDialectPerRun,
+      keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),
@@ -766,6 +770,7 @@ export class PlatformSettingsService {
     manualPhoneVerificationEnabled?: boolean;
     manualPhoneVerificationFeeTokens?: number;
     manualPhoneVerificationWhatsappNumber?: string;
+    manualPhoneVerificationExpiryMinutes?: number;
     startupBonusAmount?: number | null;
     tawkToEnabled?: boolean;
     tawkToPropertyId?: string | null;
@@ -788,6 +793,7 @@ export class PlatformSettingsService {
     llmMaxTotalGeneratedItems?: number;
     llmMaxPoolPerDialect?: number;
     llmBackfillItemsPerDialectPerRun?: number;
+    keyboardLayoutMaxLength?: number;
     qualityGateEnabled?: boolean;
     qualityWeightConsensus?: number;
     qualityWeightNoise?: number;
@@ -1093,6 +1099,7 @@ export class PlatformSettingsService {
       manualPhoneVerificationEnabled: row.manualPhoneVerificationEnabled,
       manualPhoneVerificationFeeTokens: row.manualPhoneVerificationFeeTokens.toString(),
       manualPhoneVerificationWhatsappNumber: row.manualPhoneVerificationWhatsappNumber,
+      manualPhoneVerificationExpiryMinutes: row.manualPhoneVerificationExpiryMinutes,
       startupBonusAmount: row.startupBonusAmount?.toString() ?? null,
       tawkToEnabled: row.tawkToEnabled,
       tawkToPropertyId: row.tawkToPropertyId,
@@ -1112,6 +1119,7 @@ export class PlatformSettingsService {
       llmMaxTotalGeneratedItems: row.llmMaxTotalGeneratedItems,
       llmMaxPoolPerDialect: row.llmMaxPoolPerDialect,
       llmBackfillItemsPerDialectPerRun: row.llmBackfillItemsPerDialectPerRun,
+      keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),
@@ -1218,6 +1226,7 @@ export class PlatformSettingsService {
       manualPhoneVerificationEnabled: manualPhone.enabled,
       manualPhoneVerificationFeeTokens: manualPhone.feeTokens.toString(),
       manualPhoneVerificationWhatsappNumber: manualPhone.whatsappNumber,
+      manualPhoneVerificationExpiryMinutes: manualPhone.expiryMinutes,
       // Login page shows the notice if either login or signup is blocked
       // (magic-link request is a signup path -- see requestMagicLink);
       // register page shows it only if signup is blocked, so both are

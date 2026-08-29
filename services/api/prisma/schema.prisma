@@ -89,7 +89,7 @@ model User {
   courseNotificationsEnabled    Boolean         @default(false)
   // Recorded after the browser confirms the PWA was installed. This is a
   // product-analytics marker only; it never grants access or changes auth.
-  pwaInstalledAt                 DateTime?
+  pwaInstalledAt                DateTime?
   // Country of origin is account identity data. It is distinct from
   // countryId below, which scopes the dialect/content the trainer works on.
   originCountryId               String?
@@ -756,13 +756,13 @@ model Word {
 /// reset/expiry, since a word they've twice chosen not to attempt isn't
 /// coming back into rotation on its own.
 model WordSkip {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  wordId     String
-  word       Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
-  skipCount  Int      @default(0)
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wordId    String
+  word      Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  skipCount Int      @default(0)
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, wordId])
   @@map("word_skips")
@@ -1293,9 +1293,9 @@ model Deposit {
   confirmedAt       DateTime?
   lastIpnAt         DateTime?
 
-  ipnEvents       NowPaymentsIpnEvent[]
-  webhookEvents   FlutterwaveWebhookEvent[]
-  v4ChargeEvents  FlutterwaveV4ChargeEvent[]
+  ipnEvents      NowPaymentsIpnEvent[]
+  webhookEvents  FlutterwaveWebhookEvent[]
+  v4ChargeEvents FlutterwaveV4ChargeEvent[]
 
   @@index([walletId])
   @@map("deposits")
@@ -1379,11 +1379,11 @@ model WithdrawalRequest {
   destinationMobileNumberEncryptedJson  Json?
   destinationMobileNumberMasked         String?
   destinationCountry                    String?
-  fiatAmount                            Decimal?        @db.Decimal(20, 8) // local-currency payout amount, snapshotted from usdtAmount at the request-time USD->fiat rate; null for crypto withdrawals
-  fiatUsdExchangeRate                   Decimal?        @db.Decimal(18, 6) // local-currency units per USD used to calculate fiatAmount; retained for payout/audit reproducibility
+  fiatAmount                            Decimal?       @db.Decimal(20, 8) // local-currency payout amount, snapshotted from usdtAmount at the request-time USD->fiat rate; null for crypto withdrawals
+  fiatUsdExchangeRate                   Decimal?       @db.Decimal(18, 6) // local-currency units per USD used to calculate fiatAmount; retained for payout/audit reproducibility
 
   providerEvents              NowPaymentsPayoutEvent[]
-  providerEventsFlutterwave   FlutterwavePayoutEvent[]   @relation("FlutterwavePayoutEvents")
+  providerEventsFlutterwave   FlutterwavePayoutEvent[]     @relation("FlutterwavePayoutEvents")
   providerEventsFlutterwaveV4 FlutterwaveV4TransferEvent[] @relation("FlutterwaveV4TransferEvents")
 
   @@index([walletId])
@@ -1451,15 +1451,15 @@ enum PayoutAccountVerificationStatus {
 /// display; the STABLECOIN_WALLET group is reserved for a future unified
 /// payout-account model and is not populated by any code path yet.
 model PayoutAccount {
-  id                 String                          @id @default(uuid())
-  userId             String
-  user               User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type               PayoutAccountType
-  country            String // ISO 3166-1 alpha-2, e.g. "NG"
-  currency           String // ISO 4217, e.g. "NGN"
-  provider           String                          @default("flutterwave")
-  isDefault          Boolean                         @default(false)
-  verificationStatus PayoutAccountVerificationStatus @default(UNVERIFIED)
+  id                  String                          @id @default(uuid())
+  userId              String
+  user                User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type                PayoutAccountType
+  country             String // ISO 3166-1 alpha-2, e.g. "NG"
+  currency            String // ISO 4217, e.g. "NGN"
+  provider            String                          @default("flutterwave")
+  isDefault           Boolean                         @default(false)
+  verificationStatus  PayoutAccountVerificationStatus @default(UNVERIFIED)
   // Flutterwave v4 Recipient id (POST /transfers/recipients), created lazily
   // the first time a v4 payout targets this account and reused on every
   // later withdrawal from it -- see FlutterwaveV4Service.createRecipient.
@@ -1488,9 +1488,9 @@ model PayoutAccount {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  withdrawals WithdrawalRequest[]
-  p2pOffers   P2PTokenOffer[] @relation("P2POfferPayoutAccount")
-  p2pSellerTrades P2PTokenTrade[] @relation("P2PTradeSellerPaymentMethod")
+  withdrawals     WithdrawalRequest[]
+  p2pOffers       P2PTokenOffer[]     @relation("P2POfferPayoutAccount")
+  p2pSellerTrades P2PTokenTrade[]     @relation("P2PTradeSellerPaymentMethod")
 
   @@index([userId])
   @@index([userId, isDefault])
@@ -1645,23 +1645,23 @@ model P2PMarketSettings {
 }
 
 model P2PTokenOffer {
-  id               String             @id @default(uuid())
+  id               String         @id @default(uuid())
   type             P2POfferType
   userId           String
-  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenAmount      Decimal            @db.Decimal(20, 8)
-  remainingTokens  Decimal            @db.Decimal(20, 8)
-  fiatAmount       Decimal            @db.Decimal(20, 8)
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenAmount      Decimal        @db.Decimal(20, 8)
+  remainingTokens  Decimal        @db.Decimal(20, 8)
+  fiatAmount       Decimal        @db.Decimal(20, 8)
   fiatCurrency     String
   paymentMethod    String
   paymentMethodId  String?
-  paymentMethodRef PayoutAccount?     @relation("P2POfferPayoutAccount", fields: [paymentMethodId], references: [id], onDelete: SetNull)
-  status           P2POfferStatus     @default(ACTIVE)
+  paymentMethodRef PayoutAccount? @relation("P2POfferPayoutAccount", fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  status           P2POfferStatus @default(ACTIVE)
   expiresAt        DateTime
   completedAt      DateTime?
   cancelledAt      DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   trades P2PTokenTrade[]
 
@@ -1671,20 +1671,20 @@ model P2PTokenOffer {
 }
 
 model P2PTokenTrade {
-  id                      String             @id @default(uuid())
+  id                      String         @id @default(uuid())
   offerId                 String
-  offer                   P2PTokenOffer      @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  offer                   P2PTokenOffer  @relation(fields: [offerId], references: [id], onDelete: Restrict)
   buyerId                 String
-  buyer                   User               @relation("P2PBuyerTrades", fields: [buyerId], references: [id], onDelete: Cascade)
+  buyer                   User           @relation("P2PBuyerTrades", fields: [buyerId], references: [id], onDelete: Cascade)
   sellerId                String
-  seller                  User               @relation("P2PSellerTrades", fields: [sellerId], references: [id], onDelete: Cascade)
+  seller                  User           @relation("P2PSellerTrades", fields: [sellerId], references: [id], onDelete: Cascade)
   sellerPaymentMethodId   String?
-  sellerPaymentMethod     PayoutAccount?     @relation("P2PTradeSellerPaymentMethod", fields: [sellerPaymentMethodId], references: [id], onDelete: SetNull)
-  tokenAmount             Decimal            @db.Decimal(20, 8)
-  fiatAmount              Decimal            @db.Decimal(20, 8)
+  sellerPaymentMethod     PayoutAccount? @relation("P2PTradeSellerPaymentMethod", fields: [sellerPaymentMethodId], references: [id], onDelete: SetNull)
+  tokenAmount             Decimal        @db.Decimal(20, 8)
+  fiatAmount              Decimal        @db.Decimal(20, 8)
   fiatCurrency            String
   paymentMethod           String
-  status                  P2PTradeStatus     @default(AWAITING_PAYMENT)
+  status                  P2PTradeStatus @default(AWAITING_PAYMENT)
   paymentDeadlineAt       DateTime
   cancelRequestedByUserId String?
   cancelAvailableAt       DateTime?
@@ -1692,8 +1692,8 @@ model P2PTokenTrade {
   releasedAt              DateTime?
   cancelledAt             DateTime?
   disputedAt              DateTime?
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
 
   dispute P2PDispute?
 
@@ -1767,6 +1767,7 @@ model PlatformSettings {
   manualPhoneVerificationEnabled         Boolean   @default(true) // lets trainers request admin-assisted WhatsApp phone verification when SMS delivery is unreliable
   manualPhoneVerificationFeeTokens       Decimal   @default(1) @db.Decimal(20, 8) // DL fee charged when a trainer creates a manual WhatsApp verification request
   manualPhoneVerificationWhatsappNumber  String    @default("1234567890") // admin-operated WhatsApp number trainers are instructed to message with their generated code
+  manualPhoneVerificationExpiryMinutes   Int       @default(30) // generated WhatsApp verification codes expire after this many minutes
   startupBonusAmount                     Decimal?  @db.Decimal(20, 8) // one-time DL amount credited (as a STARTUP_BONUS ledger entry) the first time a user verifies their email; null or 0 means the bonus is off
   tawkToEnabled                          Boolean   @default(false) // master switch for the Tawk.to live-chat widget; the frontend only loads the widget script when this is true AND both IDs below are set
   tawkToPropertyId                       String? // Tawk.to "Property ID" from the widget's embed snippet -- the first path segment of https://embed.tawk.to/<propertyId>/<widgetId>
@@ -1789,6 +1790,7 @@ model PlatformSettings {
   llmMaxTotalGeneratedItems              Int       @default(5000) // hard global cap on generated source content volume (Word rows when llmWordsPerItem=1, otherwise en-us Prompt rows); word-generator-job stops generating brand-new content once this total is reached
   llmMaxPoolPerDialect                   Int       @default(50) // gate on total content pool size, not just batch size: word-generator-job skips generating new Prompt/Word translations for a dialect once that dialect's combined active-Prompt + translated-Word count reaches this ceiling. Consensus scoring and peer reverse-validation both need multiple trainers submitting the *same* prompt/word -- an unbounded pool spread across too few trainers means no single item ever accumulates enough submissions to score, so the pool per dialect is grown deliberately (raise this setting) as that dialect's active trainer base grows, not automatically every run
   llmBackfillItemsPerDialectPerRun       Int       @default(10) // per scheduled run, how many pre-existing English Word/Prompt rows (oldest first) a single under-cap dialect may have translated into it, before word-generator-job moves on to generating brand-new English content. Without this, a newly-enabled dialect starts its pool at 0 and only grows via the shared trickle of NEW content each run (llmItemsPerRun), staying permanently behind dialects enabled earlier -- this lets it instead catch up by draining the existing backlog, bounded so one far-behind dialect can't consume an entire run's LLM budget
+  keyboardLayoutMaxLength                Int       @default(1000) // maximum number of characters an admin may save in a dialect's virtual keyboard layout
   qualityGateEnabled                     Boolean   @default(false) // master kill switch for the quality-gate-worker's effect on payout; worker still runs and records noise/quality/livenessScore when false, but compositeScore computation falls back to the raw score (today's behavior) until enabled
   qualityWeightConsensus                 Decimal   @default(60) @db.Decimal(5, 2) // weight (%) given to the real score (consensus agreement / exact-match) in compositeScore's blend
   qualityWeightNoise                     Decimal   @default(15) @db.Decimal(5, 2) // weight (%) given to noiseScore in compositeScore's blend

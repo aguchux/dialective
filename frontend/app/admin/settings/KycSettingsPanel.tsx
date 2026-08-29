@@ -20,6 +20,12 @@ export function KycSettingsPanel() {
   const [requiredForWithdrawals, setRequiredForWithdrawals] = useState(false);
   const [minWithdrawalTokens, setMinWithdrawalTokens] = useState('0');
   const [requiredOnboarding, setRequiredOnboarding] = useState(false);
+  const [manualPhoneVerificationEnabled, setManualPhoneVerificationEnabled] = useState(true);
+  const [manualPhoneVerificationFeeTokens, setManualPhoneVerificationFeeTokens] = useState('1');
+  const [manualPhoneVerificationWhatsappNumber, setManualPhoneVerificationWhatsappNumber] =
+    useState('');
+  const [manualPhoneVerificationExpiryMinutes, setManualPhoneVerificationExpiryMinutes] =
+    useState('30');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,17 +34,32 @@ export function KycSettingsPanel() {
     setRequiredForWithdrawals(settings.isKycRequiredForWithdrawals);
     setMinWithdrawalTokens(settings.kycMinWithdrawalTokens);
     setRequiredOnboarding(settings.isKycRequiredOnboarding);
+    setManualPhoneVerificationEnabled(settings.manualPhoneVerificationEnabled);
+    setManualPhoneVerificationFeeTokens(settings.manualPhoneVerificationFeeTokens);
+    setManualPhoneVerificationWhatsappNumber(settings.manualPhoneVerificationWhatsappNumber);
+    setManualPhoneVerificationExpiryMinutes(
+      String(settings.manualPhoneVerificationExpiryMinutes),
+    );
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
     setError(null);
+    const expiryMinutes = Number(manualPhoneVerificationExpiryMinutes);
+    if (!Number.isInteger(expiryMinutes) || expiryMinutes < 1 || expiryMinutes > 1440) {
+      setError('Manual WhatsApp code expiry must be a whole number between 1 and 1,440 minutes.');
+      return;
+    }
     try {
       await updateSettings({
         isKycRequiredForWithdrawals: requiredForWithdrawals,
         kycMinWithdrawalTokens: Number(minWithdrawalTokens) || 0,
         isKycRequiredOnboarding: requiredOnboarding,
+        manualPhoneVerificationEnabled,
+        manualPhoneVerificationFeeTokens: Number(manualPhoneVerificationFeeTokens) || 0,
+        manualPhoneVerificationWhatsappNumber,
+        manualPhoneVerificationExpiryMinutes: expiryMinutes,
       }).unwrap();
       setMessage('Identity verification settings saved.');
     } catch (err) {
@@ -122,6 +143,68 @@ export function KycSettingsPanel() {
               Withdrawals below this amount skip the KYC gate even when required above is on. Set to
               0 to require verification for every withdrawal.
             </p>
+          </div>
+
+          <div className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4">
+            <label
+              className="flex cursor-pointer items-start gap-3"
+              htmlFor="manual-phone-verification"
+            >
+              <input
+                checked={manualPhoneVerificationEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="manual-phone-verification"
+                onChange={(event) => setManualPhoneVerificationEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Allow manual WhatsApp phone verification</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Trainers receive a code to send to your WhatsApp number when SMS delivery fails.
+                  The code is only valid for the duration set below, and the DL fee is charged only
+                  after an admin verifies it.
+                </span>
+              </span>
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm font-bold" htmlFor="manual-phone-whatsapp">
+                WhatsApp number
+                <input
+                  className={inputClass}
+                  id="manual-phone-whatsapp"
+                  maxLength={40}
+                  onChange={(event) => setManualPhoneVerificationWhatsappNumber(event.target.value)}
+                  placeholder="1234567890"
+                  value={manualPhoneVerificationWhatsappNumber}
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-bold" htmlFor="manual-phone-fee">
+                Manual verification fee (DL)
+                <input
+                  className={inputClass}
+                  id="manual-phone-fee"
+                  min="0"
+                  onChange={(event) => setManualPhoneVerificationFeeTokens(event.target.value)}
+                  step="0.01"
+                  type="number"
+                  value={manualPhoneVerificationFeeTokens}
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-bold" htmlFor="manual-phone-expiry">
+                Code expiry (minutes)
+                <input
+                  className={inputClass}
+                  id="manual-phone-expiry"
+                  inputMode="numeric"
+                  max="1440"
+                  min="1"
+                  onChange={(event) => setManualPhoneVerificationExpiryMinutes(event.target.value)}
+                  type="number"
+                  value={manualPhoneVerificationExpiryMinutes}
+                />
+              </label>
+            </div>
           </div>
 
           <div>

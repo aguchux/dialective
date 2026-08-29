@@ -45,6 +45,17 @@ export class GeoController {
     private readonly llm: LlmNormalizerService,
   ) {}
 
+  private async validateKeyboardLayout(keyboardLayout: string | undefined) {
+    if (keyboardLayout === undefined) return;
+
+    const { keyboardLayoutMaxLength } = await this.platformSettings.getForAdmin();
+    if (keyboardLayout.length > keyboardLayoutMaxLength) {
+      throw new UnprocessableEntityException(
+        `keyboardLayout must not exceed ${keyboardLayoutMaxLength} characters`,
+      );
+    }
+  }
+
   @Get('countries')
   getCountries() {
     return this.prisma.country.findMany({
@@ -262,6 +273,7 @@ export class GeoController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async createDialect(@Body() dto: CreateDialectDto) {
+    await this.validateKeyboardLayout(dto.keyboardLayout);
     const country = await this.prisma.country.findUnique({ where: { id: dto.countryId } });
     if (!country) {
       throw new UnprocessableEntityException('countryId does not match an existing country');
@@ -284,6 +296,7 @@ export class GeoController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async updateDialect(@Param('id') id: string, @Body() dto: UpdateDialectDto) {
+    await this.validateKeyboardLayout(dto.keyboardLayout);
     if (dto.countryId) {
       const country = await this.prisma.country.findUnique({ where: { id: dto.countryId } });
       if (!country) {

@@ -778,6 +778,7 @@ export interface PublicClientSettings {
   manualPhoneVerificationEnabled: boolean;
   manualPhoneVerificationFeeTokens: string;
   manualPhoneVerificationWhatsappNumber: string;
+  manualPhoneVerificationExpiryMinutes: number;
   // enabled = login OR signup is blocked; the two flags below let each page
   // (login vs register) show the notice only when it actually applies to it.
   authMaintenanceEnabled: boolean;
@@ -1010,6 +1011,7 @@ export interface PlatformSettings {
   manualPhoneVerificationEnabled: boolean;
   manualPhoneVerificationFeeTokens: string;
   manualPhoneVerificationWhatsappNumber: string;
+  manualPhoneVerificationExpiryMinutes: number;
   startupBonusAmount: string | null;
   tawkToEnabled: boolean;
   tawkToPropertyId: string | null;
@@ -1032,6 +1034,7 @@ export interface PlatformSettings {
   llmMaxTotalGeneratedItems: number;
   llmMaxPoolPerDialect: number;
   llmBackfillItemsPerDialectPerRun: number;
+  keyboardLayoutMaxLength: number;
   qualityGateEnabled: boolean;
   qualityWeightConsensus: string;
   qualityWeightNoise: string;
@@ -1103,6 +1106,7 @@ export interface PlatformSettingsInput {
   manualPhoneVerificationEnabled?: boolean;
   manualPhoneVerificationFeeTokens?: number;
   manualPhoneVerificationWhatsappNumber?: string;
+  manualPhoneVerificationExpiryMinutes?: number;
   startupBonusAmount?: number | null;
   tawkToEnabled?: boolean;
   tawkToPropertyId?: string;
@@ -1125,6 +1129,7 @@ export interface PlatformSettingsInput {
   llmMaxTotalGeneratedItems?: number;
   llmMaxPoolPerDialect?: number;
   llmBackfillItemsPerDialectPerRun?: number;
+  keyboardLayoutMaxLength?: number;
   qualityGateEnabled?: boolean;
   qualityWeightConsensus?: number;
   qualityWeightNoise?: number;

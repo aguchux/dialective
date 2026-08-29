@@ -126,6 +126,12 @@ export class UpdatePlatformSettingsDto {
   @MaxLength(40)
   manualPhoneVerificationWhatsappNumber?: string;
 
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  manualPhoneVerificationExpiryMinutes?: number;
+
   // One-time DL amount credited the first time a user verifies their email.
   // 0 (or omitted, leaving it null) means the bonus is off.
   @IsOptional()
@@ -243,6 +249,12 @@ export class UpdatePlatformSettingsDto {
   @Min(1)
   @Max(500)
   llmBackfillItemsPerDialectPerRun?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10000)
+  keyboardLayoutMaxLength?: number;
 
   @IsOptional()
   @IsBoolean()
