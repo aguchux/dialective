@@ -36,6 +36,12 @@ export interface CreatePayoutResult {
 
 export type PayoutStatusResult = ProviderPayoutStatus;
 
+export interface ProviderBalance {
+  currency: string;
+  availableBalance: number;
+  ledgerBalance: number;
+}
+
 /**
  * Thin wrapper around NOWPayments' hosted-invoice API -- same "one class
  * per external integration" shape as StorageService (Spaces) and
@@ -196,6 +202,46 @@ export class NowPaymentsService implements PayoutProvider {
     }
     const payout = extractPayout(raw, payoutId);
     return { payoutId: payout.id ?? payoutId, status: payout.status, raw };
+  }
+
+  /**
+   * GET /v1/balance -- this merchant account's balance per currency, used by
+   * reserve-balance-poll.ts as the live source for TokenomicsService's
+   * reserve total (see schema.prisma's ReserveBalanceSnapshot). Same simple
+   * x-api-key read as createInvoice -- no payout-JWT auth needed for a
+   * read-only balance call.
+   */
+  async getBalance(): Promise<ProviderBalance[]> {
+    const res = await fetch(`${NOWPAYMENTS_API_BASE}/balance`, {
+      headers: { 'x-api-key': this.apiKey },
+    });
+    const raw = await readNowPaymentsJson(res);
+    if (!res.ok) {
+      this.logger.error(`NOWPayments getBalance failed: ${res.status} ${JSON.stringify(raw)}`);
+      throw new BadGatewayException('The payment provider could not return account balances.');
+    }
+    // Historically shaped as { [currency]: { amount, pendingAmount } } --
+    // tolerate either that map shape or an array-of-entries shape so a minor
+    // API revision doesn't silently return an empty list.
+    if (Array.isArray(raw)) {
+      return raw.map((entry) => {
+        const row = entry as Record<string, unknown>;
+        return {
+          currency: String(row.currency ?? '').toUpperCase(),
+          availableBalance: Number(row.amount ?? row.balance ?? 0),
+          ledgerBalance: Number(row.amount ?? row.balance ?? 0),
+        };
+      });
+    }
+    return Object.entries(raw).map(([currency, value]) => {
+      const row = (value ?? {}) as Record<string, unknown>;
+      const available = Number(row.amount ?? 0);
+      return {
+        currency: currency.toUpperCase(),
+        availableBalance: available,
+        ledgerBalance: available + Number(row.pendingAmount ?? 0),
+      };
+    });
   }
 
   private async getPayoutAuthToken(): Promise<string> {

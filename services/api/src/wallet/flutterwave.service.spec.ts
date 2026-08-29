@@ -128,4 +128,53 @@ describe('FlutterwaveService', () => {
       ).resolves.toEqual({ accountNumber: '0690000032', accountName: 'John Doe' });
     });
   });
+
+  describe('listBalances', () => {
+    it('parses the { data: [{ currency, available_balance, ledger_balance }] } response shape', async () => {
+      process.env.FLUTTERWAVE_SECRET_KEY = 'FLWSECK_TEST-example';
+      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            status: 'success',
+            data: [
+              { currency: 'NGN', available_balance: 150000, ledger_balance: 150000 },
+              { currency: 'USD', available_balance: 200, ledger_balance: 210 },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      await expect(service.listBalances()).resolves.toEqual([
+        { currency: 'NGN', availableBalance: 150000, ledgerBalance: 150000 },
+        { currency: 'USD', availableBalance: 200, ledgerBalance: 210 },
+      ]);
+      expect(fetchSpy.mock.calls[0][0]).toBe('https://api.flutterwave.com/v3/balances');
+      expect(fetchSpy.mock.calls[0][1]?.headers).toMatchObject({
+        Authorization: 'Bearer FLWSECK_TEST-example',
+      });
+    });
+
+    it('throws BadGatewayException on a non-OK response', async () => {
+      process.env.FLUTTERWAVE_SECRET_KEY = 'FLWSECK_TEST-example';
+      jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(new Response(JSON.stringify({ message: 'invalid key' }), { status: 401 }));
+
+      await expect(service.listBalances()).rejects.toThrow(
+        'The payment provider could not return account balances.',
+      );
+    });
+
+    it('throws BadGatewayException when the response is missing a data array', async () => {
+      process.env.FLUTTERWAVE_SECRET_KEY = 'FLWSECK_TEST-example';
+      jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(new Response(JSON.stringify({ status: 'success' }), { status: 200 }));
+
+      await expect(service.listBalances()).rejects.toThrow(
+        'The payment provider returned an invalid balances response.',
+      );
+    });
+  });
 });

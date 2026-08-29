@@ -154,3 +154,52 @@ describe('NowPaymentsService IPN verification', () => {
     expect(fetchSpy.mock.calls[1][0]).toBe('https://api.nowpayments.io/v1/payout/payout-1');
   });
 });
+
+describe('NowPaymentsService.getBalance', () => {
+  let service: NowPaymentsService;
+
+  beforeEach(() => {
+    process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
+    service = new NowPaymentsService();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    delete process.env.NOWPAYMENTS_API_KEY;
+  });
+
+  it('parses the { [currency]: { amount, pendingAmount } } map shape with a simple x-api-key GET', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ usdt: { amount: 40, pendingAmount: 5 } }), { status: 200 }),
+    );
+
+    await expect(service.getBalance()).resolves.toEqual([
+      { currency: 'USDT', availableBalance: 40, ledgerBalance: 45 },
+    ]);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toBe('https://api.nowpayments.io/v1/balance');
+    expect(init?.headers).toMatchObject({ 'x-api-key': 'test-api-key' });
+  });
+
+  it('parses an array-of-entries shape as a fallback', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify([{ currency: 'usdc', amount: 12 }]), { status: 200 }),
+      );
+
+    await expect(service.getBalance()).resolves.toEqual([
+      { currency: 'USDC', availableBalance: 12, ledgerBalance: 12 },
+    ]);
+  });
+
+  it('throws BadGatewayException on a non-OK response', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 }));
+
+    await expect(service.getBalance()).rejects.toThrow(
+      'The payment provider could not return account balances.',
+    );
+  });
+});

@@ -16,6 +16,7 @@ import {
   useResumeMintingMutation,
 } from '@/store/api';
 import { ValuationChart } from './ValuationChart';
+import { AvailableReserveSection } from './AvailableReserveSection';
 import { ReserveLedgerSection } from './ReserveLedgerSection';
 import { TokenOperationsSection } from './TokenOperationsSection';
 import { PolicySettingsPanel } from './PolicySettingsPanel';
@@ -265,6 +266,8 @@ export default function AdminTokenomicsPage() {
             </table>
           </div>
         </section>
+
+        {status && <AvailableReserveSection status={status} />}
 
         <ReserveLedgerSection />
 

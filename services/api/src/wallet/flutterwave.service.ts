@@ -54,6 +54,12 @@ export interface ResolveAccountResult {
   accountName: string;
 }
 
+export interface ProviderBalance {
+  currency: string;
+  availableBalance: number;
+  ledgerBalance: number;
+}
+
 /**
  * Thin wrapper around Flutterwave's v3 API -- the fiat (bank transfer +
  * mobile money) rail alongside NowPaymentsService's stablecoin rail. Same
@@ -319,6 +325,38 @@ export class FlutterwaveService implements PayoutProvider {
 
   getWebhookEventHash(rawBody: Buffer): string {
     return createHash('sha256').update(rawBody).digest('hex');
+  }
+
+  /**
+   * GET /v3/balances -- every currency balance held in this Flutterwave
+   * merchant account, used by reserve-balance-poll.ts as the live source
+   * for TokenomicsService's reserve total (see schema.prisma's
+   * ReserveBalanceSnapshot). Same bearer-secret-key auth as every other v3
+   * call here; no v4 equivalent is used since v4 has no confirmed balances
+   * resource.
+   */
+  async listBalances(): Promise<ProviderBalance[]> {
+    const res = await fetch(`${FLUTTERWAVE_API_BASE}/balances`, {
+      headers: this.authHeaders(),
+    });
+    const raw = await readFlutterwaveJson(res);
+    if (!res.ok) {
+      this.logger.error(`Flutterwave listBalances failed: ${res.status} ${JSON.stringify(raw)}`);
+      throw new BadGatewayException('The payment provider could not return account balances.');
+    }
+    const data = raw.data;
+    if (!Array.isArray(data)) {
+      this.logger.error(`Flutterwave listBalances returned an unexpected shape: ${JSON.stringify(raw)}`);
+      throw new BadGatewayException('The payment provider returned an invalid balances response.');
+    }
+    return data.map((entry) => {
+      const row = entry as Record<string, unknown>;
+      return {
+        currency: String(row.currency ?? ''),
+        availableBalance: Number(row.available_balance ?? 0),
+        ledgerBalance: Number(row.ledger_balance ?? 0),
+      };
+    });
   }
 }
 

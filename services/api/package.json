@@ -10,6 +10,7 @@
     "withdrawal-reconcile": "node dist/withdrawal-reconcile.js",
     "tokenomics-valuation": "node dist/tokenomics-valuation.js",
     "weekly-trainer-report": "node dist/weekly-trainer-report.js",
+    "reserve-balance-poll": "node dist/reserve-balance-poll.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",

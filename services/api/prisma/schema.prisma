@@ -1172,6 +1172,25 @@ model ReserveTransaction {
   @@map("reserve_transactions")
 }
 
+/// One row per (provider, currency), upserted on every successful
+/// reserve-balance-poll.ts run -- a live cache, not a history table
+/// (ValuationSnapshot already gives historical rate tracking). A failed
+/// provider fetch simply leaves the existing row untouched, so fetchedAt
+/// naturally reflects staleness; TokenomicsService.getStatus sums whatever
+/// is currently here (fresh or stale) as the reserve total, which is the
+/// fallback-to-last-known-good behavior by construction.
+model ReserveBalanceSnapshot {
+  id         String   @id @default(uuid())
+  provider   String // 'flutterwave' | 'nowpayments'
+  currency   String // provider's own currency code, e.g. 'NGN', 'USDT'
+  balanceRaw Decimal  @db.Decimal(20, 8) // provider-currency amount, as reported
+  balanceUsd Decimal  @db.Decimal(20, 8) // converted via Country.usdExchangeRate (fiat) or 1:1 (stablecoin/USD)
+  fetchedAt  DateTime @default(now())
+
+  @@unique([provider, currency])
+  @@map("reserve_balance_snapshots")
+}
+
 model ValuationSnapshot {
   id                     String   @id @default(uuid())
   eligibleReserveUsd     Decimal  @db.Decimal(20, 8)

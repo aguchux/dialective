@@ -171,22 +171,24 @@ export class TokenomicsService {
   }
 
   async getStatus() {
-    const [policy, reserveRows, accounts, latest] = await Promise.all([
+    const [policy, balanceSnapshots, accounts, latest] = await Promise.all([
       this.ensurePolicy(),
-      this.prisma.reserveTransaction.findMany({
-        where: { status: ReserveTransactionStatus.ELIGIBLE },
-        select: { direction: true, eligibleUsdAmount: true },
-      }),
+      this.prisma.reserveBalanceSnapshot.findMany({ orderBy: { fetchedAt: 'asc' } }),
       this.prisma.tokenAccount.findMany({
         select: { kind: true, available: true, locked: true },
       }),
       this.prisma.valuationSnapshot.findFirst({ orderBy: { createdAt: 'desc' } }),
     ]);
     const supply = summarizeSupply(accounts);
-    const eligibleReserveUsd = reserveRows.reduce(
-      (total, row) =>
-        total +
-        (row.direction === ReserveDirection.CREDIT ? 1 : -1) * row.eligibleUsdAmount.toNumber(),
+    // The reserve total is the live Flutterwave + NOWPayments account
+    // balance sum (reserve-balance-poll.ts, cached in ReserveBalanceSnapshot
+    // -- see its doc comment in schema.prisma), not the ReserveTransaction
+    // ledger. A provider outage simply leaves its row stale rather than
+    // missing, so this always reflects the last successfully polled balance
+    // per provider/currency -- that staleness is surfaced via
+    // reserveBalancesFetchedAt below, not hidden.
+    const eligibleReserveUsd = balanceSnapshots.reduce(
+      (total, row) => total + row.balanceUsd.toNumber(),
       0,
     );
     const publishedValueUsd =
@@ -205,6 +207,14 @@ export class TokenomicsService {
       reserveHealthStatus: deriveHealthStatus(coverageRatio, policy),
       supply,
       lastValuationAt: latest?.createdAt ?? null,
+      reserveBalances: balanceSnapshots.map((row) => ({
+        provider: row.provider,
+        currency: row.currency,
+        balanceRaw: row.balanceRaw.toString(),
+        balanceUsd: row.balanceUsd.toString(),
+        fetchedAt: row.fetchedAt,
+      })),
+      reserveBalancesFetchedAt: balanceSnapshots[0]?.fetchedAt ?? null,
     };
   }
 

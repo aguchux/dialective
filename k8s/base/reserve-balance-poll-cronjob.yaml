@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: reserve-balance-poll
+spec:
+  # Every 15 minutes -- frequent enough that TokenomicsService's reserve
+  # total is rarely more than 15 min stale, cheap enough not to hammer
+  # either provider's rate limits. See services/api/src/reserve-balance-poll.ts.
+  schedule: '*/15 * * * *'
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: reserve-balance-poll
+              image: golojan/dialect-api:latest
+              command: ['node', 'dist/reserve-balance-poll.js']
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-creds
+                      key: connection_string
+                - name: FLUTTERWAVE_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: flutterwave-creds
+                      key: flutterwave_secret_key
+                - name: NOWPAYMENTS_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: nowpayments-creds
+                      key: nowpayments_api_key

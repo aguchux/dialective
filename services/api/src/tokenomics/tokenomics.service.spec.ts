@@ -152,7 +152,7 @@ describe('TokenomicsService', () => {
       };
       const prisma = {
         tokenomicsPolicy: { upsert: jest.fn().mockResolvedValue(policy) },
-        reserveTransaction: { findMany: jest.fn().mockResolvedValue([]) },
+        reserveBalanceSnapshot: { findMany: jest.fn().mockResolvedValue([]) },
         tokenAccount: { findMany: jest.fn().mockResolvedValue([]) },
         valuationSnapshot: { findFirst: jest.fn().mockResolvedValue(null) },
       };
@@ -168,9 +168,16 @@ describe('TokenomicsService', () => {
       const prisma = makeStatusHarness();
       // eligibleReserveUsd and redeemable supply are both driven by empty
       // arrays above, so directly stub getStatus's internal computation by
-      // reconstructing the ratio via reserve rows + a single USER account.
-      prisma.reserveTransaction.findMany.mockResolvedValue([
-        { direction: 'CREDIT', eligibleUsdAmount: new Prisma.Decimal(ratio * 100) },
+      // reconstructing the ratio via cached provider balances + a single
+      // USER account.
+      prisma.reserveBalanceSnapshot.findMany.mockResolvedValue([
+        {
+          provider: 'flutterwave',
+          currency: 'USD',
+          balanceRaw: new Prisma.Decimal(ratio * 100),
+          balanceUsd: new Prisma.Decimal(ratio * 100),
+          fetchedAt: new Date(),
+        },
       ]);
       prisma.tokenAccount.findMany.mockResolvedValue([
         { kind: 'USER', available: new Prisma.Decimal(1000), locked: new Prisma.Decimal(0) },
@@ -190,6 +197,58 @@ describe('TokenomicsService', () => {
       const status = await service.getStatus();
       expect(status.coverageRatio).toBeNull();
       expect(status.reserveHealthStatus).toBe('HEALTHY');
+    });
+
+    it('sums cached ReserveBalanceSnapshot rows as eligibleReserveUsd, not the ReserveTransaction ledger', async () => {
+      const prisma = makeStatusHarness();
+      prisma.reserveBalanceSnapshot.findMany.mockResolvedValue([
+        {
+          provider: 'flutterwave',
+          currency: 'NGN',
+          balanceRaw: new Prisma.Decimal(1000),
+          balanceUsd: new Prisma.Decimal(60),
+          fetchedAt: new Date('2026-08-29T10:00:00Z'),
+        },
+        {
+          provider: 'nowpayments',
+          currency: 'USDT',
+          balanceRaw: new Prisma.Decimal(40),
+          balanceUsd: new Prisma.Decimal(40),
+          fetchedAt: new Date('2026-08-29T10:05:00Z'),
+        },
+      ]);
+      const settings = { getTokenUsdRate: jest.fn().mockResolvedValue(0.1) };
+      const service = new TokenomicsService(prisma as never, settings as never);
+
+      const status = await service.getStatus();
+      expect(status.eligibleReserveUsd).toBe(100);
+      expect(status.reserveBalances).toEqual([
+        {
+          provider: 'flutterwave',
+          currency: 'NGN',
+          balanceRaw: '1000',
+          balanceUsd: '60',
+          fetchedAt: new Date('2026-08-29T10:00:00Z'),
+        },
+        {
+          provider: 'nowpayments',
+          currency: 'USDT',
+          balanceRaw: '40',
+          balanceUsd: '40',
+          fetchedAt: new Date('2026-08-29T10:05:00Z'),
+        },
+      ]);
+    });
+
+    it('yields eligibleReserveUsd: 0 (not an error) when no balance has ever been polled', async () => {
+      const prisma = makeStatusHarness();
+      const settings = { getTokenUsdRate: jest.fn().mockResolvedValue(0.1) };
+      const service = new TokenomicsService(prisma as never, settings as never);
+
+      const status = await service.getStatus();
+      expect(status.eligibleReserveUsd).toBe(0);
+      expect(status.reserveBalances).toEqual([]);
+      expect(status.reserveBalancesFetchedAt).toBeNull();
     });
   });
 

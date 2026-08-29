@@ -516,6 +516,14 @@ export interface TokenomicsSupply {
   redeemable: number;
 }
 
+export interface ReserveBalanceRow {
+  provider: string;
+  currency: string;
+  balanceRaw: string;
+  balanceUsd: string;
+  fetchedAt: string;
+}
+
 export interface TokenomicsStatus {
   baseCurrency: string;
   enabled: boolean;
@@ -527,6 +535,8 @@ export interface TokenomicsStatus {
   reserveHealthStatus: ReserveHealthStatus;
   supply: TokenomicsSupply;
   lastValuationAt: string | null;
+  reserveBalances: ReserveBalanceRow[];
+  reserveBalancesFetchedAt: string | null;
 }
 
 export interface ValuationSnapshotRow {
