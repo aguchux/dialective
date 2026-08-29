@@ -67,6 +67,7 @@ import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { GetTrainerReportDto } from './dto/get-trainer-report.dto';
 import { TrainerReportService } from './trainer-report.service';
 import { CreateReferralInviteDto } from './dto/create-referral-invite.dto';
+import { ListReferralInvitationsDto } from './dto/list-referral-invitations.dto';
 import { tokensToUsdt, usdToTokens } from './token-rate.util';
 import { tokensToLocalCurrency } from './currency-rate.util';
 import {
@@ -281,6 +282,57 @@ export class WalletController {
     });
   }
 
+  @Get('wallet/referrals/invitations')
+  @UseGuards(JwtAuthGuard)
+  async listReferralInvitations(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ListReferralInvitationsDto,
+  ) {
+    const pageSize = query.pageSize;
+    const [joinedTotal, pendingTotal] = await Promise.all([
+      this.prisma.user.count({ where: { referredById: req.user.sub } }),
+      this.prisma.referralInvite.count({
+        where: {
+          inviterId: req.user.sub,
+          status: ReferralInviteStatus.INVITED,
+          expiresAt: { gt: new Date() },
+        },
+      }),
+    ]);
+    const total = joinedTotal + pendingTotal;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    // joined+pending are two independently-sorted sources merged in memory
+    // (see mergeReferralInvites), so correctly slicing any given page needs
+    // BOTH sources' top-`page * pageSize` rows -- there's no cheap DB-level
+    // OFFSET across two tables. That cost grows with page depth, so it's
+    // capped here (not just page itself, see ListReferralInvitationsDto's
+    // own @Max) -- referral counts per trainer are realistically small, so
+    // silently clamping to the last reachable page beyond this depth is a
+    // fine tradeoff against a full cursor-based rewrite.
+    const MAX_MERGE_DEPTH_PAGES = 20;
+    const page = Math.min(query.page, totalPages, MAX_MERGE_DEPTH_PAGES);
+    const take = page * pageSize;
+
+    const [pending, joined] = await Promise.all([
+      this.getPendingReferralInvites(req.user.sub, take),
+      this.prisma.user.findMany({
+        where: { referredById: req.user.sub },
+        orderBy: { createdAt: 'desc' },
+        take,
+        select: { id: true, firstName: true, email: true, createdAt: true },
+      }),
+    ]);
+    const items = this.mergeReferralInvites(joined, pending);
+
+    return {
+      items: items.slice((page - 1) * pageSize, page * pageSize),
+      page,
+      pageSize,
+      total,
+      totalPages,
+    };
+  }
+
   @Get('wallet/dashboard')
   @UseGuards(JwtAuthGuard)
   async getTrainerDashboard(@Req() req: AuthenticatedRequest) {
@@ -444,7 +496,7 @@ export class WalletController {
    * remaining ones -- expired invites are never surfaced as "expired" in
    * the dashboard, they just disappear from the list.
    */
-  private async getPendingReferralInvites(inviterId: string) {
+  private async getPendingReferralInvites(inviterId: string, take = 8) {
     const now = new Date();
     await this.prisma.referralInvite.deleteMany({
       where: { inviterId, status: ReferralInviteStatus.INVITED, expiresAt: { lte: now } },
@@ -452,7 +504,7 @@ export class WalletController {
     return this.prisma.referralInvite.findMany({
       where: { inviterId, status: ReferralInviteStatus.INVITED, expiresAt: { gt: now } },
       orderBy: { createdAt: 'desc' },
-      take: 8,
+      take,
       select: { id: true, firstName: true, email: true, createdAt: true },
     });
   }
@@ -466,7 +518,7 @@ export class WalletController {
    * joined, the person already appears via the real User record, so
    * including the invite row too would duplicate them.
    */
-  private mergeRecentInvites(
+  private mergeReferralInvites(
     joined: { id: string; firstName: string | null; email: string; createdAt: Date }[],
     pending: { id: string; firstName: string; email: string; createdAt: Date }[],
   ) {
@@ -487,7 +539,14 @@ export class WalletController {
       })),
     ];
     merged.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    return merged.slice(0, 8);
+    return merged;
+  }
+
+  private mergeRecentInvites(
+    joined: { id: string; firstName: string | null; email: string; createdAt: Date }[],
+    pending: { id: string; firstName: string; email: string; createdAt: Date }[],
+  ) {
+    return this.mergeReferralInvites(joined, pending).slice(0, 8);
   }
 
   /**

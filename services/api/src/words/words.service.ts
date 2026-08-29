@@ -17,6 +17,7 @@ import { CoursesService } from '../courses/courses.service';
 import { AsrRegistryService } from '../asr-registry/asr-registry.service';
 import { MailService } from '../mail/mail.service';
 import { AUDIT_HOLD_MESSAGE, isOnAuditHold } from '../common/audit-hold.util';
+import { CHECKLIST_VERSION, QRAC_CHECKLIST, nextQracVersion } from './qrac.util';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
 import { GetSpellingSuggestionsDto } from './dto/get-spelling-suggestions.dto';
@@ -89,6 +90,31 @@ export class WordsService {
     return { ended: true };
   }
 
+  async signQrac(userId: string, sessionId: string) {
+    const session = await this.getOwnedSession(userId, sessionId);
+    if (session.endedAt) throw new ConflictException('This training session has ended');
+
+    const latest = await this.prisma.qracAffirmationSubmission.findFirst({
+      where: { userId },
+      orderBy: { signedAt: 'desc' },
+      select: { version: true },
+    });
+    const version = nextQracVersion(latest?.version ?? null);
+    const signedAt = new Date();
+
+    await this.prisma.$transaction([
+      this.prisma.qracAffirmationSubmission.create({
+        data: { userId, sessionId, version, checklistVersion: CHECKLIST_VERSION, signedAt },
+      }),
+      this.prisma.trainingSession.update({
+        where: { id: sessionId },
+        data: { lastQracAt: signedAt },
+      }),
+    ]);
+
+    return { version, signedAt };
+  }
+
   async nextAssignment(userId: string, sessionId: string) {
     const session = await this.getOwnedSession(userId, sessionId);
     if (session.endedAt) throw new ConflictException('This training session has ended');
@@ -109,6 +135,24 @@ export class WordsService {
         message: 'Complete the required course(s) below before you can continue training.',
         requiredCourses: incompleteRequired,
       });
+    }
+
+    // Same per-round re-check rationale as the required-courses gate above
+    // (sessions have no server-side TTL) -- a trainer can be mid-session for
+    // longer than qracIntervalMinutes, so this must fire here, not just once
+    // at startSession. Anchored on lastQracAt (or startedAt if never
+    // signed); signQrac() bumps lastQracAt to resume.
+    if (await this.settings.isQracEnabled()) {
+      const intervalMinutes = await this.settings.getQracIntervalMinutes();
+      const anchor = session.lastQracAt ?? session.startedAt;
+      const dueAt = new Date(anchor.getTime() + intervalMinutes * 60_000);
+      if (new Date() >= dueAt) {
+        throw new ForbiddenException({
+          message: 'Confirm the quality recording checklist to continue.',
+          qracRequired: true,
+          qracChecklist: QRAC_CHECKLIST,
+        });
+      }
     }
 
     const trainer = await this.getTrainer(userId);

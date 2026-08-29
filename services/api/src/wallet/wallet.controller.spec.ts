@@ -1441,3 +1441,112 @@ describe('WalletController admin wallet adjustments', () => {
     ).rejects.toThrow('Insufficient wallet balance for this debit');
   });
 });
+
+describe('WalletController.listReferralInvitations', () => {
+  function setup(overrides: {
+    joinedTotal?: number;
+    pendingTotal?: number;
+    joined?: { id: string; firstName: string | null; email: string; createdAt: Date }[];
+    pending?: { id: string; firstName: string; email: string; createdAt: Date }[];
+  }) {
+    const prisma = {
+      user: {
+        count: jest.fn().mockResolvedValue(overrides.joinedTotal ?? 0),
+        findMany: jest.fn().mockResolvedValue(overrides.joined ?? []),
+      },
+      referralInvite: {
+        count: jest.fn().mockResolvedValue(overrides.pendingTotal ?? 0),
+        findMany: jest.fn().mockResolvedValue(overrides.pending ?? []),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { controller, prisma };
+  }
+
+  const req = { user: { sub: 'trainer-1' } } as never;
+
+  it('merges joined users and pending invites newest-first', async () => {
+    const { controller } = setup({
+      joinedTotal: 1,
+      pendingTotal: 1,
+      joined: [
+        {
+          id: 'user-1',
+          firstName: 'Ada',
+          email: 'ada@example.com',
+          createdAt: new Date('2026-08-20'),
+        },
+      ],
+      pending: [
+        {
+          id: 'invite-1',
+          firstName: 'Bo',
+          email: 'bo@example.com',
+          createdAt: new Date('2026-08-25'),
+        },
+      ],
+    });
+
+    const result = await controller.listReferralInvitations(req, { page: 1, pageSize: 5 } as never);
+
+    expect(result.items.map((i: { email: string; status: string }) => [i.email, i.status])).toEqual(
+      [
+        ['bo@example.com', 'INVITED'],
+        ['ada@example.com', 'JOINED'],
+      ],
+    );
+    expect(result.total).toBe(2);
+    expect(result.totalPages).toBe(1);
+    expect(result.page).toBe(1);
+  });
+
+  it('returns an empty page without erroring when the trainer has no invitations', async () => {
+    const { controller } = setup({});
+
+    const result = await controller.listReferralInvitations(req, { page: 1, pageSize: 5 } as never);
+
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(0);
+    expect(result.totalPages).toBe(1);
+  });
+
+  it('clamps a requested page beyond the real last page down to totalPages', async () => {
+    const { controller, prisma } = setup({ joinedTotal: 2, pendingTotal: 0 });
+
+    const result = await controller.listReferralInvitations(req, {
+      page: 99,
+      pageSize: 5,
+    } as never);
+
+    expect(result.page).toBe(1); // ceil(2/5) = 1 total page
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 1 * 5 }),
+    );
+  });
+
+  it('clamps the merge-fetch depth at MAX_MERGE_DEPTH_PAGES regardless of how many pages exist', async () => {
+    const { controller, prisma } = setup({ joinedTotal: 10_000, pendingTotal: 0 });
+
+    const result = await controller.listReferralInvitations(req, {
+      page: 500,
+      pageSize: 5,
+    } as never);
+
+    // totalPages would be 2000, but the merge-fetch itself is capped at 20
+    // pages deep (see MAX_MERGE_DEPTH_PAGES in wallet.controller.ts) --
+    // requested page 500 clamps down to page 20, not all the way to 2000.
+    expect(result.page).toBe(20);
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 20 * 5 }),
+    );
+  });
+});

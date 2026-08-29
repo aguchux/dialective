@@ -2,7 +2,13 @@ import { WordsService } from './words.service';
 
 describe('WordsService', () => {
   const trainer = { id: 'trainer-1', dialect: { tag: 'ig', name: 'Igbo', keyboardLayout: null } };
-  const session = { id: 'session-1', userId: trainer.id, endedAt: null };
+  const session = {
+    id: 'session-1',
+    userId: trainer.id,
+    endedAt: null,
+    startedAt: new Date('2026-01-01T00:00:00Z'),
+    lastQracAt: null as Date | null,
+  };
   const settings = {
     getTaskTokenCost: jest.fn(),
     isReverseWordTrainingEnabled: jest.fn(),
@@ -12,6 +18,8 @@ describe('WordsService', () => {
     getWordTrainingRecordingTimeoutSeconds: jest.fn().mockResolvedValue(5),
     getWordTrainingRecordingMaxTimeoutSeconds: jest.fn().mockResolvedValue(180),
     getAuditHoldEveryNSubmissions: jest.fn().mockResolvedValue(0),
+    isQracEnabled: jest.fn().mockResolvedValue(false),
+    getQracIntervalMinutes: jest.fn().mockResolvedValue(30),
   };
   const storage = { createPresignedDownloadUrl: jest.fn(), createPresignedUploadUrl: jest.fn() };
   const streams = { publish: jest.fn() };
@@ -28,6 +36,11 @@ describe('WordsService', () => {
       trainingSession: {
         findUnique: jest.fn().mockResolvedValue(session),
         create: jest.fn().mockResolvedValue(session),
+        update: jest.fn().mockResolvedValue(session),
+      },
+      qracAffirmationSubmission: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
       },
       word: {
         count: jest.fn().mockResolvedValue(1),
@@ -58,6 +71,9 @@ describe('WordsService', () => {
     settings.isSpellingNormalizationEnabled.mockResolvedValue(false);
     courses.getIncompleteRequiredCourses.mockReset().mockResolvedValue([]);
     settings.getAuditHoldEveryNSubmissions.mockReset().mockResolvedValue(0);
+    settings.isQracEnabled.mockReset().mockResolvedValue(false);
+    settings.getQracIntervalMinutes.mockReset().mockResolvedValue(30);
+    session.lastQracAt = null;
     mail.sendAuditHoldStartedEmail.mockReset().mockResolvedValue(undefined);
     service = new WordsService(
       prisma,
@@ -233,6 +249,60 @@ describe('WordsService', () => {
       'Complete the required course',
     );
     expect(prisma.wordTrainingAssignment.create).not.toHaveBeenCalled();
+  });
+
+  describe('QRAC gate in nextAssignment', () => {
+    beforeEach(() => {
+      settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-1',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+    });
+
+    it('never blocks when qracEnabled is false, regardless of elapsed time', async () => {
+      settings.isQracEnabled.mockResolvedValue(false);
+      session.startedAt = new Date(Date.now() - 60 * 60_000);
+      await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
+        assignmentId: 'assignment-1',
+      });
+    });
+
+    it('does not block a fresh session before the interval has elapsed', async () => {
+      settings.isQracEnabled.mockResolvedValue(true);
+      settings.getQracIntervalMinutes.mockResolvedValue(30);
+      session.startedAt = new Date(); // just started
+      await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
+        assignmentId: 'assignment-1',
+      });
+    });
+
+    it('blocks with qracRequired once the interval has elapsed since startedAt', async () => {
+      settings.isQracEnabled.mockResolvedValue(true);
+      settings.getQracIntervalMinutes.mockResolvedValue(30);
+      session.startedAt = new Date(Date.now() - 31 * 60_000);
+      session.lastQracAt = null;
+
+      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toMatchObject({
+        response: expect.objectContaining({
+          qracRequired: true,
+          qracChecklist: expect.arrayContaining([expect.any(String)]),
+        }),
+      });
+      expect(prisma.wordTrainingAssignment.create).not.toHaveBeenCalled();
+    });
+
+    it('measures elapsed time from lastQracAt, not startedAt, once the trainer has signed before', async () => {
+      settings.isQracEnabled.mockResolvedValue(true);
+      settings.getQracIntervalMinutes.mockResolvedValue(30);
+      session.startedAt = new Date(Date.now() - 120 * 60_000); // session opened long ago
+      session.lastQracAt = new Date(Date.now() - 5 * 60_000); // but signed recently
+
+      await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
+        assignmentId: 'assignment-1',
+      });
+    });
   });
 
   it('excludes words the trainer has already recorded when picking an ENGLISH_TO_DIALECT word', async () => {
@@ -621,6 +691,72 @@ describe('WordsService', () => {
       expect(result.suggestions).toHaveLength(8);
       expect(result.suggestions.every((s: any) => s.source === 'community')).toBe(true);
       expect(prisma.wordTranslation.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('signQrac', () => {
+    beforeEach(() => {
+      prisma.$transaction.mockImplementation(async (ops: unknown[]) => Promise.all(ops as any));
+    });
+
+    it('records the first signing as version 1.0 when the trainer has never signed', async () => {
+      prisma.qracAffirmationSubmission.findFirst.mockResolvedValue(null);
+      prisma.qracAffirmationSubmission.create.mockResolvedValue({});
+
+      const result = await service.signQrac(trainer.id, session.id);
+
+      expect(result.version).toBe('1.0');
+      expect(prisma.qracAffirmationSubmission.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: trainer.id,
+            sessionId: session.id,
+            version: '1.0',
+          }),
+        }),
+      );
+      expect(prisma.trainingSession.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: session.id },
+          data: expect.objectContaining({ lastQracAt: result.signedAt }),
+        }),
+      );
+    });
+
+    it('increments the minor version off the trainer own most recent signing', async () => {
+      prisma.qracAffirmationSubmission.findFirst.mockResolvedValue({ version: '1.4' });
+      prisma.qracAffirmationSubmission.create.mockResolvedValue({});
+
+      const result = await service.signQrac(trainer.id, session.id);
+
+      expect(result.version).toBe('1.5');
+    });
+
+    it('rolls over to the next major version after .9', async () => {
+      prisma.qracAffirmationSubmission.findFirst.mockResolvedValue({ version: '1.9' });
+      prisma.qracAffirmationSubmission.create.mockResolvedValue({});
+
+      const result = await service.signQrac(trainer.id, session.id);
+
+      expect(result.version).toBe('2.0');
+    });
+
+    it('rejects signing an ended session', async () => {
+      prisma.trainingSession.findUnique.mockResolvedValue({ ...session, endedAt: new Date() });
+
+      await expect(service.signQrac(trainer.id, session.id)).rejects.toThrow(
+        'This training session has ended',
+      );
+      expect(prisma.qracAffirmationSubmission.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects signing a session that does not belong to the caller', async () => {
+      prisma.trainingSession.findUnique.mockResolvedValue({ ...session, userId: 'someone-else' });
+
+      await expect(service.signQrac(trainer.id, session.id)).rejects.toThrow(
+        'does not belong to you',
+      );
+      expect(prisma.qracAffirmationSubmission.create).not.toHaveBeenCalled();
     });
   });
 });

@@ -19,6 +19,7 @@ export default function robots(): MetadataRoute.Robots {
         '/verify-email',
         '/magic-link',
         '/pipeline-test',
+        '/invite/',
       ],
     },
     sitemap: `${siteUrl}/sitemap.xml`,

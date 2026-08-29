@@ -23,6 +23,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { usePortalContainer } from '@/components/ui/PortalContainer';
 import { notifyFullScreenOverlay } from '@/lib/recording-signal';
+import { QracDialog } from '@/components/trainer/QracDialog';
 import {
   ApiErrorShape,
   RecordingNoiseRating,
@@ -36,6 +37,17 @@ import {
   useStartWordTrainingSessionMutation,
   useSubmitWordRecordingMutation,
 } from '@/store/api';
+
+// Same "sessions have no server-side TTL" reasoning as required courses
+// (see extractRequiredCourses below), but the QRAC checklist is a periodic
+// re-affirmation the trainer resolves in-place, right here -- unlike
+// required courses (owned by the parent, since it can also gate other
+// entry points like dictation), QracDialog is rendered inside this
+// component and never closes this outer dialog, just overlays it.
+function extractQracRequired(err: unknown): boolean {
+  const data = (err as { data?: ApiErrorShape } | undefined)?.data;
+  return !!data?.qracRequired;
+}
 
 const MIC_PERMISSION_ERROR = 'Microphone permission is required to record.';
 const DEFAULT_SECONDS_PER_WORD = 5;
@@ -121,6 +133,7 @@ export function WordTrainingDialog({
   const [rebuildSubmitted, setRebuildSubmitted] = useState(false);
   const [rebuildScore, setRebuildScore] = useState<number | null>(null);
   const [sourcePlaying, setSourcePlaying] = useState(false);
+  const [qracOpen, setQracOpen] = useState(false);
   const submittingRef = useRef(false);
 
   const [startSession, { isLoading: isStarting }] = useStartWordTrainingSessionMutation();
@@ -213,6 +226,7 @@ export function WordTrainingDialog({
     setRebuildSubmitted(false);
     setRebuildScore(null);
     setSourcePlaying(false);
+    setQracOpen(false);
   }, [clearRecording, open, releaseMicrophone]);
 
   // Tawk.to's chat bubble sits bottom-right, the same corner this dialog's
@@ -301,6 +315,11 @@ export function WordTrainingDialog({
         throw err;
       }
     } catch (err) {
+      // No QRAC branch here -- a just-created session's lastQracAt is null
+      // and startedAt is now(), so nextAssignment's due-check can never fire
+      // on this very first call (see WordsService.nextAssignment). QRAC only
+      // becomes reachable once a session has been open for a while, i.e. in
+      // nextWord below.
       const requiredCourses = extractRequiredCourses(err);
       if (requiredCourses && onRequiredCourses) {
         onOpenChange(false);
@@ -332,6 +351,13 @@ export function WordTrainingDialog({
     } catch (err) {
       if (isNoWordsAvailable(err)) {
         setStep('unavailable');
+        return;
+      }
+      if (extractQracRequired(err)) {
+        // Deliberately don't touch `session`/`step`/onOpenChange here --
+        // QracDialog renders as an overlay on top of this same dialog and
+        // resolves the check in place; signing retries this exact call.
+        setQracOpen(true);
         return;
       }
       const requiredCourses = extractRequiredCourses(err);
@@ -568,604 +594,622 @@ export function WordTrainingDialog({
   const progress = Math.min(1, elapsedMs / maxRecordingMs);
   const ringColor = noiseColor(noiseRating);
 
+  async function handleQracSigned() {
+    setQracOpen(false);
+    void nextWord();
+  }
+
+  async function handleQracEndSession() {
+    setQracOpen(false);
+    void closeDialog();
+  }
+
   return (
-    <RadixDialog.Root
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) void closeDialog();
-      }}
-    >
-      <RadixDialog.Portal container={portalContainer}>
-        <RadixDialog.Overlay className="fixed inset-0 z-40 bg-black/65 data-[state=open]:animate-[fadeIn_150ms_ease-out]" />
-        <RadixDialog.Content
-          aria-describedby="word-training-description"
-          className="fixed inset-0 z-50 overflow-y-auto bg-bg text-ink focus:outline-none data-[state=open]:animate-[fadeIn_150ms_ease-out]"
-          onEscapeKeyDown={(event) => {
-            if (recorderState === 'recording') event.preventDefault();
-          }}
-          onOpenAutoFocus={(event) => event.preventDefault()}
-        >
-          <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
-            <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4 md:px-6">
-              <div className="flex min-w-0 items-center gap-3">
-                {step === 'terms' ? (
-                  <button
-                    aria-label="Back to task selection"
-                    className="grid size-10 place-items-center rounded-lg hover:bg-surface-muted"
-                    onClick={() => setStep('select')}
-                    type="button"
-                  >
-                    <ArrowLeft className="size-5" aria-hidden="true" />
-                  </button>
-                ) : null}
-                <div className="min-w-0">
-                  <RadixDialog.Title className="truncate text-lg font-black">
-                    Word training
-                  </RadixDialog.Title>
-                  <RadixDialog.Description
-                    className="truncate text-xs font-semibold text-muted"
-                    id="word-training-description"
-                  >
-                    {session ? `${session.dialectName} session` : 'Voice contribution session'}
-                  </RadixDialog.Description>
-                </div>
-              </div>
-              <button
-                aria-label="Close training"
-                className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-surface-muted"
-                onClick={() => void closeDialog()}
-                type="button"
-              >
-                <X className="size-5" aria-hidden="true" />
-              </button>
-            </div>
-          </header>
-
-          <main className="mx-auto grid min-h-[calc(100dvh-4rem)] w-full max-w-5xl content-center px-4 py-8 md:px-6">
-            {step === 'select' && (
-              <section className="mx-auto grid w-full max-w-xl gap-6">
-                <div>
-                  <p className="text-sm font-extrabold text-accent">Select task</p>
-                  <h2 className="mt-1 text-3xl font-black">Choose your training task</h2>
+    <>
+      <RadixDialog.Root
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) void closeDialog();
+        }}
+      >
+        <RadixDialog.Portal container={portalContainer}>
+          <RadixDialog.Overlay className="fixed inset-0 z-40 bg-black/65 data-[state=open]:animate-[fadeIn_150ms_ease-out]" />
+          <RadixDialog.Content
+            aria-describedby="word-training-description"
+            className="fixed inset-0 z-50 overflow-y-auto bg-bg text-ink focus:outline-none data-[state=open]:animate-[fadeIn_150ms_ease-out]"
+            onEscapeKeyDown={(event) => {
+              if (recorderState === 'recording') event.preventDefault();
+            }}
+            onOpenAutoFocus={(event) => event.preventDefault()}
+          >
+            <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
+              <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4 md:px-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  {step === 'terms' ? (
+                    <button
+                      aria-label="Back to task selection"
+                      className="grid size-10 place-items-center rounded-lg hover:bg-surface-muted"
+                      onClick={() => setStep('select')}
+                      type="button"
+                    >
+                      <ArrowLeft className="size-5" aria-hidden="true" />
+                    </button>
+                  ) : null}
+                  <div className="min-w-0">
+                    <RadixDialog.Title className="truncate text-lg font-black">
+                      Word training
+                    </RadixDialog.Title>
+                    <RadixDialog.Description
+                      className="truncate text-xs font-semibold text-muted"
+                      id="word-training-description"
+                    >
+                      {session ? `${session.dialectName} session` : 'Voice contribution session'}
+                    </RadixDialog.Description>
+                  </div>
                 </div>
                 <button
-                  className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-lg border-2 border-accent bg-surface p-5 text-left shadow-[0_12px_32px_rgba(88,28,135,0.10)]"
-                  onClick={() => setStep('terms')}
-                  type="button"
-                >
-                  <span className="grid size-12 place-items-center rounded-lg bg-accent-soft text-accent">
-                    <BookOpenCheck className="size-6" aria-hidden="true" />
-                  </span>
-                  <span>
-                    <span className="block text-lg font-black">Word training</span>
-                    <span className="mt-1 block text-sm leading-relaxed text-muted">
-                      Translation, pronunciation, and reverse validation.
-                    </span>
-                  </span>
-                  <ArrowRight className="size-5 text-accent" aria-hidden="true" />
-                </button>
-              </section>
-            )}
-
-            {step === 'terms' && (
-              <section className="mx-auto grid w-full max-w-2xl gap-6 rounded-lg border border-line bg-surface p-5 md:p-7">
-                <div>
-                  <p className="text-sm font-extrabold text-accent">Voice data agreement</p>
-                  <h2 className="mt-1 text-2xl font-black">Consent to AI training use</h2>
-                </div>
-                <div className="grid gap-3 text-sm leading-7 text-muted md:text-base">
-                  <p>
-                    You confirm that the recordings are your voice and that you are at least 18
-                    years old.
-                  </p>
-                  <p>
-                    You grant Dialect Library permission to store, process, analyze, license, and
-                    use your recordings, typed translations, and derived data to develop, evaluate,
-                    and improve speech and artificial intelligence systems.
-                  </p>
-                  <p>
-                    This permission is worldwide, perpetual, and may include sharing de-identified
-                    training data with approved research or commercial partners. Your account
-                    identity will not be included in licensed audio datasets.
-                  </p>
-                </div>
-                <label
-                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
-                  htmlFor="voice-consent"
-                >
-                  <input
-                    checked={accepted}
-                    className="mt-0.5 size-5 accent-accent"
-                    id="voice-consent"
-                    onChange={(event) => setAccepted(event.target.checked)}
-                    type="checkbox"
-                  />
-                  <span className="text-sm font-bold leading-6">
-                    I have read and agree to the voice data agreement and the{' '}
-                    <a className="text-accent underline" href="/terms" target="_blank">
-                      Terms of Use
-                    </a>
-                    .
-                  </span>
-                </label>
-                {error && (
-                  <p className="text-sm font-bold text-danger" role="alert">
-                    {error}
-                  </p>
-                )}
-                <button
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45"
-                  disabled={!accepted || isStarting}
-                  onClick={() => void beginSession()}
-                  type="button"
-                >
-                  {isStarting ? (
-                    <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Mic className="size-5" aria-hidden="true" />
-                  )}
-                  {isStarting ? 'Starting session' : 'Agree and start'}
-                </button>
-              </section>
-            )}
-
-            {step === 'loading' && <LoadingState label="Preparing your first word" />}
-
-            {step === 'training' && (
-              <section className="mx-auto grid w-full max-w-3xl gap-6 text-center">
-                {!assignment ? (
-                  <LoadingState label="Generating next word" />
-                ) : assignment.direction === 'SENTENCE_REBUILD' ? (
-                  <>
-                    <div>
-                      <div className="flex flex-wrap items-center justify-center gap-3">
-                        <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
-                          {assignment.responseLanguage} sentence rebuild
-                        </span>
-                        <SkipAssignmentButton
-                          disabled={!canSkipAssignment}
-                          loading={isLoadingNext}
-                          onClick={() => void nextWord()}
-                        />
-                      </div>
-                      <p className="mt-4 text-sm font-bold text-muted">
-                        Tap the fragments in the correct order
-                      </p>
-                    </div>
-
-                    <div className="mx-auto flex min-h-16 w-full max-w-xl flex-wrap items-center justify-center gap-2 rounded-lg border-2 border-dashed border-line bg-surface p-4">
-                      {pickedIndexes.length === 0 && (
-                        <span className="text-sm text-muted">
-                          Tap fragments below to build the sentence
-                        </span>
-                      )}
-                      {pickedIndexes.map((index, position) => (
-                        <span
-                          className="rounded-md bg-accent px-3 py-1.5 font-bold text-white"
-                          key={`${index}-${position}`}
-                        >
-                          {assignment.fragments![index].text}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-center gap-2">
-                      {assignment.fragments!.map((fragment, index) => (
-                        <button
-                          className="rounded-md border border-line bg-white px-3 py-1.5 font-bold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
-                          disabled={
-                            pickedIndexes.includes(index) || rebuildSubmitting || rebuildSubmitted
-                          }
-                          key={index}
-                          onClick={() => pickFragment(index)}
-                          type="button"
-                        >
-                          {fragment.text}
-                        </button>
-                      ))}
-                    </div>
-
-                    {error && (
-                      <p className="text-sm font-bold text-danger" role="alert">
-                        {error}
-                      </p>
-                    )}
-
-                    {!rebuildSubmitted && (
-                      <div className="flex flex-wrap items-center justify-center gap-3">
-                        <button
-                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-45"
-                          disabled={pickedIndexes.length === 0 || rebuildSubmitting}
-                          onClick={unpickLast}
-                          type="button"
-                        >
-                          <RotateCcw className="size-4" aria-hidden="true" />
-                          Undo
-                        </button>
-                        <ActionButton
-                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45"
-                          disabled={pickedIndexes.length !== assignment.fragments!.length}
-                          onClick={() => void submitSentenceRebuild()}
-                          pending={rebuildSubmitting}
-                          pendingLabel="Submitting"
-                          type="button"
-                        >
-                          <Send className="size-4" aria-hidden="true" />
-                          Submit
-                        </ActionButton>
-                      </div>
-                    )}
-
-                    {rebuildSubmitted && (
-                      <div className="mx-auto grid w-full max-w-md gap-4 rounded-lg border border-line bg-surface p-5">
-                        <div className="flex items-center justify-center gap-2 font-black text-emerald-700 dark:text-emerald-300">
-                          <Check className="size-5" aria-hidden="true" />
-                          Answer submitted
-                        </div>
-                        {rebuildScore !== null && (
-                          <p className="text-sm font-bold text-muted">
-                            Order match: {rebuildScore === 1 ? 'Correct' : 'Not quite'}
-                          </p>
-                        )}
-                        <button
-                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark"
-                          onClick={() => void nextWord()}
-                          type="button"
-                        >
-                          Next word <ArrowRight className="size-4" aria-hidden="true" />
-                        </button>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <div className="flex flex-wrap items-center justify-center gap-3">
-                        <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
-                          {assignment.sourceLanguage} to {assignment.responseLanguage}
-                        </span>
-                        <SkipAssignmentButton
-                          disabled={!canSkipAssignment}
-                          loading={isLoadingNext}
-                          onClick={() => void nextWord()}
-                        />
-                      </div>
-                      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-1 text-xs font-extrabold text-muted">
-                          <span aria-hidden="true">
-                            {assignment.direction === 'DIALECT_TO_ENGLISH' ? '🔊' : '💬'}
-                          </span>
-                          {assignment.direction === 'DIALECT_TO_ENGLISH'
-                            ? `Listen in ${assignment.sourceLanguage}`
-                            : `Shown in ${assignment.sourceLanguage}`}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
-                        <h2 className="break-words text-4xl font-black md:text-6xl">
-                          {assignment.promptText}
-                        </h2>
-                        {assignment.sourceAudioUrl && (
-                          <button
-                            aria-label={
-                              sourcePlaying ? 'Pause dialect recording' : 'Play dialect recording'
-                            }
-                            className="grid size-11 shrink-0 place-items-center rounded-full bg-accent text-white shadow-[0_8px_20px_rgba(126,34,206,0.3)] transition-transform hover:bg-accent-dark active:scale-95"
-                            onClick={toggleSourcePlayback}
-                            type="button"
-                          >
-                            {sourcePlaying ? (
-                              <Pause className="size-5 fill-current" aria-hidden="true" />
-                            ) : (
-                              <Play className="ml-0.5 size-5 fill-current" aria-hidden="true" />
-                            )}
-                          </button>
-                        )}
-                      </div>
-                      {assignment.sourceAudioUrl && (
-                        <audio
-                          onEnded={() => setSourcePlaying(false)}
-                          onPause={() => setSourcePlaying(false)}
-                          onPlay={() => setSourcePlaying(true)}
-                          ref={sourceAudioRef}
-                          src={assignment.sourceAudioUrl}
-                        />
-                      )}
-                    </div>
-
-                    <div className="mx-auto grid w-full max-w-md gap-2 text-left">
-                      <label
-                        className="flex items-center gap-1.5 text-sm font-extrabold"
-                        htmlFor="training-response"
-                      >
-                        <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-[11px] font-black text-accent">
-                          1
-                        </span>
-                        Type it in {assignment.responseLanguage}
-                      </label>
-                      <RadixPopover.Root
-                        open={suggestionsOpen && suggestions.length > 0}
-                        onOpenChange={setSuggestionsOpen}
-                      >
-                        <RadixPopover.Anchor asChild>
-                          <div className="relative">
-                            <input
-                              autoComplete="off"
-                              className="min-h-12 w-full rounded-lg border border-line bg-surface px-4 text-base font-bold outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft disabled:opacity-60"
-                              disabled={
-                                recorderState === 'submitting' || recorderState === 'submitted'
-                              }
-                              id="training-response"
-                              onChange={(event) => {
-                                setResponseText(event.target.value);
-                                setSuggestionsOpen(true);
-                              }}
-                              onFocus={() => setSuggestionsOpen(true)}
-                              placeholder={`Type the ${assignment.responseLanguage} spelling`}
-                              ref={responseInputRef}
-                              value={responseText}
-                            />
-                            {assignment.dialectKeyboardLayout && (
-                              <button
-                                aria-label={
-                                  keyboardOpen ? 'Hide dialect keyboard' : 'Show dialect keyboard'
-                                }
-                                aria-pressed={keyboardOpen}
-                                className={`absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md transition-colors ${
-                                  keyboardOpen
-                                    ? 'bg-accent-soft text-accent'
-                                    : 'text-muted hover:bg-surface-muted'
-                                }`}
-                                disabled={
-                                  recorderState === 'submitting' || recorderState === 'submitted'
-                                }
-                                onClick={() => setKeyboardOpen((current) => !current)}
-                                type="button"
-                              >
-                                <Keyboard className="size-4" aria-hidden="true" />
-                              </button>
-                            )}
-                          </div>
-                        </RadixPopover.Anchor>
-                        <RadixPopover.Portal container={portalContainer}>
-                          <RadixPopover.Content
-                            align="start"
-                            className="z-60 w-[min(var(--container-md),90vw)] rounded-lg border border-line bg-surface p-1.5 shadow-[0_12px_32px_rgba(27,31,27,0.15)]"
-                            onOpenAutoFocus={(event) => event.preventDefault()}
-                            sideOffset={6}
-                          >
-                            <ul className="grid gap-0.5">
-                              {suggestions.map((suggestion) => (
-                                <li key={`${suggestion.source}-${suggestion.text}`}>
-                                  <button
-                                    className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left font-bold hover:bg-surface-muted"
-                                    onClick={() => {
-                                      setResponseText(suggestion.text);
-                                      setSuggestionsOpen(false);
-                                      responseInputRef.current?.focus();
-                                    }}
-                                    type="button"
-                                  >
-                                    <span>{suggestion.text}</span>
-                                    <span
-                                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-extrabold ${
-                                        suggestion.source === 'community'
-                                          ? 'bg-emerald-100 text-emerald-700'
-                                          : 'bg-accent-soft text-accent'
-                                      }`}
-                                    >
-                                      {suggestion.source === 'community' ? 'Community' : 'AI'}
-                                    </span>
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          </RadixPopover.Content>
-                        </RadixPopover.Portal>
-                      </RadixPopover.Root>
-
-                      {keyboardOpen && assignment.dialectKeyboardLayout && (
-                        <div className="flex flex-wrap gap-1.5 rounded-lg border border-line bg-surface p-2">
-                          {assignment.dialectKeyboardLayout
-                            .split(/\s+/)
-                            .filter(Boolean)
-                            .map((char) => (
-                              <button
-                                className="grid min-w-9 place-items-center rounded-md border border-line bg-white px-2 py-1.5 text-base font-bold hover:bg-surface-muted"
-                                key={char}
-                                onClick={() => insertCharacter(char)}
-                                type="button"
-                              >
-                                {char}
-                              </button>
-                            ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mx-auto grid w-full max-w-md justify-items-center gap-1 text-center">
-                      <p className="flex items-center gap-1.5 text-sm font-extrabold">
-                        <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-[11px] font-black text-accent">
-                          2
-                        </span>
-                        Say it in{' '}
-                        {assignment.direction === 'DIALECT_TO_ENGLISH'
-                          ? assignment.sourceLanguage
-                          : assignment.responseLanguage}
-                      </p>
-                      {assignment.direction === 'DIALECT_TO_ENGLISH' && (
-                        <p className="text-xs font-bold text-muted">
-                          Your own {assignment.sourceLanguage} pronunciation of this word -- not the
-                          English you typed above.
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="relative mx-auto grid size-[248px] place-items-center md:size-[288px]">
-                      <svg
-                        aria-hidden="true"
-                        className="absolute inset-0 size-full -rotate-90"
-                        viewBox="0 0 240 240"
-                      >
-                        <circle
-                          cx="120"
-                          cy="120"
-                          fill="none"
-                          r={RING_RADIUS}
-                          stroke="var(--line)"
-                          strokeWidth="12"
-                        />
-                        <circle
-                          cx="120"
-                          cy="120"
-                          fill="none"
-                          r={RING_RADIUS}
-                          stroke={ringColor}
-                          strokeDasharray={RING_CIRCUMFERENCE}
-                          strokeDashoffset={RING_CIRCUMFERENCE * (1 - progress)}
-                          strokeLinecap="round"
-                          strokeWidth="12"
-                          className="transition-[stroke,stroke-dashoffset] duration-100"
-                        />
-                      </svg>
-                      <button
-                        aria-label={recorderButtonLabel(recorderState)}
-                        className="relative z-[1] grid size-36 place-items-center rounded-full bg-accent text-white shadow-[0_14px_40px_rgba(126,34,206,0.3)] transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 md:size-40"
-                        disabled={recorderState === 'submitting' || recorderState === 'submitted'}
-                        onClick={() => {
-                          if (recorderState === 'ready') void startRecording();
-                          else if (recorderState === 'recording') stopRecording();
-                          else togglePlayback();
-                        }}
-                        type="button"
-                      >
-                        {recorderState === 'recording' ? (
-                          <Square className="size-12 fill-current" aria-hidden="true" />
-                        ) : recorderState === 'playing' ? (
-                          <Pause className="size-12 fill-current" aria-hidden="true" />
-                        ) : recorderState === 'recorded' || recorderState === 'paused' ? (
-                          <Play className="ml-1 size-12 fill-current" aria-hidden="true" />
-                        ) : recorderState === 'submitting' ? (
-                          <LoaderCircle className="size-12 animate-spin" aria-hidden="true" />
-                        ) : recorderState === 'submitted' ? (
-                          <Check className="size-14" aria-hidden="true" />
-                        ) : (
-                          <Mic className="size-14" aria-hidden="true" />
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-3 text-sm font-bold">
-                      <span>
-                        {formatDuration(elapsedMs)} / {formatDuration(maxRecordingMs)}
-                      </span>
-                      <span aria-hidden="true" className="text-line">
-                        |
-                      </span>
-                      <span className="inline-flex items-center gap-2">
-                        <span
-                          className="size-2.5 rounded-full"
-                          style={{ backgroundColor: ringColor }}
-                        />
-                        {noiseLabel(noiseRating)}
-                      </span>
-                    </div>
-
-                    {audioUrl && (
-                      <audio
-                        onEnded={() => setRecorderState('recorded')}
-                        ref={audioRef}
-                        src={audioUrl}
-                      />
-                    )}
-                    {error && (
-                      <div className="grid justify-items-center gap-1">
-                        <p className="text-sm font-bold text-danger" role="alert">
-                          {error}
-                        </p>
-                        {error === MIC_PERMISSION_ERROR && (
-                          <button
-                            className="text-sm font-extrabold text-accent underline hover:no-underline"
-                            onClick={() => void startRecording()}
-                            type="button"
-                          >
-                            Click here to give permission
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {(recorderState === 'recorded' ||
-                      recorderState === 'paused' ||
-                      recorderState === 'playing') && (
-                      <div className="flex flex-wrap items-center justify-center gap-3">
-                        <button
-                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted"
-                          onClick={clearRecording}
-                          type="button"
-                        >
-                          <Trash2 className="size-4" aria-hidden="true" />
-                          Delete
-                        </button>
-                        <button
-                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:opacity-45"
-                          disabled={!responseText.trim()}
-                          onClick={() => void saveRecording()}
-                          type="button"
-                        >
-                          <Send className="size-4" aria-hidden="true" />
-                          Submit
-                        </button>
-                      </div>
-                    )}
-
-                    {recorderState === 'submitted' && (
-                      <div className="mx-auto grid w-full max-w-md gap-4 rounded-lg border border-line bg-surface p-5">
-                        <div className="flex items-center justify-center gap-2 font-black text-emerald-700 dark:text-emerald-300">
-                          <Check className="size-5" aria-hidden="true" />
-                          Recording submitted
-                        </div>
-                        {score !== null && (
-                          <p className="text-sm font-bold text-muted">
-                            Validation match: {score === 1 ? 'Confirmed' : 'Needs review'}
-                          </p>
-                        )}
-                        <button
-                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark"
-                          onClick={() => void nextWord()}
-                          type="button"
-                        >
-                          Next word <ArrowRight className="size-4" aria-hidden="true" />
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </section>
-            )}
-
-            {step === 'unavailable' && (
-              <section className="mx-auto grid w-full max-w-md gap-4 text-center">
-                <span className="mx-auto grid size-14 place-items-center rounded-full bg-accent-soft text-accent">
-                  <Clock3 className="size-7" aria-hidden="true" />
-                </span>
-                <h2 className="text-2xl font-black">No words available right now</h2>
-                <p className="leading-relaxed text-muted">
-                  The word dictionary is temporarily empty for your dialect. Check back later -- new
-                  words are added regularly.
-                </p>
-                <button
-                  className="mx-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted"
+                  aria-label="Close training"
+                  className="grid size-10 place-items-center rounded-lg border border-line bg-surface hover:bg-surface-muted"
                   onClick={() => void closeDialog()}
                   type="button"
                 >
-                  Close
+                  <X className="size-5" aria-hidden="true" />
                 </button>
-              </section>
-            )}
-          </main>
-        </RadixDialog.Content>
-      </RadixDialog.Portal>
-    </RadixDialog.Root>
+              </div>
+            </header>
+
+            <main className="mx-auto grid min-h-[calc(100dvh-4rem)] w-full max-w-5xl content-center px-4 py-8 md:px-6">
+              {step === 'select' && (
+                <section className="mx-auto grid w-full max-w-xl gap-6">
+                  <div>
+                    <p className="text-sm font-extrabold text-accent">Select task</p>
+                    <h2 className="mt-1 text-3xl font-black">Choose your training task</h2>
+                  </div>
+                  <button
+                    className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-lg border-2 border-accent bg-surface p-5 text-left shadow-[0_12px_32px_rgba(88,28,135,0.10)]"
+                    onClick={() => setStep('terms')}
+                    type="button"
+                  >
+                    <span className="grid size-12 place-items-center rounded-lg bg-accent-soft text-accent">
+                      <BookOpenCheck className="size-6" aria-hidden="true" />
+                    </span>
+                    <span>
+                      <span className="block text-lg font-black">Word training</span>
+                      <span className="mt-1 block text-sm leading-relaxed text-muted">
+                        Translation, pronunciation, and reverse validation.
+                      </span>
+                    </span>
+                    <ArrowRight className="size-5 text-accent" aria-hidden="true" />
+                  </button>
+                </section>
+              )}
+
+              {step === 'terms' && (
+                <section className="mx-auto grid w-full max-w-2xl gap-6 rounded-lg border border-line bg-surface p-5 md:p-7">
+                  <div>
+                    <p className="text-sm font-extrabold text-accent">Voice data agreement</p>
+                    <h2 className="mt-1 text-2xl font-black">Consent to AI training use</h2>
+                  </div>
+                  <div className="grid gap-3 text-sm leading-7 text-muted md:text-base">
+                    <p>
+                      You confirm that the recordings are your voice and that you are at least 18
+                      years old.
+                    </p>
+                    <p>
+                      You grant Dialect Library permission to store, process, analyze, license, and
+                      use your recordings, typed translations, and derived data to develop,
+                      evaluate, and improve speech and artificial intelligence systems.
+                    </p>
+                    <p>
+                      This permission is worldwide, perpetual, and may include sharing de-identified
+                      training data with approved research or commercial partners. Your account
+                      identity will not be included in licensed audio datasets.
+                    </p>
+                  </div>
+                  <label
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+                    htmlFor="voice-consent"
+                  >
+                    <input
+                      checked={accepted}
+                      className="mt-0.5 size-5 accent-accent"
+                      id="voice-consent"
+                      onChange={(event) => setAccepted(event.target.checked)}
+                      type="checkbox"
+                    />
+                    <span className="text-sm font-bold leading-6">
+                      I have read and agree to the voice data agreement and the{' '}
+                      <a className="text-accent underline" href="/terms" target="_blank">
+                        Terms of Use
+                      </a>
+                      .
+                    </span>
+                  </label>
+                  {error && (
+                    <p className="text-sm font-bold text-danger" role="alert">
+                      {error}
+                    </p>
+                  )}
+                  <button
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45"
+                    disabled={!accepted || isStarting}
+                    onClick={() => void beginSession()}
+                    type="button"
+                  >
+                    {isStarting ? (
+                      <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Mic className="size-5" aria-hidden="true" />
+                    )}
+                    {isStarting ? 'Starting session' : 'Agree and start'}
+                  </button>
+                </section>
+              )}
+
+              {step === 'loading' && <LoadingState label="Preparing your first word" />}
+
+              {step === 'training' && (
+                <section className="mx-auto grid w-full max-w-3xl gap-6 text-center">
+                  {!assignment ? (
+                    <LoadingState label="Generating next word" />
+                  ) : assignment.direction === 'SENTENCE_REBUILD' ? (
+                    <>
+                      <div>
+                        <div className="flex flex-wrap items-center justify-center gap-3">
+                          <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
+                            {assignment.responseLanguage} sentence rebuild
+                          </span>
+                          <SkipAssignmentButton
+                            disabled={!canSkipAssignment}
+                            loading={isLoadingNext}
+                            onClick={() => void nextWord()}
+                          />
+                        </div>
+                        <p className="mt-4 text-sm font-bold text-muted">
+                          Tap the fragments in the correct order
+                        </p>
+                      </div>
+
+                      <div className="mx-auto flex min-h-16 w-full max-w-xl flex-wrap items-center justify-center gap-2 rounded-lg border-2 border-dashed border-line bg-surface p-4">
+                        {pickedIndexes.length === 0 && (
+                          <span className="text-sm text-muted">
+                            Tap fragments below to build the sentence
+                          </span>
+                        )}
+                        {pickedIndexes.map((index, position) => (
+                          <span
+                            className="rounded-md bg-accent px-3 py-1.5 font-bold text-white"
+                            key={`${index}-${position}`}
+                          >
+                            {assignment.fragments![index].text}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-center gap-2">
+                        {assignment.fragments!.map((fragment, index) => (
+                          <button
+                            className="rounded-md border border-line bg-white px-3 py-1.5 font-bold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
+                            disabled={
+                              pickedIndexes.includes(index) || rebuildSubmitting || rebuildSubmitted
+                            }
+                            key={index}
+                            onClick={() => pickFragment(index)}
+                            type="button"
+                          >
+                            {fragment.text}
+                          </button>
+                        ))}
+                      </div>
+
+                      {error && (
+                        <p className="text-sm font-bold text-danger" role="alert">
+                          {error}
+                        </p>
+                      )}
+
+                      {!rebuildSubmitted && (
+                        <div className="flex flex-wrap items-center justify-center gap-3">
+                          <button
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-45"
+                            disabled={pickedIndexes.length === 0 || rebuildSubmitting}
+                            onClick={unpickLast}
+                            type="button"
+                          >
+                            <RotateCcw className="size-4" aria-hidden="true" />
+                            Undo
+                          </button>
+                          <ActionButton
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45"
+                            disabled={pickedIndexes.length !== assignment.fragments!.length}
+                            onClick={() => void submitSentenceRebuild()}
+                            pending={rebuildSubmitting}
+                            pendingLabel="Submitting"
+                            type="button"
+                          >
+                            <Send className="size-4" aria-hidden="true" />
+                            Submit
+                          </ActionButton>
+                        </div>
+                      )}
+
+                      {rebuildSubmitted && (
+                        <div className="mx-auto grid w-full max-w-md gap-4 rounded-lg border border-line bg-surface p-5">
+                          <div className="flex items-center justify-center gap-2 font-black text-emerald-700 dark:text-emerald-300">
+                            <Check className="size-5" aria-hidden="true" />
+                            Answer submitted
+                          </div>
+                          {rebuildScore !== null && (
+                            <p className="text-sm font-bold text-muted">
+                              Order match: {rebuildScore === 1 ? 'Correct' : 'Not quite'}
+                            </p>
+                          )}
+                          <button
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark"
+                            onClick={() => void nextWord()}
+                            type="button"
+                          >
+                            Next word <ArrowRight className="size-4" aria-hidden="true" />
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <div className="flex flex-wrap items-center justify-center gap-3">
+                          <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
+                            {assignment.sourceLanguage} to {assignment.responseLanguage}
+                          </span>
+                          <SkipAssignmentButton
+                            disabled={!canSkipAssignment}
+                            loading={isLoadingNext}
+                            onClick={() => void nextWord()}
+                          />
+                        </div>
+                        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-1 text-xs font-extrabold text-muted">
+                            <span aria-hidden="true">
+                              {assignment.direction === 'DIALECT_TO_ENGLISH' ? '🔊' : '💬'}
+                            </span>
+                            {assignment.direction === 'DIALECT_TO_ENGLISH'
+                              ? `Listen in ${assignment.sourceLanguage}`
+                              : `Shown in ${assignment.sourceLanguage}`}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
+                          <h2 className="break-words text-4xl font-black md:text-6xl">
+                            {assignment.promptText}
+                          </h2>
+                          {assignment.sourceAudioUrl && (
+                            <button
+                              aria-label={
+                                sourcePlaying ? 'Pause dialect recording' : 'Play dialect recording'
+                              }
+                              className="grid size-11 shrink-0 place-items-center rounded-full bg-accent text-white shadow-[0_8px_20px_rgba(126,34,206,0.3)] transition-transform hover:bg-accent-dark active:scale-95"
+                              onClick={toggleSourcePlayback}
+                              type="button"
+                            >
+                              {sourcePlaying ? (
+                                <Pause className="size-5 fill-current" aria-hidden="true" />
+                              ) : (
+                                <Play className="ml-0.5 size-5 fill-current" aria-hidden="true" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                        {assignment.sourceAudioUrl && (
+                          <audio
+                            onEnded={() => setSourcePlaying(false)}
+                            onPause={() => setSourcePlaying(false)}
+                            onPlay={() => setSourcePlaying(true)}
+                            ref={sourceAudioRef}
+                            src={assignment.sourceAudioUrl}
+                          />
+                        )}
+                      </div>
+
+                      <div className="mx-auto grid w-full max-w-md gap-2 text-left">
+                        <label
+                          className="flex items-center gap-1.5 text-sm font-extrabold"
+                          htmlFor="training-response"
+                        >
+                          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-[11px] font-black text-accent">
+                            1
+                          </span>
+                          Type it in {assignment.responseLanguage}
+                        </label>
+                        <RadixPopover.Root
+                          open={suggestionsOpen && suggestions.length > 0}
+                          onOpenChange={setSuggestionsOpen}
+                        >
+                          <RadixPopover.Anchor asChild>
+                            <div className="relative">
+                              <input
+                                autoComplete="off"
+                                className="min-h-12 w-full rounded-lg border border-line bg-surface px-4 text-base font-bold outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft disabled:opacity-60"
+                                disabled={
+                                  recorderState === 'submitting' || recorderState === 'submitted'
+                                }
+                                id="training-response"
+                                onChange={(event) => {
+                                  setResponseText(event.target.value);
+                                  setSuggestionsOpen(true);
+                                }}
+                                onFocus={() => setSuggestionsOpen(true)}
+                                placeholder={`Type the ${assignment.responseLanguage} spelling`}
+                                ref={responseInputRef}
+                                value={responseText}
+                              />
+                              {assignment.dialectKeyboardLayout && (
+                                <button
+                                  aria-label={
+                                    keyboardOpen ? 'Hide dialect keyboard' : 'Show dialect keyboard'
+                                  }
+                                  aria-pressed={keyboardOpen}
+                                  className={`absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md transition-colors ${
+                                    keyboardOpen
+                                      ? 'bg-accent-soft text-accent'
+                                      : 'text-muted hover:bg-surface-muted'
+                                  }`}
+                                  disabled={
+                                    recorderState === 'submitting' || recorderState === 'submitted'
+                                  }
+                                  onClick={() => setKeyboardOpen((current) => !current)}
+                                  type="button"
+                                >
+                                  <Keyboard className="size-4" aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
+                          </RadixPopover.Anchor>
+                          <RadixPopover.Portal container={portalContainer}>
+                            <RadixPopover.Content
+                              align="start"
+                              className="z-60 w-[min(var(--container-md),90vw)] rounded-lg border border-line bg-surface p-1.5 shadow-[0_12px_32px_rgba(27,31,27,0.15)]"
+                              onOpenAutoFocus={(event) => event.preventDefault()}
+                              sideOffset={6}
+                            >
+                              <ul className="grid gap-0.5">
+                                {suggestions.map((suggestion) => (
+                                  <li key={`${suggestion.source}-${suggestion.text}`}>
+                                    <button
+                                      className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left font-bold hover:bg-surface-muted"
+                                      onClick={() => {
+                                        setResponseText(suggestion.text);
+                                        setSuggestionsOpen(false);
+                                        responseInputRef.current?.focus();
+                                      }}
+                                      type="button"
+                                    >
+                                      <span>{suggestion.text}</span>
+                                      <span
+                                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-extrabold ${
+                                          suggestion.source === 'community'
+                                            ? 'bg-emerald-100 text-emerald-700'
+                                            : 'bg-accent-soft text-accent'
+                                        }`}
+                                      >
+                                        {suggestion.source === 'community' ? 'Community' : 'AI'}
+                                      </span>
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </RadixPopover.Content>
+                          </RadixPopover.Portal>
+                        </RadixPopover.Root>
+
+                        {keyboardOpen && assignment.dialectKeyboardLayout && (
+                          <div className="flex flex-wrap gap-1.5 rounded-lg border border-line bg-surface p-2">
+                            {assignment.dialectKeyboardLayout
+                              .split(/\s+/)
+                              .filter(Boolean)
+                              .map((char) => (
+                                <button
+                                  className="grid min-w-9 place-items-center rounded-md border border-line bg-white px-2 py-1.5 text-base font-bold hover:bg-surface-muted"
+                                  key={char}
+                                  onClick={() => insertCharacter(char)}
+                                  type="button"
+                                >
+                                  {char}
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mx-auto grid w-full max-w-md justify-items-center gap-1 text-center">
+                        <p className="flex items-center gap-1.5 text-sm font-extrabold">
+                          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-[11px] font-black text-accent">
+                            2
+                          </span>
+                          Say it in{' '}
+                          {assignment.direction === 'DIALECT_TO_ENGLISH'
+                            ? assignment.sourceLanguage
+                            : assignment.responseLanguage}
+                        </p>
+                        {assignment.direction === 'DIALECT_TO_ENGLISH' && (
+                          <p className="text-xs font-bold text-muted">
+                            Your own {assignment.sourceLanguage} pronunciation of this word -- not
+                            the English you typed above.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="relative mx-auto grid size-[248px] place-items-center md:size-[288px]">
+                        <svg
+                          aria-hidden="true"
+                          className="absolute inset-0 size-full -rotate-90"
+                          viewBox="0 0 240 240"
+                        >
+                          <circle
+                            cx="120"
+                            cy="120"
+                            fill="none"
+                            r={RING_RADIUS}
+                            stroke="var(--line)"
+                            strokeWidth="12"
+                          />
+                          <circle
+                            cx="120"
+                            cy="120"
+                            fill="none"
+                            r={RING_RADIUS}
+                            stroke={ringColor}
+                            strokeDasharray={RING_CIRCUMFERENCE}
+                            strokeDashoffset={RING_CIRCUMFERENCE * (1 - progress)}
+                            strokeLinecap="round"
+                            strokeWidth="12"
+                            className="transition-[stroke,stroke-dashoffset] duration-100"
+                          />
+                        </svg>
+                        <button
+                          aria-label={recorderButtonLabel(recorderState)}
+                          className="relative z-[1] grid size-36 place-items-center rounded-full bg-accent text-white shadow-[0_14px_40px_rgba(126,34,206,0.3)] transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 md:size-40"
+                          disabled={recorderState === 'submitting' || recorderState === 'submitted'}
+                          onClick={() => {
+                            if (recorderState === 'ready') void startRecording();
+                            else if (recorderState === 'recording') stopRecording();
+                            else togglePlayback();
+                          }}
+                          type="button"
+                        >
+                          {recorderState === 'recording' ? (
+                            <Square className="size-12 fill-current" aria-hidden="true" />
+                          ) : recorderState === 'playing' ? (
+                            <Pause className="size-12 fill-current" aria-hidden="true" />
+                          ) : recorderState === 'recorded' || recorderState === 'paused' ? (
+                            <Play className="ml-1 size-12 fill-current" aria-hidden="true" />
+                          ) : recorderState === 'submitting' ? (
+                            <LoaderCircle className="size-12 animate-spin" aria-hidden="true" />
+                          ) : recorderState === 'submitted' ? (
+                            <Check className="size-14" aria-hidden="true" />
+                          ) : (
+                            <Mic className="size-14" aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-center gap-3 text-sm font-bold">
+                        <span>
+                          {formatDuration(elapsedMs)} / {formatDuration(maxRecordingMs)}
+                        </span>
+                        <span aria-hidden="true" className="text-line">
+                          |
+                        </span>
+                        <span className="inline-flex items-center gap-2">
+                          <span
+                            className="size-2.5 rounded-full"
+                            style={{ backgroundColor: ringColor }}
+                          />
+                          {noiseLabel(noiseRating)}
+                        </span>
+                      </div>
+
+                      {audioUrl && (
+                        <audio
+                          onEnded={() => setRecorderState('recorded')}
+                          ref={audioRef}
+                          src={audioUrl}
+                        />
+                      )}
+                      {error && (
+                        <div className="grid justify-items-center gap-1">
+                          <p className="text-sm font-bold text-danger" role="alert">
+                            {error}
+                          </p>
+                          {error === MIC_PERMISSION_ERROR && (
+                            <button
+                              className="text-sm font-extrabold text-accent underline hover:no-underline"
+                              onClick={() => void startRecording()}
+                              type="button"
+                            >
+                              Click here to give permission
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {(recorderState === 'recorded' ||
+                        recorderState === 'paused' ||
+                        recorderState === 'playing') && (
+                        <div className="flex flex-wrap items-center justify-center gap-3">
+                          <button
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted"
+                            onClick={clearRecording}
+                            type="button"
+                          >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                            Delete
+                          </button>
+                          <button
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:opacity-45"
+                            disabled={!responseText.trim()}
+                            onClick={() => void saveRecording()}
+                            type="button"
+                          >
+                            <Send className="size-4" aria-hidden="true" />
+                            Submit
+                          </button>
+                        </div>
+                      )}
+
+                      {recorderState === 'submitted' && (
+                        <div className="mx-auto grid w-full max-w-md gap-4 rounded-lg border border-line bg-surface p-5">
+                          <div className="flex items-center justify-center gap-2 font-black text-emerald-700 dark:text-emerald-300">
+                            <Check className="size-5" aria-hidden="true" />
+                            Recording submitted
+                          </div>
+                          {score !== null && (
+                            <p className="text-sm font-bold text-muted">
+                              Validation match: {score === 1 ? 'Confirmed' : 'Needs review'}
+                            </p>
+                          )}
+                          <button
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark"
+                            onClick={() => void nextWord()}
+                            type="button"
+                          >
+                            Next word <ArrowRight className="size-4" aria-hidden="true" />
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
+              )}
+
+              {step === 'unavailable' && (
+                <section className="mx-auto grid w-full max-w-md gap-4 text-center">
+                  <span className="mx-auto grid size-14 place-items-center rounded-full bg-accent-soft text-accent">
+                    <Clock3 className="size-7" aria-hidden="true" />
+                  </span>
+                  <h2 className="text-2xl font-black">No words available right now</h2>
+                  <p className="leading-relaxed text-muted">
+                    The word dictionary is temporarily empty for your dialect. Check back later --
+                    new words are added regularly.
+                  </p>
+                  <button
+                    className="mx-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted"
+                    onClick={() => void closeDialog()}
+                    type="button"
+                  >
+                    Close
+                  </button>
+                </section>
+              )}
+            </main>
+          </RadixDialog.Content>
+        </RadixDialog.Portal>
+      </RadixDialog.Root>
+      <QracDialog
+        onEndSession={() => void handleQracEndSession()}
+        onSigned={() => void handleQracSigned()}
+        open={qracOpen}
+        sessionId={session?.sessionId ?? null}
+      />
+    </>
   );
 }
 

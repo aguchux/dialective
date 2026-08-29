@@ -97,6 +97,23 @@ describe('PlatformSettingsService submission rate limit settings', () => {
   });
 });
 
+describe('PlatformSettingsService QRAC settings', () => {
+  it('isQracEnabled reflects the row value, defaulting false per the schema default', async () => {
+    const { service } = setup({ qracEnabled: false });
+    await expect(service.isQracEnabled()).resolves.toBe(false);
+  });
+
+  it('isQracEnabled returns true once an admin turns the toggle on', async () => {
+    const { service } = setup({ qracEnabled: true });
+    await expect(service.isQracEnabled()).resolves.toBe(true);
+  });
+
+  it('getQracIntervalMinutes reflects the admin-configured value', async () => {
+    const { service } = setup({ qracIntervalMinutes: 45 });
+    await expect(service.getQracIntervalMinutes()).resolves.toBe(45);
+  });
+});
+
 describe('PlatformSettingsService.isSpeechExpressionEnabled', () => {
   it('returns false by default', async () => {
     const { service } = setup({ speechExpressionEnabled: false });

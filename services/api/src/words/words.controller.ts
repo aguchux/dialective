@@ -49,6 +49,11 @@ export class WordsController {
     return this.words.endSession(req.user.sub, sessionId);
   }
 
+  @Post('sessions/:sessionId/qrac')
+  signQrac(@Req() req: AuthenticatedRequest, @Param('sessionId') sessionId: string) {
+    return this.words.signQrac(req.user.sub, sessionId);
+  }
+
   @Get('sessions/:sessionId/next')
   nextAssignment(@Req() req: AuthenticatedRequest, @Param('sessionId') sessionId: string) {
     return this.words.nextAssignment(req.user.sub, sessionId);

@@ -5,13 +5,7 @@ import { getCurrentSession } from '@/lib/client-session';
 import { notifyAuthMaintenance } from '@/lib/auth-maintenance-signal';
 
 export type KycStatus =
-  | 'NOT_STARTED'
-  | 'IN_PROGRESS'
-  | 'IN_REVIEW'
-  | 'APPROVED'
-  | 'DECLINED'
-  | 'ABANDONED'
-  | 'EXPIRED';
+  'NOT_STARTED' | 'IN_PROGRESS' | 'IN_REVIEW' | 'APPROVED' | 'DECLINED' | 'ABANDONED' | 'EXPIRED';
 
 export interface PublicUser {
   id: string;
@@ -252,6 +246,20 @@ export interface ReferralSettingsInput {
 export interface ReferralInviteInput {
   firstName: string;
   email: string;
+}
+
+export interface ReferralInvitationPage {
+  items: {
+    id: string;
+    firstName: string | null;
+    email: string;
+    createdAt: string;
+    status: 'INVITED' | 'JOINED';
+  }[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 }
 
 export interface ReferralSummary {
@@ -1054,6 +1062,8 @@ export interface PlatformSettings {
   keyboardLayoutMaxLength: number;
   submissionRateLimitEnabled: boolean;
   submissionRateLimitPerHour: number;
+  qracEnabled: boolean;
+  qracIntervalMinutes: number;
   qualityGateEnabled: boolean;
   qualityWeightConsensus: string;
   qualityWeightNoise: string;
@@ -1151,6 +1161,8 @@ export interface PlatformSettingsInput {
   keyboardLayoutMaxLength?: number;
   submissionRateLimitEnabled?: boolean;
   submissionRateLimitPerHour?: number;
+  qracEnabled?: boolean;
+  qracIntervalMinutes?: number;
   qualityGateEnabled?: boolean;
   qualityWeightConsensus?: number;
   qualityWeightNoise?: number;
@@ -1710,6 +1722,8 @@ export interface ApiErrorShape {
   path?: string;
   timestamp?: string;
   requiredCourses?: IncompleteRequiredCourse[];
+  qracRequired?: boolean;
+  qracChecklist?: string[];
 }
 
 function normalizeErrorMessage(error: unknown, fallback: string): string {
@@ -1798,6 +1812,7 @@ export const dialectivaApi = createApi({
     'PayoutAccounts',
     'Kyc',
     'AdminSettlement',
+    'ReferralInvites',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -1823,6 +1838,14 @@ export const dialectivaApi = createApi({
         method: 'POST',
         body,
       }),
+      invalidatesTags: ['ReferralInvites'],
+    }),
+    getReferralInvitations: builder.query<
+      ReferralInvitationPage,
+      { page?: number; pageSize?: number } | void
+    >({
+      query: (params) => ({ url: '/wallet/referrals/invitations', params: params ?? undefined }),
+      providesTags: ['ReferralInvites'],
     }),
     getCountries: builder.query<Country[], void>({
       query: () => '/geo/countries',
@@ -2027,6 +2050,9 @@ export const dialectivaApi = createApi({
     endWordTrainingSession: builder.mutation<{ ended: boolean }, string>({
       query: (sessionId) => ({ url: `/words/sessions/${sessionId}/end`, method: 'POST' }),
     }),
+    signQrac: builder.mutation<{ version: string; signedAt: string }, string>({
+      query: (sessionId) => ({ url: `/words/sessions/${sessionId}/qrac`, method: 'POST' }),
+    }),
     createWordRecordingUpload: builder.mutation<
       WordRecordingUpload,
       { assignmentId: string; contentType: string }
@@ -2073,7 +2099,10 @@ export const dialectivaApi = createApi({
     }),
     createFlutterwaveDeposit: builder.mutation<
       | { depositId: string; hostedCheckoutUrl: string }
-      | { depositId: string; virtualAccount: { accountNumber: string; bankName: string; note: string | null } }
+      | {
+          depositId: string;
+          virtualAccount: { accountNumber: string; bankName: string; note: string | null };
+        }
       | { depositId: string; redirectUrl: string | null },
       {
         usdAmount: number;
@@ -2924,14 +2953,16 @@ export const dialectivaApi = createApi({
       query: (params) => ({ url: '/admin-settlement/unsettled', params }),
       providesTags: ['AdminSettlement'],
     }),
-    settleOne: builder.mutation<SettleResult, { kind: RecordingKind; id: string; force?: boolean }>({
-      query: ({ kind, id, force }) => ({
-        url: `/admin-settlement/${kind}/${id}/settle`,
-        method: 'POST',
-        body: { force },
-      }),
-      invalidatesTags: ['AdminSettlement', 'Wallet', 'Tokenomics'],
-    }),
+    settleOne: builder.mutation<SettleResult, { kind: RecordingKind; id: string; force?: boolean }>(
+      {
+        query: ({ kind, id, force }) => ({
+          url: `/admin-settlement/${kind}/${id}/settle`,
+          method: 'POST',
+          body: { force },
+        }),
+        invalidatesTags: ['AdminSettlement', 'Wallet', 'Tokenomics'],
+      },
+    ),
     settleAll: builder.mutation<SettleAllResult, { kind?: RecordingKind; force?: boolean }>({
       query: (body) => ({ url: '/admin-settlement/settle-all', method: 'POST', body }),
       invalidatesTags: ['AdminSettlement', 'Wallet', 'Tokenomics'],
@@ -3251,6 +3282,7 @@ export const dialectivaApi = createApi({
 export const {
   useRegisterMutation,
   useSendReferralInviteMutation,
+  useGetReferralInvitationsQuery,
   useRequestMagicLinkMutation,
   useRequestPasswordResetMutation,
   useResetPasswordMutation,
@@ -3292,6 +3324,7 @@ export const {
   useLazyGetNextWordTrainingAssignmentQuery,
   useLazyGetSpellingSuggestionsQuery,
   useEndWordTrainingSessionMutation,
+  useSignQracMutation,
   useCreateWordRecordingUploadMutation,
   useSubmitWordRecordingMutation,
   useRequestDepositOtpMutation,

@@ -35,6 +35,8 @@ import {
   Plus,
   Play,
   RefreshCw,
+  Send,
+  Share2,
   Shield as ShieldIcon,
   Sparkles,
   Square,
@@ -117,6 +119,7 @@ import {
   useGetMySubmissionsQuery,
   useGetMyWordRecordingsQuery,
   useGetTrainerDashboardQuery,
+  useGetReferralInvitationsQuery,
   useGetWalletActivityQuery,
   useSendReferralInviteMutation,
   useUpdateProfileMutation,
@@ -951,7 +954,10 @@ function TokensView({
             tokenUsdRate={summary.tokenUsdRate}
             localCurrency={summary.localCurrency}
           />
-          <FundTokensDialog tokenUsdRate={summary.tokenUsdRate} localCurrency={summary.localCurrency} />
+          <FundTokensDialog
+            tokenUsdRate={summary.tokenUsdRate}
+            localCurrency={summary.localCurrency}
+          />
         </div>
       </div>
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Token balance summary">
@@ -1888,20 +1894,57 @@ function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; n
   );
 }
 
+const REFERRAL_CAMPAIGNS = [
+  {
+    id: 'earn',
+    title: 'Start Earning Real money on Dialect Library',
+    description: 'Contribute voice in your dialect, help train AI, and earn for approved work.',
+    format: 'Feed post',
+    dimensions: '1080 x 1080',
+    aspectClass: 'aspect-square',
+  },
+  {
+    id: 'contribute',
+    title: 'Contribute voice in your Dialect, get paid',
+    description: 'Record your local dialect and help make AI more useful for every community.',
+    format: 'Story or status',
+    dimensions: '1080 x 1920',
+    aspectClass: 'aspect-[9/16]',
+  },
+  {
+    id: 'community',
+    title: 'Your dialect matters. Join Dialect Library today.',
+    description: 'Help preserve dialect voices while contributing to better AI language tools.',
+    format: 'Link preview',
+    dimensions: '1200 x 630',
+    aspectClass: 'aspect-[1.91/1]',
+  },
+] as const;
+
+type ReferralCampaign = (typeof REFERRAL_CAMPAIGNS)[number];
+
 function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: string }) {
   const [copied, setCopied] = useState(false);
   const [referralLink, setReferralLink] = useState(`/register?ref=${data.referrals.code}`);
+  const [siteOrigin, setSiteOrigin] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteFirstName, setInviteFirstName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [invitationPage, setInvitationPage] = useState(1);
+  const [shareCampaign, setShareCampaign] = useState<ReferralCampaign | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
   const [sendReferralInvite, { isLoading: inviteSending }] = useSendReferralInviteMutation();
+  const { data: invitations, isFetching: invitationsLoading } = useGetReferralInvitationsQuery({
+    page: invitationPage,
+    pageSize: 5,
+  });
 
-  useEffect(
-    () => setReferralLink(`${window.location.origin}/register?ref=${data.referrals.code}`),
-    [data.referrals.code],
-  );
+  useEffect(() => {
+    setSiteOrigin(window.location.origin);
+    setReferralLink(`${window.location.origin}/register?ref=${data.referrals.code}`);
+  }, [data.referrals.code]);
 
   async function copyLink() {
     await navigator.clipboard.writeText(referralLink);
@@ -1922,10 +1965,35 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
       setInviteMessage('Invitation sent successfully.');
       setInviteFirstName('');
       setInviteEmail('');
+      setInvitationPage(1);
       setInviteOpen(false);
     } catch (err) {
       setInviteError(normalizeErrorMessage(err, 'Unable to send invitation right now.'));
     }
+  }
+
+  const campaignLink = shareCampaign
+    ? `${siteOrigin || ''}/invite/${encodeURIComponent(data.referrals.code)}/${shareCampaign.id}`
+    : '';
+
+  async function copyCampaignLink() {
+    if (!campaignLink) return;
+    await navigator.clipboard.writeText(campaignLink);
+    setShareCopied(true);
+    window.setTimeout(() => setShareCopied(false), 1800);
+  }
+
+  function openShare(url: string) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  async function shareNatively() {
+    if (!shareCampaign || !campaignLink || !navigator.share) return;
+    await navigator.share({
+      title: shareCampaign.title,
+      text: shareCampaign.description,
+      url: campaignLink,
+    });
   }
 
   return (
@@ -2048,31 +2116,86 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
       </section>
       <section className="mt-8">
         <SectionTitle
-          title="Recent invitations"
+          title="Invitations"
           subtitle="People invited or registered under your referral network."
         />
-        {data.referrals.recentInvites.length ? (
-          <div className={`${cardClass} divide-y divide-line`}>
-            {data.referrals.recentInvites.map((invite) => (
-              <div className="flex items-center gap-3 p-4" key={invite.id}>
-                <Avatar email={invite.email} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-extrabold">{invite.firstName ?? invite.email}</p>
-                  <p className="truncate text-sm text-muted">{invite.email}</p>
-                  <p className="text-sm text-muted">
-                    {invite.status === 'JOINED' ? 'Joined' : 'Invited'}{' '}
-                    {formatDate(invite.createdAt)}
-                  </p>
-                </div>
-                {invite.status === 'JOINED' ? (
-                  <BadgeCheck className="size-5 shrink-0 text-emerald-600" aria-label="Joined" />
-                ) : (
-                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
-                    Invited
-                  </span>
-                )}
+        {invitationsLoading && !invitations ? (
+          <div className={`${cardClass} p-5 text-sm font-bold text-muted`}>
+            Loading invitations...
+          </div>
+        ) : invitations?.items.length ? (
+          <div className={`${cardClass} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-line bg-surface-muted text-xs font-black uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-4 py-3">Invitee</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {invitations.items.map((invite) => (
+                    <tr key={invite.id}>
+                      <td className="px-4 py-3">
+                        <div className="flex min-w-[210px] items-center gap-3">
+                          <Avatar email={invite.email} />
+                          <div className="min-w-0">
+                            <p className="truncate font-extrabold">
+                              {invite.firstName ?? invite.email}
+                            </p>
+                            <p className="truncate text-xs text-muted">{invite.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={
+                            invite.status === 'JOINED'
+                              ? 'inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-black text-emerald-800'
+                              : 'inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800'
+                          }
+                        >
+                          {invite.status === 'JOINED' ? 'Joined' : 'Invited'}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-muted">
+                        {formatDate(invite.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-sm text-muted">
+              <span>
+                Page {invitations.page} of {invitations.totalPages} ({invitations.total} total)
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  className="inline-flex size-9 items-center justify-center rounded-lg border border-line bg-white disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={invitations.page <= 1 || invitationsLoading}
+                  onClick={() => setInvitationPage((page) => Math.max(1, page - 1))}
+                  title="Previous invitation page"
+                  type="button"
+                >
+                  <ChevronLeft className="size-4" aria-hidden="true" />
+                  <span className="sr-only">Previous invitation page</span>
+                </button>
+                <button
+                  className="inline-flex size-9 items-center justify-center rounded-lg border border-line bg-white disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={invitations.page >= invitations.totalPages || invitationsLoading}
+                  onClick={() =>
+                    setInvitationPage((page) => Math.min(invitations.totalPages, page + 1))
+                  }
+                  title="Next invitation page"
+                  type="button"
+                >
+                  <ChevronRight className="size-4" aria-hidden="true" />
+                  <span className="sr-only">Next invitation page</span>
+                </button>
               </div>
-            ))}
+            </div>
           </div>
         ) : (
           <EmptyPanel
@@ -2083,6 +2206,150 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
           />
         )}
       </section>
+      <section className="mt-8">
+        <SectionTitle
+          title="Share materials"
+          subtitle="Choose a campaign sized for the social channel where you want to invite trainers."
+        />
+        <div className="grid gap-4 md:grid-cols-3">
+          {REFERRAL_CAMPAIGNS.map((campaign) => (
+            <article className={`${cardClass} overflow-hidden`} key={campaign.id}>
+              <div className={`relative overflow-hidden bg-surface-muted ${campaign.aspectClass}`}>
+                <Image
+                  alt={campaign.title}
+                  className="object-cover"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  src="/og-image.png"
+                />
+              </div>
+              <div className="grid gap-3 p-4">
+                <div>
+                  <div className="flex items-center justify-between gap-2 text-xs font-bold text-muted">
+                    <span>{campaign.format}</span>
+                    <span>{campaign.dimensions}</span>
+                  </div>
+                  <h3 className="mt-2 text-base font-black leading-snug">{campaign.title}</h3>
+                  <p className="mt-2 text-sm text-muted">{campaign.description}</p>
+                </div>
+                <button
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-accent bg-accent px-3 py-2 font-bold text-white transition-colors hover:bg-accent-dark"
+                  onClick={() => setShareCampaign(campaign)}
+                  type="button"
+                >
+                  <Share2 className="size-4" aria-hidden="true" />
+                  Share campaign
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+      <Dialog
+        open={Boolean(shareCampaign)}
+        onOpenChange={(open) => !open && setShareCampaign(null)}
+      >
+        <DialogContent
+          title="Share your invitation"
+          description="Select a message, then share the campaign link with your referral code included."
+        >
+          {shareCampaign && (
+            <div className="grid gap-4">
+              <div className="grid gap-2" role="radiogroup" aria-label="Campaign message">
+                {REFERRAL_CAMPAIGNS.map((campaign) => (
+                  <button
+                    aria-checked={shareCampaign.id === campaign.id}
+                    className={
+                      shareCampaign.id === campaign.id
+                        ? 'rounded-lg border-2 border-accent bg-accent/5 p-3 text-left'
+                        : 'rounded-lg border border-line bg-white p-3 text-left hover:bg-surface-muted'
+                    }
+                    key={campaign.id}
+                    onClick={() => setShareCampaign(campaign)}
+                    role="radio"
+                    type="button"
+                  >
+                    <span className="block font-bold">{campaign.title}</span>
+                    <span className="mt-1 block text-sm text-muted">{campaign.description}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex min-w-0 items-center gap-2 rounded-lg border border-line bg-surface-muted p-2 pl-3">
+                <span className="min-w-0 flex-1 truncate text-sm font-bold">{campaignLink}</span>
+                <button
+                  className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent text-white"
+                  onClick={copyCampaignLink}
+                  title="Copy campaign link"
+                  type="button"
+                >
+                  {shareCopied ? (
+                    <Check className="size-4" aria-hidden="true" />
+                  ) : (
+                    <Copy className="size-4" aria-hidden="true" />
+                  )}
+                  <span className="sr-only">{shareCopied ? 'Copied' : 'Copy campaign link'}</span>
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <button
+                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                  onClick={() =>
+                    openShare(
+                      `https://wa.me/?text=${encodeURIComponent(`${shareCampaign.title} ${campaignLink}`)}`,
+                    )
+                  }
+                  type="button"
+                >
+                  WhatsApp
+                </button>
+                <button
+                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                  onClick={() =>
+                    openShare(
+                      `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(campaignLink)}`,
+                    )
+                  }
+                  type="button"
+                >
+                  Facebook
+                </button>
+                <button
+                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                  onClick={() =>
+                    openShare(
+                      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(campaignLink)}`,
+                    )
+                  }
+                  type="button"
+                >
+                  LinkedIn
+                </button>
+                <button
+                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                  onClick={() =>
+                    openShare(
+                      `https://x.com/intent/post?text=${encodeURIComponent(`${shareCampaign.title} ${campaignLink}`)}`,
+                    )
+                  }
+                  type="button"
+                >
+                  X
+                </button>
+              </div>
+              {typeof navigator !== 'undefined' && 'share' in navigator && (
+                <button
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 py-2 font-bold hover:bg-surface-muted"
+                  onClick={() => void shareNatively()}
+                  type="button"
+                >
+                  <Send className="size-4" aria-hidden="true" />
+                  More sharing options
+                </button>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2641,7 +2908,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                                 Text {manualPhoneRequest.code} to{' '}
                                 {manualPhoneRequest.whatsappNumber ||
                                   manualPhoneVerificationWhatsappNumber}
-                                . This code expires in {manualPhoneVerificationExpiryMinutes} minutes.
+                                . This code expires in {manualPhoneVerificationExpiryMinutes}{' '}
+                                minutes.
                               </span>
                             </div>
                             <ActionButton
@@ -4601,7 +4869,11 @@ function bucketHeading(label: string, range: EarningsChartRange): string {
     const start = new Date(label);
     if (Number.isNaN(start.getTime())) return '';
     const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
-    const fmt = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: true, timeZone: 'UTC' });
+    const fmt = new Intl.DateTimeFormat('en-GB', {
+      hour: 'numeric',
+      hour12: true,
+      timeZone: 'UTC',
+    });
     return `${fmt.format(start)} - ${fmt.format(end)}`;
   }
   if (range === 'year') return formatMonth(label);

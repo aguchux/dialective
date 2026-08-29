@@ -212,6 +212,16 @@ export class PlatformSettingsService {
     return row.reverseWordTrainingEnabled;
   }
 
+  async isQracEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.qracEnabled;
+  }
+
+  async getQracIntervalMinutes(): Promise<number> {
+    const row = await this.getRow();
+    return row.qracIntervalMinutes;
+  }
+
   /** Reads fresh (not cached) -- weekly-trainer-report.ts checks this once at job start, so a stale cached read isn't a concern the way it would be for a per-request getter, but freshness costs nothing here either. */
   async isWeeklyTrainerReportEnabled(): Promise<boolean> {
     const row = await this.getRow();
@@ -704,6 +714,8 @@ export class PlatformSettingsService {
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
+      qracEnabled: row.qracEnabled,
+      qracIntervalMinutes: row.qracIntervalMinutes,
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),
@@ -810,6 +822,8 @@ export class PlatformSettingsService {
     keyboardLayoutMaxLength?: number;
     submissionRateLimitEnabled?: boolean;
     submissionRateLimitPerHour?: number;
+    qracEnabled?: boolean;
+    qracIntervalMinutes?: number;
     qualityGateEnabled?: boolean;
     qualityWeightConsensus?: number;
     qualityWeightNoise?: number;
@@ -1138,6 +1152,8 @@ export class PlatformSettingsService {
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
+      qracEnabled: row.qracEnabled,
+      qracIntervalMinutes: row.qracIntervalMinutes,
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),

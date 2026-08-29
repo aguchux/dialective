@@ -23,6 +23,8 @@ export function QualityGateSettingsPanel() {
   const [weightQuality, setWeightQuality] = useState('10');
   const [weightLiveness, setWeightLiveness] = useState('15');
   const [weightAsrMatch, setWeightAsrMatch] = useState('0');
+  const [qracEnabled, setQracEnabled] = useState(false);
+  const [qracIntervalMinutes, setQracIntervalMinutes] = useState('30');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +36,8 @@ export function QualityGateSettingsPanel() {
     setWeightQuality(settings.qualityWeightQuality);
     setWeightLiveness(settings.qualityWeightLiveness);
     setWeightAsrMatch(settings.qualityWeightAsrMatch);
+    setQracEnabled(settings.qracEnabled);
+    setQracIntervalMinutes(String(settings.qracIntervalMinutes));
   }, [settings]);
 
   const weightSum =
@@ -53,6 +57,12 @@ export function QualityGateSettingsPanel() {
       return;
     }
 
+    const interval = Number(qracIntervalMinutes);
+    if (qracEnabled && (!Number.isFinite(interval) || interval < 1)) {
+      setError('QRAC interval must be a positive number of minutes.');
+      return;
+    }
+
     try {
       await updateSettings({
         qualityGateEnabled: enabled,
@@ -61,6 +71,8 @@ export function QualityGateSettingsPanel() {
         qualityWeightQuality: Number(weightQuality),
         qualityWeightLiveness: Number(weightLiveness),
         qualityWeightAsrMatch: Number(weightAsrMatch),
+        qracEnabled,
+        qracIntervalMinutes: interval,
       }).unwrap();
       setMessage('Quality gate settings saved.');
     } catch (err) {
@@ -204,6 +216,41 @@ export function QualityGateSettingsPanel() {
               value={weightAsrMatch}
               onChange={(e) => setWeightAsrMatch(e.target.value)}
             />
+          </div>
+
+          <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
+            <label className="flex cursor-pointer items-start gap-3" htmlFor="qrac-enabled">
+              <input
+                checked={qracEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="qrac-enabled"
+                onChange={(event) => setQracEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Quality Recordings Affirmation Check (QRAC)</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Periodically interrupts an in-progress word-training session with a checklist the
+                  trainer must re-confirm before continuing (no background noise, clear/audible
+                  speech, staying within the time window, required courses completed). Every signing
+                  is recorded with an incrementing version.
+                </span>
+              </span>
+            </label>
+            <div className="grid gap-1 pl-8">
+              <label className="text-sm font-bold" htmlFor="qrac-interval">
+                Remind trainers every (minutes)
+              </label>
+              <input
+                className={`${inputClass} max-w-40`}
+                id="qrac-interval"
+                type="number"
+                step="1"
+                min="1"
+                value={qracIntervalMinutes}
+                onChange={(e) => setQracIntervalMinutes(e.target.value)}
+              />
+            </div>
           </div>
 
           <div>

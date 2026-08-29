@@ -268,6 +268,15 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  qracEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  qracIntervalMinutes?: number;
+
+  @IsOptional()
+  @IsBoolean()
   qualityGateEnabled?: boolean;
 
   // The four qualityWeight* fields must sum to 100 -- validated in

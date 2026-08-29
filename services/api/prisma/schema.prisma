@@ -137,6 +137,7 @@ model User {
   submissions                      Submission[]
   trainingSessions                 TrainingSession[]
   wordRecordings                   WordRecording[]
+  qracAffirmations                 QracAffirmationSubmission[]
   wordSkips                        WordSkip[]
   subscriptionPoolsOpened          SubscriptionPool[]               @relation("SubscriptionPoolOpenedBy")
   dataAccessLeadsContacted         DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
@@ -873,12 +874,35 @@ model TrainingSession {
   consentedAt  DateTime
   startedAt    DateTime  @default(now())
   endedAt      DateTime?
+  lastQracAt   DateTime? // last time this session's trainer signed the QRAC checklist; nextAssignment compares elapsed time against this (falling back to startedAt when never signed) to decide whether a re-affirmation is due -- see PlatformSettings.qracEnabled/qracIntervalMinutes
 
-  assignments WordTrainingAssignment[]
-  recordings  WordRecording[]
+  assignments      WordTrainingAssignment[]
+  recordings       WordRecording[]
+  qracAffirmations QracAffirmationSubmission[]
 
   @@index([userId, startedAt])
   @@map("training_sessions")
+}
+
+/// Append-only, immutable log of QRAC ("Quality Recordings Affirmation
+/// Check") signings -- a trainer periodically re-confirms a fixed checklist
+/// of recording-quality rules mid-session (see WordsService.nextAssignment).
+/// version is a per-USER sequential "major.minor" counter (1.0, 1.1, ...,
+/// 1.9, 2.0, ...), not tied to checklist content -- computed from the
+/// user's own previous QracAffirmationSubmission, same append-only/
+/// never-updated convention as ValuationSnapshot.
+model QracAffirmationSubmission {
+  id               String           @id @default(uuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId        String?
+  session          TrainingSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  version          String // per-user sequential major.minor counter, see nextQracVersion in qrac.util.ts
+  checklistVersion String           @default("v1") // identifies which QRAC_CHECKLIST wording (qrac.util.ts) this signing agreed to
+  signedAt         DateTime         @default(now())
+
+  @@index([userId, signedAt])
+  @@map("qrac_affirmation_submissions")
 }
 
 /// A server-issued prompt prevents the client from choosing a source word,
@@ -1823,6 +1847,8 @@ model PlatformSettings {
   keyboardLayoutMaxLength                Int       @default(1000) // maximum number of characters an admin may save in a dialect's virtual keyboard layout
   submissionRateLimitEnabled             Boolean   @default(false) // master switch for per-trainer submission throttling (SubmissionRateLimitGuard on POST /submissions/create and POST /words/recordings); off by default so existing deployments are unaffected until an admin opts in
   submissionRateLimitPerHour             Int       @default(120) // max sentence/dictation + word recordings a single trainer may submit per rolling hour while submissionRateLimitEnabled is on
+  qracEnabled                            Boolean   @default(false) // master switch for the periodic mid-session Quality Recordings Affirmation Check (QRAC); when false, WordsService.nextAssignment never blocks on it regardless of qracIntervalMinutes
+  qracIntervalMinutes                    Int       @default(30) // trainer must re-sign the QRAC checklist this often during an open word-training session; checked against TrainingSession.lastQracAt (or startedAt if never signed) on every nextAssignment call, same per-round re-check as the required-courses gate
   qualityGateEnabled                     Boolean   @default(false) // master kill switch for the quality-gate-worker's effect on payout; worker still runs and records noise/quality/livenessScore when false, but compositeScore computation falls back to the raw score (today's behavior) until enabled
   qualityWeightConsensus                 Decimal   @default(60) @db.Decimal(5, 2) // weight (%) given to the real score (consensus agreement / exact-match) in compositeScore's blend
   qualityWeightNoise                     Decimal   @default(15) @db.Decimal(5, 2) // weight (%) given to noiseScore in compositeScore's blend
