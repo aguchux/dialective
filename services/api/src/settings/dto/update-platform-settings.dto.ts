@@ -163,6 +163,10 @@ export class UpdatePlatformSettingsDto {
   pwaInstallPromptReminderMinutes?: number;
 
   @IsOptional()
+  @IsBoolean()
+  weeklyTrainerReportEnabled?: boolean;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   wordStuckTimeoutMinutes?: number;

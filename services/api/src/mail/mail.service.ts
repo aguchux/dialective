@@ -43,6 +43,22 @@ interface AuditHoldNotification {
   submissionCount: number;
 }
 
+/**
+ * Minimal, mail-service-local shape of a TrainerReport (see
+ * wallet/trainer-report.service.ts) -- declared here rather than imported
+ * from wallet/ to avoid a module cycle, since WalletModule already imports
+ * MailModule. weekly-trainer-report.ts maps the real TrainerReport into this
+ * shape at the call site.
+ */
+interface WeeklyTrainerReportEmail {
+  trainerEmail: string;
+  trainerFirstName: string | null;
+  recordings: number;
+  avgScore: string | null;
+  totalEarningsTokens: string;
+  daily: { date: string; recordings: number }[];
+}
+
 function frontendUrl(): string {
   return process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
 }
@@ -227,6 +243,17 @@ export class MailService {
       'Your phone number is verified',
       phoneVerifiedHtml(phoneNumber, dashboardUrl),
       phoneVerifiedText(phoneNumber, dashboardUrl),
+    );
+  }
+
+  /** Fired from weekly-trainer-report.ts's Monday CronJob, once per active trainer, for the trailing 7 days. */
+  async sendWeeklyTrainerReportEmail(payload: WeeklyTrainerReportEmail): Promise<void> {
+    const reportsUrl = `${frontendUrl()}/dashboard/reports`;
+    await this.send(
+      payload.trainerEmail,
+      'Your weekly Dialect Library report',
+      weeklyTrainerReportHtml(payload, reportsUrl),
+      weeklyTrainerReportText(payload, reportsUrl),
     );
   }
 
@@ -449,4 +476,61 @@ function phoneVerifiedText(phoneNumber: string, dashboardUrl: string): string {
   return `Your phone number ${phoneNumber} has been verified.
 You can now request withdrawals and trade on the P2P market.
 Go to your dashboard: ${dashboardUrl}`;
+}
+
+function formatDayLabel(isoDate: string): string {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return isoDate;
+  return new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'UTC' }).format(date);
+}
+
+// Widest day's bar is always the full cap width; others scale proportionally.
+// Fixed-pixel <td> width rather than percentage, since most email clients
+// don't run flex/grid reliably -- a plain <table> with pixel-width cells is
+// the one layout approach that renders consistently across clients.
+const WEEKLY_REPORT_BAR_MAX_PX = 200;
+function barWidthPx(value: number, max: number): number {
+  if (max <= 0) return 0;
+  return Math.max(2, Math.round((value / max) * WEEKLY_REPORT_BAR_MAX_PX));
+}
+
+function weeklyTrainerReportHtml(payload: WeeklyTrainerReportEmail, reportsUrl: string): string {
+  const greeting = payload.trainerFirstName ? escapeHtml(payload.trainerFirstName) : 'there';
+  const maxRecordings = Math.max(...payload.daily.map((day) => day.recordings), 1);
+  const rows = payload.daily
+    .map(
+      (day) => `
+  <tr>
+    <td style="padding:4px 8px 4px 0;font-size:12px;color:#666;white-space:nowrap">${escapeHtml(formatDayLabel(day.date))}</td>
+    <td style="padding:4px 0">
+      <table cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>
+        <td style="background:#2f7a4f;height:14px;width:${barWidthPx(day.recordings, maxRecordings)}px;line-height:14px;font-size:0">&nbsp;</td>
+        <td style="padding-left:6px;font-size:12px;color:#333">${day.recordings}</td>
+      </tr></table>
+    </td>
+  </tr>`,
+    )
+    .join('');
+
+  return `<p>Hi ${greeting},</p>
+<p>Here's your Dialect Library summary for the past week:</p>
+<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:12px 0">
+  <tr>
+    <td style="padding:8px;border:1px solid #e5e5e5;text-align:center"><strong>${payload.recordings}</strong><br/>Recordings</td>
+    <td style="padding:8px;border:1px solid #e5e5e5;text-align:center"><strong>${payload.avgScore ?? '—'}</strong><br/>Avg. score</td>
+    <td style="padding:8px;border:1px solid #e5e5e5;text-align:center"><strong>${escapeHtml(payload.totalEarningsTokens)} DL</strong><br/>Earned this week</td>
+  </tr>
+</table>
+<p style="margin-bottom:4px"><strong>Daily recordings</strong></p>
+<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">${rows}</table>
+<p><a href="${reportsUrl}">View your full report and export as PDF</a></p>`;
+}
+
+function weeklyTrainerReportText(payload: WeeklyTrainerReportEmail, reportsUrl: string): string {
+  return `Hi ${payload.trainerFirstName ?? 'there'},
+Here's your Dialect Library summary for the past week:
+Recordings: ${payload.recordings}
+Avg. score: ${payload.avgScore ?? 'n/a'}
+Earned this week: ${payload.totalEarningsTokens} DL
+View your full report: ${reportsUrl}`;
 }

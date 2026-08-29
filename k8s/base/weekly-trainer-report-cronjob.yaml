@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: weekly-trainer-report
+spec:
+  # Monday 08:00 UTC. See services/api/src/weekly-trainer-report.ts --
+  # gated by PlatformSettings.weeklyTrainerReportEnabled at run start.
+  schedule: '0 8 * * 1'
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: weekly-trainer-report
+              image: golojan/dialect-api:latest
+              command: ['node', 'dist/weekly-trainer-report.js']
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-creds
+                      key: connection_string
+                - name: FRONTEND_URL
+                  valueFrom:
+                    configMapKeyRef:
+                      name: api-config
+                      key: frontend_url
+                - name: RESEND_FROM_ADDRESS
+                  valueFrom:
+                    configMapKeyRef:
+                      name: api-config
+                      key: resend_from_address
+                - name: RESEND_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: auth-creds
+                      key: resend_api_key

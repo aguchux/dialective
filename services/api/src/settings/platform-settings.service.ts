@@ -200,6 +200,12 @@ export class PlatformSettingsService {
     return row.reverseWordTrainingEnabled;
   }
 
+  /** Reads fresh (not cached) -- weekly-trainer-report.ts checks this once at job start, so a stale cached read isn't a concern the way it would be for a per-request getter, but freshness costs nothing here either. */
+  async isWeeklyTrainerReportEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.weeklyTrainerReportEnabled;
+  }
+
   /**
    * Per-card visibility for the landing page's 5-stat row -- consumed by
    * GeoController.getStats. The DB column is still named
@@ -664,6 +670,7 @@ export class PlatformSettingsService {
       tawkToWidgetId: row.tawkToWidgetId,
       supportChatMode: row.supportChatMode,
       pwaInstallPromptEnabled: row.pwaInstallPromptEnabled,
+      weeklyTrainerReportEnabled: row.weeklyTrainerReportEnabled,
       pwaInstallPromptReminderMinutes: row.pwaInstallPromptReminderMinutes,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
@@ -766,6 +773,7 @@ export class PlatformSettingsService {
     supportChatMode?: string;
     pwaInstallPromptEnabled?: boolean;
     pwaInstallPromptReminderMinutes?: number;
+    weeklyTrainerReportEnabled?: boolean;
     wordStuckTimeoutMinutes?: number;
     scoringSlaMinutes?: number;
     auditHoldEveryNSubmissions?: number;
@@ -1225,6 +1233,7 @@ export class PlatformSettingsService {
       tawkToWidgetId: tawkTo.widgetId,
       supportChatMode: supportChat.mode,
       pwaInstallPromptEnabled: row.pwaInstallPromptEnabled,
+      weeklyTrainerReportEnabled: row.weeklyTrainerReportEnabled,
       pwaInstallPromptReminderMinutes: row.pwaInstallPromptReminderMinutes,
       isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens: kycMinWithdrawalTokens.toString(),

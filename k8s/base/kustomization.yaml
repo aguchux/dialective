@@ -37,3 +37,4 @@ resources:
   - withdrawal-reconcile-cronjob.yaml
   - audio-retention-cronjob.yaml
   - tokenomics-valuation-cronjob.yaml
+  - weekly-trainer-report-cronjob.yaml

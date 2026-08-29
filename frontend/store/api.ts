@@ -848,6 +848,21 @@ export interface EarningsChart {
   buckets: { label: string; amount: string }[];
 }
 
+export interface TrainerReport {
+  from: string;
+  to: string;
+  totals: {
+    recordings: number;
+    scoredRecordings: number;
+    avgScore: string | null;
+    avgCompositeScore: string | null;
+    trainingEarningsTokens: string;
+    referralEarningsTokens: string;
+    totalEarningsTokens: string;
+  };
+  daily: { date: string; recordings: number; earningsTokens: string }[];
+}
+
 export interface EarningHistoryPage {
   items: {
     id: string;
@@ -1002,6 +1017,7 @@ export interface PlatformSettings {
   supportChatMode: 'NONE' | 'TAWK' | 'AI';
   pwaInstallPromptEnabled: boolean;
   pwaInstallPromptReminderMinutes: number;
+  weeklyTrainerReportEnabled: boolean;
   wordStuckTimeoutMinutes: number;
   scoringSlaMinutes: number;
   auditHoldEveryNSubmissions: number;
@@ -1094,6 +1110,7 @@ export interface PlatformSettingsInput {
   supportChatMode?: 'NONE' | 'TAWK' | 'AI';
   pwaInstallPromptEnabled?: boolean;
   pwaInstallPromptReminderMinutes?: number;
+  weeklyTrainerReportEnabled?: boolean;
   wordStuckTimeoutMinutes?: number;
   scoringSlaMinutes?: number;
   auditHoldEveryNSubmissions?: number;
@@ -1900,6 +1917,10 @@ export const dialectivaApi = createApi({
     }),
     getTrainerDashboard: builder.query<TrainerDashboardSummary, void>({
       query: () => '/wallet/dashboard',
+      providesTags: ['Wallet'],
+    }),
+    getTrainerReport: builder.query<TrainerReport, { from?: string; to?: string }>({
+      query: ({ from, to }) => ({ url: '/wallet/report', params: { from, to } }),
       providesTags: ['Wallet'],
     }),
     getEarningHistory: builder.query<
@@ -3207,6 +3228,7 @@ export const {
   useReleaseP2PTradeMutation,
   useRaiseP2PDisputeMutation,
   useGetTrainerDashboardQuery,
+  useGetTrainerReportQuery,
   useGetEarningHistoryQuery,
   useGetWalletActivityQuery,
   useGetEarningsChartQuery,

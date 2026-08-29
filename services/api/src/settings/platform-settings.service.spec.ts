@@ -68,6 +68,18 @@ describe('PlatformSettingsService.getTawkToWidget', () => {
   });
 });
 
+describe('PlatformSettingsService.isWeeklyTrainerReportEnabled', () => {
+  it('reflects the row value, defaulting true per the schema default', async () => {
+    const { service } = setup({ weeklyTrainerReportEnabled: true });
+    await expect(service.isWeeklyTrainerReportEnabled()).resolves.toBe(true);
+  });
+
+  it('returns false once an admin turns the toggle off', async () => {
+    const { service } = setup({ weeklyTrainerReportEnabled: false });
+    await expect(service.isWeeklyTrainerReportEnabled()).resolves.toBe(false);
+  });
+});
+
 describe('PlatformSettingsService.isSpeechExpressionEnabled', () => {
   it('returns false by default', async () => {
     const { service } = setup({ speechExpressionEnabled: false });

@@ -920,6 +920,53 @@ describe('WalletController earning history', () => {
   });
 });
 
+describe('WalletController.getTrainerReport', () => {
+  it('always builds the report for the requesting trainer, never a caller-supplied id, forwarding from/to as Dates', async () => {
+    const trainerReport = { buildReport: jest.fn().mockResolvedValue({ totals: {}, daily: [] }) };
+    const controller = new WalletController(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      undefined,
+      trainerReport as never,
+    );
+
+    await controller.getTrainerReport({ user: { sub: 'user-1' } } as never, {
+      from: '2026-08-01T00:00:00Z',
+      to: '2026-08-07T00:00:00Z',
+    });
+
+    expect(trainerReport.buildReport).toHaveBeenCalledWith(
+      'user-1',
+      new Date('2026-08-01T00:00:00Z'),
+      new Date('2026-08-07T00:00:00Z'),
+    );
+  });
+
+  it('omits from/to entirely when the query is empty, letting buildReport resolve its own lifetime default', async () => {
+    const trainerReport = { buildReport: jest.fn().mockResolvedValue({ totals: {}, daily: [] }) };
+    const controller = new WalletController(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      undefined,
+      trainerReport as never,
+    );
+
+    await controller.getTrainerReport({ user: { sub: 'user-2' } } as never, {} as never);
+
+    expect(trainerReport.buildReport).toHaveBeenCalledWith('user-2', undefined, undefined);
+  });
+});
+
 describe('WalletController admin leaderboard', () => {
   it('ranks earners by task payout ledger totals and contributors by submitted task count', async () => {
     const prisma = {

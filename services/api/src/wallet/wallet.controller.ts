@@ -64,6 +64,8 @@ import { AdminWalletAdjustmentDto } from './dto/admin-wallet-adjustment.dto';
 import { ListEarningsDto } from './dto/list-earnings.dto';
 import { ListLeaderboardDto } from './dto/list-leaderboard.dto';
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
+import { GetTrainerReportDto } from './dto/get-trainer-report.dto';
+import { TrainerReportService } from './trainer-report.service';
 import { CreateReferralInviteDto } from './dto/create-referral-invite.dto';
 import { tokensToUsdt, usdToTokens } from './token-rate.util';
 import { tokensToLocalCurrency } from './currency-rate.util';
@@ -148,6 +150,7 @@ export class WalletController {
     private readonly otp: OtpService,
     private readonly mail: MailService,
     private readonly tokenomics?: TokenomicsService,
+    private readonly trainerReport?: TrainerReportService,
   ) {}
 
   private async getOrCreateWallet(userId: string) {
@@ -600,6 +603,17 @@ export class WalletController {
       total,
       totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
     };
+  }
+
+  /** Own-data-only report (never accepts a target userId) -- see TrainerReportService.buildReport for the shared aggregation this and the Monday weekly-trainer-report cron both call. */
+  @Get('wallet/report')
+  @UseGuards(JwtAuthGuard)
+  async getTrainerReport(@Req() req: AuthenticatedRequest, @Query() query: GetTrainerReportDto) {
+    return this.trainerReport!.buildReport(
+      req.user.sub,
+      query.from ? new Date(query.from) : undefined,
+      query.to ? new Date(query.to) : undefined,
+    );
   }
 
   @Get('wallet/activity')

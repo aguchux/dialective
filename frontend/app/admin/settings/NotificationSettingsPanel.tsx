@@ -35,6 +35,7 @@ export function NotificationSettingsPanel() {
   const [senderName, setSenderName] = useState('');
   const [senderEmail, setSenderEmail] = useState('');
   const [leadsNotificationAddress, setLeadsNotificationAddress] = useState('');
+  const [weeklyTrainerReportEnabled, setWeeklyTrainerReportEnabled] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +45,7 @@ export function NotificationSettingsPanel() {
     setSenderName(parsed.senderName);
     setSenderEmail(parsed.senderEmail);
     setLeadsNotificationAddress(settings.leadsNotificationAddress ?? '');
+    setWeeklyTrainerReportEnabled(settings.weeklyTrainerReportEnabled);
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -57,6 +59,7 @@ export function NotificationSettingsPanel() {
           ? { resendFromAddress: formatFromAddress(senderName, senderEmail) }
           : {}),
         ...(leadsNotificationAddress !== '' ? { leadsNotificationAddress } : {}),
+        weeklyTrainerReportEnabled,
       }).unwrap();
       setMessage('Notification settings saved.');
     } catch (err) {
@@ -127,6 +130,26 @@ export function NotificationSettingsPanel() {
               onChange={(e) => setLeadsNotificationAddress(e.target.value)}
             />
           </div>
+
+          <label
+            className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+            htmlFor="weekly-trainer-report"
+          >
+            <input
+              checked={weeklyTrainerReportEnabled}
+              className="mt-0.5 size-5 accent-accent"
+              id="weekly-trainer-report"
+              onChange={(event) => setWeeklyTrainerReportEnabled(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              <span className="block font-bold">Weekly trainer report email</span>
+              <span className="mt-1 block text-sm leading-relaxed text-muted">
+                Sends every Monday to all active trainers with a summary of their week --
+                recordings, average score, and DL earned.
+              </span>
+            </span>
+          </label>
 
           <div>
             <ActionButton

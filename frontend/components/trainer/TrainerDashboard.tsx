@@ -25,6 +25,7 @@ import {
   Clock3,
   Copy,
   Download,
+  FileBarChart,
   FileText as FileTextIcon,
   GraduationCap,
   Headphones,
@@ -718,6 +719,9 @@ function DashboardHeader({
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=referrals')}>
                 <Users className="size-4" aria-hidden="true" /> Referrals
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/dashboard/reports')}>
+                <FileBarChart className="size-4" aria-hidden="true" /> Reports
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/learn')}>
                 <GraduationCap className="size-4" aria-hidden="true" /> Learning Center
