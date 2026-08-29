@@ -98,8 +98,8 @@ export interface PublicUser {
 }
 
 type UserWithDialect = User & {
-  dialect?: { tag: string } | null;
-  dialectVariant?: { id: string; tag: string } | null;
+  dialect?: { tag: string; active?: boolean } | null;
+  dialectVariant?: { id: string; tag: string; active?: boolean } | null;
   wallet?: { balance: Prisma.Decimal } | null;
   _count?: { submissions: number; wordRecordings: number };
 };
@@ -120,7 +120,7 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     originCountryId: user.originCountryId,
     countryId: user.countryId,
     dialectId: user.dialectId,
-    dialectTag: user.dialect?.tag ?? null,
+    dialectTag: user.dialect?.active === false ? null : (user.dialect?.tag ?? null),
     dialectVariantId: user.dialectVariant?.id ?? null,
     dialectVariantTag: user.dialectVariant?.tag ?? null,
     onboardingComplete:
@@ -128,6 +128,8 @@ function toPublicUser(user: UserWithDialect): PublicUser {
       (user.originCountryId !== null &&
         user.countryId !== null &&
         user.dialectId !== null &&
+        user.dialect?.active !== false &&
+        user.dialectVariant?.active !== false &&
         !!user.firstName &&
         !!user.lastName),
     referralCode: user.referralCode,
@@ -755,8 +757,8 @@ export class AuthService {
         throw new UnprocessableEntityException('countryId and dialectId must be set together');
       }
       const dialect = await this.prisma.dialect.findUnique({ where: { id: dialectId } });
-      if (!dialect || dialect.countryId !== countryId) {
-        throw new UnprocessableEntityException('Dialect does not belong to the given country');
+      if (!dialect || dialect.countryId !== countryId || !dialect.active) {
+        throw new UnprocessableEntityException('Select an active dialect for the given country');
       }
     }
 
@@ -774,9 +776,9 @@ export class AuthService {
       const variant = await this.prisma.dialectVariant.findUnique({
         where: { id: dialectVariantId },
       });
-      if (!variant || variant.dialectId !== effectiveDialectId) {
+      if (!variant || variant.dialectId !== effectiveDialectId || !variant.active) {
         throw new UnprocessableEntityException(
-          'Dialect variant does not belong to the given dialect',
+          'Select an active sub-dialect for the given dialect',
         );
       }
     }
@@ -1341,6 +1343,33 @@ export class AuthService {
       });
     }
 
+    return toPublicUser(user);
+  }
+
+  /**
+   * Clears a trainer's training selection without touching their country of
+   * origin or historical submissions. Revoking refresh tokens makes the
+   * next authenticated session enter onboarding and choose an active dialect.
+   */
+  async resetUserDialect(userId: string): Promise<PublicUser> {
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+    if (!target) throw new NotFoundException('User not found');
+    if (target.role !== Role.TRAINER) {
+      throw new BadRequestException('Only trainer dialect selections can be reset');
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { countryId: null, dialectId: null, dialectVariantId: null },
+      include: { dialect: true, dialectVariant: true },
+    });
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
     return toPublicUser(user);
   }
 

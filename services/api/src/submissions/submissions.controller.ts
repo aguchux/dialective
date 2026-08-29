@@ -187,10 +187,19 @@ export class SubmissionsController {
     const trainer = await this.prisma.user.findUnique({
       where: { id: req.user.sub },
       select: {
+        dialect: { select: { tag: true, active: true } },
         dialectVariantId: true,
-        dialectVariant: { select: { dialect: { select: { tag: true } } } },
+        dialectVariant: { select: { active: true, dialect: { select: { tag: true } } } },
       },
     });
+    if (
+      !trainer?.dialect ||
+      trainer.dialect.active === false ||
+      trainer.dialect.tag !== body.dialectTag ||
+      trainer.dialectVariant?.active === false
+    ) {
+      throw new UnprocessableEntityException('Complete dialect onboarding before submitting');
+    }
     const dialectVariantId =
       trainer?.dialectVariant?.dialect.tag === body.dialectTag ? trainer.dialectVariantId : null;
 

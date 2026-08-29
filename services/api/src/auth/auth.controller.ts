@@ -280,6 +280,14 @@ export class AuthController {
     return this.auth.getAdminUser(id);
   }
 
+  @Post('admin/users/:id/dialect/reset')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  resetUserDialect(@Param('id') id: string) {
+    return this.auth.resetUserDialect(id);
+  }
+
   @Get('admin/users/:id/activity')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

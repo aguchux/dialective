@@ -19,6 +19,7 @@ export async function generateMetadata({ params }: PublicCourseViewPageProps): P
     title: course.title,
     description: course.summary,
     alternates: { canonical: `/learn/${course.slug}/view` },
+    robots: { index: false, follow: true },
   };
 }
 

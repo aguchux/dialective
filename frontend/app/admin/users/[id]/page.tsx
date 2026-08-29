@@ -20,6 +20,7 @@ import {
   useLockUserMutation,
   useRequestUserDeleteOtpMutation,
   useRequestUserLockOtpMutation,
+  useResetUserDialectMutation,
   useSendInstantTrainerReportMutation,
   type UserActivityEntry,
 } from '@/store/api';
@@ -67,6 +68,7 @@ export default function AdminUserDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
   const [releaseHoldDialogOpen, setReleaseHoldDialogOpen] = useState(false);
+  const [resetDialectDialogOpen, setResetDialectDialogOpen] = useState(false);
 
   const [sendReport, { isLoading: isSendingReport }] = useSendInstantTrainerReportMutation();
   const [reportMessage, setReportMessage] = useState<string | null>(null);
@@ -192,6 +194,26 @@ export default function AdminUserDetailPage() {
                 as a brand-new account.
               </p>
             </section>
+
+            {user.role === 'TRAINER' && (
+              <section className="grid gap-3 rounded-lg border border-[#f5c78e] bg-[#fff8ef] p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+                <h2 className="text-lg font-black text-[#8a4b0f]">Training dialect</h2>
+                <p className="text-sm leading-relaxed text-[#8a4b0f]">
+                  Reset this selection when the trainer must move to another dialect or sub-dialect.
+                  Their country of origin and historical recordings remain unchanged. Their next login
+                  starts at dialect onboarding before they can train again.
+                </p>
+                <div>
+                  <button
+                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-[#f5c78e] bg-white px-4 py-2 text-sm font-bold text-[#8a4b0f] transition-colors hover:bg-[#fff3e0]"
+                    onClick={() => setResetDialectDialogOpen(true)}
+                    type="button"
+                  >
+                    Reset dialect selection
+                  </button>
+                </div>
+              </section>
+            )}
 
             {user.role === 'TRAINER' && (
               <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -333,6 +355,9 @@ export default function AdminUserDetailPage() {
           onDeleted={() => router.push('/admin/users')}
         />
       )}
+      {user && resetDialectDialogOpen && (
+        <ResetDialectDialog user={user} onClose={() => setResetDialectDialogOpen(false)} />
+      )}
       {user && (
         <RecordingAuditDialog
           onOpenChange={setAuditDialogOpen}
@@ -342,6 +367,64 @@ export default function AdminUserDetailPage() {
         />
       )}
     </AdminShell>
+  );
+}
+
+function ResetDialectDialog({
+  user,
+  onClose,
+}: {
+  user: { id: string; email: string; dialectTag: string | null; dialectVariantTag: string | null };
+  onClose: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [resetDialect, { isLoading }] = useResetUserDialectMutation();
+
+  async function handleReset() {
+    setError(null);
+    try {
+      await resetDialect(user.id).unwrap();
+      onClose();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, "Unable to reset this trainer's dialect selection."));
+    }
+  }
+
+  const currentSelection = [user.dialectTag, user.dialectVariantTag].filter(Boolean).join(' / ');
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        title="Reset training dialect"
+        description={`Remove ${user.email}'s current selection${currentSelection ? ` (${currentSelection})` : ''}.`}
+      >
+        <div className="grid gap-4">
+          <p className="text-sm leading-relaxed text-muted">
+            This immediately blocks new training under the old dialect, keeps historical recordings,
+            and revokes active refresh sessions. The trainer must select an active dialect again at
+            their next login.
+          </p>
+          {error && (
+            <p className="text-sm leading-relaxed text-danger" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted">
+              Cancel
+            </DialogClose>
+            <ActionButton
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-danger bg-danger px-3.5 py-2.5 font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void handleReset()}
+              pending={isLoading}
+              pendingLabel="Resetting"
+              type="button"
+            >
+              Reset selection
+            </ActionButton>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

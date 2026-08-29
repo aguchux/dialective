@@ -1,0 +1,5 @@
+ALTER TABLE "dialects"
+ADD COLUMN "active" BOOLEAN NOT NULL DEFAULT true;
+
+ALTER TABLE "dialect_variants"
+ADD COLUMN "active" BOOLEAN NOT NULL DEFAULT true;

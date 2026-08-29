@@ -18,6 +18,10 @@ export class UpdateDialectDto {
   llmGenerationEnabled?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
   @IsString()
   keyboardLayout?: string;
 }

@@ -815,7 +815,11 @@ export class WordsService {
       include: { dialect: true, dialectVariant: true },
     });
     if (!trainer) throw new NotFoundException('Trainer not found');
-    if (!trainer.dialect)
+    if (
+      !trainer.dialect ||
+      trainer.dialect.active === false ||
+      trainer.dialectVariant?.active === false
+    )
       throw new UnprocessableEntityException('Complete dialect onboarding before training');
     return trainer;
   }

@@ -134,6 +134,7 @@ export class GeoController {
   @Get('dialects')
   getAllDialects() {
     return this.prisma.dialect.findMany({
+      where: { active: true },
       select: { tag: true, name: true },
       orderBy: { name: 'asc' },
     });
@@ -146,7 +147,7 @@ export class GeoController {
       throw new NotFoundException('Country not found');
     }
     return this.prisma.dialect.findMany({
-      where: { countryId: id },
+      where: { countryId: id, active: true },
       select: { id: true, tag: true, name: true },
       orderBy: { name: 'asc' },
     });
@@ -161,11 +162,11 @@ export class GeoController {
   @Get('dialects/:id/variants')
   async getDialectVariants(@Param('id') id: string) {
     const dialect = await this.prisma.dialect.findUnique({ where: { id } });
-    if (!dialect) {
+    if (!dialect || !dialect.active) {
       throw new NotFoundException('Dialect not found');
     }
     return this.prisma.dialectVariant.findMany({
-      where: { dialectId: id },
+      where: { dialectId: id, active: true },
       select: { id: true, tag: true, name: true },
       orderBy: { name: 'asc' },
     });
@@ -304,15 +305,22 @@ export class GeoController {
       }
     }
     try {
-      return await this.prisma.dialect.update({
-        where: { id },
-        data: {
-          tag: dto.tag,
-          name: dto.name,
-          countryId: dto.countryId,
-          llmGenerationEnabled: dto.llmGenerationEnabled,
-          keyboardLayout: dto.keyboardLayout,
-        },
+      return await this.prisma.$transaction(async (tx) => {
+        const dialect = await tx.dialect.update({
+          where: { id },
+          data: {
+            tag: dto.tag,
+            name: dto.name,
+            countryId: dto.countryId,
+            active: dto.active,
+            llmGenerationEnabled: dto.llmGenerationEnabled,
+            keyboardLayout: dto.keyboardLayout,
+          },
+        });
+        if (dto.active === false) {
+          await this.resetTrainerDialectAssignments(tx, { dialectId: id });
+        }
+        return dialect;
       });
     } catch (err) {
       throw mapPrismaError(err, 'A dialect with this tag already exists', 'Dialect not found');
@@ -352,7 +360,10 @@ export class GeoController {
   @Roles(Role.ADMIN)
   async deleteDialect(@Param('id') id: string) {
     try {
-      await this.prisma.dialect.delete({ where: { id } });
+      await this.prisma.$transaction(async (tx) => {
+        await this.resetTrainerDialectAssignments(tx, { dialectId: id });
+        await tx.dialect.delete({ where: { id } });
+      });
       return { id, deleted: true };
     } catch (err) {
       throw mapPrismaError(
@@ -391,7 +402,7 @@ export class GeoController {
   @Roles(Role.ADMIN)
   async createDialectVariant(@Param('id') id: string, @Body() dto: CreateDialectVariantDto) {
     const dialect = await this.prisma.dialect.findUnique({ where: { id } });
-    if (!dialect) {
+    if (!dialect || !dialect.active) {
       throw new NotFoundException('Dialect not found');
     }
     try {
@@ -408,9 +419,15 @@ export class GeoController {
   @Roles(Role.ADMIN)
   async updateDialectVariant(@Param('id') id: string, @Body() dto: UpdateDialectVariantDto) {
     try {
-      return await this.prisma.dialectVariant.update({
-        where: { id },
-        data: { tag: dto.tag, name: dto.name },
+      return await this.prisma.$transaction(async (tx) => {
+        const variant = await tx.dialectVariant.update({
+          where: { id },
+          data: { tag: dto.tag, name: dto.name, active: dto.active },
+        });
+        if (dto.active === false) {
+          await this.resetTrainerDialectAssignments(tx, { dialectVariantId: id });
+        }
+        return variant;
       });
     } catch (err) {
       throw mapPrismaError(
@@ -426,7 +443,10 @@ export class GeoController {
   @Roles(Role.ADMIN)
   async deleteDialectVariant(@Param('id') id: string) {
     try {
-      await this.prisma.dialectVariant.delete({ where: { id } });
+      await this.prisma.$transaction(async (tx) => {
+        await this.resetTrainerDialectAssignments(tx, { dialectVariantId: id });
+        await tx.dialectVariant.delete({ where: { id } });
+      });
       return { id, deleted: true };
     } catch (err) {
       throw mapPrismaError(
@@ -436,6 +456,29 @@ export class GeoController {
         'Variant still has users or recordings assigned to it',
       );
     }
+  }
+
+  private async resetTrainerDialectAssignments(
+    tx: Prisma.TransactionClient,
+    where: Prisma.UserWhereInput,
+  ): Promise<void> {
+    const affected = await tx.user.findMany({
+      where: { role: Role.TRAINER, ...where },
+      select: { id: true },
+    });
+    if (affected.length === 0) return;
+
+    const userIds = affected.map((user) => user.id);
+    await Promise.all([
+      tx.user.updateMany({
+        where: { id: { in: userIds } },
+        data: { countryId: null, dialectId: null, dialectVariantId: null },
+      }),
+      tx.refreshToken.updateMany({
+        where: { userId: { in: userIds }, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
   }
 }
 

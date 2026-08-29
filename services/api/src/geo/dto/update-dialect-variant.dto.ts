@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpdateDialectVariantDto {
   @IsOptional()
@@ -10,4 +10,8 @@ export class UpdateDialectVariantDto {
   @IsString()
   @MaxLength(120)
   name?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }

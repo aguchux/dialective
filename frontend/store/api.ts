@@ -123,12 +123,14 @@ export interface DialectVariant {
 }
 
 export interface AdminDialectVariant extends DialectVariant {
+  active: boolean;
   _count: { users: number; wordRecordings: number; submissions: number };
 }
 
 export interface DialectVariantInput {
   tag: string;
   name: string;
+  active?: boolean;
 }
 
 export interface AdminCountry {
@@ -148,6 +150,7 @@ export interface AdminDialect {
   tag: string;
   name: string;
   countryId: string;
+  active: boolean;
   llmGenerationEnabled: boolean;
   keyboardLayout: string | null;
   country: { id: string; name: string; code: string };
@@ -184,6 +187,7 @@ export interface DialectInput {
   tag: string;
   name: string;
   countryId: string;
+  active?: boolean;
   llmGenerationEnabled?: boolean;
   keyboardLayout?: string;
 }
@@ -2794,6 +2798,10 @@ export const dialectivaApi = createApi({
       query: (id) => `/auth/admin/users/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Users', id }],
     }),
+    resetUserDialect: builder.mutation<PublicUser, string>({
+      query: (id) => ({ url: `/auth/admin/users/${id}/dialect/reset`, method: 'POST' }),
+      invalidatesTags: (_result, _error, id) => ['Users', { type: 'Users', id }],
+    }),
     getUserActivity: builder.query<
       UserActivityPage,
       { userId: string; page?: number; pageSize?: number }
@@ -3385,6 +3393,7 @@ export const {
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,
   useGetAdminUserQuery,
+  useResetUserDialectMutation,
   useGetUserActivityQuery,
   useRequestUserLockOtpMutation,
   useLockUserMutation,

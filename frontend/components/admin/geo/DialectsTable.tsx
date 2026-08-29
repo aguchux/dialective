@@ -46,6 +46,7 @@ export function DialectsTable({
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [availabilityId, setAvailabilityId] = useState<string | null>(null);
   const [editingKeyboardFor, setEditingKeyboardFor] = useState<AdminDialect | null>(null);
   const [editingVariantsFor, setEditingVariantsFor] = useState<AdminDialect | null>(null);
 
@@ -73,6 +74,18 @@ export function DialectsTable({
     }
   }
 
+  async function handleToggleAvailability(id: string, active: boolean) {
+    setError(null);
+    setAvailabilityId(id);
+    try {
+      await updateDialect({ id, body: { active } }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to update dialect availability.'));
+    } finally {
+      setAvailabilityId(null);
+    }
+  }
+
   const columns: DataTableColumn<AdminDialect>[] = [
     {
       key: 'name',
@@ -95,6 +108,20 @@ export function DialectsTable({
       header: 'Users',
       sortValue: (d) => d._count.users,
       render: (d) => d._count.users,
+    },
+    {
+      key: 'availability',
+      header: 'Availability',
+      sortValue: (d) => (d.active ? 1 : 0),
+      render: (d) => (
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+            d.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+          }`}
+        >
+          {d.active ? 'Active' : 'Revoked'}
+        </span>
+      ),
     },
     {
       key: 'wordGeneration',
@@ -137,6 +164,20 @@ export function DialectsTable({
             <Layers className="mr-1.5 inline size-4" aria-hidden="true" />
             Variants
           </button>
+          <ActionButton
+            className={d.active ? dangerButtonClass : secondaryButtonClass}
+            onClick={() => handleToggleAvailability(d.id, !d.active)}
+            pending={availabilityId === d.id}
+            pendingLabel={d.active ? 'Revoking' : 'Restoring'}
+            title={
+              d.active
+                ? 'Revoking resets every assigned trainer so they must choose an active dialect again.'
+                : 'Restore this dialect for future selections.'
+            }
+            type="button"
+          >
+            {d.active ? 'Revoke' : 'Restore'}
+          </ActionButton>
           <ActionButton
             className={dangerButtonClass}
             onClick={() => handleDelete(d.id)}
@@ -307,6 +348,7 @@ function DialectVariantsDialog({
   const [editName, setEditName] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [availabilityId, setAvailabilityId] = useState<string | null>(null);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -355,6 +397,18 @@ function DialectVariantsDialog({
       setError(normalizeErrorMessage(err, 'Unable to remove this variant.'));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleToggleAvailability(id: string, active: boolean) {
+    setError(null);
+    setAvailabilityId(id);
+    try {
+      await updateVariant({ id, dialectId: dialect.id, body: { active } }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to update sub-dialect availability.'));
+    } finally {
+      setAvailabilityId(null);
     }
   }
 
@@ -412,7 +466,11 @@ function DialectVariantsDialog({
                           <span className="font-mono text-muted">({variant.tag})</span>
                         </p>
                         <p className="text-sm text-muted">
-                          {variant._count.users} user{variant._count.users === 1 ? '' : 's'}{' '}
+                          <span className={variant.active ? 'text-emerald-700' : 'text-slate-600'}>
+                            {variant.active ? 'Active' : 'Revoked'}
+                          </span>{' '}
+                          &middot; {variant._count.users} user
+                          {variant._count.users === 1 ? '' : 's'}{' '}
                           &middot; {variant._count.wordRecordings} word recording
                           {variant._count.wordRecordings === 1 ? '' : 's'} &middot;{' '}
                           {variant._count.submissions} submission
@@ -427,6 +485,20 @@ function DialectVariantsDialog({
                         >
                           Edit
                         </button>
+                        <ActionButton
+                          className={variant.active ? dangerButtonClass : secondaryButtonClass}
+                          onClick={() => handleToggleAvailability(variant.id, !variant.active)}
+                          pending={availabilityId === variant.id}
+                          pendingLabel={variant.active ? 'Revoking' : 'Restoring'}
+                          title={
+                            variant.active
+                              ? 'Revoking resets trainers assigned to this sub-dialect.'
+                              : 'Restore this sub-dialect for future selections.'
+                          }
+                          type="button"
+                        >
+                          {variant.active ? 'Revoke' : 'Restore'}
+                        </ActionButton>
                         <ActionButton
                           className={dangerButtonClass}
                           disabled={

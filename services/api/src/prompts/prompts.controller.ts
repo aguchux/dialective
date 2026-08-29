@@ -50,9 +50,16 @@ export class PromptsController {
   async getNext(@Req() req: AuthenticatedRequest) {
     const trainer = await this.prisma.user.findUnique({
       where: { id: req.user.sub },
-      select: { dialect: { select: { tag: true } } },
+      select: {
+        dialect: { select: { tag: true, active: true } },
+        dialectVariant: { select: { active: true } },
+      },
     });
-    if (!trainer?.dialect) {
+    if (
+      !trainer?.dialect ||
+      trainer.dialect.active === false ||
+      trainer.dialectVariant?.active === false
+    ) {
       throw new UnprocessableEntityException('Complete dialect onboarding before dictation');
     }
     const dialectTag = trainer.dialect.tag;

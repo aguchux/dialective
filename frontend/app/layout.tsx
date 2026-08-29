@@ -8,6 +8,24 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dialectlibrary.com';
 const description =
   'Dialect Library is a contributor platform for voice recordings and word translations in underrepresented languages and dialects.';
+const siteJsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      name: 'Dialect Library',
+      url: siteUrl,
+      logo: `${siteUrl}/logo-mark-512.png`,
+    },
+    {
+      '@type': 'WebSite',
+      name: 'Dialect Library',
+      url: siteUrl,
+      description,
+      publisher: { '@type': 'Organization', name: 'Dialect Library' },
+    },
+  ],
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -21,6 +39,12 @@ export const metadata: Metadata = {
     template: '%s | Dialect Library',
   },
   description,
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+    other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
+      ? { 'msvalidate.01': process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION }
+      : undefined,
+  },
   keywords: [
     'dialect data',
     'voice data collection',
@@ -83,6 +107,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={inter.variable}>
       <body>
+        <script
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd).replace(/</g, '\\u003c') }}
+          type="application/ld+json"
+        />
         <Providers>{children}</Providers>
       </body>
     </html>
