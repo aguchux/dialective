@@ -616,6 +616,44 @@ export class WalletController {
     );
   }
 
+  /**
+   * Admin-triggered "send now" alongside the Monday weekly-trainer-report
+   * cron -- same buildReport aggregation and sendWeeklyTrainerReportEmail
+   * template, just admin-initiated and defaulting to the trainer's full
+   * lifetime range (matching /dashboard/reports' own default) instead of
+   * the cron's fixed trailing-7-days window.
+   */
+  @Post('admin/users/:id/send-report')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async sendInstantTrainerReport(@Param('id') id: string, @Query() query: GetTrainerReportDto) {
+    const trainer = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, firstName: true, role: true },
+    });
+    if (!trainer) {
+      throw new NotFoundException('User not found');
+    }
+    if (trainer.role !== Role.TRAINER) {
+      throw new UnprocessableEntityException('Only trainers have a recordings/earnings report');
+    }
+
+    const report = await this.trainerReport!.buildReport(
+      trainer.id,
+      query.from ? new Date(query.from) : undefined,
+      query.to ? new Date(query.to) : undefined,
+    );
+    await this.mail.sendWeeklyTrainerReportEmail({
+      trainerEmail: trainer.email,
+      trainerFirstName: trainer.firstName,
+      recordings: report.totals.recordings,
+      avgScore: report.totals.avgScore,
+      totalEarningsTokens: report.totals.totalEarningsTokens,
+      daily: report.daily.map((day) => ({ date: day.date, recordings: day.recordings })),
+    });
+    return { sent: true };
+  }
+
   @Get('wallet/activity')
   @UseGuards(JwtAuthGuard)
   async listActivity(@Req() req: AuthenticatedRequest, @Query() query: ListEarningsDto) {

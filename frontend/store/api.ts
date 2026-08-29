@@ -2831,6 +2831,9 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
     }),
+    sendInstantTrainerReport: builder.mutation<{ sent: boolean }, string>({
+      query: (id) => ({ url: `/admin/users/${id}/send-report`, method: 'POST' }),
+    }),
     deleteUser: builder.mutation<
       { id: string; deleted: boolean },
       { id: string; otpRequestId?: string; code?: string }
@@ -3377,6 +3380,7 @@ export const {
   useDeleteUserMutation,
   useRequestAuditHoldReleaseOtpMutation,
   useReleaseAuditHoldMutation,
+  useSendInstantTrainerReportMutation,
   useRequestAdminWalletAdjustmentOtpMutation,
   useCreateAdminWalletAdjustmentMutation,
   useGetAdminTrainerRecordingsQuery,

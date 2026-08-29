@@ -967,6 +967,88 @@ describe('WalletController.getTrainerReport', () => {
   });
 });
 
+describe('WalletController.sendInstantTrainerReport', () => {
+  function setup(overrides: { user?: Record<string, unknown> | null } = {}) {
+    const user =
+      'user' in overrides
+        ? overrides.user
+        : { id: 'trainer-1', email: 'trainer@example.com', firstName: 'Ada', role: 'TRAINER' };
+    const prisma = { user: { findUnique: jest.fn().mockResolvedValue(user) } };
+    const trainerReport = {
+      buildReport: jest.fn().mockResolvedValue({
+        totals: { recordings: 12, avgScore: '84.50', totalEarningsTokens: '3.5' },
+        daily: [{ date: '2026-08-24', recordings: 2, earningsTokens: '1' }],
+      }),
+    };
+    const mail = { sendWeeklyTrainerReportEmail: jest.fn().mockResolvedValue(undefined) };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      mail as never,
+      undefined,
+      trainerReport as never,
+    );
+    return { controller, prisma, trainerReport, mail };
+  }
+
+  it('builds the lifetime report and emails it via the same template as the weekly cron', async () => {
+    const { controller, trainerReport, mail } = setup();
+
+    await expect(controller.sendInstantTrainerReport('trainer-1', {} as never)).resolves.toEqual({
+      sent: true,
+    });
+
+    expect(trainerReport.buildReport).toHaveBeenCalledWith('trainer-1', undefined, undefined);
+    expect(mail.sendWeeklyTrainerReportEmail).toHaveBeenCalledWith({
+      trainerEmail: 'trainer@example.com',
+      trainerFirstName: 'Ada',
+      recordings: 12,
+      avgScore: '84.50',
+      totalEarningsTokens: '3.5',
+      daily: [{ date: '2026-08-24', recordings: 2 }],
+    });
+  });
+
+  it('forwards an explicit from/to range as Dates', async () => {
+    const { controller, trainerReport } = setup();
+
+    await controller.sendInstantTrainerReport('trainer-1', {
+      from: '2026-08-01T00:00:00Z',
+      to: '2026-08-07T00:00:00Z',
+    } as never);
+
+    expect(trainerReport.buildReport).toHaveBeenCalledWith(
+      'trainer-1',
+      new Date('2026-08-01T00:00:00Z'),
+      new Date('2026-08-07T00:00:00Z'),
+    );
+  });
+
+  it('404s for a nonexistent user', async () => {
+    const { controller } = setup({ user: null });
+
+    await expect(controller.sendInstantTrainerReport('missing', {} as never)).rejects.toThrow(
+      'User not found',
+    );
+  });
+
+  it('rejects a non-trainer user without ever building or sending a report', async () => {
+    const { controller, trainerReport, mail } = setup({
+      user: { id: 'admin-1', email: 'admin@example.com', firstName: 'Bo', role: 'ADMIN' },
+    });
+
+    await expect(controller.sendInstantTrainerReport('admin-1', {} as never)).rejects.toThrow(
+      'Only trainers have a recordings/earnings report',
+    );
+    expect(trainerReport.buildReport).not.toHaveBeenCalled();
+    expect(mail.sendWeeklyTrainerReportEmail).not.toHaveBeenCalled();
+  });
+});
+
 describe('WalletController admin leaderboard', () => {
   it('ranks earners by task payout ledger totals and contributors by submitted task count', async () => {
     const prisma = {

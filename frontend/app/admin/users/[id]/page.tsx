@@ -20,6 +20,7 @@ import {
   useLockUserMutation,
   useRequestUserDeleteOtpMutation,
   useRequestUserLockOtpMutation,
+  useSendInstantTrainerReportMutation,
   type UserActivityEntry,
 } from '@/store/api';
 
@@ -66,6 +67,22 @@ export default function AdminUserDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
   const [releaseHoldDialogOpen, setReleaseHoldDialogOpen] = useState(false);
+
+  const [sendReport, { isLoading: isSendingReport }] = useSendInstantTrainerReportMutation();
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  async function handleSendReport() {
+    if (!user) return;
+    setReportMessage(null);
+    setReportError(null);
+    try {
+      await sendReport(user.id).unwrap();
+      setReportMessage(`Report sent to ${user.email}.`);
+    } catch (err) {
+      setReportError(normalizeErrorMessage(err, 'Unable to send this report.'));
+    }
+  }
 
   const displayName = user
     ? [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Name not provided'
@@ -175,6 +192,36 @@ export default function AdminUserDetailPage() {
                 as a brand-new account.
               </p>
             </section>
+
+            {user.role === 'TRAINER' && (
+              <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+                <h2 className="text-lg font-black">Reports</h2>
+                <p className="text-sm leading-relaxed text-muted">
+                  Sends this trainer their full lifetime report by email right now &mdash;
+                  recordings, average score, and DL earned &mdash; the same email they&rsquo;d
+                  otherwise only get every Monday.
+                </p>
+                <div>
+                  <ActionButton
+                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-4 py-2 text-sm font-extrabold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={handleSendReport}
+                    pending={isSendingReport}
+                    pendingLabel="Sending"
+                    type="button"
+                  >
+                    Send report now
+                  </ActionButton>
+                </div>
+                {reportMessage && (
+                  <p className="text-sm leading-relaxed text-accent-dark">{reportMessage}</p>
+                )}
+                {reportError && (
+                  <p className="text-sm leading-relaxed text-danger" role="alert">
+                    {reportError}
+                  </p>
+                )}
+              </section>
+            )}
 
             {user.role === 'TRAINER' && user.onAuditHold && (
               <section className="grid gap-3 rounded-lg border border-[#f5c78e] bg-[#fff8ef] p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
