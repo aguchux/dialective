@@ -169,6 +169,18 @@ export class PlatformSettingsService {
     );
   }
 
+  /** Reads fresh (not cached) -- SubmissionRateLimitGuard calls both this and getSubmissionRateLimitPerHour on every /submissions/create and /words/recordings request, and needs an admin's toggle to take effect without waiting out ROW_CACHE_TTL_MS. */
+  async isSubmissionRateLimitEnabled(): Promise<boolean> {
+    const row = await this.fetchRow();
+    return row.submissionRateLimitEnabled;
+  }
+
+  /** Reads fresh (not cached) -- see isSubmissionRateLimitEnabled. */
+  async getSubmissionRateLimitPerHour(): Promise<number> {
+    const row = await this.fetchRow();
+    return row.submissionRateLimitPerHour;
+  }
+
   async getTrainingPayoutBonusCapMultiple(): Promise<number> {
     const row = await this.getRow();
     if (row.trainingPayoutBonusCapMultiple) {
@@ -690,6 +702,8 @@ export class PlatformSettingsService {
       llmMaxPoolPerDialect: row.llmMaxPoolPerDialect,
       llmBackfillItemsPerDialectPerRun: row.llmBackfillItemsPerDialectPerRun,
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
+      submissionRateLimitEnabled: row.submissionRateLimitEnabled,
+      submissionRateLimitPerHour: row.submissionRateLimitPerHour,
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),
@@ -794,6 +808,8 @@ export class PlatformSettingsService {
     llmMaxPoolPerDialect?: number;
     llmBackfillItemsPerDialectPerRun?: number;
     keyboardLayoutMaxLength?: number;
+    submissionRateLimitEnabled?: boolean;
+    submissionRateLimitPerHour?: number;
     qualityGateEnabled?: boolean;
     qualityWeightConsensus?: number;
     qualityWeightNoise?: number;
@@ -1120,6 +1136,8 @@ export class PlatformSettingsService {
       llmMaxPoolPerDialect: row.llmMaxPoolPerDialect,
       llmBackfillItemsPerDialectPerRun: row.llmBackfillItemsPerDialectPerRun,
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
+      submissionRateLimitEnabled: row.submissionRateLimitEnabled,
+      submissionRateLimitPerHour: row.submissionRateLimitPerHour,
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),

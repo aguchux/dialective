@@ -1035,6 +1035,8 @@ export interface PlatformSettings {
   llmMaxPoolPerDialect: number;
   llmBackfillItemsPerDialectPerRun: number;
   keyboardLayoutMaxLength: number;
+  submissionRateLimitEnabled: boolean;
+  submissionRateLimitPerHour: number;
   qualityGateEnabled: boolean;
   qualityWeightConsensus: string;
   qualityWeightNoise: string;
@@ -1130,6 +1132,8 @@ export interface PlatformSettingsInput {
   llmMaxPoolPerDialect?: number;
   llmBackfillItemsPerDialectPerRun?: number;
   keyboardLayoutMaxLength?: number;
+  submissionRateLimitEnabled?: boolean;
+  submissionRateLimitPerHour?: number;
   qualityGateEnabled?: boolean;
   qualityWeightConsensus?: number;
   qualityWeightNoise?: number;

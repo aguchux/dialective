@@ -80,6 +80,23 @@ describe('PlatformSettingsService.isWeeklyTrainerReportEnabled', () => {
   });
 });
 
+describe('PlatformSettingsService submission rate limit settings', () => {
+  it('isSubmissionRateLimitEnabled reflects the row value, defaulting false per the schema default', async () => {
+    const { service } = setup({ submissionRateLimitEnabled: false });
+    await expect(service.isSubmissionRateLimitEnabled()).resolves.toBe(false);
+  });
+
+  it('isSubmissionRateLimitEnabled returns true once an admin turns the toggle on', async () => {
+    const { service } = setup({ submissionRateLimitEnabled: true });
+    await expect(service.isSubmissionRateLimitEnabled()).resolves.toBe(true);
+  });
+
+  it('getSubmissionRateLimitPerHour reflects the admin-configured value', async () => {
+    const { service } = setup({ submissionRateLimitPerHour: 45 });
+    await expect(service.getSubmissionRateLimitPerHour()).resolves.toBe(45);
+  });
+});
+
 describe('PlatformSettingsService.isSpeechExpressionEnabled', () => {
   it('returns false by default', async () => {
     const { service } = setup({ speechExpressionEnabled: false });

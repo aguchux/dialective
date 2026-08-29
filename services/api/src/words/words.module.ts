@@ -8,6 +8,7 @@ import { CoursesModule } from '../courses/courses.module';
 import { AsrRegistryModule } from '../asr-registry/asr-registry.module';
 import { MailModule } from '../mail/mail.module';
 import { WordsService } from './words.service';
+import { SubmissionRateLimitGuard } from '../common/guards/submission-rate-limit.guard';
 
 @Module({
   imports: [
@@ -20,6 +21,6 @@ import { WordsService } from './words.service';
     MailModule,
   ],
   controllers: [WordsController],
-  providers: [WordsService],
+  providers: [WordsService, SubmissionRateLimitGuard],
 })
 export class WordsModule {}

@@ -12,8 +12,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { Throttle } from '@nestjs/throttler';
 import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
+import { SubmissionRateLimitGuard } from '../common/guards/submission-rate-limit.guard';
 import { StorageService } from '../storage/storage.service';
 import { RedisStreamsService } from '../redis-streams/redis-streams.service';
 import { AsrRegistryService } from '../asr-registry/asr-registry.service';
@@ -119,7 +121,14 @@ export class SubmissionsController {
    * authenticated clients only).
    */
   @Post('create')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, SubmissionRateLimitGuard)
+  // ttl (window length) stays static; the enforced limit itself is read from
+  // PlatformSettings.submissionRateLimitPerHour by SubmissionRateLimitGuard
+  // (default 120/hour, only enforced when submissionRateLimitEnabled is on)
+  // so admin can retune or disable this from Settings without a redeploy --
+  // this decorator's limit is only the pre-DI-resolution fallback
+  // @nestjs/throttler needs at bootstrap.
+  @Throttle({ default: { limit: 120, ttl: 60 * 60 * 1000 } })
   async create(@Req() req: AuthenticatedRequest, @Body() body: CreateSubmissionDto) {
     // Same audit-hold gate as WordsService.nextAssignment -- checked here
     // too since sentence submissions are a separate task-entry point that

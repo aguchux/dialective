@@ -11,10 +11,12 @@ import {
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Prisma, Role } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SubmissionRateLimitGuard } from '../common/guards/submission-rate-limit.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListSubmissionsDto } from '../submissions/dto/list-submissions.dto';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
@@ -58,6 +60,11 @@ export class WordsController {
   }
 
   @Post('recordings')
+  @UseGuards(SubmissionRateLimitGuard)
+  // Same admin-tunable limit as SubmissionsController.create -- see
+  // SubmissionRateLimitGuard. This decorator's limit is only the
+  // pre-DI-resolution fallback @nestjs/throttler needs at bootstrap.
+  @Throttle({ default: { limit: 120, ttl: 60 * 60 * 1000 } })
   createRecording(@Req() req: AuthenticatedRequest, @Body() body: CreateWordRecordingDto) {
     return this.words.createRecording(req.user.sub, body);
   }

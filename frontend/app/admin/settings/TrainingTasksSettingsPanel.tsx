@@ -17,6 +17,8 @@ export function TrainingTasksSettingsPanel() {
   const [recordingTimeoutSeconds, setRecordingTimeoutSeconds] = useState('5');
   const [recordingMaxTimeoutSeconds, setRecordingMaxTimeoutSeconds] = useState('180');
   const [auditHoldEveryN, setAuditHoldEveryN] = useState('500');
+  const [submissionRateLimitEnabled, setSubmissionRateLimitEnabled] = useState(false);
+  const [submissionRateLimitPerHour, setSubmissionRateLimitPerHour] = useState('120');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +31,8 @@ export function TrainingTasksSettingsPanel() {
     setRecordingTimeoutSeconds(String(platformSettings.wordTrainingRecordingTimeoutSeconds));
     setRecordingMaxTimeoutSeconds(String(platformSettings.wordTrainingRecordingMaxTimeoutSeconds));
     setAuditHoldEveryN(String(platformSettings.auditHoldEveryNSubmissions));
+    setSubmissionRateLimitEnabled(platformSettings.submissionRateLimitEnabled);
+    setSubmissionRateLimitPerHour(String(platformSettings.submissionRateLimitPerHour));
   }, [platformSettings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -41,6 +45,8 @@ export function TrainingTasksSettingsPanel() {
         wordTrainingRecordingTimeoutSeconds: Number(recordingTimeoutSeconds),
         wordTrainingRecordingMaxTimeoutSeconds: Number(recordingMaxTimeoutSeconds),
         auditHoldEveryNSubmissions: Number(auditHoldEveryN),
+        submissionRateLimitEnabled,
+        submissionRateLimitPerHour: Number(submissionRateLimitPerHour),
       }).unwrap();
       setMessage('Training & tasks settings saved.');
     } catch (err) {
@@ -120,6 +126,48 @@ export function TrainingTasksSettingsPanel() {
               min="0"
               value={auditHoldEveryN}
               onChange={(e) => setAuditHoldEveryN(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="grid gap-3 rounded-lg border border-line bg-surface p-4">
+            <p className="font-bold">Submission rate limiting</p>
+            <p className="leading-relaxed text-muted">
+              Caps how many sentence/dictation and word recordings a single trainer can submit per
+              rolling hour, protecting the ASR and quality-gate workers from being overwhelmed by a
+              runaway or scripted client. Off by default.
+            </p>
+
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="submission-rate-limit-enabled"
+            >
+              <input
+                checked={submissionRateLimitEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="submission-rate-limit-enabled"
+                onChange={(event) => setSubmissionRateLimitEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Enable submission rate limiting</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  When on, a trainer exceeding the limit below gets a "too many requests" response
+                  until the rolling hour window resets.
+                </span>
+              </span>
+            </label>
+
+            <label htmlFor="submission-rate-limit-per-hour">Max submissions per trainer per hour</label>
+            <input
+              className={`${inputClass} max-w-40`}
+              id="submission-rate-limit-per-hour"
+              type="number"
+              step="1"
+              min="1"
+              max="100000"
+              value={submissionRateLimitPerHour}
+              onChange={(e) => setSubmissionRateLimitPerHour(e.target.value)}
               required
             />
           </div>
