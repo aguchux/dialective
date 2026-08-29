@@ -93,6 +93,28 @@ describe('TrainerReportService', () => {
     expect(report.daily).toEqual([{ date: '2026-08-01', recordings: 3, earningsTokens: '6' }]);
   });
 
+  it('folds COURSE_COMPLETION_REWARD into training earnings, not a separate bucket', async () => {
+    const from = new Date('2026-08-01T00:00:00Z');
+    const to = new Date('2026-08-01T23:59:59Z');
+    prisma.ledgerEntry.groupBy.mockResolvedValue([
+      { type: 'TRAINING_PAYOUT', _sum: { amount: 5 } },
+      { type: 'COURSE_COMPLETION_REWARD', _sum: { amount: 2 } },
+    ]);
+
+    const report = await service.buildReport('user-1', from, to);
+
+    expect(report.totals.trainingEarningsTokens).toBe('7');
+    expect(report.totals.referralEarningsTokens).toBe('0');
+    expect(report.totals.totalEarningsTokens).toBe('7');
+    expect(prisma.ledgerEntry.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          type: { in: expect.arrayContaining(['COURSE_COMPLETION_REWARD']) },
+        }),
+      }),
+    );
+  });
+
   it('skips the wallet-backed ledger queries entirely when the trainer has no wallet row yet', async () => {
     prisma.wallet.findUnique.mockResolvedValue(null);
 

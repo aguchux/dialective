@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.TRAINING_PAYOUT,
+  LedgerEntryType.COURSE_COMPLETION_REWARD,
   LedgerEntryType.REFERRAL_COMMISSION,
   LedgerEntryType.REFERRAL_FUNDING_BONUS,
   LedgerEntryType.REFERRAL_PAYOUT_BONUS,
@@ -73,7 +74,14 @@ export class TrainerReportService {
       ledgerTotals
         .filter((entry) => types.includes(entry.type))
         .reduce((total, entry) => total + Number(entry._sum.amount ?? 0), 0);
-    const trainingEarnings = earningsAmount([LedgerEntryType.TRAINING_PAYOUT]);
+    // Course completion bonuses fold into the "training earnings" bucket
+    // rather than getting their own field -- they're trainer-earned income
+    // like a training payout, just triggered by finishing a course instead
+    // of a recording.
+    const trainingEarnings = earningsAmount([
+      LedgerEntryType.TRAINING_PAYOUT,
+      LedgerEntryType.COURSE_COMPLETION_REWARD,
+    ]);
     const referralEarnings = earningsAmount([
       LedgerEntryType.REFERRAL_COMMISSION,
       LedgerEntryType.REFERRAL_FUNDING_BONUS,

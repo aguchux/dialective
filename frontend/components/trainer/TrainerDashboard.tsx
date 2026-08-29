@@ -170,6 +170,7 @@ export const activityLabels: Record<LedgerEntryType, string> = {
   ADMIN_FUNDING: 'Admin Funding',
   ADMIN_ADJUSTMENT: 'Wallet correction',
   STARTUP_BONUS: 'Startup Bonus',
+  COURSE_COMPLETION_REWARD: 'Course completion bonus',
   PHONE_VERIFICATION_FEE: 'Phone verification fee',
   PHONE_VERIFICATION_FEE_REFUND: 'Phone verification fee refunded',
   P2P_ESCROW_LOCK: 'P2P escrow lock',
