@@ -11,6 +11,7 @@ import { ValuationHistoryQueryDto } from './dto/valuation-history-query.dto';
 import { ListReserveTransactionsDto } from './dto/list-reserve-transactions.dto';
 import { ListTokenOperationsDto } from './dto/list-token-operations.dto';
 import { UpdateTokenomicsPolicyDto } from './dto/update-tokenomics-policy.dto';
+import { PinTokenValueDto } from './dto/pin-token-value.dto';
 
 @Controller()
 export class TokenomicsController {
@@ -97,5 +98,19 @@ export class TokenomicsController {
   @Roles(Role.ADMIN)
   updatePolicy(@Body() dto: UpdateTokenomicsPolicyDto) {
     return this.tokenomics.updatePolicy(dto);
+  }
+
+  @Post('admin/tokenomics/pin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  pinValue(@Body() dto: PinTokenValueDto) {
+    return this.tokenomics.pinValue(dto.value);
+  }
+
+  @Post('admin/tokenomics/unpin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  unpinValue() {
+    return this.tokenomics.unpinValue();
   }
 }

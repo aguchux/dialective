@@ -202,6 +202,7 @@ export class TokenomicsService {
       mintingPaused: policy.mintingPaused,
       eligibleReserveUsd,
       publishedValueUsd,
+      pinnedValueUsd: policy.pinnedValueUsd?.toNumber() ?? null,
       rawValueUsd: latest?.rawValueUsd.toNumber() ?? null,
       coverageRatio,
       reserveHealthStatus: deriveHealthStatus(coverageRatio, policy),
@@ -229,10 +230,21 @@ export class TokenomicsService {
       status.supply.redeemable > 0
         ? status.eligibleReserveUsd / status.supply.redeemable
         : fallback;
+    // A pinned value bypasses the calculated/clamped rate entirely --
+    // rawValueUsd above still records what the real calculated value would
+    // have been, so drift stays visible once an admin unpins. previous is
+    // still read (for previousPublishedValue) so the clamp bounds resume
+    // seamlessly from wherever the pin left off, not from a stale
+    // pre-pin value.
     const previousPublishedValue = previous?.publishedValueUsd.toNumber() ?? fallback;
-    const upper = previousPublishedValue * (1 + policy.maxIncreaseRate.toNumber());
-    const lower = previousPublishedValue * Math.max(0, 1 - policy.maxDecreaseRate.toNumber());
-    const publishedValueUsd = Math.min(upper, Math.max(lower, rawValueUsd));
+    let publishedValueUsd: number;
+    if (policy.pinnedValueUsd !== null) {
+      publishedValueUsd = policy.pinnedValueUsd.toNumber();
+    } else {
+      const upper = previousPublishedValue * (1 + policy.maxIncreaseRate.toNumber());
+      const lower = previousPublishedValue * Math.max(0, 1 - policy.maxDecreaseRate.toNumber());
+      publishedValueUsd = Math.min(upper, Math.max(lower, rawValueUsd));
+    }
     const liability = status.supply.redeemable * publishedValueUsd;
 
     return this.prisma.valuationSnapshot.create({
@@ -532,6 +544,32 @@ export class TokenomicsService {
         restrictedCoverageThreshold: input.restrictedCoverageThreshold,
       },
     });
+  }
+
+  /**
+   * Pins the DL/USD rate to an admin-set value, bypassing the reserve/
+   * supply-derived calculation everywhere publishedValueUsd is read.
+   * Immediately triggers recalculateValuation so the pin takes effect right
+   * away rather than waiting for the next scheduled cycle.
+   */
+  async pinValue(value: number) {
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new BadRequestException('Pinned value must be a positive number');
+    }
+    await this.prisma.tokenomicsPolicy.update({
+      where: { id: 'default' },
+      data: { pinnedValueUsd: value },
+    });
+    return this.recalculateValuation();
+  }
+
+  /** Reverts to the calculated rate; immediately triggers recalculateValuation so unpinning takes effect right away. */
+  async unpinValue() {
+    await this.prisma.tokenomicsPolicy.update({
+      where: { id: 'default' },
+      data: { pinnedValueUsd: null },
+    });
+    return this.recalculateValuation();
   }
 
   async ensurePolicy() {

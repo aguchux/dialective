@@ -530,6 +530,7 @@ export interface TokenomicsStatus {
   mintingPaused: boolean;
   eligibleReserveUsd: number;
   publishedValueUsd: number;
+  pinnedValueUsd: number | null;
   rawValueUsd: number | null;
   coverageRatio: number | null;
   reserveHealthStatus: ReserveHealthStatus;
@@ -603,6 +604,7 @@ export interface TokenomicsPolicy {
   healthyCoverageThreshold: string;
   watchCoverageThreshold: string;
   restrictedCoverageThreshold: string;
+  pinnedValueUsd: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2261,6 +2263,14 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/admin/tokenomics/policy', method: 'POST', body }),
       invalidatesTags: ['Tokenomics'],
     }),
+    pinTokenomicsValue: builder.mutation<ValuationSnapshotRow, number>({
+      query: (value) => ({ url: '/admin/tokenomics/pin', method: 'POST', body: { value } }),
+      invalidatesTags: ['Tokenomics'],
+    }),
+    unpinTokenomicsValue: builder.mutation<ValuationSnapshotRow, void>({
+      query: () => ({ url: '/admin/tokenomics/unpin', method: 'POST' }),
+      invalidatesTags: ['Tokenomics'],
+    }),
     requestWithdrawalResolveOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
       string
@@ -3305,6 +3315,8 @@ export const {
   useListTokenOperationsQuery,
   useGetTokenomicsPolicyQuery,
   useUpdateTokenomicsPolicyMutation,
+  usePinTokenomicsValueMutation,
+  useUnpinTokenomicsValueMutation,
   useRequestWithdrawalResolveOtpMutation,
   useApproveWithdrawalMutation,
   useSubmitWithdrawalToNowPaymentsMutation,

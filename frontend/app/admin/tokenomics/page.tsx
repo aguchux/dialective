@@ -19,7 +19,7 @@ import { ValuationChart } from './ValuationChart';
 import { AvailableReserveSection } from './AvailableReserveSection';
 import { ReserveLedgerSection } from './ReserveLedgerSection';
 import { TokenOperationsSection } from './TokenOperationsSection';
-import { PolicySettingsPanel } from './PolicySettingsPanel';
+import { PolicySettingsPanel, PinnedValuePanel } from './PolicySettingsPanel';
 import { inputClass, primaryButtonClass, secondaryButtonClass } from './shared';
 
 const statCardIconBg: Record<string, string> = {
@@ -153,6 +153,11 @@ export default function AdminTokenomicsPage() {
                 </span>
               </div>
               <p className="text-3xl font-black">{isLoadingStatus ? '...' : card.value}</p>
+              {card.key === 'value' && status?.pinnedValueUsd !== null && status && (
+                <span className="w-fit rounded-md bg-[#fff3e0] px-2 py-0.5 text-xs font-extrabold text-[#8a4b0f]">
+                  Pinned
+                </span>
+              )}
             </div>
           ))}
 
@@ -272,6 +277,8 @@ export default function AdminTokenomicsPage() {
         <ReserveLedgerSection />
 
         <TokenOperationsSection />
+
+        <PinnedValuePanel />
 
         <PolicySettingsPanel />
       </div>

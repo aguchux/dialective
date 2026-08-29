@@ -411,4 +411,107 @@ describe('TokenomicsService', () => {
       await expect(service.updatePolicy({ maxIncreaseRate: value })).resolves.toBeDefined();
     });
   });
+
+  describe('pinValue / unpinValue / recalculateValuation with a pin', () => {
+    function makeRecalcHarness(pinnedValueUsd: Prisma.Decimal | null) {
+      const policy = {
+        baseCurrency: 'USD',
+        enabled: true,
+        mintingPaused: false,
+        maxIncreaseRate: new Prisma.Decimal(0.05),
+        maxDecreaseRate: new Prisma.Decimal(0.05),
+        healthyCoverageThreshold: new Prisma.Decimal(1),
+        watchCoverageThreshold: new Prisma.Decimal(0.8),
+        restrictedCoverageThreshold: new Prisma.Decimal(0.6),
+        pinnedValueUsd,
+        updatedAt: new Date('2026-08-29T00:00:00Z'),
+      };
+      const valuationSnapshot = {
+        findFirst: jest.fn().mockResolvedValue({
+          publishedValueUsd: new Prisma.Decimal(0.1),
+          rawValueUsd: new Prisma.Decimal(0.1),
+        }),
+        create: jest.fn().mockImplementation(({ data }) => Promise.resolve(data)),
+      };
+      const prisma = {
+        tokenomicsPolicy: { upsert: jest.fn().mockResolvedValue(policy), update: jest.fn() },
+        reserveBalanceSnapshot: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              provider: 'flutterwave',
+              currency: 'USD',
+              balanceRaw: new Prisma.Decimal(1000),
+              balanceUsd: new Prisma.Decimal(1000),
+              fetchedAt: new Date(),
+            },
+          ]),
+        },
+        tokenAccount: {
+          findMany: jest.fn().mockResolvedValue([
+            { kind: 'USER', available: new Prisma.Decimal(1000), locked: new Prisma.Decimal(0) },
+          ]),
+        },
+        valuationSnapshot,
+      };
+      const settings = { getTokenUsdRate: jest.fn().mockResolvedValue(0.1) };
+      return { prisma, settings, policy };
+    }
+
+    it('recalculateValuation uses the pinned value verbatim, ignoring the clamp and the calculated rate', async () => {
+      const { prisma, settings } = makeRecalcHarness(new Prisma.Decimal(0.5));
+      const service = new TokenomicsService(prisma as never, settings as never);
+
+      const snapshot = await service.recalculateValuation();
+
+      // Reserve $1000 / redeemable supply 1000 = a calculated rate of $1,
+      // clamped to at most 0.1 * 1.05 = 0.105 by maxIncreaseRate -- the pin
+      // (0.5) is far outside that clamp band, proving it bypasses it entirely.
+      expect(snapshot.publishedValueUsd).toBe(0.5);
+      expect(snapshot.rawValueUsd).toBe(1);
+    });
+
+    it('recalculateValuation uses the calculated, clamped rate when unpinned', async () => {
+      const { prisma, settings } = makeRecalcHarness(null);
+      const service = new TokenomicsService(prisma as never, settings as never);
+
+      const snapshot = await service.recalculateValuation();
+
+      expect(snapshot.publishedValueUsd).toBeCloseTo(0.105, 6);
+    });
+
+    it('pinValue rejects a non-positive value without writing anything', async () => {
+      const { prisma, settings } = makeRecalcHarness(null);
+      const service = new TokenomicsService(prisma as never, settings as never);
+
+      await expect(service.pinValue(0)).rejects.toThrow('Pinned value must be a positive number');
+      await expect(service.pinValue(-1)).rejects.toThrow('Pinned value must be a positive number');
+      expect(prisma.tokenomicsPolicy.update).not.toHaveBeenCalled();
+    });
+
+    it('pinValue writes the pin and immediately recalculates', async () => {
+      const { prisma, settings } = makeRecalcHarness(new Prisma.Decimal(0.5));
+      const service = new TokenomicsService(prisma as never, settings as never);
+
+      const snapshot = await service.pinValue(0.5);
+
+      expect(prisma.tokenomicsPolicy.update).toHaveBeenCalledWith({
+        where: { id: 'default' },
+        data: { pinnedValueUsd: 0.5 },
+      });
+      expect(snapshot.publishedValueUsd).toBe(0.5);
+    });
+
+    it('unpinValue clears the pin and immediately recalculates back to the calculated rate', async () => {
+      const { prisma, settings } = makeRecalcHarness(null);
+      const service = new TokenomicsService(prisma as never, settings as never);
+
+      const snapshot = await service.unpinValue();
+
+      expect(prisma.tokenomicsPolicy.update).toHaveBeenCalledWith({
+        where: { id: 'default' },
+        data: { pinnedValueUsd: null },
+      });
+      expect(snapshot.publishedValueUsd).toBeCloseTo(0.105, 6);
+    });
+  });
 });

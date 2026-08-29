@@ -1074,6 +1074,14 @@ model TokenomicsPolicy {
   healthyCoverageThreshold    Decimal  @default(1) @db.Decimal(8, 6)
   watchCoverageThreshold      Decimal  @default(0.8) @db.Decimal(8, 6)
   restrictedCoverageThreshold Decimal  @default(0.6) @db.Decimal(8, 6)
+  /// When set, this value replaces the calculated DL/USD rate everywhere
+  /// publishedValueUsd is read (getStatus, getCurrentPublishedValue,
+  /// recalculateValuation) -- admin override that bypasses the reserve/
+  /// supply-derived value entirely. Null means unpinned (use the calculated
+  /// value). rawValueUsd on each ValuationSnapshot still records what the
+  /// real calculated value would have been while pinned, so drift stays
+  /// visible once unpinned.
+  pinnedValueUsd              Decimal? @db.Decimal(20, 8)
   updatedAt                   DateTime @updatedAt
   createdAt                   DateTime @default(now())
 
