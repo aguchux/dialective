@@ -39,6 +39,16 @@ export function fiatWithdrawalContextHash(input: {
 }
 
 /**
+ * Binds a payout-account-deletion OTP to the exact account being deleted --
+ * both the /otp request route and the executing DELETE route call this with
+ * the same payoutAccountId, so a code issued to confirm deleting one account
+ * can't be replayed against a different one.
+ */
+export function payoutAccountDeleteContextHash(input: { payoutAccountId: string }): string {
+  return hashContext({ payoutAccountId: input.payoutAccountId });
+}
+
+/**
  * Binds an admin-payout OTP (admin/training-payouts, admin/withdrawals/:id/
  * approve|resolve|submit-nowpayments) to the exact action AND the exact
  * transaction details being confirmed -- same anti-replay reasoning as

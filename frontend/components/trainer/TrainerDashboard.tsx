@@ -60,6 +60,7 @@ import { MarketView } from '@/components/p2p/MarketView';
 import { requestPwaInstall } from '@/components/PwaInstallPrompt';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationListPanel } from '@/components/notifications/NotificationListPanel';
+import { DeletePayoutAccountDialog } from '@/components/wallet/DeletePayoutAccountDialog';
 import {
   Avatar,
   cardClass,
@@ -108,7 +109,6 @@ import {
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
   useListPayoutAccountsQuery,
-  useDeletePayoutAccountMutation,
   LocalCurrency,
   WithdrawalCurrency,
   WithdrawalNetwork,
@@ -2109,8 +2109,10 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
 
   const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery();
   const { data: payoutAccounts = [] } = useListPayoutAccountsQuery();
-  const [deletePayoutAccount, { isLoading: payoutAccountDeleting }] =
-    useDeletePayoutAccountMutation();
+  const [deletingPayoutAccount, setDeletingPayoutAccount] = useState<{
+    id: string;
+    label: string;
+  } | null>(null);
   const { data: paymentInstructionsData } = useGetP2PPaymentInstructionsQuery();
   const [p2pPaymentInstructions, setP2pPaymentInstructions] = useState('');
   const [updateP2pPaymentInstructions, { isLoading: instructionsSaving }] =
@@ -2360,17 +2362,6 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       setMessage('Profile updated.');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not save your profile.'));
-    }
-  }
-
-  async function removePayoutAccount(id: string) {
-    setMessage(null);
-    setError(null);
-    try {
-      await deletePayoutAccount(id).unwrap();
-      setMessage('Payout account removed.');
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Could not remove payout account.'));
     }
   }
 
@@ -2750,8 +2741,15 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                   <button
                     aria-label={`Remove ${account.type === 'BANK' ? (account.bankName ?? 'account') : account.mobileMoneyNetwork}`}
                     className="grid min-h-9 min-w-9 shrink-0 place-items-center rounded-lg border border-line text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-red-950"
-                    disabled={payoutAccountDeleting}
-                    onClick={() => void removePayoutAccount(account.id)}
+                    onClick={() =>
+                      setDeletingPayoutAccount({
+                        id: account.id,
+                        label:
+                          account.type === 'BANK'
+                            ? (account.bankName ?? account.bankCode ?? 'this bank account')
+                            : (account.mobileMoneyNumberMasked ?? 'this mobile money account'),
+                      })
+                    }
                     type="button"
                   >
                     <Trash2 className="size-4" aria-hidden="true" />
@@ -2767,6 +2765,12 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
             + Add payout account
           </Link>
         </div>
+        {deletingPayoutAccount && (
+          <DeletePayoutAccountDialog
+            account={deletingPayoutAccount}
+            onClose={() => setDeletingPayoutAccount(null)}
+          />
+        )}
 
         <form className={`${cardClass} grid gap-4 p-5`} onSubmit={saveP2pPaymentInstructions}>
           <SectionTitle

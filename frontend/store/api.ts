@@ -2143,8 +2143,17 @@ export const dialectivaApi = createApi({
       query: ({ id, ...body }) => ({ url: `/payout-accounts/${id}`, method: 'PATCH', body }),
       invalidatesTags: ['PayoutAccounts'],
     }),
-    deletePayoutAccount: builder.mutation<{ deleted: boolean }, string>({
-      query: (id) => ({ url: `/payout-accounts/${id}`, method: 'DELETE' }),
+    requestPayoutAccountDeleteOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      string
+    >({
+      query: (id) => ({ url: `/payout-accounts/${id}/delete/otp`, method: 'POST' }),
+    }),
+    deletePayoutAccount: builder.mutation<
+      { deleted: boolean },
+      { id: string; otpRequestId: string; code: string }
+    >({
+      query: ({ id, ...body }) => ({ url: `/payout-accounts/${id}`, method: 'DELETE', body }),
       invalidatesTags: ['PayoutAccounts'],
     }),
     createKycSession: builder.mutation<{ sessionId: string; url: string }, void>({
@@ -3266,6 +3275,7 @@ export const {
   useCreatePayoutAccountMutation,
   useUpdatePayoutAccountMutation,
   useDeletePayoutAccountMutation,
+  useRequestPayoutAccountDeleteOtpMutation,
   useCreateKycSessionMutation,
   useGetKycStatusQuery,
   useListKycVerificationsQuery,

@@ -58,3 +58,26 @@ describe('MailService.sendWeeklyTrainerReportEmail', () => {
     expect(call.text).toContain('Hi there');
   });
 });
+
+describe('MailService.sendOtpEmail PAYOUT_ACCOUNT_DELETE', () => {
+  let settings: any;
+  let service: MailService;
+
+  beforeEach(() => {
+    sendMock.mockClear();
+    process.env.RESEND_API_KEY = 'test-key';
+    settings = { getResendFromAddress: jest.fn().mockResolvedValue('noreply@example.com') };
+    service = new MailService(settings as never);
+  });
+
+  it('sends a deletion-confirmation email containing the code', async () => {
+    await service.sendOtpEmail('trainer@example.com', '654321', 'PAYOUT_ACCOUNT_DELETE' as never);
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const call = sendMock.mock.calls[0][0];
+    expect(call.to).toBe('trainer@example.com');
+    expect(call.subject).toContain('deletion');
+    expect(call.html).toContain('654321');
+    expect(call.text).toContain('654321');
+  });
+});

@@ -12,20 +12,26 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
+  OtpPurpose,
   P2POfferStatus,
   PayoutAccountType,
   PayoutAccountVerificationStatus,
   WithdrawalStatus,
 } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
+import { UserThrottlerGuard } from '../common/guards/user-throttler.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { OtpService } from '../otp/otp.service';
 import { encryptPayoutField, maskAccountNumber } from '../common/payout-crypto.util';
+import { payoutAccountDeleteContextHash } from './otp-context.util';
 import { FlutterwaveService } from './flutterwave.service';
 import { FlutterwaveV4Service, RecipientCountry } from './flutterwave-v4.service';
 import { CreatePayoutAccountDto } from './dto/create-payout-account.dto';
 import { UpdatePayoutAccountDto } from './dto/update-payout-account.dto';
+import { ConfirmPayoutAccountDeleteDto } from './dto/confirm-payout-account-delete.dto';
 
 const NON_TERMINAL_WITHDRAWAL_STATUSES: WithdrawalStatus[] = [
   WithdrawalStatus.PENDING,
@@ -40,6 +46,7 @@ export class PayoutAccountsController {
     private readonly flutterwave: FlutterwaveService,
     private readonly flutterwaveV4: FlutterwaveV4Service,
     private readonly platformSettings: PlatformSettingsService,
+    private readonly otp: OtpService,
   ) {}
 
   @Get()
@@ -157,10 +164,48 @@ export class PayoutAccountsController {
     return toPublicPayoutAccount(account);
   }
 
+  /**
+   * Deletion always requires email OTP confirmation -- same reasoning as
+   * wallet/withdrawals/otp: removing a saved payout destination is a
+   * trainer-initiated, financially consequential action, so this is
+   * unconditional (no PlatformSettings toggle), matching the withdrawal-OTP
+   * precedent rather than the admin-payout-OTP precedent (which is
+   * admin-toggleable, since that gate is about an admin's own power, not a
+   * trainer's account safety).
+   */
+  @Post(':id/delete/otp')
+  @UseGuards(JwtAuthGuard, UserThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
+  async requestDeleteOtp(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    await this.requireDeletable(req.user.sub, id);
+    const contextHash = payoutAccountDeleteContextHash({ payoutAccountId: id });
+    return this.otp.issueForUser(req.user.sub, OtpPurpose.PAYOUT_ACCOUNT_DELETE, user.email, contextHash);
+  }
+
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
-  async remove(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
-    await this.requireOwnedAccount(req.user.sub, id);
+  @UseGuards(JwtAuthGuard, UserThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
+  async remove(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: ConfirmPayoutAccountDeleteDto,
+  ) {
+    await this.requireDeletable(req.user.sub, id);
+    await this.otp.verify({
+      otpRequestId: body.otpRequestId,
+      userId: req.user.sub,
+      purpose: OtpPurpose.PAYOUT_ACCOUNT_DELETE,
+      code: body.code,
+      contextHash: payoutAccountDeleteContextHash({ payoutAccountId: id }),
+    });
+    await this.prisma.payoutAccount.delete({ where: { id } });
+    return { deleted: true };
+  }
+
+  /** Shared owned/referenced checks used by both the OTP-request and the executing delete route, so a request can't be issued for an account that's about to fail these checks anyway. */
+  private async requireDeletable(userId: string, id: string) {
+    await this.requireOwnedAccount(userId, id);
     const referencedByActiveWithdrawal = await this.prisma.withdrawalRequest.findFirst({
       where: { payoutAccountId: id, status: { in: NON_TERMINAL_WITHDRAWAL_STATUSES } },
       select: { id: true },
@@ -182,8 +227,6 @@ export class PayoutAccountsController {
         'This payout account is used by an open P2P offer -- cancel or complete it first',
       );
     }
-    await this.prisma.payoutAccount.delete({ where: { id } });
-    return { deleted: true };
   }
 
   private async requireOwnedAccount(userId: string, id: string) {

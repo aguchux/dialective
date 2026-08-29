@@ -7,10 +7,10 @@ import { ArrowLeft } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { DeletePayoutAccountDialog } from '@/components/wallet/DeletePayoutAccountDialog';
 import {
   normalizeErrorMessage,
   useCreatePayoutAccountMutation,
-  useDeletePayoutAccountMutation,
   useListBanksQuery,
   useListPayoutAccountsQuery,
   useUpdatePayoutAccountMutation,
@@ -45,9 +45,10 @@ export default function PayoutAccountsPage() {
     skip: status !== 'authenticated',
   });
   const [updateAccount] = useUpdatePayoutAccountMutation();
-  const [deleteAccount, { isLoading: isDeleting }] = useDeletePayoutAccountMutation();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState<{ id: string; label: string } | null>(
+    null,
+  );
 
   async function handleSetDefault(id: string) {
     setRowError(null);
@@ -55,18 +56,6 @@ export default function PayoutAccountsPage() {
       await updateAccount({ id, isDefault: true }).unwrap();
     } catch (err) {
       setRowError(normalizeErrorMessage(err, 'Unable to set this account as default.'));
-    }
-  }
-
-  async function handleDelete(id: string) {
-    setRowError(null);
-    setDeletingId(id);
-    try {
-      await deleteAccount(id).unwrap();
-    } catch (err) {
-      setRowError(normalizeErrorMessage(err, 'Unable to delete this payout account.'));
-    } finally {
-      setDeletingId(null);
     }
   }
 
@@ -144,21 +133,33 @@ export default function PayoutAccountsPage() {
                   Set as default
                 </button>
               )}
-              <ActionButton
+              <button
                 className={secondaryButtonClass}
-                onClick={() => handleDelete(account.id)}
-                pending={isDeleting && deletingId === account.id}
-                pendingLabel="Deleting"
+                onClick={() =>
+                  setDeletingAccount({
+                    id: account.id,
+                    label:
+                      account.type === 'BANK'
+                        ? (account.bankName ?? account.bankCode ?? 'this bank account')
+                        : (account.mobileMoneyNumberMasked ?? 'this mobile money account'),
+                  })
+                }
                 type="button"
               >
                 Delete
-              </ActionButton>
+              </button>
             </div>
           </div>
         ))}
       </div>
 
       <AddPayoutAccountDialog />
+      {deletingAccount && (
+        <DeletePayoutAccountDialog
+          account={deletingAccount}
+          onClose={() => setDeletingAccount(null)}
+        />
+      )}
     </div>
   );
 }

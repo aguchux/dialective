@@ -424,6 +424,7 @@ enum OtpPurpose {
   PHONE_VERIFICATION
   P2P_TRADE
   SUB_DISTRIBUTOR_ADJUSTMENT
+  PAYOUT_ACCOUNT_DELETE
 }
 
 enum ManualPhoneVerificationStatus {
