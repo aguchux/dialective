@@ -114,6 +114,33 @@ describe('PlatformSettingsService QRAC settings', () => {
   });
 });
 
+describe('PlatformSettingsService testimony settings', () => {
+  it('isTestimonyEnabled reflects the row value, defaulting false per the schema default', async () => {
+    const { service } = setup({ testimonyEnabled: false });
+    await expect(service.isTestimonyEnabled()).resolves.toBe(false);
+  });
+
+  it('isTestimonyEnabled returns true once an admin turns the toggle on', async () => {
+    const { service } = setup({ testimonyEnabled: true });
+    await expect(service.isTestimonyEnabled()).resolves.toBe(true);
+  });
+
+  it('getTestimonyMaxTextLength reflects the admin-configured value', async () => {
+    const { service } = setup({ testimonyMaxTextLength: 280 });
+    await expect(service.getTestimonyMaxTextLength()).resolves.toBe(280);
+  });
+
+  it('getTestimonyMaxVideoSeconds reflects the admin-configured value', async () => {
+    const { service } = setup({ testimonyMaxVideoSeconds: 45 });
+    await expect(service.getTestimonyMaxVideoSeconds()).resolves.toBe(45);
+  });
+
+  it('getTestimonyRewardTokens reflects the admin-configured Decimal value as a number', async () => {
+    const { service } = setup({ testimonyRewardTokens: { toNumber: () => 7.5 } });
+    await expect(service.getTestimonyRewardTokens()).resolves.toBe(7.5);
+  });
+});
+
 describe('PlatformSettingsService.isSpeechExpressionEnabled', () => {
   it('returns false by default', async () => {
     const { service } = setup({ speechExpressionEnabled: false });

@@ -57,6 +57,7 @@ import {
 } from '@/lib/format';
 import { resolveDialectName, useDialectName } from '@/lib/dialect-name';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
+import { TestimonyDialog } from '@/components/trainer/TestimonyDialog';
 import { DictationDialog } from '@/components/trainer/DictationDialog';
 import { MarketView } from '@/components/p2p/MarketView';
 import { requestPwaInstall } from '@/components/PwaInstallPrompt';
@@ -100,6 +101,7 @@ import {
   useRequestManualPhoneVerificationMutation,
   useMarkManualPhoneVerificationSentMutation,
   useGetPublicClientSettingsQuery,
+  useGetMyTestimonyQuery,
   useGetKycStatusQuery,
   useCreateKycSessionMutation,
   ManualPhoneVerificationRequestResult,
@@ -174,6 +176,7 @@ export const activityLabels: Record<LedgerEntryType, string> = {
   ADMIN_ADJUSTMENT: 'Wallet correction',
   STARTUP_BONUS: 'Startup Bonus',
   COURSE_COMPLETION_REWARD: 'Course completion bonus',
+  TESTIMONY_APPROVED_REWARD: 'Testimony reward',
   PHONE_VERIFICATION_FEE: 'Phone verification fee',
   PHONE_VERIFICATION_FEE_REFUND: 'Phone verification fee refunded',
   P2P_ESCROW_LOCK: 'P2P escrow lock',
@@ -181,6 +184,8 @@ export const activityLabels: Record<LedgerEntryType, string> = {
   P2P_ESCROW_RELEASE: 'P2P escrow released',
   P2P_ESCROW_CREDIT: 'P2P DL purchase',
 };
+
+const TESTIMONY_DISMISSED_KEY = 'dialectiva.testimonyBannerDismissed';
 
 export function TrainerDashboard() {
   const { data: session, status, update } = useSession();
@@ -194,6 +199,7 @@ export function TrainerDashboard() {
   const [midSessionRequiredCourses, setMidSessionRequiredCourses] = useState<
     { id: string; slug: string; title: string }[] | null
   >(null);
+  const [testimonyOpen, setTestimonyOpen] = useState(false);
   const requestedView = searchParams.get('view');
   const displayName = [session?.user.firstName, session?.user.lastName].filter(Boolean).join(' ');
   const activeView = allViewIds.includes(requestedView as DashboardView)
@@ -218,6 +224,24 @@ export function TrainerDashboard() {
       session?.user.role === 'ADMIN' ||
       session?.user.role === 'DISTRIBUTOR',
   });
+  const { data: publicSettings } = useGetPublicClientSettingsQuery();
+  const { data: myTestimony } = useGetMyTestimonyQuery(undefined, {
+    skip:
+      status !== 'authenticated' ||
+      session?.user.role === 'ADMIN' ||
+      session?.user.role === 'DISTRIBUTOR' ||
+      !publicSettings?.testimonyEnabled,
+  });
+  const [testimonyDismissed, setTestimonyDismissed] = useState(false);
+  useEffect(() => {
+    setTestimonyDismissed(window.localStorage.getItem(TESTIMONY_DISMISSED_KEY) === '1');
+  }, []);
+  function dismissTestimonyBanner() {
+    window.localStorage.setItem(TESTIMONY_DISMISSED_KEY, '1');
+    setTestimonyDismissed(true);
+  }
+  const showTestimonyBanner =
+    !!publicSettings?.testimonyEnabled && myTestimony === null && !testimonyDismissed;
 
   // Same "check client-side first, server is still the authoritative
   // backstop" pattern as the balance check below -- WordsService.startSession/
@@ -299,6 +323,12 @@ export function TrainerDashboard() {
         {incompleteRequiredCourses && incompleteRequiredCourses.length > 0 && (
           <RequiredCoursesBanner courses={incompleteRequiredCourses} />
         )}
+        {showTestimonyBanner && (
+          <TestimonyBanner
+            onDismiss={dismissTestimonyBanner}
+            onGiveTestimony={() => setTestimonyOpen(true)}
+          />
+        )}
         <MicrophonePermissionBanner activeView={activeView} />
 
         <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
@@ -373,6 +403,15 @@ export function TrainerDashboard() {
           }}
           open={requiredCoursesOpen}
         />
+        {publicSettings?.testimonyEnabled && (
+          <TestimonyDialog
+            maxTextLength={publicSettings.testimonyMaxTextLength}
+            maxVideoSeconds={publicSettings.testimonyMaxVideoSeconds}
+            onOpenChange={setTestimonyOpen}
+            onSubmitted={() => setTestimonyOpen(false)}
+            open={testimonyOpen}
+          />
+        )}
       </PortalContainerProvider>
     </div>
   );
@@ -456,6 +495,40 @@ function RequiredCoursesBanner({
         >
           Start now
         </Link>
+      </div>
+    </div>
+  );
+}
+
+function TestimonyBanner({
+  onGiveTestimony,
+  onDismiss,
+}: {
+  onGiveTestimony: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm dark:border-amber-900 dark:bg-amber-950">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 md:px-2">
+        <p className="font-bold text-amber-800 dark:text-amber-200">
+          Enjoying Dialect Library? Share a quick testimony and earn DL.
+        </p>
+        <div className="flex shrink-0 items-center gap-4">
+          <button
+            className="font-extrabold text-amber-800 underline hover:no-underline dark:text-amber-200"
+            onClick={onGiveTestimony}
+            type="button"
+          >
+            Give testimony
+          </button>
+          <button
+            className="font-bold text-amber-800/70 hover:text-amber-800 dark:text-amber-200/70 dark:hover:text-amber-200"
+            onClick={onDismiss}
+            type="button"
+          >
+            Not now
+          </button>
+        </div>
       </div>
     </div>
   );

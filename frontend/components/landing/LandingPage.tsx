@@ -1,6 +1,7 @@
 import { ContributorRail } from './ContributorRail';
 import { CountryFlagMarquee } from './CountryFlagMarquee';
 import { HowItWorks } from './HowItWorks';
+import { LandingTestimonial, TestimonialsCarousel } from './TestimonialsCarousel';
 import { LandingBlog } from './LandingBlog';
 import { LandingFooter } from './LandingFooter';
 import { LandingHeader } from './LandingHeader';
@@ -62,8 +63,24 @@ async function getCountries(): Promise<Country[]> {
   }
 }
 
+async function getTestimonials(): Promise<LandingTestimonial[]> {
+  try {
+    const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/testimonials/public`, {
+      next: { revalidate: 300 },
+    });
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
+}
+
 export async function LandingPage() {
-  const [geoStats, countries] = await Promise.all([getGeoStats(), getCountries()]);
+  const [geoStats, countries, testimonials] = await Promise.all([
+    getGeoStats(),
+    getCountries(),
+    getTestimonials(),
+  ]);
   const dialectCount = geoStats?.dialectCount ?? null;
   const countryCount = geoStats?.countryCount ?? null;
   const totalTrainers = geoStats?.totalTrainers ?? null;
@@ -94,6 +111,7 @@ export async function LandingPage() {
       </div>
       <div className="px-4 md:px-[3.4rem]">
         <ContributorRail dialectCount={dialectCount} />
+        <TestimonialsCarousel testimonials={testimonials} />
         <HowItWorks />
         <CountryFlagMarquee countries={countries} />
         <LandingBlog />

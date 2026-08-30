@@ -7,6 +7,7 @@ export {
   creditCourseCompletionReward,
   creditFundingReferralBonusesOps,
   creditStartupBonus,
+  creditTestimonyReward,
   creditTrainingPayout,
   creditTrainingPayoutOps,
 } from './payouts';

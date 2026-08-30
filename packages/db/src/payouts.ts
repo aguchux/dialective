@@ -376,6 +376,46 @@ export async function creditCourseCompletionReward(
   }
 }
 
+/**
+ * One-time DL reward for an approved Testimony -- identical shape to
+ * creditCourseCompletionReward, keyed by testimonyId as the LedgerEntry
+ * reference so the (walletId, type, reference) unique constraint makes a
+ * direct re-approval (or a race between two approve requests) a safe no-op
+ * rather than a double credit. Returns true if a credit was actually
+ * written, false if this trainer already had one for this testimony.
+ */
+export async function creditTestimonyReward(
+  prisma: PrismaClient,
+  userId: string,
+  testimonyId: string,
+  tokenAmount: Decimal | number | string,
+): Promise<boolean> {
+  const wallet = await getOrCreateWallet(prisma, userId);
+  const amount = new Decimal(tokenAmount);
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.ledgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          type: 'TESTIMONY_APPROVED_REWARD',
+          amount,
+          reference: testimonyId,
+        },
+      });
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: { increment: amount } },
+      });
+    });
+    return true;
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return false;
+    }
+    throw err;
+  }
+}
+
 export async function creditFundingReferralBonusesOps(
   prisma: PrismaClient,
   userId: string,

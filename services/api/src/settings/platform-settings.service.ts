@@ -145,7 +145,10 @@ export class PlatformSettingsService {
 
   async getMinCompletedTasksForWithdrawal(): Promise<number> {
     const row = await this.getRow();
-    if (row.minCompletedTasksForWithdrawal !== null && row.minCompletedTasksForWithdrawal !== undefined) {
+    if (
+      row.minCompletedTasksForWithdrawal !== null &&
+      row.minCompletedTasksForWithdrawal !== undefined
+    ) {
       return row.minCompletedTasksForWithdrawal;
     }
     const raw = process.env.MIN_COMPLETED_TASKS_FOR_WITHDRAWAL ?? '100';
@@ -220,6 +223,26 @@ export class PlatformSettingsService {
   async getQracIntervalMinutes(): Promise<number> {
     const row = await this.getRow();
     return row.qracIntervalMinutes;
+  }
+
+  async isTestimonyEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.testimonyEnabled;
+  }
+
+  async getTestimonyMaxTextLength(): Promise<number> {
+    const row = await this.getRow();
+    return row.testimonyMaxTextLength;
+  }
+
+  async getTestimonyMaxVideoSeconds(): Promise<number> {
+    const row = await this.getRow();
+    return row.testimonyMaxVideoSeconds;
+  }
+
+  async getTestimonyRewardTokens(): Promise<number> {
+    const row = await this.getRow();
+    return row.testimonyRewardTokens.toNumber();
   }
 
   /** Reads fresh (not cached) -- weekly-trainer-report.ts checks this once at job start, so a stale cached read isn't a concern the way it would be for a per-request getter, but freshness costs nothing here either. */
@@ -716,6 +739,10 @@ export class PlatformSettingsService {
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
       qracEnabled: row.qracEnabled,
       qracIntervalMinutes: row.qracIntervalMinutes,
+      testimonyEnabled: row.testimonyEnabled,
+      testimonyMaxTextLength: row.testimonyMaxTextLength,
+      testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
+      testimonyRewardTokens: row.testimonyRewardTokens.toString(),
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),
@@ -824,6 +851,10 @@ export class PlatformSettingsService {
     submissionRateLimitPerHour?: number;
     qracEnabled?: boolean;
     qracIntervalMinutes?: number;
+    testimonyEnabled?: boolean;
+    testimonyMaxTextLength?: number;
+    testimonyMaxVideoSeconds?: number;
+    testimonyRewardTokens?: number;
     qualityGateEnabled?: boolean;
     qualityWeightConsensus?: number;
     qualityWeightNoise?: number;
@@ -1154,6 +1185,10 @@ export class PlatformSettingsService {
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
       qracEnabled: row.qracEnabled,
       qracIntervalMinutes: row.qracIntervalMinutes,
+      testimonyEnabled: row.testimonyEnabled,
+      testimonyMaxTextLength: row.testimonyMaxTextLength,
+      testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
+      testimonyRewardTokens: row.testimonyRewardTokens.toString(),
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),
@@ -1282,6 +1317,9 @@ export class PlatformSettingsService {
       kycMinWithdrawalTokens: kycMinWithdrawalTokens.toString(),
       isKycRequiredOnboarding,
       isFlutterwaveV4Enabled,
+      testimonyEnabled: row.testimonyEnabled,
+      testimonyMaxTextLength: row.testimonyMaxTextLength,
+      testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
     };
   }
 }

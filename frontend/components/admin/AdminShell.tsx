@@ -25,6 +25,7 @@ const navItems = [
   { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
   { href: '/admin/words', label: 'Words', icon: WordsIcon },
   { href: '/admin/recordings', label: 'Recordings', icon: RecordingsIcon },
+  { href: '/admin/testimonials', label: 'Testimonials', icon: TestimonialsIcon },
   { href: '/admin/audit-hold', label: 'Audit Queue', icon: AuditQueueIcon },
   { href: '/admin/phone-verifications', label: 'Phone Verifications', icon: PhoneIcon },
   { href: '/admin/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
@@ -486,6 +487,27 @@ function RecordingsIcon() {
       <path d="M5 10a7 7 0 0 0 14 0" strokeLinecap="round" />
       <path d="M12 17v4" strokeLinecap="round" />
       <path d="M8 21h8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function TestimonialsIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path
+        d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M8 10h.01M12 10h.01M16 10h.01" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

@@ -639,6 +639,7 @@ export type LedgerEntryType =
   | 'ADMIN_ADJUSTMENT'
   | 'STARTUP_BONUS'
   | 'COURSE_COMPLETION_REWARD'
+  | 'TESTIMONY_APPROVED_REWARD'
   | 'PHONE_VERIFICATION_FEE'
   | 'PHONE_VERIFICATION_FEE_REFUND'
   | 'P2P_ESCROW_LOCK'
@@ -821,6 +822,50 @@ export interface PublicClientSettings {
   kycMinWithdrawalTokens: string;
   isKycRequiredOnboarding: boolean;
   isFlutterwaveV4Enabled: boolean;
+  testimonyEnabled: boolean;
+  testimonyMaxTextLength: number;
+  testimonyMaxVideoSeconds: number;
+}
+
+export type TestimonyKind = 'VIDEO' | 'TEXT';
+export type TestimonyStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface Testimony {
+  id: string;
+  userId: string;
+  kind: TestimonyKind;
+  text: string | null;
+  videoBucket: string | null;
+  videoKey: string | null;
+  durationMs: number | null;
+  status: TestimonyStatus;
+  reviewedAt: string | null;
+  reviewedByAdminId: string | null;
+  rejectionReason: string | null;
+  rewardCredited: boolean;
+  createdAt: string;
+}
+
+export interface TestimonyUpload {
+  uploadUrl: string;
+  key: string;
+  bucket: string;
+  expiresInSeconds: number;
+}
+
+export type SubmitTestimonyInput =
+  | { kind: 'TEXT'; text: string }
+  | { kind: 'VIDEO'; bucket: string; videoKey: string; durationMs: number };
+
+export interface TestimonyAdminPage {
+  items: (Testimony & {
+    videoUrl: string | null;
+    user: { firstName: string | null; lastName: string | null; email: string };
+  })[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 }
 
 export type EarningsChartRange = 'today' | 'week' | 'month' | 'year';
@@ -1064,6 +1109,10 @@ export interface PlatformSettings {
   submissionRateLimitPerHour: number;
   qracEnabled: boolean;
   qracIntervalMinutes: number;
+  testimonyEnabled: boolean;
+  testimonyMaxTextLength: number;
+  testimonyMaxVideoSeconds: number;
+  testimonyRewardTokens: string;
   qualityGateEnabled: boolean;
   qualityWeightConsensus: string;
   qualityWeightNoise: string;
@@ -1163,6 +1212,10 @@ export interface PlatformSettingsInput {
   submissionRateLimitPerHour?: number;
   qracEnabled?: boolean;
   qracIntervalMinutes?: number;
+  testimonyEnabled?: boolean;
+  testimonyMaxTextLength?: number;
+  testimonyMaxVideoSeconds?: number;
+  testimonyRewardTokens?: number;
   qualityGateEnabled?: boolean;
   qualityWeightConsensus?: number;
   qualityWeightNoise?: number;
@@ -1813,6 +1866,7 @@ export const dialectivaApi = createApi({
     'Kyc',
     'AdminSettlement',
     'ReferralInvites',
+    'Testimony',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -2052,6 +2106,31 @@ export const dialectivaApi = createApi({
     }),
     signQrac: builder.mutation<{ version: string; signedAt: string }, string>({
       query: (sessionId) => ({ url: `/words/sessions/${sessionId}/qrac`, method: 'POST' }),
+    }),
+    getMyTestimony: builder.query<Testimony | null, void>({
+      query: () => '/testimonials/mine',
+      providesTags: ['Testimony'],
+    }),
+    createTestimonyUploadUrl: builder.mutation<TestimonyUpload, { contentType: string }>({
+      query: (body) => ({ url: '/testimonials/upload-url', method: 'POST', body }),
+    }),
+    submitTestimony: builder.mutation<Testimony, SubmitTestimonyInput>({
+      query: (body) => ({ url: '/testimonials', method: 'POST', body }),
+      invalidatesTags: ['Testimony'],
+    }),
+    getAdminTestimonials: builder.query<
+      TestimonyAdminPage,
+      { page?: number; pageSize?: number; status?: TestimonyStatus } | void
+    >({
+      query: (params) => ({ url: '/admin/testimonials', params: params ?? undefined }),
+      providesTags: ['Testimony'],
+    }),
+    reviewTestimony: builder.mutation<
+      Testimony,
+      { id: string; status: 'APPROVED' | 'REJECTED'; rejectionReason?: string }
+    >({
+      query: ({ id, ...body }) => ({ url: `/admin/testimonials/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Testimony'],
     }),
     createWordRecordingUpload: builder.mutation<
       WordRecordingUpload,
@@ -3325,6 +3404,11 @@ export const {
   useLazyGetSpellingSuggestionsQuery,
   useEndWordTrainingSessionMutation,
   useSignQracMutation,
+  useGetMyTestimonyQuery,
+  useCreateTestimonyUploadUrlMutation,
+  useSubmitTestimonyMutation,
+  useGetAdminTestimonialsQuery,
+  useReviewTestimonyMutation,
   useCreateWordRecordingUploadMutation,
   useSubmitWordRecordingMutation,
   useRequestDepositOtpMutation,

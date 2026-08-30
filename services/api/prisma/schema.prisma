@@ -138,6 +138,7 @@ model User {
   trainingSessions                 TrainingSession[]
   wordRecordings                   WordRecording[]
   qracAffirmations                 QracAffirmationSubmission[]
+  testimonies                      Testimony[]
   wordSkips                        WordSkip[]
   subscriptionPoolsOpened          SubscriptionPool[]               @relation("SubscriptionPoolOpenedBy")
   dataAccessLeadsContacted         DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
@@ -905,6 +906,46 @@ model QracAffirmationSubmission {
   @@map("qrac_affirmation_submissions")
 }
 
+enum TestimonyKind {
+  VIDEO
+  TEXT
+}
+
+enum TestimonyStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// A trainer's paid testimony -- VIDEO (max PlatformSettings.
+/// testimonyMaxVideoSeconds, uploaded publicly via StorageService's
+/// publicRead flag so the homepage carousel can embed it directly) or TEXT
+/// (max PlatformSettings.testimonyMaxTextLength chars). Mutable (unlike the
+/// append-only QracAffirmationSubmission above) since admin review flips
+/// status PENDING -> APPROVED/REJECTED; approval credits a one-time DL
+/// reward via creditTestimonyReward, keyed by this row's id as the
+/// LedgerEntry reference for idempotency.
+model Testimony {
+  id                String          @id @default(uuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind              TestimonyKind
+  text              String? // TEXT testimonies only
+  videoBucket       String? // VIDEO testimonies only
+  videoKey          String? // VIDEO testimonies only
+  durationMs        Int? // VIDEO testimonies only, actual recorded length
+  status            TestimonyStatus @default(PENDING)
+  reviewedAt        DateTime?
+  reviewedByAdminId String?
+  rejectionReason   String?
+  rewardCredited    Boolean         @default(false) // set true once creditTestimonyReward actually credits -- lets the admin UI show "rewarded" without re-deriving it from the ledger
+  createdAt         DateTime        @default(now())
+
+  @@index([userId])
+  @@index([status, createdAt])
+  @@map("testimonies")
+}
+
 /// A server-issued prompt prevents the client from choosing a source word,
 /// direction, or reverse-validation target after the session has started.
 model WordTrainingAssignment {
@@ -1028,6 +1069,7 @@ enum LedgerEntryType {
   ADMIN_ADJUSTMENT // signed: admin correction against any user's wallet; negative values are silent debit corrections
   STARTUP_BONUS
   COURSE_COMPLETION_REWARD // one-time per (wallet, courseId reference); see Course.completionRewardTokens
+  TESTIMONY_APPROVED_REWARD // one-time per (wallet, testimonyId reference); credited on admin approval, see creditTestimonyReward
   PHONE_VERIFICATION_FEE
   PHONE_VERIFICATION_FEE_REFUND // reverses PHONE_VERIFICATION_FEE when a manual verification request is rejected or expires unused -- see AuthService.refundManualPhoneVerificationFee
   P2P_ESCROW_LOCK
@@ -1859,6 +1901,10 @@ model PlatformSettings {
   speechExpressionEnabled                Boolean   @default(false) // master kill switch for the speech-expression analysis pass (emotion/tone/style/speed/energy/prosodyMetrics) in quality-gate-worker. When false, the worker skips the analysis entirely (not "computes but hides" -- unlike qualityGateEnabled, there's no downstream scoring use for this to gate, and emotion classification has a real per-job CPU cost worth skipping when unused). Purely descriptive/informational output -- deliberately has NO qualityWeight* counterpart and never feeds compositeScore/payout (see docs/Dialect-Library-Speech-Expression-Metadata-Plan.md's "never permanently bake into scoring" principle)
   spellingNormalizationProviderOrder     String    @default("openai,deepseek,anthropic") // CSV fallback-try order for spelling normalization, same permutation rules as llmProviderOrder
   sentenceRebuildEnabled                 Boolean   @default(false) // master kill switch for the SENTENCE_REBUILD word-training exercise; WordsService.nextAssignment never offers it when false
+  testimonyEnabled                       Boolean   @default(false) // master switch for prompting trainers to give a testimony (trainer dashboard banner) and for the public homepage carousel; when false neither the banner nor any carousel content appears, and submission is rejected server-side
+  testimonyMaxTextLength                 Int       @default(200) // max characters for a TEXT testimony, enforced both client-side (textarea maxLength) and server-side (TestimonialsService.submit)
+  testimonyMaxVideoSeconds               Int       @default(30) // hard cap on a VIDEO testimony's recording length, enforced client-side same as WordTrainingDialog's maxRecordingMs pattern, and re-validated server-side against the submitted durationMs
+  testimonyRewardTokens                  Decimal   @default(5) @db.Decimal(20, 8) // one-time DL reward credited via creditTestimonyReward when an admin approves a testimony (Testimony.status -> APPROVED)
   smsSenderId                            String? // Overrides TERMII_SENDER_ID/SMSLIVE247_SENDER_ID/AFRICASTALKING_SENDER_ID for every SMS provider (Termii, SMSLive247, Africa's Talking, and SMSLive247's native-OTP route) when set -- null/unset falls back to each provider's own env var, so this stays a no-op until an admin fills it in. Twilio has no equivalent (it sends from a purchased phone number, not a named sender ID).
   smsProviderOrder                       String    @default("termii,twilio,africastalking") // CSV fallback-try order for phone-verification SMS OTPs, must be a permutation of {termii,twilio,africastalking}, validated app-side like llmProviderOrder -- smslive247 is not a fallback-chain member (see smslive247NativeOtpEnabled), it can't fire-and-forget an arbitrary code on their OTP-compliant route
   smslive247NativeOtpEnabled             Boolean   @default(false) // when true, phone verification (Profile > Phone number) bypasses OtpCode/the SMS fallback chain entirely and uses SMSLive247's own token-generate/verify API end-to-end, since their OTP-compliant route generates the code itself and verifies it on their side, not ours

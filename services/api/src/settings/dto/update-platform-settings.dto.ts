@@ -277,6 +277,25 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  testimonyEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  testimonyMaxTextLength?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  testimonyMaxVideoSeconds?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  testimonyRewardTokens?: number;
+
+  @IsOptional()
+  @IsBoolean()
   qualityGateEnabled?: boolean;
 
   // The four qualityWeight* fields must sum to 100 -- validated in

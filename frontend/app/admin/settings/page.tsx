@@ -8,6 +8,7 @@ import { ReferralBonusSettingsPanel } from './ReferralBonusSettingsPanel';
 import { TrainingTasksSettingsPanel } from './TrainingTasksSettingsPanel';
 import { WordGenerationSettingsPanel } from './WordGenerationSettingsPanel';
 import { QualityGateSettingsPanel } from './QualityGateSettingsPanel';
+import { TestimonySettingsPanel } from './TestimonySettingsPanel';
 import { SpeechExpressionSettingsPanel } from './SpeechExpressionSettingsPanel';
 import { SpellingNormalizationSettingsPanel } from './SpellingNormalizationSettingsPanel';
 import { P2PMarketSettingsPanel } from './P2PMarketSettingsPanel';
@@ -35,6 +36,7 @@ const groups = [
   { key: 'pwa', label: 'Web App Install' },
   { key: 'wordGeneration', label: 'Word Generation' },
   { key: 'qualityGate', label: 'Voice Quality Gate' },
+  { key: 'testimonials', label: 'Testimony Settings' },
   { key: 'speechExpression', label: 'Speech Expression' },
   { key: 'spellingNormalization', label: 'Spelling Normalization' },
   { key: 'p2pMarket', label: 'P2P Market' },
@@ -95,6 +97,7 @@ export default function AdminSettingsPage() {
             {active === 'pwa' && <PwaSettingsPanel />}
             {active === 'wordGeneration' && <WordGenerationSettingsPanel />}
             {active === 'qualityGate' && <QualityGateSettingsPanel />}
+            {active === 'testimonials' && <TestimonySettingsPanel />}
             {active === 'speechExpression' && <SpeechExpressionSettingsPanel />}
             {active === 'spellingNormalization' && <SpellingNormalizationSettingsPanel />}
             {active === 'p2pMarket' && <P2PMarketSettingsPanel />}
