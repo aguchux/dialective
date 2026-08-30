@@ -78,7 +78,7 @@ export function LandingHeader() {
             <BrandLogo
               className="text-xl text-[#050505] sm:text-2xl"
               size={38}
-              textClassName="hidden sm:inline"
+              textClassName="hidden lg:inline"
             />
             <nav className="hidden items-center gap-6 md:flex" aria-label="Primary">
               {menuLinks.map((link) => (
@@ -96,11 +96,11 @@ export function LandingHeader() {
             {isAuthenticated ? (
               <>
                 <DropdownMenu>
-                  <DropdownMenuTrigger className="flex items-center gap-2 rounded-full border-[1.5px] border-[#050505] bg-[rgba(255,255,255,0.1)] py-1 pl-1 pr-2 transition-colors hover:bg-[rgba(5,5,5,0.1)] sm:pr-3">
+                  <DropdownMenuTrigger className="flex items-center gap-2 rounded-full border-[1.5px] border-[#050505] bg-[rgba(255,255,255,0.1)] py-1 pl-1 pr-2 transition-colors hover:bg-[rgba(5,5,5,0.1)] lg:pr-3">
                     <span className="grid size-8 place-items-center rounded-full bg-accent text-sm font-black text-white">
                       {initial}
                     </span>
-                    <span className="hidden max-w-40 truncate font-bold sm:inline">
+                    <span className="hidden max-w-40 truncate font-bold lg:inline">
                       {displayName}
                     </span>
                   </DropdownMenuTrigger>
@@ -117,14 +117,14 @@ export function LandingHeader() {
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Link
-                  className="hidden min-h-[42px] items-center justify-center whitespace-nowrap rounded-full border-[1.5px] border-accent bg-accent px-[1.15rem] py-[0.7rem] text-white no-underline transition-colors hover:border-accent-dark hover:bg-accent-dark hover:text-white sm:inline-flex"
+                  className="hidden min-h-[42px] items-center justify-center whitespace-nowrap rounded-full border-[1.5px] border-accent bg-accent px-[1.15rem] py-[0.7rem] text-white no-underline transition-colors hover:border-accent-dark hover:bg-accent-dark hover:text-white lg:inline-flex"
                   href={homePath}
                 >
                   Go to dashboard
                 </Link>
                 <Link
                   aria-label="Go to dashboard"
-                  className="grid size-9 shrink-0 place-items-center rounded-full border-[1.5px] border-accent bg-accent text-white no-underline transition-colors hover:border-accent-dark hover:bg-accent-dark sm:hidden"
+                  className="grid size-9 shrink-0 place-items-center rounded-full border-[1.5px] border-accent bg-accent text-white no-underline transition-colors hover:border-accent-dark hover:bg-accent-dark lg:hidden"
                   href={homePath}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">

@@ -211,14 +211,39 @@ function formatTime(value: string) {
 }
 
 function renderMessage(content: string) {
-  const parts = content.split(/(\[[^\]]+\]\(\/[A-Za-z0-9_/?=&-]*\))/g);
+  const parts = content.split(
+    /(\[[^\]]+\]\((?:\/[A-Za-z0-9_/?=&-]*|https:\/\/(?:www\.youtube\.com\/@DialectLibrary|wa\.me\/447424448030)|mailto:hello@dialectlibrary\.com)\))/g,
+  );
   return parts.map((part, index) => {
-    const match = /^\[([^\]]+)\]\((\/[A-Za-z0-9_/?=&-]*)\)$/.exec(part);
+    const match = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
     if (!match) return <span key={index}>{part}</span>;
+    if (!isApprovedAssistantHref(match[2])) return <span key={index}>{part}</span>;
+    if (!match[2].startsWith('/')) {
+      return (
+        <a
+          className="font-bold underline"
+          href={match[2]}
+          key={index}
+          rel="noreferrer"
+          target="_blank"
+        >
+          {match[1]}
+        </a>
+      );
+    }
     return (
       <Link className="font-bold underline" href={match[2]} key={index}>
         {match[1]}
       </Link>
     );
   });
+}
+
+function isApprovedAssistantHref(href: string) {
+  return (
+    /^\/[A-Za-z0-9_/?=&-]*$/.test(href) ||
+    href === 'https://www.youtube.com/@DialectLibrary' ||
+    href === 'https://wa.me/447424448030' ||
+    href === 'mailto:hello@dialectlibrary.com'
+  );
 }

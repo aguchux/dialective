@@ -169,7 +169,7 @@ describe('AssistantService', () => {
         service as unknown as { readKnowledgeFile(file: string): Promise<string> },
         'readKnowledgeFile',
       )
-      .mockResolvedValueOnce('A'.repeat(24_000))
+      .mockResolvedValueOnce('A'.repeat(32_000))
       .mockResolvedValueOnce('Route guidance');
     jest
       .spyOn(
@@ -183,6 +183,6 @@ describe('AssistantService', () => {
 
     expect(knowledge).toContain('## Runtime Content Registry');
     expect(knowledge).toContain('A'.repeat(100));
-    expect(knowledge).toHaveLength(36_002);
+    expect(knowledge).toHaveLength(44_002);
   });
 });
