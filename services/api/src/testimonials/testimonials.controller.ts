@@ -10,8 +10,8 @@ export class TestimonialsController {
 
   @Get('mine')
   @UseGuards(JwtAuthGuard)
-  getMine(@Req() req: AuthenticatedRequest) {
-    return this.testimonials.getMine(req.user.sub);
+  listMine(@Req() req: AuthenticatedRequest) {
+    return this.testimonials.listMine(req.user.sub);
   }
 
   @Post('upload-url')
@@ -29,8 +29,9 @@ export class TestimonialsController {
   /**
    * Unauthenticated, powers the homepage carousel (LandingPage.tsx fetches
    * this server-side). No `id` param needed by the caller -- returns every
-   * APPROVED testimony; the response is small (one row per trainer, ever,
-   * per the one-testimony-per-trainer submission rule) so no pagination.
+   * APPROVED testimony (a trainer may have more than one, each submitted
+   * and approved independently); no pagination since the approved set is
+   * expected to stay small.
    */
   @Get('public')
   getPublic() {

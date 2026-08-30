@@ -103,7 +103,7 @@ import {
   useRequestManualPhoneVerificationMutation,
   useMarkManualPhoneVerificationSentMutation,
   useGetPublicClientSettingsQuery,
-  useGetMyTestimonyQuery,
+  useListMyTestimoniesQuery,
   useGetKycStatusQuery,
   useCreateKycSessionMutation,
   ManualPhoneVerificationRequestResult,
@@ -2585,7 +2585,7 @@ function CampaignsView({ referralCode }: { referralCode: string }) {
 
 function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) {
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
-  const { data: myTestimony, isLoading } = useGetMyTestimonyQuery(undefined, {
+  const { data: myTestimonies, isLoading } = useListMyTestimoniesQuery(undefined, {
     skip: !publicSettings?.testimonyEnabled,
   });
 
@@ -2605,19 +2605,18 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
       <div className="mb-5 flex items-start justify-between gap-4">
         <ViewHeading
           title="Testimonials"
-          subtitle="Share your experience with Dialect Library and earn a one-time DL reward once approved."
+          subtitle="Share your experience with Dialect Library, anytime -- every approved testimonial earns a DL reward."
         />
-        {publicSettings?.testimonyEnabled &&
-          (!myTestimony || myTestimony.status === 'REJECTED') && (
-            <button
-              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-accent bg-accent px-4 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark"
-              onClick={onGiveTestimony}
-              type="button"
-            >
-              <MessageSquareQuote className="size-4" aria-hidden="true" />
-              Create Testimonial
-            </button>
-          )}
+        {publicSettings?.testimonyEnabled && (
+          <button
+            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-accent bg-accent px-4 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark"
+            onClick={onGiveTestimony}
+            type="button"
+          >
+            <MessageSquareQuote className="size-4" aria-hidden="true" />
+            Add Testimonial
+          </button>
+        )}
       </div>
       {!publicSettings?.testimonyEnabled ? (
         <EmptyPanel
@@ -2628,32 +2627,38 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
         />
       ) : isLoading ? (
         <div className={`${cardClass} p-5 text-sm font-bold text-muted`}>Loading...</div>
-      ) : myTestimony ? (
-        <div className={`${cardClass} grid gap-3 p-5`}>
-          <div className="flex items-center justify-between gap-2">
-            <span
-              className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-black ${statusTone[myTestimony.status]}`}
-            >
-              {statusLabel[myTestimony.status]}
-            </span>
-            <span className="text-xs text-muted">{formatDate(myTestimony.createdAt)}</span>
-          </div>
-          {myTestimony.kind === 'TEXT' ? (
-            <p className="text-sm italic text-ink">&ldquo;{myTestimony.text}&rdquo;</p>
-          ) : (
-            <p className="text-sm text-muted">Video testimony submitted.</p>
-          )}
-          {myTestimony.status === 'REJECTED' && myTestimony.rejectionReason && (
-            <p className="text-sm text-muted">Reason: {myTestimony.rejectionReason}</p>
-          )}
-          {myTestimony.status === 'APPROVED' && myTestimony.rewardCredited && (
-            <p className="text-sm font-bold text-emerald-700">Your DL reward has been credited.</p>
-          )}
+      ) : myTestimonies && myTestimonies.length > 0 ? (
+        <div className="grid gap-3">
+          {myTestimonies.map((testimony) => (
+            <div className={`${cardClass} grid gap-3 p-5`} key={testimony.id}>
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-black ${statusTone[testimony.status]}`}
+                >
+                  {statusLabel[testimony.status]}
+                </span>
+                <span className="text-xs text-muted">{formatDate(testimony.createdAt)}</span>
+              </div>
+              {testimony.kind === 'TEXT' ? (
+                <p className="text-sm italic text-ink">&ldquo;{testimony.text}&rdquo;</p>
+              ) : (
+                <p className="text-sm text-muted">Video testimony submitted.</p>
+              )}
+              {testimony.status === 'REJECTED' && testimony.rejectionReason && (
+                <p className="text-sm text-muted">Reason: {testimony.rejectionReason}</p>
+              )}
+              {testimony.status === 'APPROVED' && testimony.rewardCredited && (
+                <p className="text-sm font-bold text-emerald-700">
+                  Your DL reward has been credited.
+                </p>
+              )}
+            </div>
+          ))}
         </div>
       ) : (
         <EmptyPanel
           icon={MessageSquareQuote}
-          title="You haven't submitted a testimony yet"
+          title="You haven't submitted a testimonial yet"
           actionHref={undefined}
           actionLabel={undefined}
         />

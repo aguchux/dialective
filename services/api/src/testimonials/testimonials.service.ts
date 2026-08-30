@@ -32,8 +32,8 @@ export class TestimonialsService {
     private readonly storage: StorageService,
   ) {}
 
-  async getMine(userId: string) {
-    return this.prisma.testimony.findFirst({
+  async listMine(userId: string) {
+    return this.prisma.testimony.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
@@ -55,26 +55,15 @@ export class TestimonialsService {
   }
 
   /**
-   * One active submission at a time: a trainer with a PENDING or APPROVED
-   * testimony can't submit another (APPROVED already got them their
-   * one-time reward and public slot; PENDING is still awaiting review). A
-   * REJECTED testimony can be resubmitted -- see the query below, which
-   * only blocks on PENDING/APPROVED.
+   * Trainers may submit testimonials at will -- no cap on how many they
+   * have PENDING or APPROVED at once. Each submission is reviewed and
+   * rewarded independently (creditTestimonyReward is keyed by the
+   * individual testimony's id, so multiple approvals for the same trainer
+   * each pay out rather than colliding on one ledger entry).
    */
   async submit(userId: string, dto: CreateTestimonyDto) {
     if (!(await this.settings.isTestimonyEnabled())) {
       throw new ForbiddenException('Testimonials are not currently open');
-    }
-
-    const existing = await this.prisma.testimony.findFirst({
-      where: { userId, status: { in: ['PENDING', 'APPROVED'] } },
-    });
-    if (existing) {
-      throw new ConflictException(
-        existing.status === 'APPROVED'
-          ? 'You have already submitted a testimony'
-          : 'Your previous testimony is still awaiting review',
-      );
     }
 
     if (dto.kind === 'TEXT') {

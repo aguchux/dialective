@@ -2210,7 +2210,7 @@ export const dialectivaApi = createApi({
     signQrac: builder.mutation<{ version: string; signedAt: string }, string>({
       query: (sessionId) => ({ url: `/words/sessions/${sessionId}/qrac`, method: 'POST' }),
     }),
-    getMyTestimony: builder.query<Testimony | null, void>({
+    listMyTestimonies: builder.query<Testimony[], void>({
       query: () => '/testimonials/mine',
       providesTags: ['Testimony'],
     }),
@@ -3596,7 +3596,7 @@ export const {
   useLazyGetSpellingSuggestionsQuery,
   useEndWordTrainingSessionMutation,
   useSignQracMutation,
-  useGetMyTestimonyQuery,
+  useListMyTestimoniesQuery,
   useCreateTestimonyUploadUrlMutation,
   useSubmitTestimonyMutation,
   useGetAdminTestimonialsQuery,

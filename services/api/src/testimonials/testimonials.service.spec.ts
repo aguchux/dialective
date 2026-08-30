@@ -95,28 +95,33 @@ describe('TestimonialsService', () => {
       expect(result.kind).toBe('VIDEO');
     });
 
-    it('rejects a second submission while a PENDING testimony still exists', async () => {
-      prisma.testimony.findFirst.mockResolvedValue({ id: 'existing', status: 'PENDING' });
-      await expect(
-        service.submit('user-1', { kind: 'TEXT', text: 'again' } as any),
-      ).rejects.toThrow('still awaiting review');
-      expect(prisma.testimony.create).not.toHaveBeenCalled();
-    });
-
-    it('rejects a second submission once the trainer already has an APPROVED testimony', async () => {
-      prisma.testimony.findFirst.mockResolvedValue({ id: 'existing', status: 'APPROVED' });
-      await expect(
-        service.submit('user-1', { kind: 'TEXT', text: 'again' } as any),
-      ).rejects.toThrow('already submitted a testimony');
-      expect(prisma.testimony.create).not.toHaveBeenCalled();
-    });
-
-    it('allows resubmission after a REJECTED testimony (query only blocks PENDING/APPROVED)', async () => {
-      // findFirst is called with a status-in filter that excludes REJECTED --
-      // simulate the DB correctly returning null for that filter.
-      prisma.testimony.findFirst.mockResolvedValue(null);
-      const result = await service.submit('user-1', { kind: 'TEXT', text: 'second try' } as any);
+    it('allows a new submission even while the trainer already has a PENDING testimony (submit at will, no cap)', async () => {
+      const result = await service.submit('user-1', { kind: 'TEXT', text: 'again' } as any);
       expect(result.kind).toBe('TEXT');
+      expect(prisma.testimony.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows a new submission even after an APPROVED testimony (each is reviewed and rewarded independently)', async () => {
+      const result = await service.submit('user-1', { kind: 'TEXT', text: 'one more' } as any);
+      expect(result.kind).toBe('TEXT');
+      expect(prisma.testimony.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('listMine', () => {
+    it('returns every testimony for the trainer, newest first', async () => {
+      prisma.testimony.findMany.mockResolvedValue([
+        { id: 't2', status: 'PENDING' },
+        { id: 't1', status: 'APPROVED' },
+      ]);
+
+      const result = await service.listMine('user-1');
+
+      expect(prisma.testimony.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(result).toHaveLength(2);
     });
   });
 
@@ -176,6 +181,26 @@ describe('TestimonialsService', () => {
         service.review('admin-1', 'testimony-1', { status: 'APPROVED' } as any),
       ).rejects.toThrow('already been reviewed');
       expect(creditTestimonyReward).not.toHaveBeenCalled();
+    });
+
+    it('credits a second, independent reward when a different testimony from the same trainer is approved', async () => {
+      prisma.testimony.findUnique.mockResolvedValueOnce({
+        id: 'testimony-1',
+        userId: 'user-1',
+        status: 'PENDING',
+      });
+      await service.review('admin-1', 'testimony-1', { status: 'APPROVED' } as any);
+
+      prisma.testimony.findUnique.mockResolvedValueOnce({
+        id: 'testimony-2',
+        userId: 'user-1',
+        status: 'PENDING',
+      });
+      await service.review('admin-1', 'testimony-2', { status: 'APPROVED' } as any);
+
+      expect(creditTestimonyReward).toHaveBeenCalledWith(prisma, 'user-1', 'testimony-1', 5);
+      expect(creditTestimonyReward).toHaveBeenCalledWith(prisma, 'user-1', 'testimony-2', 5);
+      expect(creditTestimonyReward).toHaveBeenCalledTimes(2);
     });
 
     it('does not credit a reward on rejection', async () => {
