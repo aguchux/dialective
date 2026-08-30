@@ -51,8 +51,9 @@ function setup() {
     sendSubscriberInviteEmail: jest.fn().mockResolvedValue(undefined),
   };
 
-  const service = new SubscriberAuthService(prisma as any, mail as any);
-  return { prisma, mail, service };
+  const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
+  const service = new SubscriberAuthService(prisma as any, mail as any, webhookEvents as any);
+  return { prisma, mail, webhookEvents, service };
 }
 
 describe('SubscriberAuthService', () => {

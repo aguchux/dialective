@@ -131,6 +131,29 @@ describe('IsvcService.recalculate', () => {
     });
   });
 
+  it('publishes webhook-deliveries once per organization that validated the recording', async () => {
+    const { prisma, streams, service } = setup();
+    prisma.subscriberValidation.groupBy.mockResolvedValue([
+      { organizationId: 'org-A', _avg: { overallScore: 90 }, _count: { _all: 1 } },
+      { organizationId: 'org-B', _avg: { overallScore: 90 }, _count: { _all: 1 } },
+    ]);
+    prisma.organizationValidationConsensus.findMany.mockResolvedValue([
+      { organizationId: 'org-A', meanScore: new Prisma.Decimal(90) },
+      { organizationId: 'org-B', meanScore: new Prisma.Decimal(90) },
+    ]);
+    prisma.isvcCurrent.findUnique.mockResolvedValue(null);
+    prisma.isvcAggregation.create.mockResolvedValue({ id: 'agg-1' });
+
+    await service.recalculate('rec-1');
+
+    const webhookCalls = streams.publish.mock.calls.filter(([stream]: [string]) => stream === 'webhook-deliveries');
+    expect(webhookCalls).toHaveLength(2);
+    expect(webhookCalls.map(([, data]: [string, Record<string, string>]) => data.organization_id)).toEqual(
+      expect.arrayContaining(['org-A', 'org-B']),
+    );
+    expect(webhookCalls[0][1].event_type).toBe('ISVC_VERSION_CREATED');
+  });
+
   it('does not create a new version when nothing materially changed', async () => {
     const { prisma, streams, service } = setup();
     prisma.subscriberValidation.groupBy.mockResolvedValue([

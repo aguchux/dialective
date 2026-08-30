@@ -24,13 +24,15 @@ function setup() {
   const catalogue = { isEligible: jest.fn().mockResolvedValue(true) };
   const versioning = { writeNewVersionIfMaterial: jest.fn().mockResolvedValue(undefined) };
   const smartDeckEvaluator = { evaluateRule: jest.fn().mockResolvedValue(undefined) };
+  const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
   const service = new StreamDecksService(
     prisma as any,
     catalogue as any,
     versioning as any,
     smartDeckEvaluator as any,
+    webhookEvents as any,
   );
-  return { prisma, catalogue, versioning, smartDeckEvaluator, service };
+  return { prisma, catalogue, versioning, smartDeckEvaluator, webhookEvents, service };
 }
 
 describe('StreamDecksService', () => {

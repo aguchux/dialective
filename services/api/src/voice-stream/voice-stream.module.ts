@@ -6,6 +6,7 @@ import { CatalogueModule } from './catalogue/catalogue.module';
 import { StreamDecksModule } from './stream-decks/stream-decks.module';
 import { IsvpModule } from './isvp/isvp.module';
 import { StreamApiModule } from './stream-api/stream-api.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 /**
  * Dialect Library Voice Stream -- Phase 1 (Subscriber Foundation). See
@@ -24,6 +25,7 @@ import { StreamApiModule } from './stream-api/stream-api.module';
     StreamDecksModule,
     IsvpModule,
     StreamApiModule,
+    WebhooksModule,
   ],
 })
 export class VoiceStreamModule {}

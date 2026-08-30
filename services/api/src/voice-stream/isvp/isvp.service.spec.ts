@@ -11,8 +11,9 @@ function setup() {
   };
   const streams = { publish: jest.fn().mockResolvedValue('1-0') };
   const catalogue = { isEligible: jest.fn().mockResolvedValue(true) };
-  const service = new IsvpService(prisma as any, streams as any, catalogue as any);
-  return { prisma, streams, catalogue, service };
+  const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
+  const service = new IsvpService(prisma as any, streams as any, catalogue as any, webhookEvents as any);
+  return { prisma, streams, catalogue, webhookEvents, service };
 }
 
 const DTO = {

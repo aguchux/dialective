@@ -1,12 +1,13 @@
 import { ConflictException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
-import { OtpPurpose, SubscriberOrgRole, SubscriberUser } from '@dialectiva/db';
+import { OtpPurpose, SubscriberOrgRole, SubscriberUser, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../../mail/mail.service';
 import { generateOpaqueToken, hashToken } from '../../auth/token.util';
 import { generateOtpCode, hashOtpCode } from '../../otp/otp.util';
 import { signSubscriberAccessToken } from './subscriber-jwt.util';
+import { WebhookEventService } from '../webhooks/webhook-event.service';
 
 const BCRYPT_ROUNDS = 12;
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -60,6 +61,7 @@ export class SubscriberAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly webhookEvents: WebhookEventService,
   ) {}
 
   /**
@@ -82,7 +84,7 @@ export class SubscriberAuthService {
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-    const user = await this.prisma.$transaction(async (tx) => {
+    const { user, organizationId } = await this.prisma.$transaction(async (tx) => {
       const org = await tx.subscriberOrganization.create({
         data: { name: organizationName, slug: slugify(organizationName) },
       });
@@ -97,7 +99,13 @@ export class SubscriberAuthService {
           acceptedAt: new Date(),
         },
       });
-      return createdUser;
+      return { user: createdUser, organizationId: org.id };
+    });
+
+    void this.webhookEvents.emit(organizationId, WebhookEventType.SUBSCRIBER_CREATED, {
+      organization_id: organizationId,
+      user_id: user.id,
+      email: user.email,
     });
 
     return this.issueOtp(user, OtpPurpose.SUBSCRIBER_EMAIL_VERIFY);

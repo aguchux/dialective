@@ -12,8 +12,9 @@ function setup() {
       update: jest.fn(),
     },
   };
-  const service = new StreamKeysService(prisma as never);
-  return { service, prisma };
+  const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
+  const service = new StreamKeysService(prisma as never, webhookEvents as never);
+  return { service, prisma, webhookEvents };
 }
 
 describe('StreamKeysService.create', () => {

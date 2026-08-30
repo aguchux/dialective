@@ -8,6 +8,7 @@ const ISVC_STREAM = process.env.ISVC_STREAM ?? 'isvc-jobs';
 const CONSUMER_GROUP = process.env.CONSUMER_GROUP ?? 'isvc-scorers';
 const CONSUMER_NAME = process.env.HOSTNAME ?? 'isvc-scorer-1';
 const SMART_DECK_STREAM = process.env.SMART_DECK_STREAM ?? 'smart-deck-jobs';
+const WEBHOOK_STREAM = process.env.WEBHOOK_STREAM ?? 'webhook-deliveries';
 
 /**
  * Consumes isvc-jobs (published by api's IsvpService after every
@@ -172,6 +173,38 @@ export class IsvcService implements OnModuleInit {
       this.logger.error(
         `Failed to publish smart-deck-jobs for recording=${recordingId}: ${err instanceof Error ? err.message : err}`,
       );
+    }
+
+    // ISVC is cross-org by design (it's the consensus across every
+    // organization that validated this recording), so a version change is
+    // notified to every one of those orgs individually -- a
+    // WebhookSubscription always belongs to exactly one organization, api's
+    // WebhookEventService.emit shape isn't reachable from here (separate
+    // deployable), so this publishes directly to webhook-deliveries the
+    // same way it already does for smart-deck-jobs above.
+    const consensusOrgs = await this.prisma.organizationValidationConsensus.findMany({
+      where: { recordingId },
+      select: { organizationId: true },
+    });
+    for (const { organizationId } of consensusOrgs) {
+      try {
+        await this.streams.publish(WEBHOOK_STREAM, {
+          organization_id: organizationId,
+          event_type: 'ISVC_VERSION_CREATED',
+          payload: JSON.stringify({
+            organization_id: organizationId,
+            recording_id: recordingId,
+            version: nextVersion,
+            isvs: next.isvs,
+            confidence: next.confidence,
+          }),
+          attempt: '1',
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to publish webhook-deliveries for org=${organizationId} recording=${recordingId}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
     }
   }
 }

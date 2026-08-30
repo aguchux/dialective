@@ -1,6 +1,6 @@
 import { BadRequestException, Controller, Get, Param, Req, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
-import { StreamKeyScope } from '@dialectiva/db';
+import { StreamKeyScope, WebhookEventType } from '@dialectiva/db';
 import { StorageService } from '../../storage/storage.service';
 import { StreamKeyAuthGuard, AuthenticatedStreamKeyRequest } from './stream-key-auth.guard';
 import { StreamKeyScopesGuard } from './stream-key-scopes.guard';
@@ -11,6 +11,7 @@ import { ConcurrentStreamGuard } from './concurrent-stream.guard';
 import { StreamManifestService } from './stream-manifest.service';
 import { StreamAccessLogService } from './stream-access-log.service';
 import { contentTypeForAudioKey } from './audio-content-type.util';
+import { WebhookEventService } from '../webhooks/webhook-event.service';
 
 /**
  * Doc section 35's full authorization order for an audio stream request,
@@ -37,6 +38,7 @@ export class StreamAudioController {
     private readonly storage: StorageService,
     private readonly accessLog: StreamAccessLogService,
     private readonly concurrentStream: ConcurrentStreamGuard,
+    private readonly webhookEvents: WebhookEventService,
   ) {}
 
   @Get('decks/:deckId/items/:recordingId/audio')
@@ -122,6 +124,19 @@ export class StreamAudioController {
         ipAddress: req.ip,
         userAgent: req.headers['user-agent'],
       });
+      void this.webhookEvents.emit(
+        req.streamKey.organizationId,
+        entitlementDecision === 'allowed'
+          ? WebhookEventType.AUDIO_STREAM_COMPLETED
+          : WebhookEventType.AUDIO_STREAM_DENIED,
+        {
+          organization_id: req.streamKey.organizationId,
+          deck_id: deckId,
+          recording_id: recordingId,
+          result_code: resultCode,
+          bytes_streamed: bytesStreamed,
+        },
+      );
     }
   }
 }

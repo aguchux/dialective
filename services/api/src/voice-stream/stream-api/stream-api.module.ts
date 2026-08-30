@@ -3,6 +3,7 @@ import { CatalogueModule } from '../catalogue/catalogue.module';
 import { BillingModule } from '../billing/billing.module';
 import { StreamDecksModule } from '../stream-decks/stream-decks.module';
 import { StorageModule } from '../../storage/storage.module';
+import { WebhooksModule } from '../webhooks/webhooks.module';
 import { StreamKeysController } from './stream-keys.controller';
 import { StreamKeysService } from './stream-keys.service';
 import { StreamManifestController } from './stream-manifest.controller';
@@ -22,7 +23,7 @@ import { ConcurrentStreamGuard } from './concurrent-stream.guard';
  * docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md sections 25-38.
  */
 @Module({
-  imports: [CatalogueModule, BillingModule, StreamDecksModule, StorageModule],
+  imports: [CatalogueModule, BillingModule, StreamDecksModule, StorageModule, WebhooksModule],
   controllers: [StreamKeysController, StreamManifestController, StreamAudioController],
   providers: [
     StreamKeysService,

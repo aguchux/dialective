@@ -4,7 +4,7 @@ import { ReactNode, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, Search, ShieldCheck, Layers, KeyRound, Users, CreditCard, LogOut } from 'lucide-react';
+import { LayoutDashboard, Search, ShieldCheck, Layers, KeyRound, Webhook, Users, CreditCard, LogOut } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/validation', label: 'Validation', icon: ShieldCheck },
   { href: '/dashboard/decks', label: 'Stream Decks', icon: Layers },
   { href: '/dashboard/api-keys', label: 'API Keys', icon: KeyRound },
+  { href: '/dashboard/webhooks', label: 'Webhooks', icon: Webhook },
   { href: '/dashboard/team', label: 'Team', icon: Users },
   { href: '/dashboard/billing', label: 'Subscription & Billing', icon: CreditCard },
 ];

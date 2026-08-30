@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import Stripe from 'stripe';
-import { Prisma, SubscriptionStatus } from '@dialectiva/db';
+import { Prisma, SubscriptionStatus, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ApiAccessTokensService } from '../../api-access-tokens/api-access-tokens.service';
+import { WebhookEventService } from '../webhooks/webhook-event.service';
 
 function streamFrontendUrl(): string {
   return process.env.STREAM_FRONTEND_URL ?? 'https://stream.dialectlibrary.com';
@@ -42,6 +43,7 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly apiAccessTokens: ApiAccessTokensService,
+    private readonly webhookEvents: WebhookEventService,
   ) {}
 
   private async getStripe(): Promise<Stripe> {
@@ -193,6 +195,10 @@ export class BillingService {
             stripeSubscriptionId,
           },
         });
+        void this.webhookEvents.emit(organizationId, WebhookEventType.SUBSCRIPTION_ACTIVATED, {
+          organization_id: organizationId,
+          plan_key: planKey,
+        });
         return;
       }
 
@@ -222,6 +228,17 @@ export class BillingService {
           where: { stripeSubscriptionId },
           data: { status: SubscriptionStatus.PAST_DUE },
         });
+        const subscription = await this.prisma.subscription.findFirst({
+          where: { stripeSubscriptionId },
+          select: { organizationId: true },
+        });
+        if (subscription) {
+          void this.webhookEvents.emit(
+            subscription.organizationId,
+            WebhookEventType.SUBSCRIPTION_PAYMENT_FAILED,
+            { organization_id: subscription.organizationId },
+          );
+        }
         return;
       }
 

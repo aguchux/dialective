@@ -2221,6 +2221,7 @@ model SubscriberOrganization {
   validations          SubscriberValidation[]
   organizationConsensus OrganizationValidationConsensus[]
   streamApiKeys        StreamApiKey[]
+  webhookSubscriptions WebhookSubscription[]
 
   @@map("subscriber_organizations")
 }
@@ -2695,4 +2696,75 @@ model StreamAccessLog {
   @@index([streamApiKeyId, createdAt])
   @@index([organizationId, createdAt])
   @@map("stream_access_logs")
+}
+
+// ============================================================================
+// Dialect Library Voice Stream -- Phase 4b (Webhooks)
+//
+// Subscriber-configured HTTP callbacks for Voice Stream domain events (doc
+// section 51's event catalogue). Delivery retry is handled by Redis
+// Streams' own consumer-group reclaim loop (see RedisStreamsService) --
+// no separate backoff mechanism needed, same pattern isvc-jobs/
+// smart-deck-jobs already use.
+// ============================================================================
+
+enum WebhookEventType {
+  SUBSCRIBER_CREATED
+  SUBSCRIPTION_ACTIVATED
+  SUBSCRIPTION_PAYMENT_FAILED
+  DECK_CREATED
+  DECK_ITEM_ADDED
+  DECK_ITEM_REMOVED
+  DECK_VERSION_CREATED
+  VALIDATION_SUBMITTED
+  ISVC_VERSION_CREATED
+  API_KEY_CREATED
+  API_KEY_REVOKED
+  AUDIO_STREAM_COMPLETED
+  AUDIO_STREAM_DENIED
+}
+
+/// A subscriber-configured HTTP callback endpoint. One organization may
+/// have several, each independently subscribed to a subset of event types.
+/// Signing secret is reversibly encrypted (common/token-crypto.util.ts's
+/// AES-256-GCM shape, same as ApiAccessToken) -- the server must read it
+/// back on every delivery to compute the outbound HMAC, unlike a Stream
+/// Key which is only ever hash-compared (auth/token.util.ts).
+model WebhookSubscription {
+  id              String                 @id @default(uuid())
+  organizationId  String
+  organization    SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  url             String
+  eventTypes      WebhookEventType[]
+  encryptedSecret String // AES-256-GCM ciphertext, base64
+  secretIv        String
+  secretAuthTag   String
+  active          Boolean                @default(true)
+  createdByUserId String
+  createdAt       DateTime               @default(now())
+
+  deliveries WebhookDeliveryLog[]
+
+  @@index([organizationId])
+  @@map("webhook_subscriptions")
+}
+
+/// Append-only delivery attempt record -- one row per actual HTTP delivery
+/// attempt (not per event; a retried delivery gets its own row).
+/// resultCode is null when the request itself failed to complete
+/// (DNS/timeout/connection refused).
+model WebhookDeliveryLog {
+  id             String              @id @default(uuid())
+  subscriptionId String
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  eventType      WebhookEventType
+  payload        Json
+  attemptNumber  Int
+  resultCode     Int?
+  succeeded      Boolean
+  errorMessage   String?
+  createdAt      DateTime            @default(now())
+
+  @@index([subscriptionId, createdAt])
+  @@map("webhook_delivery_logs")
 }

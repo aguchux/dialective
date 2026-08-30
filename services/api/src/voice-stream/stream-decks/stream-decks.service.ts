@@ -6,12 +6,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { StreamDeckType } from '@dialectiva/db';
+import { StreamDeckType, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogueService } from '../catalogue/catalogue.service';
 import { StreamDeckVersioningService } from './stream-deck-versioning.service';
 import { SmartDeckEvaluatorService } from './smart-deck-evaluator.service';
 import { StreamDeckRuleDto } from './dto/stream-deck-rule.dto';
+import { WebhookEventService } from '../webhooks/webhook-event.service';
 
 /**
  * "DLSD-{country}-{dialect}-{subdialect}-{6 chars}" per the product plan
@@ -34,6 +35,7 @@ export class StreamDecksService {
     private readonly catalogue: CatalogueService,
     private readonly versioning: StreamDeckVersioningService,
     private readonly smartDeckEvaluator: SmartDeckEvaluatorService,
+    private readonly webhookEvents: WebhookEventService,
   ) {}
 
   async create(
@@ -83,6 +85,13 @@ export class StreamDecksService {
     if (type === StreamDeckType.SMART) {
       await this.smartDeckEvaluator.evaluateRule(deck.id);
     }
+
+    void this.webhookEvents.emit(organizationId, WebhookEventType.DECK_CREATED, {
+      organization_id: organizationId,
+      deck_id: deck.id,
+      deck_key: deck.deckKey,
+      type: deck.type,
+    });
 
     return deck;
   }
@@ -140,6 +149,11 @@ export class StreamDecksService {
       data: { deckId, recordingId, addedByUserId: userId },
     });
     await this.versioning.writeNewVersionIfMaterial(deckId, 'manual_add');
+    void this.webhookEvents.emit(organizationId, WebhookEventType.DECK_ITEM_ADDED, {
+      organization_id: organizationId,
+      deck_id: deckId,
+      recording_id: recordingId,
+    });
     return item;
   }
 
@@ -157,6 +171,11 @@ export class StreamDecksService {
     }
     await this.prisma.streamDeckItem.delete({ where: { id: itemId } });
     await this.versioning.writeNewVersionIfMaterial(deckId, 'manual_remove');
+    void this.webhookEvents.emit(organizationId, WebhookEventType.DECK_ITEM_REMOVED, {
+      organization_id: organizationId,
+      deck_id: deckId,
+      recording_id: item.recordingId,
+    });
   }
 
   /** Replaces a Smart Deck's rule and immediately re-evaluates it -- a rule edit should show its effect right away, not wait for the next async sweep. */

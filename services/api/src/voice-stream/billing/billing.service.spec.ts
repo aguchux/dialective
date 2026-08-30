@@ -23,6 +23,7 @@ function setup() {
       upsert: jest.fn(),
       updateMany: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     subscriberOrganization: { findUniqueOrThrow: jest.fn(), update: jest.fn() },
   };
@@ -31,8 +32,9 @@ function setup() {
       key === 'stripe_secret_key' ? 'sk_test_dummy' : 'whsec_dummy',
     ),
   };
-  const service = new BillingService(prisma as any, apiAccessTokens as any);
-  return { prisma, service, apiAccessTokens };
+  const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
+  const service = new BillingService(prisma as any, apiAccessTokens as any, webhookEvents as any);
+  return { prisma, service, apiAccessTokens, webhookEvents };
 }
 
 describe('BillingService.handleWebhook', () => {

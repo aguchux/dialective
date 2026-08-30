@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@dialectiva/db';
+import { Prisma, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogueService } from '../catalogue/catalogue.service';
+import { WebhookEventService } from '../webhooks/webhook-event.service';
 
 interface SnapshotItem {
   recordingId: string;
@@ -29,6 +30,7 @@ export class StreamDeckVersioningService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalogue: CatalogueService,
+    private readonly webhookEvents: WebhookEventService,
   ) {}
 
   /**
@@ -151,6 +153,21 @@ export class StreamDeckVersioningService {
         update: { versionId: version.id },
         create: { deckId, versionId: version.id },
       });
+      return version;
     });
+
+    const deck = await this.prisma.streamDeck.findUnique({
+      where: { id: deckId },
+      select: { organizationId: true, deckKey: true },
+    });
+    if (deck) {
+      void this.webhookEvents.emit(deck.organizationId, WebhookEventType.DECK_VERSION_CREATED, {
+        organization_id: deck.organizationId,
+        deck_id: deckId,
+        deck_key: deck.deckKey,
+        version: nextVersion,
+        reason,
+      });
+    }
   }
 }

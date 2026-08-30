@@ -195,6 +195,51 @@ export interface CreateStreamKeyInput {
   expiresAt?: string;
 }
 
+export type WebhookEventType =
+  | 'SUBSCRIBER_CREATED'
+  | 'SUBSCRIPTION_ACTIVATED'
+  | 'SUBSCRIPTION_PAYMENT_FAILED'
+  | 'DECK_CREATED'
+  | 'DECK_ITEM_ADDED'
+  | 'DECK_ITEM_REMOVED'
+  | 'DECK_VERSION_CREATED'
+  | 'VALIDATION_SUBMITTED'
+  | 'ISVC_VERSION_CREATED'
+  | 'API_KEY_CREATED'
+  | 'API_KEY_REVOKED'
+  | 'AUDIO_STREAM_COMPLETED'
+  | 'AUDIO_STREAM_DENIED';
+
+export interface WebhookSubscriptionSummary {
+  id: string;
+  organizationId: string;
+  url: string;
+  eventTypes: WebhookEventType[];
+  active: boolean;
+  createdByUserId: string;
+  createdAt: string;
+}
+
+export interface CreatedWebhookSubscription extends WebhookSubscriptionSummary {
+  plaintextSecret: string;
+}
+
+export interface CreateWebhookSubscriptionInput {
+  url: string;
+  eventTypes: WebhookEventType[];
+}
+
+export interface WebhookDeliveryLogEntry {
+  id: string;
+  subscriptionId: string;
+  eventType: WebhookEventType;
+  attemptNumber: number;
+  resultCode: number | null;
+  succeeded: boolean;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: `${PUBLIC_API_V1_BASE_URL}/voice-stream`,
   prepareHeaders: async (headers) => {
@@ -218,6 +263,7 @@ export const streamApi = createApi({
     'StreamDecks',
     'Validations',
     'StreamKeys',
+    'Webhooks',
   ],
   endpoints: (builder) => ({
     getMe: builder.query<SubscriberMe, void>({
@@ -395,6 +441,26 @@ export const streamApi = createApi({
       query: (id) => ({ url: `/stream-keys/${id}`, method: 'DELETE' }),
       invalidatesTags: ['StreamKeys'],
     }),
+
+    listWebhooks: builder.query<WebhookSubscriptionSummary[], void>({
+      query: () => '/webhooks',
+      providesTags: ['Webhooks'],
+    }),
+
+    createWebhook: builder.mutation<CreatedWebhookSubscription, CreateWebhookSubscriptionInput>({
+      query: (body) => ({ url: '/webhooks', method: 'POST', body }),
+      invalidatesTags: ['Webhooks'],
+    }),
+
+    deleteWebhook: builder.mutation<{ removed: boolean }, string>({
+      query: (id) => ({ url: `/webhooks/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Webhooks'],
+    }),
+
+    listWebhookDeliveries: builder.query<WebhookDeliveryLogEntry[], string>({
+      query: (id) => `/webhooks/${id}/deliveries`,
+      providesTags: (_result, _error, id) => [{ type: 'Webhooks', id: `${id}-deliveries` }],
+    }),
   }),
 });
 
@@ -427,4 +493,8 @@ export const {
   useCreateStreamKeyMutation,
   useRotateStreamKeyMutation,
   useRevokeStreamKeyMutation,
+  useListWebhooksQuery,
+  useCreateWebhookMutation,
+  useDeleteWebhookMutation,
+  useListWebhookDeliveriesQuery,
 } = streamApi;

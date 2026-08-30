@@ -1307,6 +1307,7 @@ export class AuthService {
                 { email: { contains: search, mode: 'insensitive' as const } },
                 { firstName: { contains: search, mode: 'insensitive' as const } },
                 { lastName: { contains: search, mode: 'insensitive' as const } },
+                { phoneNumber: { contains: search, mode: 'insensitive' as const } },
               ],
             }
           : {}),

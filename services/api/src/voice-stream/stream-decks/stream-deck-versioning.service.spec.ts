@@ -6,11 +6,15 @@ function setup() {
     isvcCurrent: { findMany: jest.fn().mockResolvedValue([]) },
     streamDeckCurrentVersion: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
     streamDeckVersion: { create: jest.fn() },
+    streamDeck: {
+      findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-1', deckKey: 'DLSD-GEN-GEN-GEN-ABCDEF' }),
+    },
   };
   prisma.$transaction = jest.fn((cb: (tx: unknown) => unknown) => cb(prisma));
   const catalogue = { getEligibleRecording: jest.fn() };
-  const service = new StreamDeckVersioningService(prisma as never, catalogue as never);
-  return { service, prisma, catalogue };
+  const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
+  const service = new StreamDeckVersioningService(prisma as never, catalogue as never, webhookEvents as never);
+  return { service, prisma, catalogue, webhookEvents };
 }
 
 const baseRecording = {

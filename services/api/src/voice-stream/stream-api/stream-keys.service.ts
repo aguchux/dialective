@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { StreamKeyScope } from '@dialectiva/db';
+import { StreamKeyScope, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { generateOpaqueToken, hashToken } from '../../auth/token.util';
+import { WebhookEventService } from '../webhooks/webhook-event.service';
 
 const KEY_PREFIX = 'dlsk_live_';
 /** Chars of the raw token (after KEY_PREFIX) kept in keyPrefix for dashboard display -- long enough to tell keys apart at a glance, short enough that it alone can't be brute-forced into the full key. */
@@ -24,7 +25,10 @@ function buildKey() {
  */
 @Injectable()
 export class StreamKeysService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly webhookEvents: WebhookEventService,
+  ) {}
 
   list(organizationId: string) {
     return this.prisma.streamApiKey.findMany({
@@ -68,6 +72,13 @@ export class StreamKeysService {
       },
     });
 
+    void this.webhookEvents.emit(organizationId, WebhookEventType.API_KEY_CREATED, {
+      organization_id: organizationId,
+      key_id: row.id,
+      key_prefix: row.keyPrefix,
+      deck_id: row.deckId,
+    });
+
     return { ...row, plaintextKey: fullKey };
   }
 
@@ -81,10 +92,16 @@ export class StreamKeysService {
 
   async revoke(organizationId: string, keyId: string) {
     const key = await this.get(organizationId, keyId);
-    return this.prisma.streamApiKey.update({
+    const revoked = await this.prisma.streamApiKey.update({
       where: { id: key.id },
       data: { revokedAt: new Date() },
     });
+    void this.webhookEvents.emit(organizationId, WebhookEventType.API_KEY_REVOKED, {
+      organization_id: organizationId,
+      key_id: revoked.id,
+      key_prefix: revoked.keyPrefix,
+    });
+    return revoked;
   }
 
   /** Revokes the old key and mints a new one with the same deck/scope/IP config -- the old row is kept (audit trail), not deleted. */
@@ -93,6 +110,11 @@ export class StreamKeysService {
     await this.prisma.streamApiKey.update({
       where: { id: existing.id },
       data: { revokedAt: new Date() },
+    });
+    void this.webhookEvents.emit(organizationId, WebhookEventType.API_KEY_REVOKED, {
+      organization_id: organizationId,
+      key_id: existing.id,
+      key_prefix: existing.keyPrefix,
     });
 
     const { fullKey, keyHash, keyPrefix } = buildKey();
@@ -107,6 +129,12 @@ export class StreamKeysService {
         createdByUserId: existing.createdByUserId,
         expiresAt: existing.expiresAt,
       },
+    });
+    void this.webhookEvents.emit(organizationId, WebhookEventType.API_KEY_CREATED, {
+      organization_id: organizationId,
+      key_id: row.id,
+      key_prefix: row.keyPrefix,
+      deck_id: row.deckId,
     });
 
     return { ...row, plaintextKey: fullKey };
