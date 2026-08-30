@@ -10,7 +10,8 @@ describe('TestimonialsService', () => {
     isTestimonyEnabled: jest.fn().mockResolvedValue(true),
     getTestimonyMaxTextLength: jest.fn().mockResolvedValue(200),
     getTestimonyMaxVideoSeconds: jest.fn().mockResolvedValue(30),
-    getTestimonyRewardTokens: jest.fn().mockResolvedValue(5),
+    getTestimonyTextRewardTokens: jest.fn().mockResolvedValue(5),
+    getTestimonyVideoRewardTokens: jest.fn().mockResolvedValue(10),
   };
   const storage = {
     createPresignedUploadUrl: jest
@@ -23,6 +24,9 @@ describe('TestimonialsService', () => {
 
   beforeEach(() => {
     prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ role: 'TRAINER', kycStatus: 'APPROVED' }),
+      },
       testimony: {
         findFirst: jest.fn().mockResolvedValue(null),
         findUnique: jest.fn(),
@@ -31,7 +35,10 @@ describe('TestimonialsService', () => {
           status: 'PENDING',
           ...data,
         })),
-        update: jest.fn().mockImplementation(({ data }: any) => ({ id: 'testimony-1', ...data })),
+        update: jest.fn().mockImplementation(({ where, data }: any) => ({
+          id: where.id,
+          ...data,
+        })),
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
       },
@@ -39,12 +46,33 @@ describe('TestimonialsService', () => {
     settings.isTestimonyEnabled.mockReset().mockResolvedValue(true);
     settings.getTestimonyMaxTextLength.mockReset().mockResolvedValue(200);
     settings.getTestimonyMaxVideoSeconds.mockReset().mockResolvedValue(30);
-    settings.getTestimonyRewardTokens.mockReset().mockResolvedValue(5);
+    settings.getTestimonyTextRewardTokens.mockReset().mockResolvedValue(5);
+    settings.getTestimonyVideoRewardTokens.mockReset().mockResolvedValue(10);
+    storage.createPresignedUploadUrl.mockClear();
+    storage.getPublicObjectUrl.mockClear();
     (creditTestimonyReward as jest.Mock).mockReset().mockResolvedValue(true);
     service = new TestimonialsService(prisma, settings as any, storage as any);
   });
 
   describe('submit', () => {
+    it('rejects testimonial submission until DIDIT verification is approved', async () => {
+      prisma.user.findUnique.mockResolvedValue({ role: 'TRAINER', kycStatus: 'IN_REVIEW' });
+
+      await expect(
+        service.submit('user-1', { kind: 'TEXT', text: 'great platform' } as any),
+      ).rejects.toThrow('DIDIT identity verification');
+      expect(prisma.testimony.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a verified account that is not a trainer', async () => {
+      prisma.user.findUnique.mockResolvedValue({ role: 'DISTRIBUTOR', kycStatus: 'APPROVED' });
+
+      await expect(
+        service.submit('user-1', { kind: 'TEXT', text: 'great platform' } as any),
+      ).rejects.toThrow('DIDIT identity verification');
+      expect(prisma.testimony.create).not.toHaveBeenCalled();
+    });
+
     it('rejects when testimonyEnabled is false', async () => {
       settings.isTestimonyEnabled.mockResolvedValue(false);
       await expect(
@@ -108,6 +136,17 @@ describe('TestimonialsService', () => {
     });
   });
 
+  describe('createUploadUrl', () => {
+    it('does not issue a public video upload URL before DIDIT verification is approved', async () => {
+      prisma.user.findUnique.mockResolvedValue({ role: 'TRAINER', kycStatus: 'NOT_STARTED' });
+
+      await expect(
+        service.createUploadUrl('user-1', { contentType: 'video/webm' } as any),
+      ).rejects.toThrow('DIDIT identity verification');
+      expect(storage.createPresignedUploadUrl).not.toHaveBeenCalled();
+    });
+  });
+
   describe('listMine', () => {
     it('returns every testimony for the trainer, newest first', async () => {
       prisma.testimony.findMany.mockResolvedValue([
@@ -131,6 +170,7 @@ describe('TestimonialsService', () => {
         id: 'testimony-1',
         userId: 'user-1',
         status: 'PENDING',
+        kind: 'TEXT',
       });
 
       await service.review('admin-1', 'testimony-1', { status: 'APPROVED' } as any);
@@ -146,6 +186,7 @@ describe('TestimonialsService', () => {
         id: 'testimony-1',
         userId: 'user-1',
         status: 'PENDING',
+        kind: 'VIDEO',
       });
       (creditTestimonyReward as jest.Mock).mockResolvedValue(false);
 
@@ -155,6 +196,7 @@ describe('TestimonialsService', () => {
         (call: any) => call[0].data.rewardCredited !== undefined,
       );
       expect(rewardCreditedCalls).toHaveLength(0);
+      expect(creditTestimonyReward).toHaveBeenCalledWith(prisma, 'user-1', 'testimony-1', 10);
     });
 
     it('never throws when creditTestimonyReward itself throws -- approval is still recorded', async () => {
@@ -162,6 +204,7 @@ describe('TestimonialsService', () => {
         id: 'testimony-1',
         userId: 'user-1',
         status: 'PENDING',
+        kind: 'TEXT',
       });
       (creditTestimonyReward as jest.Mock).mockRejectedValue(new Error('ledger down'));
 
@@ -175,6 +218,7 @@ describe('TestimonialsService', () => {
         id: 'testimony-1',
         userId: 'user-1',
         status: 'APPROVED',
+        kind: 'TEXT',
       });
 
       await expect(
@@ -188,6 +232,7 @@ describe('TestimonialsService', () => {
         id: 'testimony-1',
         userId: 'user-1',
         status: 'PENDING',
+        kind: 'TEXT',
       });
       await service.review('admin-1', 'testimony-1', { status: 'APPROVED' } as any);
 
@@ -195,11 +240,12 @@ describe('TestimonialsService', () => {
         id: 'testimony-2',
         userId: 'user-1',
         status: 'PENDING',
+        kind: 'VIDEO',
       });
       await service.review('admin-1', 'testimony-2', { status: 'APPROVED' } as any);
 
       expect(creditTestimonyReward).toHaveBeenCalledWith(prisma, 'user-1', 'testimony-1', 5);
-      expect(creditTestimonyReward).toHaveBeenCalledWith(prisma, 'user-1', 'testimony-2', 5);
+      expect(creditTestimonyReward).toHaveBeenCalledWith(prisma, 'user-1', 'testimony-2', 10);
       expect(creditTestimonyReward).toHaveBeenCalledTimes(2);
     });
 
@@ -208,6 +254,7 @@ describe('TestimonialsService', () => {
         id: 'testimony-1',
         userId: 'user-1',
         status: 'PENDING',
+        kind: 'TEXT',
       });
 
       await service.review('admin-1', 'testimony-1', {
@@ -216,6 +263,95 @@ describe('TestimonialsService', () => {
       } as any);
 
       expect(creditTestimonyReward).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('setVisibility', () => {
+    it('hides an approved testimony without touching status or reward', async () => {
+      prisma.testimony.findUnique.mockResolvedValue({
+        id: 'testimony-1',
+        userId: 'user-1',
+        status: 'APPROVED',
+        rewardCredited: true,
+        visible: true,
+      });
+
+      const result = await service.setVisibility('testimony-1', { visible: false });
+
+      expect(prisma.testimony.update).toHaveBeenCalledWith({
+        where: { id: 'testimony-1' },
+        data: { visible: false },
+      });
+      expect(result.visible).toBe(false);
+    });
+
+    it('re-shows a previously hidden approved testimony', async () => {
+      prisma.testimony.findUnique.mockResolvedValue({
+        id: 'testimony-1',
+        userId: 'user-1',
+        status: 'APPROVED',
+        visible: false,
+      });
+
+      await service.setVisibility('testimony-1', { visible: true });
+
+      expect(prisma.testimony.update).toHaveBeenCalledWith({
+        where: { id: 'testimony-1' },
+        data: { visible: true },
+      });
+    });
+
+    it('rejects toggling visibility on a testimony that is not APPROVED', async () => {
+      prisma.testimony.findUnique.mockResolvedValue({
+        id: 'testimony-1',
+        userId: 'user-1',
+        status: 'PENDING',
+        visible: true,
+      });
+
+      await expect(service.setVisibility('testimony-1', { visible: false })).rejects.toThrow(
+        'Only an approved testimony can be shown or hidden publicly',
+      );
+      expect(prisma.testimony.update).not.toHaveBeenCalled();
+    });
+
+    it('throws when the testimony does not exist', async () => {
+      prisma.testimony.findUnique.mockResolvedValue(null);
+
+      await expect(service.setVisibility('missing', { visible: false })).rejects.toThrow(
+        'Testimony not found',
+      );
+    });
+  });
+
+  describe('getPublic', () => {
+    it('only queries APPROVED and visible testimonies with pagination', async () => {
+      prisma.testimony.findMany.mockResolvedValue([]);
+      prisma.testimony.count.mockResolvedValue(24);
+
+      const result = await service.getPublic({ page: 2, pageSize: 12 });
+
+      expect(prisma.testimony.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: 'APPROVED', visible: true },
+          skip: 12,
+          take: 12,
+        }),
+      );
+      expect(result).toMatchObject({ page: 2, pageSize: 12, total: 24, totalPages: 2 });
+    });
+
+    it('hides public testimonials while the feature is disabled', async () => {
+      settings.isTestimonyEnabled.mockResolvedValue(false);
+
+      await expect(service.getPublic({ page: 1, pageSize: 12 })).resolves.toEqual({
+        items: [],
+        page: 1,
+        pageSize: 12,
+        total: 0,
+        totalPages: 1,
+      });
+      expect(prisma.testimony.findMany).not.toHaveBeenCalled();
     });
   });
 });

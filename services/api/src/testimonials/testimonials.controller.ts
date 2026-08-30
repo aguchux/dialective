@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { CreateTestimonyDto } from './dto/create-testimony.dto';
 import { CreateTestimonyUploadUrlDto } from './dto/create-testimony-upload-url.dto';
+import { ListPublicTestimoniesDto } from './dto/list-public-testimonies.dto';
 import { TestimonialsService } from './testimonials.service';
 
 @Controller('testimonials')
@@ -29,12 +30,11 @@ export class TestimonialsController {
   /**
    * Unauthenticated, powers the homepage carousel (LandingPage.tsx fetches
    * this server-side). No `id` param needed by the caller -- returns every
-   * APPROVED testimony (a trainer may have more than one, each submitted
-   * and approved independently); no pagination since the approved set is
-   * expected to stay small.
+   * APPROVED, visible testimony. The landing page passes its admin-configured
+   * limit; the public archive uses ordinary pagination.
    */
   @Get('public')
-  getPublic() {
-    return this.testimonials.getPublic();
+  getPublic(@Query() query: ListPublicTestimoniesDto) {
+    return this.testimonials.getPublic(query);
   }
 }

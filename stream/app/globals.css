@@ -1,0 +1,40 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-dark: var(--accent-dark);
+  --color-accent-soft: var(--accent-soft);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+}
+
+/* Voice Stream is a distinct commercial product (AI data-infrastructure,
+   not the trainer dashboard) -- deep indigo/graphite palette with a cyan
+   accent, evoking a technical console rather than a consumer app. */
+:root {
+  color-scheme: light;
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --surface-muted: #eef0f7;
+  --ink: #12131f;
+  --muted: #5b5f76;
+  --line: #dde0ec;
+  --accent: #2f6fed;
+  --accent-dark: #1e51c2;
+  --accent-soft: #e8effe;
+  --warning: #b45309;
+  --danger: #b91c1c;
+  --success: #15803d;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}

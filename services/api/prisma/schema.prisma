@@ -431,6 +431,8 @@ enum OtpPurpose {
   P2P_TRADE
   SUB_DISTRIBUTOR_ADJUSTMENT
   PAYOUT_ACCOUNT_DELETE
+  SUBSCRIBER_EMAIL_VERIFY // Voice Stream subscriber auth -- shares this enum only for MailService.sendOtpEmail's copy lookup; SubscriberOtpCode is its own table (OtpCode's FK to User can't reference SubscriberUser)
+  SUBSCRIBER_LOGIN
 }
 
 enum ManualPhoneVerificationStatus {
@@ -941,6 +943,7 @@ model Testimony {
   reviewedByAdminId String?
   rejectionReason   String?
   rewardCredited    Boolean         @default(false) // set true once creditTestimonyReward actually credits -- lets the admin UI show "rewarded" without re-deriving it from the ledger
+  visible           Boolean         @default(true) // admin can hide an already-approved testimony from the public homepage without reversing its approval or reward
   createdAt         DateTime        @default(now())
 
   @@index([userId])
@@ -1985,7 +1988,10 @@ model PlatformSettings {
   testimonyEnabled                       Boolean   @default(false) // master switch for prompting trainers to give a testimony (trainer dashboard banner) and for the public homepage carousel; when false neither the banner nor any carousel content appears, and submission is rejected server-side
   testimonyMaxTextLength                 Int       @default(200) // max characters for a TEXT testimony, enforced both client-side (textarea maxLength) and server-side (TestimonialsService.submit)
   testimonyMaxVideoSeconds               Int       @default(30) // hard cap on a VIDEO testimony's recording length, enforced client-side same as WordTrainingDialog's maxRecordingMs pattern, and re-validated server-side against the submitted durationMs
-  testimonyRewardTokens                  Decimal   @default(5) @db.Decimal(20, 8) // one-time DL reward credited via creditTestimonyReward when an admin approves a testimony (Testimony.status -> APPROVED)
+  testimonyLandingLimit                  Int       @default(12) // approved, visible testimonials shown on the landing page; the full public archive remains paginated at /testimonials
+  testimonyRewardTokens                  Decimal   @default(5) @db.Decimal(20, 8) // legacy single reward retained only for migration compatibility; new approvals use the format-specific values below
+  testimonyTextRewardTokens              Decimal   @default(5) @db.Decimal(20, 8) // DL reward credited when an admin approves a TEXT testimony
+  testimonyVideoRewardTokens             Decimal   @default(5) @db.Decimal(20, 8) // DL reward credited when an admin approves a VIDEO testimony
   smsSenderId                            String? // Overrides TERMII_SENDER_ID/SMSLIVE247_SENDER_ID/AFRICASTALKING_SENDER_ID for every SMS provider (Termii, SMSLive247, Africa's Talking, and SMSLive247's native-OTP route) when set -- null/unset falls back to each provider's own env var, so this stays a no-op until an admin fills it in. Twilio has no equivalent (it sends from a purchased phone number, not a named sender ID).
   smsProviderOrder                       String    @default("termii,twilio,africastalking") // CSV fallback-try order for phone-verification SMS OTPs, must be a permutation of {termii,twilio,africastalking}, validated app-side like llmProviderOrder -- smslive247 is not a fallback-chain member (see smslive247NativeOtpEnabled), it can't fire-and-forget an arbitrary code on their OTP-compliant route
   smslive247NativeOtpEnabled             Boolean   @default(false) // when true, phone verification (Profile > Phone number) bypasses OtpCode/the SMS fallback chain entirely and uses SMSLive247's own token-generate/verify API end-to-end, since their OTP-compliant route generates the code itself and verifies it on their side, not ours
@@ -2167,4 +2173,345 @@ model CourseProgress {
   @@unique([userId, courseId])
   @@index([userId])
   @@map("course_progress")
+}
+
+// ============================================================================
+// Dialect Library Voice Stream -- Phase 1 (Subscriber Foundation)
+//
+// A separate commercial product/tenant boundary from the trainer-facing
+// platform above: AI/ASR/research companies subscribe (monthly, via Stripe),
+// search & preview the voice-recording catalogue (read-only against
+// WordRecording), and curate selections into private Stream Decks. See
+// docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md for the full product
+// plan; only Phase 1 (no ISVP/ISVC validation, no streaming API/keys yet)
+// is modeled here. Deliberately isolated from Role/User/RefreshToken/OtpCode
+// -- subscriber auth is a fully separate tenant/security boundary.
+// ============================================================================
+
+enum SubscriberOrgRole {
+  OWNER
+  ADMIN
+  DATASET_MANAGER
+  VALIDATOR // reserved, no-op until Phase 2 (ISVP) -- avoids a membership-role migration later
+  API_DEVELOPER // reserved, no-op until Phase 3 (Stream Keys)
+  BILLING_MANAGER
+  AUDITOR
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  GRACE_PERIOD
+  SUSPENDED
+  CANCELED
+}
+
+model SubscriberOrganization {
+  id               String   @id @default(uuid())
+  name             String
+  slug             String   @unique // DLORG-style external id, generated at creation
+  stripeCustomerId String?  @unique
+  createdAt        DateTime @default(now())
+
+  memberships          SubscriberMembership[]
+  invites              SubscriberInvite[]
+  subscription         Subscription?
+  streamDecks          StreamDeck[]
+  validations          SubscriberValidation[]
+  organizationConsensus OrganizationValidationConsensus[]
+
+  @@map("subscriber_organizations")
+}
+
+model SubscriberUser {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+
+  memberships   SubscriberMembership[]
+  refreshTokens SubscriberRefreshToken[]
+  otpCodes      SubscriberOtpCode[]
+  validations   SubscriberValidation[]
+
+  @@map("subscriber_users")
+}
+
+model SubscriberMembership {
+  id             String                 @id @default(uuid())
+  userId         String
+  user           SubscriberUser         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           SubscriberOrgRole
+  invitedAt      DateTime               @default(now())
+  acceptedAt     DateTime?
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("subscriber_memberships")
+}
+
+/// A pending invitation to join a SubscriberOrganization, before the
+/// invitee has a SubscriberUser account. SubscriberMembership.userId is a
+/// hard FK (a membership always belongs to an existing user), so an invite
+/// to a not-yet-registered email needs its own row -- accepting the invite
+/// (AcceptSubscriberInviteDto) creates the SubscriberUser + SubscriberMembership
+/// together and marks this row consumed, mirroring the opaque-token pattern
+/// in auth/token.util.ts (raw token returned once, only its hash stored).
+model SubscriberInvite {
+  id              String                 @id @default(uuid())
+  organizationId  String
+  organization    SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email           String
+  role            SubscriberOrgRole
+  tokenHash       String                 @unique
+  invitedByUserId String
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime               @default(now())
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("subscriber_invites")
+}
+
+/// Own table rather than a reuse of OtpCode -- OtpCode.userId is a hard FK to
+/// User (the trainer table), which SubscriberUser cannot satisfy. Same
+/// generate/hash/TTL/attempts/consume-once shape as OtpCode; purpose reuses
+/// the existing OtpPurpose enum only so MailService.sendOtpEmail's copy
+/// lookup (otpCopyForPurpose) can be shared -- no FK relationship implied.
+model SubscriberOtpCode {
+  id          String         @id @default(uuid())
+  userId      String
+  user        SubscriberUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose     OtpPurpose // SUBSCRIBER_EMAIL_VERIFY | SUBSCRIBER_LOGIN only
+  codeHash    String
+  ticketHash  String?        @unique
+  attempts    Int            @default(0)
+  maxAttempts Int            @default(5)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime       @default(now())
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+  @@map("subscriber_otp_codes")
+}
+
+/// Opaque refresh tokens, same rotation-on-use + family-revocation-on-reuse
+/// shape as RefreshToken (see auth.service.ts:530-583) -- separate table
+/// since it FKs to SubscriberUser, not User.
+model SubscriberRefreshToken {
+  id         String         @id @default(uuid())
+  userId     String
+  user       SubscriberUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String         @unique
+  familyId   String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?
+  createdAt  DateTime       @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("subscriber_refresh_tokens")
+}
+
+model SubscriptionPlan {
+  id               String  @id @default(uuid())
+  key              String  @unique // "starter" | "professional" | "enterprise"
+  name             String
+  stripePriceId    String  @unique
+  monthlyUsdAmount Decimal @db.Decimal(10, 2)
+  maxStreamDecks   Int? // null = unlimited
+  maxTeamMembers   Int?
+  active           Boolean @default(true)
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                   String                 @id @default(uuid())
+  organizationId       String                 @unique
+  organization         SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planId               String
+  plan                 SubscriptionPlan       @relation(fields: [planId], references: [id])
+  status               SubscriptionStatus     @default(TRIAL)
+  stripeSubscriptionId String?                @unique
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean                @default(false)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@map("subscriptions")
+}
+
+/// Idempotency ledger for Stripe webhook delivery -- id is Stripe's own
+/// event.id (simpler than NOWPayments' computed-hash approach in
+/// wallet.controller.ts since Stripe already guarantees a stable event id).
+/// processedAt null means "seen but not yet successfully handled" -- a
+/// retry after a transient failure re-attempts processing on the same row.
+model StripeWebhookEvent {
+  id          String    @id // Stripe event.id, not a generated uuid
+  type        String
+  payload     Json
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("stripe_webhook_events")
+}
+
+model StreamDeck {
+  id              String                 @id @default(uuid())
+  deckKey         String                 @unique // "DLSD-{country}-{dialect}-{subdialect}-{6 chars}" per the product plan section 9.2
+  organizationId  String
+  organization    SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  createdByUserId String
+  createdAt       DateTime               @default(now())
+
+  items StreamDeckItem[]
+
+  @@index([organizationId])
+  @@map("stream_decks")
+}
+
+model StreamDeckItem {
+  id            String     @id @default(uuid())
+  deckId        String
+  deck          StreamDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  recordingId   String // WordRecording.id -- no FK by design: keeps the Voice Stream domain
+  // loosely coupled to the trainer-facing schema, and a WordRecording can
+  // be legitimately purged (audio retention) without needing deck cleanup logic
+  addedByUserId String
+  addedAt       DateTime   @default(now())
+
+  @@unique([deckId, recordingId])
+  @@index([deckId])
+  @@map("stream_deck_items")
+}
+
+/// Lightweight preview-access record (Phase 1 only) -- full stream-request
+/// audit logging (doc section 37: bytes streamed, result code, entitlement
+/// decision, etc.) is a Phase 3 concern once the actual streaming API exists.
+model CataloguePreviewLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  recordingId    String
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("catalogue_preview_logs")
+}
+
+// ============================================================================
+// Dialect Library Voice Stream -- Phase 2 (ISVP / ISVS / ISVC)
+//
+// Independent Subscriber Validation Programme: subscriber organizations
+// submit standardized quality validations on catalogue recordings;
+// services/isvc-scorer (a separate consumer service, same async-job
+// pattern as consensus-scorer) aggregates them into a versioned ISVC
+// consensus with an ISVS score, confidence level, and agreement
+// percentage, surfaced back into catalogue search as a filter dimension.
+// See docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md sections 13-22.
+// ============================================================================
+
+enum IsvcConfidence {
+  EMERGING
+  ESTABLISHED
+  HIGH
+  VERY_HIGH
+}
+
+/// One subscriber organization's validation of one WordRecording, submitted
+/// by one validator (userId) on behalf of their org. A single org may have
+/// multiple validators submit for the same recording --
+/// OrganizationValidationConsensus (below) normalizes these down to one
+/// score per org before ISVC aggregation, per the product plan section 18
+/// ("one company with 50 validators must not have 50 times the influence
+/// of one company with one validator").
+model SubscriberValidation {
+  id                     String                 @id @default(uuid())
+  organizationId         String
+  organization           SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId                 String
+  user                   SubscriberUser         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recordingId            String // WordRecording.id -- no FK, same loose-coupling rationale as StreamDeckItem.recordingId
+  transcriptAccuracy     Int // 0-100, each dimension from the product plan section 14
+  pronunciationAccuracy  Int
+  dialectAuthenticity    Int
+  speechClarity          Int
+  audioQuality           Int
+  overallScore           Int // the validator's own rollup; NOT re-derived from the dimensions above (validator's holistic judgment, dimensions are supporting detail)
+  notes                  String? // private to the org, never surfaced in ISVC aggregates (product plan section 23)
+  createdAt              DateTime               @default(now())
+
+  @@unique([organizationId, userId, recordingId]) // one active validation per validator per recording; resubmission overwrites via upsert
+  @@index([recordingId])
+  @@index([organizationId, recordingId])
+  @@map("subscriber_validations")
+}
+
+/// One row per (organization, recording) -- the org-normalized score
+/// consumed by ISVC aggregation. Recalculated by isvc-scorer whenever any
+/// SubscriberValidation in the org changes; ISVC then aggregates across
+/// these rows, never across raw SubscriberValidation rows directly.
+model OrganizationValidationConsensus {
+  id             String                 @id @default(uuid())
+  organizationId String
+  organization   SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recordingId    String
+  validatorCount Int // how many of this org's validators contributed
+  meanScore      Decimal                @db.Decimal(5, 2) // mean of this org's validators' overallScore
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([organizationId, recordingId])
+  @@index([recordingId])
+  @@map("organization_validation_consensus")
+}
+
+/// Versioned ISVC snapshot for one recording -- append-only (never updated
+/// in place) so historical states remain queryable (product plan section
+/// 21: "Subscribers should be able to identify the exact validation state
+/// used during model training"). Only the highest `version` per
+/// recordingId is "current" -- IsvcCurrent (below) points at it for O(1)
+/// catalogue-search joins instead of a MAX(version) subquery on every
+/// search.
+model IsvcAggregation {
+  id                String         @id @default(uuid())
+  recordingId       String
+  version           Int
+  isvs              Decimal        @db.Decimal(5, 2) // the ISVS itself
+  agreement         Decimal        @db.Decimal(5, 2) // 0-100
+  confidence        IsvcConfidence
+  organizationCount Int
+  outlierOrgCount   Int
+  createdAt         DateTime       @default(now())
+
+  current IsvcCurrent?
+
+  @@unique([recordingId, version])
+  @@index([recordingId])
+  @@map("isvc_aggregations")
+}
+
+/// Points at the current IsvcAggregation version per recording -- avoids a
+/// MAX(version) correlated subquery in CatalogueService.search's ISVC
+/// filter, same "materialized pointer" shape IsvcAggregation's own doc
+/// comment above describes.
+model IsvcCurrent {
+  recordingId   String          @id
+  aggregationId String          @unique
+  aggregation   IsvcAggregation @relation(fields: [aggregationId], references: [id], onDelete: Cascade)
+
+  @@map("isvc_current")
 }

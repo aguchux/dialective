@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, Play, XCircle } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Play, XCircle } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
@@ -10,6 +10,7 @@ import {
   normalizeErrorMessage,
   useGetAdminTestimonialsQuery,
   useReviewTestimonyMutation,
+  useSetTestimonyVisibilityMutation,
 } from '@/store/api';
 
 const secondaryButtonClass =
@@ -48,6 +49,51 @@ function StatusBadge({ status }: { status: TestimonyStatus }) {
       )}
       {status === 'APPROVED' ? 'Approved' : 'Rejected'}
     </span>
+  );
+}
+
+function VisibilityToggle({ testimony }: { testimony: Testimony }) {
+  const [setVisibility, { isLoading }] = useSetTestimonyVisibilityMutation();
+  const [error, setError] = useState<string | null>(null);
+
+  async function toggle() {
+    setError(null);
+    try {
+      await setVisibility({ id: testimony.id, visible: !testimony.visible }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to update visibility.'));
+    }
+  }
+
+  return (
+    <div className="grid gap-1">
+      <ActionButton
+        className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-bold transition-colors ${
+          testimony.visible
+            ? 'border-line bg-surface text-ink hover:bg-surface-muted'
+            : 'border-line bg-amber-50 text-amber-800 hover:bg-amber-100'
+        }`}
+        onClick={() => void toggle()}
+        pending={isLoading}
+        pendingLabel={testimony.visible ? 'Hiding' : 'Showing'}
+        type="button"
+      >
+        {testimony.visible ? (
+          <>
+            <Eye className="size-3.5" aria-hidden="true" /> Visible on homepage
+          </>
+        ) : (
+          <>
+            <EyeOff className="size-3.5" aria-hidden="true" /> Hidden from homepage
+          </>
+        )}
+      </ActionButton>
+      {error && (
+        <p className="text-xs font-bold text-danger" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -215,6 +261,11 @@ export default function AdminTestimonialsPage() {
                       {item.rewardCredited && (
                         <span className="text-xs font-bold text-emerald-700">Reward credited</span>
                       )}
+                      {item.status === 'APPROVED' && !item.visible && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
+                          <EyeOff className="size-3.5" aria-hidden="true" /> Hidden from homepage
+                        </span>
+                      )}
                     </div>
                     {item.kind === 'TEXT' ? (
                       <p className="max-w-xl leading-relaxed text-ink">&ldquo;{item.text}&rdquo;</p>
@@ -233,7 +284,10 @@ export default function AdminTestimonialsPage() {
                       Submitted {new Date(item.createdAt).toLocaleString()}
                     </p>
                   </div>
-                  <ReviewActions testimony={item} />
+                  <div className="grid gap-2">
+                    <ReviewActions testimony={item} />
+                    {item.status === 'APPROVED' && <VisibilityToggle testimony={item} />}
+                  </div>
                 </article>
               ))}
             </div>

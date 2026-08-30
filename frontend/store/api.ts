@@ -865,6 +865,9 @@ export interface PublicClientSettings {
   testimonyEnabled: boolean;
   testimonyMaxTextLength: number;
   testimonyMaxVideoSeconds: number;
+  testimonyLandingLimit: number;
+  testimonyTextRewardTokens: string;
+  testimonyVideoRewardTokens: string;
 }
 
 export type TestimonyKind = 'VIDEO' | 'TEXT';
@@ -883,6 +886,7 @@ export interface Testimony {
   reviewedByAdminId: string | null;
   rejectionReason: string | null;
   rewardCredited: boolean;
+  visible: boolean;
   createdAt: string;
 }
 
@@ -1212,7 +1216,9 @@ export interface PlatformSettings {
   testimonyEnabled: boolean;
   testimonyMaxTextLength: number;
   testimonyMaxVideoSeconds: number;
-  testimonyRewardTokens: string;
+  testimonyLandingLimit: number;
+  testimonyTextRewardTokens: string;
+  testimonyVideoRewardTokens: string;
   qualityGateEnabled: boolean;
   qualityWeightConsensus: string;
   qualityWeightNoise: string;
@@ -1315,7 +1321,9 @@ export interface PlatformSettingsInput {
   testimonyEnabled?: boolean;
   testimonyMaxTextLength?: number;
   testimonyMaxVideoSeconds?: number;
-  testimonyRewardTokens?: number;
+  testimonyLandingLimit?: number;
+  testimonyTextRewardTokens?: number;
+  testimonyVideoRewardTokens?: number;
   qualityGateEnabled?: boolean;
   qualityWeightConsensus?: number;
   qualityWeightNoise?: number;
@@ -2233,6 +2241,14 @@ export const dialectivaApi = createApi({
       { id: string; status: 'APPROVED' | 'REJECTED'; rejectionReason?: string }
     >({
       query: ({ id, ...body }) => ({ url: `/admin/testimonials/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Testimony'],
+    }),
+    setTestimonyVisibility: builder.mutation<Testimony, { id: string; visible: boolean }>({
+      query: ({ id, visible }) => ({
+        url: `/admin/testimonials/${id}/visibility`,
+        method: 'PATCH',
+        body: { visible },
+      }),
       invalidatesTags: ['Testimony'],
     }),
     getMarketingMaterials: builder.query<MarketingMaterials, MarketingAdFormat | void>({
@@ -3601,6 +3617,7 @@ export const {
   useSubmitTestimonyMutation,
   useGetAdminTestimonialsQuery,
   useReviewTestimonyMutation,
+  useSetTestimonyVisibilityMutation,
   useGetMarketingMaterialsQuery,
   useCreateCampaignShareMutation,
   useGetMyMarketingSharesQuery,

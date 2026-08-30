@@ -393,6 +393,8 @@ export function TrainerDashboard() {
           <TestimonyDialog
             maxTextLength={publicSettings.testimonyMaxTextLength}
             maxVideoSeconds={publicSettings.testimonyMaxVideoSeconds}
+            textRewardTokens={publicSettings.testimonyTextRewardTokens}
+            videoRewardTokens={publicSettings.testimonyVideoRewardTokens}
             onOpenChange={setTestimonyOpen}
             onSubmitted={() => setTestimonyOpen(false)}
             open={testimonyOpen}
@@ -2585,9 +2587,26 @@ function CampaignsView({ referralCode }: { referralCode: string }) {
 
 function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) {
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
+  const { data: kycStatusData } = useGetKycStatusQuery();
+  const [createKycSession, { isLoading: isStartingKyc }] = useCreateKycSessionMutation();
   const { data: myTestimonies, isLoading } = useListMyTestimoniesQuery(undefined, {
     skip: !publicSettings?.testimonyEnabled,
   });
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
+  const kycStatus = kycStatusData?.kycStatus ?? 'NOT_STARTED';
+  const testimonyEligible = kycStatus === 'APPROVED';
+
+  async function startVerification() {
+    setVerificationError(null);
+    try {
+      const session = await createKycSession().unwrap();
+      setVerificationDialogOpen(false);
+      window.location.assign(session.url);
+    } catch (err) {
+      setVerificationError(normalizeErrorMessage(err, 'Could not start DIDIT verification.'));
+    }
+  }
 
   const statusLabel: Record<'PENDING' | 'APPROVED' | 'REJECTED', string> = {
     PENDING: 'Awaiting review',
@@ -2610,7 +2629,13 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
         {publicSettings?.testimonyEnabled && (
           <button
             className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-accent bg-accent px-4 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark"
-            onClick={onGiveTestimony}
+            onClick={() => {
+              if (testimonyEligible) {
+                onGiveTestimony();
+              } else {
+                setVerificationDialogOpen(true);
+              }
+            }}
             type="button"
           >
             <MessageSquareQuote className="size-4" aria-hidden="true" />
@@ -2625,6 +2650,35 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
           actionHref={undefined}
           actionLabel={undefined}
         />
+      ) : !testimonyEligible ? (
+        <section
+          className={`${cardClass} grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center`}
+        >
+          <div>
+            <h2 className="text-lg font-black">Verify your identity to submit a testimonial</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted">
+              Testimonial rewards are available only after DIDIT approves your identity
+              verification.
+            </p>
+            {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
+              <p className="mt-2 text-sm font-bold text-amber-700">
+                Your DIDIT verification is being reviewed.
+              </p>
+            ) : null}
+            {verificationError && (
+              <p className="mt-2 text-sm font-bold text-danger">{verificationError}</p>
+            )}
+          </div>
+          {kycStatus !== 'IN_PROGRESS' && kycStatus !== 'IN_REVIEW' && (
+            <ActionButton
+              className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-accent bg-accent px-4 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => setVerificationDialogOpen(true)}
+              type="button"
+            >
+              Verify identity
+            </ActionButton>
+          )}
+        </section>
       ) : isLoading ? (
         <div className={`${cardClass} p-5 text-sm font-bold text-muted`}>Loading...</div>
       ) : myTestimonies && myTestimonies.length > 0 ? (
@@ -2663,6 +2717,40 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
           actionLabel={undefined}
         />
       )}
+      <Dialog open={verificationDialogOpen} onOpenChange={setVerificationDialogOpen}>
+        <DialogContent
+          title="Identity verification required"
+          description="Only DIDIT-verified trainers can submit a testimonial or receive its DL reward."
+        >
+          <div className="grid gap-4">
+            {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+                Your DIDIT identity verification is already being reviewed. You can submit a
+                testimonial once it is approved.
+              </p>
+            ) : (
+              <>
+                <p className="text-sm leading-relaxed text-muted">
+                  Complete the secure DIDIT ID and selfie check, then return here after approval to
+                  continue.
+                </p>
+                {verificationError && (
+                  <p className="text-sm font-bold text-danger">{verificationError}</p>
+                )}
+                <ActionButton
+                  className="min-h-11 justify-center rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void startVerification()}
+                  pending={isStartingKyc}
+                  pendingLabel="Opening DIDIT"
+                  type="button"
+                >
+                  Complete DIDIT verification
+                </ActionButton>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

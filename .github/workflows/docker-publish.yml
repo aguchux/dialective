@@ -6,6 +6,7 @@ on:
     paths:
       - "services/api/**"
       - "services/consensus-scorer/**"
+      - "services/isvc-scorer/**"
       - "services/prompt-audio-service/**"
       - "services/settlement-job/**"
       - "services/audio-retention-job/**"
@@ -49,6 +50,9 @@ jobs:
           - service: consensus-scorer
             context: .
             image: consensus-scorer
+          - service: isvc-scorer
+            context: .
+            image: isvc-scorer
           - service: settlement-job
             context: .
             image: settlement-job

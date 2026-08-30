@@ -31,6 +31,8 @@ resources:
   - prompt-audio-service-keda.yaml
   - consensus-scorer-deployment.yaml
   - consensus-scorer-hpa.yaml
+  - isvc-scorer-deployment.yaml
+  - isvc-scorer-hpa.yaml
   - settlement-cronjob.yaml
   - word-generator-cronjob.yaml
   - fx-rate-cronjob.yaml

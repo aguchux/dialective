@@ -5,6 +5,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ListTestimoniesAdminDto } from './dto/list-testimonies-admin.dto';
 import { ReviewTestimonyDto } from './dto/review-testimony.dto';
+import { UpdateTestimonyVisibilityDto } from './dto/update-testimony-visibility.dto';
 import { TestimonialsService } from './testimonials.service';
 
 @Controller('admin/testimonials')
@@ -25,5 +26,10 @@ export class AdminTestimonialsController {
     @Body() dto: ReviewTestimonyDto,
   ) {
     return this.testimonials.review(req.user.sub, id, dto);
+  }
+
+  @Patch(':id/visibility')
+  setVisibility(@Param('id') id: string, @Body() dto: UpdateTestimonyVisibilityDto) {
+    return this.testimonials.setVisibility(id, dto);
   }
 }

@@ -6,6 +6,7 @@
     "services/api",
     "services/audio-retention-job",
     "services/consensus-scorer",
+    "services/isvc-scorer",
     "services/fx-rate-job",
     "services/settlement-job",
     "services/word-generator-job"

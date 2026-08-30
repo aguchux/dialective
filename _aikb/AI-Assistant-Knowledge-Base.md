@@ -47,7 +47,7 @@ Dialect Library is a contributor platform for voice recordings and word translat
 ## Testimonials and marketing campaigns
 
 - Trainers can submit a testimonial about their experience at any time, from the Testimonials view, as short text or a short recorded video (limits are configurable), via "Add Testimonial." There is no cap on how many a trainer may submit.
-- Each testimonial is reviewed independently by an administrator. An approved testimonial credits a one-time DL reward for that testimonial and may appear on the public homepage. A rejected one earns no reward but does not block future submissions. The whole feature is admin-configurable and may be off.
+- Each testimonial is reviewed independently by an administrator. An approved testimonial credits a one-time DL reward for that testimonial and may appear on the public homepage. A rejected one earns no reward but does not block future submissions. An admin can later hide an approved testimonial from the public homepage (e.g. for quality or a trainer's request) without reversing the approval or the reward already credited. The whole feature is admin-configurable and may be off.
 - Separately, the Campaigns view lets a trainer generate a trackable share link pairing an admin-provided ad photo with an admin-written headline for a chosen social format, and see view/registration counts per campaign. This is distinct from the plain referral link (Referrals view), which covers the trainer's own code, invite link, invitation history, and referral bonus rates.
 
 ## Courses, blog, notifications, and data access

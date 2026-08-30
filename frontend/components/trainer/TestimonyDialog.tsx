@@ -36,12 +36,16 @@ export function TestimonyDialog({
   onOpenChange,
   maxVideoSeconds,
   maxTextLength,
+  textRewardTokens,
+  videoRewardTokens,
   onSubmitted,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   maxVideoSeconds: number;
   maxTextLength: number;
+  textRewardTokens: string;
+  videoRewardTokens: string;
   onSubmitted: () => void;
 }) {
   const portalContainer = usePortalContainer();
@@ -284,7 +288,8 @@ export function TestimonyDialog({
                   <span>
                     <span className="block text-lg font-black">Record a video</span>
                     <span className="mt-1 block text-sm text-muted">
-                      Up to {maxVideoSeconds} seconds, on camera.
+                      Up to {maxVideoSeconds} seconds, on camera. Earn {videoRewardTokens} DL when
+                      approved.
                     </span>
                   </span>
                 </button>
@@ -299,7 +304,7 @@ export function TestimonyDialog({
                   <span>
                     <span className="block text-lg font-black">Write a short quote</span>
                     <span className="mt-1 block text-sm text-muted">
-                      Up to {maxTextLength} characters.
+                      Up to {maxTextLength} characters. Earn {textRewardTokens} DL when approved.
                     </span>
                   </span>
                 </button>

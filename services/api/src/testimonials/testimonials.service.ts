@@ -7,14 +7,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { creditTestimonyReward } from '@dialectiva/db';
+import { creditTestimonyReward, KycStatus, Role } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { StorageService } from '../storage/storage.service';
 import { CreateTestimonyDto } from './dto/create-testimony.dto';
 import { CreateTestimonyUploadUrlDto } from './dto/create-testimony-upload-url.dto';
 import { ListTestimoniesAdminDto } from './dto/list-testimonies-admin.dto';
+import { ListPublicTestimoniesDto } from './dto/list-public-testimonies.dto';
 import { ReviewTestimonyDto } from './dto/review-testimony.dto';
+import { UpdateTestimonyVisibilityDto } from './dto/update-testimony-visibility.dto';
 
 const TESTIMONY_BUCKET = process.env.SPACES_TESTIMONY_BUCKET ?? 'dialectiva-testimonials';
 const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
@@ -43,6 +45,7 @@ export class TestimonialsService {
     if (!(await this.settings.isTestimonyEnabled())) {
       throw new ForbiddenException('Testimonials are not currently open');
     }
+    await this.requireDiditVerification(userId);
     const extension = EXTENSION_BY_CONTENT_TYPE[dto.contentType];
     const key = `${userId}/${randomUUID()}.${extension}`;
     const { url, expiresInSeconds } = await this.storage.createPresignedUploadUrl(
@@ -65,6 +68,7 @@ export class TestimonialsService {
     if (!(await this.settings.isTestimonyEnabled())) {
       throw new ForbiddenException('Testimonials are not currently open');
     }
+    await this.requireDiditVerification(userId);
 
     if (dto.kind === 'TEXT') {
       const maxLength = await this.settings.getTestimonyMaxTextLength();
@@ -148,7 +152,10 @@ export class TestimonialsService {
       // eligibility) is already recorded regardless. Same shape as
       // CoursesService.creditCompletionAndNotify.
       try {
-        const rewardTokens = await this.settings.getTestimonyRewardTokens();
+        const rewardTokens =
+          testimony.kind === 'VIDEO'
+            ? await this.settings.getTestimonyVideoRewardTokens()
+            : await this.settings.getTestimonyTextRewardTokens();
         const credited = await creditTestimonyReward(
           this.prisma,
           testimony.userId,
@@ -171,26 +178,73 @@ export class TestimonialsService {
     return updated;
   }
 
-  async getPublic() {
+  /**
+   * Hides or re-shows an already-reviewed testimony on the public homepage.
+   * Independent of status/reward -- an admin can pull a testimony from
+   * public view (e.g. it turned out to be low quality, or the trainer asked
+   * for it to come down) without reversing the approval or clawing back the
+   * DL already credited.
+   */
+  async setVisibility(testimonyId: string, dto: UpdateTestimonyVisibilityDto) {
+    const testimony = await this.prisma.testimony.findUnique({ where: { id: testimonyId } });
+    if (!testimony) throw new NotFoundException('Testimony not found');
+    if (testimony.status !== 'APPROVED') {
+      throw new ConflictException('Only an approved testimony can be shown or hidden publicly');
+    }
+    return this.prisma.testimony.update({
+      where: { id: testimonyId },
+      data: { visible: dto.visible },
+    });
+  }
+
+  async getPublic(query: ListPublicTestimoniesDto) {
+    if (!(await this.settings.isTestimonyEnabled())) {
+      return { items: [], page: query.page, pageSize: query.pageSize, total: 0, totalPages: 1 };
+    }
+
+    const where = { status: 'APPROVED' as const, visible: true };
+    const total = await this.prisma.testimony.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / query.pageSize));
+    const page = Math.min(query.page, totalPages);
     const items = await this.prisma.testimony.findMany({
-      where: { status: 'APPROVED' },
+      where,
       orderBy: { reviewedAt: 'desc' },
+      skip: (page - 1) * query.pageSize,
+      take: query.pageSize,
       include: {
         user: {
           select: { firstName: true, dialect: { select: { name: true } } },
         },
       },
     });
-    return items.map((item) => ({
-      id: item.id,
-      kind: item.kind,
-      text: item.text,
-      videoUrl:
-        item.videoBucket && item.videoKey
-          ? this.storage.getPublicObjectUrl(item.videoBucket, item.videoKey)
-          : null,
-      trainerFirstName: item.user.firstName,
-      dialectName: item.user.dialect?.name ?? null,
-    }));
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        kind: item.kind,
+        text: item.text,
+        videoUrl:
+          item.videoBucket && item.videoKey
+            ? this.storage.getPublicObjectUrl(item.videoBucket, item.videoKey)
+            : null,
+        trainerFirstName: item.user.firstName,
+        dialectName: item.user.dialect?.name ?? null,
+      })),
+      page,
+      pageSize: query.pageSize,
+      total,
+      totalPages,
+    };
+  }
+
+  private async requireDiditVerification(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, kycStatus: true },
+    });
+    if (!user || user.role !== Role.TRAINER || user.kycStatus !== KycStatus.APPROVED) {
+      throw new ForbiddenException(
+        'Complete and receive approval for your DIDIT identity verification before submitting a testimonial',
+      );
+    }
   }
 }

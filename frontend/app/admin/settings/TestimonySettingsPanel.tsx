@@ -20,7 +20,9 @@ export function TestimonySettingsPanel() {
   const [enabled, setEnabled] = useState(false);
   const [maxTextLength, setMaxTextLength] = useState('200');
   const [maxVideoSeconds, setMaxVideoSeconds] = useState('30');
-  const [rewardTokens, setRewardTokens] = useState('5');
+  const [landingLimit, setLandingLimit] = useState('12');
+  const [textRewardTokens, setTextRewardTokens] = useState('5');
+  const [videoRewardTokens, setVideoRewardTokens] = useState('5');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +31,9 @@ export function TestimonySettingsPanel() {
     setEnabled(settings.testimonyEnabled);
     setMaxTextLength(String(settings.testimonyMaxTextLength));
     setMaxVideoSeconds(String(settings.testimonyMaxVideoSeconds));
-    setRewardTokens(settings.testimonyRewardTokens);
+    setLandingLimit(String(settings.testimonyLandingLimit));
+    setTextRewardTokens(settings.testimonyTextRewardTokens);
+    setVideoRewardTokens(settings.testimonyVideoRewardTokens);
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -39,7 +43,9 @@ export function TestimonySettingsPanel() {
 
     const textLength = Number(maxTextLength);
     const videoSeconds = Number(maxVideoSeconds);
-    const reward = Number(rewardTokens);
+    const landingCount = Number(landingLimit);
+    const textReward = Number(textRewardTokens);
+    const videoReward = Number(videoRewardTokens);
     if (!Number.isFinite(textLength) || textLength < 1) {
       setError('Max text length must be a positive number.');
       return;
@@ -48,8 +54,16 @@ export function TestimonySettingsPanel() {
       setError('Max video seconds must be a positive number.');
       return;
     }
-    if (!Number.isFinite(reward) || reward < 0) {
-      setError('Reward tokens must be zero or a positive number.');
+    if (!Number.isInteger(landingCount) || landingCount < 1 || landingCount > 100) {
+      setError('Landing testimony count must be a whole number between 1 and 100.');
+      return;
+    }
+    if (!Number.isFinite(textReward) || textReward < 0) {
+      setError('Text testimony reward must be zero or a positive number.');
+      return;
+    }
+    if (!Number.isFinite(videoReward) || videoReward < 0) {
+      setError('Video testimony reward must be zero or a positive number.');
       return;
     }
 
@@ -58,7 +72,9 @@ export function TestimonySettingsPanel() {
         testimonyEnabled: enabled,
         testimonyMaxTextLength: textLength,
         testimonyMaxVideoSeconds: videoSeconds,
-        testimonyRewardTokens: reward,
+        testimonyLandingLimit: landingCount,
+        testimonyTextRewardTokens: textReward,
+        testimonyVideoRewardTokens: videoReward,
       }).unwrap();
       setMessage('Testimony settings saved.');
     } catch (err) {
@@ -134,17 +150,51 @@ export function TestimonySettingsPanel() {
           </div>
 
           <div className="grid gap-1">
-            <label className="text-sm font-bold" htmlFor="testimony-reward">
-              DL reward on approval
+            <label className="text-sm font-bold" htmlFor="testimony-landing-limit">
+              Testimonials shown on the landing page
             </label>
             <input
               className={`${inputClass} max-w-40`}
-              id="testimony-reward"
+              id="testimony-landing-limit"
+              max="100"
+              min="1"
+              onChange={(e) => setLandingLimit(e.target.value)}
+              step="1"
+              type="number"
+              value={landingLimit}
+            />
+            <p className="text-xs leading-relaxed text-muted">
+              The public testimonials archive remains available separately.
+            </p>
+          </div>
+
+          <div className="grid gap-1">
+            <label className="text-sm font-bold" htmlFor="testimony-text-reward">
+              Text testimony DL reward on approval
+            </label>
+            <input
+              className={`${inputClass} max-w-40`}
+              id="testimony-text-reward"
               min="0"
-              onChange={(e) => setRewardTokens(e.target.value)}
+              onChange={(e) => setTextRewardTokens(e.target.value)}
               step="0.01"
               type="number"
-              value={rewardTokens}
+              value={textRewardTokens}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="text-sm font-bold" htmlFor="testimony-video-reward">
+              Video testimony DL reward on approval
+            </label>
+            <input
+              className={`${inputClass} max-w-40`}
+              id="testimony-video-reward"
+              min="0"
+              onChange={(e) => setVideoRewardTokens(e.target.value)}
+              step="0.01"
+              type="number"
+              value={videoRewardTokens}
             />
           </div>
 

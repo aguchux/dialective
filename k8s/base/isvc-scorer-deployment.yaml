@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: isvc-scorer
+  labels:
+    app: isvc-scorer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: isvc-scorer
+  template:
+    metadata:
+      labels:
+        app: isvc-scorer
+    spec:
+      containers:
+        - name: isvc-scorer
+          image: golojan/dialect-isvc-scorer:latest
+          env:
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: isvc-scorer-config
+                  key: redis_host
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: isvc-scorer-config
+                  key: redis_port
+            - name: ISVC_STREAM
+              valueFrom:
+                configMapKeyRef:
+                  name: isvc-scorer-config
+                  key: isvc_stream
+            - name: CONSUMER_GROUP
+              valueFrom:
+                configMapKeyRef:
+                  name: isvc-scorer-config
+                  key: consumer_group
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: connection_string

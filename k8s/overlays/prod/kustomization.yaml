@@ -55,6 +55,9 @@ secretGenerator:
   - name: livekit-creds
     envs:
       - secrets/livekit.env
+  - name: stream-creds
+    envs:
+      - secrets/stream.env
 
 configMapGenerator:
   - name: api-config
@@ -75,6 +78,9 @@ configMapGenerator:
   - name: consensus-scorer-config
     envs:
       - configs/consensus-scorer.env
+  - name: isvc-scorer-config
+    envs:
+      - configs/isvc-scorer.env
   - name: postgres-config
     envs:
       - configs/postgres.env

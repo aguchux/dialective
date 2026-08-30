@@ -124,6 +124,41 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: frontend_url
+            - name: STREAM_FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: stream_frontend_url
+            - name: STREAM_JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stream-creds
+                  key: stream_jwt_access_secret
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stream-creds
+                  key: stripe_secret_key
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stream-creds
+                  key: stripe_webhook_secret
+            - name: STRIPE_PRICE_ID_STARTER
+              valueFrom:
+                secretKeyRef:
+                  name: stream-creds
+                  key: stripe_price_id_starter
+            - name: STRIPE_PRICE_ID_PROFESSIONAL
+              valueFrom:
+                secretKeyRef:
+                  name: stream-creds
+                  key: stripe_price_id_professional
+            - name: STRIPE_PRICE_ID_ENTERPRISE
+              valueFrom:
+                secretKeyRef:
+                  name: stream-creds
+                  key: stripe_price_id_enterprise
             - name: RESEND_FROM_ADDRESS
               valueFrom:
                 configMapKeyRef:

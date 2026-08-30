@@ -30,6 +30,7 @@ import { ChatDialectModule } from './chatdialect/chatdialect.module';
 import { TokenomicsModule } from './tokenomics/tokenomics.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { SettlementAdminModule } from './settlement-admin/settlement-admin.module';
+import { VoiceStreamModule } from './voice-stream/voice-stream.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { SettlementAdminModule } from './settlement-admin/settlement-admin.modul
     TokenomicsModule,
     AssistantModule,
     SettlementAdminModule,
+    VoiceStreamModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

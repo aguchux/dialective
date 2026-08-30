@@ -2,13 +2,14 @@ import { UnprocessableEntityException } from '@nestjs/common';
 import { GeoController } from './geo.controller';
 
 function setup(keyboardLayoutMaxLength = 1000) {
-  const prisma = {
+  const prisma: any = {
     country: { findUnique: jest.fn().mockResolvedValue({ id: 'country-1' }) },
     dialect: {
       create: jest.fn().mockResolvedValue({ id: 'dialect-1' }),
       update: jest.fn().mockResolvedValue({ id: 'dialect-1' }),
     },
   };
+  prisma.$transaction = jest.fn((cb: (tx: unknown) => unknown) => cb(prisma));
   const platformSettings = {
     getForAdmin: jest.fn().mockResolvedValue({ keyboardLayoutMaxLength }),
   };

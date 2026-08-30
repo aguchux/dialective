@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronLeft, ChevronRight, Quote } from 'lucide-react';
+import Link from 'next/link';
 import { useRef, useState } from 'react';
 
 export interface LandingTestimonial {
@@ -40,9 +41,17 @@ export function TestimonialsCarousel({ testimonials }: { testimonials: LandingTe
       className="mx-auto grid max-w-280 gap-6 py-8 pb-9"
     >
       <div className="flex items-center justify-between gap-4">
-        <h2 id="testimonials-title" className="text-2xl font-black md:text-[2rem]">
-          What trainers say
-        </h2>
+        <div className="grid gap-1">
+          <h2 id="testimonials-title" className="text-2xl font-black md:text-[2rem]">
+            What trainers say
+          </h2>
+          <Link
+            className="w-fit text-sm font-bold text-accent no-underline hover:text-accent-dark"
+            href="/testimonials"
+          >
+            View all testimonials &rarr;
+          </Link>
+        </div>
         <div className="hidden shrink-0 items-center gap-2 md:flex">
           <button
             aria-label="Previous testimonial"

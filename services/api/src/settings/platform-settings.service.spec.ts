@@ -135,9 +135,18 @@ describe('PlatformSettingsService testimony settings', () => {
     await expect(service.getTestimonyMaxVideoSeconds()).resolves.toBe(45);
   });
 
-  it('getTestimonyRewardTokens reflects the admin-configured Decimal value as a number', async () => {
-    const { service } = setup({ testimonyRewardTokens: { toNumber: () => 7.5 } });
-    await expect(service.getTestimonyRewardTokens()).resolves.toBe(7.5);
+  it('getTestimonyLandingLimit reflects the admin-configured landing count', async () => {
+    const { service } = setup({ testimonyLandingLimit: 12 });
+    await expect(service.getTestimonyLandingLimit()).resolves.toBe(12);
+  });
+
+  it('returns the independently configured text and video reward values', async () => {
+    const { service } = setup({
+      testimonyTextRewardTokens: { toNumber: () => 3.5 },
+      testimonyVideoRewardTokens: { toNumber: () => 9 },
+    });
+    await expect(service.getTestimonyTextRewardTokens()).resolves.toBe(3.5);
+    await expect(service.getTestimonyVideoRewardTokens()).resolves.toBe(9);
   });
 });
 

@@ -12,16 +12,18 @@ cp postgres.env.example postgres.env   # then fill in real values
 cp spaces.env.example spaces.env
 cp pgadmin.env.example pgadmin.env
 cp auth.env.example auth.env
+cp stream.env.example stream.env
 cd -
 kubectl apply -k k8s/overlays/prod/
 ```
 
-`kustomization.yaml`'s `secretGenerator` reads `k8s/overlays/prod/secrets/{postgres,spaces,pgadmin,auth}.env` into four Secrets:
+`kustomization.yaml`'s `secretGenerator` reads `k8s/overlays/prod/secrets/{postgres,spaces,pgadmin,auth,stream,...}.env` into one Secret each:
 
 - `postgres-creds` — keys: `username`, `password`, `connection_string`
 - `spaces-creds` — keys: `endpoint`, `access_key`, `secret_key` (DigitalOcean Spaces, used by `api`, `vosk-worker`, `prompt-audio-service`). `endpoint` is the region endpoint, e.g. `https://nyc3.digitaloceanspaces.com`; access/secret key come from a DO Spaces access key pair.
 - `pgadmin-creds` — keys: `email`, `password` (pgAdmin's own login, used by the pgAdmin Deployment)
 - `auth-creds` — keys: `jwt_access_secret` (signs `api`'s access tokens), `oauth_callback_secret` (shared secret authenticating `frontend`→`api` server-to-server auth calls, e.g. the magic-link callback — **also set on Vercel**, see below), `nextauth_secret` (encrypts NextAuth's session JWT, Vercel-side only, not actually used by anything in this cluster). Generate random values (e.g. `openssl rand -base64 32`).
+- `stream-creds` — keys: `stream_jwt_access_secret` (signs Voice Stream subscriber access tokens, fully separate from `auth-creds`' `jwt_access_secret` — see `docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md`), `stripe_secret_key`, `stripe_webhook_secret`, `stripe_price_id_starter`, `stripe_price_id_professional`, `stripe_price_id_enterprise` (from the Stripe dashboard — Developers → API keys / Webhooks, and Products → each recurring monthly Price).
 
 Note: kustomize's `secretGenerator` appends a content-hash suffix to each Secret's name (e.g. `postgres-creds-6f46hmbbt6`) and automatically rewrites every `secretKeyRef.name` in the built manifests to match — this is intentional, not a bug: it's what forces a rolling pod restart when a secret's value changes on the next `kubectl apply -k`. Don't try to pin the literal `postgres-creds` name or disable the hash.
 
@@ -35,6 +37,7 @@ cp api.env.example api.env
 cp vosk-worker.env.example vosk-worker.env
 cp prompt-audio-service.env.example prompt-audio-service.env
 cp consensus-scorer.env.example consensus-scorer.env
+cp isvc-scorer.env.example isvc-scorer.env
 cp postgres.env.example postgres.env
 cp pgadmin.env.example pgadmin.env
 cd -
@@ -69,7 +72,7 @@ Add `http://localhost:3000` too if testing the frontend locally against the real
 
 `pgadmin.dialectlibrary.com`, `api.dialectlibrary.com`, and `livekit.dialectlibrary.com` must point (A/CNAME) at the ingress controller's external IP. TLS is issued automatically via cert-manager (`letsencrypt-prod` ClusterIssuer) — that ClusterIssuer must already exist in the cluster; it's not created by these manifests. Requires an nginx ingress controller (`ingressClassName: nginx`). `livekit.dialectlibrary.com` fronts `livekit-server`'s WS signaling only — its WebRTC media (UDP) goes through the separate `livekit-rtc` LoadBalancer Service, not the ingress controller (see `k8s/base/livekit-service.yaml`).
 
-`dialectlibrary.com` (the frontend, apex domain) and `labs.dialectlibrary.com` (`chatdialect/apps/web`) are **not** in this cluster — both are Vercel deployments (`/frontend` and `chatdialect/`, respectively, two separate Vercel projects). Point each at its own Vercel DNS target per that project's domain settings, not at the ingress controller.
+`dialectlibrary.com` (the frontend, apex domain), `labs.dialectlibrary.com` (`chatdialect/apps/web`), and `stream.dialectlibrary.com` (`/stream`, Dialect Library Voice Stream) are **not** in this cluster — all three are Vercel deployments, each its own Vercel project. Point each at its own Vercel DNS target per that project's domain settings, not at the ingress controller.
 
 ## Frontend (Vercel) env vars
 
@@ -93,6 +96,24 @@ _that_ Vercel project's settings, not here:
 `labs.dialectlibrary.com` is already included in this cluster's
 `CORS_ALLOWED_ORIGINS` (`k8s/overlays/prod/configs/api.env`) so `api`
 accepts requests from it once the domain is live.
+
+## Voice Stream (Vercel) env vars
+
+`/stream` is a third, separate Vercel project at `stream.dialectlibrary.com`
+— see `docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md`. Set these in
+_that_ Vercel project's settings, not here:
+
+- `NEXTAUTH_URL` — the Vercel deployment's public URL (`https://stream.dialectlibrary.com`)
+- `NEXTAUTH_SECRET` — its own random value (independent of `frontend`'s `nextauth_secret`)
+- `API_BASE_URL` — `https://api.dialectlibrary.com`
+- `NEXT_PUBLIC_API_BASE_URL` — same as above, exposed client-side
+
+`stream.dialectlibrary.com` is already included in this cluster's
+`CORS_ALLOWED_ORIGINS` (`k8s/overlays/prod/configs/api.env`) so `api`
+accepts requests from it once the domain is live. `api`'s own
+`STREAM_FRONTEND_URL` (`configs/api.env`'s `stream_frontend_url`) points
+Stripe Checkout's success/cancel URLs and subscriber-invite emails at this
+same domain.
 
 ## Apply
 

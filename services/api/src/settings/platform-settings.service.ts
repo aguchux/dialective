@@ -240,9 +240,19 @@ export class PlatformSettingsService {
     return row.testimonyMaxVideoSeconds;
   }
 
-  async getTestimonyRewardTokens(): Promise<number> {
+  async getTestimonyLandingLimit(): Promise<number> {
     const row = await this.getRow();
-    return row.testimonyRewardTokens.toNumber();
+    return row.testimonyLandingLimit;
+  }
+
+  async getTestimonyTextRewardTokens(): Promise<number> {
+    const row = await this.getRow();
+    return row.testimonyTextRewardTokens.toNumber();
+  }
+
+  async getTestimonyVideoRewardTokens(): Promise<number> {
+    const row = await this.getRow();
+    return row.testimonyVideoRewardTokens.toNumber();
   }
 
   /** Reads fresh (not cached) -- weekly-trainer-report.ts checks this once at job start, so a stale cached read isn't a concern the way it would be for a per-request getter, but freshness costs nothing here either. */
@@ -742,7 +752,9 @@ export class PlatformSettingsService {
       testimonyEnabled: row.testimonyEnabled,
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
-      testimonyRewardTokens: row.testimonyRewardTokens.toString(),
+      testimonyLandingLimit: row.testimonyLandingLimit,
+      testimonyTextRewardTokens: row.testimonyTextRewardTokens.toString(),
+      testimonyVideoRewardTokens: row.testimonyVideoRewardTokens.toString(),
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),
@@ -854,7 +866,9 @@ export class PlatformSettingsService {
     testimonyEnabled?: boolean;
     testimonyMaxTextLength?: number;
     testimonyMaxVideoSeconds?: number;
-    testimonyRewardTokens?: number;
+    testimonyLandingLimit?: number;
+    testimonyTextRewardTokens?: number;
+    testimonyVideoRewardTokens?: number;
     qualityGateEnabled?: boolean;
     qualityWeightConsensus?: number;
     qualityWeightNoise?: number;
@@ -1188,7 +1202,9 @@ export class PlatformSettingsService {
       testimonyEnabled: row.testimonyEnabled,
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
-      testimonyRewardTokens: row.testimonyRewardTokens.toString(),
+      testimonyLandingLimit: row.testimonyLandingLimit,
+      testimonyTextRewardTokens: row.testimonyTextRewardTokens.toString(),
+      testimonyVideoRewardTokens: row.testimonyVideoRewardTokens.toString(),
       qualityGateEnabled: row.qualityGateEnabled,
       qualityWeightConsensus: row.qualityWeightConsensus.toString(),
       qualityWeightNoise: row.qualityWeightNoise.toString(),
@@ -1320,6 +1336,9 @@ export class PlatformSettingsService {
       testimonyEnabled: row.testimonyEnabled,
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
+      testimonyLandingLimit: row.testimonyLandingLimit,
+      testimonyTextRewardTokens: row.testimonyTextRewardTokens.toString(),
+      testimonyVideoRewardTokens: row.testimonyVideoRewardTokens.toString(),
     };
   }
 }

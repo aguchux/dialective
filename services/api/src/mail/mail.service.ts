@@ -63,6 +63,10 @@ function frontendUrl(): string {
   return process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
 }
 
+function streamFrontendUrl(): string {
+  return process.env.STREAM_FRONTEND_URL ?? 'https://stream.dialectlibrary.com';
+}
+
 /**
  * Every auth flow that needs to email a user (password reset, email
  * verification, magic-link) calls through here, so the provider is a
@@ -116,6 +120,20 @@ export class MailService {
       'Your Dialect Library sign-in link',
       magicLinkHtml(url),
       `Sign in: ${url}`,
+    );
+  }
+
+  async sendSubscriberInviteEmail(params: {
+    inviteeEmail: string;
+    organizationName: string;
+    token: string;
+  }): Promise<void> {
+    const url = `${streamFrontendUrl()}/register/accept-invite?token=${params.token}`;
+    await this.send(
+      params.inviteeEmail,
+      `You've been invited to join ${params.organizationName} on Dialect Library Voice Stream`,
+      `<p>You've been invited to join <strong>${escapeHtml(params.organizationName)}</strong> on Dialect Library Voice Stream.</p><p><a href="${url}">${url}</a></p>`,
+      `You've been invited to join ${params.organizationName} on Dialect Library Voice Stream: ${url}`,
     );
   }
 
@@ -337,6 +355,16 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
       return {
         subject: 'Confirm this wallet adjustment',
         intro: 'Enter this code to confirm this sub-distributor wallet adjustment.',
+      };
+    case 'SUBSCRIBER_EMAIL_VERIFY':
+      return {
+        subject: 'Verify your Dialect Library Voice Stream account',
+        intro: 'Enter this code to verify your new Voice Stream account.',
+      };
+    case 'SUBSCRIBER_LOGIN':
+      return {
+        subject: 'Your Dialect Library Voice Stream login code',
+        intro: 'Enter this code to finish signing in to Voice Stream.',
       };
   }
 }

@@ -290,9 +290,20 @@ export class UpdatePlatformSettingsDto {
   testimonyMaxVideoSeconds?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  testimonyLandingLimit?: number;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  testimonyRewardTokens?: number;
+  testimonyTextRewardTokens?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  testimonyVideoRewardTokens?: number;
 
   @IsOptional()
   @IsBoolean()

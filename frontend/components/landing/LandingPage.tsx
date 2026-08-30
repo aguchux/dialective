@@ -1,13 +1,14 @@
 import { ContributorRail } from './ContributorRail';
 import { CountryFlagMarquee } from './CountryFlagMarquee';
 import { HowItWorks } from './HowItWorks';
-import { LandingTestimonial, TestimonialsCarousel } from './TestimonialsCarousel';
+import { TestimonialsCarousel } from './TestimonialsCarousel';
 import { LandingBlog } from './LandingBlog';
 import { LandingFooter } from './LandingFooter';
 import { LandingHeader } from './LandingHeader';
 import { LandingHero } from './LandingHero';
 import { LandingStats } from './LandingStats';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
+import { getPublicTestimonialSettings, getPublicTestimonials } from '@/lib/testimonials-api';
 
 interface GeoStatsVisibility {
   countries: boolean;
@@ -63,24 +64,16 @@ async function getCountries(): Promise<Country[]> {
   }
 }
 
-async function getTestimonials(): Promise<LandingTestimonial[]> {
-  try {
-    const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/testimonials/public`, {
-      next: { revalidate: 300 },
-    });
-    if (!res.ok) return [];
-    return res.json();
-  } catch {
-    return [];
-  }
-}
-
 export async function LandingPage() {
-  const [geoStats, countries, testimonials] = await Promise.all([
+  const [geoStats, countries, testimonialSettings] = await Promise.all([
     getGeoStats(),
     getCountries(),
-    getTestimonials(),
+    getPublicTestimonialSettings().catch(() => null),
   ]);
+  const testimonials = testimonialSettings?.testimonyEnabled
+    ? ((await getPublicTestimonials(1, testimonialSettings.testimonyLandingLimit).catch(() => null))
+        ?.items ?? [])
+    : [];
   const dialectCount = geoStats?.dialectCount ?? null;
   const countryCount = geoStats?.countryCount ?? null;
   const totalTrainers = geoStats?.totalTrainers ?? null;
@@ -111,10 +104,10 @@ export async function LandingPage() {
       </div>
       <div className="px-4 md:px-[3.4rem]">
         <ContributorRail dialectCount={dialectCount} />
-        <TestimonialsCarousel testimonials={testimonials} />
         <HowItWorks />
         <CountryFlagMarquee countries={countries} />
         <LandingBlog />
+        <TestimonialsCarousel testimonials={testimonials} />
       </div>
       <LandingFooter />
     </main>

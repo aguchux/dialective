@@ -1,3 +1,4 @@
+import { Prisma } from '@dialectiva/db';
 import { WalletController } from './wallet.controller';
 import { encryptPayoutField } from '../common/payout-crypto.util';
 
@@ -711,7 +712,7 @@ describe('WalletController Flutterwave payout submission', () => {
       id: 'withdrawal-1',
       walletId: 'wallet-1',
       tokenAmount: decimal(100),
-      usdtAmount: decimal(10),
+      usdtAmount: new Prisma.Decimal(10),
       destinationAddress: '',
       destinationCurrency: 'NGN',
       destinationNetwork: '',
@@ -721,6 +722,7 @@ describe('WalletController Flutterwave payout submission', () => {
       destinationAccountNumberEncryptedJson: encryptedAccountNumberFixture(),
       destinationAccountNumberMasked: '****1234',
       destinationAccountName: 'John Doe',
+      destinationCountry: 'NG',
       status: 'PENDING',
       providerPayoutId: null,
       ...overrides,
@@ -744,6 +746,11 @@ describe('WalletController Flutterwave payout submission', () => {
       reserveTransaction: {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({}),
+      },
+      country: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ currencyCode: 'NGN', usdExchangeRate: new Prisma.Decimal(1500) }),
       },
     };
     prisma.$transaction = jest.fn(async (input: unknown) => {
