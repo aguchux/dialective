@@ -24,7 +24,7 @@ export function LandingHero() {
           className="inline-flex min-h-[42px] min-w-[190px] items-center justify-center justify-self-center whitespace-nowrap rounded-full border-[1.5px] border-[#050505] bg-white px-[1.15rem] py-[0.7rem] text-[#050505] no-underline transition-colors hover:bg-[rgba(5,5,5,0.06)]"
           href="/data-access"
         >
-          Subscribe to voice data
+          Subscribe to Stream
         </Link>
       </div>
     </section>

@@ -29,6 +29,21 @@ export class SubscriptionPlansService {
     return this.prisma.subscriptionPlan.findMany({ orderBy: { monthlyUsdAmount: 'asc' } });
   }
 
+  /** Public pricing page -- active plans only, and only the fields a prospective subscriber should see (no Stripe Price id). */
+  async listPublic() {
+    const plans = await this.prisma.subscriptionPlan.findMany({
+      where: { active: true },
+      orderBy: { monthlyUsdAmount: 'asc' },
+    });
+    return plans.map((plan) => ({
+      key: plan.key,
+      name: plan.name,
+      monthlyUsdAmount: plan.monthlyUsdAmount,
+      maxStreamDecks: plan.maxStreamDecks,
+      maxTeamMembers: plan.maxTeamMembers,
+    }));
+  }
+
   async upsert(input: SubscriptionPlanInput) {
     const key = input.key.trim();
     const stripePriceId = input.stripePriceId.trim();

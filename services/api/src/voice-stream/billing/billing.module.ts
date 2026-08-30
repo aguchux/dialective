@@ -4,11 +4,14 @@ import { BillingController } from './billing.controller';
 import { BillingService } from './billing.service';
 import { RequireActiveSubscriptionGuard } from './require-active-subscription.guard';
 import { SubscriptionPlansService } from './subscription-plans.service';
-import { SubscriptionPlansController } from './subscription-plans.controller';
+import {
+  PublicSubscriptionPlansController,
+  SubscriptionPlansController,
+} from './subscription-plans.controller';
 
 @Module({
   imports: [ApiAccessTokensModule],
-  controllers: [BillingController, SubscriptionPlansController],
+  controllers: [BillingController, SubscriptionPlansController, PublicSubscriptionPlansController],
   providers: [BillingService, RequireActiveSubscriptionGuard, SubscriptionPlansService],
   exports: [RequireActiveSubscriptionGuard],
 })

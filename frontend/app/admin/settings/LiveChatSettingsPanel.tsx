@@ -87,8 +87,10 @@ export function LiveChatSettingsPanel() {
             <p className="rounded-lg border border-line bg-surface-muted px-3 py-3 text-sm leading-relaxed text-muted">
               Knowledge sources: <code>_aikb/AI-Assistant-Knowledge-Base.md</code> and{' '}
               <code>_aikb/Links-And-Routes.md</code>. Published blogs and courses are added to the
-              assistant&apos;s runtime link registry. Deploy an API key for at least one configured
-              LLM provider before enabling this channel.
+              assistant&apos;s runtime link registry. The API rereads these sources for every
+              answer; deploy the API after changing bundled Markdown, or mount a refreshed directory
+              with <code>ASSISTANT_KNOWLEDGE_DIR</code>. Deploy an API key for at least one
+              configured LLM provider before enabling this channel.
             </p>
           )}
 

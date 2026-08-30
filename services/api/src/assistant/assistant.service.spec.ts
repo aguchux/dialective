@@ -24,6 +24,12 @@ function makeService(...args: ConstructorParameters<typeof AssistantService>) {
   return service;
 }
 
+function makeRawService(...args: ConstructorParameters<typeof AssistantService>) {
+  const service = new AssistantService(...args);
+  services.push(service);
+  return service;
+}
+
 afterAll(async () => {
   await Promise.all(services.map((service) => service.onModuleDestroy()));
 });
@@ -154,5 +160,29 @@ describe('AssistantService', () => {
     expect(prisma.course.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { status: 'PUBLISHED' } }),
     );
+  });
+
+  it('keeps Markdown guidance and the live registry independently represented in the prompt', async () => {
+    const service = makeRawService(buildSettings() as never, {} as never, {} as never);
+    jest
+      .spyOn(
+        service as unknown as { readKnowledgeFile(file: string): Promise<string> },
+        'readKnowledgeFile',
+      )
+      .mockResolvedValueOnce('A'.repeat(24_000))
+      .mockResolvedValueOnce('Route guidance');
+    jest
+      .spyOn(
+        service as unknown as { loadContentRegistry(): Promise<string> },
+        'loadContentRegistry',
+      )
+      .mockResolvedValue(`## Runtime Content Registry\n${'B'.repeat(20_000)}`);
+
+    // @ts-expect-error -- private method under test
+    const knowledge = await service.loadKnowledge();
+
+    expect(knowledge).toContain('## Runtime Content Registry');
+    expect(knowledge).toContain('A'.repeat(100));
+    expect(knowledge).toHaveLength(36_002);
   });
 });

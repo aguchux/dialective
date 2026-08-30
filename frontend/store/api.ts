@@ -1178,6 +1178,14 @@ export interface SubscriptionPlan {
   active: boolean;
 }
 
+export interface PublicSubscriptionPlan {
+  key: string;
+  name: string;
+  monthlyUsdAmount: string;
+  maxStreamDecks: number | null;
+  maxTeamMembers: number | null;
+}
+
 export interface SubscriptionPlanInput {
   key: string;
   name: string;
@@ -3406,6 +3414,9 @@ export const dialectivaApi = createApi({
     getPublicClientSettings: builder.query<PublicClientSettings, void>({
       query: () => '/settings/public',
     }),
+    getPublicSubscriptionPlans: builder.query<PublicSubscriptionPlan[], void>({
+      query: () => '/voice-stream/subscription-plans/public',
+    }),
     chatWithAssistant: builder.mutation<
       { message: string; persistent: boolean },
       { message: string; history: Array<{ role: 'user' | 'assistant'; content: string }> }
@@ -3823,6 +3834,7 @@ export const {
   useGetSubscriptionPlansQuery,
   useUpsertSubscriptionPlanMutation,
   useDeleteSubscriptionPlanMutation,
+  useGetPublicSubscriptionPlansQuery,
   useGetAdminWordsQuery,
   useDeleteWordMutation,
   useGetAdminPromptsQuery,

@@ -29,3 +29,14 @@ export class SubscriptionPlansController {
     return { removed: true };
   }
 }
+
+/** Public pricing page (frontend /pricing) -- no auth, active plans only. */
+@Controller('voice-stream/subscription-plans')
+export class PublicSubscriptionPlansController {
+  constructor(private readonly plans: SubscriptionPlansService) {}
+
+  @Get('public')
+  listPublic() {
+    return this.plans.listPublic();
+  }
+}
