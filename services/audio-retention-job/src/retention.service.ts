@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
 import { StorageService } from './storage.service';
+import { RedisStreamsService } from './redis-streams/redis-streams.service';
+
+const SMART_DECK_STREAM = process.env.SMART_DECK_STREAM ?? 'smart-deck-jobs';
 
 interface Rule {
   id: string;
@@ -62,6 +65,7 @@ export class RetentionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly streams: RedisStreamsService,
   ) {}
 
   async run(): Promise<void> {
@@ -157,6 +161,23 @@ export class RetentionService {
       await this.prisma.submission.update({ where: { id: row.id }, data });
     } else {
       await this.prisma.wordRecording.update({ where: { id: row.id }, data });
+      // Only WordRecording purges matter for Stream Decks (StreamDeckItem.
+      // recordingId references WordRecording.id, never Submission). Best-
+      // effort, mirrors IsvpService.submit's publish pattern -- a Redis
+      // outage must never fail the purge itself, since the purge is
+      // already durable in Postgres and this is just a notification that
+      // any Smart Deck containing this recording (or a Manual deck whose
+      // version snapshot should reflect the purge) may need re-evaluation.
+      try {
+        await this.streams.publish(SMART_DECK_STREAM, {
+          trigger: 'recording_eligible',
+          recording_id: row.id,
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to publish smart-deck-jobs for recording=${row.id}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
     }
     return true;
   }

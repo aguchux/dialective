@@ -13,7 +13,10 @@ function setup() {
     if (typeof ops === 'function') return (ops as (tx: unknown) => unknown)(prisma);
     return Promise.all(ops as Promise<unknown>[]);
   });
-  const streams = { consume: jest.fn().mockResolvedValue(undefined) };
+  const streams = {
+    consume: jest.fn().mockResolvedValue(undefined),
+    publish: jest.fn().mockResolvedValue('1-0'),
+  };
   const service = new IsvcService(streams as any, prisma as any);
   return { prisma, streams, service };
 }
@@ -105,8 +108,31 @@ describe('IsvcService.recalculate', () => {
     );
   });
 
+  it('publishes to smart-deck-jobs after a material change', async () => {
+    const { prisma, streams, service } = setup();
+    prisma.subscriberValidation.groupBy.mockResolvedValue([
+      { organizationId: 'org-A', _avg: { overallScore: 90 }, _count: { _all: 1 } },
+      { organizationId: 'org-B', _avg: { overallScore: 90 }, _count: { _all: 1 } },
+      { organizationId: 'org-C', _avg: { overallScore: 90 }, _count: { _all: 1 } },
+    ]);
+    prisma.organizationValidationConsensus.findMany.mockResolvedValue([
+      { meanScore: new Prisma.Decimal(90) },
+      { meanScore: new Prisma.Decimal(90) },
+      { meanScore: new Prisma.Decimal(90) },
+    ]);
+    prisma.isvcCurrent.findUnique.mockResolvedValue(null);
+    prisma.isvcAggregation.create.mockResolvedValue({ id: 'agg-1' });
+
+    await service.recalculate('rec-1');
+
+    expect(streams.publish).toHaveBeenCalledWith('smart-deck-jobs', {
+      trigger: 'isvc_changed',
+      recording_id: 'rec-1',
+    });
+  });
+
   it('does not create a new version when nothing materially changed', async () => {
-    const { prisma, service } = setup();
+    const { prisma, streams, service } = setup();
     prisma.subscriberValidation.groupBy.mockResolvedValue([
       { organizationId: 'org-A', _avg: { overallScore: 90 }, _count: { _all: 1 } },
       { organizationId: 'org-B', _avg: { overallScore: 90 }, _count: { _all: 1 } },
@@ -133,6 +159,7 @@ describe('IsvcService.recalculate', () => {
     await service.recalculate('rec-1');
 
     expect(prisma.isvcAggregation.create).not.toHaveBeenCalled();
+    expect(streams.publish).not.toHaveBeenCalled();
   });
 
   it('creates version 2 and repoints IsvcCurrent when the result materially changes', async () => {

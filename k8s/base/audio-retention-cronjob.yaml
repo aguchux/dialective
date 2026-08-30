@@ -40,3 +40,13 @@ spec:
                     secretKeyRef:
                       name: spaces-creds
                       key: secret_key
+                - name: REDIS_HOST
+                  valueFrom:
+                    configMapKeyRef:
+                      name: audio-retention-job-config
+                      key: redis_host
+                - name: REDIS_PORT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: audio-retention-job-config
+                      key: redis_port

@@ -28,7 +28,9 @@ export class CatalogueService {
   private eligibleWhere(params: {
     countryCode?: string;
     dialectTag?: string;
+    subdialectTag?: string;
     minScore?: number;
+    minAudioQuality?: number;
   }): Prisma.WordRecordingWhereInput {
     return {
       status: SubmissionStatus.SETTLED,
@@ -36,10 +38,20 @@ export class CatalogueService {
       audioKey: { not: null },
       audioDeletedAt: null,
       ...(params.dialectTag ? { dialectTag: params.dialectTag } : {}),
-      ...(params.countryCode
-        ? { dialectVariant: { dialect: { country: { code: params.countryCode } } } }
+      ...(params.countryCode || params.subdialectTag
+        ? {
+            dialectVariant: {
+              ...(params.subdialectTag ? { tag: params.subdialectTag } : {}),
+              ...(params.countryCode
+                ? { dialect: { country: { code: params.countryCode } } }
+                : {}),
+            },
+          }
         : {}),
       ...(params.minScore !== undefined ? { score: { gte: params.minScore } } : {}),
+      ...(params.minAudioQuality !== undefined
+        ? { qualityScore: { gte: params.minAudioQuality } }
+        : {}),
     };
   }
 
@@ -138,6 +150,7 @@ export class CatalogueService {
   private async matchingIsvcRecordingIds(
     minIsvs?: number,
     minConfidence?: IsvcConfidence,
+    minOrganizationCount?: number,
   ): Promise<string[]> {
     const currents = await this.prisma.isvcCurrent.findMany({
       include: { aggregation: true },
@@ -149,9 +162,61 @@ export class CatalogueService {
         if (minRank !== undefined && CONFIDENCE_RANK[c.aggregation.confidence] < minRank) {
           return false;
         }
+        if (
+          minOrganizationCount !== undefined &&
+          c.aggregation.organizationCount < minOrganizationCount
+        ) {
+          return false;
+        }
         return true;
       })
       .map((c) => c.recordingId);
+  }
+
+  /**
+   * Smart Deck rule matching (doc section 9.3) -- returns the raw eligible
+   * recordingId set for a rule, unpaginated (unlike search(), which returns
+   * a paginated read-model shape for the dashboard UI). Used by
+   * SmartDeckEvaluatorService to diff against current deck membership.
+   */
+  async matchingRecordingIdsForRule(rule: {
+    countryCode?: string | null;
+    dialectTag?: string | null;
+    subdialectTag?: string | null;
+    minScore?: number | null;
+    minIsvs?: number | null;
+    minConfidence?: IsvcConfidence | null;
+    minOrganizationCount?: number | null;
+    minAudioQuality?: number | null;
+  }): Promise<string[]> {
+    const where = this.eligibleWhere({
+      countryCode: rule.countryCode ?? undefined,
+      dialectTag: rule.dialectTag ?? undefined,
+      subdialectTag: rule.subdialectTag ?? undefined,
+      minScore: rule.minScore ?? undefined,
+      minAudioQuality: rule.minAudioQuality ?? undefined,
+    });
+
+    const hasIsvcFilter =
+      rule.minIsvs !== undefined && rule.minIsvs !== null ||
+      Boolean(rule.minConfidence) ||
+      (rule.minOrganizationCount !== undefined && rule.minOrganizationCount !== null);
+
+    if (hasIsvcFilter) {
+      const matchingIds = await this.matchingIsvcRecordingIds(
+        rule.minIsvs ?? undefined,
+        rule.minConfidence ?? undefined,
+        rule.minOrganizationCount ?? undefined,
+      );
+      if (matchingIds.length === 0) return [];
+      where.id = { in: matchingIds };
+    }
+
+    const recordings = await this.prisma.wordRecording.findMany({
+      where,
+      select: { id: true },
+    });
+    return recordings.map((r) => r.id);
   }
 
   private async currentIsvcByRecordingId(recordingIds: string[]) {
@@ -199,5 +264,31 @@ export class CatalogueService {
       where: { id: recordingId, ...this.eligibleWhere({}) },
     });
     return count > 0;
+  }
+
+  /**
+   * Fetches the fields Voice Stream Phase 3's manifest/metadata/audio
+   * endpoints need, already scoped to eligibleWhere() -- returns null for a
+   * purged/unpaid/unknown recording, same "silently absent, never a
+   * dangling reference" posture as isEligible.
+   */
+  async getEligibleRecording(recordingId: string) {
+    return this.prisma.wordRecording.findFirst({
+      where: { id: recordingId, ...this.eligibleWhere({}) },
+      select: {
+        id: true,
+        dialectTag: true,
+        durationMs: true,
+        compositeScore: true,
+        audioBucket: true,
+        audioKey: true,
+        dialectVariant: {
+          select: {
+            tag: true,
+            dialect: { select: { tag: true, country: { select: { code: true } } } },
+          },
+        },
+      },
+    });
   }
 }

@@ -81,6 +81,9 @@ configMapGenerator:
   - name: isvc-scorer-config
     envs:
       - configs/isvc-scorer.env
+  - name: audio-retention-job-config
+    envs:
+      - configs/audio-retention-job.env
   - name: postgres-config
     envs:
       - configs/postgres.env

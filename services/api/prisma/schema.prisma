@@ -2220,6 +2220,7 @@ model SubscriberOrganization {
   streamDecks          StreamDeck[]
   validations          SubscriberValidation[]
   organizationConsensus OrganizationValidationConsensus[]
+  streamApiKeys        StreamApiKey[]
 
   @@map("subscriber_organizations")
 }
@@ -2330,6 +2331,8 @@ model SubscriptionPlan {
   monthlyUsdAmount Decimal @db.Decimal(10, 2)
   maxStreamDecks   Int? // null = unlimited
   maxTeamMembers   Int?
+  maxConcurrentStreams Int? // Phase 3 -- null = unlimited, enforced by ConcurrentStreamGuard
+  rateLimitPerMinute   Int? // Phase 3 -- null = unlimited, enforced by StreamKeyRateLimitGuard
   active           Boolean @default(true)
 
   subscriptions Subscription[]
@@ -2369,16 +2372,26 @@ model StripeWebhookEvent {
   @@map("stripe_webhook_events")
 }
 
+enum StreamDeckType {
+  MANUAL
+  SMART
+}
+
 model StreamDeck {
   id              String                 @id @default(uuid())
   deckKey         String                 @unique // "DLSD-{country}-{dialect}-{subdialect}-{6 chars}" per the product plan section 9.2
   organizationId  String
   organization    SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name            String
+  type            StreamDeckType         @default(MANUAL)
   createdByUserId String
   createdAt       DateTime               @default(now())
 
-  items StreamDeckItem[]
+  items          StreamDeckItem[]
+  streamApiKeys  StreamApiKey[]
+  rule           StreamDeckRule?
+  versions       StreamDeckVersion[]
+  currentVersion StreamDeckCurrentVersion?
 
   @@index([organizationId])
   @@map("stream_decks")
@@ -2397,6 +2410,93 @@ model StreamDeckItem {
   @@unique([deckId, recordingId])
   @@index([deckId])
   @@map("stream_deck_items")
+}
+
+// ============================================================================
+// Dialect Library Voice Stream -- Phase 4a (Deck Versioning & Curation)
+//
+// Stream Deck versions, snapshots, Smart Decks with saved rules, and the
+// change feed -- see docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md
+// sections 9-12 and 31. Every training job can reference DLSD-...@42 and
+// get the exact same dataset every time.
+// ============================================================================
+
+/// Saved Smart Deck rule (doc section 9.3) -- one row per deck, only present
+/// when StreamDeck.type = SMART. Mirrors SearchCatalogueDto's field set,
+/// extended with the 3 fields that DTO doesn't cover yet (subdialect,
+/// minOrganizationCount, minAudioQuality) per doc 9.3's example rule.
+model StreamDeckRule {
+  id                   String          @id @default(uuid())
+  deckId               String          @unique
+  deck                 StreamDeck      @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  countryCode          String?
+  dialectTag           String?
+  subdialectTag        String?
+  minScore             Int?
+  minIsvs              Int?
+  minConfidence        IsvcConfidence?
+  minOrganizationCount Int?
+  minAudioQuality      Int?
+  updatedAt            DateTime        @updatedAt
+
+  @@map("stream_deck_rules")
+}
+
+/// Append-only version snapshot -- one row per (deckId, version). Created
+/// only when membership/metadata actually changed (materiality check,
+/// mirrors IsvcAggregation's writeNewVersionIfMaterial pattern in
+/// services/isvc-scorer). itemCount is denormalized for cheap listing; the
+/// actual frozen membership lives in StreamDeckVersionItem.
+model StreamDeckVersion {
+  id            String   @id @default(uuid())
+  deckId        String
+  deck          StreamDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  version       Int
+  itemCount     Int
+  createdAt     DateTime @default(now())
+  createdReason String   // "manual_add" | "manual_remove" | "smart_rule_match" | "eligibility_purge"
+
+  items   StreamDeckVersionItem[]
+  current StreamDeckCurrentVersion?
+
+  @@unique([deckId, version])
+  @@index([deckId])
+  @@map("stream_deck_versions")
+}
+
+/// Frozen per-recording membership + metadata for one StreamDeckVersion --
+/// doc section 12's snapshot requirement ("preserve recording membership,
+/// metadata references, DL Canonical Scores at snapshot time, ISVC version
+/// references"). Denormalizes the fields the manifest actually returns so
+/// a pinned-version manifest never has to re-derive historical scores from
+/// current (possibly since-changed) WordRecording/IsvcAggregation rows.
+model StreamDeckVersionItem {
+  id               String            @id @default(uuid())
+  deckVersionId    String
+  deckVersion      StreamDeckVersion @relation(fields: [deckVersionId], references: [id], onDelete: Cascade)
+  recordingId      String
+  durationMs       Int?
+  dialectTag       String
+  subdialectTag    String?
+  dlCanonicalScore Decimal?          @db.Decimal(5, 2)
+  isvs             Decimal?          @db.Decimal(5, 2)
+  isvcVersion      Int?
+
+  @@unique([deckVersionId, recordingId])
+  @@index([deckVersionId])
+  @@map("stream_deck_version_items")
+}
+
+/// Points at the current StreamDeckVersion per deck -- same "materialized
+/// pointer" shape as IsvcCurrent, avoids a MAX(version) subquery on every
+/// manifest read.
+model StreamDeckCurrentVersion {
+  deckId    String            @id
+  deck      StreamDeck        @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  versionId String            @unique
+  version   StreamDeckVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@map("stream_deck_current_versions")
 }
 
 /// Lightweight preview-access record (Phase 1 only) -- full stream-request
@@ -2514,4 +2614,85 @@ model IsvcCurrent {
   aggregation   IsvcAggregation @relation(fields: [aggregationId], references: [id], onDelete: Cascade)
 
   @@map("isvc_current")
+}
+
+// ============================================================================
+// Dialect Library Voice Stream -- Phase 3 (Voice Stream API)
+//
+// Turns Voice Stream from "browse in a dashboard" into "pull data into an
+// external pipeline": subscriber organizations mint Stream Keys (deck-scoped
+// or org-wide) and external/programmatic clients use those keys -- not the
+// human SubscriberAccessTokenClaims JWT -- to enumerate a Stream Deck
+// (manifest), fetch a recording's metadata, and stream its audio with HTTP
+// Range support. See docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md
+// sections 25-38. Python SDK (section 32) and deck versioning/change-feed
+// (section 31, Phase 4) are explicitly out of scope here.
+// ============================================================================
+
+enum StreamKeyScope {
+  DECK_READ
+  DECK_LIST
+  AUDIO_STREAM
+  METADATA_READ
+  MANIFEST_READ
+  USAGE_READ
+}
+
+/// A Stream Key is either deck-scoped (deckId set -- doc section 26.1) or
+/// org-wide (deckId null -- section 26.2, "all authorized Stream Decks
+/// within the org", never the whole platform). Bearer credential for
+/// machine/SDK clients hitting /stream/v1/*, distinct from the human
+/// dashboard JWT. Hashed per auth/token.util.ts's
+/// generateOpaqueToken/hashToken convention -- the full key (prefixed
+/// "dlsk_live_...") is shown exactly once at creation/rotation and never
+/// stored or returned again; only keyHash + keyPrefix (display-only, a la
+/// ApiAccessToken.lastFour) persist.
+model StreamApiKey {
+  id              String           @id @default(uuid())
+  organizationId  String
+  organization    SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deckId          String?          // null = org-wide key (section 26.2)
+  deck            StreamDeck?      @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  keyHash         String           @unique
+  keyPrefix       String           // display-only, e.g. "dlsk_live_7MqP"
+  scopes          StreamKeyScope[]
+  allowedIps      String[]         @default([]) // empty = no IP restriction
+  createdByUserId String
+  createdAt       DateTime         @default(now())
+  lastUsedAt      DateTime?
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+
+  accessLogs StreamAccessLog[]
+
+  @@index([organizationId])
+  @@index([deckId])
+  @@map("stream_api_keys")
+}
+
+/// Append-only audit/usage record, one row per stream-API request (manifest,
+/// metadata, or audio) -- per doc section 37 ("every stream should record
+/// ... bytes streamed, result code, entitlement decision") and section 36
+/// (usage metering). Not an extension of CataloguePreviewLog: that table is
+/// human-dashboard/userId-keyed (Phase 1 preview clicks); this is
+/// StreamApiKey-keyed machine traffic, no human user necessarily present.
+model StreamAccessLog {
+  id                  String       @id @default(uuid())
+  streamApiKeyId      String
+  streamApiKey        StreamApiKey @relation(fields: [streamApiKeyId], references: [id], onDelete: Cascade)
+  organizationId      String
+  deckId              String?
+  recordingId         String?
+  requestType         String       // "manifest" | "metadata" | "audio" | "usage"
+  requestedRange      String?      // raw Range header, audio requests only
+  bytesStreamed       BigInt?      // audio requests only
+  resultCode          Int          // HTTP status actually returned
+  entitlementDecision String       // "allowed" | "denied:<reason>"
+  ipAddress           String?
+  userAgent           String?
+  createdAt           DateTime     @default(now())
+
+  @@index([streamApiKeyId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("stream_access_logs")
 }

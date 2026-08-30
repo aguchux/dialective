@@ -6,6 +6,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { Readable } from 'stream';
 
 const PRESIGN_EXPIRY_SECONDS = 15 * 60;
 
@@ -64,6 +65,39 @@ export class StorageService {
     });
     const url = await getSignedUrl(this.client, command, { expiresIn: PRESIGN_EXPIRY_SECONDS });
     return { url, expiresInSeconds: PRESIGN_EXPIRY_SECONDS };
+  }
+
+  /**
+   * Fetches an object's bytes directly (optionally a byte range) for
+   * proxying through the API response -- used by Voice Stream Phase 3's
+   * audio streaming route, which must never hand out a permanent/presigned
+   * storage URL (doc section 30) and needs byte-accurate usage metering +
+   * concurrent-stream enforcement that a presigned redirect can't provide.
+   * `range` is the raw "bytes=start-end" value already validated by the
+   * caller; omitted for a full-object fetch.
+   */
+  async getObject(
+    bucket: string,
+    key: string,
+    range?: string,
+  ): Promise<{
+    body: Readable;
+    contentLength: number;
+    contentRange?: string;
+    acceptsRanges: boolean;
+  }> {
+    const command = new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ...(range && { Range: range }),
+    });
+    const result = await this.client.send(command);
+    return {
+      body: result.Body as Readable,
+      contentLength: result.ContentLength ?? 0,
+      contentRange: result.ContentRange,
+      acceptsRanges: result.AcceptRanges === 'bytes',
+    };
   }
 
   /**

@@ -119,14 +119,80 @@ export interface StreamDeckItem {
   addedAt: string;
 }
 
+export type StreamDeckType = 'MANUAL' | 'SMART';
+
+export interface StreamDeckRule {
+  countryCode: string | null;
+  dialectTag: string | null;
+  subdialectTag: string | null;
+  minScore: number | null;
+  minIsvs: number | null;
+  minConfidence: IsvcConfidence | null;
+  minOrganizationCount: number | null;
+  minAudioQuality: number | null;
+}
+
+export interface StreamDeckRuleInput {
+  countryCode?: string;
+  dialectTag?: string;
+  subdialectTag?: string;
+  minScore?: number;
+  minIsvs?: number;
+  minConfidence?: IsvcConfidence;
+  minOrganizationCount?: number;
+  minAudioQuality?: number;
+}
+
+export interface StreamDeckVersion {
+  version: number;
+  itemCount: number;
+  createdAt: string;
+  createdReason: string;
+}
+
 export interface StreamDeck {
   id: string;
   deckKey: string;
   name: string;
+  type: StreamDeckType;
+  rule?: StreamDeckRule | null;
   createdByUserId: string;
   createdAt: string;
   _count?: { items: number };
   items?: StreamDeckItem[];
+}
+
+export type StreamKeyScope =
+  | 'DECK_READ'
+  | 'DECK_LIST'
+  | 'AUDIO_STREAM'
+  | 'METADATA_READ'
+  | 'MANIFEST_READ'
+  | 'USAGE_READ';
+
+export interface StreamApiKeySummary {
+  id: string;
+  organizationId: string;
+  deckId: string | null;
+  keyPrefix: string;
+  scopes: StreamKeyScope[];
+  allowedIps: string[];
+  createdByUserId: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface CreatedStreamApiKey extends StreamApiKeySummary {
+  plaintextKey: string;
+}
+
+export interface CreateStreamKeyInput {
+  deckId?: string;
+  scopes: StreamKeyScope[];
+  allowedIps?: string[];
+  expiresAt?: string;
 }
 
 const rawBaseQuery = fetchBaseQuery({
@@ -144,7 +210,15 @@ const rawBaseQuery = fetchBaseQuery({
 export const streamApi = createApi({
   reducerPath: 'streamApi',
   baseQuery: rawBaseQuery,
-  tagTypes: ['Me', 'Organization', 'Members', 'Subscription', 'StreamDecks', 'Validations'],
+  tagTypes: [
+    'Me',
+    'Organization',
+    'Members',
+    'Subscription',
+    'StreamDecks',
+    'Validations',
+    'StreamKeys',
+  ],
   endpoints: (builder) => ({
     getMe: builder.query<SubscriberMe, void>({
       query: () => '/me',
@@ -252,10 +326,27 @@ export const streamApi = createApi({
 
     createStreamDeck: builder.mutation<
       StreamDeck,
-      { name: string; countryCode?: string; dialectTag?: string; subdialectTag?: string }
+      {
+        name: string;
+        type?: StreamDeckType;
+        countryCode?: string;
+        dialectTag?: string;
+        subdialectTag?: string;
+        rule?: StreamDeckRuleInput;
+      }
     >({
       query: (body) => ({ url: '/stream-decks', method: 'POST', body }),
       invalidatesTags: ['StreamDecks'],
+    }),
+
+    updateStreamDeckRule: builder.mutation<StreamDeck, { id: string; rule: StreamDeckRuleInput }>({
+      query: ({ id, rule }) => ({ url: `/stream-decks/${id}/rule`, method: 'PATCH', body: rule }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'StreamDecks', id }],
+    }),
+
+    listStreamDeckVersions: builder.query<StreamDeckVersion[], string>({
+      query: (id) => `/stream-decks/${id}/versions`,
+      providesTags: (_result, _error, id) => [{ type: 'StreamDecks', id: `${id}-versions` }],
     }),
 
     renameStreamDeck: builder.mutation<StreamDeck, { id: string; name: string }>({
@@ -284,6 +375,26 @@ export const streamApi = createApi({
       }),
       invalidatesTags: (_result, _error, { deckId }) => [{ type: 'StreamDecks', id: deckId }],
     }),
+
+    listStreamKeys: builder.query<StreamApiKeySummary[], void>({
+      query: () => '/stream-keys',
+      providesTags: ['StreamKeys'],
+    }),
+
+    createStreamKey: builder.mutation<CreatedStreamApiKey, CreateStreamKeyInput>({
+      query: (body) => ({ url: '/stream-keys', method: 'POST', body }),
+      invalidatesTags: ['StreamKeys'],
+    }),
+
+    rotateStreamKey: builder.mutation<CreatedStreamApiKey, string>({
+      query: (id) => ({ url: `/stream-keys/${id}/rotate`, method: 'POST' }),
+      invalidatesTags: ['StreamKeys'],
+    }),
+
+    revokeStreamKey: builder.mutation<StreamApiKeySummary, string>({
+      query: (id) => ({ url: `/stream-keys/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['StreamKeys'],
+    }),
   }),
 });
 
@@ -306,8 +417,14 @@ export const {
   useListStreamDecksQuery,
   useGetStreamDeckQuery,
   useCreateStreamDeckMutation,
+  useUpdateStreamDeckRuleMutation,
+  useListStreamDeckVersionsQuery,
   useRenameStreamDeckMutation,
   useDeleteStreamDeckMutation,
   useAddStreamDeckItemMutation,
   useRemoveStreamDeckItemMutation,
+  useListStreamKeysQuery,
+  useCreateStreamKeyMutation,
+  useRotateStreamKeyMutation,
+  useRevokeStreamKeyMutation,
 } = streamApi;

@@ -1,4 +1,5 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { StreamDeckType } from '@dialectiva/db';
 import { StreamDecksService } from './stream-decks.service';
 
 function setup() {
@@ -17,10 +18,19 @@ function setup() {
       create: jest.fn(),
       delete: jest.fn(),
     },
+    streamDeckRule: { upsert: jest.fn() },
+    streamDeckVersion: { findMany: jest.fn() },
   };
   const catalogue = { isEligible: jest.fn().mockResolvedValue(true) };
-  const service = new StreamDecksService(prisma as any, catalogue as any);
-  return { prisma, catalogue, service };
+  const versioning = { writeNewVersionIfMaterial: jest.fn().mockResolvedValue(undefined) };
+  const smartDeckEvaluator = { evaluateRule: jest.fn().mockResolvedValue(undefined) };
+  const service = new StreamDecksService(
+    prisma as any,
+    catalogue as any,
+    versioning as any,
+    smartDeckEvaluator as any,
+  );
+  return { prisma, catalogue, versioning, smartDeckEvaluator, service };
 }
 
 describe('StreamDecksService', () => {
@@ -111,6 +121,91 @@ describe('StreamDecksService', () => {
       await expect(service.addItem('org-1', 'deck-1', 'user-1', 'rec-1')).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('triggers a version write after a successful add', async () => {
+      const { prisma, versioning, service } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', items: [] });
+      prisma.streamDeckItem.findUnique.mockResolvedValue(null);
+      prisma.streamDeckItem.create.mockResolvedValue({ id: 'item-1' });
+
+      await service.addItem('org-1', 'deck-1', 'user-1', 'rec-1');
+
+      expect(versioning.writeNewVersionIfMaterial).toHaveBeenCalledWith('deck-1', 'manual_add');
+    });
+
+    it('rejects manual add on a Smart Deck', async () => {
+      const { prisma, service } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        organizationId: 'org-1',
+        type: StreamDeckType.SMART,
+        items: [],
+      });
+
+      await expect(service.addItem('org-1', 'deck-1', 'user-1', 'rec-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('removeItem', () => {
+    it('triggers a version write after a successful remove', async () => {
+      const { prisma, versioning, service } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', items: [] });
+      prisma.streamDeckItem.findUnique.mockResolvedValue({ id: 'item-1', deckId: 'deck-1' });
+
+      await service.removeItem('org-1', 'deck-1', 'item-1');
+
+      expect(versioning.writeNewVersionIfMaterial).toHaveBeenCalledWith('deck-1', 'manual_remove');
+    });
+
+    it('rejects manual remove on a Smart Deck', async () => {
+      const { prisma, service } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        organizationId: 'org-1',
+        type: StreamDeckType.SMART,
+        items: [],
+      });
+
+      await expect(service.removeItem('org-1', 'deck-1', 'item-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('create (Smart Deck)', () => {
+    it('rejects a SMART deck created without a rule', async () => {
+      const { service } = setup();
+
+      await expect(
+        service.create('org-1', 'user-1', { name: 'Smart Deck', type: StreamDeckType.SMART }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('creates the rule row and evaluates it for a SMART deck', async () => {
+      const { prisma, smartDeckEvaluator, service } = setup();
+      prisma.streamDeck.create.mockImplementation(({ data }: any) => ({
+        id: 'deck-1',
+        ...data,
+      }));
+
+      await service.create('org-1', 'user-1', {
+        name: 'Smart Deck',
+        type: StreamDeckType.SMART,
+        rule: { minScore: 90 },
+      });
+
+      expect(prisma.streamDeck.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: StreamDeckType.SMART,
+            rule: { create: { minScore: 90 } },
+          }),
+        }),
+      );
+      expect(smartDeckEvaluator.evaluateRule).toHaveBeenCalledWith('deck-1');
     });
   });
 });

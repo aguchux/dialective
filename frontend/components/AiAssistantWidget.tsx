@@ -212,7 +212,7 @@ function formatTime(value: string) {
 
 function renderMessage(content: string) {
   const parts = content.split(
-    /(\[[^\]]+\]\((?:\/[A-Za-z0-9_/?=&-]*|https:\/\/(?:www\.youtube\.com\/@DialectLibrary|wa\.me\/447424448030)|mailto:hello@dialectlibrary\.com)\))/g,
+    /(\[[^\]]+\]\((?:\/[A-Za-z0-9_/?=&-]*|https:\/\/(?:www\.youtube\.com\/@DialectLibrary|wa\.me\/447424448030|www\.dialectlibrary\.com\/faq)|mailto:hello@dialectlibrary\.com)\))/g,
   );
   return parts.map((part, index) => {
     const match = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
@@ -244,6 +244,7 @@ function isApprovedAssistantHref(href: string) {
     /^\/[A-Za-z0-9_/?=&-]*$/.test(href) ||
     href === 'https://www.youtube.com/@DialectLibrary' ||
     href === 'https://wa.me/447424448030' ||
+    href === 'https://www.dialectlibrary.com/faq' ||
     href === 'mailto:hello@dialectlibrary.com'
   );
 }

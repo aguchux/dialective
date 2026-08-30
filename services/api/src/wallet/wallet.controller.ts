@@ -1661,35 +1661,20 @@ export class WalletController {
     });
   }
 
-  /** Shared PENDING withdrawal preconditions -- kill switch, minimum, allow-listed currency/network, verified contact. */
-  private async validateWithdrawalRequest(
+  /**
+   * Withdrawal requirements that must apply to every payout rail. Keep this
+   * separate from provider/destination validation so crypto cannot drift from
+   * Flutterwave's account, task, and identity gates.
+   */
+  private async validateCommonWithdrawalRequirements(
     userId: string,
     tokenAmount: number,
-    destinationCurrency: string,
-    destinationNetwork: string,
   ): Promise<void> {
-    if (!(await this.platformSettings.isCryptoWithdrawalsEnabled())) {
-      throw new UnprocessableEntityException('Crypto withdrawals are currently disabled');
-    }
     const minTokens = await this.platformSettings.getMinWithdrawalTokens();
     if (tokenAmount < minTokens) {
       throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
     }
     await this.requireMinCompletedTasksForWithdrawal(userId);
-    const [allowedCurrencies, allowedNetworks] = await Promise.all([
-      this.platformSettings.getAllowedWithdrawalCurrencies(),
-      this.platformSettings.getAllowedWithdrawalNetworks(),
-    ]);
-    if (!allowedCurrencies.includes(destinationCurrency.toUpperCase())) {
-      throw new UnprocessableEntityException(
-        `${destinationCurrency} is not an allowed withdrawal currency`,
-      );
-    }
-    if (!allowedNetworks.includes(destinationNetwork.toUpperCase())) {
-      throw new UnprocessableEntityException(
-        `${destinationNetwork} is not an allowed withdrawal network`,
-      );
-    }
 
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     if (!user.emailVerified) {
@@ -1704,6 +1689,33 @@ export class WalletController {
       );
     }
     await this.requireKycIfNeeded(user.kycStatus, tokenAmount);
+  }
+
+  /** Crypto-specific PENDING withdrawal preconditions. */
+  private async validateWithdrawalRequest(
+    userId: string,
+    tokenAmount: number,
+    destinationCurrency: string,
+    destinationNetwork: string,
+  ): Promise<void> {
+    if (!(await this.platformSettings.isCryptoWithdrawalsEnabled())) {
+      throw new UnprocessableEntityException('Crypto withdrawals are currently disabled');
+    }
+    await this.validateCommonWithdrawalRequirements(userId, tokenAmount);
+    const [allowedCurrencies, allowedNetworks] = await Promise.all([
+      this.platformSettings.getAllowedWithdrawalCurrencies(),
+      this.platformSettings.getAllowedWithdrawalNetworks(),
+    ]);
+    if (!allowedCurrencies.includes(destinationCurrency.toUpperCase())) {
+      throw new UnprocessableEntityException(
+        `${destinationCurrency} is not an allowed withdrawal currency`,
+      );
+    }
+    if (!allowedNetworks.includes(destinationNetwork.toUpperCase())) {
+      throw new UnprocessableEntityException(
+        `${destinationNetwork} is not an allowed withdrawal network`,
+      );
+    }
   }
 
   /**
@@ -1744,12 +1756,10 @@ export class WalletController {
   }
 
   /**
-   * Fiat counterpart to validateWithdrawalRequest -- parallel rather than a
-   * branch inside the same method, since the checks genuinely differ
-   * (allowed currency/country vs allowed currency/network) and mixing them
-   * risks a currency check silently applying to the wrong provider's
-   * allow-list. Resolves and returns the trainer's own PayoutAccount so
-   * callers don't re-fetch it.
+   * Fiat-specific counterpart to validateWithdrawalRequest. It shares the
+   * baseline requirements above, while retaining its own country/currency
+   * destination validation. Resolves and returns the trainer's own
+   * PayoutAccount so callers don't re-fetch it.
    */
   private async validateFiatWithdrawalRequest(
     userId: string,
@@ -1759,11 +1769,7 @@ export class WalletController {
     if (!(await this.platformSettings.isFlutterwavePayoutsEnabled())) {
       throw new UnprocessableEntityException('Fiat withdrawals are currently disabled');
     }
-    const minTokens = await this.platformSettings.getMinWithdrawalTokens();
-    if (tokenAmount < minTokens) {
-      throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
-    }
-    await this.requireMinCompletedTasksForWithdrawal(userId);
+    await this.validateCommonWithdrawalRequirements(userId, tokenAmount);
 
     const payoutAccount = await this.prisma.payoutAccount.findUnique({
       where: { id: payoutAccountId },
@@ -1785,17 +1791,6 @@ export class WalletController {
         `${payoutAccount.country} is not an allowed withdrawal country`,
       );
     }
-
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    if (!user.emailVerified) {
-      throw new UnprocessableEntityException('Verify your email before requesting a withdrawal');
-    }
-    if ((await this.platformSettings.isPhoneVerificationRequired()) && !user.phoneVerifiedAt) {
-      throw new UnprocessableEntityException(
-        'Verify your phone number before requesting a withdrawal',
-      );
-    }
-    await this.requireKycIfNeeded(user.kycStatus, tokenAmount);
 
     return payoutAccount;
   }

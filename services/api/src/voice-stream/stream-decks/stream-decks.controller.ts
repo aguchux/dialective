@@ -19,6 +19,7 @@ import { StreamDecksService } from './stream-decks.service';
 import { CreateStreamDeckDto } from './dto/create-stream-deck.dto';
 import { UpdateStreamDeckDto } from './dto/update-stream-deck.dto';
 import { AddStreamDeckItemDto } from './dto/add-stream-deck-item.dto';
+import { StreamDeckRuleDto } from './dto/stream-deck-rule.dto';
 
 const CAN_MANAGE_DECKS = [
   SubscriberOrgRole.OWNER,
@@ -89,5 +90,21 @@ export class StreamDecksController {
     @Param('itemId') itemId: string,
   ) {
     return this.decks.removeItem(subscriber.organizationId, id, itemId);
+  }
+
+  @Patch(':id/rule')
+  @UseGuards(SubscriberRolesGuard, RequireActiveSubscriptionGuard)
+  @SubscriberRoles(...CAN_MANAGE_DECKS)
+  updateRule(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: StreamDeckRuleDto,
+  ) {
+    return this.decks.updateRule(subscriber.organizationId, id, dto);
+  }
+
+  @Get(':id/versions')
+  listVersions(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims, @Param('id') id: string) {
+    return this.decks.listVersions(subscriber.organizationId, id);
   }
 }

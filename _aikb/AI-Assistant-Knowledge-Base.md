@@ -14,7 +14,7 @@ Dialect Library is a contributor platform for voice recordings and word translat
 ## Official channels and trainer resources
 
 - Official YouTube channel: [Dialect Library on YouTube](https://www.youtube.com/@DialectLibrary). Trainers can use it for published platform videos and guidance.
-- Official WhatsApp support: [Message Dialect Library on WhatsApp](https://wa.me/447424448030) or +44 7424 448030. Never ask a trainer to send passwords, one-time codes, recovery codes, payment credentials, or identity documents through WhatsApp.
+- Official WhatsApp support: [Message Dialect Library on WhatsApp](https://wa.me/447424448030) or +44 7424 448030. The only code a trainer may send there is the temporary code displayed by the official Manual WhatsApp verification flow in Profile. Never ask a trainer to send passwords, SMS or email login codes, recovery codes, payment credentials, or identity documents through WhatsApp.
 
 ## Accounts and onboarding
 
@@ -23,7 +23,9 @@ Dialect Library is a contributor platform for voice recordings and word translat
 - Users can sign in with email and password or a passwordless email magic link. Password reset is available from the login flow.
 - A trainer can manage their name, country, dialect, phone verification, notification preferences, payment methods, and DIDIT identity verification from [Profile](/dashboard?view=profile). A revoked or reset dialect must be selected again before training continues.
 - The browser app can be installed from the account menu when the install option is available. Installing it does not create a separate account or change wallet access.
-- Phone verification can be required before sensitive actions such as payment-method changes, trading, or withdrawals. Never ask a user to send a one-time code to the assistant.
+- Phone verification can be required before sensitive actions such as payment-method changes, trading, or withdrawals.
+- If an SMS OTP does not arrive, the trainer can open [Profile](/dashboard?view=profile), choose **Verify mobile**, and select **WhatsApp Method**. After confirming the displayed DL charge, the platform generates a temporary code and shows the official WhatsApp number. The trainer sends only that displayed code to the number, then selects **I have sent the WhatsApp message**. The request remains pending until an administrator matches and verifies the code. The code expires after the administrator-configured number of minutes.
+- Manual WhatsApp verification validates control of a reachable WhatsApp/mobile number. The assistant must never generate a code or ask for a password, SMS or email login code, recovery code, bank/card details, private key, payment confirmation, or identity document.
 - An account can be active, suspended, or blocked. Fraud, duplicate accounts, score manipulation, or referral abuse can lead to suspension.
 
 ## Training and scoring
@@ -103,6 +105,10 @@ The platform has a scoring time limit and resolution policy. Do not promise a sp
 ### Why verify an email or phone number?
 
 Verification helps secure the account and is required for some sensitive actions. The user should only enter codes in the official platform verification form.
+
+### My SMS OTP did not arrive. Can I verify my phone through WhatsApp?
+
+Yes, when Manual WhatsApp verification is enabled. Open [Profile](/dashboard?view=profile), select **Verify mobile**, then select **WhatsApp Method**. Review and accept the displayed DL charge; the platform will show a temporary code and the official WhatsApp number. Send only that code, choose **I have sent the WhatsApp message**, and wait for an administrator to confirm it. The code expires after the configured time. This process verifies a working mobile/WhatsApp number; it never requires sharing a password or another security code.
 
 ### Can I test recording without an account?
 

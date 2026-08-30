@@ -7,6 +7,7 @@ import { computeAgreement, computeConfidence, countOutliers, mean, stdDev } from
 const ISVC_STREAM = process.env.ISVC_STREAM ?? 'isvc-jobs';
 const CONSUMER_GROUP = process.env.CONSUMER_GROUP ?? 'isvc-scorers';
 const CONSUMER_NAME = process.env.HOSTNAME ?? 'isvc-scorer-1';
+const SMART_DECK_STREAM = process.env.SMART_DECK_STREAM ?? 'smart-deck-jobs';
 
 /**
  * Consumes isvc-jobs (published by api's IsvpService after every
@@ -156,5 +157,21 @@ export class IsvcService implements OnModuleInit {
     this.logger.log(
       `Recording=${recordingId} ISVC v${nextVersion}: isvs=${next.isvs.toFixed(2)} agreement=${next.agreement.toFixed(2)} confidence=${next.confidence} orgs=${next.organizationCount} outliers=${next.outlierOrgCount}`,
     );
+
+    // Best-effort, cross-service producer (mirrors api's IsvpService.submit
+    // pattern) -- api's in-process Smart Deck evaluator consumes this to
+    // re-evaluate any Smart Deck rule filtering on minIsvs/minConfidence/
+    // minOrganizationCount for this recording. A publish failure must never
+    // fail the ISVC write itself, which is already durable in Postgres.
+    try {
+      await this.streams.publish(SMART_DECK_STREAM, {
+        trigger: 'isvc_changed',
+        recording_id: recordingId,
+      });
+    } catch (err) {
+      this.logger.error(
+        `Failed to publish smart-deck-jobs for recording=${recordingId}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
   }
 }

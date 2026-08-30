@@ -5,6 +5,7 @@ import { BillingModule } from './billing/billing.module';
 import { CatalogueModule } from './catalogue/catalogue.module';
 import { StreamDecksModule } from './stream-decks/stream-decks.module';
 import { IsvpModule } from './isvp/isvp.module';
+import { StreamApiModule } from './stream-api/stream-api.module';
 
 /**
  * Dialect Library Voice Stream -- Phase 1 (Subscriber Foundation). See
@@ -22,6 +23,7 @@ import { IsvpModule } from './isvp/isvp.module';
     CatalogueModule,
     StreamDecksModule,
     IsvpModule,
+    StreamApiModule,
   ],
 })
 export class VoiceStreamModule {}

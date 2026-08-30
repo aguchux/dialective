@@ -10,6 +10,85 @@ jest.mock('@dialectiva/db', () => ({
 }));
 import { adjustAdminWallet, creditAdminFunding, creditTrainingPayout } from '@dialectiva/db';
 
+describe('WalletController crypto withdrawal eligibility', () => {
+  const cryptoOtpRequest = {
+    user: { sub: 'trainer-1' },
+  } as never;
+  const cryptoOtpBody = {
+    tokenAmount: 50,
+    destinationAddress: 'TQx9wZ2uY8aB7cD6eF5gH4jK3mN2pR1sV0',
+    destinationCurrency: 'USDT',
+    destinationNetwork: 'TRC20',
+  } as never;
+
+  function setup(overrides?: {
+    settledSubmissions?: number;
+    settledWordRecordings?: number;
+    user?: { emailVerified: boolean; phoneVerifiedAt: Date | null; kycStatus: string };
+  }) {
+    const prisma = {
+      submission: { count: jest.fn().mockResolvedValue(overrides?.settledSubmissions ?? 100) },
+      wordRecording: { count: jest.fn().mockResolvedValue(overrides?.settledWordRecordings ?? 0) },
+      user: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          email: 'trainer@example.com',
+          emailVerified: true,
+          phoneVerifiedAt: new Date(),
+          kycStatus: 'APPROVED',
+          ...overrides?.user,
+        }),
+      },
+    };
+    const platformSettings = {
+      isCryptoWithdrawalsEnabled: jest.fn().mockResolvedValue(true),
+      getMinWithdrawalTokens: jest.fn().mockResolvedValue(50),
+      getMinCompletedTasksForWithdrawal: jest.fn().mockResolvedValue(100),
+      isPhoneVerificationRequired: jest.fn().mockResolvedValue(true),
+      isKycRequiredForWithdrawals: jest.fn().mockResolvedValue(true),
+      getKycMinWithdrawalTokens: jest.fn().mockResolvedValue(50),
+      getAllowedWithdrawalCurrencies: jest.fn().mockResolvedValue(['USDT']),
+      getAllowedWithdrawalNetworks: jest.fn().mockResolvedValue(['TRC20']),
+    };
+    const otp = { issueForUser: jest.fn().mockResolvedValue({ id: 'otp-1' }) };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      platformSettings as never,
+      otp as never,
+      {} as never,
+    );
+    return { controller, prisma, otp };
+  }
+
+  it('requires the configured settled-task count before issuing a crypto withdrawal OTP', async () => {
+    const { controller, prisma, otp } = setup({ settledSubmissions: 99 });
+
+    await expect(controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody)).rejects.toThrow(
+      'Complete at least 100 tasks before requesting a withdrawal (99/100 so far)',
+    );
+    expect(prisma.submission.count).toHaveBeenCalledWith({
+      where: { userId: 'trainer-1', status: 'SETTLED' },
+    });
+    expect(prisma.wordRecording.count).toHaveBeenCalledWith({
+      where: { userId: 'trainer-1', status: 'SETTLED' },
+    });
+    expect(otp.issueForUser).not.toHaveBeenCalled();
+  });
+
+  it('applies the same verified-phone gate to crypto withdrawals', async () => {
+    const { controller, otp } = setup({
+      user: { emailVerified: true, phoneVerifiedAt: null, kycStatus: 'APPROVED' },
+    });
+
+    await expect(controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody)).rejects.toThrow(
+      'Verify your phone number before requesting a withdrawal',
+    );
+    expect(otp.issueForUser).not.toHaveBeenCalled();
+  });
+});
+
 describe('WalletController NOWPayments IPN', () => {
   const finishedBody = {
     payment_id: 12345,

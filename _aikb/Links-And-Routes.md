@@ -31,34 +31,34 @@ This registry is the approved link inventory for the assistant. Only suggest a l
 
 ## Official external channels
 
-| Purpose                         | Link                                      | Notes                                                                           |
-| ------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------- |
-| Dialect Library YouTube channel | `https://www.youtube.com/@DialectLibrary` | Published platform videos and trainer guidance                                  |
-| WhatsApp support                | `https://wa.me/447424448030`              | Account-specific support; never send passwords, OTPs, or payment credentials    |
-| Email support                   | `mailto:hello@dialectlibrary.com`         | Account-specific support; never include passwords, OTPs, or payment credentials |
-| Frequently asked questions      | `https://www.dialectlibrary.com/faq`      | Primary self-service detail for common trainer questions                        |
+| Purpose                         | Link                                      | Notes                                                                                                                                                     |
+| ------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dialect Library YouTube channel | `https://www.youtube.com/@DialectLibrary` | Published platform videos and trainer guidance                                                                                                            |
+| WhatsApp support                | `https://wa.me/447424448030`              | Account-specific support and manual phone verification after it is started in Profile; never send passwords, login/recovery codes, or payment credentials |
+| Email support                   | `mailto:hello@dialectlibrary.com`         | Account-specific support; never include passwords, OTPs, or payment credentials                                                                           |
+| Frequently asked questions      | `https://www.dialectlibrary.com/faq`      | Primary self-service detail for common trainer questions                                                                                                  |
 
 ## Trainer routes
 
-| Purpose                                                          | Route                                      | Access                             |
-| ---------------------------------------------------------------- | ------------------------------------------ | ---------------------------------- |
-| Trainer dashboard                                                | `/dashboard`                               | Signed-in trainer                  |
-| Trainer home                                                     | `/dashboard?view=home`                     | Signed-in trainer                  |
-| Tokens and wallet activity                                       | `/dashboard?view=tokens`                   | Signed-in trainer                  |
-| Earnings history                                                 | `/dashboard?view=earnings`                 | Signed-in trainer                  |
-| Training and submitted tasks                                     | `/dashboard?view=training`                 | Signed-in trainer                  |
-| P2P token market                                                 | `/dashboard?view=market`                   | Signed-in trainer; may be disabled |
-| My Scores                                                        | `/dashboard?view=scores`                   | Signed-in trainer                  |
-| Profile, country, dialect, phone, payment methods, notifications | `/dashboard?view=profile`                  | Signed-in trainer                  |
-| Referrals (code, invite link, invitations, bonus rates)          | `/dashboard?view=referrals`                | Signed-in trainer                  |
-| Campaigns (ad share links and performance)                       | `/dashboard?view=campaigns`                | Signed-in trainer                  |
-| Testimonials                                                     | `/dashboard?view=testimonials`             | Signed-in trainer; may be disabled |
-| Payout accounts                                                  | `/dashboard/payout-accounts`               | Signed-in trainer                  |
-| Signed-in course study                                           | `/dashboard/learn/{published-course-slug}` | Signed-in trainer                  |
-| Notifications                                                    | `/notifications`                           | Signed-in user                     |
-| Trainer notifications                                            | `/dashboard?view=notifications`            | Signed-in trainer                  |
-| Onboarding                                                       | `/onboarding`                              | Signed-in user when required       |
-| Personal training report                                         | `/dashboard/reports`                       | Signed-in trainer                  |
+| Purpose                                                                                              | Route                                      | Access                             |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------------- |
+| Trainer dashboard                                                                                    | `/dashboard`                               | Signed-in trainer                  |
+| Trainer home                                                                                         | `/dashboard?view=home`                     | Signed-in trainer                  |
+| Tokens and wallet activity                                                                           | `/dashboard?view=tokens`                   | Signed-in trainer                  |
+| Earnings history                                                                                     | `/dashboard?view=earnings`                 | Signed-in trainer                  |
+| Training and submitted tasks                                                                         | `/dashboard?view=training`                 | Signed-in trainer                  |
+| P2P token market                                                                                     | `/dashboard?view=market`                   | Signed-in trainer; may be disabled |
+| My Scores                                                                                            | `/dashboard?view=scores`                   | Signed-in trainer                  |
+| Profile, country, dialect, SMS or manual WhatsApp phone verification, payment methods, notifications | `/dashboard?view=profile`                  | Signed-in trainer                  |
+| Referrals (code, invite link, invitations, bonus rates)                                              | `/dashboard?view=referrals`                | Signed-in trainer                  |
+| Campaigns (ad share links and performance)                                                           | `/dashboard?view=campaigns`                | Signed-in trainer                  |
+| Testimonials                                                                                         | `/dashboard?view=testimonials`             | Signed-in trainer; may be disabled |
+| Payout accounts                                                                                      | `/dashboard/payout-accounts`               | Signed-in trainer                  |
+| Signed-in course study                                                                               | `/dashboard/learn/{published-course-slug}` | Signed-in trainer                  |
+| Notifications                                                                                        | `/notifications`                           | Signed-in user                     |
+| Trainer notifications                                                                                | `/dashboard?view=notifications`            | Signed-in trainer                  |
+| Onboarding                                                                                           | `/onboarding`                              | Signed-in user when required       |
+| Personal training report                                                                             | `/dashboard/reports`                       | Signed-in trainer                  |
 
 ## Distributor routes
 

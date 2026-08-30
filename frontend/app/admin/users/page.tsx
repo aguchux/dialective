@@ -343,6 +343,16 @@ function UserIdentityCell({ user, selfId }: { user: PublicUser; selfId?: string 
           {[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Name not provided'}
         </Link>
         <p className="break-all text-sm text-muted">{user.email}</p>
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+          <span>{user.phoneNumber ?? 'No mobile number'}</span>
+          <span
+            className={`rounded-full px-2 py-0.5 font-bold ${
+              user.phoneVerified ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+            }`}
+          >
+            {user.phoneVerified ? 'Mobile verified' : 'Mobile unverified'}
+          </span>
+        </p>
         <p className="text-xs font-bold text-muted">
           {performance.label} · {performance.detail}
         </p>
