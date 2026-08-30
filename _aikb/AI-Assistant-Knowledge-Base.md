@@ -8,7 +8,7 @@ Dialect Library is a contributor platform for voice recordings and word translat
 - Treat all reward rates, available task types, supported countries, currencies, payment methods, and timeframes as configurable. Do not promise an amount, approval, score, or payout date.
 - The assistant cannot inspect a person's account, change settings, verify payments, approve withdrawals, resolve disputes, or access private data.
 - Never request, repeat, or handle passwords, one-time codes, recovery codes, private keys, bank-card details, or full bank-account details.
-- For account-specific, payment, security, scoring, or legal concerns that cannot be answered from this knowledge base, direct the user to platform support at hello@dialectlibrary.com.
+- For account-specific, payment, security, scoring, or legal concerns that cannot be answered from this knowledge base, direct the user to platform support at hello@dialectlibrary.com or WhatsApp +44 7424 448030.
 
 ## Accounts and onboarding
 
@@ -25,6 +25,7 @@ Dialect Library is a contributor platform for voice recordings and word translat
 - A trainer can skip an unfamiliar word or phrase and move to the next item instead of guessing.
 - Word-training work may be validated through reverse validation. Sentence recordings are transcribed and compared with other submissions for the same prompt and dialect.
 - Scoring and settlement can take time because they depend on validation, quality controls, and the configured settlement delay. A task that reaches the platform scoring timeout is resolved according to the active platform policy, which may refund the held DL or apply a fair score when that policy is enabled.
+- During a training session, a trainer may periodically see a short quality-affirmation checklist (quiet environment, clear speech, staying in time, required courses complete) before continuing -- a routine quality check, not a penalty. How often it appears is admin-configurable.
 - Trainers can review task status in Training and completed scores in My Scores.
 
 ## DL, funding, earnings, and withdrawals
@@ -32,7 +33,7 @@ Dialect Library is a contributor platform for voice recordings and word translat
 - DL, pronounced "dial", is Dialect Library's internal platform unit. It is not a cryptocurrency, security, or transferable financial instrument outside the platform.
 - Trainers may fund their wallet using supported USDT or USDC checkout options. A confirmed payment is converted to DL at the configured rate.
 - Starting a training task can hold DL until the task is resolved. Training payouts and eligible referral bonuses are recorded in the wallet ledger.
-- A withdrawal requires the applicable verification and minimum balance requirements. Requests are reviewed before payout. A rejected or failed withdrawal is handled according to the platform's ledger workflow; users should review the request status rather than assume a payment is complete.
+- A withdrawal requires the applicable verification, a minimum balance, and a minimum number of completed (settled) training tasks -- a configurable gate that keeps payouts limited to trainers with real, consistent contribution. Trainers can see their own progress toward this minimum on the Dashboard and Tokens views, and get a clear explanation in the Withdraw dialog if not yet eligible, so they know beforehand rather than after a failed attempt. Requests are reviewed before payout; a rejected or failed withdrawal is handled via the platform's ledger workflow, so users should check the request status rather than assume a payment is complete.
 - Fiat withdrawal availability, supported countries, currencies, payout accounts, and payment methods are configurable. The displayed fiat amount is based on the withdrawal's stored conversion snapshot.
 
 ## Referrals, distributors, and the P2P market
@@ -42,6 +43,12 @@ Dialect Library is a contributor platform for voice recordings and word translat
 - The P2P market is optional and may be disabled. It supports token sell offers and buy requests with an escrow workflow.
 - Never tell a buyer to pay outside the trade workflow. A seller should release DL only after confirming payment, and either party can raise a dispute within the market workflow.
 - Distributor features are role-gated. A distributor can receive an admin allocation, manage allowed downstream distributors, and view an approved referral network. The assistant must not expose another user's balances or account details.
+
+## Testimonials and marketing campaigns
+
+- Trainers can submit a testimonial about their experience at any time, from the Testimonials view, as short text or a short recorded video (limits are configurable), via "Add Testimonial." There is no cap on how many a trainer may submit.
+- Each testimonial is reviewed independently by an administrator. An approved testimonial credits a one-time DL reward for that testimonial and may appear on the public homepage. A rejected one earns no reward but does not block future submissions. The whole feature is admin-configurable and may be off.
+- Separately, the Campaigns view lets a trainer generate a trackable share link pairing an admin-provided ad photo with an admin-written headline for a chosen social format, and see view/registration counts per campaign. This is distinct from the plain referral link (Referrals view), which covers the trainer's own code, invite link, invitation history, and referral bonus rates.
 
 ## Courses, blog, notifications, and data access
 
@@ -84,3 +91,19 @@ The platform may offer a recording pipeline demonstration, but submitted trainin
 ### Where can I read the full policies?
 
 Use the Terms of Use, Privacy Policy, and Cookie Policy links in the route registry.
+
+### Why can't I withdraw yet?
+
+Withdrawals require a minimum number of completed (settled) tasks, plus any minimum balance and verification requirements. Check your progress on the Dashboard/Tokens views or in the Withdraw dialog.
+
+### How do I submit a testimonial, and when do I get paid for it?
+
+Open the Testimonials view and use "Add Testimonial." Each submission is reviewed independently; an approved one earns a one-time DL reward and may appear on the public homepage. You can submit more than one over time.
+
+### How is a Campaign link different from my referral link?
+
+A referral link (Referrals view) is your personal invite link. A Campaign (Campaigns view) pairs an admin-provided ad photo with an admin-written headline for a chosen social format, giving you a trackable share link with its own view/registration counts.
+
+### How do I contact support?
+
+Email hello@dialectlibrary.com or message +44 7424 448030 on WhatsApp.
