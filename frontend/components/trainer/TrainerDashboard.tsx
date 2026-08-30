@@ -142,7 +142,7 @@ type DashboardView =
   | 'earnings'
   | 'training'
   | 'market'
-  | 'marketing'
+  | 'referrals'
   | 'campaigns'
   | 'testimonials'
   | 'scores'
@@ -154,8 +154,6 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
   { id: 'earnings', label: 'Earnings', icon: CircleDollarSign },
   { id: 'training', label: 'Training', icon: Mic2 },
   { id: 'market', label: 'Market', icon: Landmark },
-  { id: 'marketing', label: 'Referrals', icon: Users },
-  { id: 'testimonials', label: 'Testimonials', icon: MessageSquareQuote },
   { id: 'scores', label: 'My Scores', icon: Star },
 ];
 
@@ -163,7 +161,9 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
 const allViewIds: DashboardView[] = [
   ...views.map((view) => view.id),
   'home',
+  'referrals',
   'campaigns',
+  'testimonials',
   'profile',
   'notifications',
 ];
@@ -749,6 +749,9 @@ function DashboardHeader({
               <DropdownMenuItem onSelect={() => router.push('/dashboard/reports')}>
                 <FileBarChart className="size-4" aria-hidden="true" /> Reports
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/dashboard?view=referrals')}>
+                <Users className="size-4" aria-hidden="true" /> Referrals
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=campaigns')}>
                 <Megaphone className="size-4" aria-hidden="true" /> Campaigns
               </DropdownMenuItem>
@@ -850,7 +853,7 @@ function DashboardViewContent({
       />
     );
   if (activeView === 'market') return <MarketView />;
-  if (activeView === 'marketing') return <MarketingView data={data} email={email} />;
+  if (activeView === 'referrals') return <MarketingView data={data} email={email} />;
   if (activeView === 'campaigns') return <CampaignsView referralCode={data.referrals.code} />;
   if (activeView === 'testimonials') return <TestimonialsView onGiveTestimony={onGiveTestimony} />;
   if (activeView === 'scores') return <ScoresView />;
