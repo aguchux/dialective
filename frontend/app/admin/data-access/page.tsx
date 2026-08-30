@@ -110,7 +110,7 @@ export default function AdminDataAccessLeadsPage() {
     <AdminShell>
       <div className="grid gap-6">
         <div className="grid gap-2">
-          <h1 className="text-3xl font-black">Data Access Leads</h1>
+          <h1 className="text-3xl font-black">Stream Requests</h1>
           <p className="leading-relaxed text-muted">
             Voice-data subscription requests submitted from the public form. Use contact details
             below for follow-up.

@@ -21,7 +21,7 @@ const navItems = [
   { href: '/admin', label: 'Dashboard', icon: HomeIcon },
   { href: '/admin/users', label: 'Users', icon: UsersIcon },
   { href: '/admin/distributors', label: 'Distributors', icon: DistributorsIcon },
-  { href: '/admin/data-access', label: 'Data Access Leads', icon: LeadsIcon },
+  { href: '/admin/data-access', label: 'Stream Requests', icon: LeadsIcon },
   { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
   { href: '/admin/words', label: 'Words', icon: WordsIcon },
   { href: '/admin/recordings', label: 'Recordings', icon: RecordingsIcon },
