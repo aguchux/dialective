@@ -883,6 +883,51 @@ function ViewHeading({
   );
 }
 
+/**
+ * Purely informational -- lets a trainer see how close they are to
+ * withdrawal eligibility before they ever open the Withdraw dialog, instead
+ * of only finding out via a rejected request. Renders nothing once the
+ * threshold is met or disabled (minCompletedTasksForWithdrawal <= 0).
+ */
+function WithdrawalEligibilityNote({
+  completedTasksForWithdrawal,
+  minCompletedTasksForWithdrawal,
+}: {
+  completedTasksForWithdrawal: number;
+  minCompletedTasksForWithdrawal: number;
+}) {
+  if (minCompletedTasksForWithdrawal <= 0) return null;
+  const remaining = minCompletedTasksForWithdrawal - completedTasksForWithdrawal;
+  if (remaining <= 0) return null;
+  const progressPercent = Math.min(
+    100,
+    Math.round((completedTasksForWithdrawal / minCompletedTasksForWithdrawal) * 100),
+  );
+
+  return (
+    <div className="mt-4 rounded-lg border border-line bg-surface-muted p-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-bold text-ink">
+          {completedTasksForWithdrawal}/{minCompletedTasksForWithdrawal} tasks toward withdrawal
+          eligibility
+        </p>
+        <Link
+          className="text-sm font-extrabold text-accent hover:underline"
+          href="/dashboard?view=training"
+        >
+          Keep training
+        </Link>
+      </div>
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
+        <div className="h-full rounded-full bg-accent" style={{ width: `${progressPercent}%` }} />
+      </div>
+      <p className="mt-2 text-xs text-muted">
+        Complete {remaining} more task{remaining === 1 ? '' : 's'} to unlock withdrawals.
+      </p>
+    </div>
+  );
+}
+
 function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refreshing: boolean }) {
   const usdValue = Number(data.balance) * data.tokenUsdRate;
   const router = useRouter();
@@ -899,6 +944,8 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
           <WithdrawTokensDialog
             balance={data.balance}
             minWithdrawalTokens={data.minWithdrawalTokens}
+            minCompletedTasksForWithdrawal={data.minCompletedTasksForWithdrawal}
+            completedTasksForWithdrawal={data.completedTasksForWithdrawal}
             tokenUsdRate={data.tokenUsdRate}
             localCurrency={data.localCurrency}
           />
@@ -942,6 +989,10 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
             ` · rate as of ${formatDateTime(data.localCurrency.updatedAt)}`}
         </p>
       )}
+      <WithdrawalEligibilityNote
+        completedTasksForWithdrawal={data.completedTasksForWithdrawal}
+        minCompletedTasksForWithdrawal={data.minCompletedTasksForWithdrawal}
+      />
       <section className="mt-8">
         <div className="mb-3 flex items-start justify-between gap-3">
           <SectionTitle title="Recent activity" subtitle="Your latest DL transactions." />
@@ -986,6 +1037,8 @@ function TokensView({
           <WithdrawTokensDialog
             balance={summary.balance}
             minWithdrawalTokens={summary.minWithdrawalTokens}
+            minCompletedTasksForWithdrawal={summary.minCompletedTasksForWithdrawal}
+            completedTasksForWithdrawal={summary.completedTasksForWithdrawal}
             tokenUsdRate={summary.tokenUsdRate}
             localCurrency={summary.localCurrency}
           />
@@ -1017,6 +1070,10 @@ function TokensView({
           tone="green"
         />
       </section>
+      <WithdrawalEligibilityNote
+        completedTasksForWithdrawal={summary.completedTasksForWithdrawal}
+        minCompletedTasksForWithdrawal={summary.minCompletedTasksForWithdrawal}
+      />
       <section className={`${cardClass} mt-6 overflow-hidden`}>
         {isLoading ? (
           <div className="grid min-h-52 place-items-center" role="status">
@@ -1123,6 +1180,8 @@ function EarningsView({
           <WithdrawTokensDialog
             balance={data.balance}
             minWithdrawalTokens={data.minWithdrawalTokens}
+            minCompletedTasksForWithdrawal={data.minCompletedTasksForWithdrawal}
+            completedTasksForWithdrawal={data.completedTasksForWithdrawal}
             tokenUsdRate={data.tokenUsdRate}
             localCurrency={data.localCurrency}
           />
@@ -4175,11 +4234,15 @@ const WITHDRAWAL_ADDRESS_PATTERNS: Record<WithdrawalNetwork, RegExp> = {
 function WithdrawTokensDialog({
   balance,
   minWithdrawalTokens,
+  minCompletedTasksForWithdrawal,
+  completedTasksForWithdrawal,
   tokenUsdRate,
   localCurrency,
 }: {
   balance: string;
   minWithdrawalTokens: string;
+  minCompletedTasksForWithdrawal: number;
+  completedTasksForWithdrawal: number;
   tokenUsdRate: number;
   localCurrency: LocalCurrency | null;
 }) {
@@ -4215,6 +4278,8 @@ function WithdrawTokensDialog({
     amountNumber >= Number(publicSettings?.kycMinWithdrawalTokens ?? '0');
   const kycStatus = kycStatusData?.kycStatus ?? 'NOT_STARTED';
   const kycBlocked = kycRequired && kycStatus !== 'APPROVED';
+  const tasksRemaining = Math.max(0, minCompletedTasksForWithdrawal - completedTasksForWithdrawal);
+  const tasksBlocked = tasksRemaining > 0;
 
   async function startKycVerification() {
     setMessage(null);
@@ -4350,7 +4415,33 @@ function WithdrawTokensDialog({
           <span className="sm:hidden">Withdraw</span>
         </button>
       </DialogTrigger>
-      {kycBlocked ? (
+      {tasksBlocked ? (
+        <DialogContent
+          title="Keep training to unlock withdrawals"
+          description={`Withdrawals open up once you've completed ${minCompletedTasksForWithdrawal} tasks.`}
+        >
+          <div className="grid gap-4">
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-line bg-surface p-6 text-center">
+              <Mic2 className="size-12 text-accent" aria-hidden="true" />
+              <p className="font-extrabold">
+                {completedTasksForWithdrawal}/{minCompletedTasksForWithdrawal} tasks completed
+              </p>
+              <p className="text-sm leading-relaxed text-muted">
+                Complete {tasksRemaining} more task{tasksRemaining === 1 ? '' : 's'} to unlock
+                withdrawals. This keeps payouts limited to trainers who&apos;ve shown real,
+                consistent contribution.
+              </p>
+            </div>
+            <Link
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark"
+              href="/dashboard?view=training"
+              onClick={() => setDialogOpen(false)}
+            >
+              Start training
+            </Link>
+          </div>
+        </DialogContent>
+      ) : kycBlocked ? (
         <DialogContent
           title="Verify your identity"
           description="A quick ID scan and selfie confirms it's really you before your first withdrawal."

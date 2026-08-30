@@ -397,6 +397,17 @@ export class WalletController {
       this.getPendingReferralInvites(req.user.sub),
     ]);
 
+    // Same SETTLED-submission-or-word-recording count validateWithdrawalRequest
+    // enforces server-side (requireMinCompletedTasksForWithdrawal) -- surfaced
+    // here too so the dashboard can show trainers where they stand *before*
+    // they attempt a withdrawal, instead of only finding out from a rejected
+    // request.
+    const [submissionCount, wordRecordingCount] = await Promise.all([
+      this.prisma.submission.count({ where: { userId: req.user.sub, status: 'SETTLED' } }),
+      this.prisma.wordRecording.count({ where: { userId: req.user.sub, status: 'SETTLED' } }),
+    ]);
+    const completedTasksForWithdrawal = submissionCount + wordRecordingCount;
+
     const ledgerAmount = (types: string[]) =>
       ledgerTotals
         .filter((entry) => types.includes(entry.type))
@@ -431,6 +442,7 @@ export class WalletController {
       cookiePersistSeconds,
       inviteExpirySeconds,
       minWithdrawalTokens,
+      minCompletedTasksForWithdrawal,
     ] = await Promise.all([
       this.getCurrentTokenUsdRate(),
       this.getLocalCurrency(req.user.sub),
@@ -441,6 +453,7 @@ export class WalletController {
       this.platformSettings.getReferralCookiePersistSeconds(),
       this.platformSettings.getReferralInviteExpirySeconds(),
       this.platformSettings.getMinWithdrawalTokens(),
+      this.platformSettings.getMinCompletedTasksForWithdrawal(),
     ]);
 
     return {
@@ -452,6 +465,8 @@ export class WalletController {
       recordingRoundTimeoutSeconds,
       recordingRoundMaxTimeoutSeconds,
       minWithdrawalTokens: minWithdrawalTokens.toString(),
+      minCompletedTasksForWithdrawal,
+      completedTasksForWithdrawal,
       localCurrency: dashboardLocalCurrency,
       balanceInLocalCurrency: dashboardLocalCurrency
         ? tokensToLocalCurrency(

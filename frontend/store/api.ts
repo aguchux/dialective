@@ -799,6 +799,8 @@ export interface TrainerDashboardSummary {
   recordingRoundTimeoutSeconds: number;
   recordingRoundMaxTimeoutSeconds: number;
   minWithdrawalTokens: string;
+  minCompletedTasksForWithdrawal: number;
+  completedTasksForWithdrawal: number;
   localCurrency: LocalCurrency | null;
   balanceInLocalCurrency: string | null;
   fundedTokens: string;
