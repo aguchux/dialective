@@ -1167,6 +1167,27 @@ export interface ApiAccessTokenSummary {
   updatedByEmail: string | null;
 }
 
+export interface SubscriptionPlan {
+  id: string;
+  key: string;
+  name: string;
+  stripePriceId: string;
+  monthlyUsdAmount: string;
+  maxStreamDecks: number | null;
+  maxTeamMembers: number | null;
+  active: boolean;
+}
+
+export interface SubscriptionPlanInput {
+  key: string;
+  name: string;
+  stripePriceId: string;
+  monthlyUsdAmount: number;
+  maxStreamDecks?: number | null;
+  maxTeamMembers?: number | null;
+  active?: boolean;
+}
+
 export interface PlatformSettings {
   tokenUsdRate: string | null;
   minWithdrawalTokens: string | null;
@@ -1968,6 +1989,7 @@ export const dialectivaApi = createApi({
     'Profile',
     'Notifications',
     'ApiAccessTokens',
+    'SubscriptionPlans',
     'Tokenomics',
     'AssistantThread',
     'AdminAssistantConversations',
@@ -3444,6 +3466,25 @@ export const dialectivaApi = createApi({
       query: (key) => ({ url: `/admin/api-access-tokens/${key}`, method: 'DELETE' }),
       invalidatesTags: ['ApiAccessTokens'],
     }),
+    getSubscriptionPlans: builder.query<SubscriptionPlan[], void>({
+      query: () => '/admin/voice-stream/subscription-plans',
+      providesTags: ['SubscriptionPlans'],
+    }),
+    upsertSubscriptionPlan: builder.mutation<
+      SubscriptionPlan,
+      { key: string; data: SubscriptionPlanInput }
+    >({
+      query: ({ key, data }) => ({
+        url: `/admin/voice-stream/subscription-plans/${key}`,
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['SubscriptionPlans'],
+    }),
+    deleteSubscriptionPlan: builder.mutation<{ removed: boolean }, string>({
+      query: (key) => ({ url: `/admin/voice-stream/subscription-plans/${key}`, method: 'DELETE' }),
+      invalidatesTags: ['SubscriptionPlans'],
+    }),
     getAdminWords: builder.query<
       AdminWordsPage,
       { page: number; pageSize: number; search?: string; partOfSpeech?: PartOfSpeech }
@@ -3779,6 +3820,9 @@ export const {
   useGetApiAccessTokensQuery,
   useSetApiAccessTokenMutation,
   useDeleteApiAccessTokenMutation,
+  useGetSubscriptionPlansQuery,
+  useUpsertSubscriptionPlanMutation,
+  useDeleteSubscriptionPlanMutation,
   useGetAdminWordsQuery,
   useDeleteWordMutation,
   useGetAdminPromptsQuery,

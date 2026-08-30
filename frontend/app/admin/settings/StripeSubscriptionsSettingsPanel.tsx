@@ -1,0 +1,434 @@
+'use client';
+
+import { useState } from 'react';
+import {
+  ApiAccessTokenSummary,
+  SubscriptionPlan,
+  normalizeErrorMessage,
+  useDeleteApiAccessTokenMutation,
+  useDeleteSubscriptionPlanMutation,
+  useGetApiAccessTokensQuery,
+  useGetSubscriptionPlansQuery,
+  useSetApiAccessTokenMutation,
+  useUpsertSubscriptionPlanMutation,
+} from '@/store/api';
+import { ActionButton } from '@/components/ui/ActionButton';
+
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
+const primaryButtonClass =
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
+const dangerButtonClass =
+  'inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-white px-3.5 py-2.5 font-bold text-danger transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
+
+const STRIPE_KEY_LABELS: Record<string, { label: string; description: string }> = {
+  stripe_secret_key: {
+    label: 'Stripe Secret Key',
+    description:
+      'From dashboard.stripe.com -> Developers -> API keys. Used to create Checkout sessions and Customers for Voice Stream subscribers.',
+  },
+  stripe_webhook_secret: {
+    label: 'Stripe Webhook Signing Secret',
+    description:
+      'From the webhook endpoint configured for /api/v1/voice-stream/billing/webhooks/stripe. Verifies that incoming webhook events actually came from Stripe.',
+  },
+};
+
+const STRIPE_KEYS = ['stripe_secret_key', 'stripe_webhook_secret'];
+
+function StripeKeyRow({ token }: { token: ApiAccessTokenSummary }) {
+  const [setToken, { isLoading: isSaving }] = useSetApiAccessTokenMutation();
+  const [deleteToken, { isLoading: isDeleting }] = useDeleteApiAccessTokenMutation();
+  const [value, setValue] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const meta = STRIPE_KEY_LABELS[token.key] ?? { label: token.key, description: '' };
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    setError(null);
+    try {
+      await setToken({ key: token.key, value }).unwrap();
+      setValue('');
+      setMessage('Saved.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to save.'));
+    }
+  }
+
+  async function handleRemove() {
+    setMessage(null);
+    setError(null);
+    try {
+      await deleteToken(token.key).unwrap();
+      setMessage('Removed.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to remove.'));
+    }
+  }
+
+  return (
+    <div className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-bold">{meta.label}</p>
+          {meta.description && (
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted">{meta.description}</p>
+          )}
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-3 py-1 text-sm font-bold ${
+            token.isSet ? 'bg-accent/10 text-accent-dark' : 'bg-danger/10 text-danger'
+          }`}
+        >
+          {token.isSet ? `Set (...${token.lastFour})` : 'Not set'}
+        </span>
+      </div>
+
+      {token.isSet && token.updatedAt && (
+        <p className="text-sm text-muted">
+          Last updated {new Date(token.updatedAt).toLocaleString()}
+          {token.updatedByEmail ? ` by ${token.updatedByEmail}` : ''}
+        </p>
+      )}
+
+      <form className="flex flex-wrap items-center gap-2" onSubmit={handleSave}>
+        <input
+          className="min-w-0 flex-1 rounded-lg border border-line px-3 py-2.5"
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={token.isSet ? 'Enter a new value to rotate' : 'Paste value'}
+          type="password"
+          value={value}
+        />
+        <ActionButton
+          className={primaryButtonClass}
+          disabled={!value.trim()}
+          pending={isSaving}
+          pendingLabel="Saving"
+          type="submit"
+        >
+          {token.isSet ? 'Rotate' : 'Save'}
+        </ActionButton>
+        {token.isSet && (
+          <ActionButton
+            className={dangerButtonClass}
+            onClick={handleRemove}
+            pending={isDeleting}
+            pendingLabel="Removing"
+            type="button"
+          >
+            Remove
+          </ActionButton>
+        )}
+      </form>
+
+      {message && <p className="text-sm leading-relaxed text-accent-dark">{message}</p>}
+      {error && (
+        <p className="text-sm leading-relaxed text-danger" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function emptyPlanForm() {
+  return {
+    key: '',
+    name: '',
+    stripePriceId: '',
+    monthlyUsdAmount: '',
+    maxStreamDecks: '',
+    maxTeamMembers: '',
+    active: true,
+  };
+}
+
+function planToForm(plan: SubscriptionPlan) {
+  return {
+    key: plan.key,
+    name: plan.name,
+    stripePriceId: plan.stripePriceId,
+    monthlyUsdAmount: plan.monthlyUsdAmount,
+    maxStreamDecks: plan.maxStreamDecks?.toString() ?? '',
+    maxTeamMembers: plan.maxTeamMembers?.toString() ?? '',
+    active: plan.active,
+  };
+}
+
+function PlanForm({
+  initial,
+  isNew,
+  onDone,
+}: {
+  initial: ReturnType<typeof emptyPlanForm>;
+  isNew: boolean;
+  onDone: () => void;
+}) {
+  const [form, setForm] = useState(initial);
+  const [upsert, { isLoading: isSaving }] = useUpsertSubscriptionPlanMutation();
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const monthlyUsdAmount = Number(form.monthlyUsdAmount);
+    if (!form.key.trim() || !form.name.trim() || !form.stripePriceId.trim()) {
+      setError('Key, name, and Stripe Price id are required.');
+      return;
+    }
+    if (!Number.isFinite(monthlyUsdAmount) || monthlyUsdAmount <= 0) {
+      setError('Monthly USD amount must be a positive number.');
+      return;
+    }
+    try {
+      await upsert({
+        key: form.key.trim(),
+        data: {
+          key: form.key.trim(),
+          name: form.name.trim(),
+          stripePriceId: form.stripePriceId.trim(),
+          monthlyUsdAmount,
+          maxStreamDecks: form.maxStreamDecks ? Number(form.maxStreamDecks) : null,
+          maxTeamMembers: form.maxTeamMembers ? Number(form.maxTeamMembers) : null,
+          active: form.active,
+        },
+      }).unwrap();
+      onDone();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to save plan.'));
+    }
+  }
+
+  return (
+    <form className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4" onSubmit={handleSave}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1 text-sm font-bold">
+          Plan key
+          <input
+            className={inputClass}
+            disabled={!isNew}
+            onChange={(e) => setForm({ ...form, key: e.target.value })}
+            placeholder="starter"
+            value={form.key}
+          />
+        </label>
+        <label className="grid gap-1 text-sm font-bold">
+          Display name
+          <input
+            className={inputClass}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Starter"
+            value={form.name}
+          />
+        </label>
+        <label className="grid gap-1 text-sm font-bold sm:col-span-2">
+          Stripe Price id
+          <input
+            className={inputClass}
+            onChange={(e) => setForm({ ...form, stripePriceId: e.target.value })}
+            placeholder="price_1AbCdEfGhIjKlMn"
+            value={form.stripePriceId}
+          />
+        </label>
+        <label className="grid gap-1 text-sm font-bold">
+          Monthly USD amount
+          <input
+            className={inputClass}
+            min="0"
+            onChange={(e) => setForm({ ...form, monthlyUsdAmount: e.target.value })}
+            step="0.01"
+            type="number"
+            value={form.monthlyUsdAmount}
+          />
+        </label>
+        <label className="grid gap-1 text-sm font-bold">
+          Max stream decks (blank = unlimited)
+          <input
+            className={inputClass}
+            min="1"
+            onChange={(e) => setForm({ ...form, maxStreamDecks: e.target.value })}
+            type="number"
+            value={form.maxStreamDecks}
+          />
+        </label>
+        <label className="grid gap-1 text-sm font-bold">
+          Max team members (blank = unlimited)
+          <input
+            className={inputClass}
+            min="1"
+            onChange={(e) => setForm({ ...form, maxTeamMembers: e.target.value })}
+            type="number"
+            value={form.maxTeamMembers}
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm font-bold">
+          <input
+            checked={form.active}
+            onChange={(e) => setForm({ ...form, active: e.target.checked })}
+            type="checkbox"
+          />
+          Active (selectable by subscribers)
+        </label>
+      </div>
+
+      {error && (
+        <p className="text-sm leading-relaxed text-danger" role="alert">
+          {error}
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        <ActionButton className={primaryButtonClass} pending={isSaving} pendingLabel="Saving" type="submit">
+          {isNew ? 'Add plan' : 'Save changes'}
+        </ActionButton>
+        <button
+          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-white px-3.5 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted"
+          onClick={onDone}
+          type="button"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function PlanRow({ plan }: { plan: SubscriptionPlan }) {
+  const [editing, setEditing] = useState(false);
+  const [deletePlan, { isLoading: isDeleting }] = useDeleteSubscriptionPlanMutation();
+  const [error, setError] = useState<string | null>(null);
+
+  if (editing) {
+    return <PlanForm initial={planToForm(plan)} isNew={false} onDone={() => setEditing(false)} />;
+  }
+
+  async function handleDelete() {
+    setError(null);
+    try {
+      await deletePlan(plan.key).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to delete plan.'));
+    }
+  }
+
+  return (
+    <div className="grid gap-2 rounded-lg border border-line bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-bold">
+            {plan.name}{' '}
+            <span className="font-normal text-muted">
+              (key: {plan.key}) -- ${plan.monthlyUsdAmount}/mo
+            </span>
+          </p>
+          <p className="mt-1 text-sm text-muted">Stripe Price: {plan.stripePriceId}</p>
+          <p className="mt-1 text-sm text-muted">
+            Stream decks: {plan.maxStreamDecks ?? 'unlimited'} -- Team members:{' '}
+            {plan.maxTeamMembers ?? 'unlimited'}
+          </p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-3 py-1 text-sm font-bold ${
+            plan.active ? 'bg-accent/10 text-accent-dark' : 'bg-danger/10 text-danger'
+          }`}
+        >
+          {plan.active ? 'Active' : 'Inactive'}
+        </span>
+      </div>
+      {error && (
+        <p className="text-sm leading-relaxed text-danger" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="flex gap-2">
+        <button
+          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-white px-3.5 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted"
+          onClick={() => setEditing(true)}
+          type="button"
+        >
+          Edit
+        </button>
+        <ActionButton
+          className={dangerButtonClass}
+          onClick={handleDelete}
+          pending={isDeleting}
+          pendingLabel="Deleting"
+          type="button"
+        >
+          Delete
+        </ActionButton>
+      </div>
+    </div>
+  );
+}
+
+export function StripeSubscriptionsSettingsPanel() {
+  const { data: tokens, isLoading: tokensLoading } = useGetApiAccessTokensQuery();
+  const { data: plans, isLoading: plansLoading } = useGetSubscriptionPlansQuery();
+  const [addingPlan, setAddingPlan] = useState(false);
+
+  const stripeTokens = tokens?.filter((t) => STRIPE_KEYS.includes(t.key)) ?? [];
+
+  return (
+    <div className="grid gap-6">
+      <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+        <div className="grid gap-1">
+          <h2 className="text-2xl leading-snug">Stripe Keys</h2>
+          <p className="leading-relaxed text-muted">
+            Credentials for the Voice Stream Stripe integration. Encrypted at rest and never shown
+            again after saving.
+          </p>
+        </div>
+        {tokensLoading && <p className="text-muted">Loading...</p>}
+        {!tokensLoading && (
+          <div className="grid gap-4">
+            {stripeTokens.map((token) => (
+              <StripeKeyRow key={token.key} token={token} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="grid gap-1">
+            <h2 className="text-2xl leading-snug">Subscription Plans</h2>
+            <p className="leading-relaxed text-muted">
+              Voice Stream subscription tiers and their Stripe Price ids. These are read directly
+              from this table when creating a Checkout session -- no env var or redeploy needed to
+              change a price.
+            </p>
+          </div>
+          {!addingPlan && (
+            <button
+              className={primaryButtonClass}
+              onClick={() => setAddingPlan(true)}
+              type="button"
+            >
+              Add plan
+            </button>
+          )}
+        </div>
+
+        {addingPlan && (
+          <PlanForm initial={emptyPlanForm()} isNew onDone={() => setAddingPlan(false)} />
+        )}
+
+        {plansLoading && <p className="text-muted">Loading...</p>}
+        {!plansLoading && (
+          <div className="grid gap-3">
+            {plans?.map((plan) => (
+              <PlanRow key={plan.key} plan={plan} />
+            ))}
+            {plans?.length === 0 && !addingPlan && (
+              <p className="text-muted">No subscription plans configured yet.</p>
+            )}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

@@ -23,6 +23,20 @@ describe('ApiAccessTokensService.list', () => {
 
     expect(result).toEqual([
       { key: 'huggingface', isSet: false, lastFour: null, updatedAt: null, updatedByEmail: null },
+      {
+        key: 'stripe_secret_key',
+        isSet: false,
+        lastFour: null,
+        updatedAt: null,
+        updatedByEmail: null,
+      },
+      {
+        key: 'stripe_webhook_secret',
+        isSet: false,
+        lastFour: null,
+        updatedAt: null,
+        updatedByEmail: null,
+      },
     ]);
   });
 
@@ -47,6 +61,20 @@ describe('ApiAccessTokensService.list', () => {
         lastFour: 'a1b2',
         updatedAt,
         updatedByEmail: 'admin@example.com',
+      },
+      {
+        key: 'stripe_secret_key',
+        isSet: false,
+        lastFour: null,
+        updatedAt: null,
+        updatedByEmail: null,
+      },
+      {
+        key: 'stripe_webhook_secret',
+        isSet: false,
+        lastFour: null,
+        updatedAt: null,
+        updatedByEmail: null,
       },
     ]);
   });

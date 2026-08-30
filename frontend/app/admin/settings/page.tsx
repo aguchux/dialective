@@ -22,6 +22,7 @@ import { LiveChatSettingsPanel } from './LiveChatSettingsPanel';
 import { DatasetStorageSettingsPanel } from './DatasetStorageSettingsPanel';
 import { LandingPageSettingsPanel } from './LandingPageSettingsPanel';
 import { ApiAccessTokensSettingsPanel } from './ApiAccessTokensSettingsPanel';
+import { StripeSubscriptionsSettingsPanel } from './StripeSubscriptionsSettingsPanel';
 import { PwaSettingsPanel } from './PwaSettingsPanel';
 
 const groups = [
@@ -46,6 +47,7 @@ const groups = [
   { key: 'kyc', label: 'Identity Verification' },
   { key: 'datasetStorage', label: 'Dataset & Storage' },
   { key: 'apiAccessTokens', label: 'API Access Tokens' },
+  { key: 'stripeSubscriptions', label: 'Stripe & Subscriptions' },
 ] as const;
 
 type GroupKey = (typeof groups)[number]['key'];
@@ -107,6 +109,7 @@ export default function AdminSettingsPage() {
             {active === 'kyc' && <KycSettingsPanel />}
             {active === 'datasetStorage' && <DatasetStorageSettingsPanel />}
             {active === 'apiAccessTokens' && <ApiAccessTokensSettingsPanel />}
+            {active === 'stripeSubscriptions' && <StripeSubscriptionsSettingsPanel />}
           </div>
         </div>
       </div>

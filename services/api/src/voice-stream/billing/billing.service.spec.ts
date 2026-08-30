@@ -1,6 +1,3 @@
-process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? 'sk_test_dummy';
-process.env.STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? 'whsec_dummy';
-
 const constructEventMock = jest.fn();
 jest.mock('stripe', () => {
   return jest.fn().mockImplementation(() => ({
@@ -29,8 +26,13 @@ function setup() {
     },
     subscriberOrganization: { findUniqueOrThrow: jest.fn(), update: jest.fn() },
   };
-  const service = new BillingService(prisma as any);
-  return { prisma, service };
+  const apiAccessTokens = {
+    getDecrypted: jest.fn((key: string) =>
+      key === 'stripe_secret_key' ? 'sk_test_dummy' : 'whsec_dummy',
+    ),
+  };
+  const service = new BillingService(prisma as any, apiAccessTokens as any);
+  return { prisma, service, apiAccessTokens };
 }
 
 describe('BillingService.handleWebhook', () => {

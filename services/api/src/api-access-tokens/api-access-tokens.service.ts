@@ -9,7 +9,11 @@ import { decryptToken, encryptToken } from '../common/token-crypto.util';
  * credential needs to move from a k8s-Secret-only env var to an
  * admin-rotatable one; never let the frontend submit an arbitrary key.
  */
-export const KNOWN_API_ACCESS_TOKEN_KEYS = ['huggingface'] as const;
+export const KNOWN_API_ACCESS_TOKEN_KEYS = [
+  'huggingface',
+  'stripe_secret_key',
+  'stripe_webhook_secret',
+] as const;
 export type ApiAccessTokenKey = (typeof KNOWN_API_ACCESS_TOKEN_KEYS)[number];
 
 export interface ApiAccessTokenSummary {

@@ -121,8 +121,11 @@ function TokenRow({ token }: { token: ApiAccessTokenSummary }) {
   );
 }
 
+const STRIPE_KEYS = ['stripe_secret_key', 'stripe_webhook_secret'];
+
 export function ApiAccessTokensSettingsPanel() {
   const { data: tokens, isLoading } = useGetApiAccessTokensQuery();
+  const otherTokens = tokens?.filter((t) => !STRIPE_KEYS.includes(t.key));
 
   return (
     <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -132,13 +135,14 @@ export function ApiAccessTokensSettingsPanel() {
           Third-party API credentials used by backend workers, rotatable here instead of via a
           Kubernetes secret and redeploy. Values are encrypted at rest and never shown again after
           saving -- only the last 4 characters are displayed to confirm which token is active.
+          Stripe credentials live under the &quot;Stripe &amp; Subscriptions&quot; tab.
         </p>
       </div>
 
       {isLoading && <p className="text-muted">Loading...</p>}
       {!isLoading && (
         <div className="grid gap-4">
-          {tokens?.map((token) => (
+          {otherTokens?.map((token) => (
             <TokenRow key={token.key} token={token} />
           ))}
         </div>

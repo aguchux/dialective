@@ -2,17 +2,10 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import Stripe from 'stripe';
 import { Prisma, SubscriptionStatus } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ApiAccessTokensService } from '../../api-access-tokens/api-access-tokens.service';
 
 function streamFrontendUrl(): string {
   return process.env.STREAM_FRONTEND_URL ?? 'https://stream.dialectlibrary.com';
-}
-
-function getStripe(): Stripe {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  if (!secretKey) {
-    throw new Error('STRIPE_SECRET_KEY is not set');
-  }
-  return new Stripe(secretKey);
 }
 
 /**
@@ -46,7 +39,18 @@ function mapStripeStatus(status: Stripe.Subscription.Status): SubscriptionStatus
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly apiAccessTokens: ApiAccessTokensService,
+  ) {}
+
+  private async getStripe(): Promise<Stripe> {
+    const secretKey = await this.apiAccessTokens.getDecrypted('stripe_secret_key');
+    if (!secretKey) {
+      throw new Error('Stripe secret key is not configured (Admin -> Settings -> Stripe & Subscriptions)');
+    }
+    return new Stripe(secretKey);
+  }
 
   async createCheckoutSession(
     organizationId: string,
@@ -62,7 +66,7 @@ export class BillingService {
       where: { id: organizationId },
     });
 
-    const stripe = getStripe();
+    const stripe = await this.getStripe();
     const customerId =
       org.stripeCustomerId ??
       (
@@ -110,15 +114,15 @@ export class BillingService {
    * wallet.controller.ts's NOWPayments/Flutterwave webhook dedup pattern.
    */
   async handleWebhook(rawBody: Buffer, signature: string | undefined): Promise<void> {
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    const webhookSecret = await this.apiAccessTokens.getDecrypted('stripe_webhook_secret');
     if (!webhookSecret) {
-      throw new Error('STRIPE_WEBHOOK_SECRET is not set');
+      throw new Error('Stripe webhook secret is not configured (Admin -> Settings -> Stripe & Subscriptions)');
     }
     if (!signature) {
       throw new BadRequestException('Missing Stripe signature header');
     }
 
-    const stripe = getStripe();
+    const stripe = await this.getStripe();
     let event: Stripe.Event;
     try {
       event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
