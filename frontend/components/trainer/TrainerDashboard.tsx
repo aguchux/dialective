@@ -143,6 +143,7 @@ type DashboardView =
   | 'training'
   | 'market'
   | 'marketing'
+  | 'campaigns'
   | 'testimonials'
   | 'scores'
   | 'profile'
@@ -153,7 +154,7 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
   { id: 'earnings', label: 'Earnings', icon: CircleDollarSign },
   { id: 'training', label: 'Training', icon: Mic2 },
   { id: 'market', label: 'Market', icon: Landmark },
-  { id: 'marketing', label: 'Marketing', icon: Megaphone },
+  { id: 'marketing', label: 'Referrals', icon: Users },
   { id: 'testimonials', label: 'Testimonials', icon: MessageSquareQuote },
   { id: 'scores', label: 'My Scores', icon: Star },
 ];
@@ -162,6 +163,7 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
 const allViewIds: DashboardView[] = [
   ...views.map((view) => view.id),
   'home',
+  'campaigns',
   'profile',
   'notifications',
 ];
@@ -747,7 +749,7 @@ function DashboardHeader({
               <DropdownMenuItem onSelect={() => router.push('/dashboard/reports')}>
                 <FileBarChart className="size-4" aria-hidden="true" /> Reports
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => router.push('/dashboard?view=marketing')}>
+              <DropdownMenuItem onSelect={() => router.push('/dashboard?view=campaigns')}>
                 <Megaphone className="size-4" aria-hidden="true" /> Campaigns
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=testimonials')}>
@@ -849,6 +851,7 @@ function DashboardViewContent({
     );
   if (activeView === 'market') return <MarketView />;
   if (activeView === 'marketing') return <MarketingView data={data} email={email} />;
+  if (activeView === 'campaigns') return <CampaignsView referralCode={data.referrals.code} />;
   if (activeView === 'testimonials') return <TestimonialsView onGiveTestimony={onGiveTestimony} />;
   if (activeView === 'scores') return <ScoresView />;
   if (activeView === 'tokens') return <TokensView data={data} refreshing={refreshing} />;
@@ -1963,29 +1966,15 @@ function MarketingView({ data, email }: { data: TrainerDashboardSummary; email: 
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [invitationPage, setInvitationPage] = useState(1);
-  const [activeFormat, setActiveFormat] = useState<MarketingAdFormat>('FEED_SQUARE');
-  const [sharePhotoId, setSharePhotoId] = useState<string | null>(null);
-  const [shareHeadlineId, setShareHeadlineId] = useState<string | null>(null);
-  const [shareLink, setShareLink] = useState('');
-  const [shareCopied, setShareCopied] = useState(false);
-  const [shareError, setShareError] = useState<string | null>(null);
   const [sendReferralInvite, { isLoading: inviteSending }] = useSendReferralInviteMutation();
   const { data: invitations, isFetching: invitationsLoading } = useGetReferralInvitationsQuery({
     page: invitationPage,
     pageSize: 5,
   });
-  const { data: materials } = useGetMarketingMaterialsQuery(activeFormat);
-  const { data: myShares } = useGetMyMarketingSharesQuery();
-  const [createCampaignShare, { isLoading: shareCreating }] = useCreateCampaignShareMutation();
 
   useEffect(() => {
     setReferralLink(`${REFERRAL_SHARE_ORIGIN}/register?ref=${data.referrals.code}`);
   }, [data.referrals.code]);
-
-  useEffect(() => {
-    setSharePhotoId(null);
-    setShareHeadlineId(materials?.headlines[0]?.id ?? null);
-  }, [activeFormat, materials?.headlines]);
 
   async function copyLink() {
     await navigator.clipboard.writeText(referralLink);
@@ -2013,50 +2002,12 @@ function MarketingView({ data, email }: { data: TrainerDashboardSummary; email: 
     }
   }
 
-  const selectedPhoto = materials?.photos.find((photo) => photo.id === sharePhotoId) ?? null;
-  const selectedHeadline = materials?.headlines.find((h) => h.id === shareHeadlineId) ?? null;
-
-  async function openShareDialog(photoId: string) {
-    setShareError(null);
-    setSharePhotoId(photoId);
-    const headlineId = shareHeadlineId ?? materials?.headlines[0]?.id;
-    if (!headlineId) return;
-    try {
-      const share = await createCampaignShare({ photoId, headlineId }).unwrap();
-      setShareLink(
-        `${REFERRAL_SHARE_ORIGIN}/invite/${encodeURIComponent(data.referrals.code)}/${share.id}`,
-      );
-    } catch (err) {
-      setShareError(normalizeErrorMessage(err, 'Unable to create your campaign link right now.'));
-    }
-  }
-
-  async function copyCampaignLink() {
-    if (!shareLink) return;
-    await navigator.clipboard.writeText(shareLink);
-    setShareCopied(true);
-    window.setTimeout(() => setShareCopied(false), 1800);
-  }
-
-  function openShare(url: string) {
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
-
-  async function shareNatively() {
-    if (!shareLink || !navigator.share) return;
-    await navigator.share({
-      title: selectedHeadline?.title ?? 'Dialect Library',
-      text: selectedHeadline?.description ?? '',
-      url: shareLink,
-    });
-  }
-
   return (
     <div>
       <div className="mb-5 flex items-start justify-between gap-4">
         <ViewHeading
-          title="Marketing"
-          subtitle="Your invitations, share materials, and campaign performance."
+          title="Referrals"
+          subtitle="Your invitations and credited lifetime referral bonuses."
         />
         <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
           <DialogTrigger asChild>
@@ -2261,7 +2212,70 @@ function MarketingView({ data, email }: { data: TrainerDashboardSummary; email: 
           />
         )}
       </section>
-      <section className="mt-8">
+    </div>
+  );
+}
+
+function CampaignsView({ referralCode }: { referralCode: string }) {
+  const [activeFormat, setActiveFormat] = useState<MarketingAdFormat>('FEED_SQUARE');
+  const [sharePhotoId, setSharePhotoId] = useState<string | null>(null);
+  const [shareHeadlineId, setShareHeadlineId] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState('');
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const { data: materials } = useGetMarketingMaterialsQuery(activeFormat);
+  const { data: myShares } = useGetMyMarketingSharesQuery();
+  const [createCampaignShare, { isLoading: shareCreating }] = useCreateCampaignShareMutation();
+
+  useEffect(() => {
+    setSharePhotoId(null);
+    setShareHeadlineId(materials?.headlines[0]?.id ?? null);
+  }, [activeFormat, materials?.headlines]);
+
+  const selectedPhoto = materials?.photos.find((photo) => photo.id === sharePhotoId) ?? null;
+  const selectedHeadline = materials?.headlines.find((h) => h.id === shareHeadlineId) ?? null;
+
+  async function openShareDialog(photoId: string) {
+    setShareError(null);
+    setSharePhotoId(photoId);
+    const headlineId = shareHeadlineId ?? materials?.headlines[0]?.id;
+    if (!headlineId) return;
+    try {
+      const share = await createCampaignShare({ photoId, headlineId }).unwrap();
+      setShareLink(
+        `${REFERRAL_SHARE_ORIGIN}/invite/${encodeURIComponent(referralCode)}/${share.id}`,
+      );
+    } catch (err) {
+      setShareError(normalizeErrorMessage(err, 'Unable to create your campaign link right now.'));
+    }
+  }
+
+  async function copyCampaignLink() {
+    if (!shareLink) return;
+    await navigator.clipboard.writeText(shareLink);
+    setShareCopied(true);
+    window.setTimeout(() => setShareCopied(false), 1800);
+  }
+
+  function openShare(url: string) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  async function shareNatively() {
+    if (!shareLink || !navigator.share) return;
+    await navigator.share({
+      title: selectedHeadline?.title ?? 'Dialect Library',
+      text: selectedHeadline?.description ?? '',
+      url: shareLink,
+    });
+  }
+
+  return (
+    <div>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <ViewHeading title="Campaigns" subtitle="Share materials and campaign performance." />
+      </div>
+      <section>
         <SectionTitle
           title="Share materials"
           subtitle="Pick a format sized for the social channel where you want to invite trainers, then choose a photo and headline."
