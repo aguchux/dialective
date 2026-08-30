@@ -61,6 +61,7 @@ export class AuthController {
       dto.firstName,
       dto.lastName,
       dto.referralCode,
+      dto.campaignShareId,
     );
   }
 

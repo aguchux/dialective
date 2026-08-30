@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { Download } from 'lucide-react';
+import { Download, MessageSquareText } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { requestPwaInstall } from '@/components/PwaInstallPrompt';
@@ -26,6 +26,7 @@ const navItems = [
   { href: '/admin/words', label: 'Words', icon: WordsIcon },
   { href: '/admin/recordings', label: 'Recordings', icon: RecordingsIcon },
   { href: '/admin/testimonials', label: 'Testimonials', icon: TestimonialsIcon },
+  { href: '/admin/marketing', label: 'Marketing', icon: MarketingIcon },
   { href: '/admin/audit-hold', label: 'Audit Queue', icon: AuditQueueIcon },
   { href: '/admin/phone-verifications', label: 'Phone Verifications', icon: PhoneIcon },
   { href: '/admin/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
@@ -38,6 +39,7 @@ const navItems = [
   { href: '/admin/blog', label: 'Blog', icon: BlogIcon },
   { href: '/admin/courses', label: 'Courses', icon: CoursesIcon },
   { href: '/admin/updates', label: 'Updates', icon: BellIcon },
+  { href: '/admin/ai-conversations', label: 'AI Conversations', icon: MessageSquareText },
   { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
@@ -508,6 +510,23 @@ function TestimonialsIcon() {
         strokeLinejoin="round"
       />
       <path d="M8 10h.01M12 10h.01M16 10h.01" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MarketingIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path d="m3 11 18-5v12L3 14v-3z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

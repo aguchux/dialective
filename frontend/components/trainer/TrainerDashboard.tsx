@@ -31,6 +31,8 @@ import {
   Headphones,
   Landmark,
   LogOut,
+  Megaphone,
+  MessageSquareQuote,
   Mic2,
   Plus,
   Play,
@@ -125,6 +127,10 @@ import {
   useGetWalletActivityQuery,
   useSendReferralInviteMutation,
   useUpdateProfileMutation,
+  MarketingAdFormat,
+  useGetMarketingMaterialsQuery,
+  useCreateCampaignShareMutation,
+  useGetMyMarketingSharesQuery,
 } from '@/store/api';
 import type { Session } from 'next-auth';
 
@@ -136,7 +142,8 @@ type DashboardView =
   | 'earnings'
   | 'training'
   | 'market'
-  | 'referrals'
+  | 'marketing'
+  | 'testimonials'
   | 'scores'
   | 'profile'
   | 'notifications';
@@ -146,6 +153,8 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
   { id: 'earnings', label: 'Earnings', icon: CircleDollarSign },
   { id: 'training', label: 'Training', icon: Mic2 },
   { id: 'market', label: 'Market', icon: Landmark },
+  { id: 'marketing', label: 'Marketing', icon: Megaphone },
+  { id: 'testimonials', label: 'Testimonials', icon: MessageSquareQuote },
   { id: 'scores', label: 'My Scores', icon: Star },
 ];
 
@@ -153,7 +162,6 @@ const views: { id: DashboardView; label: string; icon: typeof WalletCards }[] = 
 const allViewIds: DashboardView[] = [
   ...views.map((view) => view.id),
   'home',
-  'referrals',
   'profile',
   'notifications',
 ];
@@ -184,8 +192,6 @@ export const activityLabels: Record<LedgerEntryType, string> = {
   P2P_ESCROW_RELEASE: 'P2P escrow released',
   P2P_ESCROW_CREDIT: 'P2P DL purchase',
 };
-
-const TESTIMONY_DISMISSED_KEY = 'dialectiva.testimonyBannerDismissed';
 
 export function TrainerDashboard() {
   const { data: session, status, update } = useSession();
@@ -225,23 +231,6 @@ export function TrainerDashboard() {
       session?.user.role === 'DISTRIBUTOR',
   });
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
-  const { data: myTestimony } = useGetMyTestimonyQuery(undefined, {
-    skip:
-      status !== 'authenticated' ||
-      session?.user.role === 'ADMIN' ||
-      session?.user.role === 'DISTRIBUTOR' ||
-      !publicSettings?.testimonyEnabled,
-  });
-  const [testimonyDismissed, setTestimonyDismissed] = useState(false);
-  useEffect(() => {
-    setTestimonyDismissed(window.localStorage.getItem(TESTIMONY_DISMISSED_KEY) === '1');
-  }, []);
-  function dismissTestimonyBanner() {
-    window.localStorage.setItem(TESTIMONY_DISMISSED_KEY, '1');
-    setTestimonyDismissed(true);
-  }
-  const showTestimonyBanner =
-    !!publicSettings?.testimonyEnabled && myTestimony === null && !testimonyDismissed;
 
   // Same "check client-side first, server is still the authoritative
   // backstop" pattern as the balance check below -- WordsService.startSession/
@@ -323,12 +312,6 @@ export function TrainerDashboard() {
         {incompleteRequiredCourses && incompleteRequiredCourses.length > 0 && (
           <RequiredCoursesBanner courses={incompleteRequiredCourses} />
         )}
-        {showTestimonyBanner && (
-          <TestimonyBanner
-            onDismiss={dismissTestimonyBanner}
-            onGiveTestimony={() => setTestimonyOpen(true)}
-          />
-        )}
         <MicrophonePermissionBanner activeView={activeView} />
 
         <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
@@ -372,6 +355,7 @@ export function TrainerDashboard() {
               refreshing={isFetching}
               onStartTask={handleStartTask}
               onStartDictation={handleStartDictation}
+              onGiveTestimony={() => setTestimonyOpen(true)}
             />
           )}
         </main>
@@ -495,40 +479,6 @@ function RequiredCoursesBanner({
         >
           Start now
         </Link>
-      </div>
-    </div>
-  );
-}
-
-function TestimonyBanner({
-  onGiveTestimony,
-  onDismiss,
-}: {
-  onGiveTestimony: () => void;
-  onDismiss: () => void;
-}) {
-  return (
-    <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm dark:border-amber-900 dark:bg-amber-950">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 md:px-2">
-        <p className="font-bold text-amber-800 dark:text-amber-200">
-          Enjoying Dialect Library? Share a quick testimony and earn DL.
-        </p>
-        <div className="flex shrink-0 items-center gap-4">
-          <button
-            className="font-extrabold text-amber-800 underline hover:no-underline dark:text-amber-200"
-            onClick={onGiveTestimony}
-            type="button"
-          >
-            Give testimony
-          </button>
-          <button
-            className="font-bold text-amber-800/70 hover:text-amber-800 dark:text-amber-200/70 dark:hover:text-amber-200"
-            onClick={onDismiss}
-            type="button"
-          >
-            Not now
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -794,11 +744,14 @@ function DashboardHeader({
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=profile')}>
                 <UserIcon className="size-4" aria-hidden="true" /> Profile
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => router.push('/dashboard?view=referrals')}>
-                <Users className="size-4" aria-hidden="true" /> Referrals
-              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/dashboard/reports')}>
                 <FileBarChart className="size-4" aria-hidden="true" /> Reports
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/dashboard?view=marketing')}>
+                <Megaphone className="size-4" aria-hidden="true" /> Campaigns
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/dashboard?view=testimonials')}>
+                <MessageSquareQuote className="size-4" aria-hidden="true" /> Testimonials
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/learn')}>
                 <GraduationCap className="size-4" aria-hidden="true" /> Learning Center
@@ -874,6 +827,7 @@ function DashboardViewContent({
   refreshing,
   onStartTask,
   onStartDictation,
+  onGiveTestimony,
 }: {
   activeView: DashboardView;
   data: TrainerDashboardSummary;
@@ -882,6 +836,7 @@ function DashboardViewContent({
   refreshing: boolean;
   onStartTask: () => void;
   onStartDictation: () => void;
+  onGiveTestimony: () => void;
 }) {
   if (activeView === 'earnings') return <EarningsView data={data} refreshing={refreshing} />;
   if (activeView === 'training')
@@ -893,7 +848,8 @@ function DashboardViewContent({
       />
     );
   if (activeView === 'market') return <MarketView />;
-  if (activeView === 'referrals') return <ReferralsView data={data} email={email} />;
+  if (activeView === 'marketing') return <MarketingView data={data} email={email} />;
+  if (activeView === 'testimonials') return <TestimonialsView onGiveTestimony={onGiveTestimony} />;
   if (activeView === 'scores') return <ScoresView />;
   if (activeView === 'tokens') return <TokensView data={data} refreshing={refreshing} />;
   return <HomeView data={data} refreshing={refreshing} />;
@@ -1967,38 +1923,36 @@ function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; n
   );
 }
 
-const REFERRAL_CAMPAIGNS = [
+const MARKETING_AD_FORMATS: {
+  id: MarketingAdFormat;
+  label: string;
+  dimensions: string;
+  aspectClass: string;
+}[] = [
   {
-    id: 'earn',
-    title: 'Start Earning Real money on Dialect Library',
-    description: 'Contribute voice in your dialect, help train AI, and earn for approved work.',
-    format: 'Feed post',
+    id: 'FEED_SQUARE',
+    label: 'Feed post',
     dimensions: '1080 x 1080',
     aspectClass: 'aspect-square',
   },
   {
-    id: 'contribute',
-    title: 'Contribute voice in your Dialect, get paid',
-    description: 'Record your local dialect and help make AI more useful for every community.',
-    format: 'Story or status',
+    id: 'STORY',
+    label: 'Story or status',
     dimensions: '1080 x 1920',
     aspectClass: 'aspect-[9/16]',
   },
   {
-    id: 'community',
-    title: 'Your dialect matters. Join Dialect Library today.',
-    description: 'Help preserve dialect voices while contributing to better AI language tools.',
-    format: 'Link preview',
+    id: 'LINK_PREVIEW',
+    label: 'Link preview',
     dimensions: '1200 x 630',
     aspectClass: 'aspect-[1.91/1]',
   },
-] as const;
+];
 
-type ReferralCampaign = (typeof REFERRAL_CAMPAIGNS)[number];
 const REFERRAL_SHARE_ORIGIN =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ?? 'https://www.dialectlibrary.com';
 
-function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: string }) {
+function MarketingView({ data, email }: { data: TrainerDashboardSummary; email: string }) {
   const [copied, setCopied] = useState(false);
   const [referralLink, setReferralLink] = useState(
     `${REFERRAL_SHARE_ORIGIN}/register?ref=${data.referrals.code}`,
@@ -2009,17 +1963,29 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [invitationPage, setInvitationPage] = useState(1);
-  const [shareCampaign, setShareCampaign] = useState<ReferralCampaign | null>(null);
+  const [activeFormat, setActiveFormat] = useState<MarketingAdFormat>('FEED_SQUARE');
+  const [sharePhotoId, setSharePhotoId] = useState<string | null>(null);
+  const [shareHeadlineId, setShareHeadlineId] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
   const [sendReferralInvite, { isLoading: inviteSending }] = useSendReferralInviteMutation();
   const { data: invitations, isFetching: invitationsLoading } = useGetReferralInvitationsQuery({
     page: invitationPage,
     pageSize: 5,
   });
+  const { data: materials } = useGetMarketingMaterialsQuery(activeFormat);
+  const { data: myShares } = useGetMyMarketingSharesQuery();
+  const [createCampaignShare, { isLoading: shareCreating }] = useCreateCampaignShareMutation();
 
   useEffect(() => {
     setReferralLink(`${REFERRAL_SHARE_ORIGIN}/register?ref=${data.referrals.code}`);
   }, [data.referrals.code]);
+
+  useEffect(() => {
+    setSharePhotoId(null);
+    setShareHeadlineId(materials?.headlines[0]?.id ?? null);
+  }, [activeFormat, materials?.headlines]);
 
   async function copyLink() {
     await navigator.clipboard.writeText(referralLink);
@@ -2047,13 +2013,27 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
     }
   }
 
-  const campaignLink = shareCampaign
-    ? `${REFERRAL_SHARE_ORIGIN}/invite/${encodeURIComponent(data.referrals.code)}/${shareCampaign.id}`
-    : '';
+  const selectedPhoto = materials?.photos.find((photo) => photo.id === sharePhotoId) ?? null;
+  const selectedHeadline = materials?.headlines.find((h) => h.id === shareHeadlineId) ?? null;
+
+  async function openShareDialog(photoId: string) {
+    setShareError(null);
+    setSharePhotoId(photoId);
+    const headlineId = shareHeadlineId ?? materials?.headlines[0]?.id;
+    if (!headlineId) return;
+    try {
+      const share = await createCampaignShare({ photoId, headlineId }).unwrap();
+      setShareLink(
+        `${REFERRAL_SHARE_ORIGIN}/invite/${encodeURIComponent(data.referrals.code)}/${share.id}`,
+      );
+    } catch (err) {
+      setShareError(normalizeErrorMessage(err, 'Unable to create your campaign link right now.'));
+    }
+  }
 
   async function copyCampaignLink() {
-    if (!campaignLink) return;
-    await navigator.clipboard.writeText(campaignLink);
+    if (!shareLink) return;
+    await navigator.clipboard.writeText(shareLink);
     setShareCopied(true);
     window.setTimeout(() => setShareCopied(false), 1800);
   }
@@ -2063,11 +2043,11 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
   }
 
   async function shareNatively() {
-    if (!shareCampaign || !campaignLink || !navigator.share) return;
+    if (!shareLink || !navigator.share) return;
     await navigator.share({
-      title: shareCampaign.title,
-      text: shareCampaign.description,
-      url: campaignLink,
+      title: selectedHeadline?.title ?? 'Dialect Library',
+      text: selectedHeadline?.description ?? '',
+      url: shareLink,
     });
   }
 
@@ -2075,8 +2055,8 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
     <div>
       <div className="mb-5 flex items-start justify-between gap-4">
         <ViewHeading
-          title="Referrals"
-          subtitle="Your invitations and credited lifetime referral bonuses."
+          title="Marketing"
+          subtitle="Your invitations, share materials, and campaign performance."
         />
         <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
           <DialogTrigger asChild>
@@ -2284,75 +2264,113 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
       <section className="mt-8">
         <SectionTitle
           title="Share materials"
-          subtitle="Choose a campaign sized for the social channel where you want to invite trainers."
+          subtitle="Pick a format sized for the social channel where you want to invite trainers, then choose a photo and headline."
         />
-        <div className="grid gap-4 md:grid-cols-3">
-          {REFERRAL_CAMPAIGNS.map((campaign) => (
-            <article className={`${cardClass} overflow-hidden`} key={campaign.id}>
-              <div className={`relative overflow-hidden bg-surface-muted ${campaign.aspectClass}`}>
-                <Image
-                  alt={campaign.title}
-                  className="object-cover"
-                  fill
-                  sizes="(max-width: 768px) 100vw, 33vw"
-                  src="/og-image.png"
-                />
-              </div>
-              <div className="grid gap-3 p-4">
-                <div>
-                  <div className="flex items-center justify-between gap-2 text-xs font-bold text-muted">
-                    <span>{campaign.format}</span>
-                    <span>{campaign.dimensions}</span>
-                  </div>
-                  <h3 className="mt-2 text-base font-black leading-snug">{campaign.title}</h3>
-                  <p className="mt-2 text-sm text-muted">{campaign.description}</p>
-                </div>
-                <button
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-accent bg-accent px-3 py-2 font-bold text-white transition-colors hover:bg-accent-dark"
-                  onClick={() => setShareCampaign(campaign)}
-                  type="button"
-                >
-                  <Share2 className="size-4" aria-hidden="true" />
-                  Share campaign
-                </button>
-              </div>
-            </article>
+        <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Ad format">
+          {MARKETING_AD_FORMATS.map((format) => (
+            <button
+              aria-selected={activeFormat === format.id}
+              className={
+                activeFormat === format.id
+                  ? 'rounded-full bg-accent px-3.5 py-2 text-sm font-bold text-white'
+                  : 'rounded-full border border-line bg-white px-3.5 py-2 text-sm font-bold hover:bg-surface-muted'
+              }
+              key={format.id}
+              onClick={() => setActiveFormat(format.id)}
+              role="tab"
+              type="button"
+            >
+              {format.label} <span className="opacity-70">({format.dimensions})</span>
+            </button>
           ))}
         </div>
+        {materials && materials.headlines.length > 0 && (
+          <div className="mb-4 grid gap-1">
+            <label className="text-sm font-bold" htmlFor="marketing-headline">
+              Headline
+            </label>
+            <select
+              className="min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted"
+              id="marketing-headline"
+              onChange={(e) => setShareHeadlineId(e.target.value)}
+              value={shareHeadlineId ?? ''}
+            >
+              {materials.headlines.map((headline) => (
+                <option key={headline.id} value={headline.id}>
+                  {headline.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {materials && materials.photos.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            {materials.photos.map((photo) => {
+              const format = MARKETING_AD_FORMATS.find((f) => f.id === photo.format);
+              return (
+                <article className={`${cardClass} overflow-hidden`} key={photo.id}>
+                  <div
+                    className={`relative overflow-hidden bg-surface-muted ${format?.aspectClass ?? 'aspect-square'}`}
+                  >
+                    <Image
+                      alt="Ad photo"
+                      className="object-cover"
+                      fill
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                      src={photo.url}
+                    />
+                  </div>
+                  <div className="grid gap-3 p-4">
+                    <button
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-accent bg-accent px-3 py-2 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={!shareHeadlineId || shareCreating}
+                      onClick={() => void openShareDialog(photo.id)}
+                      type="button"
+                    >
+                      <Share2 className="size-4" aria-hidden="true" />
+                      Share campaign
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyPanel
+            icon={Megaphone}
+            title="No ad photos yet for this format"
+            actionHref={undefined}
+            actionLabel={undefined}
+          />
+        )}
       </section>
-      <Dialog
-        open={Boolean(shareCampaign)}
-        onOpenChange={(open) => !open && setShareCampaign(null)}
-      >
+      <Dialog open={Boolean(selectedPhoto)} onOpenChange={(open) => !open && setSharePhotoId(null)}>
         <DialogContent
           title="Share your invitation"
-          description="Select a message, then share the campaign link with your referral code included."
+          description="Share the campaign link with your referral code included."
         >
-          {shareCampaign && (
+          {selectedPhoto && (
             <div className="grid gap-4">
-              <div className="grid gap-2" role="radiogroup" aria-label="Campaign message">
-                {REFERRAL_CAMPAIGNS.map((campaign) => (
-                  <button
-                    aria-checked={shareCampaign.id === campaign.id}
-                    className={
-                      shareCampaign.id === campaign.id
-                        ? 'rounded-lg border-2 border-accent bg-accent/5 p-3 text-left'
-                        : 'rounded-lg border border-line bg-white p-3 text-left hover:bg-surface-muted'
-                    }
-                    key={campaign.id}
-                    onClick={() => setShareCampaign(campaign)}
-                    role="radio"
-                    type="button"
-                  >
-                    <span className="block font-bold">{campaign.title}</span>
-                    <span className="mt-1 block text-sm text-muted">{campaign.description}</span>
-                  </button>
-                ))}
-              </div>
+              {selectedHeadline && (
+                <div className="rounded-lg border border-line bg-surface-muted p-3">
+                  <span className="block font-bold">{selectedHeadline.title}</span>
+                  <span className="mt-1 block text-sm text-muted">
+                    {selectedHeadline.description}
+                  </span>
+                </div>
+              )}
+              {shareError && (
+                <p className="text-sm font-bold text-danger" role="alert">
+                  {shareError}
+                </p>
+              )}
               <div className="flex min-w-0 items-center gap-2 rounded-lg border border-line bg-surface-muted p-2 pl-3">
-                <span className="min-w-0 flex-1 truncate text-sm font-bold">{campaignLink}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-bold">
+                  {shareLink || 'Generating link...'}
+                </span>
                 <button
-                  className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent text-white"
+                  className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!shareLink}
                   onClick={copyCampaignLink}
                   title="Copy campaign link"
                   type="button"
@@ -2367,10 +2385,11 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <button
-                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!shareLink}
                   onClick={() =>
                     openShare(
-                      `https://wa.me/?text=${encodeURIComponent(`${shareCampaign.title} ${campaignLink}`)}`,
+                      `https://wa.me/?text=${encodeURIComponent(`${selectedHeadline?.title ?? ''} ${shareLink}`)}`,
                     )
                   }
                   type="button"
@@ -2378,10 +2397,11 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
                   WhatsApp
                 </button>
                 <button
-                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!shareLink}
                   onClick={() =>
                     openShare(
-                      `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(campaignLink)}`,
+                      `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareLink)}`,
                     )
                   }
                   type="button"
@@ -2389,10 +2409,11 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
                   Facebook
                 </button>
                 <button
-                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!shareLink}
                   onClick={() =>
                     openShare(
-                      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(campaignLink)}`,
+                      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareLink)}`,
                     )
                   }
                   type="button"
@@ -2400,10 +2421,11 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
                   LinkedIn
                 </button>
                 <button
-                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                  className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!shareLink}
                   onClick={() =>
                     openShare(
-                      `https://x.com/intent/post?text=${encodeURIComponent(`${shareCampaign.title} ${campaignLink}`)}`,
+                      `https://x.com/intent/post?text=${encodeURIComponent(`${selectedHeadline?.title ?? ''} ${shareLink}`)}`,
                     )
                   }
                   type="button"
@@ -2411,7 +2433,7 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
                   X
                 </button>
               </div>
-              {typeof navigator !== 'undefined' && 'share' in navigator && (
+              {shareLink && typeof navigator !== 'undefined' && 'share' in navigator && (
                 <button
                   className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 py-2 font-bold hover:bg-surface-muted"
                   onClick={() => void shareNatively()}
@@ -2425,6 +2447,141 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
           )}
         </DialogContent>
       </Dialog>
+      <section className="mt-8">
+        <SectionTitle
+          title="Your campaigns"
+          subtitle="Views and registrations for each photo + headline pairing you've shared."
+        />
+        {myShares && myShares.length > 0 ? (
+          <div className={`${cardClass} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-line bg-surface-muted text-xs font-black uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-4 py-3">Campaign</th>
+                    <th className="px-4 py-3">Format</th>
+                    <th className="px-4 py-3">Views</th>
+                    <th className="px-4 py-3">Registrations</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {myShares.map((share) => (
+                    <tr key={share.id}>
+                      <td className="px-4 py-3">
+                        <div className="flex min-w-[220px] items-center gap-3">
+                          <div className="relative size-10 shrink-0 overflow-hidden rounded-md bg-surface-muted">
+                            <Image
+                              alt="Ad photo"
+                              className="object-cover"
+                              fill
+                              src={share.photoUrl}
+                            />
+                          </div>
+                          <span className="truncate font-extrabold">{share.headlineTitle}</span>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-muted">
+                        {MARKETING_AD_FORMATS.find((f) => f.id === share.format)?.label ??
+                          share.format}
+                      </td>
+                      <td className="px-4 py-3 font-bold">{share.viewCount.toLocaleString()}</td>
+                      <td className="px-4 py-3 font-bold">
+                        {share.registeredCount.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <EmptyPanel
+            icon={Megaphone}
+            title="No campaigns shared yet"
+            actionHref={undefined}
+            actionLabel={undefined}
+          />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) {
+  const { data: publicSettings } = useGetPublicClientSettingsQuery();
+  const { data: myTestimony, isLoading } = useGetMyTestimonyQuery(undefined, {
+    skip: !publicSettings?.testimonyEnabled,
+  });
+
+  const statusLabel: Record<'PENDING' | 'APPROVED' | 'REJECTED', string> = {
+    PENDING: 'Awaiting review',
+    APPROVED: 'Approved',
+    REJECTED: 'Not approved',
+  };
+  const statusTone: Record<'PENDING' | 'APPROVED' | 'REJECTED', string> = {
+    PENDING: 'bg-amber-100 text-amber-800',
+    APPROVED: 'bg-emerald-100 text-emerald-800',
+    REJECTED: 'bg-rose-100 text-rose-800',
+  };
+
+  return (
+    <div>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <ViewHeading
+          title="Testimonials"
+          subtitle="Share your experience with Dialect Library and earn a one-time DL reward once approved."
+        />
+        {publicSettings?.testimonyEnabled &&
+          (!myTestimony || myTestimony.status === 'REJECTED') && (
+            <button
+              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-accent bg-accent px-4 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark"
+              onClick={onGiveTestimony}
+              type="button"
+            >
+              <MessageSquareQuote className="size-4" aria-hidden="true" />
+              Create Testimonial
+            </button>
+          )}
+      </div>
+      {!publicSettings?.testimonyEnabled ? (
+        <EmptyPanel
+          icon={MessageSquareQuote}
+          title="Testimonials are not open right now"
+          actionHref={undefined}
+          actionLabel={undefined}
+        />
+      ) : isLoading ? (
+        <div className={`${cardClass} p-5 text-sm font-bold text-muted`}>Loading...</div>
+      ) : myTestimony ? (
+        <div className={`${cardClass} grid gap-3 p-5`}>
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-black ${statusTone[myTestimony.status]}`}
+            >
+              {statusLabel[myTestimony.status]}
+            </span>
+            <span className="text-xs text-muted">{formatDate(myTestimony.createdAt)}</span>
+          </div>
+          {myTestimony.kind === 'TEXT' ? (
+            <p className="text-sm italic text-ink">&ldquo;{myTestimony.text}&rdquo;</p>
+          ) : (
+            <p className="text-sm text-muted">Video testimony submitted.</p>
+          )}
+          {myTestimony.status === 'REJECTED' && myTestimony.rejectionReason && (
+            <p className="text-sm text-muted">Reason: {myTestimony.rejectionReason}</p>
+          )}
+          {myTestimony.status === 'APPROVED' && myTestimony.rewardCredited && (
+            <p className="text-sm font-bold text-emerald-700">Your DL reward has been credited.</p>
+          )}
+        </div>
+      ) : (
+        <EmptyPanel
+          icon={MessageSquareQuote}
+          title="You haven't submitted a testimony yet"
+          actionHref={undefined}
+          actionLabel={undefined}
+        />
+      )}
     </div>
   );
 }

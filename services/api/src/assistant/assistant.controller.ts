@@ -1,8 +1,13 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { Role } from '@dialectiva/db';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { UserThrottlerGuard } from '../common/guards/user-throttler.guard';
 import { AssistantService } from './assistant.service';
 import { ChatAssistantDto } from './dto/chat-assistant.dto';
+import { ListAdminConversationsDto } from './dto/list-admin-conversations.dto';
 import {
   OptionalJwtAuthGuard,
   OptionallyAuthenticatedRequest,
@@ -23,5 +28,19 @@ export class AssistantController {
   @UseGuards(OptionalJwtAuthGuard, UserThrottlerGuard)
   thread(@Req() req: OptionallyAuthenticatedRequest) {
     return this.assistant.getThread(req.user?.sub);
+  }
+
+  @Get('admin/conversations')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  listAdminConversations(@Query() query: ListAdminConversationsDto) {
+    return this.assistant.listAdminConversations(query);
+  }
+
+  @Get('admin/conversations/:conversationId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  getAdminConversation(@Param('conversationId') conversationId: string) {
+    return this.assistant.getAdminConversation(conversationId);
   }
 }

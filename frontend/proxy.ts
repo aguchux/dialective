@@ -3,7 +3,9 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import {
   DEFAULT_REFERRAL_COOKIE_MAX_AGE_SECONDS,
+  MARKETING_CAMPAIGN_COOKIE_KEY,
   REFERRAL_COOKIE_KEY,
+  normalizeMarketingCampaignId,
   normalizeReferralCode,
 } from '@/lib/referral-cookie';
 import { postAuthPath, roleHomePath } from '@/lib/role-home';
@@ -19,6 +21,20 @@ function withReferralCookie(request: NextRequest, response: NextResponse) {
 
   if (referralCode) {
     response.cookies.set(REFERRAL_COOKIE_KEY, referralCode, {
+      httpOnly: false,
+      maxAge: DEFAULT_REFERRAL_COOKIE_MAX_AGE_SECONDS,
+      path: '/',
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+    });
+  }
+
+  const campaignShareId = normalizeMarketingCampaignId(
+    request.nextUrl.searchParams.get('campaign'),
+  );
+
+  if (campaignShareId) {
+    response.cookies.set(MARKETING_CAMPAIGN_COOKIE_KEY, campaignShareId, {
       httpOnly: false,
       maxAge: DEFAULT_REFERRAL_COOKIE_MAX_AGE_SECONDS,
       path: '/',

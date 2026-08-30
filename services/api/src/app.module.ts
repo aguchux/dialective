@@ -8,6 +8,7 @@ import { SubmissionsModule } from './submissions/submissions.module';
 import { PromptsModule } from './prompts/prompts.module';
 import { WordsModule } from './words/words.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
+import { MarketingModule } from './marketing/marketing.module';
 import { WalletModule } from './wallet/wallet.module';
 import { GeoModule } from './geo/geo.module';
 import { LeadsModule } from './leads/leads.module';
@@ -40,6 +41,7 @@ import { SettlementAdminModule } from './settlement-admin/settlement-admin.modul
     PromptsModule,
     WordsModule,
     TestimonialsModule,
+    MarketingModule,
     WalletModule,
     GeoModule,
     LeadsModule,

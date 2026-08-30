@@ -4,6 +4,7 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  NotFoundException,
   OnModuleDestroy,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -16,6 +17,7 @@ import { parseProviderOrder } from '../llm/llm-provider.interface';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AssistantHistoryMessageDto } from './dto/chat-assistant.dto';
+import { ListAdminConversationsDto } from './dto/list-admin-conversations.dto';
 
 const KNOWLEDGE_FILES = ['AI-Assistant-Knowledge-Base.md', 'Links-And-Routes.md'] as const;
 const MAX_KNOWLEDGE_CHARS = 18_000;
@@ -117,6 +119,77 @@ export class AssistantService implements OnModuleDestroy {
       include: { messages: { orderBy: { createdAt: 'asc' }, take: 100 } },
     });
     return { persistent: true, messages: conversation?.messages ?? [] };
+  }
+
+  async listAdminConversations(query: ListAdminConversationsDto) {
+    const where = query.search
+      ? {
+          user: {
+            OR: [
+              { email: { contains: query.search, mode: 'insensitive' as const } },
+              { firstName: { contains: query.search, mode: 'insensitive' as const } },
+              { lastName: { contains: query.search, mode: 'insensitive' as const } },
+            ],
+          },
+        }
+      : undefined;
+    const [items, total] = await Promise.all([
+      this.prisma.assistantConversation.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        select: {
+          id: true,
+          createdAt: true,
+          updatedAt: true,
+          user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+          _count: { select: { messages: true } },
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { content: true, role: true, createdAt: true },
+          },
+        },
+      }),
+      this.prisma.assistantConversation.count({ where }),
+    ]);
+
+    return {
+      items: items.map(({ messages, ...conversation }) => ({
+        ...conversation,
+        latestMessage: messages[0] ?? null,
+      })),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+      totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+    };
+  }
+
+  async getAdminConversation(conversationId: string) {
+    const conversation = await this.prisma.assistantConversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        id: true,
+        createdAt: true,
+        updatedAt: true,
+        user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+        _count: { select: { messages: true } },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 500,
+          select: { id: true, role: true, content: true, createdAt: true },
+        },
+      },
+    });
+    if (!conversation) throw new NotFoundException('Assistant conversation not found');
+
+    return {
+      ...conversation,
+      messages: conversation.messages.reverse(),
+      truncated: conversation._count.messages > conversation.messages.length,
+    };
   }
 
   private async getRecentHistory(userId: string): Promise<AssistantHistoryMessageDto[]> {

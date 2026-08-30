@@ -7,10 +7,19 @@ import { SettingsModule } from '../settings/settings.module';
 import { P2PModule } from '../p2p/p2p.module';
 import { StorageModule } from '../storage/storage.module';
 import { TokenomicsModule } from '../tokenomics/tokenomics.module';
+import { MarketingModule } from '../marketing/marketing.module';
 import { RegisterRateLimitGuard } from '../common/guards/register-rate-limit.guard';
 
 @Module({
-  imports: [MailModule, OtpModule, SettingsModule, P2PModule, StorageModule, TokenomicsModule],
+  imports: [
+    MailModule,
+    OtpModule,
+    SettingsModule,
+    P2PModule,
+    StorageModule,
+    TokenomicsModule,
+    MarketingModule,
+  ],
   controllers: [AuthController],
   providers: [AuthService, RegisterRateLimitGuard],
   exports: [AuthService],

@@ -1,23 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 import { ReferralInviteRedirect } from './ReferralInviteRedirect';
 
-const campaigns = {
-  earn: {
-    title: 'Start Earning Real money on Dialect Library',
-    description: 'Contribute voice in your dialect, help train AI, and earn for approved work.',
-  },
-  contribute: {
-    title: 'Contribute voice in your Dialect, get paid',
-    description: 'Record your local dialect and help make AI more useful for every community.',
-  },
-  community: {
-    title: 'Your dialect matters. Join Dialect Library today.',
-    description: 'Help preserve dialect voices while contributing to better AI language tools.',
-  },
-} as const;
-
-type Campaign = keyof typeof campaigns;
 const referralShareOrigin =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ?? 'https://www.dialectlibrary.com';
 
@@ -25,8 +10,29 @@ interface ReferralCampaignPageProps {
   params: { code: string; campaign: string };
 }
 
-function isValidReferral(code: string, campaign: string): campaign is Campaign {
-  return /^[A-Za-z0-9_-]{4,64}$/.test(code) && campaign in campaigns;
+function isValidReferral(code: string, campaign: string): boolean {
+  return (
+    /^[A-Za-z0-9_-]{4,64}$/.test(code) &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(campaign)
+  );
+}
+
+interface CampaignShareHeadline {
+  title: string;
+  description: string;
+  photoUrl: string;
+}
+
+async function getCampaignShare(shareId: string): Promise<CampaignShareHeadline | null> {
+  try {
+    const res = await fetch(`${PUBLIC_API_V1_BASE_URL}/marketing/shares/${shareId}/headline`, {
+      cache: 'no-store', // every fetch also records a view server-side -- must not be deduped/cached
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as CampaignShareHeadline;
+  } catch {
+    return null;
+  }
 }
 
 export async function generateMetadata({ params }: ReferralCampaignPageProps): Promise<Metadata> {
@@ -34,11 +40,15 @@ export async function generateMetadata({ params }: ReferralCampaignPageProps): P
     return { title: 'Invitation not found', robots: { index: false, follow: false } };
   }
 
-  const campaign = campaigns[params.campaign];
+  const share = await getCampaignShare(params.campaign);
+  if (!share) {
+    return { title: 'Invitation not found', robots: { index: false, follow: false } };
+  }
+
   const canonical = `${referralShareOrigin}/invite/${encodeURIComponent(params.code)}/${params.campaign}`;
   return {
-    title: campaign.title,
-    description: campaign.description,
+    title: share.title,
+    description: share.description,
     alternates: { canonical },
     // Per-trainer invite links are meant for social-share link previews
     // (hence the real OpenGraph/Twitter metadata below, which crawlers like
@@ -53,20 +63,20 @@ export async function generateMetadata({ params }: ReferralCampaignPageProps): P
       type: 'website',
       url: canonical,
       siteName: 'Dialect Library',
-      title: campaign.title,
-      description: campaign.description,
-      images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Dialect Library' }],
+      title: share.title,
+      description: share.description,
+      images: [{ url: share.photoUrl, width: 1200, height: 630, alt: 'Dialect Library' }],
     },
     twitter: {
       card: 'summary_large_image',
-      title: campaign.title,
-      description: campaign.description,
-      images: ['/og-image.png'],
+      title: share.title,
+      description: share.description,
+      images: [share.photoUrl],
     },
   };
 }
 
 export default function ReferralCampaignPage({ params }: ReferralCampaignPageProps) {
   if (!isValidReferral(params.code, params.campaign)) notFound();
-  return <ReferralInviteRedirect code={params.code} />;
+  return <ReferralInviteRedirect campaignShareId={params.campaign} code={params.code} />;
 }

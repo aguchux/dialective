@@ -31,6 +31,7 @@ import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { P2PService } from '../p2p/p2p.service';
 import { StorageService } from '../storage/storage.service';
 import { TokenomicsService } from '../tokenomics/tokenomics.service';
+import { MarketingService } from '../marketing/marketing.service';
 import { createSmslive247Otp, verifySmslive247Otp } from '../sms/smslive247-native-otp';
 import { generateOpaqueToken, hashToken } from './token.util';
 import { AuthMaintenanceException } from './auth-maintenance.exception';
@@ -172,6 +173,7 @@ export class AuthService {
     private readonly p2p: P2PService,
     private readonly storage: StorageService,
     private readonly tokenomics: TokenomicsService,
+    private readonly marketing: MarketingService,
   ) {}
 
   /**
@@ -209,6 +211,7 @@ export class AuthService {
     firstName: string,
     lastName: string,
     referralCode?: string,
+    campaignShareId?: string,
   ): Promise<PendingOtp> {
     await this.assertNotInAuthMaintenance('signup');
     const existing = await this.prisma.user.findUnique({ where: { email } });
@@ -231,6 +234,11 @@ export class AuthService {
     });
 
     await this.reconcileReferralInvites(email, referredById, user.id);
+    if (campaignShareId) {
+      // Best-effort -- a tracking failure must never block registration.
+      // recordRegistration itself also swallows a duplicate/bad id.
+      await this.marketing.recordRegistration(campaignShareId, user.id);
+    }
     await this.issueEmailVerification(user);
 
     const { ticket, expiresInSeconds } = await this.otp.issueWithTicket(

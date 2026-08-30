@@ -262,6 +262,44 @@ export interface ReferralInvitationPage {
   totalPages: number;
 }
 
+export interface AdminAssistantConversationSummary {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    role: string;
+  };
+  _count: { messages: number };
+  latestMessage: { content: string; role: 'user' | 'assistant'; createdAt: string } | null;
+}
+
+export interface AdminAssistantConversationPage {
+  items: AdminAssistantConversationSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface AdminAssistantConversationDetail {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  user: AdminAssistantConversationSummary['user'];
+  _count: { messages: number };
+  messages: Array<{
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    createdAt: string;
+  }>;
+  truncated: boolean;
+}
+
 export interface ReferralSummary {
   referrerEmail: string | null;
   referralCode: string | null;
@@ -866,6 +904,66 @@ export interface TestimonyAdminPage {
   pageSize: number;
   total: number;
   totalPages: number;
+}
+
+export type MarketingAdFormat = 'FEED_SQUARE' | 'STORY' | 'LINK_PREVIEW';
+
+export interface MarketingAdPhoto {
+  id: string;
+  format: MarketingAdFormat;
+  url: string;
+}
+
+export interface MarketingHeadline {
+  id: string;
+  format: MarketingAdFormat;
+  title: string;
+  description: string;
+}
+
+export interface MarketingMaterials {
+  photos: MarketingAdPhoto[];
+  headlines: MarketingHeadline[];
+}
+
+export interface MarketingCampaignShare {
+  id: string;
+  userId: string;
+  photoId: string;
+  headlineId: string;
+  viewCount: number;
+  createdAt: string;
+}
+
+export interface MyMarketingShare {
+  id: string;
+  format: MarketingAdFormat;
+  photoUrl: string;
+  headlineTitle: string;
+  viewCount: number;
+  registeredCount: number;
+  createdAt: string;
+}
+
+export interface AdminMarketingAdPhoto {
+  id: string;
+  format: MarketingAdFormat;
+  bucket: string;
+  key: string;
+  url: string;
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface AdminMarketingHeadline {
+  id: string;
+  format: MarketingAdFormat;
+  title: string;
+  description: string;
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
 }
 
 export type EarningsChartRange = 'today' | 'week' | 'month' | 'year';
@@ -1862,11 +1960,13 @@ export const dialectivaApi = createApi({
     'ApiAccessTokens',
     'Tokenomics',
     'AssistantThread',
+    'AdminAssistantConversations',
     'PayoutAccounts',
     'Kyc',
     'AdminSettlement',
     'ReferralInvites',
     'Testimony',
+    'Marketing',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -1877,6 +1977,7 @@ export const dialectivaApi = createApi({
         email: string;
         password: string;
         referralCode?: string;
+        campaignShareId?: string;
       }
     >({
       query: (body) => ({
@@ -2131,6 +2232,81 @@ export const dialectivaApi = createApi({
     >({
       query: ({ id, ...body }) => ({ url: `/admin/testimonials/${id}`, method: 'PATCH', body }),
       invalidatesTags: ['Testimony'],
+    }),
+    getMarketingMaterials: builder.query<MarketingMaterials, MarketingAdFormat | void>({
+      query: (format) => ({ url: '/marketing/materials', params: format ? { format } : undefined }),
+      providesTags: ['Marketing'],
+    }),
+    createCampaignShare: builder.mutation<
+      MarketingCampaignShare,
+      { photoId: string; headlineId: string }
+    >({
+      query: (body) => ({ url: '/marketing/shares', method: 'POST', body }),
+      invalidatesTags: ['Marketing'],
+    }),
+    getMyMarketingShares: builder.query<MyMarketingShare[], void>({
+      query: () => '/marketing/shares/mine',
+      providesTags: ['Marketing'],
+    }),
+    getAdminMarketingPhotos: builder.query<AdminMarketingAdPhoto[], MarketingAdFormat | void>({
+      query: (format) => ({
+        url: '/admin/marketing/photos',
+        params: format ? { format } : undefined,
+      }),
+      providesTags: ['Marketing'],
+    }),
+    createMarketingPhotoUploadUrl: builder.mutation<
+      TestimonyUpload,
+      { format: MarketingAdFormat; contentType: string }
+    >({
+      query: (body) => ({ url: '/admin/marketing/photos/upload-url', method: 'POST', body }),
+    }),
+    createMarketingPhoto: builder.mutation<
+      AdminMarketingAdPhoto,
+      { format: MarketingAdFormat; bucket: string; key: string }
+    >({
+      query: (body) => ({ url: '/admin/marketing/photos', method: 'POST', body }),
+      invalidatesTags: ['Marketing'],
+    }),
+    updateMarketingPhoto: builder.mutation<
+      AdminMarketingAdPhoto,
+      { id: string; active?: boolean; sortOrder?: number }
+    >({
+      query: ({ id, ...body }) => ({ url: `/admin/marketing/photos/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Marketing'],
+    }),
+    deleteMarketingPhoto: builder.mutation<void, string>({
+      query: (id) => ({ url: `/admin/marketing/photos/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Marketing'],
+    }),
+    getAdminMarketingHeadlines: builder.query<AdminMarketingHeadline[], MarketingAdFormat | void>({
+      query: (format) => ({
+        url: '/admin/marketing/headlines',
+        params: format ? { format } : undefined,
+      }),
+      providesTags: ['Marketing'],
+    }),
+    createMarketingHeadline: builder.mutation<
+      AdminMarketingHeadline,
+      { format: MarketingAdFormat; title: string; description: string }
+    >({
+      query: (body) => ({ url: '/admin/marketing/headlines', method: 'POST', body }),
+      invalidatesTags: ['Marketing'],
+    }),
+    updateMarketingHeadline: builder.mutation<
+      AdminMarketingHeadline,
+      { id: string; title?: string; description?: string; active?: boolean; sortOrder?: number }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/admin/marketing/headlines/${id}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['Marketing'],
+    }),
+    deleteMarketingHeadline: builder.mutation<void, string>({
+      query: (id) => ({ url: `/admin/marketing/headlines/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Marketing'],
     }),
     createWordRecordingUpload: builder.mutation<
       WordRecordingUpload,
@@ -3212,6 +3388,20 @@ export const dialectivaApi = createApi({
       query: () => '/assistant/thread',
       providesTags: ['AssistantThread'],
     }),
+    getAdminAssistantConversations: builder.query<
+      AdminAssistantConversationPage,
+      { page: number; pageSize: number; search?: string }
+    >({
+      query: ({ page, pageSize, search }) => ({
+        url: '/assistant/admin/conversations',
+        params: { page, pageSize, search },
+      }),
+      providesTags: ['AdminAssistantConversations'],
+    }),
+    getAdminAssistantConversation: builder.query<AdminAssistantConversationDetail, string>({
+      query: (conversationId) => `/assistant/admin/conversations/${conversationId}`,
+      providesTags: (_result, _error, id) => [{ type: 'AdminAssistantConversations', id }],
+    }),
     updatePlatformSettings: builder.mutation<PlatformSettings, PlatformSettingsInput>({
       query: (body) => ({
         url: '/admin/platform-settings',
@@ -3409,6 +3599,18 @@ export const {
   useSubmitTestimonyMutation,
   useGetAdminTestimonialsQuery,
   useReviewTestimonyMutation,
+  useGetMarketingMaterialsQuery,
+  useCreateCampaignShareMutation,
+  useGetMyMarketingSharesQuery,
+  useGetAdminMarketingPhotosQuery,
+  useCreateMarketingPhotoUploadUrlMutation,
+  useCreateMarketingPhotoMutation,
+  useUpdateMarketingPhotoMutation,
+  useDeleteMarketingPhotoMutation,
+  useGetAdminMarketingHeadlinesQuery,
+  useCreateMarketingHeadlineMutation,
+  useUpdateMarketingHeadlineMutation,
+  useDeleteMarketingHeadlineMutation,
   useCreateWordRecordingUploadMutation,
   useSubmitWordRecordingMutation,
   useRequestDepositOtpMutation,
@@ -3552,6 +3754,8 @@ export const {
   useGetPublicClientSettingsQuery,
   useChatWithAssistantMutation,
   useGetAssistantThreadQuery,
+  useGetAdminAssistantConversationsQuery,
+  useGetAdminAssistantConversationQuery,
   useUpdatePlatformSettingsMutation,
   useGetApiAccessTokensQuery,
   useSetApiAccessTokenMutation,

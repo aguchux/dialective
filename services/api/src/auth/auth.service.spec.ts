@@ -105,12 +105,18 @@ function setup(
     getStartupBonusAmount: jest.fn().mockResolvedValue(0),
     getManualPhoneVerificationSettings: jest
       .fn()
-      .mockResolvedValue({ enabled: true, feeTokens: 1, whatsappNumber: '1234567890', expiryMinutes: 30 }),
+      .mockResolvedValue({
+        enabled: true,
+        feeTokens: 1,
+        whatsappNumber: '1234567890',
+        expiryMinutes: 30,
+      }),
     isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false),
   };
   const p2p = { adminCancelAllForUser: jest.fn() };
   const storage = { deleteObject: jest.fn() };
   const tokenomics = { isMintingPaused: jest.fn().mockResolvedValue(false) };
+  const marketing = { recordRegistration: jest.fn().mockResolvedValue(undefined) };
   const service = new AuthService(
     prisma as never,
     mail as never,
@@ -119,8 +125,9 @@ function setup(
     p2p as never,
     storage as never,
     tokenomics as never,
+    marketing as never,
   );
-  return { service, prisma, mail, otp, platformSettings, storage, tokenomics };
+  return { service, prisma, mail, otp, platformSettings, storage, tokenomics, marketing };
 }
 
 describe('AuthService auth maintenance gate', () => {
@@ -168,6 +175,28 @@ describe('AuthService auth maintenance gate', () => {
 
     await service.register('a@b.com', 'password123', 'A', 'B');
     expect(prisma.user.findUnique).toHaveBeenCalled();
+  });
+});
+
+describe('AuthService register campaign attribution', () => {
+  it('records marketing campaign registration when a campaignShareId is provided', async () => {
+    const { service, prisma, marketing } = setup({ enabled: false });
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({ id: 'user-1', email: 'a@b.com', referralCode: 'ref1' });
+
+    await service.register('a@b.com', 'password123', 'A', 'B', undefined, 'share-1');
+
+    expect(marketing.recordRegistration).toHaveBeenCalledWith('share-1', 'user-1');
+  });
+
+  it('does not call recordRegistration when no campaignShareId is provided', async () => {
+    const { service, prisma, marketing } = setup({ enabled: false });
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({ id: 'user-1', email: 'a@b.com', referralCode: 'ref1' });
+
+    await service.register('a@b.com', 'password123', 'A', 'B');
+
+    expect(marketing.recordRegistration).not.toHaveBeenCalled();
   });
 });
 

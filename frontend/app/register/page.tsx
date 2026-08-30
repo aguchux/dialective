@@ -17,9 +17,13 @@ import { roleHomePath } from '@/lib/role-home';
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
   clearReferralCookie,
+  clearMarketingCampaignCookie,
   DEFAULT_REFERRAL_COOKIE_MAX_AGE_SECONDS,
+  normalizeMarketingCampaignId,
   normalizeReferralCode,
+  readMarketingCampaignCookie,
   readReferralCookie,
+  writeMarketingCampaignCookie,
   writeReferralCookie,
 } from '@/lib/referral-cookie';
 
@@ -35,6 +39,7 @@ function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const referralCode = normalizeReferralCode(searchParams.get('ref'));
+  const campaignShareId = normalizeMarketingCampaignId(searchParams.get('campaign'));
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -71,6 +76,11 @@ function RegisterContent() {
     writeReferralCookie(referralCode, referralCookieMaxAgeSeconds);
   }, [referralCode, referralCookieMaxAgeSeconds]);
 
+  useEffect(() => {
+    if (!campaignShareId) return;
+    writeMarketingCampaignCookie(campaignShareId, referralCookieMaxAgeSeconds);
+  }, [campaignShareId, referralCookieMaxAgeSeconds]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -78,12 +88,14 @@ function RegisterContent() {
 
     try {
       const effectiveReferralCode = referralCode ?? readReferralCookie();
+      const effectiveCampaignShareId = campaignShareId ?? readMarketingCampaignCookie();
       const pending = await register({
         firstName,
         lastName,
         email,
         password,
         referralCode: effectiveReferralCode,
+        campaignShareId: effectiveCampaignShareId,
       }).unwrap();
       setTicket(pending.ticket);
     } catch (err) {
@@ -109,6 +121,7 @@ function RegisterContent() {
         setError('Invalid or expired code.');
       } else {
         clearReferralCookie();
+        clearMarketingCampaignCookie();
         const freshSession = await getSession();
         window.location.href = roleHomePath(
           freshSession?.user?.role,

@@ -139,6 +139,8 @@ model User {
   wordRecordings                   WordRecording[]
   qracAffirmations                 QracAffirmationSubmission[]
   testimonies                      Testimony[]
+  marketingCampaignShares          MarketingCampaignShare[]
+  marketingCampaignRegistration    MarketingCampaignRegistration?
   wordSkips                        WordSkip[]
   subscriptionPoolsOpened          SubscriptionPool[]               @relation("SubscriptionPoolOpenedBy")
   dataAccessLeadsContacted         DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
@@ -944,6 +946,85 @@ model Testimony {
   @@index([userId])
   @@index([status, createdAt])
   @@map("testimonies")
+}
+
+enum MarketingAdFormat {
+  FEED_SQUARE // 1080x1080
+  STORY // 1080x1920
+  LINK_PREVIEW // 1200x630
+}
+
+/// Admin-uploaded photo for a trainer share campaign, scoped to one ad
+/// format/size. Uploaded via presigned URL with publicRead: true (same
+/// pattern as Testimony's video upload), since the chosen photo becomes the
+/// OpenGraph image on a trainer's public /invite/[code]/[shareId] link.
+model MarketingAdPhoto {
+  id        String                   @id @default(uuid())
+  format    MarketingAdFormat
+  bucket    String
+  key       String
+  active    Boolean                  @default(true)
+  sortOrder Int                      @default(0)
+  createdAt DateTime                 @default(now())
+  shares    MarketingCampaignShare[]
+
+  @@index([format, active, sortOrder])
+  @@map("marketing_ad_photos")
+}
+
+/// Admin-written title/description for a trainer share campaign, scoped to
+/// the same ad format as the photo it will be paired with.
+model MarketingHeadline {
+  id          String                   @id @default(uuid())
+  format      MarketingAdFormat
+  title       String
+  description String
+  active      Boolean                  @default(true)
+  sortOrder   Int                      @default(0)
+  createdAt   DateTime                 @default(now())
+  shares      MarketingCampaignShare[]
+
+  @@index([format, active, sortOrder])
+  @@map("marketing_headlines")
+}
+
+/// One row per trainer's chosen (photo, headline) pairing, created lazily
+/// the first time the trainer confirms that pairing in the share dialog.
+/// The unique constraint below makes that creation idempotent -- resharing
+/// the same pairing reuses the same id/stats instead of fragmenting counts.
+/// This row's id is the "campaign" path segment in
+/// /invite/[code]/[shareId].
+model MarketingCampaignShare {
+  id            String                          @id @default(uuid())
+  userId        String
+  user          User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photoId       String
+  photo         MarketingAdPhoto                @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  headlineId    String
+  headline      MarketingHeadline               @relation(fields: [headlineId], references: [id], onDelete: Cascade)
+  viewCount     Int                             @default(0)
+  createdAt     DateTime                        @default(now())
+  registrations MarketingCampaignRegistration[]
+
+  @@unique([userId, photoId, headlineId])
+  @@index([userId])
+  @@map("marketing_campaign_shares")
+}
+
+/// One row per invitee who registered having arrived through a specific
+/// campaign share -- a separate table (not just a counter on the share) so
+/// each invitee is individually attributable, mirroring how ReferralInvite
+/// tracks individual invitee status rather than only incrementing a count.
+model MarketingCampaignRegistration {
+  id            String                 @id @default(uuid())
+  shareId       String
+  share         MarketingCampaignShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  invitedUserId String                 @unique
+  invitedUser   User                   @relation(fields: [invitedUserId], references: [id], onDelete: Cascade)
+  createdAt     DateTime               @default(now())
+
+  @@index([shareId])
+  @@map("marketing_campaign_registrations")
 }
 
 /// A server-issued prompt prevents the client from choosing a source word,
