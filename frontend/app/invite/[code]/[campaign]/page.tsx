@@ -18,6 +18,8 @@ const campaigns = {
 } as const;
 
 type Campaign = keyof typeof campaigns;
+const referralShareOrigin =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ?? 'https://www.dialectlibrary.com';
 
 interface ReferralCampaignPageProps {
   params: { code: string; campaign: string };
@@ -33,7 +35,7 @@ export async function generateMetadata({ params }: ReferralCampaignPageProps): P
   }
 
   const campaign = campaigns[params.campaign];
-  const canonical = `/invite/${encodeURIComponent(params.code)}/${params.campaign}`;
+  const canonical = `${referralShareOrigin}/invite/${encodeURIComponent(params.code)}/${params.campaign}`;
   return {
     title: campaign.title,
     description: campaign.description,

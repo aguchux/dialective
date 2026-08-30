@@ -1995,11 +1995,14 @@ const REFERRAL_CAMPAIGNS = [
 ] as const;
 
 type ReferralCampaign = (typeof REFERRAL_CAMPAIGNS)[number];
+const REFERRAL_SHARE_ORIGIN =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ?? 'https://www.dialectlibrary.com';
 
 function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: string }) {
   const [copied, setCopied] = useState(false);
-  const [referralLink, setReferralLink] = useState(`/register?ref=${data.referrals.code}`);
-  const [siteOrigin, setSiteOrigin] = useState('');
+  const [referralLink, setReferralLink] = useState(
+    `${REFERRAL_SHARE_ORIGIN}/register?ref=${data.referrals.code}`,
+  );
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteFirstName, setInviteFirstName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
@@ -2015,8 +2018,7 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
   });
 
   useEffect(() => {
-    setSiteOrigin(window.location.origin);
-    setReferralLink(`${window.location.origin}/register?ref=${data.referrals.code}`);
+    setReferralLink(`${REFERRAL_SHARE_ORIGIN}/register?ref=${data.referrals.code}`);
   }, [data.referrals.code]);
 
   async function copyLink() {
@@ -2046,7 +2048,7 @@ function ReferralsView({ data, email }: { data: TrainerDashboardSummary; email: 
   }
 
   const campaignLink = shareCampaign
-    ? `${siteOrigin || ''}/invite/${encodeURIComponent(data.referrals.code)}/${shareCampaign.id}`
+    ? `${REFERRAL_SHARE_ORIGIN}/invite/${encodeURIComponent(data.referrals.code)}/${shareCampaign.id}`
     : '';
 
   async function copyCampaignLink() {
