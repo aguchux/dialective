@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { LandingFooter } from '@/components/landing/LandingFooter';
@@ -82,6 +83,16 @@ export default function DataAccessPage() {
             <h1 className="max-w-3xl text-4xl font-black leading-tight md:text-5xl">
               License voice and dialect data collected by real speakers.
             </h1>
+            <div className="relative min-h-[220px] w-full overflow-hidden rounded-lg border border-[rgba(5,5,5,0.1)] bg-[#f4f1fa]">
+              <Image
+                alt="Speakers contributing voice recordings to Dialect Library"
+                className="object-cover"
+                fill
+                priority
+                sizes="(max-width: 767px) calc(100vw - 72px), 620px"
+                src="/landing-hero.png"
+              />
+            </div>
             <p className="max-w-2xl text-lg leading-relaxed text-[rgba(5,5,5,0.68)]">
               Dialect Library&apos;s dataset is growing every day. Tell us your organization,
               website, and target countries and we&apos;ll follow up about access, coverage, and
@@ -173,14 +184,6 @@ export default function DataAccessPage() {
               <p className="leading-relaxed text-muted">{item.body}</p>
             </article>
           ))}
-        </section>
-
-        <section className="grid gap-3 rounded-lg border border-[#efd6ad] bg-[#fff7e8] p-5 text-[#8a4b0f]">
-          <h2 className="text-2xl font-black">Manual review</h2>
-          <p className="max-w-4xl leading-relaxed">
-            There is no self-serve subscription yet — every request is reviewed manually while the
-            dataset and licensing terms are still being defined.
-          </p>
         </section>
       </div>
 
