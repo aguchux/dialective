@@ -1362,6 +1362,8 @@ export interface PlatformSettings {
   isKycRequiredForWithdrawals: boolean;
   kycMinWithdrawalTokens: string;
   isKycRequiredOnboarding: boolean;
+  kycAutoCancelStaleEnabled: boolean;
+  kycAutoCancelStaleMinutes: number;
   authMaintenanceEnabled: boolean;
   authMaintenanceUntil: string | null;
   authMaintenanceMessage: string | null;
@@ -1471,6 +1473,8 @@ export interface PlatformSettingsInput {
   isKycRequiredForWithdrawals?: boolean;
   kycMinWithdrawalTokens?: number;
   isKycRequiredOnboarding?: boolean;
+  kycAutoCancelStaleEnabled?: boolean;
+  kycAutoCancelStaleMinutes?: number;
   authMaintenanceEnabled?: boolean;
   authMaintenanceUntil?: string | null;
   authMaintenanceMessage?: string | null;

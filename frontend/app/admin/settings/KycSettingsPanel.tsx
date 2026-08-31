@@ -20,6 +20,8 @@ export function KycSettingsPanel() {
   const [requiredForWithdrawals, setRequiredForWithdrawals] = useState(false);
   const [minWithdrawalTokens, setMinWithdrawalTokens] = useState('0');
   const [requiredOnboarding, setRequiredOnboarding] = useState(false);
+  const [autoCancelStaleEnabled, setAutoCancelStaleEnabled] = useState(false);
+  const [autoCancelStaleMinutes, setAutoCancelStaleMinutes] = useState('60');
   const [manualPhoneVerificationEnabled, setManualPhoneVerificationEnabled] = useState(true);
   const [manualPhoneVerificationFeeTokens, setManualPhoneVerificationFeeTokens] = useState('1');
   const [manualPhoneVerificationWhatsappNumber, setManualPhoneVerificationWhatsappNumber] =
@@ -34,6 +36,8 @@ export function KycSettingsPanel() {
     setRequiredForWithdrawals(settings.isKycRequiredForWithdrawals);
     setMinWithdrawalTokens(settings.kycMinWithdrawalTokens);
     setRequiredOnboarding(settings.isKycRequiredOnboarding);
+    setAutoCancelStaleEnabled(settings.kycAutoCancelStaleEnabled);
+    setAutoCancelStaleMinutes(String(settings.kycAutoCancelStaleMinutes));
     setManualPhoneVerificationEnabled(settings.manualPhoneVerificationEnabled);
     setManualPhoneVerificationFeeTokens(settings.manualPhoneVerificationFeeTokens);
     setManualPhoneVerificationWhatsappNumber(settings.manualPhoneVerificationWhatsappNumber);
@@ -51,11 +55,18 @@ export function KycSettingsPanel() {
       setError('Manual WhatsApp code expiry must be a whole number between 1 and 1,440 minutes.');
       return;
     }
+    const staleMinutes = Number(autoCancelStaleMinutes);
+    if (!Number.isInteger(staleMinutes) || staleMinutes < 5 || staleMinutes > 10080) {
+      setError('Auto-cancel timeout must be a whole number between 5 and 10,080 minutes (7 days).');
+      return;
+    }
     try {
       await updateSettings({
         isKycRequiredForWithdrawals: requiredForWithdrawals,
         kycMinWithdrawalTokens: Number(minWithdrawalTokens) || 0,
         isKycRequiredOnboarding: requiredOnboarding,
+        kycAutoCancelStaleEnabled: autoCancelStaleEnabled,
+        kycAutoCancelStaleMinutes: staleMinutes,
         manualPhoneVerificationEnabled,
         manualPhoneVerificationFeeTokens: Number(manualPhoneVerificationFeeTokens) || 0,
         manualPhoneVerificationWhatsappNumber,
@@ -143,6 +154,41 @@ export function KycSettingsPanel() {
               Withdrawals below this amount skip the KYC gate even when required above is on. Set to
               0 to require verification for every withdrawal.
             </p>
+          </div>
+
+          <div className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4">
+            <label className="flex cursor-pointer items-start gap-3" htmlFor="kyc-auto-cancel-stale">
+              <input
+                checked={autoCancelStaleEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="kyc-auto-cancel-stale"
+                onChange={(event) => setAutoCancelStaleEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Auto-cancel stale verifications</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  A verification left in Not Started, In Progress, or In Review for longer than the
+                  timeout below is marked Abandoned, freeing the trainer to start a fresh Didit
+                  session. Runs automatically every 10 minutes. Approved/Declined/Expired
+                  verifications are never touched.
+                </span>
+              </span>
+            </label>
+
+            <label className="grid max-w-xs gap-1 text-sm font-bold" htmlFor="kyc-auto-cancel-minutes">
+              Timeout (minutes)
+              <input
+                className={inputClass}
+                id="kyc-auto-cancel-minutes"
+                inputMode="numeric"
+                max="10080"
+                min="5"
+                onChange={(event) => setAutoCancelStaleMinutes(event.target.value)}
+                type="number"
+                value={autoCancelStaleMinutes}
+              />
+            </label>
           </div>
 
           <div className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4">

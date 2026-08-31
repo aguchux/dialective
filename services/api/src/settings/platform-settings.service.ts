@@ -497,6 +497,11 @@ export class PlatformSettingsService {
     return row.isKycRequiredOnboarding;
   }
 
+  async getKycAutoCancelStaleSettings(): Promise<{ enabled: boolean; minutes: number }> {
+    const row = await this.getRow();
+    return { enabled: row.kycAutoCancelStaleEnabled, minutes: row.kycAutoCancelStaleMinutes };
+  }
+
   async getWithdrawalFeeSettings(): Promise<{
     mode: string;
     tokenAmount: number;
@@ -814,6 +819,8 @@ export class PlatformSettingsService {
       isKycRequiredForWithdrawals: row.isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens: row.kycMinWithdrawalTokens.toString(),
       isKycRequiredOnboarding: row.isKycRequiredOnboarding,
+      kycAutoCancelStaleEnabled: row.kycAutoCancelStaleEnabled,
+      kycAutoCancelStaleMinutes: row.kycAutoCancelStaleMinutes,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,
@@ -932,6 +939,8 @@ export class PlatformSettingsService {
     isKycRequiredForWithdrawals?: boolean;
     kycMinWithdrawalTokens?: number;
     isKycRequiredOnboarding?: boolean;
+    kycAutoCancelStaleEnabled?: boolean;
+    kycAutoCancelStaleMinutes?: number;
     authMaintenanceEnabled?: boolean;
     authMaintenanceUntil?: Date | null;
     authMaintenanceMessage?: string | null;
@@ -1272,6 +1281,8 @@ export class PlatformSettingsService {
       isKycRequiredForWithdrawals: row.isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens: row.kycMinWithdrawalTokens.toString(),
       isKycRequiredOnboarding: row.isKycRequiredOnboarding,
+      kycAutoCancelStaleEnabled: row.kycAutoCancelStaleEnabled,
+      kycAutoCancelStaleMinutes: row.kycAutoCancelStaleMinutes,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,

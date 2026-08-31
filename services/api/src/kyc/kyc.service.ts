@@ -1,12 +1,20 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { KycStatus, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { DiditDecision, DiditService } from './didit.service';
 import {
   encryptKycField,
   fingerprintKycDocument,
   maskDocumentNumber,
 } from '../common/kyc-crypto.util';
+
+const NON_TERMINAL_STATUSES: KycStatus[] = [
+  KycStatus.NOT_STARTED,
+  KycStatus.IN_PROGRESS,
+  KycStatus.IN_REVIEW,
+];
 
 const TERMINAL_STATUSES: KycStatus[] = [
   KycStatus.APPROVED,
@@ -36,7 +44,60 @@ export class KycService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly didit: DiditService,
+    private readonly settings: PlatformSettingsService,
   ) {}
+
+  /**
+   * Abandons any KycVerification (and its User.kycStatus) that has sat in a
+   * non-terminal status for longer than the admin-configured timeout,
+   * gated behind kycAutoCancelStaleEnabled -- off by default so no existing
+   * in-flight verification is affected until an admin opts in. Marking as
+   * ABANDONED (not deleting) frees the trainer to start a fresh session via
+   * createVerificationSession, since that method only blocks on
+   * kycStatus===APPROVED.
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async autoCancelStaleVerifications(): Promise<void> {
+    const { enabled, minutes } = await this.settings.getKycAutoCancelStaleSettings();
+    if (!enabled) return;
+
+    const staleBefore = new Date(Date.now() - minutes * 60 * 1000);
+    const stale = await this.prisma.kycVerification.findMany({
+      where: { status: { in: NON_TERMINAL_STATUSES }, createdAt: { lt: staleBefore } },
+      select: { id: true, userId: true },
+    });
+    if (stale.length === 0) return;
+
+    for (const verification of stale) {
+      await this.prisma.kycVerification.update({
+        where: { id: verification.id },
+        data: {
+          status: KycStatus.ABANDONED,
+          declineReason: `Auto-cancelled after ${minutes} minutes without completion.`,
+        },
+      });
+      // Only reflect ABANDONED onto User.kycStatus if this user has no
+      // OTHER active (non-stale) attempt still in flight -- a user can have
+      // more than one KycVerification row (each createVerificationSession
+      // call inserts a new one), and a fresher retry shouldn't be clobbered
+      // by an older attempt's timeout.
+      const stillActive = await this.prisma.kycVerification.findFirst({
+        where: {
+          userId: verification.userId,
+          status: { in: NON_TERMINAL_STATUSES },
+          createdAt: { gte: staleBefore },
+        },
+        select: { id: true },
+      });
+      if (!stillActive) {
+        await this.prisma.user.update({
+          where: { id: verification.userId },
+          data: { kycStatus: KycStatus.ABANDONED },
+        });
+      }
+    }
+    this.logger.log(`Auto-cancelled ${stale.length} stale Didit verification(s)`);
+  }
 
   async createVerificationSession(userId: string, callbackUrl: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
