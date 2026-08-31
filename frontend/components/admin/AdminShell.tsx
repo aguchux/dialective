@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { CircleHelp, Download, MessageSquareText } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { requestPwaInstall } from '@/components/PwaInstallPrompt';
@@ -17,31 +17,68 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu';
 
-const navItems = [
-  { href: '/admin', label: 'Dashboard', icon: HomeIcon },
-  { href: '/admin/users', label: 'Users', icon: UsersIcon },
-  { href: '/admin/distributors', label: 'Distributors', icon: DistributorsIcon },
-  { href: '/admin/data-access', label: 'Stream Requests', icon: LeadsIcon },
-  { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
-  { href: '/admin/words', label: 'Words', icon: WordsIcon },
-  { href: '/admin/recordings', label: 'Recordings', icon: RecordingsIcon },
-  { href: '/admin/testimonials', label: 'Testimonials', icon: TestimonialsIcon },
-  { href: '/admin/marketing', label: 'Marketing', icon: MarketingIcon },
-  { href: '/admin/audit-hold', label: 'Audit Queue', icon: AuditQueueIcon },
-  { href: '/admin/phone-verifications', label: 'Phone Verifications', icon: PhoneIcon },
-  { href: '/admin/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
-  { href: '/admin/referrals', label: 'Referrals', icon: ReferralIcon },
-  { href: '/admin/p2p', label: 'P2P Market', icon: P2PIcon },
-  { href: '/admin/withdrawals', label: 'Withdrawals', icon: WithdrawalsIcon },
-  { href: '/admin/pools', label: 'Reward Pool', icon: PoolIcon },
-  { href: '/admin/tokenomics', label: 'Tokenomics', icon: TokenomicsIcon },
-  { href: '/admin/settlement', label: 'Unsettled Tasks', icon: SettlementIcon },
-  { href: '/admin/blog', label: 'Blog', icon: BlogIcon },
-  { href: '/admin/courses', label: 'Courses', icon: CoursesIcon },
-  { href: '/admin/updates', label: 'Updates', icon: BellIcon },
-  { href: '/admin/ai-conversations', label: 'AI Conversations', icon: MessageSquareText },
-  { href: '/admin/faqs', label: 'FAQs Manager', icon: CircleHelp },
-  { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: () => React.JSX.Element;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    label: 'Overview',
+    items: [{ href: '/admin', label: 'Dashboard', icon: HomeIcon }],
+  },
+  {
+    label: 'People',
+    items: [
+      { href: '/admin/users', label: 'Users', icon: UsersIcon },
+      { href: '/admin/distributors', label: 'Distributors', icon: DistributorsIcon },
+      { href: '/admin/referrals', label: 'Referrals', icon: ReferralIcon },
+      { href: '/admin/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
+      { href: '/admin/phone-verifications', label: 'Phone Verifications', icon: PhoneIcon },
+      { href: '/admin/audit-hold', label: 'Audit Queue', icon: AuditQueueIcon },
+    ],
+  },
+  {
+    label: 'Data & Coverage',
+    items: [
+      { href: '/admin/data-access', label: 'Stream Requests', icon: LeadsIcon },
+      { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
+      { href: '/admin/words', label: 'Words', icon: WordsIcon },
+      { href: '/admin/recordings', label: 'Recordings', icon: RecordingsIcon },
+      { href: '/admin/settlement', label: 'Unsettled Tasks', icon: SettlementIcon },
+    ],
+  },
+  {
+    label: 'Economy',
+    items: [
+      { href: '/admin/p2p', label: 'P2P Market', icon: P2PIcon },
+      { href: '/admin/withdrawals', label: 'Withdrawals', icon: WithdrawalsIcon },
+      { href: '/admin/pools', label: 'Reward Pool', icon: PoolIcon },
+      { href: '/admin/tokenomics', label: 'Tokenomics', icon: TokenomicsIcon },
+    ],
+  },
+  {
+    label: 'Content & Support',
+    items: [
+      { href: '/admin/testimonials', label: 'Testimonials', icon: TestimonialsIcon },
+      { href: '/admin/marketing', label: 'Marketing', icon: MarketingIcon },
+      { href: '/admin/blog', label: 'Blog', icon: BlogIcon },
+      { href: '/admin/courses', label: 'Courses', icon: CoursesIcon },
+      { href: '/admin/updates', label: 'Updates', icon: BellIcon },
+      { href: '/admin/ai-conversations', label: 'AI Conversations', icon: ChatIcon },
+      { href: '/admin/faqs', label: 'FAQs Manager', icon: HelpIcon },
+    ],
+  },
+  {
+    label: 'System',
+    items: [{ href: '/admin/settings', label: 'Settings', icon: SettingsIcon }],
+  },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -117,20 +154,28 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => router.push('/admin/profile')}>
-                  <ProfileIcon />
+                  <span className="grid size-4.5 shrink-0 place-items-center [&_svg]:size-full">
+                    <ProfileIcon />
+                  </span>
                   Profile
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => router.push('/')}>
-                  <HomeIcon />
+                  <span className="grid size-4.5 shrink-0 place-items-center [&_svg]:size-full">
+                    <HomeIcon />
+                  </span>
                   Back to site
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => requestPwaInstall()}>
-                  <Download className="size-4" aria-hidden="true" />
+                  <span className="grid size-4.5 shrink-0 place-items-center [&_svg]:size-full">
+                    <Download aria-hidden="true" className="size-full" />
+                  </span>
                   Install app
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>
-                  <SignOutIcon />
+                  <span className="grid size-4.5 shrink-0 place-items-center [&_svg]:size-full">
+                    <SignOutIcon />
+                  </span>
                   Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -144,6 +189,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function groupIsActive(group: NavGroup, pathname: string): boolean {
+  return group.items.some((item) => itemIsActive(item, pathname));
+}
+
+function itemIsActive(item: NavItem, pathname: string): boolean {
+  return item.href === '/admin' ? pathname === item.href : pathname.startsWith(item.href);
+}
+
 function AdminSidebar({
   pathname,
   router,
@@ -155,15 +208,25 @@ function AdminSidebar({
   mobile?: boolean;
   onClose?: () => void;
 }) {
+  const activeGroupLabel = useMemo(
+    () => navGroups.find((group) => groupIsActive(group, pathname))?.label ?? navGroups[0].label,
+    [pathname],
+  );
+  const [openGroup, setOpenGroup] = useState(activeGroupLabel);
+
+  useEffect(() => {
+    setOpenGroup(activeGroupLabel);
+  }, [activeGroupLabel]);
+
   return (
     <aside
-      className={`${mobile ? 'flex h-full' : 'hidden md:flex'} flex-col gap-1 border-r border-line bg-[#151726] p-4 text-white`}
+      className={`${mobile ? 'flex h-full' : 'hidden md:flex'} flex-col border-r border-line bg-[#151726] text-white`}
     >
-      <div className="mb-4 flex items-center justify-between px-1">
+      <div className="flex items-center justify-between px-4 pb-3 pt-4">
         <BrandLogo className="text-white" textClassName="text-base" size={32} />
         {mobile && (
           <button
-            className="grid size-9 place-items-center rounded-lg text-white/70 hover:bg-white/5 hover:text-white"
+            className="grid size-9 shrink-0 place-items-center rounded-lg text-white/70 hover:bg-white/5 hover:text-white"
             onClick={onClose}
             type="button"
             aria-label="Close admin menu"
@@ -172,44 +235,78 @@ function AdminSidebar({
           </button>
         )}
       </div>
-      <nav className="grid gap-1 overflow-y-auto">
-        {navItems.map((item) => {
-          const active =
-            item.href === '/admin' ? pathname === item.href : pathname.startsWith(item.href);
+
+      <nav className="grid flex-1 gap-0.5 overflow-y-auto px-3 pb-2">
+        {navGroups.map((group) => {
+          const expanded = openGroup === group.label;
+          const groupActive = groupIsActive(group, pathname);
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold no-underline transition-colors ${
-                active
-                  ? 'bg-white/10 text-white'
-                  : 'text-white/70 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <item.icon />
-              {item.label}
-            </Link>
+            <div className="grid gap-0.5" key={group.label}>
+              <button
+                aria-expanded={expanded}
+                className={`flex items-center gap-2 rounded-lg px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider transition-colors ${
+                  groupActive ? 'text-white/85' : 'text-white/45 hover:text-white/70'
+                }`}
+                onClick={() => setOpenGroup(expanded ? '' : group.label)}
+                type="button"
+              >
+                <ChevronRightIcon
+                  className={`size-3 shrink-0 transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
+                />
+                {group.label}
+              </button>
+
+              {expanded && (
+                <div className="grid gap-0.5 pb-1">
+                  {group.items.map((item) => {
+                    const active = itemIsActive(item, pathname);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`flex items-center gap-3 rounded-lg py-2 pl-7 pr-3 text-sm font-bold no-underline transition-colors ${
+                          active
+                            ? 'bg-white/10 text-white'
+                            : 'text-white/70 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        <span className="grid size-4.5 shrink-0 place-items-center [&_svg]:size-full">
+                          <item.icon />
+                        </span>
+                        <span className="truncate">{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </nav>
 
-      <button
-        className="mt-auto flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold text-white/70 transition-colors hover:bg-white/5 hover:text-white"
-        onClick={() => router.push('/')}
-        type="button"
-      >
-        <HomeIcon />
-        Back to site
-      </button>
+      <div className="grid gap-0.5 border-t border-white/10 p-3">
+        <button
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+          onClick={() => router.push('/')}
+          type="button"
+        >
+          <span className="grid size-4.5 shrink-0 place-items-center [&_svg]:size-full">
+            <HomeIcon />
+          </span>
+          Back to site
+        </button>
 
-      <button
-        className="flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold text-white/70 transition-colors hover:bg-white/5 hover:text-white"
-        onClick={() => signOut({ callbackUrl: '/' })}
-        type="button"
-      >
-        <SignOutIcon />
-        Sign out
-      </button>
+        <button
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+          onClick={() => signOut({ callbackUrl: '/' })}
+          type="button"
+        >
+          <span className="grid size-4.5 shrink-0 place-items-center [&_svg]:size-full">
+            <SignOutIcon />
+          </span>
+          Sign out
+        </button>
+      </div>
     </aside>
   );
 }
@@ -415,6 +512,64 @@ function ChevronIcon() {
       aria-hidden="true"
     >
       <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      aria-hidden="true"
+    >
+      <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path
+        d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1.1-4.2A8 8 0 1 1 21 12Z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M8 11h.01M12 11h.01M16 11h.01" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function HelpIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path
+        d="M9.3 9.3a2.7 2.7 0 1 1 3.9 2.4c-.8.4-1.2 1-1.2 1.9v.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M12 17.2h.01" strokeLinecap="round" />
     </svg>
   );
 }
