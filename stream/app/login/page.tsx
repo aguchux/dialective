@@ -1,7 +1,7 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { FormEvent, Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { ShieldCheck } from 'lucide-react';
@@ -10,8 +10,10 @@ import { AuthShell } from '@/components/AuthShell';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { Card, ErrorText, FieldLabel, PrimaryButton, TextInput } from '@/components/ui';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const justJoined = searchParams.get('joined') === '1';
   const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -58,6 +60,11 @@ export default function LoginPage() {
             : `Enter the code we sent to ${email}`}
         </p>
       </div>
+      {justJoined && step === 'credentials' && (
+        <p className="mb-4 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-center text-sm font-bold text-success">
+          Your account is ready. Sign in to continue.
+        </p>
+      )}
       <Card className="p-6">
         {step === 'credentials' ? (
           <form className="grid gap-4" onSubmit={submitCredentials}>
@@ -144,5 +151,13 @@ function ShieldEyebrow() {
       <ShieldCheck aria-hidden="true" className="size-3.5 text-accent" />
       Secure enterprise access
     </>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

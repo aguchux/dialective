@@ -41,22 +41,6 @@ export const authOptions: NextAuthOptions = {
         return authResultToNextAuthUser(result);
       },
     }),
-
-    CredentialsProvider({
-      id: 'invite-accept',
-      name: 'Accept Invite',
-      credentials: {
-        token: { label: 'token', type: 'text' },
-        password: { label: 'password', type: 'password' },
-      },
-      async authorize(credentials) {
-        if (!credentials?.token || !credentials?.password) {
-          return null;
-        }
-        const result = await apiClient.acceptInvite(credentials.token, credentials.password);
-        return authResultToNextAuthUser(result);
-      },
-    }),
   ],
 
   callbacks: {

@@ -1,60 +1,55 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { ShieldCheck } from 'lucide-react';
-import { apiClient, ApiError } from '@/lib/api-client';
+import { leadsApi, LeadsApiError, type DataAccessLeadInterestInput } from '@/lib/leads-api';
 import { AuthShell } from '@/components/AuthShell';
-import { SocialAuthButtons } from '@/components/SocialAuthButtons';
+import { CountryDialectPicker } from '@/components/CountryDialectPicker';
 import { Card, ErrorText, FieldLabel, PrimaryButton, TextInput } from '@/components/ui';
 
+/**
+ * Subscriber onboarding is admin-invite-only (see leads.controller.ts /
+ * subscriber-auth.service.ts's provisionOrganizationFromLead): a visitor
+ * requests access here, an admin reviews the request and reaches out, then
+ * invites the org via the admin dashboard. There is no self-serve org
+ * creation -- this form only ever creates a DataAccessLead, the same
+ * pipeline the trainer site's /data-access page feeds.
+ */
 export default function RegisterPage() {
-  const router = useRouter();
-  const [step, setStep] = useState<'details' | 'otp'>('details');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [organizationName, setOrganizationName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [ticket, setTicket] = useState('');
-  const [code, setCode] = useState('');
+  const [organization, setOrganization] = useState('');
+  const [website, setWebsite] = useState('');
+  const [interests, setInterests] = useState<DataAccessLeadInterestInput[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
-  async function submitDetails(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (interests.length === 0) {
+      setError('Select at least one country and dialect you’re interested in.');
+      return;
+    }
     setPending(true);
     try {
-      const result = await apiClient.register(
+      await leadsApi.createDataAccessLead({
         firstName,
         lastName,
         email,
-        password,
-        organizationName,
-      );
-      setTicket(result.ticket);
-      setStep('otp');
+        organization,
+        website,
+        interests,
+      });
+      setSubmitted(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Unable to register right now.');
+      setError(err instanceof LeadsApiError ? err.message : 'Unable to submit your request.');
     } finally {
       setPending(false);
     }
-  }
-
-  async function submitOtp(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setPending(true);
-    const result = await signIn('otp-verify', { ticket, code, redirect: false });
-    setPending(false);
-    if (result?.error) {
-      setError('Invalid or expired code.');
-      return;
-    }
-    router.push('/dashboard');
   }
 
   return (
@@ -67,18 +62,21 @@ export default function RegisterPage() {
       }
     >
       <div className="mb-6 text-center">
-        <h1 className="text-2xl font-black text-ink">
-          {step === 'details' ? 'Create your organization' : 'Verify your email'}
-        </h1>
+        <h1 className="text-2xl font-black text-ink">Request access</h1>
         <p className="mt-1 text-sm text-muted">
-          {step === 'details'
-            ? 'Get started with Dialect Library Stream'
-            : `Enter the code we sent to ${email}`}
+          Tell us about your organization and we&apos;ll follow up about coverage and licensing.
         </p>
       </div>
       <Card className="p-6">
-        {step === 'details' ? (
-          <form className="grid gap-4" onSubmit={submitDetails}>
+        {submitted ? (
+          <div className="grid gap-2 text-center">
+            <p className="text-sm font-bold text-ink">Thanks — request received</p>
+            <p className="text-sm text-muted">
+              We&apos;ll reach out at the email you provided to discuss your needs and onboarding.
+            </p>
+          </div>
+        ) : (
+          <form className="grid gap-3" onSubmit={submit}>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <FieldLabel>First name</FieldLabel>
@@ -88,15 +86,6 @@ export default function RegisterPage() {
                 <FieldLabel>Last name</FieldLabel>
                 <TextInput onChange={(e) => setLastName(e.target.value)} required value={lastName} />
               </div>
-            </div>
-            <div>
-              <FieldLabel>Organization name</FieldLabel>
-              <TextInput
-                onChange={(e) => setOrganizationName(e.target.value)}
-                placeholder="Acme AI Ltd"
-                required
-                value={organizationName}
-              />
             </div>
             <div>
               <FieldLabel>Work email</FieldLabel>
@@ -109,43 +98,28 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <FieldLabel>Password</FieldLabel>
+              <FieldLabel>Company / organization</FieldLabel>
               <TextInput
-                minLength={8}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
+                onChange={(e) => setOrganization(e.target.value)}
+                placeholder="Acme AI Ltd"
                 required
-                type="password"
-                value={password}
+                value={organization}
               />
             </div>
-            {error && <ErrorText>{error}</ErrorText>}
-            <PrimaryButton disabled={pending} type="submit">
-              {pending ? 'Creating account...' : 'Create account'}
-            </PrimaryButton>
-
-            <div className="relative my-1 text-center">
-              <div className="absolute inset-x-0 top-1/2 border-t border-line" />
-              <span className="relative bg-surface px-3 text-xs font-bold uppercase text-muted">or</span>
-            </div>
-
-            <SocialAuthButtons />
-          </form>
-        ) : (
-          <form className="grid gap-4" onSubmit={submitOtp}>
             <div>
-              <FieldLabel>Verification code</FieldLabel>
+              <FieldLabel>Website</FieldLabel>
               <TextInput
-                inputMode="numeric"
-                maxLength={6}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(e) => setWebsite(e.target.value)}
+                placeholder="https://acme.com"
                 required
-                value={code}
+                type="url"
+                value={website}
               />
             </div>
+            <CountryDialectPicker onChange={setInterests} value={interests} />
             {error && <ErrorText>{error}</ErrorText>}
             <PrimaryButton disabled={pending} type="submit">
-              {pending ? 'Verifying...' : 'Verify and continue'}
+              {pending ? 'Submitting request...' : 'Request access'}
             </PrimaryButton>
           </form>
         )}

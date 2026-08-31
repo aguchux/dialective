@@ -2,7 +2,7 @@
 
 import { FormEvent, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
+import { apiClient, ApiError } from '@/lib/api-client';
 import { AuthShell } from '@/components/AuthShell';
 import { Card, ErrorText, FieldLabel, PrimaryButton, TextInput } from '@/components/ui';
 
@@ -18,13 +18,19 @@ function AcceptInviteForm() {
     e.preventDefault();
     setError(null);
     setPending(true);
-    const result = await signIn('invite-accept', { token, password, redirect: false });
-    setPending(false);
-    if (result?.error) {
-      setError('This invite is invalid or has expired.');
-      return;
+    try {
+      // Sets the account's password but does NOT sign in -- the subscriber
+      // is meant to land on /login next, not skip straight to /dashboard,
+      // so onboarding/verification steps have a consistent single entry
+      // point regardless of whether someone arrived via invite or a normal
+      // return visit.
+      await apiClient.acceptInvite(token, password);
+      router.push('/login?joined=1');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'This invite is invalid or has expired.');
+    } finally {
+      setPending(false);
     }
-    router.push('/dashboard');
   }
 
   if (!token) {
