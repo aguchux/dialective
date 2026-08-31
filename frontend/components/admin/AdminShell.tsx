@@ -96,7 +96,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   return (
-    <div className="grid min-h-screen bg-surface-muted text-ink md:grid-cols-[240px_1fr]">
+    <div className="grid min-h-screen bg-surface-muted text-ink md:grid-cols-[272px_1fr]">
       <AdminSidebar pathname={pathname} router={router} />
 
       <div
@@ -107,7 +107,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         onClick={() => setMenuOpen(false)}
       />
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-[min(84vw,280px)] transform transition-transform duration-200 md:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-[min(84vw,300px)] transform transition-transform duration-200 md:hidden ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -220,7 +220,7 @@ function AdminSidebar({
 
   return (
     <aside
-      className={`${mobile ? 'flex h-full' : 'hidden md:flex'} flex-col border-r border-line bg-[#151726] text-white`}
+      className={`${mobile ? 'flex h-full' : 'hidden md:sticky md:top-0 md:flex md:h-screen'} flex-col border-r border-line bg-[#151726] text-white`}
     >
       <div className="flex items-center justify-between px-4 pb-3 pt-4">
         <BrandLogo className="text-white" textClassName="text-base" size={32} />
@@ -244,7 +244,7 @@ function AdminSidebar({
             <div className="grid shrink-0 gap-0.5" key={group.label}>
               <button
                 aria-expanded={expanded}
-                className={`flex items-center gap-2 rounded-lg px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider transition-colors ${
+                className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-2 py-2 text-left text-[10px] font-black uppercase tracking-wide transition-colors ${
                   groupActive ? 'text-white/85' : 'text-white/45 hover:text-white/70'
                 }`}
                 onClick={() => setOpenGroup(expanded ? '' : group.label)}
