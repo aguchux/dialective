@@ -15,5 +15,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "exclude": ["node_modules", "dist", "prisma.config.ts", "prisma"]
+  "exclude": ["node_modules", "dist", "prisma.config.ts", "prisma", "test"]
 }

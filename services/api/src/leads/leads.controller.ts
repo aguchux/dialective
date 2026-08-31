@@ -19,8 +19,10 @@ import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SubscriberAuthService } from '../voice-stream/subscriber-auth/subscriber-auth.service';
 import { CreateDataAccessLeadDto } from './dto/create-data-access-lead.dto';
 import { UpdateDataAccessLeadContactDto } from './dto/update-data-access-lead-contact.dto';
+import { InviteDataAccessLeadDto } from './dto/invite-data-access-lead.dto';
 
 /**
  * Interest capture for the "Subscribe to voice data" landing-page CTA --
@@ -31,18 +33,29 @@ import { UpdateDataAccessLeadContactDto } from './dto/update-data-access-lead-co
  */
 @Controller('leads')
 export class LeadsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly subscriberAuth: SubscriberAuthService,
+  ) {}
 
   @Post('data-access')
   @HttpCode(HttpStatus.CREATED)
   async createDataAccessLead(@Body() dto: CreateDataAccessLeadDto) {
     const lead = await this.prisma.dataAccessLead.create({
       data: {
-        name: dto.name,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        name: `${dto.firstName} ${dto.lastName}`,
         email: dto.email,
         organization: dto.organization,
         website: dto.website,
-        countriesInterested: dto.countriesInterested,
+        interests: {
+          create: dto.interests.map((interest) => ({
+            countryId: interest.countryId,
+            dialectTags: interest.dialectTags,
+            subdialectTags: interest.subdialectTags,
+          })),
+        },
       },
     });
 
@@ -69,6 +82,10 @@ export class LeadsController {
           contactedBy: {
             select: { id: true, email: true, firstName: true, lastName: true },
           },
+          interests: {
+            include: { country: { select: { id: true, code: true, name: true } } },
+          },
+          invitedOrganization: { select: { id: true, name: true } },
         },
       }),
       this.prisma.dataAccessLead.count(),
@@ -106,5 +123,39 @@ export class LeadsController {
     });
 
     return lead;
+  }
+
+  /**
+   * Approves a lead: provisions a brand-new SubscriberOrganization +
+   * Subscription (on the chosen plan) and emails the lead an owner-role
+   * invite (SubscriberAuthService.provisionOrganizationFromLead) -- same
+   * "click link, choose password, redirected to dashboard" acceptance flow
+   * already used for ordinary member invites.
+   */
+  @Post('admin/data-access/:id/invite')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async inviteDataAccessLead(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: InviteDataAccessLeadDto,
+  ) {
+    const lead = await this.prisma.dataAccessLead.findUniqueOrThrow({ where: { id } });
+
+    const { organizationId } = await this.subscriberAuth.provisionOrganizationFromLead({
+      organizationName: dto.organizationName,
+      planId: dto.planId,
+      inviteeEmail: lead.email,
+      firstName: lead.firstName,
+      lastName: lead.lastName,
+      invitedByUserId: req.user.sub,
+    });
+
+    await this.prisma.dataAccessLead.update({
+      where: { id },
+      data: { invitedOrganizationId: organizationId },
+    });
+
+    return { organizationId };
   }
 }

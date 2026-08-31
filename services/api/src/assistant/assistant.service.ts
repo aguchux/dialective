@@ -310,7 +310,7 @@ export class AssistantService implements OnModuleDestroy {
    */
   private async loadContentRegistry(): Promise<string> {
     try {
-      const [posts, courses] = await Promise.all([
+      const [posts, courses, faqs] = await Promise.all([
         this.prisma.blogPost.findMany({
           where: { status: BlogPostStatus.PUBLISHED },
           orderBy: [{ publishedAt: 'desc' }, { sortOrder: 'asc' }],
@@ -323,6 +323,12 @@ export class AssistantService implements OnModuleDestroy {
           take: MAX_REGISTRY_ITEMS_PER_TYPE,
           select: { title: true, slug: true, summary: true, visibility: true },
         }),
+        this.prisma.faq.findMany({
+          where: { visible: true },
+          orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }],
+          take: MAX_REGISTRY_ITEMS_PER_TYPE,
+          select: { question: true, answer: true },
+        }),
       ]);
 
       const publicCourses = courses.filter(
@@ -334,6 +340,13 @@ export class AssistantService implements OnModuleDestroy {
       return [
         '## Runtime Content Registry',
         'This is generated from published content. Use only these exact links for specific articles and courses.',
+        '### Published frequently asked questions',
+        ...(faqs.length
+          ? faqs.map(
+              (faq) =>
+                `- Q: ${safeRegistryText(faq.question)}\n  A: ${safeRegistryText(faq.answer)}`,
+            )
+          : ['- No published FAQs are currently available.']),
         '### Published blog posts',
         ...(posts.length
           ? posts.map(

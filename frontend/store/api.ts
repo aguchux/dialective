@@ -186,21 +186,38 @@ export interface DialectInput {
   keyboardLayout?: string;
 }
 
+export interface DataAccessLeadInterestInput {
+  countryId: string;
+  dialectTags: string[];
+  subdialectTags: string[];
+}
+
 export interface DataAccessLeadInput {
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   organization: string;
   website: string;
-  countriesInterested: string;
+  interests: DataAccessLeadInterestInput[];
+}
+
+export interface DataAccessLeadInterest {
+  id: string;
+  countryId: string;
+  country: { id: string; code: string; name: string };
+  dialectTags: string[];
+  subdialectTags: string[];
 }
 
 export interface AdminDataAccessLead {
   id: string;
+  firstName: string;
+  lastName: string;
   name: string;
   email: string;
   organization: string | null;
   website: string | null;
-  countriesInterested: string | null;
+  interests: DataAccessLeadInterest[];
   contactedAt: string | null;
   contactNote: string | null;
   contactedByUserId: string | null;
@@ -210,6 +227,8 @@ export interface AdminDataAccessLead {
     firstName: string | null;
     lastName: string | null;
   } | null;
+  invitedOrganizationId: string | null;
+  invitedOrganization: { id: string; name: string } | null;
   createdAt: string;
 }
 
@@ -224,6 +243,11 @@ export interface DataAccessLeadsPage {
 export interface DataAccessLeadContactUpdateInput {
   contacted: boolean;
   note?: string;
+}
+
+export interface DataAccessLeadInviteInput {
+  organizationName: string;
+  planId: string;
 }
 
 export interface ReferralSettings {
@@ -298,6 +322,27 @@ export interface AdminAssistantConversationDetail {
     createdAt: string;
   }>;
   truncated: boolean;
+}
+
+export interface AdminFaq {
+  id: string;
+  question: string;
+  answer: string;
+  visible: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+  } | null;
+}
+
+export interface FaqInput {
+  question: string;
+  answer: string;
 }
 
 export interface ReferralSummary {
@@ -2022,6 +2067,7 @@ export const dialectivaApi = createApi({
     'ReferralInvites',
     'Testimony',
     'Marketing',
+    'Faqs',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -2870,6 +2916,17 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['DataAccessLeads'],
     }),
+    inviteDataAccessLead: builder.mutation<
+      { organizationId: string },
+      { id: string; body: DataAccessLeadInviteInput }
+    >({
+      query: ({ id, body }) => ({
+        url: `/leads/admin/data-access/${id}/invite`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['DataAccessLeads'],
+    }),
     getReferralSettings: builder.query<ReferralSettings, void>({
       query: () => '/admin/referral-settings',
       providesTags: ['ReferralSettings'],
@@ -3468,6 +3525,25 @@ export const dialectivaApi = createApi({
       query: (conversationId) => `/assistant/admin/conversations/${conversationId}`,
       providesTags: (_result, _error, id) => [{ type: 'AdminAssistantConversations', id }],
     }),
+    getAdminFaqs: builder.query<AdminFaq[], void>({
+      query: () => '/admin/faqs',
+      providesTags: ['Faqs'],
+    }),
+    createFaq: builder.mutation<AdminFaq, FaqInput>({
+      query: (body) => ({ url: '/admin/faqs', method: 'POST', body }),
+      invalidatesTags: ['Faqs'],
+    }),
+    updateFaq: builder.mutation<
+      AdminFaq,
+      { id: string; body: Partial<FaqInput> & { visible?: boolean } }
+    >({
+      query: ({ id, body }) => ({ url: `/admin/faqs/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Faqs'],
+    }),
+    deleteFaq: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/admin/faqs/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Faqs'],
+    }),
     updatePlatformSettings: builder.mutation<PlatformSettings, PlatformSettingsInput>({
       query: (body) => ({
         url: '/admin/platform-settings',
@@ -3757,6 +3833,7 @@ export const {
   useCreateDataAccessLeadMutation,
   useGetAdminDataAccessLeadsQuery,
   useUpdateAdminDataAccessLeadContactMutation,
+  useInviteDataAccessLeadMutation,
   useGetReferralSettingsQuery,
   useUpdateReferralSettingsMutation,
   useGetReferralsQuery,
@@ -3842,6 +3919,10 @@ export const {
   useGetAssistantThreadQuery,
   useGetAdminAssistantConversationsQuery,
   useGetAdminAssistantConversationQuery,
+  useGetAdminFaqsQuery,
+  useCreateFaqMutation,
+  useUpdateFaqMutation,
+  useDeleteFaqMutation,
   useUpdatePlatformSettingsMutation,
   useGetApiAccessTokensQuery,
   useSetApiAccessTokenMutation,

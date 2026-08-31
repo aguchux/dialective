@@ -1,9 +1,9 @@
-import { faqItems } from './faq-data';
+import type { PublicFaq } from '@/lib/faq-api';
 
-export function FaqAccordion() {
+export function FaqAccordion({ items }: { items: PublicFaq[] }) {
   return (
     <section className="grid gap-3" aria-label="Frequently asked questions">
-      {faqItems.map((item, index) => (
+      {items.map((item, index) => (
         <details
           className="group rounded-lg border border-line bg-surface shadow-[0_10px_24px_rgba(27,31,27,0.06)]"
           key={item.question}

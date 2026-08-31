@@ -159,6 +159,7 @@ model User {
   payoutAccounts                   PayoutAccount[]
   kycVerifications                 KycVerification[]
   assistantConversation            AssistantConversation?
+  faqsCreated                      Faq[]                            @relation("FaqCreatedBy")
 
   @@index([promotedById])
   @@index([originCountryId])
@@ -186,6 +187,24 @@ model AssistantMessage {
 
   @@index([conversationId, createdAt])
   @@map("assistant_messages")
+}
+
+/// Admin-managed public support content. FAQ entries are deliberately stored
+/// separately from the assistant transcript: an administrator must review and
+/// provide the answer before a user question becomes public guidance.
+model Faq {
+  id          String   @id @default(uuid())
+  question    String   @unique
+  answer      String
+  visible     Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdById String?
+  createdBy   User?    @relation("FaqCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, sortOrder])
+  @@map("faqs")
 }
 
 enum SystemUpdateKind {
@@ -271,18 +290,19 @@ model ReferralInvite {
 /// country -- enforced in AuthService.updateProfile, not at the schema level,
 /// since Prisma has no cross-FK check constraint.
 model Country {
-  id                    String               @id @default(uuid())
-  code                  String               @unique // ISO 3166-1 alpha-2, e.g. "NG", "US"
-  name                  String
-  llmGenerationEnabled  Boolean              @default(false) // opts this country's dialects into word-generator-job's translation sweep; a dialect only participates when both this AND Dialect.llmGenerationEnabled are true
-  currencyCode          String               @default("USD") // ISO 4217, e.g. "NGN", "KES" -- what wallet balances and P2P offers display in for this country's users
-  usdExchangeRate       Decimal?             @db.Decimal(18, 6) // units of currencyCode per 1 USD; null until fx-rate-job's first successful fetch or an admin sets one manually
-  exchangeRateSource    String               @default("LIVE") // "LIVE" (fx-rate-job may overwrite usdExchangeRate) or "MANUAL" (admin-set, fx-rate-job skips this row until reset)
-  exchangeRateUpdatedAt DateTime? // last time usdExchangeRate changed (live fetch or admin edit) -- shown in UI so a stale rate is visible, not silently trusted
-  dialects              Dialect[]
-  users                 User[]
-  originUsers           User[]               @relation("UserOriginCountry")
-  audioRetentionRules   AudioRetentionRule[]
+  id                      String                   @id @default(uuid())
+  code                    String                   @unique // ISO 3166-1 alpha-2, e.g. "NG", "US"
+  name                    String
+  llmGenerationEnabled    Boolean                  @default(false) // opts this country's dialects into word-generator-job's translation sweep; a dialect only participates when both this AND Dialect.llmGenerationEnabled are true
+  currencyCode            String                   @default("USD") // ISO 4217, e.g. "NGN", "KES" -- what wallet balances and P2P offers display in for this country's users
+  usdExchangeRate         Decimal?                 @db.Decimal(18, 6) // units of currencyCode per 1 USD; null until fx-rate-job's first successful fetch or an admin sets one manually
+  exchangeRateSource      String                   @default("LIVE") // "LIVE" (fx-rate-job may overwrite usdExchangeRate) or "MANUAL" (admin-set, fx-rate-job skips this row until reset)
+  exchangeRateUpdatedAt   DateTime? // last time usdExchangeRate changed (live fetch or admin edit) -- shown in UI so a stale rate is visible, not silently trusted
+  dialects                Dialect[]
+  users                   User[]
+  originUsers             User[]                   @relation("UserOriginCountry")
+  audioRetentionRules     AudioRetentionRule[]
+  dataAccessLeadInterests DataAccessLeadInterest[]
 
   @@map("countries")
 }
@@ -2075,25 +2095,52 @@ model ApiAccessToken {
 /// self-serve subscription flow yet; this just captures interest for
 /// manual follow-up (MailService notifies an admin address on submit).
 model DataAccessLead {
-  id                  String    @id @default(uuid())
-  name                String
-  email               String
-  organization        String?
-  website             String?
-  countriesInterested String?
-  contactedAt         DateTime?
-  contactNote         String?
-  contactedByUserId   String?
-  contactedBy         User?     @relation("DataAccessLeadContactedBy", fields: [contactedByUserId], references: [id], onDelete: SetNull)
-  createdAt           DateTime  @default(now())
+  id                String    @id @default(uuid())
+  firstName         String
+  lastName          String
+  name              String // retained for the pre-firstName/lastName rows; new writes set it to "firstName lastName"
+  email             String
+  organization      String?
+  website           String?
+  contactedAt       DateTime?
+  contactNote       String?
+  contactedByUserId String?
+  contactedBy       User?     @relation("DataAccessLeadContactedBy", fields: [contactedByUserId], references: [id], onDelete: SetNull)
+  createdAt         DateTime  @default(now())
 
-  subscriptionPools SubscriptionPool[]
+  subscriptionPools     SubscriptionPool[]
+  interests             DataAccessLeadInterest[]
+  invitedOrganizationId String?                  @unique // set once an admin approves the lead and provisions a SubscriberOrganization + invite from it
+  invitedOrganization   SubscriberOrganization?  @relation(fields: [invitedOrganizationId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([email])
   @@index([contactedAt])
   @@index([contactedByUserId])
   @@map("data_access_leads")
+}
+
+/// One row per (lead, country) pair the requester checked, with the
+/// dialects/subdialects checked under that country -- mirrors the
+/// hierarchical picker's shape (check country -> its dialects show -> check
+/// dialect -> its subdialects show -> check them). dialectTags/
+/// subdialectTags are stored as tag arrays rather than a normalized junction
+/// down to Dialect/DialectVariant rows, since this is a point-in-time
+/// snapshot of interest for manual admin review, not a live-updating
+/// selection that needs to track renames/deletions of the underlying
+/// Dialect/DialectVariant catalogue.
+model DataAccessLeadInterest {
+  id             String         @id @default(uuid())
+  leadId         String
+  lead           DataAccessLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  countryId      String
+  country        Country        @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  dialectTags    String[] // Dialect.tag values checked under this country
+  subdialectTags String[] // DialectVariant.tag values checked under any of the above dialects
+
+  @@unique([leadId, countryId])
+  @@index([leadId])
+  @@map("data_access_lead_interests")
 }
 
 /// Editor.js-backed editorial content. `excerpt` is derived by BlogService
@@ -2215,18 +2262,19 @@ model SubscriberOrganization {
   stripeCustomerId String?  @unique
   createdAt        DateTime @default(now())
 
-  memberships          SubscriberMembership[]
-  invites              SubscriberInvite[]
-  subscription         Subscription?
-  streamDecks          StreamDeck[]
-  validations          SubscriberValidation[]
+  memberships           SubscriberMembership[]
+  invites               SubscriberInvite[]
+  subscription          Subscription?
+  streamDecks           StreamDeck[]
+  validations           SubscriberValidation[]
   organizationConsensus OrganizationValidationConsensus[]
-  streamApiKeys        StreamApiKey[]
-  webhookSubscriptions WebhookSubscription[]
-  oauthClients         OAuthClient[]
-  activityEvents       OrgActivityEvent[]
-  anomalyEvents        AnomalyEvent[]
-  usageCounters        UsageCounter[]
+  streamApiKeys         StreamApiKey[]
+  webhookSubscriptions  WebhookSubscription[]
+  oauthClients          OAuthClient[]
+  activityEvents        OrgActivityEvent[]
+  anomalyEvents         AnomalyEvent[]
+  usageCounters         UsageCounter[]
+  sourceDataAccessLead  DataAccessLead?
 
   @@map("subscriber_organizations")
 }
@@ -2275,6 +2323,8 @@ model SubscriberInvite {
   organizationId  String
   organization    SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email           String
+  firstName       String? // set on org-provisioning invites (admin-approved DataAccessLead) so acceptInvite can name the new SubscriberUser correctly instead of guessing from the email; null on ordinary member invites, where the invitee already has a name on file if they already exist
+  lastName        String?
   role            SubscriberOrgRole
   tokenHash       String                 @unique
   invitedByUserId String
@@ -2330,19 +2380,19 @@ model SubscriberRefreshToken {
 }
 
 model SubscriptionPlan {
-  id               String  @id @default(uuid())
-  key              String  @unique // "starter" | "professional" | "enterprise"
-  name             String
-  stripePriceId    String  @unique
-  monthlyUsdAmount Decimal @db.Decimal(10, 2)
-  maxStreamDecks   Int? // null = unlimited
-  maxTeamMembers   Int?
+  id                   String          @id @default(uuid())
+  key                  String          @unique // "starter" | "professional" | "enterprise"
+  name                 String
+  stripePriceId        String          @unique
+  monthlyUsdAmount     Decimal         @db.Decimal(10, 2)
+  maxStreamDecks       Int? // null = unlimited
+  maxTeamMembers       Int?
   maxConcurrentStreams Int? // Phase 3 -- null = unlimited, enforced by ConcurrentStreamGuard
   rateLimitPerMinute   Int? // Phase 3 -- null = unlimited, enforced by StreamKeyRateLimitGuard
   minIsvcConfidence    IsvcConfidence? // Phase 5 -- null = full catalogue access, enforced by TierGateGuard
   monthlyByteQuota     BigInt? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
   monthlyRequestQuota  Int? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
-  active           Boolean @default(true)
+  active               Boolean         @default(true)
 
   subscriptions Subscription[]
 
@@ -2457,13 +2507,13 @@ model StreamDeckRule {
 /// services/isvc-scorer). itemCount is denormalized for cheap listing; the
 /// actual frozen membership lives in StreamDeckVersionItem.
 model StreamDeckVersion {
-  id            String   @id @default(uuid())
+  id            String     @id @default(uuid())
   deckId        String
   deck          StreamDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
   version       Int
   itemCount     Int
-  createdAt     DateTime @default(now())
-  createdReason String   // "manual_add" | "manual_remove" | "smart_rule_match" | "eligibility_purge"
+  createdAt     DateTime   @default(now())
+  createdReason String // "manual_add" | "manual_remove" | "smart_rule_match" | "eligibility_purge"
 
   items   StreamDeckVersionItem[]
   current StreamDeckCurrentVersion?
@@ -2549,20 +2599,20 @@ enum IsvcConfidence {
 /// ("one company with 50 validators must not have 50 times the influence
 /// of one company with one validator").
 model SubscriberValidation {
-  id                     String                 @id @default(uuid())
-  organizationId         String
-  organization           SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId                 String
-  user                   SubscriberUser         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  recordingId            String // WordRecording.id -- no FK, same loose-coupling rationale as StreamDeckItem.recordingId
-  transcriptAccuracy     Int // 0-100, each dimension from the product plan section 14
-  pronunciationAccuracy  Int
-  dialectAuthenticity    Int
-  speechClarity          Int
-  audioQuality           Int
-  overallScore           Int // the validator's own rollup; NOT re-derived from the dimensions above (validator's holistic judgment, dimensions are supporting detail)
-  notes                  String? // private to the org, never surfaced in ISVC aggregates (product plan section 23)
-  createdAt              DateTime               @default(now())
+  id                    String                 @id @default(uuid())
+  organizationId        String
+  organization          SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  SubscriberUser         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recordingId           String // WordRecording.id -- no FK, same loose-coupling rationale as StreamDeckItem.recordingId
+  transcriptAccuracy    Int // 0-100, each dimension from the product plan section 14
+  pronunciationAccuracy Int
+  dialectAuthenticity   Int
+  speechClarity         Int
+  audioQuality          Int
+  overallScore          Int // the validator's own rollup; NOT re-derived from the dimensions above (validator's holistic judgment, dimensions are supporting detail)
+  notes                 String? // private to the org, never surfaced in ISVC aggregates (product plan section 23)
+  createdAt             DateTime               @default(now())
 
   @@unique([organizationId, userId, recordingId]) // one active validation per validator per recording; resubmission overwrites via upsert
   @@index([recordingId])
@@ -2658,17 +2708,17 @@ enum StreamKeyScope {
 /// stored or returned again; only keyHash + keyPrefix (display-only, a la
 /// ApiAccessToken.lastFour) persist.
 model StreamApiKey {
-  id              String           @id @default(uuid())
+  id              String                 @id @default(uuid())
   organizationId  String
   organization    SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  deckId          String?          // null = org-wide key (section 26.2)
-  deck            StreamDeck?      @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  keyHash         String           @unique
-  keyPrefix       String           // display-only, e.g. "dlsk_live_7MqP"
+  deckId          String? // null = org-wide key (section 26.2)
+  deck            StreamDeck?            @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  keyHash         String                 @unique
+  keyPrefix       String // display-only, e.g. "dlsk_live_7MqP"
   scopes          StreamKeyScope[]
-  allowedIps      String[]         @default([]) // empty = no IP restriction
+  allowedIps      String[]               @default([]) // empty = no IP restriction
   createdByUserId String
-  createdAt       DateTime         @default(now())
+  createdAt       DateTime               @default(now())
   lastUsedAt      DateTime?
   expiresAt       DateTime?
   revokedAt       DateTime?
@@ -2691,15 +2741,15 @@ model StreamApiKey {
 /// DB hit per request) -- the actual value-add over a Stream Key, traded
 /// against instant revocability, which is why the token TTL is kept short.
 model OAuthClient {
-  id              String           @id @default(uuid())
+  id              String                 @id @default(uuid())
   organizationId  String
   organization    SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  deckId          String?          // same org-wide-vs-deck-scoped shape as StreamApiKey.deckId
-  clientId        String           @unique
+  deckId          String? // same org-wide-vs-deck-scoped shape as StreamApiKey.deckId
+  clientId        String                 @unique
   secretHash      String
   scopes          StreamKeyScope[] // reuses the existing scope enum -- same permission model as Stream Keys
   createdByUserId String
-  createdAt       DateTime         @default(now())
+  createdAt       DateTime               @default(now())
   revokedAt       DateTime?
 
   @@index([organizationId])
@@ -2713,7 +2763,7 @@ model OAuthClient {
 /// human-dashboard/userId-keyed (Phase 1 preview clicks); this is
 /// StreamApiKey-keyed machine traffic, no human user necessarily present.
 model StreamAccessLog {
-  id                  String       @id @default(uuid())
+  id                  String   @id @default(uuid())
   // Loose reference, not a Prisma relation -- Phase 4b's OAuth M2M clients
   // authenticate the same /stream/v1/* routes and populate this same field
   // with an OAuthClient.id, so a hard FK to StreamApiKey alone would reject
@@ -2721,18 +2771,18 @@ model StreamAccessLog {
   // disambiguates which table this id actually points into (same
   // loose-coupling rationale already used for deckId/recordingId above).
   streamApiKeyId      String
-  credentialType      String       @default("stream_key") // "stream_key" | "oauth_client"
+  credentialType      String   @default("stream_key") // "stream_key" | "oauth_client"
   organizationId      String
   deckId              String?
   recordingId         String?
-  requestType         String       // "manifest" | "metadata" | "audio" | "usage"
-  requestedRange      String?      // raw Range header, audio requests only
-  bytesStreamed       BigInt?      // audio requests only
-  resultCode          Int          // HTTP status actually returned
-  entitlementDecision String       // "allowed" | "denied:<reason>"
+  requestType         String // "manifest" | "metadata" | "audio" | "usage"
+  requestedRange      String? // raw Range header, audio requests only
+  bytesStreamed       BigInt? // audio requests only
+  resultCode          Int // HTTP status actually returned
+  entitlementDecision String // "allowed" | "denied:<reason>"
   ipAddress           String?
   userAgent           String?
-  createdAt           DateTime     @default(now())
+  createdAt           DateTime @default(now())
 
   @@index([streamApiKeyId, createdAt])
   @@index([organizationId, createdAt])

@@ -9,5 +9,6 @@ import { SubscriberAuthService } from './subscriber-auth.service';
   imports: [MailModule, WebhooksModule, OrgActivityModule],
   controllers: [SubscriberAuthController],
   providers: [SubscriberAuthService],
+  exports: [SubscriberAuthService],
 })
 export class SubscriberAuthModule {}

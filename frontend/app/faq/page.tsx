@@ -3,6 +3,7 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { LandingFooter } from '@/components/landing/LandingFooter';
 import { LandingHeader } from '@/components/landing/LandingHeader';
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
+import { getPublishedFaqs } from '@/lib/faq-api';
 
 export const metadata = {
   title: 'FAQ',
@@ -10,7 +11,8 @@ export const metadata = {
     'Answers about contributing dialect recordings, word translations, review, privacy, and rewards.',
 };
 
-export default function FaqPage() {
+export default async function FaqPage() {
+  const faqs = await getPublishedFaqs().catch(() => []);
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-white text-[#050505]">
       <ParallaxTopBackground />
@@ -25,7 +27,13 @@ export default function FaqPage() {
           </p>
         </section>
 
-        <FaqAccordion />
+        {faqs.length > 0 ? (
+          <FaqAccordion items={faqs} />
+        ) : (
+          <section className="rounded-lg border border-line bg-surface p-5 text-muted">
+            FAQs are temporarily unavailable. Please try again shortly.
+          </section>
+        )}
       </div>
       <div className="relative z-10">
         <LandingFooter />

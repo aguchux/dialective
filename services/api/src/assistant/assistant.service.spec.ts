@@ -141,6 +141,13 @@ describe('AssistantService', () => {
           },
         ]),
       },
+      faq: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { question: 'How do I start?', answer: 'Open Training and start a task.' },
+          ]),
+      },
     };
     const service = makeService(
       settings as never,
@@ -154,11 +161,16 @@ describe('AssistantService', () => {
     expect(registry).toContain('[Recording tips](/blog/recording-tips)');
     expect(registry).toContain('[Getting started](/learn/getting-started)');
     expect(registry).toContain('[Trainer guide](/dashboard/learn/trainer-guide)');
+    expect(registry).toContain('Q: How do I start?');
+    expect(registry).toContain('A: Open Training and start a task.');
     expect(prisma.blogPost.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { status: 'PUBLISHED' } }),
     );
     expect(prisma.course.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { status: 'PUBLISHED' } }),
+    );
+    expect(prisma.faq.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { visible: true } }),
     );
   });
 

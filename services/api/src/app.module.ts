@@ -32,6 +32,7 @@ import { TokenomicsModule } from './tokenomics/tokenomics.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { SettlementAdminModule } from './settlement-admin/settlement-admin.module';
 import { VoiceStreamModule } from './voice-stream/voice-stream.module';
+import { FaqsModule } from './faqs/faqs.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { VoiceStreamModule } from './voice-stream/voice-stream.module';
     AssistantModule,
     SettlementAdminModule,
     VoiceStreamModule,
+    FaqsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

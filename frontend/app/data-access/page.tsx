@@ -5,8 +5,13 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { LandingFooter } from '@/components/landing/LandingFooter';
 import { LandingHeader } from '@/components/landing/LandingHeader';
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
-import { normalizeErrorMessage, useCreateDataAccessLeadMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useCreateDataAccessLeadMutation,
+  type DataAccessLeadInterestInput,
+} from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { CountryDialectPicker } from '@/components/CountryDialectPicker';
 
 const inputClass =
   'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
@@ -29,11 +34,12 @@ const useCases = [
 ];
 
 export default function DataAccessPage() {
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [organization, setOrganization] = useState('');
   const [website, setWebsite] = useState('');
-  const [countriesInterested, setCountriesInterested] = useState('');
+  const [interests, setInterests] = useState<DataAccessLeadInterestInput[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [createLead, { isLoading }] = useCreateDataAccessLeadMutation();
@@ -41,13 +47,18 @@ export default function DataAccessPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (interests.length === 0) {
+      setError('Select at least one country and dialect you’re interested in.');
+      return;
+    }
     try {
       await createLead({
-        name,
+        firstName,
+        lastName,
         email,
         organization,
         website,
-        countriesInterested,
+        interests,
       }).unwrap();
       setSubmitted(true);
     } catch (err) {
@@ -90,14 +101,24 @@ export default function DataAccessPage() {
               <>
                 <h2 className="text-xl font-black">Request access</h2>
                 <form className="grid gap-2.5" onSubmit={handleSubmit}>
-                  <input
-                    className={inputClass}
-                    type="text"
-                    placeholder="Your name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                  />
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <input
+                      className={inputClass}
+                      type="text"
+                      placeholder="First name"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      required
+                    />
+                    <input
+                      className={inputClass}
+                      type="text"
+                      placeholder="Last name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      required
+                    />
+                  </div>
                   <input
                     className={inputClass}
                     type="email"
@@ -122,14 +143,7 @@ export default function DataAccessPage() {
                     onChange={(e) => setWebsite(e.target.value)}
                     required
                   />
-                  <input
-                    className={inputClass}
-                    type="text"
-                    placeholder="Countries interested in (e.g. Nigeria, Ghana, Kenya)"
-                    value={countriesInterested}
-                    onChange={(e) => setCountriesInterested(e.target.value)}
-                    required
-                  />
+                  <CountryDialectPicker value={interests} onChange={setInterests} />
                   <ActionButton
                     className={primaryButtonClass}
                     type="submit"

@@ -309,6 +309,68 @@ export class SubscriberAuthService {
     });
   }
 
+  /**
+   * Admin-approval path for a DataAccessLead (services/api/src/leads):
+   * stands up a brand-new SubscriberOrganization + Subscription (on the
+   * chosen plan) and issues an owner-role SubscriberInvite, in one
+   * transaction -- same shape as register()'s org-creation, but issuing an
+   * invite instead of a password (the lead never set one). Reuses
+   * acceptInvite() unchanged: it already creates the SubscriberUser/
+   * SubscriberMembership generically regardless of whether the org is new.
+   */
+  async provisionOrganizationFromLead(params: {
+    organizationName: string;
+    planId: string;
+    inviteeEmail: string;
+    firstName: string;
+    lastName: string;
+    invitedByUserId: string;
+  }): Promise<{ organizationId: string }> {
+    const existingMember = await this.prisma.subscriberMembership.findFirst({
+      where: { user: { email: params.inviteeEmail } },
+    });
+    if (existingMember) {
+      throw new ConflictException('This person is already a member of a Voice Stream organization');
+    }
+
+    const { token, hash } = generateOpaqueToken();
+
+    const organizationId = await this.prisma.$transaction(async (tx) => {
+      const org = await tx.subscriberOrganization.create({
+        data: { name: params.organizationName, slug: slugify(params.organizationName) },
+      });
+      await tx.subscription.create({
+        data: { organizationId: org.id, planId: params.planId },
+      });
+      await tx.subscriberInvite.create({
+        data: {
+          organizationId: org.id,
+          email: params.inviteeEmail,
+          firstName: params.firstName,
+          lastName: params.lastName,
+          role: SubscriberOrgRole.OWNER,
+          tokenHash: hash,
+          invitedByUserId: params.invitedByUserId,
+          expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+        },
+      });
+      return org.id;
+    });
+
+    await this.mail.sendSubscriberInviteEmail({
+      inviteeEmail: params.inviteeEmail,
+      organizationName: params.organizationName,
+      token,
+    });
+
+    void this.orgActivity.record(organizationId, ActivityEventType.MEMBER_INVITED, params.invitedByUserId, {
+      email: params.inviteeEmail,
+      role: SubscriberOrgRole.OWNER,
+    });
+
+    return { organizationId };
+  }
+
   async acceptInvite(token: string, password: string): Promise<SubscriberAuthResult> {
     const invite = await this.prisma.subscriberInvite.findUnique({
       where: { tokenHash: hashToken(token) },
@@ -327,8 +389,8 @@ export class SubscriberAuthService {
           data: {
             email: invite.email,
             passwordHash,
-            firstName: invite.email.split('@')[0],
-            lastName: '',
+            firstName: invite.firstName ?? invite.email.split('@')[0],
+            lastName: invite.lastName ?? '',
             emailVerifiedAt: new Date(), // the invite email itself is the proof of ownership
           },
         }));

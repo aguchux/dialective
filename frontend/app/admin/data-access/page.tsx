@@ -10,23 +10,39 @@ import {
   normalizeErrorMessage,
   useGetAdminDataAccessLeadsQuery,
   useUpdateAdminDataAccessLeadContactMutation,
+  useInviteDataAccessLeadMutation,
+  useGetSubscriptionPlansQuery,
 } from '@/store/api';
+
+function formatInterests(lead: AdminDataAccessLead): string {
+  if (lead.interests.length === 0) return '-';
+  return lead.interests
+    .map((interest) => {
+      const dialects = interest.dialectTags.length > 0 ? ` (${interest.dialectTags.join(', ')})` : '';
+      return `${interest.country.name}${dialects}`;
+    })
+    .join('; ');
+}
 
 export default function AdminDataAccessLeadsPage() {
   const [page, setPage] = useState(1);
-  const [activeLead, setActiveLead] = useState<AdminDataAccessLead | null>(null);
+  const [contactLead, setContactLead] = useState<AdminDataAccessLead | null>(null);
+  const [inviteLead, setInviteLead] = useState<AdminDataAccessLead | null>(null);
   const pageSize = 25;
   const { data, isLoading } = useGetAdminDataAccessLeadsQuery({ page, pageSize });
   const [updateContact] = useUpdateAdminDataAccessLeadContactMutation();
+  const [inviteLeadMutation] = useInviteDataAccessLeadMutation();
 
   const columns: DataTableColumn<AdminDataAccessLead>[] = [
     {
       key: 'contact',
       header: 'Contact',
-      sortValue: (row) => `${row.name} ${row.email}`,
+      sortValue: (row) => `${row.firstName} ${row.lastName} ${row.email}`,
       render: (row) => (
         <div className="grid gap-1">
-          <p className="font-extrabold">{row.name}</p>
+          <p className="font-extrabold">
+            {row.firstName} {row.lastName}
+          </p>
           <a className="text-sm font-bold text-accent hover:underline" href={`mailto:${row.email}`}>
             {row.email}
           </a>
@@ -58,10 +74,10 @@ export default function AdminDataAccessLeadsPage() {
         ),
     },
     {
-      key: 'countriesInterested',
-      header: 'Countries Interested In',
-      sortValue: (row) => row.countriesInterested ?? '',
-      render: (row) => <span className="leading-relaxed">{row.countriesInterested ?? '-'}</span>,
+      key: 'interests',
+      header: 'Countries / Dialects Interested In',
+      sortValue: (row) => formatInterests(row),
+      render: (row) => <span className="leading-relaxed">{formatInterests(row)}</span>,
     },
     {
       key: 'createdAt',
@@ -89,16 +105,41 @@ export default function AdminDataAccessLeadsPage() {
       searchable: false,
     },
     {
+      key: 'invite',
+      header: 'Organization',
+      sortValue: (row) => row.invitedOrganization?.name ?? '',
+      render: (row) =>
+        row.invitedOrganization ? (
+          <span className="inline-flex w-fit rounded-full bg-accent-soft px-2 py-1 text-xs font-bold text-accent-dark">
+            Invited: {row.invitedOrganization.name}
+          </span>
+        ) : (
+          <span className="text-xs text-muted">Not invited</span>
+        ),
+      searchable: false,
+    },
+    {
       key: 'actions',
       header: 'Actions',
       render: (row) => (
-        <button
-          className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted"
-          onClick={() => setActiveLead(row)}
-          type="button"
-        >
-          {row.contactedAt ? 'Update contact note' : 'Mark contacted'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted"
+            onClick={() => setContactLead(row)}
+            type="button"
+          >
+            {row.contactedAt ? 'Update contact note' : 'Mark contacted'}
+          </button>
+          {!row.invitedOrganization && (
+            <button
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-accent bg-accent px-3 py-1.5 text-sm font-bold text-white transition-colors hover:bg-accent-dark"
+              onClick={() => setInviteLead(row)}
+              type="button"
+            >
+              Approve &amp; invite
+            </button>
+          )}
+        </div>
       ),
       searchable: false,
     },
@@ -113,7 +154,8 @@ export default function AdminDataAccessLeadsPage() {
           <h1 className="text-3xl font-black">Stream Requests</h1>
           <p className="leading-relaxed text-muted">
             Voice-data subscription requests submitted from the public form. Use contact details
-            below for follow-up.
+            below for follow-up, or approve a request to provision an organization and send an
+            invite.
           </p>
         </div>
 
@@ -151,13 +193,24 @@ export default function AdminDataAccessLeadsPage() {
           </div>
         </div>
 
-        {activeLead && (
+        {contactLead && (
           <UpdateLeadContactDialog
-            lead={activeLead}
-            onClose={() => setActiveLead(null)}
+            lead={contactLead}
+            onClose={() => setContactLead(null)}
             onSubmit={async (payload) => {
-              await updateContact({ id: activeLead.id, body: payload }).unwrap();
-              setActiveLead(null);
+              await updateContact({ id: contactLead.id, body: payload }).unwrap();
+              setContactLead(null);
+            }}
+          />
+        )}
+
+        {inviteLead && (
+          <InviteLeadDialog
+            lead={inviteLead}
+            onClose={() => setInviteLead(null)}
+            onSubmit={async (payload) => {
+              await inviteLeadMutation({ id: inviteLead.id, body: payload }).unwrap();
+              setInviteLead(null);
             }}
           />
         )}
@@ -200,7 +253,7 @@ function UpdateLeadContactDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         title="Lead follow-up"
-        description={`Update contact status for ${lead.name} (${lead.email}).`}
+        description={`Update contact status for ${lead.firstName} ${lead.lastName} (${lead.email}).`}
       >
         <form className="grid gap-3" onSubmit={handleSubmit}>
           <label className="flex items-start gap-2 rounded-lg border border-line bg-surface p-3 text-sm font-bold">
@@ -244,6 +297,106 @@ function UpdateLeadContactDialog({
               type="submit"
             >
               Save
+            </ActionButton>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InviteLeadDialog({
+  lead,
+  onClose,
+  onSubmit,
+}: {
+  lead: AdminDataAccessLead;
+  onClose: () => void;
+  onSubmit: (payload: { organizationName: string; planId: string }) => Promise<void>;
+}) {
+  const { data: plans, isLoading: plansLoading } = useGetSubscriptionPlansQuery();
+  const [organizationName, setOrganizationName] = useState(lead.organization ?? '');
+  const [planId, setPlanId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    if (!planId) {
+      setError('Choose a subscription plan.');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await onSubmit({ organizationName, planId });
+    } catch (mutationError) {
+      setError(normalizeErrorMessage(mutationError, 'Unable to send the invite.'));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        title="Approve & invite"
+        description={`Provision a Voice Stream organization for ${lead.firstName} ${lead.lastName} (${lead.email}) and email them an owner invite.`}
+      >
+        <form className="grid gap-3" onSubmit={handleSubmit}>
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="org-name">
+              Organization name
+            </label>
+            <input
+              className="min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink"
+              id="org-name"
+              maxLength={200}
+              onChange={(e) => setOrganizationName(e.target.value)}
+              required
+              value={organizationName}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="text-xs font-bold uppercase text-muted" htmlFor="plan-select">
+              Subscription plan
+            </label>
+            <select
+              className="min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink"
+              id="plan-select"
+              onChange={(e) => setPlanId(e.target.value)}
+              required
+              value={planId}
+            >
+              <option disabled value="">
+                {plansLoading ? 'Loading plans…' : 'Select a plan'}
+              </option>
+              {(plans ?? []).map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name} (${plan.monthlyUsdAmount}/mo)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {error && (
+            <p className="text-sm text-danger" role="alert">
+              {error}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60">
+              Cancel
+            </DialogClose>
+            <ActionButton
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+              pending={isSaving}
+              pendingLabel="Sending invite"
+              type="submit"
+            >
+              Send invite
             </ActionButton>
           </div>
         </form>

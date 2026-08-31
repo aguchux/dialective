@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { Download, MessageSquareText } from 'lucide-react';
+import { CircleHelp, Download, MessageSquareText } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { requestPwaInstall } from '@/components/PwaInstallPrompt';
@@ -40,6 +40,7 @@ const navItems = [
   { href: '/admin/courses', label: 'Courses', icon: CoursesIcon },
   { href: '/admin/updates', label: 'Updates', icon: BellIcon },
   { href: '/admin/ai-conversations', label: 'AI Conversations', icon: MessageSquareText },
+  { href: '/admin/faqs', label: 'FAQs Manager', icon: CircleHelp },
   { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
