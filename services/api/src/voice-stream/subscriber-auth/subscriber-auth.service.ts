@@ -121,6 +121,21 @@ export class SubscriberAuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // requireSso blocks password login for every role except OWNER -- OWNER
+    // always keeps a break-glass path so a broken IdP integration never
+    // permanently locks an org out with no recovery path. Same generic
+    // message as the invalid-credential path, so an unauthenticated prober
+    // never learns the org requires SSO.
+    const membership = await this.firstMembership(user.id);
+    if (membership.role !== SubscriberOrgRole.OWNER) {
+      const policy = await this.prisma.subscriberOrgSecurityPolicy.findUnique({
+        where: { organizationId: membership.organizationId },
+      });
+      if (policy?.requireSso) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+    }
+
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
       throw new UnauthorizedException('Invalid email or password');
@@ -219,6 +234,7 @@ export class SubscriberAuthService {
       throw new UnauthorizedException('User no longer exists');
     }
     const membership = await this.firstMembership(user.id);
+    const refreshTtlMs = await this.refreshTokenTtlMsFor(membership.organizationId);
 
     const { token: nextToken, hash: nextHash } = generateOpaqueToken();
 
@@ -232,7 +248,7 @@ export class SubscriberAuthService {
           userId: user.id,
           tokenHash: nextHash,
           familyId: record.familyId,
-          expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+          expiresAt: new Date(Date.now() + refreshTtlMs),
         },
       }),
     ]);
@@ -447,9 +463,20 @@ export class SubscriberAuthService {
     return membership;
   }
 
+  /** Per-org override of REFRESH_TOKEN_TTL_MS via SubscriberOrgSecurityPolicy.refreshTokenTtlMinutes -- null/absent policy falls back to the platform default. */
+  private async refreshTokenTtlMsFor(organizationId: string): Promise<number> {
+    const policy = await this.prisma.subscriberOrgSecurityPolicy.findUnique({
+      where: { organizationId },
+    });
+    return policy?.refreshTokenTtlMinutes != null
+      ? policy.refreshTokenTtlMinutes * 60 * 1000
+      : REFRESH_TOKEN_TTL_MS;
+  }
+
   /** Public so SsoService can issue tokens for a SubscriberUser resolved from a validated SAML assertion, reusing this logic instead of duplicating it. */
   async issueAuthResult(user: SubscriberUser): Promise<SubscriberAuthResult> {
     const membership = await this.firstMembership(user.id);
+    const refreshTtlMs = await this.refreshTokenTtlMsFor(membership.organizationId);
     const { token: refreshToken, hash } = generateOpaqueToken();
     const familyId = randomUUID();
 
@@ -458,7 +485,7 @@ export class SubscriberAuthService {
         userId: user.id,
         tokenHash: hash,
         familyId,
-        expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+        expiresAt: new Date(Date.now() + refreshTtlMs),
       },
     });
 

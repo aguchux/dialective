@@ -12,6 +12,8 @@ export interface AuthenticatedStreamKeyRequest extends Request {
     scopes: StreamKeyScope[];
     /** Which table `id` points into -- StreamKeyAuthGuard sets 'stream_key', OAuthJwtAuthGuard sets 'oauth_client' (both populate this same request shape). */
     credentialType: 'stream_key' | 'oauth_client';
+    /** Set by DedicatedCapacityGuard (Phase 4) once resolved, so downstream code (StreamAudioController's finally block) never needs a second Prisma lookup for the same plan field. Undefined until that guard runs. */
+    isReservedCapacityOrg?: boolean;
   };
 }
 

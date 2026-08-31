@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ActivityEventType, StreamKeyScope, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { generateOpaqueToken, hashToken } from '../../auth/token.util';
@@ -75,6 +75,7 @@ export class StreamKeysService {
     if (params.deckId) {
       await this.assertDeckBelongsToOrg(organizationId, params.deckId);
     }
+    await this.assertAllowlistPolicy(organizationId, params.allowedIps ?? []);
 
     const { fullKey, keyHash, keyPrefix } = buildKey();
     const row = await this.prisma.streamApiKey.create({
@@ -133,9 +134,19 @@ export class StreamKeysService {
     return revoked;
   }
 
-  /** Revokes the old key and mints a new one with the same deck/scope/IP config -- the old row is kept (audit trail), not deleted. */
-  async rotate(organizationId: string, keyId: string, actorUserId: string) {
+  /**
+   * Revokes the old key and mints a new one with the same deck/scope config
+   * -- the old row is kept (audit trail), not deleted. allowedIps carries
+   * over from the existing key unless the caller supplies an override,
+   * which lets a caller satisfy a newly-enabled requireIpAllowlist policy
+   * (an old key predating the policy could otherwise have an empty
+   * allowlist with no way to fix it via rotate).
+   */
+  async rotate(organizationId: string, keyId: string, actorUserId: string, allowedIps?: string[]) {
     const existing = await this.get(organizationId, keyId);
+    const effectiveAllowedIps = allowedIps ?? existing.allowedIps;
+    await this.assertAllowlistPolicy(organizationId, effectiveAllowedIps);
+
     await this.prisma.streamApiKey.update({
       where: { id: existing.id },
       data: { revokedAt: new Date() },
@@ -154,7 +165,7 @@ export class StreamKeysService {
         keyHash,
         keyPrefix,
         scopes: existing.scopes,
-        allowedIps: existing.allowedIps,
+        allowedIps: effectiveAllowedIps,
         createdByUserId: existing.createdByUserId,
         expiresAt: existing.expiresAt,
       },
@@ -173,5 +184,16 @@ export class StreamKeysService {
     });
 
     return { ...row, plaintextKey: fullKey };
+  }
+
+  private async assertAllowlistPolicy(organizationId: string, allowedIps: string[]): Promise<void> {
+    const policy = await this.prisma.subscriberOrgSecurityPolicy.findUnique({
+      where: { organizationId },
+    });
+    if (policy?.requireIpAllowlist && allowedIps.length === 0) {
+      throw new BadRequestException(
+        "This organization's security policy requires every Stream Key to have a non-empty IP allowlist",
+      );
+    }
   }
 }

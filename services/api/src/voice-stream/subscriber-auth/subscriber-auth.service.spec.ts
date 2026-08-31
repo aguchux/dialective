@@ -39,6 +39,9 @@ function setup() {
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    subscriberOrgSecurityPolicy: {
+      findUnique: jest.fn(),
+    },
     $transaction: undefined as unknown as jest.Mock,
   };
   prisma.$transaction = jest.fn(async (ops: unknown) => {
@@ -131,10 +134,54 @@ describe('SubscriberAuthService', () => {
         email: 'a@b.com',
         passwordHash: await bcrypt.hash('correct-password', 12),
       });
+      prisma.subscriberMembership.findFirst.mockResolvedValue({
+        organizationId: 'org-1',
+        role: SubscriberOrgRole.ADMIN,
+      });
+      prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue(null);
 
       await expect(service.login('a@b.com', 'wrong-password')).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+
+    it('rejects password login when the org requires SSO and the caller is not OWNER', async () => {
+      const { prisma, service } = setup();
+      const bcrypt = require('bcrypt');
+      prisma.subscriberUser.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+        passwordHash: await bcrypt.hash('correct-password', 12),
+      });
+      prisma.subscriberMembership.findFirst.mockResolvedValue({
+        organizationId: 'org-1',
+        role: SubscriberOrgRole.ADMIN,
+      });
+      prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue({ requireSso: true });
+
+      await expect(service.login('a@b.com', 'correct-password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('allows password login for OWNER even when the org requires SSO (break-glass fallback)', async () => {
+      const { prisma, mail, service } = setup();
+      const bcrypt = require('bcrypt');
+      prisma.subscriberUser.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'owner@b.com',
+        passwordHash: await bcrypt.hash('correct-password', 12),
+      });
+      prisma.subscriberMembership.findFirst.mockResolvedValue({
+        organizationId: 'org-1',
+        role: SubscriberOrgRole.OWNER,
+      });
+      prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue({ requireSso: true });
+
+      const result = await service.login('owner@b.com', 'correct-password');
+
+      expect(result.otpRequired).toBe(true);
+      expect(mail.sendOtpEmail).toHaveBeenCalled();
     });
 
     it('issues a login OTP on correct credentials', async () => {
@@ -145,6 +192,11 @@ describe('SubscriberAuthService', () => {
         email: 'a@b.com',
         passwordHash: await bcrypt.hash('correct-password', 12),
       });
+      prisma.subscriberMembership.findFirst.mockResolvedValue({
+        organizationId: 'org-1',
+        role: SubscriberOrgRole.ADMIN,
+      });
+      prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue(null);
 
       const result = await service.login('a@b.com', 'correct-password');
 
@@ -274,6 +326,60 @@ describe('SubscriberAuthService', () => {
           data: expect.objectContaining({ revokedAt: expect.any(Date) }),
         }),
       );
+    });
+
+    it('uses the org security policy refresh TTL override when set', async () => {
+      const { prisma, service } = setup();
+      prisma.subscriberRefreshToken.findUnique.mockResolvedValue({
+        id: 'rt-1',
+        userId: 'user-1',
+        familyId: 'family-1',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      prisma.subscriberUser.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@b.com' });
+      prisma.subscriberMembership.findFirst.mockResolvedValue({
+        organizationId: 'org-1',
+        role: SubscriberOrgRole.ADMIN,
+      });
+      prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue({
+        refreshTokenTtlMinutes: 60, // 1 hour, far shorter than the 30-day platform default
+      });
+
+      const before = Date.now();
+      await service.refresh('valid-token');
+
+      const createCall = prisma.subscriberRefreshToken.create.mock.calls[0][0];
+      const expiresAt = createCall.data.expiresAt.getTime();
+      // Should land ~1 hour out, not ~30 days out.
+      expect(expiresAt - before).toBeLessThan(2 * 60 * 60 * 1000);
+      expect(expiresAt - before).toBeGreaterThan(30 * 60 * 1000);
+    });
+
+    it('falls back to the 30-day platform default when no policy is configured', async () => {
+      const { prisma, service } = setup();
+      prisma.subscriberRefreshToken.findUnique.mockResolvedValue({
+        id: 'rt-1',
+        userId: 'user-1',
+        familyId: 'family-1',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      prisma.subscriberUser.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@b.com' });
+      prisma.subscriberMembership.findFirst.mockResolvedValue({
+        organizationId: 'org-1',
+        role: SubscriberOrgRole.ADMIN,
+      });
+      prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue(null);
+
+      const before = Date.now();
+      await service.refresh('valid-token');
+
+      const createCall = prisma.subscriberRefreshToken.create.mock.calls[0][0];
+      const expiresAt = createCall.data.expiresAt.getTime();
+      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+      expect(expiresAt - before).toBeGreaterThan(thirtyDaysMs - 5000);
+      expect(expiresAt - before).toBeLessThan(thirtyDaysMs + 5000);
     });
   });
 

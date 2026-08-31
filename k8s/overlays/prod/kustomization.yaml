@@ -58,6 +58,9 @@ secretGenerator:
   - name: stream-creds
     envs:
       - secrets/stream.env
+  - name: rabbitmq-creds
+    envs:
+      - secrets/rabbitmq.env
 
 configMapGenerator:
   - name: api-config

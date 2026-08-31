@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { StreamKeyScope } from '@dialectiva/db';
 import { StreamKeysService } from './stream-keys.service';
 
@@ -10,6 +10,9 @@ function setup() {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+    },
+    subscriberOrgSecurityPolicy: {
+      findUnique: jest.fn().mockResolvedValue(null),
     },
   };
   const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
@@ -81,6 +84,38 @@ describe('StreamKeysService.create', () => {
 
     expect(a.plaintextKey).not.toBe(b.plaintextKey);
   });
+
+  it('rejects an empty allowedIps when the org security policy requires an allowlist', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue({ requireIpAllowlist: true });
+
+    await expect(
+      service.create('org-1', 'user-1', { scopes: [StreamKeyScope.DECK_READ], allowedIps: [] }),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.streamApiKey.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts a non-empty allowedIps when the org security policy requires an allowlist', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue({ requireIpAllowlist: true });
+    prisma.streamApiKey.create.mockResolvedValue({ id: 'key-1', allowedIps: ['1.2.3.4'] });
+
+    await service.create('org-1', 'user-1', {
+      scopes: [StreamKeyScope.DECK_READ],
+      allowedIps: ['1.2.3.4'],
+    });
+
+    expect(prisma.streamApiKey.create).toHaveBeenCalled();
+  });
+
+  it('allows an empty allowedIps when no security policy is configured', async () => {
+    const { service, prisma } = setup();
+    prisma.streamApiKey.create.mockResolvedValue({ id: 'key-1', allowedIps: [] });
+
+    await service.create('org-1', 'user-1', { scopes: [StreamKeyScope.DECK_READ] });
+
+    expect(prisma.streamApiKey.create).toHaveBeenCalled();
+  });
 });
 
 describe('StreamKeysService.revoke', () => {
@@ -141,6 +176,48 @@ describe('StreamKeysService.rotate', () => {
           allowedIps: ['1.2.3.4'],
         }),
       }),
+    );
+    expect(result.plaintextKey).toMatch(/^dlsk_live_/);
+  });
+
+  it('rejects rotating a key with an empty allowedIps when the org policy requires an allowlist', async () => {
+    const { service, prisma } = setup();
+    prisma.streamApiKey.findUnique.mockResolvedValue({
+      id: 'key-1',
+      organizationId: 'org-1',
+      deckId: null,
+      scopes: [StreamKeyScope.AUDIO_STREAM],
+      allowedIps: [], // predates the policy
+      createdByUserId: 'user-1',
+      expiresAt: null,
+    });
+    prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue({ requireIpAllowlist: true });
+
+    await expect(service.rotate('org-1', 'key-1', 'user-1')).rejects.toThrow(BadRequestException);
+    expect(prisma.streamApiKey.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts a supplied allowedIps override at rotation time to satisfy a new allowlist policy', async () => {
+    const { service, prisma } = setup();
+    prisma.streamApiKey.findUnique.mockResolvedValue({
+      id: 'key-1',
+      organizationId: 'org-1',
+      deckId: null,
+      scopes: [StreamKeyScope.AUDIO_STREAM],
+      allowedIps: [], // predates the policy
+      createdByUserId: 'user-1',
+      expiresAt: null,
+    });
+    prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue({ requireIpAllowlist: true });
+    prisma.streamApiKey.update.mockResolvedValue({ id: 'key-1', revokedAt: new Date() });
+    prisma.streamApiKey.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+      Promise.resolve({ id: 'key-2', ...data }),
+    );
+
+    const result = await service.rotate('org-1', 'key-1', 'user-1', ['5.6.7.8']);
+
+    expect(prisma.streamApiKey.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ allowedIps: ['5.6.7.8'] }) }),
     );
     expect(result.plaintextKey).toMatch(/^dlsk_live_/);
   });

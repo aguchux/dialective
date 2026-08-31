@@ -6,6 +6,7 @@ import { StorageModule } from '../../storage/storage.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { OAuthModule } from '../oauth/oauth.module';
 import { OrgActivityModule } from '../org-activity/org-activity.module';
+import { SecurityPolicyModule } from '../security-policy/security-policy.module';
 import { StreamKeysController } from './stream-keys.controller';
 import { StreamKeysService } from './stream-keys.service';
 import { StreamManifestController } from './stream-manifest.controller';
@@ -19,6 +20,7 @@ import { StreamKeyRateLimitGuard } from './stream-key-rate-limit.guard';
 import { ConcurrentStreamGuard } from './concurrent-stream.guard';
 import { UsageCounterModule } from './usage-counter.module';
 import { QuotaGuard } from './quota.guard';
+import { DedicatedCapacityGuard } from './dedicated-capacity.guard';
 import { OAuthJwtAuthGuard } from '../oauth/oauth-jwt-auth.guard';
 
 /**
@@ -37,6 +39,7 @@ import { OAuthJwtAuthGuard } from '../oauth/oauth-jwt-auth.guard';
     OAuthModule,
     OrgActivityModule,
     UsageCounterModule,
+    SecurityPolicyModule,
   ],
   controllers: [StreamKeysController, StreamManifestController, StreamAudioController],
   providers: [
@@ -50,6 +53,7 @@ import { OAuthJwtAuthGuard } from '../oauth/oauth-jwt-auth.guard';
     StreamKeySubscriptionGuard,
     StreamKeyRateLimitGuard,
     ConcurrentStreamGuard,
+    DedicatedCapacityGuard,
   ],
 })
 export class StreamApiModule {}

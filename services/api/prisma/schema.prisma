@@ -142,7 +142,7 @@ model User {
   wordRecordings                   WordRecording[]
   qracAffirmations                 QracAffirmationSubmission[]
   testimonies                      Testimony[]
-  testimoniesEdited                Testimony[]                       @relation("TestimonyEditedBy")
+  testimoniesEdited                Testimony[]                      @relation("TestimonyEditedBy")
   marketingCampaignShares          MarketingCampaignShare[]
   marketingCampaignRegistration    MarketingCampaignRegistration?
   wordSkips                        WordSkip[]
@@ -989,7 +989,7 @@ model Testimony {
   reviewedByAdminId String?
   adminEditedAt     DateTime? // editorial correction to a pending TEXT testimony, before review
   editedByAdminId   String?
-  editedByAdmin     User?            @relation("TestimonyEditedBy", fields: [editedByAdminId], references: [id], onDelete: SetNull)
+  editedByAdmin     User?           @relation("TestimonyEditedBy", fields: [editedByAdminId], references: [id], onDelete: SetNull)
   rejectionReason   String?
   rewardCredited    Boolean         @default(false) // set true once creditTestimonyReward actually credits -- lets the admin UI show "rewarded" without re-deriving it from the ledger
   visible           Boolean         @default(true) // admin can hide an already-approved testimony from the public homepage without reversing its approval or reward
@@ -2311,6 +2311,7 @@ model SubscriberOrganization {
   webhookSubscriptions   WebhookSubscription[]
   oauthClients           OAuthClient[]
   ssoIdpConfig           SsoIdpConfig? // Phase 4 SSO -- present only for orgs with SAML configured
+  securityPolicy         SubscriberOrgSecurityPolicy? // Phase 4 enterprise security policies -- present only for orgs with a policy configured
   activityEvents         OrgActivityEvent[]
   anomalyEvents          AnomalyEvent[]
   usageCounters          UsageCounter[]
@@ -2423,22 +2424,24 @@ model SubscriberRefreshToken {
 }
 
 model SubscriptionPlan {
-  id                   String          @id @default(uuid())
-  key                  String          @unique // "starter" | "professional" | "enterprise"
-  name                 String
+  id                                String          @id @default(uuid())
+  key                               String          @unique // "starter" | "professional" | "enterprise"
+  name                              String
   // Free plans never go through Stripe Checkout and therefore have no Price.
-  stripePriceId        String?         @unique
-  monthlyUsdAmount     Decimal         @db.Decimal(10, 2)
-  maxStreamDecks       Int? // null = unlimited
-  maxTeamMembers       Int?
-  maxConcurrentStreams Int? // Phase 3 -- null = unlimited, enforced by ConcurrentStreamGuard
-  rateLimitPerMinute   Int? // Phase 3 -- null = unlimited, enforced by StreamKeyRateLimitGuard
-  minIsvcConfidence    IsvcConfidence? // Phase 5 -- null = full catalogue access, enforced by TierGateGuard
-  monthlyByteQuota     BigInt? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
-  monthlyRequestQuota  Int? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
-  ssoEnabled           Boolean         @default(false) // Phase 4 -- enterprise-tier gate, enforced by SsoEntitlementGuard
-  features             String[]        @default([]) // admin-authored comparison bullets, display-only -- not enforced by any guard, unlike the numeric limits above
-  active               Boolean         @default(true)
+  stripePriceId                     String?         @unique
+  monthlyUsdAmount                  Decimal         @db.Decimal(10, 2)
+  maxStreamDecks                    Int? // null = unlimited
+  maxTeamMembers                    Int?
+  maxConcurrentStreams              Int? // Phase 3 -- null = unlimited, enforced by ConcurrentStreamGuard
+  rateLimitPerMinute                Int? // Phase 3 -- null = unlimited, enforced by StreamKeyRateLimitGuard
+  minIsvcConfidence                 IsvcConfidence? // Phase 5 -- null = full catalogue access, enforced by TierGateGuard
+  monthlyByteQuota                  BigInt? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
+  monthlyRequestQuota               Int? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
+  ssoEnabled                        Boolean         @default(false) // Phase 4 -- enterprise-tier gate, enforced by SsoEntitlementGuard
+  enterpriseSecurityPoliciesEnabled Boolean         @default(false) // Phase 4 -- enterprise-tier gate, enforced by SecurityPolicyEntitlementGuard
+  reservedCapacityPercent           Int? // Phase 4 -- null = no reserved floor (Starter/Professional default); Enterprise orgs get this % of FLEET_MAX_CONCURRENT_STREAMS/FLEET_MAX_REQUESTS_PER_MINUTE protected from non-Enterprise admission, enforced by DedicatedCapacityGuard
+  features                          String[]        @default([]) // admin-authored comparison bullets, display-only -- not enforced by any guard, unlike the numeric limits above
+  active                            Boolean         @default(true)
 
   subscriptions Subscription[]
 
@@ -3006,6 +3009,26 @@ model SsoIdentity {
   @@map("sso_identities")
 }
 
+/// Phase 4 "enterprise security policies" -- per-org toggles an OWNER/ADMIN
+/// can configure to enforce rules on their own org's members. One row per
+/// org (organizationId unique), mirroring SsoIdpConfig's 1:1-optional shape.
+model SubscriberOrgSecurityPolicy {
+  id             String                 @id @default(uuid())
+  organizationId String                 @unique
+  organization   SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  requireSso               Boolean             @default(false) // blocks password login for every role except OWNER when true -- see SubscriberAuthService.login
+  refreshTokenTtlMinutes   Int? // null = platform default (30 days); overrides REFRESH_TOKEN_TTL_MS per-org
+  minRoleForApiKeyCreation SubscriberOrgRole[] @default([]) // empty = platform default (StreamKeysController.CAN_MANAGE_KEYS); non-empty = exact allowed-role set for key creation in this org. SubscriberOrgRole has no inherent ordering, so this is an explicit set, not a hierarchy floor.
+  requireIpAllowlist       Boolean             @default(false) // when true, StreamKeysService.create/rotate reject an empty allowedIps
+
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("subscriber_org_security_policies")
+}
+
 /// Append-only audit/usage record, one row per stream-API request (manifest,
 /// metadata, or audio) -- per doc section 37 ("every stream should record
 /// ... bytes streamed, result code, entitlement decision") and section 36
@@ -3136,6 +3159,8 @@ enum ActivityEventType {
   SSO_CONFIGURED
   SSO_DISABLED
   SSO_LOGIN
+  SECURITY_POLICY_UPDATED
+  SECURITY_POLICY_REMOVED
 }
 
 /// Org-activity audit timeline -- who did what, when, distinct from

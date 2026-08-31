@@ -2,22 +2,79 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: rabbitmq-config
+  labels:
+    app: rabbitmq
 data:
   rabbitmq.conf: |
+    # AMQP remains private to the cluster. The management UI is exposed only
+    # through the TLS ingress in rabbitmq-ingress.yaml.
     loopback_users.guest = false
-    # Keep memory watermark sane for your limit/request
-    vm_memory_high_watermark.relative = 0.7
-    # Avoid boot-time disk alarms on small PVCs
-    disk_free_limit.absolute = 200MB
     management.tcp.port = 15672
+    vm_memory_high_watermark.relative = 0.6
+    disk_free_limit.absolute = 1GB
+    log.console = true
+    log.console.level = info
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-headless
+  labels:
+    app: rabbitmq
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: amqp
+    - name: management
+      port: 15672
+      targetPort: management
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  labels:
+    app: rabbitmq
+spec:
+  type: ClusterIP
+  selector:
+    app: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: amqp
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-management
+  labels:
+    app: rabbitmq
+spec:
+  type: ClusterIP
+  selector:
+    app: rabbitmq
+  ports:
+    - name: http
+      port: 15672
+      targetPort: management
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: rabbitmq
+  labels:
+    app: rabbitmq
 spec:
   serviceName: rabbitmq-headless
   replicas: 1
+  updateStrategy:
+    type: RollingUpdate
   selector:
     matchLabels:
       app: rabbitmq
@@ -27,59 +84,76 @@ spec:
         app: rabbitmq
         tier: backend
     spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 999
+        runAsNonRoot: true
+        runAsUser: 999
       containers:
         - name: rabbitmq
-          image: rabbitmq:3.13-management
+          # Pin to a supported release instead of a floating major/latest tag.
+          image: rabbitmq:4.3.5-management
+          imagePullPolicy: IfNotPresent
           ports:
             - name: amqp
               containerPort: 5672
-            - name: http
+            - name: management
               containerPort: 15672
           env:
             - name: RABBITMQ_DEFAULT_USER
               valueFrom:
                 secretKeyRef:
-                  name: hosoptima-global-secrets
-                  key: RABBITMQ_DEFAULT_USER
+                  name: rabbitmq-creds
+                  key: username
             - name: RABBITMQ_DEFAULT_PASS
               valueFrom:
                 secretKeyRef:
-                  name: hosoptima-global-secrets
-                  key: RABBITMQ_DEFAULT_PASS
+                  name: rabbitmq-creds
+                  key: password
+            - name: RABBITMQ_DEFAULT_VHOST
+              value: /dialectiva
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: false
           volumeMounts:
             - name: rabbitmq-data
               mountPath: /var/lib/rabbitmq
-            - name: rabbitmq-conf
+            - name: rabbitmq-config
               mountPath: /etc/rabbitmq/rabbitmq.conf
               subPath: rabbitmq.conf
+              readOnly: true
           startupProbe:
             exec:
-              command:
-                - rabbitmq-diagnostics
-                - ping
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
             periodSeconds: 5
             timeoutSeconds: 5
-            failureThreshold: 24
+            failureThreshold: 36
           readinessProbe:
             exec:
-              command:
-                - rabbitmq-diagnostics
-                - check_running
-            initialDelaySeconds: 10
+              command: ["rabbitmq-diagnostics", "-q", "check_running"]
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 6
           livenessProbe:
             exec:
-              command:
-                - rabbitmq-diagnostics
-                - ping
-            initialDelaySeconds: 20
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
       volumes:
-        - name: rabbitmq-conf
+        - name: rabbitmq-config
           configMap:
             name: rabbitmq-config
   volumeClaimTemplates:
@@ -89,44 +163,42 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 10Gi
+            storage: 20Gi
         storageClassName: do-block-storage
 ---
-# Headless service for StatefulSet identity
-apiVersion: v1
-kind: Service
-metadata:
-  name: rabbitmq-headless
-  labels:
-    app: rabbitmq
-spec:
-  clusterIP: None
-  selector:
-    app: rabbitmq
-  ports:
-    - name: amqp
-      port: 5672
-      targetPort: 5672
-    - name: http
-      port: 15672
-      targetPort: 15672
----
-# Client-facing ClusterIP service (point apps here)
-apiVersion: v1
-kind: Service
+apiVersion: policy/v1
+kind: PodDisruptionBudget
 metadata:
   name: rabbitmq
-  labels:
-    app: rabbitmq
 spec:
+  minAvailable: 1
   selector:
-    app: rabbitmq
-  ports:
-    - name: amqp
-      port: 5672
-      targetPort: 5672
-    - name: http
-      port: 15672
-      targetPort: 15672
-  type: ClusterIP
-
+    matchLabels:
+      app: rabbitmq
+---
+# Requires a NetworkPolicy-capable CNI. AMQP is available only to workloads
+# in this namespace; the management UI accepts traffic only from ingress-nginx.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rabbitmq-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: rabbitmq
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: dai
+      ports:
+        - protocol: TCP
+          port: 5672
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 15672

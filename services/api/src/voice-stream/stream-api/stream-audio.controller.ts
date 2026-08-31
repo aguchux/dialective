@@ -9,6 +9,7 @@ import { StreamKeySubscriptionGuard } from './stream-key-subscription.guard';
 import { StreamKeyRateLimitGuard } from './stream-key-rate-limit.guard';
 import { ConcurrentStreamGuard } from './concurrent-stream.guard';
 import { QuotaGuard } from './quota.guard';
+import { DedicatedCapacityGuard } from './dedicated-capacity.guard';
 import { StreamManifestService } from './stream-manifest.service';
 import { StreamAccessLogService } from './stream-access-log.service';
 import { contentTypeForAudioKey } from './audio-content-type.util';
@@ -31,6 +32,7 @@ import { EitherStreamCredentialGuard } from '../oauth/either-stream-credential.g
   EitherStreamCredentialGuard,
   StreamKeyScopesGuard,
   StreamKeySubscriptionGuard,
+  DedicatedCapacityGuard, // Phase 4 -- runs before per-org ceilings so a fleet-saturation rejection never reaches QuotaGuard's DB read
   QuotaGuard,
   ConcurrentStreamGuard,
   StreamKeyRateLimitGuard,
@@ -41,6 +43,7 @@ export class StreamAudioController {
     private readonly storage: StorageService,
     private readonly accessLog: StreamAccessLogService,
     private readonly concurrentStream: ConcurrentStreamGuard,
+    private readonly dedicatedCapacity: DedicatedCapacityGuard,
     private readonly webhookEvents: WebhookEventService,
   ) {}
 
@@ -55,6 +58,8 @@ export class StreamAudioController {
     let bytesStreamed = 0;
     let resultCode = 200;
     let entitlementDecision = 'allowed';
+    const isReservedCapacityOrg = req.streamKey.isReservedCapacityOrg ?? false;
+    void this.dedicatedCapacity.trackStart(isReservedCapacityOrg);
 
     try {
       const recording = await this.manifest.getEligibleItemMetadata(
@@ -114,6 +119,7 @@ export class StreamAudioController {
       }
     } finally {
       this.concurrentStream.release(req.streamKey.id);
+      void this.dedicatedCapacity.trackEnd(isReservedCapacityOrg);
       void this.accessLog.record({
         streamApiKeyId: req.streamKey.id,
         credentialType: req.streamKey.credentialType,
