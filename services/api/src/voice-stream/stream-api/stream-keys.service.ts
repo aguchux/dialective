@@ -9,6 +9,21 @@ const KEY_PREFIX = 'dlsk_live_';
 /** Chars of the raw token (after KEY_PREFIX) kept in keyPrefix for dashboard display -- long enough to tell keys apart at a glance, short enough that it alone can't be brute-forced into the full key. */
 const DISPLAY_PREFIX_LENGTH = 8;
 
+/** Every StreamApiKey field except keyHash -- keyHash must never leave the server in an HTTP response. */
+const PUBLIC_KEY_SELECT = {
+  id: true,
+  organizationId: true,
+  deckId: true,
+  keyPrefix: true,
+  scopes: true,
+  allowedIps: true,
+  createdByUserId: true,
+  createdAt: true,
+  lastUsedAt: true,
+  expiresAt: true,
+  revokedAt: true,
+} as const;
+
 function buildKey() {
   const { token, hash } = generateOpaqueToken();
   const fullKey = `${KEY_PREFIX}${token}`;
@@ -36,6 +51,7 @@ export class StreamKeysService {
     return this.prisma.streamApiKey.findMany({
       where: { organizationId },
       orderBy: { createdAt: 'desc' },
+      select: PUBLIC_KEY_SELECT,
     });
   }
 
@@ -72,6 +88,7 @@ export class StreamKeysService {
         createdByUserId,
         expiresAt: params.expiresAt ? new Date(params.expiresAt) : null,
       },
+      select: PUBLIC_KEY_SELECT,
     });
 
     void this.webhookEvents.emit(organizationId, WebhookEventType.API_KEY_CREATED, {
@@ -102,6 +119,7 @@ export class StreamKeysService {
     const revoked = await this.prisma.streamApiKey.update({
       where: { id: key.id },
       data: { revokedAt: new Date() },
+      select: PUBLIC_KEY_SELECT,
     });
     void this.webhookEvents.emit(organizationId, WebhookEventType.API_KEY_REVOKED, {
       organization_id: organizationId,
@@ -140,6 +158,7 @@ export class StreamKeysService {
         createdByUserId: existing.createdByUserId,
         expiresAt: existing.expiresAt,
       },
+      select: PUBLIC_KEY_SELECT,
     });
     void this.webhookEvents.emit(organizationId, WebhookEventType.API_KEY_CREATED, {
       organization_id: organizationId,

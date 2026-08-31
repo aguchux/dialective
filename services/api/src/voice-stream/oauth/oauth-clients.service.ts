@@ -6,6 +6,18 @@ import { OrgActivityService } from '../org-activity/org-activity.service';
 
 const CLIENT_ID_PREFIX = 'dlm2m_';
 
+/** Every OAuthClient field except secretHash -- secretHash must never leave the server in an HTTP response. */
+const PUBLIC_CLIENT_SELECT = {
+  id: true,
+  organizationId: true,
+  deckId: true,
+  clientId: true,
+  scopes: true,
+  createdByUserId: true,
+  createdAt: true,
+  revokedAt: true,
+} as const;
+
 function buildClient() {
   const { token: clientIdSuffix } = generateOpaqueToken();
   const { token: secret, hash: secretHash } = generateOpaqueToken();
@@ -33,6 +45,7 @@ export class OAuthClientsService {
     return this.prisma.oAuthClient.findMany({
       where: { organizationId },
       orderBy: { createdAt: 'desc' },
+      select: PUBLIC_CLIENT_SELECT,
     });
   }
 
@@ -62,6 +75,7 @@ export class OAuthClientsService {
         scopes: params.scopes,
         createdByUserId,
       },
+      select: PUBLIC_CLIENT_SELECT,
     });
 
     void this.orgActivity.record(organizationId, ActivityEventType.OAUTH_CLIENT_CREATED, createdByUserId, {
@@ -85,6 +99,7 @@ export class OAuthClientsService {
     const revoked = await this.prisma.oAuthClient.update({
       where: { id: client.id },
       data: { revokedAt: new Date() },
+      select: PUBLIC_CLIENT_SELECT,
     });
     void this.orgActivity.record(organizationId, ActivityEventType.OAUTH_CLIENT_REVOKED, actorUserId, {
       clientId: revoked.clientId,
