@@ -21,12 +21,15 @@ export function FaqEditorDialog({
   onOpenChange,
   faq,
   initialQuestion,
+  sourceMessageId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   faq?: AdminFaq | null;
   /** A question sourced from an AI conversation is protected until the admin explicitly edits it. */
   initialQuestion?: string;
+  /** The AI-conversation message this FAQ is being created from, if any. */
+  sourceMessageId?: string;
 }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
@@ -59,7 +62,11 @@ export function FaqEditorDialog({
           body: { question: question.trim(), answer: answer.trim() },
         }).unwrap();
       } else {
-        await createFaq({ question: question.trim(), answer: answer.trim() }).unwrap();
+        await createFaq({
+          question: question.trim(),
+          answer: answer.trim(),
+          sourceMessageId,
+        }).unwrap();
       }
       onOpenChange(false);
     } catch (err) {

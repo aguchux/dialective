@@ -320,6 +320,7 @@ export interface AdminAssistantConversationDetail {
     role: 'user' | 'assistant';
     content: string;
     createdAt: string;
+    convertedToFaqId: string | null;
   }>;
   truncated: boolean;
 }
@@ -343,6 +344,8 @@ export interface AdminFaq {
 export interface FaqInput {
   question: string;
   answer: string;
+  /** Set when creating this FAQ from an AI-conversation user message. */
+  sourceMessageId?: string;
 }
 
 export interface ReferralSummary {
@@ -3531,7 +3534,8 @@ export const dialectivaApi = createApi({
     }),
     createFaq: builder.mutation<AdminFaq, FaqInput>({
       query: (body) => ({ url: '/admin/faqs', method: 'POST', body }),
-      invalidatesTags: ['Faqs'],
+      invalidatesTags: (_result, _error, body) =>
+        body.sourceMessageId ? ['Faqs', 'AdminAssistantConversations'] : ['Faqs'],
     }),
     updateFaq: builder.mutation<
       AdminFaq,

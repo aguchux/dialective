@@ -178,12 +178,14 @@ model AssistantConversation {
 }
 
 model AssistantMessage {
-  id             String                @id @default(uuid())
-  conversationId String
-  conversation   AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String
-  content        String
-  createdAt      DateTime              @default(now())
+  id               String                @id @default(uuid())
+  conversationId   String
+  conversation     AssistantConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role             String
+  content          String
+  createdAt        DateTime               @default(now())
+  convertedToFaqId String?                @unique
+  convertedToFaq   Faq?                   @relation(fields: [convertedToFaqId], references: [id], onDelete: SetNull)
 
   @@index([conversationId, createdAt])
   @@map("assistant_messages")
@@ -193,15 +195,16 @@ model AssistantMessage {
 /// separately from the assistant transcript: an administrator must review and
 /// provide the answer before a user question becomes public guidance.
 model Faq {
-  id          String   @id @default(uuid())
-  question    String   @unique
-  answer      String
-  visible     Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdById String?
-  createdBy   User?    @relation("FaqCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String            @id @default(uuid())
+  question      String            @unique
+  answer        String
+  visible       Boolean           @default(true)
+  sortOrder     Int               @default(0)
+  createdById   String?
+  createdBy     User?             @relation("FaqCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  sourceMessage AssistantMessage?
 
   @@index([visible, sortOrder])
   @@map("faqs")

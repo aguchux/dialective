@@ -183,7 +183,7 @@ export class AssistantService implements OnModuleDestroy {
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 500,
-          select: { id: true, role: true, content: true, createdAt: true },
+          select: { id: true, role: true, content: true, createdAt: true, convertedToFaqId: true },
         },
       },
     });

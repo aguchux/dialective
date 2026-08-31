@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useEffect, useState } from 'react';
 import {
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
@@ -29,7 +30,7 @@ export default function AdminAiConversationsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [faqQuestion, setFaqQuestion] = useState<string | null>(null);
+  const [faqDraft, setFaqDraft] = useState<{ question: string; messageId: string } | null>(null);
   const deferredSearch = useDeferredValue(search.trim());
   const { data, isFetching, isLoading, isError } = useGetAdminAssistantConversationsQuery({
     page,
@@ -215,16 +216,24 @@ export default function AdminAiConversationsPage() {
                       >
                         {formatDateTime(message.createdAt)}
                       </time>
-                      {message.role === 'user' && (
-                        <button
-                          className="mt-3 inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-white/40 px-2.5 py-1 text-xs font-black text-white transition-colors hover:bg-white/15"
-                          onClick={() => setFaqQuestion(message.content)}
-                          type="button"
-                        >
-                          <CircleHelp className="size-3.5" aria-hidden="true" />
-                          Turn into FAQ
-                        </button>
-                      )}
+                      {message.role === 'user' &&
+                        (message.convertedToFaqId ? (
+                          <span className="mt-3 inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-white/40 px-2.5 py-1 text-xs font-black text-white/85">
+                            <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                            Already an FAQ
+                          </span>
+                        ) : (
+                          <button
+                            className="mt-3 inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-white/40 px-2.5 py-1 text-xs font-black text-white transition-colors hover:bg-white/15"
+                            onClick={() =>
+                              setFaqDraft({ question: message.content, messageId: message.id })
+                            }
+                            type="button"
+                          >
+                            <CircleHelp className="size-3.5" aria-hidden="true" />
+                            Turn into FAQ
+                          </button>
+                        ))}
                     </article>
                   ))}
                 </div>
@@ -243,11 +252,12 @@ export default function AdminAiConversationsPage() {
           </section>
         </div>
         <FaqEditorDialog
-          initialQuestion={faqQuestion ?? undefined}
+          initialQuestion={faqDraft?.question}
           onOpenChange={(open) => {
-            if (!open) setFaqQuestion(null);
+            if (!open) setFaqDraft(null);
           }}
-          open={faqQuestion !== null}
+          open={faqDraft !== null}
+          sourceMessageId={faqDraft?.messageId}
         />
       </div>
     </AdminShell>
