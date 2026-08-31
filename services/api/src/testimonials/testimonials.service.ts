@@ -17,6 +17,7 @@ import { ListTestimoniesAdminDto } from './dto/list-testimonies-admin.dto';
 import { ListPublicTestimoniesDto } from './dto/list-public-testimonies.dto';
 import { ReviewTestimonyDto } from './dto/review-testimony.dto';
 import { UpdateTestimonyVisibilityDto } from './dto/update-testimony-visibility.dto';
+import { UpdateTestimonyTextDto } from './dto/update-testimony-text.dto';
 
 const TESTIMONY_BUCKET = process.env.SPACES_TESTIMONY_BUCKET ?? 'dialectiva-testimonials';
 const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
@@ -176,6 +177,34 @@ export class TestimonialsService {
     }
 
     return updated;
+  }
+
+  /**
+   * An editorial correction is intentionally separate from approval: only a
+   * pending TEXT testimony may be changed, the configured trainer-visible
+   * length limit still applies, and the responsible admin is retained.
+   */
+  async updatePendingText(adminId: string, testimonyId: string, dto: UpdateTestimonyTextDto) {
+    const testimony = await this.prisma.testimony.findUnique({ where: { id: testimonyId } });
+    if (!testimony) throw new NotFoundException('Testimony not found');
+    if (testimony.kind !== 'TEXT') {
+      throw new BadRequestException('Only text testimonials can be edited');
+    }
+    if (testimony.status !== 'PENDING') {
+      throw new ConflictException('Only pending testimonials can be edited');
+    }
+
+    const text = dto.text.trim();
+    if (!text) throw new BadRequestException('Enter the corrected testimony text');
+    const maxLength = await this.settings.getTestimonyMaxTextLength();
+    if (text.length > maxLength) {
+      throw new BadRequestException(`Testimony text must be ${maxLength} characters or fewer`);
+    }
+
+    return this.prisma.testimony.update({
+      where: { id: testimonyId },
+      data: { text, adminEditedAt: new Date(), editedByAdminId: adminId },
+    });
   }
 
   /**

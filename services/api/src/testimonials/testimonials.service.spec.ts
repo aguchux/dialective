@@ -266,6 +266,47 @@ describe('TestimonialsService', () => {
     });
   });
 
+  describe('updatePendingText', () => {
+    it('records a pending text correction and the editing admin', async () => {
+      prisma.testimony.findUnique.mockResolvedValue({
+        id: 'testimony-1',
+        kind: 'TEXT',
+        status: 'PENDING',
+      });
+
+      await service.updatePendingText('admin-1', 'testimony-1', { text: '  Clear wording.  ' });
+
+      expect(prisma.testimony.update).toHaveBeenCalledWith({
+        where: { id: 'testimony-1' },
+        data: {
+          text: 'Clear wording.',
+          adminEditedAt: expect.any(Date),
+          editedByAdminId: 'admin-1',
+        },
+      });
+    });
+
+    it('does not allow a video or reviewed testimonial to be edited', async () => {
+      prisma.testimony.findUnique.mockResolvedValueOnce({
+        id: 'testimony-1',
+        kind: 'VIDEO',
+        status: 'PENDING',
+      });
+      await expect(
+        service.updatePendingText('admin-1', 'testimony-1', { text: 'Correction' }),
+      ).rejects.toThrow('Only text testimonials can be edited');
+
+      prisma.testimony.findUnique.mockResolvedValueOnce({
+        id: 'testimony-2',
+        kind: 'TEXT',
+        status: 'APPROVED',
+      });
+      await expect(
+        service.updatePendingText('admin-1', 'testimony-2', { text: 'Correction' }),
+      ).rejects.toThrow('Only pending testimonials can be edited');
+    });
+  });
+
   describe('setVisibility', () => {
     it('hides an approved testimony without touching status or reward', async () => {
       prisma.testimony.findUnique.mockResolvedValue({

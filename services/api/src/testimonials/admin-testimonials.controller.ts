@@ -6,6 +6,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { ListTestimoniesAdminDto } from './dto/list-testimonies-admin.dto';
 import { ReviewTestimonyDto } from './dto/review-testimony.dto';
 import { UpdateTestimonyVisibilityDto } from './dto/update-testimony-visibility.dto';
+import { UpdateTestimonyTextDto } from './dto/update-testimony-text.dto';
 import { TestimonialsService } from './testimonials.service';
 
 @Controller('admin/testimonials')
@@ -26,6 +27,15 @@ export class AdminTestimonialsController {
     @Body() dto: ReviewTestimonyDto,
   ) {
     return this.testimonials.review(req.user.sub, id, dto);
+  }
+
+  @Patch(':id/text')
+  updateText(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateTestimonyTextDto,
+  ) {
+    return this.testimonials.updatePendingText(req.user.sub, id, dto);
   }
 
   @Patch(':id/visibility')

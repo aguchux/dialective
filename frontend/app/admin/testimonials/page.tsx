@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, Eye, EyeOff, Play, XCircle } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Pencil, Play, XCircle } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { Dialog, DialogContent } from '@/components/ui/Dialog';
 import {
   Testimony,
   TestimonyStatus,
@@ -11,6 +12,7 @@ import {
   useGetAdminTestimonialsQuery,
   useReviewTestimonyMutation,
   useSetTestimonyVisibilityMutation,
+  useUpdateTestimonyTextMutation,
 } from '@/store/api';
 
 const secondaryButtonClass =
@@ -97,6 +99,61 @@ function VisibilityToggle({ testimony }: { testimony: Testimony }) {
   );
 }
 
+function TestimonyTextEditor({ testimony }: { testimony: Testimony }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(testimony.text ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [updateText, { isLoading }] = useUpdateTestimonyTextMutation();
+
+  function changeOpen(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      setText(testimony.text ?? '');
+      setError(null);
+    }
+  }
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    try {
+      await updateText({ id: testimony.id, text }).unwrap();
+      setOpen(false);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to save the corrected testimony.'));
+    }
+  }
+
+  return (
+    <Dialog onOpenChange={changeOpen} open={open}>
+      <button className={secondaryButtonClass} onClick={() => changeOpen(true)} type="button">
+        <Pencil className="mr-1 inline size-3.5" aria-hidden="true" /> Edit text
+      </button>
+      <DialogContent
+        description="Correct spelling or grammar before approving. The original testimonial remains pending until you approve it separately."
+        title="Edit text testimonial"
+      >
+        <form className="grid gap-3" onSubmit={(event) => void save(event)}>
+          <label className="grid gap-1.5 text-sm font-bold" htmlFor={`testimony-text-${testimony.id}`}>
+            Corrected testimonial
+            <textarea
+              className="min-h-40 w-full resize-y rounded-lg border border-line bg-white p-3 text-sm font-normal leading-relaxed text-ink"
+              id={`testimony-text-${testimony.id}`}
+              onChange={(event) => setText(event.target.value)}
+              value={text}
+            />
+          </label>
+          {error && <p className="text-sm font-bold text-danger" role="alert">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button className={secondaryButtonClass} onClick={() => setOpen(false)} type="button">Cancel</button>
+            <ActionButton className="inline-flex min-h-9 items-center justify-center rounded-lg bg-accent px-3 py-1.5 text-sm font-extrabold text-white hover:bg-accent-dark" pending={isLoading} pendingLabel="Saving" type="submit">Save correction</ActionButton>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ReviewActions({ testimony }: { testimony: Testimony & { videoUrl: string | null } }) {
   const [review, { isLoading }] = useReviewTestimonyMutation();
   const [rejecting, setRejecting] = useState(false);
@@ -173,6 +230,7 @@ function ReviewActions({ testimony }: { testimony: Testimony & { videoUrl: strin
   return (
     <div className="grid gap-2">
       <div className="flex gap-2">
+        {testimony.kind === 'TEXT' && <TestimonyTextEditor testimony={testimony} />}
         <ActionButton
           className="inline-flex min-h-9 items-center justify-center rounded-lg bg-accent px-3 py-1.5 text-sm font-extrabold text-white hover:bg-accent-dark"
           onClick={() => void approve()}
@@ -283,6 +341,11 @@ export default function AdminTestimonialsPage() {
                     <p className="text-xs text-muted">
                       Submitted {new Date(item.createdAt).toLocaleString()}
                     </p>
+                    {item.adminEditedAt && (
+                      <p className="text-xs font-bold text-amber-800">
+                        Edited by an administrator before review.
+                      </p>
+                    )}
                   </div>
                   <div className="grid gap-2">
                     <ReviewActions testimony={item} />

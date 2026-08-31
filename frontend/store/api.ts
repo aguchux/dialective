@@ -942,6 +942,8 @@ export interface Testimony {
   status: TestimonyStatus;
   reviewedAt: string | null;
   reviewedByAdminId: string | null;
+  adminEditedAt: string | null;
+  editedByAdminId: string | null;
   rejectionReason: string | null;
   rewardCredited: boolean;
   visible: boolean;
@@ -2371,6 +2373,14 @@ export const dialectivaApi = createApi({
       query: ({ id, ...body }) => ({ url: `/admin/testimonials/${id}`, method: 'PATCH', body }),
       invalidatesTags: ['Testimony'],
     }),
+    updateTestimonyText: builder.mutation<Testimony, { id: string; text: string }>({
+      query: ({ id, text }) => ({
+        url: `/admin/testimonials/${id}/text`,
+        method: 'PATCH',
+        body: { text },
+      }),
+      invalidatesTags: ['Testimony'],
+    }),
     setTestimonyVisibility: builder.mutation<Testimony, { id: string; visible: boolean }>({
       query: ({ id, visible }) => ({
         url: `/admin/testimonials/${id}/visibility`,
@@ -3798,6 +3808,7 @@ export const {
   useSubmitTestimonyMutation,
   useGetAdminTestimonialsQuery,
   useReviewTestimonyMutation,
+  useUpdateTestimonyTextMutation,
   useSetTestimonyVisibilityMutation,
   useGetMarketingMaterialsQuery,
   useCreateCampaignShareMutation,

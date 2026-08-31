@@ -9,6 +9,7 @@ import { StreamApiModule } from './stream-api/stream-api.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { ReportsModule } from './reports/reports.module';
 import { AnomalyDetectionModule } from './anomaly-detection/anomaly-detection.module';
+import { SsoModule } from './sso/sso.module';
 
 /**
  * Dialect Library Voice Stream -- Phase 1 (Subscriber Foundation). See
@@ -30,6 +31,7 @@ import { AnomalyDetectionModule } from './anomaly-detection/anomaly-detection.mo
     WebhooksModule,
     ReportsModule,
     AnomalyDetectionModule,
+    SsoModule,
   ],
 })
 export class VoiceStreamModule {}

@@ -34,24 +34,15 @@ CREATE UNIQUE INDEX "sso_idp_configs_organizationId_key" ON "sso_idp_configs"("o
 
 ALTER TABLE "sso_idp_configs" ADD CONSTRAINT "sso_idp_configs_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "subscriber_organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
-CREATE TABLE "sso_login_links" (
-    "id" TEXT NOT NULL,
-    "idpConfigId" TEXT NOT NULL,
-    "samlRequestId" TEXT NOT NULL,
+CREATE TABLE "sso_request_cache" (
+    "key" TEXT NOT NULL,
+    "value" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "expiresAt" TIMESTAMP(3) NOT NULL,
-    "consumedAt" TIMESTAMP(3),
 
-    CONSTRAINT "sso_login_links_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "sso_request_cache_pkey" PRIMARY KEY ("key")
 );
 
-CREATE UNIQUE INDEX "sso_login_links_samlRequestId_key" ON "sso_login_links"("samlRequestId");
-
-CREATE INDEX "sso_login_links_idpConfigId_idx" ON "sso_login_links"("idpConfigId");
-
-CREATE INDEX "sso_login_links_expiresAt_idx" ON "sso_login_links"("expiresAt");
-
-ALTER TABLE "sso_login_links" ADD CONSTRAINT "sso_login_links_idpConfigId_fkey" FOREIGN KEY ("idpConfigId") REFERENCES "sso_idp_configs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE INDEX "sso_request_cache_createdAt_idx" ON "sso_request_cache"("createdAt");
 
 CREATE TABLE "sso_identities" (
     "id" TEXT NOT NULL,

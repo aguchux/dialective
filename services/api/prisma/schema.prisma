@@ -142,6 +142,7 @@ model User {
   wordRecordings                   WordRecording[]
   qracAffirmations                 QracAffirmationSubmission[]
   testimonies                      Testimony[]
+  testimoniesEdited                Testimony[]                       @relation("TestimonyEditedBy")
   marketingCampaignShares          MarketingCampaignShare[]
   marketingCampaignRegistration    MarketingCampaignRegistration?
   wordSkips                        WordSkip[]
@@ -986,12 +987,16 @@ model Testimony {
   status            TestimonyStatus @default(PENDING)
   reviewedAt        DateTime?
   reviewedByAdminId String?
+  adminEditedAt     DateTime? // editorial correction to a pending TEXT testimony, before review
+  editedByAdminId   String?
+  editedByAdmin     User?            @relation("TestimonyEditedBy", fields: [editedByAdminId], references: [id], onDelete: SetNull)
   rejectionReason   String?
   rewardCredited    Boolean         @default(false) // set true once creditTestimonyReward actually credits -- lets the admin UI show "rewarded" without re-deriving it from the ledger
   visible           Boolean         @default(true) // admin can hide an already-approved testimony from the public homepage without reversing its approval or reward
   createdAt         DateTime        @default(now())
 
   @@index([userId])
+  @@index([editedByAdminId])
   @@index([status, createdAt])
   @@map("testimonies")
 }
@@ -2956,32 +2961,28 @@ model SsoIdpConfig {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  loginLinks SsoLoginLink[]
   identities SsoIdentity[]
 
   @@map("sso_idp_configs")
 }
 
-/// Tracks an in-flight SP-initiated login (the AuthnRequest ID we sent), so
-/// the ACS endpoint can validate the assertion's InResponseTo against a
-/// request WE actually issued (replay/CSRF protection for the SP-initiated
-/// path specifically -- node-saml's own validateInResponseTo option only
-/// checks presence/format; single-use enforcement across horizontally
-/// scaled instances needs this DB-backed table). IdP-initiated assertions
-/// have no InResponseTo (absent/empty per spec) and therefore never
-/// reference this table -- see SsoService.
-model SsoLoginLink {
-  id            String       @id @default(uuid())
-  idpConfigId   String
-  idpConfig     SsoIdpConfig @relation(fields: [idpConfigId], references: [id], onDelete: Cascade)
-  samlRequestId String       @unique
-  createdAt     DateTime     @default(now())
-  expiresAt     DateTime
-  consumedAt    DateTime?
+/// Backs SsoService's PrismaSamlCacheProvider, a node-saml CacheProvider
+/// implementation (saveAsync/getAsync/removeAsync over {key, value,
+/// createdAt}) -- node-saml's own AuthnRequest-ID tracking for SP-initiated
+/// login's InResponseTo replay/CSRF defense. node-saml's built-in
+/// InMemoryCacheProvider explicitly documents itself as "NOT sufficient"
+/// for load-balanced/multi-instance deployments since a request generated
+/// on one instance may be validated on another -- this table is that
+/// caller-supplied, horizontally-scalable replacement. IdP-initiated
+/// assertions have no InResponseTo and never touch this table. Rows are
+/// single-use: node-saml calls removeAsync on successful validation.
+model SsoRequestCache {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
 
-  @@index([idpConfigId])
-  @@index([expiresAt])
-  @@map("sso_login_links")
+  @@index([createdAt])
+  @@map("sso_request_cache")
 }
 
 /// Links a SubscriberUser to the (idpConfig, NameID) pair the IdP asserts
