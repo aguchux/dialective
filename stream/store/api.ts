@@ -364,8 +364,15 @@ export interface AnomalyEventEntry {
   details: Record<string, unknown>;
 }
 
+// See frontend/store/api.ts's identical constant for why this exists --
+// same fix, same rationale, applied to this app's separate RTK Query
+// client so a hung request here (e.g. during an API deploy) also fails
+// visibly instead of spinning forever.
+const REQUEST_TIMEOUT_MS = 20_000;
+
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: `${PUBLIC_API_V1_BASE_URL}/voice-stream`,
+  timeout: REQUEST_TIMEOUT_MS,
   prepareHeaders: async (headers) => {
     headers.set('Content-Type', 'application/json');
     const session = await getCurrentSession().catch(() => null);

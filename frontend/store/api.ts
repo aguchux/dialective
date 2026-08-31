@@ -2006,8 +2006,17 @@ function normalizeErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+// Without a ceiling, a request caught mid-flight during an API deploy (or
+// any other network stall) hangs forever -- fetchBaseQuery has no default
+// timeout, and the browser's own TCP-level timeout can be minutes. This
+// aborts and surfaces a retryable FETCH_ERROR instead, so a stuck screen
+// (e.g. WordTrainingDialog's "Preparing your first word" spinner) fails
+// visibly rather than silently.
+const REQUEST_TIMEOUT_MS = 20_000;
+
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: PUBLIC_API_V1_BASE_URL,
+  timeout: REQUEST_TIMEOUT_MS,
   prepareHeaders: async (headers) => {
     headers.set('Content-Type', 'application/json');
     // A session-lookup failure must never block a request -- most endpoints

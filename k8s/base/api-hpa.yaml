@@ -7,7 +7,11 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: api
-  minReplicas: 1
+  # minReplicas raised from 1 to 2: a single replica means every deploy
+  # has a window with zero pods serving traffic (see api-deployment.yaml's
+  # maxUnavailable: 0 comment) -- the HPA would otherwise scale back down
+  # to 1 under low load and silently undo that redundancy.
+  minReplicas: 2
   maxReplicas: 5
   metrics:
     - type: Resource
