@@ -1482,7 +1482,7 @@ export interface PlatformSettingsInput {
 }
 
 export type WordTrainingDirection =
-  'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD';
+  'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD' | 'PHRASE_TO_DIALECT';
 export type RecordingNoiseRating = 'NOISY' | 'FAIR' | 'QUIET';
 
 export interface WordTrainingSession {
@@ -1504,6 +1504,7 @@ export interface WordTrainingAssignment {
   dialectTag: string | null;
   dialectKeyboardLayout: string | null;
   fragments: { text: string; position: number }[] | null;
+  phraseTierJustReached: boolean;
 }
 
 export interface SpellingSuggestion {
@@ -1646,7 +1647,7 @@ export interface AdminRecordingSummary {
   id: string;
   kind: RecordingKind;
   trainer?: AdminRecordingTrainer | null;
-  direction: 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD' | null;
+  direction: 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD' | 'PHRASE_TO_DIALECT' | null;
   promptText: string;
   responseText: string | null;
   asrTranscript: string | null;

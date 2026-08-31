@@ -606,6 +606,23 @@ model Prompt {
   origin     PromptOrigin @default(LLM_FREEFORM) // default matches every pre-existing generated row's actual origin; SEED/WORD_COMPOSED are set explicitly by their respective insert call sites
   createdAt  DateTime     @default(now())
 
+  // Non-null ONLY on rows generated for the PHRASE_TO_DIALECT word-training
+  // escalation feature (see WordsService.pickPhraseSource) -- word-generator-job's
+  // tier-composition pass stamps both with the exact [min,max] word-count band of
+  // the tier it composed this phrase for (see phrase-tiers.const.ts). Every
+  // pre-existing Prompt (dictation SEED/LLM_FREEFORM, and SENTENCE_REBUILD's
+  // WORD_COMPOSED rows) leaves both null -- this pair is the ONLY signal marking a
+  // row as phrase-pool content, and doubles as the tier-range filter.
+  // Deliberately not reusing `origin` for this: origin means "how was this
+  // generated" (SEED/LLM_FREEFORM/WORD_COMPOSED), not "what exercise consumes it"
+  // -- a WORD_COMPOSED row can be for SENTENCE_REBUILD OR PHRASE_TO_DIALECT, origin
+  // alone can't tell them apart. pickPhraseSource matches by inclusive-range
+  // overlap (phraseWordCountMin <= tier.max AND phraseWordCountMax >= tier.min),
+  // not exact match, so a phrase generated for a slightly wider band can still
+  // serve an adjacent tier if that tier's own pool is thin.
+  phraseWordCountMin Int?
+  phraseWordCountMax Int?
+
   submissions  Submission[]
   translations PromptTranslation[]
   words        PromptWord[]
@@ -613,6 +630,7 @@ model Prompt {
   recordings   WordRecording[]
 
   @@index([dialectTag, active])
+  @@index([dialectTag, active, phraseWordCountMin, phraseWordCountMax])
   @@map("prompts")
 }
 
@@ -839,6 +857,7 @@ enum WordTrainingDirection {
   ENGLISH_TO_DIALECT
   DIALECT_TO_ENGLISH
   SENTENCE_REBUILD
+  PHRASE_TO_DIALECT
 }
 
 enum RecordingNoiseRating {
@@ -1062,9 +1081,9 @@ model WordTrainingAssignment {
   id                String                @id @default(uuid())
   sessionId         String
   session           TrainingSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  wordId            String? // required for ENGLISH_TO_DIALECT/DIALECT_TO_ENGLISH, null for SENTENCE_REBUILD
+  wordId            String? // required for ENGLISH_TO_DIALECT/DIALECT_TO_ENGLISH (word-sourced), null for SENTENCE_REBUILD/PHRASE_TO_DIALECT and for a DIALECT_TO_ENGLISH assignment whose reverse-validation source was itself a phrase
   word              Word?                 @relation(fields: [wordId], references: [id], onDelete: Cascade)
-  promptId          String? // required for SENTENCE_REBUILD, null otherwise
+  promptId          String? // required for SENTENCE_REBUILD and PHRASE_TO_DIALECT, and for a DIALECT_TO_ENGLISH assignment whose reverse-validation source was a phrase; null otherwise
   prompt            Prompt?               @relation(fields: [promptId], references: [id], onDelete: Cascade)
   direction         WordTrainingDirection
   sourceRecordingId String?
@@ -1088,18 +1107,22 @@ model WordTrainingAssignment {
 /// packages/db/src/payouts.ts) but has its own scoring path, since word
 /// training has no consensus/quorum concept:
 ///   - DIALECT_TO_ENGLISH: self-scores at creation (exact-match against the
-///     known English word) -- WordsService.createRecording sets
-///     validationScore/score/status=SCORED synchronously.
-///   - ENGLISH_TO_DIALECT: has no ground truth of its own. It is scored only
-///     once a peer's reverse-validation (a DIALECT_TO_ENGLISH recording whose
-///     sourceRecordingId points back at it) lands -- see
-///     WordsService.scoreReverseValidatedSource. Until then it stays PENDING
-///     and is excluded from settlement, same as an un-quorum'd Submission.
+///     known English word/prompt text) -- WordsService.createRecording sets
+///     validationScore/score/status=SCORED synchronously. Its source can be
+///     either an ENGLISH_TO_DIALECT or a PHRASE_TO_DIALECT recording (see
+///     WordsService.pickReverseSource), same reverse-validation mechanism
+///     either way.
+///   - ENGLISH_TO_DIALECT and PHRASE_TO_DIALECT: neither has ground truth of
+///     its own. Both are scored only once a peer's reverse-validation (a
+///     DIALECT_TO_ENGLISH recording whose sourceRecordingId points back at
+///     it) lands -- see WordsService.scoreReverseValidatedSource. Until then
+///     they stay PENDING and are excluded from settlement, same as an
+///     un-quorum'd Submission.
 model WordRecording {
   id                        String                  @id @default(uuid())
-  wordId                    String? // null for SENTENCE_REBUILD (points at a Prompt via promptId instead)
+  wordId                    String? // null for SENTENCE_REBUILD/PHRASE_TO_DIALECT (points at a Prompt via promptId instead)
   word                      Word?                   @relation(fields: [wordId], references: [id], onDelete: Cascade)
-  promptId                  String? // set for SENTENCE_REBUILD, null otherwise
+  promptId                  String? // set for SENTENCE_REBUILD and PHRASE_TO_DIALECT, null otherwise
   prompt                    Prompt?                 @relation(fields: [promptId], references: [id], onDelete: Cascade)
   userId                    String?
   user                      User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -2012,6 +2035,9 @@ model PlatformSettings {
   speechExpressionEnabled                Boolean   @default(false) // master kill switch for the speech-expression analysis pass (emotion/tone/style/speed/energy/prosodyMetrics) in quality-gate-worker. When false, the worker skips the analysis entirely (not "computes but hides" -- unlike qualityGateEnabled, there's no downstream scoring use for this to gate, and emotion classification has a real per-job CPU cost worth skipping when unused). Purely descriptive/informational output -- deliberately has NO qualityWeight* counterpart and never feeds compositeScore/payout (see docs/Dialect-Library-Speech-Expression-Metadata-Plan.md's "never permanently bake into scoring" principle)
   spellingNormalizationProviderOrder     String    @default("openai,deepseek,anthropic") // CSV fallback-try order for spelling normalization, same permutation rules as llmProviderOrder
   sentenceRebuildEnabled                 Boolean   @default(false) // master kill switch for the SENTENCE_REBUILD word-training exercise; WordsService.nextAssignment never offers it when false
+  phraseEscalationEnabled                Boolean   @default(false) // master kill switch for PHRASE_TO_DIALECT assignment -- when false, WordsService.nextAssignment never phrase-escalates a trainer regardless of their lifetime WordRecording count (see phrase-tiers.const.ts); separate from phraseTierGenerationEnabled below, which gates word-generator-job's pool-building pass instead, so the pool can pre-populate before assignment goes live
+  phraseTierGenerationEnabled            Boolean   @default(false) // master kill switch for word-generator-job's per-tier phrase composition pass (runPhraseTierGeneration); job's regular single-word/composition run is unaffected when this is false
+  phraseTierItemsPerTierPerRun           Int       @default(3) // how many new phrases word-generator-job composes PER TIER (see phrase-tiers.const.ts) per scheduled run, same convention as llmItemsPerRun above but scoped per-tier instead of globally
   testimonyEnabled                       Boolean   @default(false) // master switch for prompting trainers to give a testimony (trainer dashboard banner) and for the public homepage carousel; when false neither the banner nor any carousel content appears, and submission is rejected server-side
   testimonyMaxTextLength                 Int       @default(200) // max characters for a TEXT testimony, enforced both client-side (textarea maxLength) and server-side (TestimonialsService.submit)
   testimonyMaxVideoSeconds               Int       @default(30) // hard cap on a VIDEO testimony's recording length, enforced client-side same as WordTrainingDialog's maxRecordingMs pattern, and re-validated server-side against the submitted durationMs

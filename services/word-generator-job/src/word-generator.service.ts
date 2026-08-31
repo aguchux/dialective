@@ -13,6 +13,7 @@ import {
 import { OpenAiProvider } from './llm/openai.provider';
 import { DeepSeekProvider } from './llm/deepseek.provider';
 import { AnthropicProvider } from './llm/anthropic.provider';
+import { PHRASE_TIERS } from './phrase-tiers.const';
 
 const DEFAULT_PROVIDER_ORDER: LlmProviderKey[] = ['openai', 'deepseek', 'anthropic'];
 
@@ -229,6 +230,99 @@ export class WordGeneratorService {
         `translationsInserted=${translationsInserted} translationsSkippedDuplicate=${translationsSkipped} ` +
         `translationFailures=${translationFailures} promptWordFailures=${promptWordFailures} ` +
         `backfilled=${backfilled} backfillSkippedDuplicate=${backfillSkippedDuplicate} backfillFailures=${backfillFailures}`,
+    );
+
+    await this.runPhraseTierGeneration();
+  }
+
+  /**
+   * Composes AI phrases sized for each PHRASE_TIERS band (see
+   * phrase-tiers.const.ts) into the SAME Prompt/PromptWord tables the
+   * regular composition path above uses, tagged with phraseWordCountMin/Max
+   * so WordsService.pickPhraseSource can find them by tier -- see that
+   * service's PHRASE_TO_DIALECT escalation feature. Runs independently of
+   * the regular wordsPerItem-driven composition/generation above (own
+   * enable flag, own per-tier item budget) so the phrase pool can
+   * pre-populate on its own schedule.
+   */
+  private async runPhraseTierGeneration(): Promise<void> {
+    const settings = await this.getSettings();
+    if (!settings.phraseTierGenerationEnabled) {
+      this.logger.log('Phrase-tier generation disabled (phraseTierGenerationEnabled=false); skipping');
+      return;
+    }
+
+    const providerOrder = this.parseProviderOrder(settings.llmProviderOrder);
+    const itemsPerTier = settings.phraseTierItemsPerTierPerRun;
+    const dialectTags = await this.getEnabledDialectTags();
+
+    let totalInserted = 0;
+    let totalSkippedDuplicate = 0;
+    let totalOutOfRange = 0;
+
+    for (const tier of PHRASE_TIERS) {
+      const wordSets = await this.selectWordsForComposition(tier.wordCountMax, itemsPerTier);
+      if (wordSets.length < itemsPerTier) {
+        this.logger.warn(
+          `Phrase-tier generation (threshold=${tier.threshold}) requested ${itemsPerTier} item(s) but only found enough classified Word rows for ${wordSets.length}`,
+        );
+      }
+
+      const composed: { text: string; wordSet: { id: string; text: string }[] }[] = [];
+      for (const wordSet of wordSets) {
+        try {
+          const prompt = this.buildCompositionPrompt(wordSet);
+          const { items } = await this.chain.generate(prompt, providerOrder);
+          const text = items[0]?.trim();
+          if (!text || isFlaggedContent(text)) continue;
+          const wordCount = text.split(/\s+/).length;
+          if (wordCount < tier.wordCountMin || wordCount > tier.wordCountMax) {
+            totalOutOfRange += 1;
+            continue;
+          }
+          composed.push({ text, wordSet });
+        } catch (err) {
+          this.logger.warn(
+            `Phrase-tier composition failed (threshold=${tier.threshold}) for word set [${wordSet.map((w) => w.text).join(', ')}]: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
+      const { accepted, filteredCount } = this.filterAndValidateComposed(composed);
+      totalSkippedDuplicate += filteredCount;
+      const result = await this.insertComposedPrompts(accepted, tier);
+      totalInserted += result.inserted;
+      totalSkippedDuplicate += result.skippedDuplicate;
+
+      for (const promptRow of result.insertedRows) {
+        await this.segmentAndLinkPromptWords(
+          promptRow.id,
+          promptRow.text,
+          'en-us',
+          providerOrder,
+          promptRow.wordSet,
+        );
+
+        for (const dialectTag of dialectTags) {
+          const outcome = await this.translateAndLinkPrompt(
+            promptRow.id,
+            promptRow.text,
+            dialectTag,
+            providerOrder,
+            tier,
+          );
+          if (outcome === 'inserted') {
+            const translatedText = await this.getPromptTranslationText(promptRow.id, dialectTag);
+            if (translatedText) {
+              await this.segmentAndLinkPromptWords(promptRow.id, translatedText, dialectTag, providerOrder);
+            }
+          }
+        }
+      }
+    }
+
+    this.logger.log(
+      `Phrase-tier generation complete: inserted=${totalInserted} skippedDuplicate=${totalSkippedDuplicate} outOfRange=${totalOutOfRange}`,
     );
   }
 
@@ -497,6 +591,7 @@ export class WordGeneratorService {
    */
   private async insertComposedPrompts(
     items: { text: string; wordSet: { id: string; text: string }[] }[],
+    phraseTier?: { wordCountMin: number; wordCountMax: number },
   ): Promise<{
     inserted: number;
     skippedDuplicate: number;
@@ -515,7 +610,15 @@ export class WordGeneratorService {
       [];
     for (const item of newItems) {
       const row = await this.prisma.prompt.create({
-        data: { dialectTag: 'en-us', text: item.text, active: true, origin: 'WORD_COMPOSED' },
+        data: {
+          dialectTag: 'en-us',
+          text: item.text,
+          active: true,
+          origin: 'WORD_COMPOSED',
+          ...(phraseTier
+            ? { phraseWordCountMin: phraseTier.wordCountMin, phraseWordCountMax: phraseTier.wordCountMax }
+            : {}),
+        },
         select: { id: true, text: true },
       });
       insertedRows.push({ ...row, wordSet: item.wordSet });
@@ -574,6 +677,7 @@ export class WordGeneratorService {
     sourceText: string,
     dialectTag: string,
     providerOrder: LlmProviderKey[],
+    phraseTier?: { wordCountMin: number; wordCountMax: number },
   ): Promise<'inserted' | 'duplicate' | 'failed'> {
     try {
       const dialect = await this.prisma.dialect.findUnique({
@@ -598,9 +702,23 @@ export class WordGeneratorService {
       });
       if (existingPrompt) return 'duplicate';
 
+      // Phrase-pool prompts stamp the same tier range on the translated
+      // dialect row too -- pickPhraseSource (services/api) queries by
+      // dialectTag directly against Prompt, not via PromptTranslation, so
+      // the translated row needs its own phraseWordCountMin/Max to be
+      // independently discoverable.
       await this.prisma.$transaction([
         this.prisma.promptTranslation.create({ data: { promptId, dialectTag, text } }),
-        this.prisma.prompt.create({ data: { dialectTag, text, active: true } }),
+        this.prisma.prompt.create({
+          data: {
+            dialectTag,
+            text,
+            active: true,
+            ...(phraseTier
+              ? { phraseWordCountMin: phraseTier.wordCountMin, phraseWordCountMax: phraseTier.wordCountMax }
+              : {}),
+          },
+        }),
       ]);
       return 'inserted';
     } catch (err) {

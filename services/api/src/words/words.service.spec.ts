@@ -13,6 +13,7 @@ describe('WordsService', () => {
     getTaskTokenCost: jest.fn(),
     isReverseWordTrainingEnabled: jest.fn(),
     isSentenceRebuildEnabled: jest.fn(),
+    isPhraseEscalationEnabled: jest.fn(),
     isSpellingNormalizationEnabled: jest.fn().mockResolvedValue(false),
     getSpellingNormalizationProviderOrder: jest.fn().mockResolvedValue('openai,deepseek,anthropic'),
     getWordTrainingRecordingTimeoutSeconds: jest.fn().mockResolvedValue(5),
@@ -59,7 +60,7 @@ describe('WordsService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         upsert: jest.fn().mockResolvedValue({}),
       },
-      prompt: { findMany: jest.fn().mockResolvedValue([]) },
+      prompt: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
       promptWord: {
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
@@ -69,6 +70,7 @@ describe('WordsService', () => {
     settings.getTaskTokenCost.mockResolvedValue(1);
     settings.isReverseWordTrainingEnabled.mockReset();
     settings.isSentenceRebuildEnabled.mockReset().mockResolvedValue(false);
+    settings.isPhraseEscalationEnabled.mockReset().mockResolvedValue(false);
     settings.isSpellingNormalizationEnabled.mockResolvedValue(false);
     courses.getIncompleteRequiredCourses.mockReset().mockResolvedValue([]);
     settings.getAuditHoldEveryNSubmissions.mockReset().mockResolvedValue(0);
@@ -236,6 +238,7 @@ describe('WordsService', () => {
       dialectTag: 'ig',
       dialectKeyboardLayout: null,
       fragments: null,
+      phraseTierJustReached: false,
     });
     expect(prisma.wordRecording.count).not.toHaveBeenCalled();
   });
@@ -785,6 +788,210 @@ describe('WordsService', () => {
         'does not belong to you',
       );
       expect(prisma.qracAffirmationSubmission.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('PHRASE_TO_DIALECT escalation', () => {
+    beforeEach(() => {
+      settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+      settings.isPhraseEscalationEnabled.mockResolvedValue(true);
+    });
+
+    it('stays on ENGLISH_TO_DIALECT when the trainer is below every tier threshold', async () => {
+      prisma.wordRecording.count.mockResolvedValue(99);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-1',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.direction).toBe('ENGLISH_TO_DIALECT');
+      expect(prisma.prompt.count).not.toHaveBeenCalled();
+    });
+
+    it('assigns PHRASE_TO_DIALECT when tiered and a matching phrase exists', async () => {
+      prisma.wordRecording.count.mockResolvedValue(150); // tier 1: 100-199 -> 2-3 words
+      prisma.prompt.count.mockResolvedValue(1);
+      prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-phrase-1', text: 'good morning' }]);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-phrase-1',
+        direction: 'PHRASE_TO_DIALECT',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result).toMatchObject({
+        assignmentId: 'assignment-phrase-1',
+        wordId: null,
+        direction: 'PHRASE_TO_DIALECT',
+        promptText: 'good morning',
+        sourceLanguage: 'English',
+        responseLanguage: 'Igbo',
+        dialectTag: 'ig',
+      });
+      expect(prisma.wordTrainingAssignment.create).toHaveBeenCalledWith({
+        data: { sessionId: session.id, promptId: 'prompt-phrase-1', direction: 'PHRASE_TO_DIALECT' },
+      });
+      expect(prisma.prompt.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            phraseWordCountMin: { lte: 3 },
+            phraseWordCountMax: { gte: 2 },
+          }),
+        }),
+      );
+    });
+
+    it('falls back to ENGLISH_TO_DIALECT when tiered but the phrase pool is empty', async () => {
+      prisma.wordRecording.count.mockResolvedValue(150);
+      prisma.prompt.count.mockResolvedValue(0);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-fallback-1',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.direction).toBe('ENGLISH_TO_DIALECT');
+      expect(prisma.prompt.findMany).not.toHaveBeenCalled();
+    });
+
+    it('never phrase-escalates when phraseEscalationEnabled is false, regardless of count', async () => {
+      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-off-1',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.direction).toBe('ENGLISH_TO_DIALECT');
+      expect(prisma.wordRecording.count).not.toHaveBeenCalled();
+      expect(prisma.prompt.count).not.toHaveBeenCalled();
+    });
+
+    it('reports phraseTierJustReached true only on the exact call where lifetime count equals the tier threshold', async () => {
+      prisma.prompt.count.mockResolvedValue(1);
+      prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-phrase-1', text: 'good morning' }]);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-phrase-1',
+        direction: 'PHRASE_TO_DIALECT',
+      });
+
+      prisma.wordRecording.count.mockResolvedValue(100);
+      const atThreshold = await service.nextAssignment(trainer.id, session.id);
+      expect(atThreshold.phraseTierJustReached).toBe(true);
+
+      prisma.wordRecording.count.mockResolvedValue(101);
+      const pastThreshold = await service.nextAssignment(trainer.id, session.id);
+      expect(pastThreshold.phraseTierJustReached).toBe(false);
+    });
+
+    it('reverse-validation can source from a PHRASE_TO_DIALECT recording, carrying promptId not wordId', async () => {
+      settings.isReverseWordTrainingEnabled.mockResolvedValue(true);
+      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
+      jest.spyOn(Math, 'random').mockReturnValue(0.1);
+      prisma.wordRecording.count.mockResolvedValue(1);
+      prisma.wordRecording.findMany.mockResolvedValue([
+        { id: 'source-phrase-1', wordId: null, promptId: 'prompt-phrase-1', translationText: 'ụtụtụ ọma' },
+      ]);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-reverse-phrase-1',
+        direction: 'DIALECT_TO_ENGLISH',
+      });
+
+      await service.nextAssignment(trainer.id, session.id);
+
+      expect(prisma.wordTrainingAssignment.create).toHaveBeenCalledWith({
+        data: {
+          sessionId: session.id,
+          wordId: null,
+          promptId: 'prompt-phrase-1',
+          direction: 'DIALECT_TO_ENGLISH',
+          sourceRecordingId: 'source-phrase-1',
+        },
+      });
+      expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            direction: { in: ['ENGLISH_TO_DIALECT', 'PHRASE_TO_DIALECT'] },
+          }),
+        }),
+      );
+      jest.restoreAllMocks();
+    });
+
+    it('createRecording scales the duration limit off promptText for a PHRASE_TO_DIALECT assignment', async () => {
+      const assignment = {
+        id: 'assignment-phrase-2',
+        sessionId: session.id,
+        wordId: null,
+        promptId: 'prompt-phrase-1',
+        direction: 'PHRASE_TO_DIALECT',
+        consumedAt: null,
+        uploadBucket: 'recordings',
+        uploadKey: 'ig/phrase_to_dialect/audio.webm',
+        word: null,
+        prompt: { text: 'good morning friend' }, // 3 words -> 3 x 5s = 15s allowed
+        session: { userId: trainer.id, user: trainer },
+      };
+      prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+
+      await expect(
+        service.createRecording(trainer.id, {
+          assignmentId: assignment.id,
+          bucket: 'recordings',
+          audioKey: 'ig/phrase_to_dialect/audio.webm',
+          responseText: 'ụtụtụ ọma enyi',
+          durationMs: 25_000,
+          noiseRating: 'QUIET',
+        } as any),
+      ).rejects.toThrow('Recording exceeds the 15s limit for this word');
+    });
+
+    it('createRecording stores wordId=null, promptId=<x> for a PHRASE_TO_DIALECT recording', async () => {
+      const assignment = {
+        id: 'assignment-phrase-3',
+        sessionId: session.id,
+        wordId: null,
+        promptId: 'prompt-phrase-1',
+        direction: 'PHRASE_TO_DIALECT',
+        consumedAt: null,
+        uploadBucket: 'recordings',
+        uploadKey: 'ig/phrase_to_dialect/audio.webm',
+        word: null,
+        prompt: { text: 'good morning' },
+        session: { id: session.id, userId: trainer.id, user: trainer },
+      };
+      prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+      const createRecordingMock = jest
+        .fn()
+        .mockImplementation(({ data }: any) => ({ id: 'recording-phrase-1', ...data }));
+      prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
+        callback({
+          wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          wordRecording: { create: createRecordingMock },
+          ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
+        }),
+      );
+
+      await service.createRecording(trainer.id, {
+        assignmentId: assignment.id,
+        bucket: 'recordings',
+        audioKey: 'ig/phrase_to_dialect/audio.webm',
+        responseText: 'ụtụtụ ọma',
+        durationMs: 5_000,
+        noiseRating: 'QUIET',
+      } as any);
+
+      expect(createRecordingMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ wordId: null, promptId: 'prompt-phrase-1' }),
+        }),
+      );
     });
   });
 });

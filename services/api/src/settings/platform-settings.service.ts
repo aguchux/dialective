@@ -306,6 +306,21 @@ export class PlatformSettingsService {
     return row.sentenceRebuildEnabled;
   }
 
+  async isPhraseEscalationEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.phraseEscalationEnabled;
+  }
+
+  async isPhraseTierGenerationEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.phraseTierGenerationEnabled;
+  }
+
+  async getPhraseTierItemsPerTierPerRun(): Promise<number> {
+    const row = await this.getRow();
+    return row.phraseTierItemsPerTierPerRun;
+  }
+
   async getSmsProviderOrder(): Promise<string> {
     const row = await this.getRow();
     return row.smsProviderOrder;
@@ -771,6 +786,9 @@ export class PlatformSettingsService {
       speechExpressionEnabled: row.speechExpressionEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
+      phraseEscalationEnabled: row.phraseEscalationEnabled,
+      phraseTierGenerationEnabled: row.phraseTierGenerationEnabled,
+      phraseTierItemsPerTierPerRun: row.phraseTierItemsPerTierPerRun,
       smsSenderId: row.smsSenderId,
       smsProviderOrder: row.smsProviderOrder,
       smslive247NativeOtpEnabled: row.smslive247NativeOtpEnabled,
@@ -886,6 +904,9 @@ export class PlatformSettingsService {
     speechExpressionEnabled?: boolean;
     spellingNormalizationProviderOrder?: string;
     sentenceRebuildEnabled?: boolean;
+    phraseEscalationEnabled?: boolean;
+    phraseTierGenerationEnabled?: boolean;
+    phraseTierItemsPerTierPerRun?: number;
     smsSenderId?: string | null;
     smsProviderOrder?: string;
     smslive247NativeOtpEnabled?: boolean;
@@ -1223,6 +1244,9 @@ export class PlatformSettingsService {
       speechExpressionEnabled: row.speechExpressionEnabled,
       spellingNormalizationProviderOrder: row.spellingNormalizationProviderOrder,
       sentenceRebuildEnabled: row.sentenceRebuildEnabled,
+      phraseEscalationEnabled: row.phraseEscalationEnabled,
+      phraseTierGenerationEnabled: row.phraseTierGenerationEnabled,
+      phraseTierItemsPerTierPerRun: row.phraseTierItemsPerTierPerRun,
       smsSenderId: row.smsSenderId,
       smsProviderOrder: row.smsProviderOrder,
       smslive247NativeOtpEnabled: row.smslive247NativeOtpEnabled,

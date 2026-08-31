@@ -22,6 +22,7 @@ import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
 import { GetSpellingSuggestionsDto } from './dto/get-spelling-suggestions.dto';
 import { ListSubmissionsDto } from '../submissions/dto/list-submissions.dto';
+import { PhraseTier, getPhraseTier } from './phrase-tiers.const';
 
 const RECORDINGS_BUCKET = process.env.SPACES_WORD_RECORDINGS_BUCKET ?? 'dialectiva-word-recordings';
 const TERMS_VERSION = 'voice-training-v1';
@@ -162,6 +163,14 @@ export class WordsService {
     const reverseEnabled = await this.settings.isReverseWordTrainingEnabled();
     const sentenceRebuildEnabled = await this.settings.isSentenceRebuildEnabled();
 
+    // Live-evaluated every call, never cached/session-fixed -- same posture
+    // as the audit-hold/QRAC/required-courses checks above. Only overrides
+    // the ENGLISH_TO_DIALECT fallback below: reverseSource/sentenceRebuild
+    // keep their own independent roll, unaffected by tier.
+    const phraseTier = (await this.settings.isPhraseEscalationEnabled())
+      ? await this.getTrainerPhraseTier(userId)
+      : null;
+
     const roll = Math.random();
     const reverseSource =
       reverseEnabled && roll < 1 / 3
@@ -173,6 +182,7 @@ export class WordsService {
         data: {
           sessionId,
           wordId: reverseSource.wordId,
+          promptId: reverseSource.promptId,
           direction: 'DIALECT_TO_ENGLISH',
           sourceRecordingId: reverseSource.id,
         },
@@ -197,6 +207,7 @@ export class WordsService {
         dialectTag: null as string | null,
         dialectKeyboardLayout: null as string | null,
         fragments: null as { text: string; position: number }[] | null,
+        phraseTierJustReached: false,
       };
     }
 
@@ -219,7 +230,35 @@ export class WordsService {
         dialectTag: trainer.dialect!.tag,
         dialectKeyboardLayout: null as string | null,
         fragments: shuffle(sentenceRebuild.fragments.map((text, position) => ({ text, position }))),
+        phraseTierJustReached: false,
       };
+    }
+
+    // Gated before the ENGLISH_TO_DIALECT fallback, not blended into the
+    // roll above: once escalated, a trainer should always get a phrase
+    // instead of a single word (when the tier's pool has one), not
+    // sometimes-single-word-by-chance. Falls through to single-word only
+    // when the phrase pool for this tier is empty.
+    if (phraseTier) {
+      const phraseSource = await this.pickPhraseSource(trainer.dialect!.tag, phraseTier);
+      if (phraseSource) {
+        const assignment = await this.prisma.wordTrainingAssignment.create({
+          data: { sessionId, promptId: phraseSource.promptId, direction: 'PHRASE_TO_DIALECT' },
+        });
+        return {
+          assignmentId: assignment.id,
+          wordId: null as string | null,
+          direction: assignment.direction,
+          promptText: phraseSource.promptText,
+          sourceLanguage: 'English',
+          responseLanguage: trainer.dialect!.name,
+          dialectTag: trainer.dialect!.tag,
+          dialectKeyboardLayout: trainer.dialect!.keyboardLayout,
+          fragments: null as { text: string; position: number }[] | null,
+          phraseTierJustReached: await this.didJustReachTier(userId, phraseTier),
+        };
+      }
+      // Pool empty for this tier -- fall through to single-word below.
     }
 
     const totalWords = await this.prisma.word.count();
@@ -244,6 +283,7 @@ export class WordsService {
       dialectTag: trainer.dialect!.tag,
       dialectKeyboardLayout: trainer.dialect!.keyboardLayout,
       fragments: null as { text: string; position: number }[] | null,
+      phraseTierJustReached: false,
     };
   }
 
@@ -343,8 +383,15 @@ export class WordsService {
         'responseText, bucket, audioKey, durationMs, and noiseRating are required for this assignment',
       );
     }
-    if (!assignment.word) {
-      throw new UnprocessableEntityException('This assignment has no associated word');
+    // PHRASE_TO_DIALECT assignments carry their source text via
+    // assignment.prompt (wordId is null, mirrors SENTENCE_REBUILD's shape
+    // but takes this generic audio path instead). A DIALECT_TO_ENGLISH
+    // reverse-validation assignment whose SOURCE was itself a phrase also
+    // has wordId null and promptId set (see pickReverseSource/nextAssignment's
+    // reverseSource branch) -- both cases read from assignment.prompt.text.
+    const promptText = assignment.wordId ? assignment.word?.text : assignment.prompt?.text;
+    if (!promptText) {
+      throw new UnprocessableEntityException('This assignment has no associated word or prompt');
     }
 
     // Mirrors the client's countdown (see WordTrainingDialog.tsx): per-word
@@ -357,7 +404,7 @@ export class WordsService {
       this.settings.getWordTrainingRecordingTimeoutSeconds(),
       this.settings.getWordTrainingRecordingMaxTimeoutSeconds(),
     ]);
-    const wordCount = Math.max(1, assignment.word.text.trim().split(/\s+/).length);
+    const wordCount = Math.max(1, promptText.trim().split(/\s+/).length);
     const allowedMs = Math.min(perWordSeconds * wordCount, maxSeconds) * 1000;
     const durationGraceMs = 5_000;
     if (body.durationMs > allowedMs + durationGraceMs) {
@@ -367,7 +414,7 @@ export class WordsService {
     }
 
     const normalizedAnswer = normalizeAnswer(body.responseText);
-    const normalizedEnglish = normalizeAnswer(assignment.word.text);
+    const normalizedEnglish = normalizeAnswer(promptText);
     const validationScore =
       assignment.direction === 'DIALECT_TO_ENGLISH'
         ? normalizedAnswer === normalizedEnglish
@@ -411,6 +458,7 @@ export class WordsService {
       const created = await tx.wordRecording.create({
         data: {
           wordId: assignment.wordId,
+          promptId: assignment.wordId ? null : assignment.promptId,
           userId,
           sessionId: assignment.sessionId,
           assignmentId: assignment.id,
@@ -447,7 +495,7 @@ export class WordsService {
       await this.scoreReverseValidatedSource(assignment.sourceRecordingId, validationScore!);
     }
 
-    if (assignment.direction === 'ENGLISH_TO_DIALECT') {
+    if (assignment.direction === 'ENGLISH_TO_DIALECT' && assignment.word) {
       await this.normalizeSpellingBestEffort(
         recording.id,
         assignment.word.text,
@@ -628,9 +676,11 @@ export class WordsService {
           promptText:
             recording.direction === 'SENTENCE_REBUILD'
               ? `Rebuild: ${recording.prompt?.text ?? recording.translationText}`
-              : recording.direction === 'ENGLISH_TO_DIALECT'
-                ? (recording.word?.text ?? recording.translationText)
-                : `Translate: ${recording.translationText}`,
+              : recording.direction === 'PHRASE_TO_DIALECT'
+                ? (recording.prompt?.text ?? recording.translationText)
+                : recording.direction === 'ENGLISH_TO_DIALECT'
+                  ? (recording.word?.text ?? recording.translationText)
+                  : `Translate: ${recording.translationText}`,
           dialectTag: recording.dialectTag,
           status: recording.status,
           tokensSpent: recording.tokensSpent.toString(),
@@ -871,6 +921,33 @@ export class WordsService {
     return trainer;
   }
 
+  /**
+   * Live-evaluated on every nextAssignment call -- never cached/session-fixed,
+   * same posture as audit-hold/QRAC/required-courses checks. Lifetime scope,
+   * same query shape as checkAuditHoldThreshold: WordRecording.count({
+   * where: { userId } }), NOT scoped to direction or session, and
+   * deliberately excludes Submission counts (a separate, unrelated task type).
+   */
+  private async getTrainerPhraseTier(userId: string): Promise<PhraseTier | null> {
+    const count = await this.prisma.wordRecording.count({ where: { userId } });
+    return getPhraseTier(count);
+  }
+
+  /**
+   * True exactly once, on the FIRST nextAssignment call after a trainer's
+   * lifetime WordRecording count crosses into a new tier -- crossing
+   * tier.threshold happens on exactly one specific WordRecording (the one
+   * that pushes count from threshold-1 to threshold), so this is true only
+   * when the CURRENT total equals that exact threshold. False on every
+   * other call, including every subsequent call within the same tier. No
+   * new persisted state needed -- this reads the same live count
+   * getTrainerPhraseTier already computed.
+   */
+  private async didJustReachTier(userId: string, tier: PhraseTier): Promise<boolean> {
+    const count = await this.prisma.wordRecording.count({ where: { userId } });
+    return count === tier.threshold;
+  }
+
   private async getOwnedSession(userId: string, sessionId: string) {
     const session = await this.prisma.trainingSession.findUnique({ where: { id: sessionId } });
     if (!session) throw new NotFoundException('Training session not found');
@@ -963,6 +1040,36 @@ export class WordsService {
     return { promptId, fragments: words.map((w) => w.text) };
   }
 
+  /**
+   * Mirrors pickSentenceRebuildSource's shape but reads a Prompt's own
+   * `text` directly (audio-recording task, no tap-to-reorder fragments
+   * needed) and filters by tier word-count range instead of dialect-only.
+   * Deliberately pure random, no anti-repetition/ban-after-N-skips
+   * fairness (unlike pickEnglishToDialectWord) -- appropriate for a small,
+   * continuously-growing pool with no product requirement for phrase-level
+   * fairness, same posture as pickSentenceRebuildSource already has.
+   */
+  private async pickPhraseSource(
+    dialectTag: string,
+    tier: PhraseTier,
+  ): Promise<{ promptId: string; promptText: string } | null> {
+    const where = {
+      dialectTag,
+      active: true,
+      phraseWordCountMin: { lte: tier.wordCountMax },
+      phraseWordCountMax: { gte: tier.wordCountMin },
+      words: { some: { dialectTag } },
+    };
+    const count = await this.prisma.prompt.count({ where });
+    if (count === 0) return null;
+    const [prompt] = await this.prisma.prompt.findMany({
+      where,
+      take: 1,
+      skip: Math.floor(Math.random() * count),
+    });
+    return prompt ? { promptId: prompt.id, promptText: prompt.text } : null;
+  }
+
   private async pickReverseSource(userId: string, sessionId: string, dialectTag: string) {
     const usedSources = await this.prisma.wordTrainingAssignment.findMany({
       where: { sessionId, sourceRecordingId: { not: null } },
@@ -975,7 +1082,10 @@ export class WordsService {
         ),
       },
       dialectTag,
-      direction: 'ENGLISH_TO_DIALECT' as const,
+      // Reverse-validation's source can be an ENGLISH_TO_DIALECT single-word
+      // recording OR a PHRASE_TO_DIALECT recording -- same peer-validation
+      // mechanism either way (see createRecording's promptText unification).
+      direction: { in: ['ENGLISH_TO_DIALECT', 'PHRASE_TO_DIALECT'] as ('ENGLISH_TO_DIALECT' | 'PHRASE_TO_DIALECT')[] },
       userId: { not: userId },
       noiseRating: { not: 'NOISY' as const },
     };

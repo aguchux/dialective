@@ -134,6 +134,7 @@ export function WordTrainingDialog({
   const [rebuildScore, setRebuildScore] = useState<number | null>(null);
   const [sourcePlaying, setSourcePlaying] = useState(false);
   const [qracOpen, setQracOpen] = useState(false);
+  const [showLevelUp, setShowLevelUp] = useState(false);
   const submittingRef = useRef(false);
 
   const [startSession, { isLoading: isStarting }] = useStartWordTrainingSessionMutation();
@@ -227,7 +228,17 @@ export function WordTrainingDialog({
     setRebuildScore(null);
     setSourcePlaying(false);
     setQracOpen(false);
+    setShowLevelUp(false);
   }, [clearRecording, open, releaseMicrophone]);
+
+  // Fires once, the exact call after a trainer's lifetime WordRecording
+  // count crosses into a new phrase-escalation tier (see
+  // WordsService.didJustReachTier) -- phraseTierJustReached is only ever
+  // true on that single response, so this doesn't need to track "already
+  // shown" state itself.
+  useEffect(() => {
+    if (assignment?.phraseTierJustReached) setShowLevelUp(true);
+  }, [assignment]);
 
   // Tawk.to's chat bubble sits bottom-right, the same corner this dialog's
   // record button and audio controls occupy -- hide it for the whole
@@ -759,6 +770,25 @@ export function WordTrainingDialog({
 
               {step === 'training' && (
                 <section className="mx-auto grid w-full max-w-3xl gap-6 text-center">
+                  {showLevelUp && (
+                    <div
+                      className="mx-auto flex w-full max-w-xl items-center justify-between gap-4 rounded-lg border-2 border-accent bg-accent-soft p-4 text-left"
+                      role="status"
+                    >
+                      <p className="text-sm font-bold text-accent">
+                        🎉 You&apos;ve unlocked phrase recording! You&apos;ll now record short
+                        phrases instead of single words.
+                      </p>
+                      <button
+                        aria-label="Dismiss"
+                        className="shrink-0 rounded-lg p-1.5 text-accent hover:bg-accent/10"
+                        onClick={() => setShowLevelUp(false)}
+                        type="button"
+                      >
+                        <X aria-hidden="true" className="size-4" />
+                      </button>
+                    </div>
+                  )}
                   {!assignment ? (
                     <LoadingState label="Generating next word" />
                   ) : assignment.direction === 'SENTENCE_REBUILD' ? (
