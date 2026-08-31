@@ -128,6 +128,49 @@ export class KycService {
     return session;
   }
 
+  /**
+   * Lets a trainer escape a DIDIT verification stuck in IN_PROGRESS/IN_REVIEW
+   * (Didit never resolved it, and the admin-gated auto-cancel cron above is
+   * off by default / has a long timeout) without waiting on an admin.
+   * Abandons the user's current non-terminal attempt so createVerificationSession
+   * (which only blocks on kycStatus===APPROVED) is immediately unblocked.
+   */
+  async cancelMyVerification(userId: string) {
+    const verification = await this.prisma.kycVerification.findFirst({
+      where: { userId, status: { in: NON_TERMINAL_STATUSES } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!verification) {
+      throw new NotFoundException('No active verification to cancel');
+    }
+    await this.abandon(verification.id, userId, 'Cancelled by user to retry verification.');
+    return { cancelled: true };
+  }
+
+  /** Admin counterpart of cancelMyVerification, for the KYC oversight queue. */
+  async adminCancel(id: string) {
+    const verification = await this.prisma.kycVerification.findUnique({ where: { id } });
+    if (!verification) throw new NotFoundException('Verification not found');
+    if (TERMINAL_STATUSES.includes(verification.status)) {
+      throw new BadRequestException('This verification is already resolved');
+    }
+    await this.abandon(verification.id, verification.userId, 'Cancelled by admin to allow retry.');
+    return this.prisma.kycVerification.findUniqueOrThrow({ where: { id } });
+  }
+
+  private async abandon(verificationId: string, userId: string, reason: string) {
+    await this.prisma.$transaction([
+      this.prisma.kycVerification.update({
+        where: { id: verificationId },
+        data: { status: KycStatus.ABANDONED, declineReason: reason },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { kycStatus: KycStatus.ABANDONED },
+      }),
+    ]);
+  }
+
   async getMyStatus(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },

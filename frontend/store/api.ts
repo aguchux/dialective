@@ -2621,6 +2621,10 @@ export const dialectivaApi = createApi({
       query: () => '/kyc/status',
       providesTags: ['Kyc'],
     }),
+    cancelMyKyc: builder.mutation<{ cancelled: boolean }, void>({
+      query: () => ({ url: '/kyc/cancel', method: 'POST' }),
+      invalidatesTags: ['Kyc', 'Profile'],
+    }),
     listKycVerifications: builder.query<
       KycVerificationList,
       { status?: KycStatus; page?: number; pageSize?: number } | void
@@ -2634,6 +2638,10 @@ export const dialectivaApi = createApi({
     }),
     refreshKycVerification: builder.mutation<KycVerification, string>({
       query: (id) => ({ url: `/admin/kyc/${id}/refresh`, method: 'POST' }),
+      invalidatesTags: ['Kyc'],
+    }),
+    cancelKycVerification: builder.mutation<KycVerification, string>({
+      query: (id) => ({ url: `/admin/kyc/${id}/cancel`, method: 'POST' }),
       invalidatesTags: ['Kyc'],
     }),
     getTokenomicsStatus: builder.query<TokenomicsStatus, void>({
@@ -3840,9 +3848,11 @@ export const {
   useRequestPayoutAccountDeleteOtpMutation,
   useCreateKycSessionMutation,
   useGetKycStatusQuery,
+  useCancelMyKycMutation,
   useListKycVerificationsQuery,
   useGetKycVerificationQuery,
   useRefreshKycVerificationMutation,
+  useCancelKycVerificationMutation,
   useGetTokenomicsStatusQuery,
   useGetValuationHistoryQuery,
   useRecalculateValuationMutation,

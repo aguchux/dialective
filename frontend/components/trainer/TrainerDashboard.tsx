@@ -96,6 +96,7 @@ import {
   useListMyTestimoniesQuery,
   useGetKycStatusQuery,
   useCreateKycSessionMutation,
+  useCancelMyKycMutation,
   ManualPhoneVerificationRequestResult,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
@@ -2425,6 +2426,7 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
   const { data: kycStatusData } = useGetKycStatusQuery();
   const [createKycSession, { isLoading: isStartingKyc }] = useCreateKycSessionMutation();
+  const [cancelMyKyc, { isLoading: isCancellingKyc }] = useCancelMyKycMutation();
   const { data: myTestimonies, isLoading } = useListMyTestimoniesQuery(undefined, {
     skip: !publicSettings?.testimonyEnabled,
   });
@@ -2441,6 +2443,16 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
       window.location.assign(session.url);
     } catch (err) {
       setVerificationError(normalizeErrorMessage(err, 'Could not start DIDIT verification.'));
+    }
+  }
+
+  async function cancelAndRetryVerification() {
+    setVerificationError(null);
+    try {
+      await cancelMyKyc().unwrap();
+      await startVerification();
+    } catch (err) {
+      setVerificationError(normalizeErrorMessage(err, 'Could not cancel your verification.'));
     }
   }
 
@@ -2505,15 +2517,15 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
               <p className="mt-2 text-sm font-bold text-danger">{verificationError}</p>
             )}
           </div>
-          {kycStatus !== 'IN_PROGRESS' && kycStatus !== 'IN_REVIEW' && (
-            <ActionButton
-              className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-accent bg-accent px-4 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => setVerificationDialogOpen(true)}
-              type="button"
-            >
-              Verify identity
-            </ActionButton>
-          )}
+          <ActionButton
+            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-accent bg-accent px-4 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => setVerificationDialogOpen(true)}
+            type="button"
+          >
+            {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW'
+              ? 'Verification status'
+              : 'Verify identity'}
+          </ActionButton>
         </section>
       ) : isLoading ? (
         <div className={`${cardClass} p-5 text-sm font-bold text-muted`}>Loading...</div>
@@ -2560,10 +2572,25 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
         >
           <div className="grid gap-4">
             {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
-                Your DIDIT identity verification is already being reviewed. You can submit a
-                testimonial once it is approved.
-              </p>
+              <>
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+                  Your DIDIT identity verification is already being reviewed. You can submit a
+                  testimonial once it is approved. If this is stuck, you can cancel it and try
+                  again.
+                </p>
+                {verificationError && (
+                  <p className="text-sm font-bold text-danger">{verificationError}</p>
+                )}
+                <ActionButton
+                  className="min-h-11 justify-center rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void cancelAndRetryVerification()}
+                  pending={isCancellingKyc || isStartingKyc}
+                  pendingLabel="Cancelling"
+                  type="button"
+                >
+                  Cancel and retry verification
+                </ActionButton>
+              </>
             ) : (
               <>
                 <p className="text-sm leading-relaxed text-muted">
@@ -2600,6 +2627,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const { data: me } = useGetMeQuery();
   const { data: kycStatusData } = useGetKycStatusQuery();
   const [createKycSession, { isLoading: isStartingKyc }] = useCreateKycSessionMutation();
+  const [cancelMyKyc, { isLoading: isCancellingKyc }] = useCancelMyKycMutation();
   const kycStatus = kycStatusData?.kycStatus ?? 'NOT_STARTED';
 
   async function startKycVerification() {
@@ -2609,6 +2637,16 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       window.location.href = session.url;
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not start identity verification.'));
+    }
+  }
+
+  async function cancelAndRetryKycVerification() {
+    setError(null);
+    try {
+      await cancelMyKyc().unwrap();
+      await startKycVerification();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not cancel your verification.'));
     }
   }
 
@@ -3179,9 +3217,26 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               You&apos;re verified.
             </p>
           ) : kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              Verification in progress -- we&apos;re reviewing your ID and selfie.
-            </p>
+            <>
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                Verification in progress -- we&apos;re reviewing your ID and selfie. If this is
+                stuck, you can cancel it and try again.
+              </p>
+              {error && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                  {error}
+                </p>
+              )}
+              <ActionButton
+                className="min-h-11 justify-self-start rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void cancelAndRetryKycVerification()}
+                pending={isCancellingKyc || isStartingKyc}
+                pendingLabel="Cancelling"
+                type="button"
+              >
+                Cancel and retry verification
+              </ActionButton>
+            </>
           ) : (
             <>
               {(kycStatus === 'DECLINED' ||
@@ -4193,6 +4248,7 @@ function WithdrawTokensDialog({
   const { data: kycStatusData } = useGetKycStatusQuery();
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
   const [createKycSession, { isLoading: isStartingKyc }] = useCreateKycSessionMutation();
+  const [cancelMyKyc, { isLoading: isCancellingKyc }] = useCancelMyKycMutation();
   const router = useRouter();
 
   const addressLooksValid =
@@ -4217,6 +4273,16 @@ function WithdrawTokensDialog({
       window.location.href = session.url;
     } catch (error) {
       setMessage(normalizeErrorMessage(error, 'Could not start identity verification.'));
+    }
+  }
+
+  async function cancelAndRetryKycVerification() {
+    setMessage(null);
+    try {
+      await cancelMyKyc().unwrap();
+      await startKycVerification();
+    } catch (error) {
+      setMessage(normalizeErrorMessage(error, 'Could not cancel your verification.'));
     }
   }
 
@@ -4383,7 +4449,7 @@ function WithdrawTokensDialog({
                   <p className="font-extrabold">Verification in progress.</p>
                   <p className="text-sm leading-relaxed text-muted">
                     We&apos;re reviewing your ID and selfie. This usually takes a few minutes --
-                    check back shortly.
+                    check back shortly. If it&apos;s stuck, you can cancel and try again.
                   </p>
                 </>
               ) : kycStatus === 'DECLINED' ||
@@ -4410,7 +4476,17 @@ function WithdrawTokensDialog({
                 {message}
               </p>
             )}
-            {kycStatus !== 'IN_PROGRESS' && kycStatus !== 'IN_REVIEW' && (
+            {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
+              <ActionButton
+                className="min-h-11 rounded-lg border border-line px-4 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void cancelAndRetryKycVerification()}
+                pending={isCancellingKyc || isStartingKyc}
+                pendingLabel="Cancelling"
+                type="button"
+              >
+                Cancel and retry verification
+              </ActionButton>
+            ) : (
               <ActionButton
                 className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => void startKycVerification()}

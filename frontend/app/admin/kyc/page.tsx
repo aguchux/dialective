@@ -8,6 +8,7 @@ import {
   KycStatus,
   KycVerification,
   normalizeErrorMessage,
+  useCancelKycVerificationMutation,
   useGetKycVerificationQuery,
   useListKycVerificationsQuery,
   useRefreshKycVerificationMutation,
@@ -185,6 +186,7 @@ function DetailDialog({
 }) {
   const { data: row } = useGetKycVerificationQuery(id ?? '', { skip: !id });
   const [refresh, { isLoading: refreshing }] = useRefreshKycVerificationMutation();
+  const [cancel, { isLoading: cancelling }] = useCancelKycVerificationMutation();
   const [error, setError] = useState<string | null>(null);
 
   async function refreshRow() {
@@ -194,6 +196,16 @@ function DetailDialog({
       await refresh(id).unwrap();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to refresh this verification.'));
+    }
+  }
+
+  async function cancelRow() {
+    if (!id) return;
+    setError(null);
+    try {
+      await cancel(id).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to cancel this verification.'));
     }
   }
 
@@ -236,15 +248,26 @@ function DetailDialog({
               </p>
             )}
             {(row.status === 'IN_PROGRESS' || row.status === 'IN_REVIEW') && (
-              <ActionButton
-                className="min-h-11 justify-self-start rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:opacity-60"
-                onClick={() => void refreshRow()}
-                pending={refreshing}
-                pendingLabel="Refreshing"
-                type="button"
-              >
-                Refresh from Didit
-              </ActionButton>
+              <div className="flex flex-wrap gap-2">
+                <ActionButton
+                  className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:opacity-60"
+                  onClick={() => void refreshRow()}
+                  pending={refreshing}
+                  pendingLabel="Refreshing"
+                  type="button"
+                >
+                  Refresh from Didit
+                </ActionButton>
+                <ActionButton
+                  className="min-h-11 rounded-lg border border-danger px-5 font-extrabold text-danger hover:bg-red-50 disabled:opacity-60"
+                  onClick={() => void cancelRow()}
+                  pending={cancelling}
+                  pendingLabel="Cancelling"
+                  type="button"
+                >
+                  Cancel verification
+                </ActionButton>
+              </div>
             )}
           </div>
         )}

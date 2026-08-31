@@ -35,6 +35,12 @@ export class KycController {
     return this.kyc.getMyStatus(req.user.sub);
   }
 
+  @Post('kyc/cancel')
+  @UseGuards(JwtAuthGuard)
+  cancel(@Req() req: AuthenticatedRequest) {
+    return this.kyc.cancelMyVerification(req.user.sub);
+  }
+
   /**
    * No JwtAuthGuard -- Didit can't send a JWT, trust comes from
    * verifyWebhookSignature instead (see didit.service.ts's doc comment on
@@ -87,5 +93,12 @@ export class KycController {
   @Roles(Role.ADMIN)
   adminRefresh(@Param('id') id: string) {
     return this.kyc.refreshFromProvider(id);
+  }
+
+  @Post('admin/kyc/:id/cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  adminCancel(@Param('id') id: string) {
+    return this.kyc.adminCancel(id);
   }
 }
