@@ -76,7 +76,16 @@ export default async function TestimonialsPage({ searchParams }: TestimonialsPag
                   {testimonial.text && (
                     <p className="leading-relaxed text-muted">&ldquo;{testimonial.text}&rdquo;</p>
                   )}
-                  <p className="text-sm font-extrabold text-ink">{trainerLabel(testimonial)}</p>
+                  {testimonial.trainerProfileSlug ? (
+                    <Link
+                      className="w-fit text-sm font-extrabold text-ink no-underline hover:text-accent"
+                      href={`/trainers/${encodeURIComponent(testimonial.trainerProfileSlug)}`}
+                    >
+                      {trainerLabel(testimonial)}
+                    </Link>
+                  ) : (
+                    <p className="text-sm font-extrabold text-ink">{trainerLabel(testimonial)}</p>
+                  )}
                 </article>
               ))}
             </section>

@@ -29,6 +29,7 @@
     "@nestjs/platform-express": "^10.4.0",
     "@nestjs/schedule": "^4.1.2",
     "@nestjs/throttler": "^5.2.0",
+    "@node-saml/node-saml": "^5.1.0",
     "@prisma/adapter-pg": "^7.0.0",
     "@prisma/client": "^7.0.0",
     "bcrypt": "^5.1.1",

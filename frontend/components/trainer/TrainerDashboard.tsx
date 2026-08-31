@@ -277,6 +277,11 @@ export function TrainerDashboard() {
           displayName={displayName || emailName(session.user.email)}
           email={session.user.email ?? 'Trainer'}
           image={session.user.image}
+          publicProfileHref={
+            session.user.referralCode
+              ? `/trainers/${encodeURIComponent(session.user.referralCode)}`
+              : null
+          }
         />
 
         {me && !me.emailVerified && <EmailVerificationBanner />}
@@ -5305,4 +5310,3 @@ function normalizePhoneNumber(value: string) {
   const parsed = parsePhoneNumberFromString(value);
   return parsed?.number ?? `+${value.replace(/\D/g, '')}`;
 }
-

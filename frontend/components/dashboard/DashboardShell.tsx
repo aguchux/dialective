@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import {
+  BadgeCheck,
   ChevronDown,
   ChevronLeft,
   CircleDollarSign,
@@ -67,11 +68,13 @@ export function DashboardHeader({
   displayName,
   email,
   image,
+  publicProfileHref,
 }: {
   activeView: DashboardView | null;
   displayName: string;
   email: string;
   image?: string | null;
+  publicProfileHref?: string | null;
 }) {
   const router = useRouter();
   return (
@@ -122,6 +125,11 @@ export function DashboardHeader({
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=profile')}>
                 <UserIcon className="size-4" aria-hidden="true" /> Profile
               </DropdownMenuItem>
+              {publicProfileHref && (
+                <DropdownMenuItem onSelect={() => router.push(publicProfileHref)}>
+                  <BadgeCheck className="size-4" aria-hidden="true" /> Public profile
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onSelect={() => router.push('/dashboard/reports')}>
                 <FileBarChart className="size-4" aria-hidden="true" /> Reports
               </DropdownMenuItem>

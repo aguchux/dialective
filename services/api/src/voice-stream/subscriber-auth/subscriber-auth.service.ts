@@ -115,7 +115,9 @@ export class SubscriberAuthService {
 
   async login(email: string, password: string): Promise<SubscriberPendingOtp> {
     const user = await this.prisma.subscriberUser.findUnique({ where: { email } });
-    if (!user) {
+    if (!user || !user.passwordHash) {
+      // Same generic message whether the account doesn't exist or is an
+      // SSO-only (passwordHash: null) account -- avoids leaking account type.
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -445,7 +447,8 @@ export class SubscriberAuthService {
     return membership;
   }
 
-  private async issueAuthResult(user: SubscriberUser): Promise<SubscriberAuthResult> {
+  /** Public so SsoService can issue tokens for a SubscriberUser resolved from a validated SAML assertion, reusing this logic instead of duplicating it. */
+  async issueAuthResult(user: SubscriberUser): Promise<SubscriberAuthResult> {
     const membership = await this.firstMembership(user.id);
     const { token: refreshToken, hash } = generateOpaqueToken();
     const familyId = randomUUID();

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   },
   description:
     'Search, validate, curate, and securely stream licensed Dialect Library voice data into your model-training infrastructure.',
-  robots: { index: false, follow: false }, // authenticated subscriber product, not a public marketing surface
+  robots: { index: true, follow: true },
   icons: {
     icon: [
       { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },

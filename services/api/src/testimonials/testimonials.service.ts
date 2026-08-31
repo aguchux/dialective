@@ -213,7 +213,7 @@ export class TestimonialsService {
       take: query.pageSize,
       include: {
         user: {
-          select: { firstName: true, dialect: { select: { name: true } } },
+          select: { firstName: true, referralCode: true, dialect: { select: { name: true } } },
         },
       },
     });
@@ -227,6 +227,7 @@ export class TestimonialsService {
             ? this.storage.getPublicObjectUrl(item.videoBucket, item.videoKey)
             : null,
         trainerFirstName: item.user.firstName,
+        trainerProfileSlug: item.user.referralCode,
         dialectName: item.user.dialect?.name ?? null,
       })),
       page,

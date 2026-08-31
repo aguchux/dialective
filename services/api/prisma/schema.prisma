@@ -2305,6 +2305,7 @@ model SubscriberOrganization {
   streamApiKeys          StreamApiKey[]
   webhookSubscriptions   WebhookSubscription[]
   oauthClients           OAuthClient[]
+  ssoIdpConfig           SsoIdpConfig? // Phase 4 SSO -- present only for orgs with SAML configured
   activityEvents         OrgActivityEvent[]
   anomalyEvents          AnomalyEvent[]
   usageCounters          UsageCounter[]
@@ -2318,7 +2319,7 @@ model SubscriberOrganization {
 model SubscriberUser {
   id              String    @id @default(uuid())
   email           String    @unique
-  passwordHash    String
+  passwordHash    String? // nullable for SSO-only, JIT-provisioned users (see SsoService.handleAssertion) -- every password-login code path must null-check before bcrypt.compare
   firstName       String
   lastName        String
   emailVerifiedAt DateTime?
@@ -2328,6 +2329,7 @@ model SubscriberUser {
   refreshTokens SubscriberRefreshToken[]
   otpCodes      SubscriberOtpCode[]
   validations   SubscriberValidation[]
+  ssoIdentities SsoIdentity[]
 
   @@map("subscriber_users")
 }
@@ -2429,6 +2431,7 @@ model SubscriptionPlan {
   minIsvcConfidence    IsvcConfidence? // Phase 5 -- null = full catalogue access, enforced by TierGateGuard
   monthlyByteQuota     BigInt? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
   monthlyRequestQuota  Int? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
+  ssoEnabled           Boolean         @default(false) // Phase 4 -- enterprise-tier gate, enforced by SsoEntitlementGuard
   features             String[]        @default([]) // admin-authored comparison bullets, display-only -- not enforced by any guard, unlike the numeric limits above
   active               Boolean         @default(true)
 
@@ -2916,6 +2919,92 @@ model OAuthClient {
   @@map("oauth_clients")
 }
 
+// ============================================================================
+// Dialect Library Voice Stream -- Phase 4 (SAML 2.0 SSO, enterprise tier).
+// See docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md enterprise-tier
+// "SSO/SAML" bullet. Backend Service Provider (SP) only -- no subscriber
+// dashboard exists yet, so IdP-initiated login is the only fully working
+// entry point; SP-initiated login is a real, working endpoint that nothing
+// calls yet (see SsoAcsController login-redirect route).
+// ============================================================================
+
+/// Per-organization Identity Provider configuration. One row per org
+/// (organizationId is unique -- multi-IdP-per-org is a future concern, not
+/// built here). X.509 certs are public material (not secrets), stored as
+/// plaintext -- unlike WebhookSubscription.encryptedSecret, no AES-256-GCM
+/// wrapping is needed or appropriate here.
+model SsoIdpConfig {
+  id             String                 @id @default(uuid())
+  organizationId String                 @unique
+  organization   SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  idpEntityId    String
+  idpSsoUrl      String
+  idpCertificate String
+
+  spEntityId String
+
+  nameIdFormat       String @default("urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress")
+  emailAttribute     String @default("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")
+  firstNameAttribute String @default("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname")
+  lastNameAttribute  String @default("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname")
+
+  defaultRole SubscriberOrgRole @default(VALIDATOR)
+
+  active          Boolean  @default(true)
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  loginLinks SsoLoginLink[]
+  identities SsoIdentity[]
+
+  @@map("sso_idp_configs")
+}
+
+/// Tracks an in-flight SP-initiated login (the AuthnRequest ID we sent), so
+/// the ACS endpoint can validate the assertion's InResponseTo against a
+/// request WE actually issued (replay/CSRF protection for the SP-initiated
+/// path specifically -- node-saml's own validateInResponseTo option only
+/// checks presence/format; single-use enforcement across horizontally
+/// scaled instances needs this DB-backed table). IdP-initiated assertions
+/// have no InResponseTo (absent/empty per spec) and therefore never
+/// reference this table -- see SsoService.
+model SsoLoginLink {
+  id            String       @id @default(uuid())
+  idpConfigId   String
+  idpConfig     SsoIdpConfig @relation(fields: [idpConfigId], references: [id], onDelete: Cascade)
+  samlRequestId String       @unique
+  createdAt     DateTime     @default(now())
+  expiresAt     DateTime
+  consumedAt    DateTime?
+
+  @@index([idpConfigId])
+  @@index([expiresAt])
+  @@map("sso_login_links")
+}
+
+/// Links a SubscriberUser to the (idpConfig, NameID) pair the IdP asserts
+/// for them -- mirrors LinkedAccount's shape (provider + providerAccountId)
+/// rather than extending SubscriberUser directly, so a user can in principle
+/// have both a password and an SSO link and so this table, not
+/// SubscriberUser, carries the SSO-specific provenance (lastLoginAt, which
+/// IdP). One row per (idpConfigId, user).
+model SsoIdentity {
+  id           String         @id @default(uuid())
+  userId       String
+  user         SubscriberUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  idpConfigId  String
+  idpConfig    SsoIdpConfig   @relation(fields: [idpConfigId], references: [id], onDelete: Cascade)
+  nameId       String
+  firstLoginAt DateTime       @default(now())
+  lastLoginAt  DateTime       @default(now())
+
+  @@unique([idpConfigId, nameId])
+  @@unique([idpConfigId, userId])
+  @@map("sso_identities")
+}
+
 /// Append-only audit/usage record, one row per stream-API request (manifest,
 /// metadata, or audio) -- per doc section 37 ("every stream should record
 /// ... bytes streamed, result code, entitlement decision") and section 36
@@ -3043,6 +3132,9 @@ enum ActivityEventType {
   DECK_ITEM_ADDED
   DECK_ITEM_REMOVED
   DECK_VISIBILITY_CHANGED
+  SSO_CONFIGURED
+  SSO_DISABLED
+  SSO_LOGIN
 }
 
 /// Org-activity audit timeline -- who did what, when, distinct from

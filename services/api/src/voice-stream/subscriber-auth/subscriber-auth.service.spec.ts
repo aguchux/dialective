@@ -112,6 +112,17 @@ describe('SubscriberAuthService', () => {
       );
     });
 
+    it('rejects password login for an SSO-only account (null passwordHash)', async () => {
+      const { prisma, service } = setup();
+      prisma.subscriberUser.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+        passwordHash: null,
+      });
+
+      await expect(service.login('a@b.com', 'anything')).rejects.toThrow(UnauthorizedException);
+    });
+
     it('rejects an incorrect password', async () => {
       const { prisma, service } = setup();
       const bcrypt = require('bcrypt');
