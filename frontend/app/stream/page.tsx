@@ -65,19 +65,16 @@ export default function StreamPage() {
               license the voice recordings collected by Dialect Library&apos;s trainer community --
               across countries, dialects, and sub-dialects most datasets miss.
             </p>
-            <div className="grid grid-flow-col gap-1 justify-start md:gap-3">
-              <Link
-                className="inline-flex min-h-11 items-center justify-center rounded-full border border-accent bg-accent px-5 py-3 font-extrabold text-white no-underline transition-colors hover:border-accent-dark hover:bg-accent-dark"
-                href="/data-access"
+            <div className="grid grid-flow-col items-center gap-3 justify-start">
+              <span
+                aria-disabled="true"
+                className="inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-full border border-line bg-[rgba(5,5,5,0.06)] px-5 py-3 font-extrabold text-[rgba(5,5,5,0.45)]"
               >
                 Subscribe to Stream
-              </Link>
-              <Link
-                className="inline-flex min-h-[42px] min-w-[190px] items-center justify-center justify-self-center whitespace-nowrap rounded-full border-[1.5px] border-[#050505] bg-white px-[1.15rem] py-[0.7rem] text-[#050505] no-underline transition-colors hover:bg-[rgba(5,5,5,0.06)]"
-                href="/pricing"
-              >
-                View pricing
-              </Link>
+              </span>
+              <span className="rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-sm font-extrabold uppercase tracking-wide text-accent">
+                Coming soon
+              </span>
             </div>
           </div>
 
@@ -129,17 +126,17 @@ export default function StreamPage() {
         </section>
 
         <section className="grid gap-3 rounded-lg border border-[#efd6ad] bg-[#fff7e8] p-5 text-[#8a4b0f]">
-          <h2 className="text-2xl font-black">Ready to get access?</h2>
+          <h2 className="text-2xl font-black">Voice Stream is coming soon</h2>
           <p className="max-w-4xl leading-relaxed">
-            Tell us about your organization and use case, and we&apos;ll follow up about coverage,
-            access, and licensing terms.
+            Subscriptions aren&apos;t open yet. If you&apos;d like to be notified when Voice Stream
+            launches, reach out and we&apos;ll follow up about coverage, access, and licensing terms.
           </p>
           <div>
             <Link
               className="inline-flex min-h-11 items-center justify-center rounded-full border border-[#8a4b0f] bg-[#8a4b0f] px-5 py-3 font-extrabold text-white no-underline transition-colors hover:opacity-90"
               href="/data-access"
             >
-              Subscribe to Stream
+              Get notified
             </Link>
           </div>
         </section>

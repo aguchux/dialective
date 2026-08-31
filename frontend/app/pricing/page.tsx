@@ -68,29 +68,29 @@ export default function PricingPage() {
                       : 'Access to the full catalogue, all quality tiers'}
                   </li>
                 </ul>
-                <Link
-                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-accent bg-accent px-5 py-3 font-extrabold text-white no-underline transition-colors hover:border-accent-dark hover:bg-accent-dark"
-                  href="/data-access"
+                <span
+                  aria-disabled="true"
+                  className="inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-full border border-line bg-[rgba(5,5,5,0.06)] px-5 py-3 font-extrabold text-[rgba(5,5,5,0.45)]"
                 >
-                  Subscribe to Stream
-                </Link>
+                  Coming soon
+                </span>
               </article>
             ))}
           </section>
         )}
 
         <section className="grid gap-3 rounded-lg border border-[#efd6ad] bg-[#fff7e8] p-5 text-[#8a4b0f]">
-          <h2 className="text-2xl font-black">Need a custom plan?</h2>
+          <h2 className="text-2xl font-black">Voice Stream is coming soon</h2>
           <p className="max-w-4xl leading-relaxed">
-            Larger teams or specialized coverage needs can reach out directly and we&apos;ll put
-            together terms that fit.
+            Subscriptions aren&apos;t open yet. If you&apos;d like to be notified when Voice Stream
+            launches, reach out and we&apos;ll follow up about coverage, access, and licensing terms.
           </p>
           <div>
             <Link
               className="inline-flex min-h-11 items-center justify-center rounded-full border border-[#8a4b0f] bg-[#8a4b0f] px-5 py-3 font-extrabold text-white no-underline transition-colors hover:opacity-90"
               href="/data-access"
             >
-              Contact us
+              Get notified
             </Link>
           </div>
         </section>
