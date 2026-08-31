@@ -25,14 +25,16 @@ function setup() {
   const versioning = { writeNewVersionIfMaterial: jest.fn().mockResolvedValue(undefined) };
   const smartDeckEvaluator = { evaluateRule: jest.fn().mockResolvedValue(undefined) };
   const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
+  const orgActivity = { record: jest.fn().mockResolvedValue(undefined) };
   const service = new StreamDecksService(
     prisma as any,
     catalogue as any,
     versioning as any,
     smartDeckEvaluator as any,
     webhookEvents as any,
+    orgActivity as any,
   );
-  return { prisma, catalogue, versioning, smartDeckEvaluator, webhookEvents, service };
+  return { prisma, catalogue, versioning, smartDeckEvaluator, webhookEvents, orgActivity, service };
 }
 
 describe('StreamDecksService', () => {
@@ -75,6 +77,65 @@ describe('StreamDecksService', () => {
       );
       expect(prisma.streamDeck.create).not.toHaveBeenCalled();
     });
+
+    it('logs a DECK_CREATED activity event', async () => {
+      const { prisma, orgActivity, service } = setup();
+      prisma.streamDeck.create.mockImplementation(({ data }: any) => ({ id: 'deck-1', ...data }));
+
+      await service.create('org-1', 'user-1', { name: 'My Deck' });
+
+      expect(orgActivity.record).toHaveBeenCalledWith(
+        'org-1',
+        'DECK_CREATED',
+        'user-1',
+        expect.objectContaining({ deckId: 'deck-1' }),
+      );
+    });
+  });
+
+  describe('rename', () => {
+    it('logs a DECK_RENAMED activity event with before/after names', async () => {
+      const { prisma, orgActivity, service } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        organizationId: 'org-1',
+        name: 'Old Name',
+        items: [],
+      });
+      prisma.streamDeck.update.mockResolvedValue({ id: 'deck-1', name: 'New Name' });
+
+      await service.rename('org-1', 'deck-1', 'user-1', 'New Name');
+
+      expect(orgActivity.record).toHaveBeenCalledWith(
+        'org-1',
+        'DECK_RENAMED',
+        'user-1',
+        expect.objectContaining({ deckId: 'deck-1', previousName: 'Old Name', newName: 'New Name' }),
+      );
+    });
+  });
+
+  describe('remove', () => {
+    it('logs a DECK_DELETED activity event', async () => {
+      const { prisma, orgActivity, service } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        organizationId: 'org-1',
+        deckKey: 'DLSD-GEN-GEN-GEN-ABC123',
+        name: 'My Deck',
+        items: [],
+      });
+
+      await service.remove('org-1', 'deck-1', 'user-1');
+
+      expect(prisma.streamDeck.delete).toHaveBeenCalledWith({ where: { id: 'deck-1' } });
+      expect(orgActivity.record).toHaveBeenCalledWith(
+        'org-1',
+        'DECK_DELETED',
+        'user-1',
+        expect.objectContaining({ deckId: 'deck-1' }),
+      );
+    });
   });
 
   describe('addItem', () => {
@@ -95,6 +156,22 @@ describe('StreamDecksService', () => {
 
       await expect(service.addItem('org-1', 'deck-1', 'user-1', 'rec-1')).rejects.toThrow(
         ConflictException,
+      );
+    });
+
+    it('logs a DECK_ITEM_ADDED activity event', async () => {
+      const { prisma, orgActivity, service } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', items: [] });
+      prisma.streamDeckItem.findUnique.mockResolvedValue(null);
+      prisma.streamDeckItem.create.mockResolvedValue({ id: 'item-1' });
+
+      await service.addItem('org-1', 'deck-1', 'user-1', 'rec-1');
+
+      expect(orgActivity.record).toHaveBeenCalledWith(
+        'org-1',
+        'DECK_ITEM_ADDED',
+        'user-1',
+        expect.objectContaining({ deckId: 'deck-1', recordingId: 'rec-1' }),
       );
     });
 
@@ -157,9 +234,24 @@ describe('StreamDecksService', () => {
       prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', items: [] });
       prisma.streamDeckItem.findUnique.mockResolvedValue({ id: 'item-1', deckId: 'deck-1' });
 
-      await service.removeItem('org-1', 'deck-1', 'item-1');
+      await service.removeItem('org-1', 'deck-1', 'user-1', 'item-1');
 
       expect(versioning.writeNewVersionIfMaterial).toHaveBeenCalledWith('deck-1', 'manual_remove');
+    });
+
+    it('logs a DECK_ITEM_REMOVED activity event', async () => {
+      const { prisma, orgActivity, service } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', items: [] });
+      prisma.streamDeckItem.findUnique.mockResolvedValue({ id: 'item-1', deckId: 'deck-1', recordingId: 'rec-1' });
+
+      await service.removeItem('org-1', 'deck-1', 'user-1', 'item-1');
+
+      expect(orgActivity.record).toHaveBeenCalledWith(
+        'org-1',
+        'DECK_ITEM_REMOVED',
+        'user-1',
+        expect.objectContaining({ deckId: 'deck-1', recordingId: 'rec-1' }),
+      );
     });
 
     it('rejects manual remove on a Smart Deck', async () => {
@@ -171,7 +263,7 @@ describe('StreamDecksService', () => {
         items: [],
       });
 
-      await expect(service.removeItem('org-1', 'deck-1', 'item-1')).rejects.toThrow(
+      await expect(service.removeItem('org-1', 'deck-1', 'user-1', 'item-1')).rejects.toThrow(
         BadRequestException,
       );
     });

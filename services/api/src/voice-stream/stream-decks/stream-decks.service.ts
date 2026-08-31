@@ -6,13 +6,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { StreamDeckType, WebhookEventType } from '@dialectiva/db';
+import { ActivityEventType, StreamDeckType, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogueService } from '../catalogue/catalogue.service';
 import { StreamDeckVersioningService } from './stream-deck-versioning.service';
 import { SmartDeckEvaluatorService } from './smart-deck-evaluator.service';
 import { StreamDeckRuleDto } from './dto/stream-deck-rule.dto';
 import { WebhookEventService } from '../webhooks/webhook-event.service';
+import { OrgActivityService } from '../org-activity/org-activity.service';
 
 /**
  * "DLSD-{country}-{dialect}-{subdialect}-{6 chars}" per the product plan
@@ -36,6 +37,7 @@ export class StreamDecksService {
     private readonly versioning: StreamDeckVersioningService,
     private readonly smartDeckEvaluator: SmartDeckEvaluatorService,
     private readonly webhookEvents: WebhookEventService,
+    private readonly orgActivity: OrgActivityService,
   ) {}
 
   async create(
@@ -92,6 +94,11 @@ export class StreamDecksService {
       deck_key: deck.deckKey,
       type: deck.type,
     });
+    void this.orgActivity.record(organizationId, ActivityEventType.DECK_CREATED, createdByUserId, {
+      deckId: deck.id,
+      deckKey: deck.deckKey,
+      type: deck.type,
+    });
 
     return deck;
   }
@@ -115,14 +122,25 @@ export class StreamDecksService {
     return deck;
   }
 
-  async rename(organizationId: string, deckId: string, name: string) {
-    await this.get(organizationId, deckId);
-    return this.prisma.streamDeck.update({ where: { id: deckId }, data: { name } });
+  async rename(organizationId: string, deckId: string, actorUserId: string, name: string) {
+    const before = await this.get(organizationId, deckId);
+    const deck = await this.prisma.streamDeck.update({ where: { id: deckId }, data: { name } });
+    void this.orgActivity.record(organizationId, ActivityEventType.DECK_RENAMED, actorUserId, {
+      deckId,
+      previousName: before.name,
+      newName: name,
+    });
+    return deck;
   }
 
-  async remove(organizationId: string, deckId: string) {
-    await this.get(organizationId, deckId);
+  async remove(organizationId: string, deckId: string, actorUserId: string) {
+    const deck = await this.get(organizationId, deckId);
     await this.prisma.streamDeck.delete({ where: { id: deckId } });
+    void this.orgActivity.record(organizationId, ActivityEventType.DECK_DELETED, actorUserId, {
+      deckId,
+      deckKey: deck.deckKey,
+      name: deck.name,
+    });
   }
 
   async addItem(organizationId: string, deckId: string, userId: string, recordingId: string) {
@@ -154,10 +172,14 @@ export class StreamDecksService {
       deck_id: deckId,
       recording_id: recordingId,
     });
+    void this.orgActivity.record(organizationId, ActivityEventType.DECK_ITEM_ADDED, userId, {
+      deckId,
+      recordingId,
+    });
     return item;
   }
 
-  async removeItem(organizationId: string, deckId: string, itemId: string) {
+  async removeItem(organizationId: string, deckId: string, actorUserId: string, itemId: string) {
     const deck = await this.get(organizationId, deckId);
     if (deck.type === StreamDeckType.SMART) {
       throw new BadRequestException(
@@ -175,6 +197,10 @@ export class StreamDecksService {
       organization_id: organizationId,
       deck_id: deckId,
       recording_id: item.recordingId,
+    });
+    void this.orgActivity.record(organizationId, ActivityEventType.DECK_ITEM_REMOVED, actorUserId, {
+      deckId,
+      recordingId: item.recordingId,
     });
   }
 

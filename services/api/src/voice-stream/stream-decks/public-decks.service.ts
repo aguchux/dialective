@@ -1,10 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { StreamDeckVisibility } from '@dialectiva/db';
+import { ActivityEventType, StreamDeckVisibility } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogueService, QualityTier, qualityTierFor } from '../catalogue/catalogue.service';
 import { StreamDecksService } from './stream-decks.service';
 import { StreamDeckVersioningService } from './stream-deck-versioning.service';
 import { SetDeckLicenseDto } from './dto/set-deck-license.dto';
+import { OrgActivityService } from '../org-activity/org-activity.service';
 
 const TIER_RANK: Record<QualityTier, number> = { standard: 0, high: 1, premium_verified: 2 };
 
@@ -27,6 +28,7 @@ export class PublicDecksService {
     private readonly catalogue: CatalogueService,
     private readonly decks: StreamDecksService,
     private readonly versioning: StreamDeckVersioningService,
+    private readonly orgActivity: OrgActivityService,
   ) {}
 
   private async getOwnedDeck(organizationId: string, deckId: string) {
@@ -37,9 +39,22 @@ export class PublicDecksService {
     return deck;
   }
 
-  async setVisibility(organizationId: string, deckId: string, visibility: StreamDeckVisibility) {
-    await this.getOwnedDeck(organizationId, deckId);
-    return this.prisma.streamDeck.update({ where: { id: deckId }, data: { visibility } });
+  async setVisibility(
+    organizationId: string,
+    deckId: string,
+    actorUserId: string,
+    visibility: StreamDeckVisibility,
+  ) {
+    const before = await this.getOwnedDeck(organizationId, deckId);
+    const deck = await this.prisma.streamDeck.update({ where: { id: deckId }, data: { visibility } });
+    if (before.visibility !== visibility) {
+      void this.orgActivity.record(organizationId, ActivityEventType.DECK_VISIBILITY_CHANGED, actorUserId, {
+        deckId,
+        previousVisibility: before.visibility,
+        newVisibility: visibility,
+      });
+    }
+    return deck;
   }
 
   async setLicense(organizationId: string, deckId: string, userId: string, dto: SetDeckLicenseDto) {

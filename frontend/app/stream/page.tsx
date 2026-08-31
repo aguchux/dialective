@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { LandingFooter } from '@/components/landing/LandingFooter';
@@ -80,15 +81,16 @@ export default function StreamPage() {
             </div>
           </div>
 
-          <aside className="grid content-start gap-4 rounded-lg border border-[rgba(5,5,5,0.1)] bg-surface p-4">
-            <h2 className="text-xl font-black">What you get</h2>
-            <ul className="grid gap-2 leading-relaxed text-muted">
-              <li>Catalogue search across every eligible recording</li>
-              <li>ISVC quality scoring backed by cross-org validation</li>
-              <li>Named Stream Decks for your team&apos;s working sets</li>
-              <li>Role-based team access under one subscription</li>
-            </ul>
-          </aside>
+          <div className="relative min-h-[260px] overflow-hidden rounded-lg border border-[rgba(5,5,5,0.1)] bg-[#f4f1fa] md:min-h-0">
+            <Image
+              alt="Voice Stream catalogue shown on an AI team's workspace display"
+              className="object-cover"
+              fill
+              priority
+              sizes="(max-width: 767px) calc(100vw - 72px), (max-width: 1280px) 40vw, 500px"
+              src="/voice-stream-product.png"
+            />
+          </div>
         </section>
 
         <section className="grid gap-4" aria-label="Voice Stream features">

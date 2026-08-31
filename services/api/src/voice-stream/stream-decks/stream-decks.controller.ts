@@ -66,14 +66,14 @@ export class StreamDecksController {
     @Param('id') id: string,
     @Body() dto: UpdateStreamDeckDto,
   ) {
-    return this.decks.rename(subscriber.organizationId, id, dto.name);
+    return this.decks.rename(subscriber.organizationId, id, subscriber.sub, dto.name);
   }
 
   @Delete(':id')
   @UseGuards(SubscriberRolesGuard)
   @SubscriberRoles(...CAN_MANAGE_DECKS)
   remove(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims, @Param('id') id: string) {
-    return this.decks.remove(subscriber.organizationId, id);
+    return this.decks.remove(subscriber.organizationId, id, subscriber.sub);
   }
 
   @Post(':id/items')
@@ -95,7 +95,7 @@ export class StreamDecksController {
     @Param('id') id: string,
     @Param('itemId') itemId: string,
   ) {
-    return this.decks.removeItem(subscriber.organizationId, id, itemId);
+    return this.decks.removeItem(subscriber.organizationId, id, subscriber.sub, itemId);
   }
 
   @Patch(':id/rule')
@@ -122,7 +122,7 @@ export class StreamDecksController {
     @Param('id') id: string,
     @Body() dto: SetDeckVisibilityDto,
   ) {
-    return this.publicDecks.setVisibility(subscriber.organizationId, id, dto.visibility);
+    return this.publicDecks.setVisibility(subscriber.organizationId, id, subscriber.sub, dto.visibility);
   }
 
   @Post(':id/license')

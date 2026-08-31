@@ -3009,6 +3009,12 @@ enum ActivityEventType {
   MEMBER_ROLE_CHANGED
   MEMBER_REMOVED
   SUBSCRIPTION_PLAN_CHANGED
+  DECK_CREATED
+  DECK_RENAMED
+  DECK_DELETED
+  DECK_ITEM_ADDED
+  DECK_ITEM_REMOVED
+  DECK_VISIBILITY_CHANGED
 }
 
 /// Org-activity audit timeline -- who did what, when, distinct from

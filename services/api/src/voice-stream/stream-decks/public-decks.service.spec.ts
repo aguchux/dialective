@@ -13,8 +13,15 @@ function setup() {
   const catalogue = { isEligible: jest.fn().mockResolvedValue(true) };
   const decks = { create: jest.fn(), get: jest.fn() };
   const versioning = { writeNewVersionIfMaterial: jest.fn().mockResolvedValue(undefined) };
-  const service = new PublicDecksService(prisma as any, catalogue as any, decks as any, versioning as any);
-  return { prisma, catalogue, decks, versioning, service };
+  const orgActivity = { record: jest.fn().mockResolvedValue(undefined) };
+  const service = new PublicDecksService(
+    prisma as any,
+    catalogue as any,
+    decks as any,
+    versioning as any,
+    orgActivity as any,
+  );
+  return { prisma, catalogue, decks, versioning, orgActivity, service };
 }
 
 describe('PublicDecksService', () => {
@@ -23,22 +30,47 @@ describe('PublicDecksService', () => {
       const { prisma, service } = setup();
       prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-OTHER' });
 
-      await expect(service.setVisibility('org-1', 'deck-1', 'PUBLIC' as any)).rejects.toThrow(
+      await expect(service.setVisibility('org-1', 'deck-1', 'user-1', 'PUBLIC' as any)).rejects.toThrow(
         NotFoundException,
       );
     });
 
     it('updates visibility for an owned deck', async () => {
       const { prisma, service } = setup();
-      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1' });
+      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', visibility: 'PRIVATE' });
       prisma.streamDeck.update.mockResolvedValue({ id: 'deck-1', visibility: 'PUBLIC' });
 
-      await service.setVisibility('org-1', 'deck-1', 'PUBLIC' as any);
+      await service.setVisibility('org-1', 'deck-1', 'user-1', 'PUBLIC' as any);
 
       expect(prisma.streamDeck.update).toHaveBeenCalledWith({
         where: { id: 'deck-1' },
         data: { visibility: 'PUBLIC' },
       });
+    });
+
+    it('logs a DECK_VISIBILITY_CHANGED activity event only when visibility actually changes', async () => {
+      const { prisma, orgActivity, service } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', visibility: 'PRIVATE' });
+      prisma.streamDeck.update.mockResolvedValue({ id: 'deck-1', visibility: 'PUBLIC' });
+
+      await service.setVisibility('org-1', 'deck-1', 'user-1', 'PUBLIC' as any);
+
+      expect(orgActivity.record).toHaveBeenCalledWith(
+        'org-1',
+        'DECK_VISIBILITY_CHANGED',
+        'user-1',
+        expect.objectContaining({ deckId: 'deck-1', previousVisibility: 'PRIVATE', newVisibility: 'PUBLIC' }),
+      );
+    });
+
+    it('does not log an activity event when visibility is set to its current value', async () => {
+      const { prisma, orgActivity, service } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', visibility: 'PRIVATE' });
+      prisma.streamDeck.update.mockResolvedValue({ id: 'deck-1', visibility: 'PRIVATE' });
+
+      await service.setVisibility('org-1', 'deck-1', 'user-1', 'PRIVATE' as any);
+
+      expect(orgActivity.record).not.toHaveBeenCalled();
     });
   });
 
