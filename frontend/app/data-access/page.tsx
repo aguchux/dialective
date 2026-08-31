@@ -83,7 +83,7 @@ export default function DataAccessPage() {
             <h1 className="max-w-3xl text-4xl font-black leading-tight md:text-5xl">
               License voice and dialect data collected by real speakers.
             </h1>
-            <div className="relative min-h-[220px] w-full overflow-hidden rounded-lg border border-[rgba(5,5,5,0.1)] bg-[#f4f1fa]">
+            <div className="relative -my-1 min-h-[220px] w-full overflow-hidden rounded-lg border border-[rgba(5,5,5,0.1)] bg-[#f4f1fa]">
               <Image
                 alt="Speakers contributing voice recordings to Dialect Library"
                 className="object-cover"

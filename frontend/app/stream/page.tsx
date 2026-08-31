@@ -54,7 +54,18 @@ export default function StreamPage() {
       <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-4 py-6 md:px-8">
         <Breadcrumbs items={[{ label: 'Stream' }]} />
 
-        <section className="grid gap-5 rounded-lg border border-line bg-white/80 p-5 shadow-[0_14px_32px_rgba(27,31,27,0.08)] backdrop-blur-sm md:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] md:p-7">
+        <section className="grid gap-5 rounded-lg border border-line bg-white/80 p-5 shadow-[0_14px_32px_rgba(27,31,27,0.08)] backdrop-blur-sm md:p-7">
+          <div className="relative min-h-[220px] w-full overflow-hidden rounded-lg border border-[rgba(5,5,5,0.1)] bg-[#050b1f] md:min-h-[340px]">
+            <Image
+              alt="Dialect Library Stream -- licensed voice datasets collected by real speakers"
+              className="object-cover"
+              fill
+              priority
+              sizes="(max-width: 767px) calc(100vw - 72px), 1200px"
+              src="/stream-banner.png"
+            />
+          </div>
+
           <div className="grid gap-4">
             <p className="text-sm font-extrabold uppercase text-accent">Dialect Library Voice Stream</p>
             <h1 className="max-w-3xl text-4xl font-black leading-tight md:text-5xl">
@@ -65,20 +76,12 @@ export default function StreamPage() {
               license the voice recordings collected by Dialect Library&apos;s trainer community --
               across countries, dialects, and sub-dialects most datasets miss.
             </p>
-            <span className="inline-flex w-fit rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-sm font-extrabold uppercase tracking-wide text-accent">
-              Coming soon
-            </span>
-          </div>
-
-          <div className="relative min-h-[260px] overflow-hidden rounded-lg border border-[rgba(5,5,5,0.1)] bg-[#f4f1fa] md:min-h-0">
-            <Image
-              alt="Voice Stream catalogue shown on an AI team's workspace display"
-              className="object-cover"
-              fill
-              priority
-              sizes="(max-width: 767px) calc(100vw - 72px), (max-width: 1280px) 40vw, 500px"
-              src="/voice-stream-product.png"
-            />
+            <Link
+              className="inline-flex min-h-11 w-fit items-center justify-center rounded-full border border-accent bg-accent px-5 py-3 font-extrabold text-white no-underline transition-colors hover:border-accent-dark hover:bg-accent-dark"
+              href="/data-access"
+            >
+              Get notified
+            </Link>
           </div>
         </section>
 

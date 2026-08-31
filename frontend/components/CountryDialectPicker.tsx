@@ -24,8 +24,12 @@ export function CountryDialectPicker({
 }) {
   const { data: countries, isLoading: countriesLoading } = useGetCountriesQuery();
   const [expandedCountryId, setExpandedCountryId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const checkedCountryIds = new Set(value.map((v) => v.countryId));
+  const filteredCountries = (countries ?? []).filter((country) =>
+    country.name.toLowerCase().includes(search.trim().toLowerCase()),
+  );
 
   function toggleCountry(countryId: string, checked: boolean) {
     if (checked) {
@@ -48,8 +52,15 @@ export function CountryDialectPicker({
   return (
     <div className="grid gap-2">
       <p className="text-sm font-bold text-ink">Countries and dialects of interest</p>
-      <div className="grid max-h-72 gap-1 overflow-y-auto rounded-lg border border-line bg-white p-2 dark:bg-surface-muted">
-        {(countries ?? []).map((country) => {
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search countries…"
+        className="min-h-9 w-full rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink dark:bg-surface-muted"
+      />
+      <div className="grid max-h-44 gap-1 overflow-y-auto rounded-lg border border-line bg-white p-2 dark:bg-surface-muted">
+        {filteredCountries.map((country) => {
           const checked = checkedCountryIds.has(country.id);
           const interest = value.find((v) => v.countryId === country.id);
           return (
@@ -83,6 +94,9 @@ export function CountryDialectPicker({
         })}
         {(countries ?? []).length === 0 && (
           <p className="px-1.5 py-2 text-sm text-muted">No countries available yet.</p>
+        )}
+        {(countries ?? []).length > 0 && filteredCountries.length === 0 && (
+          <p className="px-1.5 py-2 text-sm text-muted">No countries match &quot;{search}&quot;.</p>
         )}
       </div>
     </div>
