@@ -74,6 +74,42 @@ describe('SubscriptionPlansService.upsert', () => {
     );
   });
 
+  it('trims and drops blank entries from features on create', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriptionPlan.findFirst.mockResolvedValue(null);
+    prisma.subscriptionPlan.upsert.mockResolvedValue({ key: 'starter' });
+
+    await service.upsert({
+      key: 'starter',
+      name: 'Starter',
+      stripePriceId: 'price_1',
+      monthlyUsdAmount: 49,
+      features: ['  Priority support  ', '', '   ', 'Unlimited decks'],
+    });
+
+    expect(prisma.subscriptionPlan.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ features: ['Priority support', 'Unlimited decks'] }),
+      }),
+    );
+  });
+
+  it('omits features from the update payload when not provided, leaving existing bullets untouched', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriptionPlan.findFirst.mockResolvedValue(null);
+    prisma.subscriptionPlan.upsert.mockResolvedValue({ key: 'starter' });
+
+    await service.upsert({
+      key: 'starter',
+      name: 'Starter',
+      stripePriceId: 'price_1',
+      monthlyUsdAmount: 49,
+    });
+
+    const call = prisma.subscriptionPlan.upsert.mock.calls[0][0];
+    expect(call.update.features).toBeUndefined();
+  });
+
   it('stringifies the BigInt monthlyByteQuota in the returned row (JSON.stringify cannot serialize a raw bigint)', async () => {
     const { service, prisma } = setup();
     prisma.subscriptionPlan.findFirst.mockResolvedValue(null);

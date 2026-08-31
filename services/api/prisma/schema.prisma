@@ -71,6 +71,9 @@ model User {
   emailVerified                 DateTime?
   phoneNumber                   String?         @unique // E.164 international format, e.g. "+2348012345678"
   phoneVerifiedAt               DateTime?
+  // HMAC of the DIDIT-approved identity document. It is never returned by
+  // the API and makes a second approval for the same identity impossible.
+  diditIdentityFingerprint      String?         @unique
   // Denormalized read-cache of the latest resolved KycVerification (the
   // KycVerification table is the source of truth/history) -- lets
   // wallet.controller.ts's withdrawal gate check identity status without a
@@ -2395,6 +2398,7 @@ model SubscriptionPlan {
   minIsvcConfidence    IsvcConfidence? // Phase 5 -- null = full catalogue access, enforced by TierGateGuard
   monthlyByteQuota     BigInt? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
   monthlyRequestQuota  Int? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
+  features             String[]        @default([]) // admin-authored comparison bullets, display-only -- not enforced by any guard, unlike the numeric limits above
   active               Boolean         @default(true)
 
   subscriptions Subscription[]

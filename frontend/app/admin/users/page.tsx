@@ -356,6 +356,17 @@ function UserIdentityCell({ user, selfId }: { user: PublicUser; selfId?: string 
         <p className="text-xs font-bold text-muted">
           {performance.label} · {performance.detail}
         </p>
+        {(user.potentialDuplicateNameMatches?.length ?? 0) > 0 && (
+          <p
+            className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-extrabold text-amber-800"
+            title={user.potentialDuplicateNameMatches!
+              .map((match) => `${match.email}${match.phoneNumber ? ` | ${match.phoneNumber}` : ''}`)
+              .join('\n')}
+          >
+            Flag: same name on {user.potentialDuplicateNameMatches!.length} account
+            {user.potentialDuplicateNameMatches!.length === 1 ? '' : 's'}
+          </p>
+        )}
         {user.id === selfId && <p className="text-xs text-muted">This is you</p>}
       </div>
     </div>

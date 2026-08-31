@@ -96,6 +96,18 @@ export interface PublicUser {
   auditHoldAt: string | null;
   auditHoldReleasedAt: string | null;
   onAuditHold: boolean;
+  potentialDuplicateNameMatches?: PotentialDuplicateNameMatch[];
+}
+
+export interface PotentialDuplicateNameMatch {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  phoneNumber: string | null;
+  phoneVerified: boolean;
+  status: UserStatus;
+  kycStatus: string;
 }
 
 type UserWithDialect = User & {
@@ -837,7 +849,7 @@ export class AuthService {
       select: { id: true },
     });
     if (existing && existing.id !== userId) {
-      throw new ConflictException('This phone number is already verified on another account');
+      throw new ConflictException('This phone number is already linked to another account');
     }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
 
@@ -942,12 +954,12 @@ export class AuthService {
       throw new UnprocessableEntityException('Enter a valid phone number in international format');
     }
 
-    const existingPhoneOwner = await this.prisma.user.findFirst({
-      where: { phoneNumber, id: { not: userId }, phoneVerifiedAt: { not: null } },
+    const existingPhoneOwner = await this.prisma.user.findUnique({
+      where: { phoneNumber },
       select: { id: true },
     });
-    if (existingPhoneOwner) {
-      throw new ConflictException('This phone number is already verified on another account');
+    if (existingPhoneOwner && existingPhoneOwner.id !== userId) {
+      throw new ConflictException('This phone number is already linked to another account');
     }
 
     const user = await this.prisma.user.findUnique({
@@ -1320,7 +1332,7 @@ export class AuthService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return users.map(toPublicUser);
+    return this.withPotentialDuplicateNameMatches(users.map(toPublicUser));
   }
 
   async updateUserRole(userId: string, role: Role): Promise<PublicUser> {
@@ -1330,6 +1342,64 @@ export class AuthService {
       include: { dialect: true, dialectVariant: true },
     });
     return toPublicUser(user);
+  }
+
+  /**
+   * Exact normalized full-name matches are review signals, not proof of a
+   * duplicate person. This is used only by admin endpoints, so another
+   * account's details cannot leak through normal profile/auth responses.
+   */
+  private async withPotentialDuplicateNameMatches(users: PublicUser[]): Promise<PublicUser[]> {
+    const normalizedFullName = (firstName: string | null, lastName: string | null) => {
+      const normalize = (value: string | null) =>
+        value?.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase() ?? '';
+      const first = normalize(firstName);
+      const last = normalize(lastName);
+      return first && last ? `${first}\u0000${last}` : null;
+    };
+    const names = new Set(
+      users
+        .map((user) => normalizedFullName(user.firstName, user.lastName))
+        .filter((name): name is string => name !== null),
+    );
+    if (names.size === 0) return users;
+
+    const candidates = await this.prisma.user.findMany({
+      where: { firstName: { not: null }, lastName: { not: null } },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phoneNumber: true,
+        phoneVerifiedAt: true,
+        status: true,
+        kycStatus: true,
+      },
+    });
+    const byName = new Map<string, PotentialDuplicateNameMatch[]>();
+    for (const candidate of candidates) {
+      const name = normalizedFullName(candidate.firstName, candidate.lastName);
+      if (!name || !names.has(name)) continue;
+      const matches = byName.get(name) ?? [];
+      matches.push({
+        id: candidate.id,
+        firstName: candidate.firstName,
+        lastName: candidate.lastName,
+        email: candidate.email,
+        phoneNumber: candidate.phoneNumber,
+        phoneVerified: candidate.phoneVerifiedAt !== null,
+        status: candidate.status,
+        kycStatus: candidate.kycStatus,
+      });
+      byName.set(name, matches);
+    }
+
+    return users.map((user) => {
+      const name = normalizedFullName(user.firstName, user.lastName);
+      const matches = name ? (byName.get(name) ?? []).filter((match) => match.id !== user.id) : [];
+      return { ...user, ...(matches.length ? { potentialDuplicateNameMatches: matches } : {}) };
+    });
   }
 
   /**
@@ -1393,7 +1463,7 @@ export class AuthService {
       },
     });
     if (!user) throw new NotFoundException('User not found');
-    return toPublicUser(user);
+    return (await this.withPotentialDuplicateNameMatches([toPublicUser(user)]))[0];
   }
 
   /**

@@ -165,6 +165,36 @@ export default function AdminUserDetailPage() {
               />
             </section>
 
+            <section className="grid gap-3 rounded-lg border border-amber-200 bg-amber-50 p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+              <h2 className="text-lg font-black text-amber-950">Account integrity</h2>
+              {(user.potentialDuplicateNameMatches?.length ?? 0) > 0 ? (
+                <>
+                  <p className="text-sm leading-relaxed text-amber-900">
+                    Potential same-name match. This is a review warning only; a matching name does not prove the accounts belong to one person.
+                  </p>
+                  <div className="grid gap-2">
+                    {user.potentialDuplicateNameMatches!.map((match) => (
+                      <Link
+                        className="grid gap-1 rounded-lg border border-amber-200 bg-white p-3 text-sm no-underline transition-colors hover:bg-amber-100"
+                        href={`/admin/users/${match.id}`}
+                        key={match.id}
+                      >
+                        <span className="font-extrabold text-ink">
+                          {[match.firstName, match.lastName].filter(Boolean).join(' ') || 'Name not provided'}
+                        </span>
+                        <span className="text-muted">{match.email}</span>
+                        <span className="text-muted">
+                          {match.phoneNumber ?? 'No mobile'} | {match.phoneVerified ? 'Mobile verified' : 'Mobile unverified'} | {match.status} | DIDIT {match.kycStatus.replace(/_/g, ' ')}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-amber-900">No potential same-name matches found. DIDIT-approved identities and mobile numbers are enforced as unique.</p>
+              )}
+            </section>
+
             <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
               <h2 className="text-lg font-black">Account controls</h2>
               {user.id === selfId ? (

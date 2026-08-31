@@ -19,6 +19,8 @@ export interface SubscriptionPlanInput {
   /** Phase 4b advanced quota policies -- null means unlimited, enforced by QuotaGuard. */
   monthlyByteQuota?: bigint | null;
   monthlyRequestQuota?: number | null;
+  /** Admin-authored comparison bullets, display-only -- not enforced by any guard. */
+  features?: string[];
   active?: boolean;
 }
 
@@ -56,6 +58,7 @@ export class SubscriptionPlansService {
       minIsvcConfidence: plan.minIsvcConfidence,
       monthlyByteQuota: plan.monthlyByteQuota?.toString() ?? null,
       monthlyRequestQuota: plan.monthlyRequestQuota,
+      features: plan.features,
     }));
   }
 
@@ -88,6 +91,7 @@ export class SubscriptionPlansService {
         minIsvcConfidence: input.minIsvcConfidence ?? null,
         monthlyByteQuota: input.monthlyByteQuota ?? null,
         monthlyRequestQuota: input.monthlyRequestQuota ?? null,
+        features: (input.features ?? []).map((f) => f.trim()).filter(Boolean),
         active: input.active ?? true,
       },
       update: {
@@ -99,6 +103,9 @@ export class SubscriptionPlansService {
         minIsvcConfidence: input.minIsvcConfidence ?? null,
         monthlyByteQuota: input.monthlyByteQuota ?? null,
         monthlyRequestQuota: input.monthlyRequestQuota ?? null,
+        ...(input.features !== undefined && {
+          features: input.features.map((f) => f.trim()).filter(Boolean),
+        }),
         ...(input.active !== undefined && { active: input.active }),
       },
     });

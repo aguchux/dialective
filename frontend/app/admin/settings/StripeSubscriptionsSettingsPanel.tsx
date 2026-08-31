@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Check, Plus, X } from 'lucide-react';
 import {
   ApiAccessTokenSummary,
   IsvcConfidence,
@@ -153,6 +154,7 @@ function emptyPlanForm() {
     minIsvcConfidence: '' as IsvcConfidence | '',
     monthlyByteQuotaGb: '',
     monthlyRequestQuota: '',
+    features: [] as string[],
     active: true,
   };
 }
@@ -172,8 +174,84 @@ function planToForm(plan: SubscriptionPlan) {
       ? (Number(plan.monthlyByteQuota) / BYTES_PER_GB).toString()
       : '',
     monthlyRequestQuota: plan.monthlyRequestQuota?.toString() ?? '',
+    features: plan.features ?? [],
     active: plan.active,
   };
+}
+
+/** Add/remove/edit free-text comparison bullets for a plan (e.g. "Priority support"). Display-only, not tied to any enforced limit. */
+function FeatureListEditor({
+  features,
+  onChange,
+}: {
+  features: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [draft, setDraft] = useState('');
+
+  function addFeature() {
+    const value = draft.trim();
+    if (!value) return;
+    onChange([...features, value]);
+    setDraft('');
+  }
+
+  function removeFeature(index: number) {
+    onChange(features.filter((_, i) => i !== index));
+  }
+
+  return (
+    <div className="grid gap-2 sm:col-span-2">
+      <span className="text-sm font-bold">Comparison features</span>
+      {features.length > 0 && (
+        <ul className="grid gap-1.5">
+          {features.map((feature, index) => (
+            <li
+              className="flex items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2"
+              key={`${feature}-${index}`}
+            >
+              <span className="text-sm">{feature}</span>
+              <button
+                aria-label={`Remove "${feature}"`}
+                className="grid size-7 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                onClick={() => removeFeature(index)}
+                type="button"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <input
+          className={inputClass}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addFeature();
+            }
+          }}
+          placeholder="e.g. Priority support"
+          value={draft}
+        />
+        <button
+          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-white px-3.5 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!draft.trim()}
+          onClick={addFeature}
+          type="button"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          Add
+        </button>
+      </div>
+      <p className="text-xs text-muted">
+        Shown as a bullet list on this plan for side-by-side comparison. Display-only -- not
+        enforced.
+      </p>
+    </div>
+  );
 }
 
 function PlanForm({
@@ -216,6 +294,7 @@ function PlanForm({
             ? Math.round(Number(form.monthlyByteQuotaGb) * BYTES_PER_GB)
             : null,
           monthlyRequestQuota: form.monthlyRequestQuota ? Number(form.monthlyRequestQuota) : null,
+          features: form.features,
           active: form.active,
         },
       }).unwrap();
@@ -322,6 +401,10 @@ function PlanForm({
             value={form.monthlyRequestQuota}
           />
         </label>
+        <FeatureListEditor
+          features={form.features}
+          onChange={(features) => setForm({ ...form, features })}
+        />
         <label className="flex items-center gap-2 text-sm font-bold">
           <input
             checked={form.active}
@@ -396,6 +479,19 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
             {' -- '}
             {plan.monthlyRequestQuota ? `${plan.monthlyRequestQuota.toLocaleString()} requests` : 'unlimited requests'}
           </p>
+          {plan.features.length > 0 && (
+            <ul className="mt-2 grid gap-1">
+              {plan.features.map((feature, index) => (
+                <li
+                  className="flex items-start gap-1.5 text-sm text-ink"
+                  key={`${feature}-${index}`}
+                >
+                  <Check className="mt-0.5 size-3.5 shrink-0 text-accent" aria-hidden="true" />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <span
           className={`shrink-0 rounded-full px-3 py-1 text-sm font-bold ${

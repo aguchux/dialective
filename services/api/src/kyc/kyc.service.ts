@@ -2,7 +2,11 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { KycStatus, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { DiditDecision, DiditService } from './didit.service';
-import { encryptKycField, maskDocumentNumber } from '../common/kyc-crypto.util';
+import {
+  encryptKycField,
+  fingerprintKycDocument,
+  maskDocumentNumber,
+} from '../common/kyc-crypto.util';
 
 const TERMINAL_STATUSES: KycStatus[] = [
   KycStatus.APPROVED,
@@ -122,30 +126,66 @@ export class KycService {
     decision: DiditDecision | null,
   ) {
     const idVerification = decision?.idVerifications[0];
-    await this.prisma.kycVerification.update({
-      where: { id: verificationId },
-      data: {
-        status,
-        documentType: idVerification?.documentType ?? undefined,
-        documentNumberMasked: idVerification?.documentNumber
-          ? maskDocumentNumber(idVerification.documentNumber)
-          : undefined,
-        faceMatchScore: decision?.faceMatchScore ?? undefined,
-        livenessScore: decision?.livenessScore ?? undefined,
-        declineReason: decision?.declineReason ?? undefined,
-        decisionEncryptedJson: decision
-          ? (encryptKycField(JSON.stringify(decision.raw)) as unknown as Prisma.InputJsonValue)
-          : undefined,
-        webhookReceivedAt: new Date(),
-      },
-    });
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        kycStatus: status,
-        kycVerifiedAt: status === KycStatus.APPROVED ? new Date() : undefined,
-      },
-    });
+    const resolvedAt = new Date();
+    const verificationData = {
+      status,
+      documentType: idVerification?.documentType ?? undefined,
+      documentNumberMasked: idVerification?.documentNumber
+        ? maskDocumentNumber(idVerification.documentNumber)
+        : undefined,
+      faceMatchScore: decision?.faceMatchScore ?? undefined,
+      livenessScore: decision?.livenessScore ?? undefined,
+      declineReason: decision?.declineReason ?? undefined,
+      decisionEncryptedJson: decision
+        ? (encryptKycField(JSON.stringify(decision.raw)) as unknown as Prisma.InputJsonValue)
+        : undefined,
+      webhookReceivedAt: resolvedAt,
+    };
+    const identityFingerprint =
+      status === KycStatus.APPROVED && idVerification?.documentNumber
+        ? fingerprintKycDocument(idVerification.documentNumber)
+        : null;
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.kycVerification.update({
+          where: { id: verificationId },
+          data: verificationData,
+        });
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            kycStatus: status,
+            kycVerifiedAt: status === KycStatus.APPROVED ? resolvedAt : undefined,
+            ...(identityFingerprint ? { diditIdentityFingerprint: identityFingerprint } : {}),
+          },
+        });
+      });
+    } catch (err) {
+      const duplicateIdentity =
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        String(err.meta?.target ?? '').includes('diditIdentityFingerprint');
+      if (!duplicateIdentity) throw err;
+
+      // Do not reveal the account that already owns the identity. The raw
+      // DIDIT decision remains encrypted for an authorised audit.
+      await this.prisma.$transaction(async (tx) => {
+        await tx.kycVerification.update({
+          where: { id: verificationId },
+          data: {
+            ...verificationData,
+            status: KycStatus.DECLINED,
+            declineReason: 'This identity is already associated with another account.',
+          },
+        });
+        await tx.user.update({
+          where: { id: userId },
+          data: { kycStatus: KycStatus.DECLINED, kycVerifiedAt: null },
+        });
+      });
+      this.logger.warn(`DIDIT identity duplicate blocked for user=${userId}`);
+    }
   }
 
   async adminList(filters: { status?: KycStatus; page: number; pageSize: number }) {

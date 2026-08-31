@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsInt,
@@ -65,6 +67,14 @@ export class UpsertSubscriptionPlanDto {
   @IsInt()
   @IsPositive()
   monthlyRequestQuota?: number | null;
+
+  /** Admin-authored comparison bullets, e.g. "Priority support". Display-only -- not enforced by any guard. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(140, { each: true })
+  features?: string[];
 
   @IsOptional()
   @IsBoolean()

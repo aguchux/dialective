@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
+import { createCipheriv, createDecipheriv, createHmac, randomBytes, scryptSync } from 'crypto';
 
 /**
  * AES-256-GCM encrypt/decrypt for KycVerification.decisionEncryptedJson --
@@ -54,4 +54,23 @@ export function decryptKycField(field: EncryptedKycField): string {
 export function maskDocumentNumber(value: string, visibleDigits = 4): string {
   if (value.length <= visibleDigits) return '*'.repeat(value.length);
   return '*'.repeat(value.length - visibleDigits) + value.slice(-visibleDigits);
+}
+
+/**
+ * Produces a non-reversible, stable key for a DIDIT document number. This
+ * enables one-identity-per-account enforcement without storing the document
+ * number in plaintext or making it available to the API response surface.
+ */
+export function fingerprintKycDocument(value: string): string {
+  const passphrase = process.env.KYC_DOCUMENT_ENCRYPTION_KEY;
+  if (!passphrase) {
+    throw new Error('KYC_DOCUMENT_ENCRYPTION_KEY is not set');
+  }
+  const normalized = value.normalize('NFKC').replace(/[^\p{L}\p{N}]/gu, '').toUpperCase();
+  if (!normalized) {
+    throw new Error('KYC document number is empty after normalization');
+  }
+  return createHmac('sha256', passphrase)
+    .update(`dialectiva-didit-identity-v1:${normalized}`)
+    .digest('hex');
 }

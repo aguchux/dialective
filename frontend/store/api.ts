@@ -39,6 +39,16 @@ export interface PublicUser {
   auditHoldAt: string | null;
   auditHoldReleasedAt: string | null;
   onAuditHold: boolean;
+  potentialDuplicateNameMatches?: Array<{
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    phoneNumber: string | null;
+    phoneVerified: boolean;
+    status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
+    kycStatus: KycStatus;
+  }>;
 }
 
 export interface PendingOtp {
@@ -1229,6 +1239,8 @@ export interface SubscriptionPlan {
   /** Bytes, as a string (server-serialized from a Prisma BigInt). */
   monthlyByteQuota: string | null;
   monthlyRequestQuota: number | null;
+  /** Admin-authored comparison bullets, display-only. */
+  features: string[];
   active: boolean;
 }
 
@@ -1241,6 +1253,7 @@ export interface PublicSubscriptionPlan {
   minIsvcConfidence: IsvcConfidence | null;
   monthlyByteQuota: string | null;
   monthlyRequestQuota: number | null;
+  features: string[];
 }
 
 export interface SubscriptionPlanInput {
@@ -1254,6 +1267,7 @@ export interface SubscriptionPlanInput {
   /** Bytes, as a JS number -- the server converts to BigInt. */
   monthlyByteQuota?: number | null;
   monthlyRequestQuota?: number | null;
+  features?: string[];
   active?: boolean;
 }
 
