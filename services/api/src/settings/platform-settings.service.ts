@@ -220,6 +220,11 @@ export class PlatformSettingsService {
     return row.qracEnabled;
   }
 
+  async isQracRequiredAtSessionStart(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.qracRequiredAtSessionStart;
+  }
+
   async getQracIntervalMinutes(): Promise<number> {
     const row = await this.getRow();
     return row.qracIntervalMinutes;
@@ -748,6 +753,7 @@ export class PlatformSettingsService {
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
       qracEnabled: row.qracEnabled,
+      qracRequiredAtSessionStart: row.qracRequiredAtSessionStart,
       qracIntervalMinutes: row.qracIntervalMinutes,
       testimonyEnabled: row.testimonyEnabled,
       testimonyMaxTextLength: row.testimonyMaxTextLength,
@@ -862,6 +868,7 @@ export class PlatformSettingsService {
     submissionRateLimitEnabled?: boolean;
     submissionRateLimitPerHour?: number;
     qracEnabled?: boolean;
+    qracRequiredAtSessionStart?: boolean;
     qracIntervalMinutes?: number;
     testimonyEnabled?: boolean;
     testimonyMaxTextLength?: number;
@@ -1198,6 +1205,7 @@ export class PlatformSettingsService {
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
       qracEnabled: row.qracEnabled,
+      qracRequiredAtSessionStart: row.qracRequiredAtSessionStart,
       qracIntervalMinutes: row.qracIntervalMinutes,
       testimonyEnabled: row.testimonyEnabled,
       testimonyMaxTextLength: row.testimonyMaxTextLength,

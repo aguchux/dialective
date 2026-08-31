@@ -24,6 +24,7 @@ export function QualityGateSettingsPanel() {
   const [weightLiveness, setWeightLiveness] = useState('15');
   const [weightAsrMatch, setWeightAsrMatch] = useState('0');
   const [qracEnabled, setQracEnabled] = useState(false);
+  const [qracRequiredAtSessionStart, setQracRequiredAtSessionStart] = useState(false);
   const [qracIntervalMinutes, setQracIntervalMinutes] = useState('30');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +38,7 @@ export function QualityGateSettingsPanel() {
     setWeightLiveness(settings.qualityWeightLiveness);
     setWeightAsrMatch(settings.qualityWeightAsrMatch);
     setQracEnabled(settings.qracEnabled);
+    setQracRequiredAtSessionStart(settings.qracRequiredAtSessionStart);
     setQracIntervalMinutes(String(settings.qracIntervalMinutes));
   }, [settings]);
 
@@ -72,6 +74,7 @@ export function QualityGateSettingsPanel() {
         qualityWeightLiveness: Number(weightLiveness),
         qualityWeightAsrMatch: Number(weightAsrMatch),
         qracEnabled,
+        qracRequiredAtSessionStart,
         qracIntervalMinutes: interval,
       }).unwrap();
       setMessage('Quality gate settings saved.');
@@ -230,19 +233,38 @@ export function QualityGateSettingsPanel() {
               <span>
                 <span className="block font-bold">Quality Recordings Affirmation Check (QRAC)</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Periodically interrupts an in-progress word-training session with a checklist the
-                  trainer must re-confirm before continuing (no background noise, clear/audible
-                  speech, staying within the time window, required courses completed). Every signing
-                  is recorded with an incrementing version.
+                  Controls the required training quality affirmation. Every signing is recorded with
+                  an incrementing version.
+                </span>
+              </span>
+            </label>
+            <label
+              className="flex cursor-pointer items-start gap-3 pl-8"
+              htmlFor="qrac-session-start"
+            >
+              <input
+                checked={qracRequiredAtSessionStart}
+                className="mt-0.5 size-5 accent-accent"
+                disabled={!qracEnabled}
+                id="qrac-session-start"
+                onChange={(event) => setQracRequiredAtSessionStart(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Require at every new task session</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Trainers must sign QRAC before receiving their first word in each new session.
+                  Turn this off to use the periodic reminder below instead.
                 </span>
               </span>
             </label>
             <div className="grid gap-1 pl-8">
               <label className="text-sm font-bold" htmlFor="qrac-interval">
-                Remind trainers every (minutes)
+                Periodic reminder interval (minutes)
               </label>
               <input
                 className={`${inputClass} max-w-40`}
+                disabled={!qracEnabled || qracRequiredAtSessionStart}
                 id="qrac-interval"
                 type="number"
                 step="1"

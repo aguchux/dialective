@@ -19,6 +19,7 @@ describe('WordsService', () => {
     getWordTrainingRecordingMaxTimeoutSeconds: jest.fn().mockResolvedValue(180),
     getAuditHoldEveryNSubmissions: jest.fn().mockResolvedValue(0),
     isQracEnabled: jest.fn().mockResolvedValue(false),
+    isQracRequiredAtSessionStart: jest.fn().mockResolvedValue(false),
     getQracIntervalMinutes: jest.fn().mockResolvedValue(30),
   };
   const storage = { createPresignedDownloadUrl: jest.fn(), createPresignedUploadUrl: jest.fn() };
@@ -72,6 +73,7 @@ describe('WordsService', () => {
     courses.getIncompleteRequiredCourses.mockReset().mockResolvedValue([]);
     settings.getAuditHoldEveryNSubmissions.mockReset().mockResolvedValue(0);
     settings.isQracEnabled.mockReset().mockResolvedValue(false);
+    settings.isQracRequiredAtSessionStart.mockReset().mockResolvedValue(false);
     settings.getQracIntervalMinutes.mockReset().mockResolvedValue(30);
     session.lastQracAt = null;
     mail.sendAuditHoldStartedEmail.mockReset().mockResolvedValue(undefined);
@@ -271,6 +273,7 @@ describe('WordsService', () => {
 
     it('does not block a fresh session before the interval has elapsed', async () => {
       settings.isQracEnabled.mockResolvedValue(true);
+      settings.isQracRequiredAtSessionStart.mockResolvedValue(false);
       settings.getQracIntervalMinutes.mockResolvedValue(30);
       session.startedAt = new Date(); // just started
       await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
@@ -280,6 +283,7 @@ describe('WordsService', () => {
 
     it('blocks with qracRequired once the interval has elapsed since startedAt', async () => {
       settings.isQracEnabled.mockResolvedValue(true);
+      settings.isQracRequiredAtSessionStart.mockResolvedValue(false);
       settings.getQracIntervalMinutes.mockResolvedValue(30);
       session.startedAt = new Date(Date.now() - 31 * 60_000);
       session.lastQracAt = null;
@@ -295,9 +299,33 @@ describe('WordsService', () => {
 
     it('measures elapsed time from lastQracAt, not startedAt, once the trainer has signed before', async () => {
       settings.isQracEnabled.mockResolvedValue(true);
+      settings.isQracRequiredAtSessionStart.mockResolvedValue(false);
       settings.getQracIntervalMinutes.mockResolvedValue(30);
       session.startedAt = new Date(Date.now() - 120 * 60_000); // session opened long ago
       session.lastQracAt = new Date(Date.now() - 5 * 60_000); // but signed recently
+
+      await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
+        assignmentId: 'assignment-1',
+      });
+    });
+
+    it('requires QRAC before the first assignment of every new session when session-start mode is enabled', async () => {
+      settings.isQracEnabled.mockResolvedValue(true);
+      settings.isQracRequiredAtSessionStart.mockResolvedValue(true);
+      session.startedAt = new Date();
+      session.lastQracAt = null;
+
+      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toMatchObject({
+        response: expect.objectContaining({ qracRequired: true }),
+      });
+      expect(prisma.wordTrainingAssignment.create).not.toHaveBeenCalled();
+    });
+
+    it('allows subsequent assignments in session-start mode after QRAC is signed', async () => {
+      settings.isQracEnabled.mockResolvedValue(true);
+      settings.isQracRequiredAtSessionStart.mockResolvedValue(true);
+      session.startedAt = new Date(Date.now() - 60 * 60_000);
+      session.lastQracAt = new Date(Date.now() - 60 * 60_000);
 
       await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
         assignmentId: 'assignment-1',

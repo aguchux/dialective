@@ -137,16 +137,19 @@ export class WordsService {
       });
     }
 
-    // Same per-round re-check rationale as the required-courses gate above
-    // (sessions have no server-side TTL) -- a trainer can be mid-session for
-    // longer than qracIntervalMinutes, so this must fire here, not just once
-    // at startSession. Anchored on lastQracAt (or startedAt if never
-    // signed); signQrac() bumps lastQracAt to resume.
+    // QRAC can be configured either as a mandatory check-in for every new
+    // session, or as the existing periodic re-affirmation. Both gates live
+    // at the assignment chokepoint so a trainer cannot receive work before
+    // signing, and an admin setting change takes effect immediately.
     if (await this.settings.isQracEnabled()) {
+      const requireAtSessionStart = await this.settings.isQracRequiredAtSessionStart();
       const intervalMinutes = await this.settings.getQracIntervalMinutes();
       const anchor = session.lastQracAt ?? session.startedAt;
       const dueAt = new Date(anchor.getTime() + intervalMinutes * 60_000);
-      if (new Date() >= dueAt) {
+      if (
+        (requireAtSessionStart && !session.lastQracAt) ||
+        (!requireAtSessionStart && new Date() >= dueAt)
+      ) {
         throw new ForbiddenException({
           message: 'Confirm the quality recording checklist to continue.',
           qracRequired: true,

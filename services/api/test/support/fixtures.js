@@ -8,6 +8,7 @@ exports.seedStreamKey = seedStreamKey;
 exports.seedOAuthClient = seedOAuthClient;
 exports.cleanupOrgs = cleanupOrgs;
 exports.cleanupRecordings = cleanupRecordings;
+exports.waitForCondition = waitForCondition;
 const crypto_1 = require("crypto");
 const db_1 = require("@dialectiva/db");
 const token_util_1 = require("../../src/auth/token.util");
@@ -177,5 +178,20 @@ async function cleanupRecordings(prisma, recordingIds) {
     if (recordingIds.length === 0)
         return;
     await prisma.wordRecording.deleteMany({ where: { id: { in: recordingIds } } });
+}
+/**
+ * StreamManifestController's logRequest() call is fire-and-forget
+ * (`void this.accessLog.record(...)`), so the HTTP response can return
+ * before the write lands. Polls briefly rather than asserting immediately.
+ */
+async function waitForCondition(check, opts = {}) {
+    const timeoutMs = opts.timeoutMs ?? 2000;
+    const intervalMs = opts.intervalMs ?? 50;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        if (await check())
+            return;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
 }
 //# sourceMappingURL=fixtures.js.map

@@ -263,3 +263,21 @@ export async function cleanupRecordings(prisma: PrismaClient, recordingIds: stri
   if (recordingIds.length === 0) return;
   await prisma.wordRecording.deleteMany({ where: { id: { in: recordingIds } } });
 }
+
+/**
+ * StreamManifestController's logRequest() call is fire-and-forget
+ * (`void this.accessLog.record(...)`), so the HTTP response can return
+ * before the write lands. Polls briefly rather than asserting immediately.
+ */
+export async function waitForCondition(
+  check: () => Promise<boolean>,
+  opts: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<void> {
+  const timeoutMs = opts.timeoutMs ?? 2000;
+  const intervalMs = opts.intervalMs ?? 50;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await check()) return;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}

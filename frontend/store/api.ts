@@ -1254,6 +1254,7 @@ export interface PlatformSettings {
   submissionRateLimitEnabled: boolean;
   submissionRateLimitPerHour: number;
   qracEnabled: boolean;
+  qracRequiredAtSessionStart: boolean;
   qracIntervalMinutes: number;
   testimonyEnabled: boolean;
   testimonyMaxTextLength: number;
@@ -1359,6 +1360,7 @@ export interface PlatformSettingsInput {
   submissionRateLimitEnabled?: boolean;
   submissionRateLimitPerHour?: number;
   qracEnabled?: boolean;
+  qracRequiredAtSessionStart?: boolean;
   qracIntervalMinutes?: number;
   testimonyEnabled?: boolean;
   testimonyMaxTextLength?: number;

@@ -306,6 +306,12 @@ export function WordTrainingDialog({
         setAssignment(next);
         setStep('training');
       } catch (err) {
+        if (extractQracRequired(err)) {
+          // Session-start QRAC keeps the just-created session open. The
+          // affirmation overlay resumes this exact first-assignment request.
+          setQracOpen(true);
+          return;
+        }
         void endSession(created.sessionId);
         setSession(null);
         if (isNoWordsAvailable(err)) {
@@ -315,11 +321,6 @@ export function WordTrainingDialog({
         throw err;
       }
     } catch (err) {
-      // No QRAC branch here -- a just-created session's lastQracAt is null
-      // and startedAt is now(), so nextAssignment's due-check can never fire
-      // on this very first call (see WordsService.nextAssignment). QRAC only
-      // becomes reachable once a session has been open for a while, i.e. in
-      // nextWord below.
       const requiredCourses = extractRequiredCourses(err);
       if (requiredCourses && onRequiredCourses) {
         onOpenChange(false);

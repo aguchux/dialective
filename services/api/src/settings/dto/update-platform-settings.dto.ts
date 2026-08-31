@@ -271,6 +271,10 @@ export class UpdatePlatformSettingsDto {
   qracEnabled?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  qracRequiredAtSessionStart?: boolean;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   qracIntervalMinutes?: number;

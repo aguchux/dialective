@@ -35,7 +35,9 @@ Dialect Library is a contributor platform for voice recordings and word translat
 - A trainer can skip an unfamiliar word or phrase and move to the next item instead of guessing.
 - Word-training work may be validated through reverse validation. Sentence recordings are transcribed and compared with other submissions for the same prompt and dialect.
 - Scoring and settlement can take time because they depend on validation, quality controls, and the configured settlement delay. A task that reaches the platform scoring timeout is resolved according to the active platform policy, which may refund the held DL or apply a fair score when that policy is enabled.
-- During a training session, a trainer may periodically see a short quality-affirmation checklist (quiet environment, clear speech, staying in time, required courses complete) before continuing -- a routine quality check, not a penalty. How often it appears is admin-configurable.
+- During a training session, a trainer may see the **QRAC**, meaning **Quality Recordings Affirmation Check**. It is a routine quality check, not a penalty. Depending on the current platform setting, it is required before the first item in every new task session or periodically during an open session.
+- To continue when QRAC appears, the trainer must read and affirm each item: there is no background noise, speech is clear and audible, the recording stays within the allowed time, required courses are complete, the trainer is the only speaker, and the recording is made in a quiet private place without interruption.
+- QRAC also confirms that submissions are reviewed for quality and that inaccurate affirmations can affect the account. Trainers should only sign it when each statement is true. The affirmation is recorded against the active training session.
 - Trainers can review task status in Training and completed scores in My Scores.
 - Use [Training](/dashboard?view=training) to start a task or review submitted work, and [My Scores](/dashboard?view=scores) for scored results. Trainers should never guess a translation; use the next-item control for unfamiliar prompts.
 

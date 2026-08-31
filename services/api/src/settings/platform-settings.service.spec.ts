@@ -108,6 +108,11 @@ describe('PlatformSettingsService QRAC settings', () => {
     await expect(service.isQracEnabled()).resolves.toBe(true);
   });
 
+  it('isQracRequiredAtSessionStart reflects the selected QRAC mode', async () => {
+    const { service } = setup({ qracRequiredAtSessionStart: true });
+    await expect(service.isQracRequiredAtSessionStart()).resolves.toBe(true);
+  });
+
   it('getQracIntervalMinutes reflects the admin-configured value', async () => {
     const { service } = setup({ qracIntervalMinutes: 45 });
     await expect(service.getQracIntervalMinutes()).resolves.toBe(45);
