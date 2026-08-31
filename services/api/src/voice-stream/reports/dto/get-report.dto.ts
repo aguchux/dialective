@@ -18,6 +18,16 @@ export class SubscriberAnalyticsQueryDto {
   format?: 'csv';
 }
 
+export class SubscriberAnalyticsTimeSeriesQueryDto {
+  @Type(() => Date)
+  @IsDate()
+  from!: Date;
+
+  @Type(() => Date)
+  @IsDate()
+  to!: Date;
+}
+
 export class FormatOnlyQueryDto {
   @IsOptional()
   @IsIn(['csv'])

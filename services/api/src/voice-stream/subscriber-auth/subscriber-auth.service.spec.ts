@@ -42,6 +42,11 @@ function setup() {
     subscriberOrgSecurityPolicy: {
       findUnique: jest.fn(),
     },
+    subscriberPasswordResetToken: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
     $transaction: undefined as unknown as jest.Mock,
   };
   prisma.$transaction = jest.fn(async (ops: unknown) => {
@@ -52,6 +57,7 @@ function setup() {
   const mail = {
     sendOtpEmail: jest.fn().mockResolvedValue(undefined),
     sendSubscriberInviteEmail: jest.fn().mockResolvedValue(undefined),
+    sendSubscriberPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
   };
 
   const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
@@ -493,6 +499,121 @@ describe('SubscriberAuthService', () => {
         email: 'a@b.com',
         role: SubscriberOrgRole.VALIDATOR,
       });
+    });
+  });
+
+  describe('requestPasswordReset', () => {
+    it('does nothing when no account exists for the email (does not reveal existence)', async () => {
+      const { service, prisma, mail } = setup();
+      prisma.subscriberUser.findUnique.mockResolvedValue(null);
+
+      await service.requestPasswordReset('nobody@b.com');
+
+      expect(prisma.subscriberPasswordResetToken.create).not.toHaveBeenCalled();
+      expect(mail.sendSubscriberPasswordResetEmail).not.toHaveBeenCalled();
+    });
+
+    it('does nothing for an SSO-only account with no passwordHash', async () => {
+      const { service, prisma, mail } = setup();
+      prisma.subscriberUser.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'sso@b.com',
+        passwordHash: null,
+      });
+
+      await service.requestPasswordReset('sso@b.com');
+
+      expect(prisma.subscriberPasswordResetToken.create).not.toHaveBeenCalled();
+      expect(mail.sendSubscriberPasswordResetEmail).not.toHaveBeenCalled();
+    });
+
+    it('creates a reset token and emails it for a normal password account', async () => {
+      const { service, prisma, mail } = setup();
+      prisma.subscriberUser.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+        passwordHash: 'hash',
+      });
+
+      await service.requestPasswordReset('a@b.com');
+
+      expect(prisma.subscriberPasswordResetToken.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ userId: 'user-1' }) }),
+      );
+      expect(mail.sendSubscriberPasswordResetEmail).toHaveBeenCalledWith(
+        'a@b.com',
+        expect.any(String),
+      );
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('throws UnauthorizedException when the token does not exist', async () => {
+      const { service, prisma } = setup();
+      prisma.subscriberPasswordResetToken.findUnique.mockResolvedValue(null);
+
+      await expect(service.resetPassword('bad-token', 'newpassword1')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('throws UnauthorizedException when the token was already used', async () => {
+      const { service, prisma } = setup();
+      prisma.subscriberPasswordResetToken.findUnique.mockResolvedValue({
+        id: 'reset-1',
+        userId: 'user-1',
+        usedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+
+      await expect(service.resetPassword('used-token', 'newpassword1')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('throws UnauthorizedException when the token has expired', async () => {
+      const { service, prisma } = setup();
+      prisma.subscriberPasswordResetToken.findUnique.mockResolvedValue({
+        id: 'reset-1',
+        userId: 'user-1',
+        usedAt: null,
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+
+      await expect(service.resetPassword('expired-token', 'newpassword1')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('updates the password, marks the token used, and revokes all refresh tokens', async () => {
+      const { service, prisma } = setup();
+      prisma.subscriberPasswordResetToken.findUnique.mockResolvedValue({
+        id: 'reset-1',
+        userId: 'user-1',
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+
+      await service.resetPassword('good-token', 'newpassword1');
+
+      expect(prisma.subscriberUser.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user-1' },
+          data: expect.objectContaining({ passwordHash: expect.any(String) }),
+        }),
+      );
+      expect(prisma.subscriberPasswordResetToken.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'reset-1' },
+          data: expect.objectContaining({ usedAt: expect.any(Date) }),
+        }),
+      );
+      expect(prisma.subscriberRefreshToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'user-1', revokedAt: null },
+          data: expect.objectContaining({ revokedAt: expect.any(Date) }),
+        }),
+      );
     });
   });
 });

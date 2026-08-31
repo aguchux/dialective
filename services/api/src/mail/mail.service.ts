@@ -132,6 +132,16 @@ export class MailService {
     );
   }
 
+  async sendSubscriberPasswordResetEmail(email: string, token: string): Promise<void> {
+    const url = `${streamFrontendUrl()}/reset-password?token=${token}`;
+    await this.send(
+      email,
+      'Reset your Dialect Library Voice Stream password',
+      passwordResetHtml(url),
+      `Reset your password: ${url}`,
+    );
+  }
+
   async sendSubscriberInviteEmail(params: {
     inviteeEmail: string;
     organizationName: string;

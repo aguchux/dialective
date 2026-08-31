@@ -58,6 +58,7 @@ export class StreamAudioController {
     let bytesStreamed = 0;
     let resultCode = 200;
     let entitlementDecision = 'allowed';
+    let durationStreamedMs: number | undefined;
     const isReservedCapacityOrg = req.streamKey.isReservedCapacityOrg ?? false;
     void this.dedicatedCapacity.trackStart(isReservedCapacityOrg);
 
@@ -67,6 +68,7 @@ export class StreamAudioController {
         deckId,
         recordingId,
       );
+      durationStreamedMs = recording.durationMs ?? undefined;
       if (!recording.audioBucket || !recording.audioKey) {
         entitlementDecision = 'denied:no_audio';
         resultCode = 404;
@@ -129,6 +131,7 @@ export class StreamAudioController {
         requestType: 'audio',
         requestedRange: req.headers.range,
         bytesStreamed: BigInt(bytesStreamed),
+        durationStreamedMs: entitlementDecision === 'allowed' ? durationStreamedMs : undefined,
         resultCode,
         entitlementDecision,
         ipAddress: req.ip,

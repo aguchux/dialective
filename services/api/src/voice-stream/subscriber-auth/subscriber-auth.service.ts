@@ -15,6 +15,7 @@ const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_TTL_SECONDS = OTP_TTL_MS / 1000;
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 export interface SubscriberPendingOtp {
   otpRequired: true;
@@ -429,6 +430,55 @@ export class SubscriberAuthService {
     });
 
     return this.issueAuthResult(user);
+  }
+
+  // --- Password reset -----------------------------------------------------
+  // Mirrors AuthService.requestPasswordReset/resetPassword (auth/auth.service.ts)
+  // -- same opaque-token-over-email shape, own table since SubscriberUser
+  // isn't the trainer User table PasswordResetToken is FK'd to.
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.prisma.subscriberUser.findUnique({ where: { email } });
+    if (!user || !user.passwordHash) {
+      // Don't reveal whether the email exists, or that it's SSO-only.
+      return;
+    }
+
+    const { token, hash } = generateOpaqueToken();
+    await this.prisma.subscriberPasswordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hash,
+        expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
+      },
+    });
+
+    await this.mail.sendSubscriberPasswordResetEmail(email, token);
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const hash = hashToken(token);
+    const record = await this.prisma.subscriberPasswordResetToken.findUnique({
+      where: { tokenHash: hash },
+    });
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired reset token');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+
+    await this.prisma.$transaction([
+      this.prisma.subscriberUser.update({ where: { id: record.userId }, data: { passwordHash } }),
+      this.prisma.subscriberPasswordResetToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+      // Resetting the password invalidates all existing sessions.
+      this.prisma.subscriberRefreshToken.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
   }
 
   private async issueOtp(

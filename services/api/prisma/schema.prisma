@@ -2331,11 +2331,12 @@ model SubscriberUser {
   emailVerifiedAt DateTime?
   createdAt       DateTime  @default(now())
 
-  memberships   SubscriberMembership[]
-  refreshTokens SubscriberRefreshToken[]
-  otpCodes      SubscriberOtpCode[]
-  validations   SubscriberValidation[]
-  ssoIdentities SsoIdentity[]
+  memberships        SubscriberMembership[]
+  refreshTokens      SubscriberRefreshToken[]
+  otpCodes           SubscriberOtpCode[]
+  validations        SubscriberValidation[]
+  ssoIdentities      SsoIdentity[]
+  passwordResetTokens SubscriberPasswordResetToken[]
 
   @@map("subscriber_users")
 }
@@ -2402,6 +2403,22 @@ model SubscriberOtpCode {
   @@index([userId, purpose])
   @@index([expiresAt])
   @@map("subscriber_otp_codes")
+}
+
+/// Mirrors PasswordResetToken -- can't reuse it directly since its userId is
+/// a hard FK to the trainer User table (same reason SubscriberOtpCode above
+/// is its own table rather than reusing OtpCode).
+model SubscriberPasswordResetToken {
+  id        String         @id @default(uuid())
+  userId    String
+  user      SubscriberUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String         @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  @@index([userId])
+  @@map("subscriber_password_reset_tokens")
 }
 
 /// Opaque refresh tokens, same rotation-on-use + family-revocation-on-reuse
@@ -3051,6 +3068,7 @@ model StreamAccessLog {
   requestType         String // "manifest" | "metadata" | "audio" | "usage"
   requestedRange      String? // raw Range header, audio requests only
   bytesStreamed       BigInt? // audio requests only
+  durationStreamedMs  Int? // audio requests only, the recording's full durationMs at request time (WordRecording.durationMs) -- coarse "hours streamed" usage signal, not scaled by partial-range bytes actually sent
   resultCode          Int // HTTP status actually returned
   entitlementDecision String // "allowed" | "denied:<reason>"
   ipAddress           String?

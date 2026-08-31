@@ -9,6 +9,8 @@ import { ResendSubscriberOtpDto } from './dto/resend-subscriber-otp.dto';
 import { SubscriberRefreshDto } from './dto/subscriber-refresh.dto';
 import { InviteSubscriberMemberDto } from './dto/invite-subscriber-member.dto';
 import { AcceptSubscriberInviteDto } from './dto/accept-subscriber-invite.dto';
+import { RequestSubscriberPasswordResetDto } from './dto/request-subscriber-password-reset.dto';
+import { ResetSubscriberPasswordDto } from './dto/reset-subscriber-password.dto';
 import { SubscriberAuthGuard } from './subscriber-auth.guard';
 import { SubscriberRolesGuard } from './subscriber-roles.guard';
 import { SubscriberRoles } from './subscriber-roles.decorator';
@@ -79,5 +81,19 @@ export class SubscriberAuthController {
   @HttpCode(HttpStatus.OK)
   acceptInvite(@Body() dto: AcceptSubscriberInviteDto) {
     return this.auth.acceptInvite(dto.token, dto.password);
+  }
+
+  @Post('password-reset/request')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { limit: 3, ttl: 10 * 60 * 1000 } })
+  async requestPasswordReset(@Body() dto: RequestSubscriberPasswordResetDto): Promise<void> {
+    await this.auth.requestPasswordReset(dto.email);
+  }
+
+  @Post('password-reset/confirm')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { limit: 10, ttl: 10 * 60 * 1000 } })
+  async resetPassword(@Body() dto: ResetSubscriberPasswordDto): Promise<void> {
+    await this.auth.resetPassword(dto.token, dto.newPassword);
   }
 }

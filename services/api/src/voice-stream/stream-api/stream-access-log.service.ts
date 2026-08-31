@@ -11,6 +11,7 @@ export interface StreamAccessLogEntry {
   requestType: 'manifest' | 'metadata' | 'audio' | 'usage';
   requestedRange?: string;
   bytesStreamed?: bigint;
+  durationStreamedMs?: number;
   resultCode: number;
   entitlementDecision: string;
   ipAddress?: string;
@@ -40,6 +41,7 @@ export class StreamAccessLogService {
           requestType: entry.requestType,
           requestedRange: entry.requestedRange,
           bytesStreamed: entry.bytesStreamed,
+          durationStreamedMs: entry.durationStreamedMs,
           resultCode: entry.resultCode,
           entitlementDecision: entry.entitlementDecision,
           ipAddress: entry.ipAddress,

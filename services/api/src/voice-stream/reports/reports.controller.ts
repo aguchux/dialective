@@ -16,6 +16,7 @@ import {
   ActivityExportQueryDto,
   FormatOnlyQueryDto,
   SubscriberAnalyticsQueryDto,
+  SubscriberAnalyticsTimeSeriesQueryDto,
   WebhookDeliveryExportQueryDto,
 } from './dto/get-report.dto';
 import { respondJsonOrCsv } from './csv.util';
@@ -48,6 +49,14 @@ export class ReportsController {
   ) {
     const report = await this.subscriberAnalytics.build(subscriber.organizationId, query.from, query.to);
     respondJsonOrCsv(res, 'subscriber-analytics-report.csv', query.format, report);
+  }
+
+  @Get('subscriber-analytics/time-series')
+  async subscriberAnalyticsTimeSeries(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Query() query: SubscriberAnalyticsTimeSeriesQueryDto,
+  ) {
+    return this.subscriberAnalytics.buildTimeSeries(subscriber.organizationId, query.from, query.to);
   }
 
   @Get('validation-contributions')

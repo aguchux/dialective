@@ -325,7 +325,9 @@ export interface SubscriberAnalyticsReport {
   totalRequests: number;
   audioRequests: number;
   totalBytesStreamed: string;
+  totalHoursStreamed: number;
   deniedRequestRate: number;
+  successRate: number;
   requestsByType: Record<string, number>;
   topDecksByRequests: { deckId: string | null; requests: number }[];
   rows: {
@@ -336,6 +338,12 @@ export interface SubscriberAnalyticsReport {
     resultCode: number;
     entitlementDecision: string;
   }[];
+}
+
+export interface SubscriberAnalyticsTimeSeriesPoint {
+  date: string;
+  successfulRequests: number;
+  failedRequests: number;
 }
 
 export interface ValidationContributionReport {
@@ -705,6 +713,14 @@ export const streamApi = createApi({
       providesTags: ['Reports'],
     }),
 
+    getSubscriberAnalyticsTimeSeries: builder.query<
+      SubscriberAnalyticsTimeSeriesPoint[],
+      { from: string; to: string }
+    >({
+      query: (params) => ({ url: '/reports/subscriber-analytics/time-series', params }),
+      providesTags: ['Reports'],
+    }),
+
     getValidationContributionReport: builder.query<ValidationContributionReport, void>({
       query: () => '/reports/validation-contributions',
       providesTags: ['Reports'],
@@ -773,6 +789,7 @@ export const {
   useListWebhookDeliveriesQuery,
   useGetDatasetQualityReportQuery,
   useGetSubscriberAnalyticsReportQuery,
+  useGetSubscriberAnalyticsTimeSeriesQuery,
   useGetValidationContributionReportQuery,
   useGetProvenanceReportQuery,
   useGetAnomalyEventsQuery,

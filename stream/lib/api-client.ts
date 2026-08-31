@@ -109,4 +109,16 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({ token, password }),
     }),
+
+  requestPasswordReset: (email: string) =>
+    apiFetch<void>('/voice-stream/auth/password-reset/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    apiFetch<void>('/voice-stream/auth/password-reset/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    }),
 };

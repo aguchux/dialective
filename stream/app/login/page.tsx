@@ -4,8 +4,10 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
+import { ShieldCheck } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
-import { AuthShellHeader } from '@/components/AuthShellHeader';
+import { AuthShell } from '@/components/AuthShell';
+import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { Card, ErrorText, FieldLabel, PrimaryButton, TextInput } from '@/components/ui';
 
 export default function LoginPage() {
@@ -47,64 +49,100 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-12">
-      <div className="w-full max-w-md">
-        <AuthShellHeader title="Sign in" />
-        <Card className="p-6">
-          {step === 'credentials' ? (
-            <form className="grid gap-4" onSubmit={submitCredentials}>
-              <div>
-                <FieldLabel>Email</FieldLabel>
-                <TextInput
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  type="email"
-                  value={email}
-                />
-              </div>
-              <div>
-                <FieldLabel>Password</FieldLabel>
-                <TextInput
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  type="password"
-                  value={password}
-                />
-              </div>
-              {error && <ErrorText>{error}</ErrorText>}
-              <PrimaryButton disabled={pending} type="submit">
-                {pending ? 'Signing in...' : 'Continue'}
-              </PrimaryButton>
-            </form>
-          ) : (
-            <form className="grid gap-4" onSubmit={submitOtp}>
-              <p className="text-sm text-muted">
-                Enter the 6-digit code we sent to <strong>{email}</strong>.
-              </p>
-              <div>
-                <FieldLabel>Verification code</FieldLabel>
-                <TextInput
-                  inputMode="numeric"
-                  maxLength={6}
-                  onChange={(e) => setCode(e.target.value)}
-                  required
-                  value={code}
-                />
-              </div>
-              {error && <ErrorText>{error}</ErrorText>}
-              <PrimaryButton disabled={pending} type="submit">
-                {pending ? 'Verifying...' : 'Sign in'}
-              </PrimaryButton>
-            </form>
-          )}
-        </Card>
-        <p className="mt-6 text-center text-sm text-muted">
-          Need an account?{' '}
-          <Link className="font-bold text-accent hover:underline" href="/register">
-            Create one
-          </Link>
+    <AuthShell eyebrow={<ShieldEyebrow />}>
+      <div className="mb-6 text-center">
+        <h1 className="text-2xl font-black text-ink">Welcome back</h1>
+        <p className="mt-1 text-sm text-muted">
+          {step === 'credentials'
+            ? 'Sign in to access Dialect Library Stream'
+            : `Enter the code we sent to ${email}`}
         </p>
       </div>
-    </main>
+      <Card className="p-6">
+        {step === 'credentials' ? (
+          <form className="grid gap-4" onSubmit={submitCredentials}>
+            <div>
+              <FieldLabel>Work email</FieldLabel>
+              <TextInput
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@acme.com"
+                required
+                type="email"
+                value={email}
+              />
+            </div>
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <FieldLabel>Password</FieldLabel>
+                <Link className="text-xs font-bold text-accent hover:underline" href="/forgot-password">
+                  Forgot password?
+                </Link>
+              </div>
+              <TextInput
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                required
+                type="password"
+                value={password}
+              />
+            </div>
+            {error && <ErrorText>{error}</ErrorText>}
+            <PrimaryButton disabled={pending} type="submit">
+              {pending ? 'Signing in...' : 'Sign in'}
+            </PrimaryButton>
+
+            <div className="relative my-1 text-center">
+              <div className="absolute inset-x-0 top-1/2 border-t border-line" />
+              <span className="relative bg-surface px-3 text-xs font-bold uppercase text-muted">or</span>
+            </div>
+
+            <SocialAuthButtons />
+          </form>
+        ) : (
+          <form className="grid gap-4" onSubmit={submitOtp}>
+            <div>
+              <FieldLabel>Verification code</FieldLabel>
+              <TextInput
+                inputMode="numeric"
+                maxLength={6}
+                onChange={(e) => setCode(e.target.value)}
+                required
+                value={code}
+              />
+            </div>
+            {error && <ErrorText>{error}</ErrorText>}
+            <PrimaryButton disabled={pending} type="submit">
+              {pending ? 'Verifying...' : 'Sign in'}
+            </PrimaryButton>
+          </form>
+        )}
+      </Card>
+      <p className="mt-6 text-center text-sm text-muted">
+        Don&apos;t have an account?{' '}
+        <Link className="font-bold text-accent hover:underline" href="/register">
+          Request access
+        </Link>
+      </p>
+      <p className="mt-4 text-center text-xs text-muted">
+        By signing in, you agree to our{' '}
+        <a className="text-accent hover:underline" href="/terms">
+          Terms of Service
+        </a>{' '}
+        and{' '}
+        <a className="text-accent hover:underline" href="/privacy">
+          Privacy Policy
+        </a>
+        .
+      </p>
+    </AuthShell>
+  );
+}
+
+function ShieldEyebrow() {
+  return (
+    <>
+      <ShieldCheck aria-hidden="true" className="size-3.5 text-accent" />
+      Secure enterprise access
+    </>
   );
 }

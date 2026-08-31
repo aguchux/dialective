@@ -3,7 +3,7 @@
 import { FormEvent, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
-import { AuthShellHeader } from '@/components/AuthShellHeader';
+import { AuthShell } from '@/components/AuthShell';
 import { Card, ErrorText, FieldLabel, PrimaryButton, TextInput } from '@/components/ui';
 
 function AcceptInviteForm() {
@@ -33,7 +33,6 @@ function AcceptInviteForm() {
 
   return (
     <form className="grid gap-4" onSubmit={submit}>
-      <p className="text-sm text-muted">Set a password to join the organization.</p>
       <div>
         <FieldLabel>Password</FieldLabel>
         <TextInput
@@ -54,15 +53,16 @@ function AcceptInviteForm() {
 
 export default function AcceptInvitePage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-12">
-      <div className="w-full max-w-md">
-        <AuthShellHeader title="Join your team" />
-        <Card className="p-6">
-          <Suspense fallback={<p className="text-sm text-muted">Loading...</p>}>
-            <AcceptInviteForm />
-          </Suspense>
-        </Card>
+    <AuthShell>
+      <div className="mb-6 text-center">
+        <h1 className="text-2xl font-black text-ink">Join your team</h1>
+        <p className="mt-1 text-sm text-muted">Set a password to accept your invite.</p>
       </div>
-    </main>
+      <Card className="p-6">
+        <Suspense fallback={<p className="text-sm text-muted">Loading...</p>}>
+          <AcceptInviteForm />
+        </Suspense>
+      </Card>
+    </AuthShell>
   );
 }

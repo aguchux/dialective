@@ -34,6 +34,28 @@
   --success: #15803d;
 }
 
+/* Dashboard console theme -- always dark, matching the product mockup
+   (deep navy ground, blue accent, translucent card surfaces). Scoped under
+   .stream-console rather than a `.dark`/prefers-color-scheme toggle: the
+   dashboard shell is the one surface meant to look like a technical
+   console at all times, while marketing/auth pages stay on the light
+   palette above. */
+.stream-console {
+  color-scheme: dark;
+  --bg: #0a0f1e;
+  --surface: #111834;
+  --surface-muted: #16204a;
+  --ink: #f4f6fb;
+  --muted: #8791b3;
+  --line: #263063;
+  --accent: #2f6fed;
+  --accent-dark: #1e51c2;
+  --accent-soft: #1b2450;
+  --warning: #e8a23d;
+  --danger: #ef5350;
+  --success: #34d399;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
