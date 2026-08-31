@@ -103,10 +103,17 @@ export class BillingService {
   }
 
   async getSubscriptionStatus(organizationId: string) {
-    return this.prisma.subscription.findUnique({
+    const subscription = await this.prisma.subscription.findUnique({
       where: { organizationId },
       include: { plan: true },
     });
+    if (!subscription) return subscription;
+    // plan.monthlyByteQuota is a Prisma BigInt -- JSON.stringify can't
+    // serialize it, so convert before this reaches the controller.
+    return {
+      ...subscription,
+      plan: { ...subscription.plan, monthlyByteQuota: subscription.plan.monthlyByteQuota?.toString() ?? null },
+    };
   }
 
   /**

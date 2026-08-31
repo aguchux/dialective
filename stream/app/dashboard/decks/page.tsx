@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
-import { Layers, Plus, Sparkles } from 'lucide-react';
+import { Layers, Plus, ShieldCheck, Sparkles } from 'lucide-react';
 import {
   IsvcConfidence,
   StreamDeckType,
@@ -28,6 +28,12 @@ export default function StreamDecksPage() {
   const [minAudioQuality, setMinAudioQuality] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+
+  function applyHighConfidenceTemplate() {
+    setType('SMART');
+    setMinConfidence('VERY_HIGH');
+    setMinOrganizationCount('3');
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -79,6 +85,15 @@ export default function StreamDecksPage() {
               <FieldLabel>Deck name</FieldLabel>
               <TextInput onChange={(e) => setName(e.target.value)} required value={name} />
             </div>
+
+            <button
+              className="flex items-center gap-2 self-start rounded-lg border border-line bg-surface-muted px-3 py-2 text-xs font-bold text-ink transition-colors hover:border-accent"
+              onClick={applyHighConfidenceTemplate}
+              type="button"
+            >
+              <ShieldCheck aria-hidden="true" className="size-3.5 text-success" />
+              Start from &quot;High-Confidence Package&quot; template
+            </button>
 
             <div>
               <FieldLabel>Deck type</FieldLabel>

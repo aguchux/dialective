@@ -9,7 +9,10 @@ function setup() {
       findFirst: jest.fn(),
     },
     cataloguePreviewLog: { create: jest.fn() },
-    isvcCurrent: { findMany: jest.fn().mockResolvedValue([]) },
+    isvcCurrent: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
   };
   const storage = {
     createPresignedDownloadUrl: jest
@@ -159,6 +162,97 @@ describe('CatalogueService', () => {
         }),
       );
     });
+
+    it('classifies qualityTier as premium_verified only at VERY_HIGH confidence with enough orgs', async () => {
+      const { prisma, service } = setup();
+      prisma.wordRecording.count.mockResolvedValue(1);
+      const row = (id: string) => ({
+        id,
+        dialectTag: 'igbo',
+        durationMs: 1000,
+        score: 90,
+        rawScore: 90,
+        compositeScore: 90,
+        noiseScore: 10,
+        qualityScore: 95,
+        livenessScore: 99,
+        createdAt: new Date('2026-01-01'),
+        dialectVariant: null,
+      });
+      prisma.wordRecording.findMany.mockResolvedValue([row('rec-1')]);
+      prisma.isvcCurrent.findMany.mockResolvedValueOnce([
+        { recordingId: 'rec-1', aggregation: { isvs: 98, confidence: 'VERY_HIGH', organizationCount: 2, agreement: 96 } },
+      ]);
+
+      const result = await service.search({ page: 1, pageSize: 20 });
+
+      expect(result.items[0].qualityTier).toBe('standard');
+    });
+
+    it('takes the stricter of a user minConfidence filter and planMinConfidence', async () => {
+      const { prisma, service } = setup();
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.wordRecording.findMany.mockResolvedValue([]);
+      prisma.isvcCurrent.findMany.mockResolvedValue([
+        { recordingId: 'rec-1', aggregation: { isvs: 92, confidence: 'HIGH', organizationCount: 6, agreement: 85 } },
+        { recordingId: 'rec-2', aggregation: { isvs: 96, confidence: 'VERY_HIGH', organizationCount: 6, agreement: 85 } },
+      ]);
+
+      await service.search({ minConfidence: 'ESTABLISHED', planMinConfidence: 'VERY_HIGH', page: 1, pageSize: 20 });
+
+      expect(prisma.wordRecording.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({ id: { in: ['rec-2'] } }),
+      });
+    });
+
+    it('sortBy=isvs_desc orders and paginates by ISVS instead of createdAt', async () => {
+      const { prisma, service } = setup();
+      prisma.isvcCurrent.findMany.mockResolvedValue([
+        { recordingId: 'rec-low', aggregation: { isvs: 60, confidence: 'ESTABLISHED', organizationCount: 2, agreement: 80 } },
+        { recordingId: 'rec-high', aggregation: { isvs: 95, confidence: 'VERY_HIGH', organizationCount: 5, agreement: 90 } },
+      ]);
+      prisma.wordRecording.findMany.mockResolvedValue([
+        { id: 'rec-high', dialectTag: 'igbo', durationMs: 1000, score: 90, rawScore: 90, compositeScore: 90, noiseScore: 10, qualityScore: 95, livenessScore: 99, createdAt: new Date('2026-01-01'), dialectVariant: null },
+        { id: 'rec-low', dialectTag: 'igbo', durationMs: 1000, score: 90, rawScore: 90, compositeScore: 90, noiseScore: 10, qualityScore: 95, livenessScore: 99, createdAt: new Date('2026-01-02'), dialectVariant: null },
+      ]);
+
+      const result = await service.search({ sortBy: 'isvs_desc', page: 1, pageSize: 20 });
+
+      expect(result.items.map((i) => i.recordingId)).toEqual(['rec-high', 'rec-low']);
+      expect(result.total).toBe(2);
+    });
+
+    it('sortBy=isvs_desc slices the correct page window without dropping or duplicating items', async () => {
+      const { prisma, service } = setup();
+      prisma.isvcCurrent.findMany.mockResolvedValue([
+        { recordingId: 'rec-a', aggregation: { isvs: 90, confidence: 'HIGH', organizationCount: 2, agreement: 80 } },
+        { recordingId: 'rec-b', aggregation: { isvs: 80, confidence: 'HIGH', organizationCount: 2, agreement: 80 } },
+        { recordingId: 'rec-c', aggregation: { isvs: 70, confidence: 'HIGH', organizationCount: 2, agreement: 80 } },
+      ]);
+      prisma.wordRecording.findMany.mockImplementation(({ where }: { where: { id: { in: string[] } } }) =>
+        Promise.resolve(
+          where.id.in.map((id) => ({
+            id,
+            dialectTag: 'igbo',
+            durationMs: 1000,
+            score: 90,
+            rawScore: 90,
+            compositeScore: 90,
+            noiseScore: 10,
+            qualityScore: 95,
+            livenessScore: 99,
+            createdAt: new Date('2026-01-01'),
+            dialectVariant: null,
+          })),
+        ),
+      );
+
+      const result = await service.search({ sortBy: 'isvs_desc', page: 2, pageSize: 2 });
+
+      expect(result.items.map((i) => i.recordingId)).toEqual(['rec-c']);
+      expect(result.total).toBe(3);
+      expect(result.totalPages).toBe(2);
+    });
   });
 
   describe('preview', () => {
@@ -186,6 +280,77 @@ describe('CatalogueService', () => {
       });
       expect(storage.createPresignedDownloadUrl).toHaveBeenCalledWith('bucket', 'key.wav');
       expect(result).toEqual({ url: 'https://signed-url', expiresInSeconds: 900 });
+    });
+
+    it('rejects a recording below the plan confidence floor even though it is otherwise eligible', async () => {
+      const { prisma, service } = setup();
+      prisma.wordRecording.findFirst.mockResolvedValue({
+        audioBucket: 'bucket',
+        audioKey: 'key.wav',
+      });
+      prisma.isvcCurrent.findUnique.mockResolvedValue({
+        aggregation: { confidence: 'ESTABLISHED' },
+      });
+
+      await expect(service.preview('org-1', 'user-1', 'rec-1', 'HIGH')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.cataloguePreviewLog.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getEligibleRecording', () => {
+    const recordingRow = {
+      id: 'rec-1',
+      dialectTag: 'igbo',
+      durationMs: 1000,
+      compositeScore: 90,
+      audioBucket: 'bucket',
+      audioKey: 'key.wav',
+      dialectVariant: null,
+    };
+
+    it('returns the recording when no plan floor is given', async () => {
+      const { prisma, service } = setup();
+      prisma.wordRecording.findFirst.mockResolvedValue(recordingRow);
+
+      const result = await service.getEligibleRecording('rec-1');
+
+      expect(result).toEqual(recordingRow);
+    });
+
+    it('returns null when the recording is below the plan confidence floor', async () => {
+      const { prisma, service } = setup();
+      prisma.wordRecording.findFirst.mockResolvedValue(recordingRow);
+      prisma.isvcCurrent.findUnique.mockResolvedValue({
+        aggregation: { confidence: 'ESTABLISHED' },
+      });
+
+      const result = await service.getEligibleRecording('rec-1', 'VERY_HIGH');
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null for a recording with no ISVC yet when a plan floor is set', async () => {
+      const { prisma, service } = setup();
+      prisma.wordRecording.findFirst.mockResolvedValue(recordingRow);
+      prisma.isvcCurrent.findUnique.mockResolvedValue(null);
+
+      const result = await service.getEligibleRecording('rec-1', 'HIGH');
+
+      expect(result).toBeNull();
+    });
+
+    it('returns the recording when its confidence meets the plan floor', async () => {
+      const { prisma, service } = setup();
+      prisma.wordRecording.findFirst.mockResolvedValue(recordingRow);
+      prisma.isvcCurrent.findUnique.mockResolvedValue({
+        aggregation: { confidence: 'VERY_HIGH' },
+      });
+
+      const result = await service.getEligibleRecording('rec-1', 'HIGH');
+
+      expect(result).toEqual(recordingRow);
     });
   });
 

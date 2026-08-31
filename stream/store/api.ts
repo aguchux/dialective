@@ -59,6 +59,7 @@ export interface SubscriberMember {
 }
 
 export type IsvcConfidence = 'EMERGING' | 'ESTABLISHED' | 'HIGH' | 'VERY_HIGH';
+export type QualityTier = 'standard' | 'high' | 'premium_verified';
 
 export interface CatalogueRecording {
   recordingId: string;
@@ -78,6 +79,7 @@ export interface CatalogueRecording {
   isvcConfidence: IsvcConfidence | null;
   isvcOrganizationCount: number | null;
   isvcAgreement: string | null;
+  qualityTier: QualityTier;
 }
 
 export interface ValidationDimensions {
@@ -195,6 +197,26 @@ export interface CreateStreamKeyInput {
   expiresAt?: string;
 }
 
+export interface OAuthClientSummary {
+  id: string;
+  organizationId: string;
+  deckId: string | null;
+  clientId: string;
+  scopes: StreamKeyScope[];
+  createdByUserId: string;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+export interface CreatedOAuthClient extends OAuthClientSummary {
+  plaintextSecret: string;
+}
+
+export interface CreateOAuthClientInput {
+  deckId?: string;
+  scopes: StreamKeyScope[];
+}
+
 export type WebhookEventType =
   | 'SUBSCRIBER_CREATED'
   | 'SUBSCRIPTION_ACTIVATED'
@@ -240,6 +262,58 @@ export interface WebhookDeliveryLogEntry {
   createdAt: string;
 }
 
+export interface DatasetQualityReport {
+  totalEligibleRecordings: number;
+  tierCounts: Record<QualityTier, number>;
+  confidenceCounts: Record<string, number>;
+  meanIsvs: number | null;
+  meanAgreement: number | null;
+  rows: Record<string, unknown>[];
+}
+
+export interface SubscriberAnalyticsReport {
+  totalRequests: number;
+  audioRequests: number;
+  totalBytesStreamed: string;
+  deniedRequestRate: number;
+  requestsByType: Record<string, number>;
+  topDecksByRequests: { deckId: string | null; requests: number }[];
+  rows: {
+    createdAt: string;
+    deckId: string | null;
+    recordingId: string | null;
+    bytesStreamed: string;
+    resultCode: number;
+    entitlementDecision: string;
+  }[];
+}
+
+export interface ValidationContributionReport {
+  totalRecordingsValidated: number;
+  averageValidatorCount: number | null;
+  averageMeanScore: number | null;
+  byDialect: Record<string, number>;
+  rows: Record<string, unknown>[];
+}
+
+export interface ProvenanceReport {
+  deckId: string;
+  deckKey: string;
+  version: number;
+  itemCount: number;
+  createdAt: string;
+  createdReason: string;
+  rows: Record<string, unknown>[];
+}
+
+export interface AnomalyEventEntry {
+  createdAt: string;
+  ruleKey: string;
+  windowStart: string;
+  windowEnd: string;
+  details: Record<string, unknown>;
+}
+
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: `${PUBLIC_API_V1_BASE_URL}/voice-stream`,
   prepareHeaders: async (headers) => {
@@ -264,6 +338,8 @@ export const streamApi = createApi({
     'Validations',
     'StreamKeys',
     'Webhooks',
+    'Reports',
+    'OAuthClients',
   ],
   endpoints: (builder) => ({
     getMe: builder.query<SubscriberMe, void>({
@@ -322,6 +398,7 @@ export const streamApi = createApi({
         minScore?: number;
         minIsvs?: number;
         minConfidence?: IsvcConfidence;
+        sortBy?: 'newest' | 'isvs_desc';
         page?: number;
         pageSize?: number;
       }
@@ -442,6 +519,21 @@ export const streamApi = createApi({
       invalidatesTags: ['StreamKeys'],
     }),
 
+    listOAuthClients: builder.query<OAuthClientSummary[], void>({
+      query: () => '/oauth/clients',
+      providesTags: ['OAuthClients'],
+    }),
+
+    createOAuthClient: builder.mutation<CreatedOAuthClient, CreateOAuthClientInput>({
+      query: (body) => ({ url: '/oauth/clients', method: 'POST', body }),
+      invalidatesTags: ['OAuthClients'],
+    }),
+
+    revokeOAuthClient: builder.mutation<OAuthClientSummary, string>({
+      query: (id) => ({ url: `/oauth/clients/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['OAuthClients'],
+    }),
+
     listWebhooks: builder.query<WebhookSubscriptionSummary[], void>({
       query: () => '/webhooks',
       providesTags: ['Webhooks'],
@@ -460,6 +552,34 @@ export const streamApi = createApi({
     listWebhookDeliveries: builder.query<WebhookDeliveryLogEntry[], string>({
       query: (id) => `/webhooks/${id}/deliveries`,
       providesTags: (_result, _error, id) => [{ type: 'Webhooks', id: `${id}-deliveries` }],
+    }),
+
+    getDatasetQualityReport: builder.query<DatasetQualityReport, void>({
+      query: () => '/reports/dataset-quality',
+      providesTags: ['Reports'],
+    }),
+
+    getSubscriberAnalyticsReport: builder.query<
+      SubscriberAnalyticsReport,
+      { from?: string; to?: string } | void
+    >({
+      query: (params) => ({ url: '/reports/subscriber-analytics', params: params ?? undefined }),
+      providesTags: ['Reports'],
+    }),
+
+    getValidationContributionReport: builder.query<ValidationContributionReport, void>({
+      query: () => '/reports/validation-contributions',
+      providesTags: ['Reports'],
+    }),
+
+    getProvenanceReport: builder.query<ProvenanceReport, { deckId: string; version: number }>({
+      query: ({ deckId, version }) => `/reports/provenance/${deckId}/${version}`,
+      providesTags: ['Reports'],
+    }),
+
+    getAnomalyEvents: builder.query<{ rows: AnomalyEventEntry[] }, void>({
+      query: () => '/reports/anomalies',
+      providesTags: ['Reports'],
     }),
   }),
 });
@@ -493,8 +613,16 @@ export const {
   useCreateStreamKeyMutation,
   useRotateStreamKeyMutation,
   useRevokeStreamKeyMutation,
+  useListOAuthClientsQuery,
+  useCreateOAuthClientMutation,
+  useRevokeOAuthClientMutation,
   useListWebhooksQuery,
   useCreateWebhookMutation,
   useDeleteWebhookMutation,
   useListWebhookDeliveriesQuery,
+  useGetDatasetQualityReportQuery,
+  useGetSubscriberAnalyticsReportQuery,
+  useGetValidationContributionReportQuery,
+  useGetProvenanceReportQuery,
+  useGetAnomalyEventsQuery,
 } = streamApi;

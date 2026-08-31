@@ -55,7 +55,7 @@ export class SubscriberOrgsController {
     @Param('id') membershipId: string,
     @Body() dto: UpdateSubscriberMemberRoleDto,
   ) {
-    return this.orgs.updateMemberRole(subscriber.organizationId, membershipId, dto.role);
+    return this.orgs.updateMemberRole(subscriber.organizationId, membershipId, dto.role, subscriber.sub);
   }
 
   @Delete('organization/members/:id')
@@ -65,6 +65,6 @@ export class SubscriberOrgsController {
     @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
     @Param('id') membershipId: string,
   ) {
-    return this.orgs.removeMember(subscriber.organizationId, membershipId);
+    return this.orgs.removeMember(subscriber.organizationId, membershipId, subscriber.sub);
   }
 }

@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UsageCounterService } from './usage-counter.service';
 
 export interface StreamAccessLogEntry {
   streamApiKeyId: string;
+  credentialType?: 'stream_key' | 'oauth_client';
   organizationId: string;
   deckId?: string;
   recordingId?: string;
@@ -20,7 +22,10 @@ export interface StreamAccessLogEntry {
 export class StreamAccessLogService {
   private readonly logger = new Logger(StreamAccessLogService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly usageCounter: UsageCounterService,
+  ) {}
 
   /** Never throws -- a logging failure must not take down the request it's logging. */
   async record(entry: StreamAccessLogEntry): Promise<void> {
@@ -28,6 +33,7 @@ export class StreamAccessLogService {
       await this.prisma.streamAccessLog.create({
         data: {
           streamApiKeyId: entry.streamApiKeyId,
+          credentialType: entry.credentialType ?? 'stream_key',
           organizationId: entry.organizationId,
           deckId: entry.deckId,
           recordingId: entry.recordingId,
@@ -45,5 +51,7 @@ export class StreamAccessLogService {
         `Failed to write StreamAccessLog for key=${entry.streamApiKeyId}: ${err instanceof Error ? err.message : err}`,
       );
     }
+
+    void this.usageCounter.increment(entry.organizationId, { bytes: entry.bytesStreamed, requests: 1 });
   }
 }

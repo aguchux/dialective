@@ -4,6 +4,8 @@ import { BillingModule } from '../billing/billing.module';
 import { StreamDecksModule } from '../stream-decks/stream-decks.module';
 import { StorageModule } from '../../storage/storage.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
+import { OAuthModule } from '../oauth/oauth.module';
+import { OrgActivityModule } from '../org-activity/org-activity.module';
 import { StreamKeysController } from './stream-keys.controller';
 import { StreamKeysService } from './stream-keys.service';
 import { StreamManifestController } from './stream-manifest.controller';
@@ -15,6 +17,8 @@ import { StreamKeyScopesGuard } from './stream-key-scopes.guard';
 import { StreamKeySubscriptionGuard } from './stream-key-subscription.guard';
 import { StreamKeyRateLimitGuard } from './stream-key-rate-limit.guard';
 import { ConcurrentStreamGuard } from './concurrent-stream.guard';
+import { UsageCounterModule } from './usage-counter.module';
+import { QuotaGuard } from './quota.guard';
 
 /**
  * Dialect Library Voice Stream -- Phase 3 (Voice Stream API). Stream Key
@@ -23,12 +27,22 @@ import { ConcurrentStreamGuard } from './concurrent-stream.guard';
  * docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md sections 25-38.
  */
 @Module({
-  imports: [CatalogueModule, BillingModule, StreamDecksModule, StorageModule, WebhooksModule],
+  imports: [
+    CatalogueModule,
+    BillingModule,
+    StreamDecksModule,
+    StorageModule,
+    WebhooksModule,
+    OAuthModule,
+    OrgActivityModule,
+    UsageCounterModule,
+  ],
   controllers: [StreamKeysController, StreamManifestController, StreamAudioController],
   providers: [
     StreamKeysService,
     StreamManifestService,
     StreamAccessLogService,
+    QuotaGuard,
     StreamKeyAuthGuard,
     StreamKeyScopesGuard,
     StreamKeySubscriptionGuard,

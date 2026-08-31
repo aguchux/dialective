@@ -7,6 +7,8 @@ import { StreamDecksModule } from './stream-decks/stream-decks.module';
 import { IsvpModule } from './isvp/isvp.module';
 import { StreamApiModule } from './stream-api/stream-api.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { ReportsModule } from './reports/reports.module';
+import { AnomalyDetectionModule } from './anomaly-detection/anomaly-detection.module';
 
 /**
  * Dialect Library Voice Stream -- Phase 1 (Subscriber Foundation). See
@@ -26,6 +28,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     IsvpModule,
     StreamApiModule,
     WebhooksModule,
+    ReportsModule,
+    AnomalyDetectionModule,
   ],
 })
 export class VoiceStreamModule {}

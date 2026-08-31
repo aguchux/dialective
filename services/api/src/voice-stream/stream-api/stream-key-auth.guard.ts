@@ -10,6 +10,8 @@ export interface AuthenticatedStreamKeyRequest extends Request {
     organizationId: string;
     deckId: string | null;
     scopes: StreamKeyScope[];
+    /** Which table `id` points into -- StreamKeyAuthGuard sets 'stream_key', OAuthJwtAuthGuard sets 'oauth_client' (both populate this same request shape). */
+    credentialType: 'stream_key' | 'oauth_client';
   };
 }
 
@@ -55,6 +57,7 @@ export class StreamKeyAuthGuard implements CanActivate {
       organizationId: key.organizationId,
       deckId: key.deckId,
       scopes: key.scopes,
+      credentialType: 'stream_key',
     };
 
     void this.prisma.streamApiKey.update({

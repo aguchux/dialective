@@ -19,10 +19,14 @@ import { CurrentSubscriber } from '../subscriber-auth/current-subscriber.decorat
 import { SubscriberAccessTokenClaims } from '../subscriber-auth/subscriber-jwt.util';
 import { BillingService } from './billing.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
+import { UsageCounterService } from '../stream-api/usage-counter.service';
 
 @Controller('voice-stream/billing')
 export class BillingController {
-  constructor(private readonly billing: BillingService) {}
+  constructor(
+    private readonly billing: BillingService,
+    private readonly usageCounter: UsageCounterService,
+  ) {}
 
   @Post('checkout-session')
   @UseGuards(SubscriberAuthGuard, SubscriberRolesGuard)
@@ -42,6 +46,17 @@ export class BillingController {
   @UseGuards(SubscriberAuthGuard)
   getSubscription(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
     return this.billing.getSubscriptionStatus(subscriber.organizationId);
+  }
+
+  @Get('usage')
+  @UseGuards(SubscriberAuthGuard)
+  async getUsage(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
+    const usage = await this.usageCounter.getCurrentUsage(subscriber.organizationId);
+    return {
+      periodStart: usage.periodStart,
+      bytesUsed: usage.bytesUsed.toString(),
+      requestsUsed: usage.requestsUsed,
+    };
   }
 
   /**

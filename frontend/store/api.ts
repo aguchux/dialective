@@ -1167,6 +1167,8 @@ export interface ApiAccessTokenSummary {
   updatedByEmail: string | null;
 }
 
+export type IsvcConfidence = 'EMERGING' | 'ESTABLISHED' | 'HIGH' | 'VERY_HIGH';
+
 export interface SubscriptionPlan {
   id: string;
   key: string;
@@ -1175,6 +1177,10 @@ export interface SubscriptionPlan {
   monthlyUsdAmount: string;
   maxStreamDecks: number | null;
   maxTeamMembers: number | null;
+  minIsvcConfidence: IsvcConfidence | null;
+  /** Bytes, as a string (server-serialized from a Prisma BigInt). */
+  monthlyByteQuota: string | null;
+  monthlyRequestQuota: number | null;
   active: boolean;
 }
 
@@ -1184,6 +1190,9 @@ export interface PublicSubscriptionPlan {
   monthlyUsdAmount: string;
   maxStreamDecks: number | null;
   maxTeamMembers: number | null;
+  minIsvcConfidence: IsvcConfidence | null;
+  monthlyByteQuota: string | null;
+  monthlyRequestQuota: number | null;
 }
 
 export interface SubscriptionPlanInput {
@@ -1193,6 +1202,10 @@ export interface SubscriptionPlanInput {
   monthlyUsdAmount: number;
   maxStreamDecks?: number | null;
   maxTeamMembers?: number | null;
+  minIsvcConfidence?: IsvcConfidence | null;
+  /** Bytes, as a JS number -- the server converts to BigInt. */
+  monthlyByteQuota?: number | null;
+  monthlyRequestQuota?: number | null;
   active?: boolean;
 }
 

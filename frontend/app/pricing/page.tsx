@@ -62,6 +62,11 @@ export default function PricingPage() {
                   <li>ISVC quality filtering</li>
                   <li>{formatLimit(plan.maxStreamDecks, 'Stream Decks')}</li>
                   <li>{formatLimit(plan.maxTeamMembers, 'team members')}</li>
+                  <li>
+                    {plan.minIsvcConfidence
+                      ? `Access to ${plan.minIsvcConfidence === 'VERY_HIGH' ? 'Premium Verified' : plan.minIsvcConfidence.replace('_', ' ').toLowerCase()}-confidence data and above`
+                      : 'Access to the full catalogue, all quality tiers'}
+                  </li>
                 </ul>
                 <Link
                   className="inline-flex min-h-11 items-center justify-center rounded-full border border-accent bg-accent px-5 py-3 font-extrabold text-white no-underline transition-colors hover:border-accent-dark hover:bg-accent-dark"

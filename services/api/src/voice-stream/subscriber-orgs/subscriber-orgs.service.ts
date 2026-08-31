@@ -1,10 +1,14 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { SubscriberOrgRole } from '@dialectiva/db';
+import { ActivityEventType, SubscriberOrgRole } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
+import { OrgActivityService } from '../org-activity/org-activity.service';
 
 @Injectable()
 export class SubscriberOrgsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly orgActivity: OrgActivityService,
+  ) {}
 
   async getMe(userId: string) {
     const user = await this.prisma.subscriberUser.findUniqueOrThrow({
@@ -19,10 +23,26 @@ export class SubscriberOrgsService {
   }
 
   async getOrganization(organizationId: string) {
-    return this.prisma.subscriberOrganization.findUniqueOrThrow({
+    const org = await this.prisma.subscriberOrganization.findUniqueOrThrow({
       where: { id: organizationId },
       include: { subscription: { include: { plan: true } } },
     });
+    // plan.monthlyByteQuota is a Prisma BigInt -- JSON.stringify can't
+    // serialize it, so convert before this reaches the controller (same
+    // convention as SubscriptionPlansService.list/upsert).
+    if (org.subscription) {
+      return {
+        ...org,
+        subscription: {
+          ...org.subscription,
+          plan: {
+            ...org.subscription.plan,
+            monthlyByteQuota: org.subscription.plan.monthlyByteQuota?.toString() ?? null,
+          },
+        },
+      };
+    }
+    return org;
   }
 
   async updateOrganization(organizationId: string, data: { name?: string }) {
@@ -40,7 +60,12 @@ export class SubscriberOrgsService {
     });
   }
 
-  async updateMemberRole(organizationId: string, membershipId: string, role: SubscriberOrgRole) {
+  async updateMemberRole(
+    organizationId: string,
+    membershipId: string,
+    role: SubscriberOrgRole,
+    actorUserId: string,
+  ) {
     const membership = await this.prisma.subscriberMembership.findUnique({
       where: { id: membershipId },
     });
@@ -50,13 +75,19 @@ export class SubscriberOrgsService {
     if (membership.role === SubscriberOrgRole.OWNER && role !== SubscriberOrgRole.OWNER) {
       await this.assertNotLastOwner(organizationId, membershipId);
     }
-    return this.prisma.subscriberMembership.update({
+    const updated = await this.prisma.subscriberMembership.update({
       where: { id: membershipId },
       data: { role },
     });
+    void this.orgActivity.record(organizationId, ActivityEventType.MEMBER_ROLE_CHANGED, actorUserId, {
+      targetUserId: updated.userId,
+      oldRole: membership.role,
+      newRole: role,
+    });
+    return updated;
   }
 
-  async removeMember(organizationId: string, membershipId: string) {
+  async removeMember(organizationId: string, membershipId: string, actorUserId: string) {
     const membership = await this.prisma.subscriberMembership.findUnique({
       where: { id: membershipId },
     });
@@ -67,6 +98,9 @@ export class SubscriberOrgsService {
       await this.assertNotLastOwner(organizationId, membershipId);
     }
     await this.prisma.subscriberMembership.delete({ where: { id: membershipId } });
+    void this.orgActivity.record(organizationId, ActivityEventType.MEMBER_REMOVED, actorUserId, {
+      targetUserId: membership.userId,
+    });
   }
 
   private async assertNotLastOwner(organizationId: string, excludingMembershipId: string) {

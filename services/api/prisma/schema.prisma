@@ -2222,6 +2222,10 @@ model SubscriberOrganization {
   organizationConsensus OrganizationValidationConsensus[]
   streamApiKeys        StreamApiKey[]
   webhookSubscriptions WebhookSubscription[]
+  oauthClients         OAuthClient[]
+  activityEvents       OrgActivityEvent[]
+  anomalyEvents        AnomalyEvent[]
+  usageCounters        UsageCounter[]
 
   @@map("subscriber_organizations")
 }
@@ -2334,6 +2338,9 @@ model SubscriptionPlan {
   maxTeamMembers   Int?
   maxConcurrentStreams Int? // Phase 3 -- null = unlimited, enforced by ConcurrentStreamGuard
   rateLimitPerMinute   Int? // Phase 3 -- null = unlimited, enforced by StreamKeyRateLimitGuard
+  minIsvcConfidence    IsvcConfidence? // Phase 5 -- null = full catalogue access, enforced by TierGateGuard
+  monthlyByteQuota     BigInt? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
+  monthlyRequestQuota  Int? // Phase 4b -- null = unlimited, enforced by QuotaGuard against UsageCounter
   active           Boolean @default(true)
 
   subscriptions Subscription[]
@@ -2577,6 +2584,7 @@ model OrganizationValidationConsensus {
 
   @@unique([organizationId, recordingId])
   @@index([recordingId])
+  @@index([organizationId, updatedAt])
   @@map("organization_validation_consensus")
 }
 
@@ -2664,11 +2672,37 @@ model StreamApiKey {
   expiresAt       DateTime?
   revokedAt       DateTime?
 
-  accessLogs StreamAccessLog[]
-
   @@index([organizationId])
   @@index([deckId])
   @@map("stream_api_keys")
+}
+
+/// Phase 4b (OAuth M2M) -- a second, coexisting machine-credential type
+/// alongside StreamApiKey, for integrators who want standard OAuth2
+/// client_credentials tooling. clientId is safe to display in full (not a
+/// secret, mirrors StreamApiKey.keyPrefix's display-only role); secretHash
+/// follows the same one-way-hash convention as StreamApiKey.keyHash (the
+/// client presents its secret back at the token endpoint, the server never
+/// needs to read it back -- same shape as Stream Keys, unlike webhook
+/// signing secrets which the server itself must read back to sign
+/// outbound payloads). Exchanged for a short-lived JWT
+/// (oauth-m2m-jwt.util.ts) that downstream guards verify statelessly (no
+/// DB hit per request) -- the actual value-add over a Stream Key, traded
+/// against instant revocability, which is why the token TTL is kept short.
+model OAuthClient {
+  id              String           @id @default(uuid())
+  organizationId  String
+  organization    SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deckId          String?          // same org-wide-vs-deck-scoped shape as StreamApiKey.deckId
+  clientId        String           @unique
+  secretHash      String
+  scopes          StreamKeyScope[] // reuses the existing scope enum -- same permission model as Stream Keys
+  createdByUserId String
+  createdAt       DateTime         @default(now())
+  revokedAt       DateTime?
+
+  @@index([organizationId])
+  @@map("oauth_clients")
 }
 
 /// Append-only audit/usage record, one row per stream-API request (manifest,
@@ -2679,8 +2713,14 @@ model StreamApiKey {
 /// StreamApiKey-keyed machine traffic, no human user necessarily present.
 model StreamAccessLog {
   id                  String       @id @default(uuid())
+  // Loose reference, not a Prisma relation -- Phase 4b's OAuth M2M clients
+  // authenticate the same /stream/v1/* routes and populate this same field
+  // with an OAuthClient.id, so a hard FK to StreamApiKey alone would reject
+  // every OAuth-authenticated request's audit log write. credentialType
+  // disambiguates which table this id actually points into (same
+  // loose-coupling rationale already used for deckId/recordingId above).
   streamApiKeyId      String
-  streamApiKey        StreamApiKey @relation(fields: [streamApiKeyId], references: [id], onDelete: Cascade)
+  credentialType      String       @default("stream_key") // "stream_key" | "oauth_client"
   organizationId      String
   deckId              String?
   recordingId         String?
@@ -2722,6 +2762,7 @@ enum WebhookEventType {
   API_KEY_REVOKED
   AUDIO_STREAM_COMPLETED
   AUDIO_STREAM_DENIED
+  ANOMALY_DETECTED
 }
 
 /// A subscriber-configured HTTP callback endpoint. One organization may
@@ -2767,4 +2808,80 @@ model WebhookDeliveryLog {
 
   @@index([subscriptionId, createdAt])
   @@map("webhook_delivery_logs")
+}
+
+// ============================================================================
+// Dialect Library Voice Stream -- Phase 4b (Audit exports, Anomaly
+// detection, Quota policies, remainder). See docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md
+// section 61.
+// ============================================================================
+
+enum ActivityEventType {
+  KEY_CREATED
+  KEY_ROTATED
+  KEY_REVOKED
+  OAUTH_CLIENT_CREATED
+  OAUTH_CLIENT_REVOKED
+  MEMBER_INVITED
+  MEMBER_ROLE_CHANGED
+  MEMBER_REMOVED
+  SUBSCRIPTION_PLAN_CHANGED
+}
+
+/// Org-activity audit timeline -- who did what, when, distinct from
+/// StreamAccessLog (machine-traffic requests) and WebhookDeliveryLog
+/// (outbound delivery attempts). No prior audit-log model existed
+/// anywhere in this codebase before this phase; actorUserId is null for
+/// system-initiated events (e.g. a Stripe-webhook-driven plan change).
+model OrgActivityEvent {
+  id             String                 @id @default(uuid())
+  organizationId String
+  organization   SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventType      ActivityEventType
+  actorUserId    String?
+  metadata       Json
+  createdAt      DateTime               @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("org_activity_events")
+}
+
+/// One row per threshold-rule breach detected by the hourly
+/// anomaly-detection cron (anomaly-detection.service.ts). Dedup key is
+/// [organizationId, ruleKey, windowStart] at the application level (no
+/// unique constraint -- the cron's own dedup check reads the latest event
+/// per rule before writing, matching WebhookDeliveryLog's append-only,
+/// no-unique-constraint shape).
+model AnomalyEvent {
+  id             String                 @id @default(uuid())
+  organizationId String
+  organization   SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ruleKey        String // "denial_rate_spike" | "new_ip_burst" | "request_volume_spike"
+  windowStart    DateTime
+  windowEnd      DateTime
+  details        Json
+  createdAt      DateTime               @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("anomaly_events")
+}
+
+/// Accumulated monthly usage per organization, incremented at
+/// StreamAccessLogService.record()'s choke point (every manifest/metadata/
+/// audio/usage request). periodStart is always the first-of-month UTC
+/// anchor for the billing period; QuotaGuard reads this row to enforce
+/// SubscriptionPlan.monthlyByteQuota/monthlyRequestQuota before serving a
+/// request (the increment here happens after serving -- enforcement and
+/// accounting are deliberately separate steps, same split as
+/// ConcurrentStreamGuard's acquire/release).
+model UsageCounter {
+  id             String                 @id @default(uuid())
+  organizationId String
+  organization   SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  periodStart    DateTime
+  bytesUsed      BigInt                 @default(0)
+  requestsUsed   Int                    @default(0)
+
+  @@unique([organizationId, periodStart])
+  @@map("usage_counters")
 }

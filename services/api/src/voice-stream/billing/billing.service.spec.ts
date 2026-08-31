@@ -147,3 +147,26 @@ describe('BillingService.handleWebhook', () => {
     });
   });
 });
+
+describe('BillingService.getSubscriptionStatus', () => {
+  it('stringifies the BigInt plan.monthlyByteQuota (JSON.stringify cannot serialize a raw bigint)', async () => {
+    const { service, prisma } = setup();
+    prisma.subscription.findUnique.mockResolvedValue({
+      id: 'sub-1',
+      plan: { key: 'enterprise', monthlyByteQuota: BigInt(1_000_000_000) },
+    });
+
+    const result = await service.getSubscriptionStatus('org-1');
+
+    expect(result?.plan.monthlyByteQuota).toBe('1000000000');
+  });
+
+  it('returns null unchanged when there is no subscription', async () => {
+    const { service, prisma } = setup();
+    prisma.subscription.findUnique.mockResolvedValue(null);
+
+    const result = await service.getSubscriptionStatus('org-1');
+
+    expect(result).toBeNull();
+  });
+});

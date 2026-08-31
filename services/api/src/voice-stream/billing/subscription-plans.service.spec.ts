@@ -73,6 +73,37 @@ describe('SubscriptionPlansService.upsert', () => {
       }),
     );
   });
+
+  it('stringifies the BigInt monthlyByteQuota in the returned row (JSON.stringify cannot serialize a raw bigint)', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriptionPlan.findFirst.mockResolvedValue(null);
+    prisma.subscriptionPlan.upsert.mockResolvedValue({ key: 'starter', monthlyByteQuota: BigInt(500_000_000) });
+
+    const result = await service.upsert({
+      key: 'starter',
+      name: 'Starter',
+      stripePriceId: 'price_1',
+      monthlyUsdAmount: 49,
+      monthlyByteQuota: BigInt(500_000_000),
+    });
+
+    expect(result.monthlyByteQuota).toBe('500000000');
+  });
+});
+
+describe('SubscriptionPlansService.list', () => {
+  it('stringifies each plan row\'s BigInt monthlyByteQuota', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriptionPlan.findMany.mockResolvedValue([
+      { key: 'starter', monthlyByteQuota: null },
+      { key: 'enterprise', monthlyByteQuota: BigInt(1_000_000_000) },
+    ]);
+
+    const result = await service.list();
+
+    expect(result[0].monthlyByteQuota).toBeNull();
+    expect(result[1].monthlyByteQuota).toBe('1000000000');
+  });
 });
 
 describe('SubscriptionPlansService.remove', () => {

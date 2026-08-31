@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { HealthController } from './health/health.controller';
 import { RedisStreamsModule } from './redis-streams/redis-streams.module';
 import { AsrRegistryModule } from './asr-registry/asr-registry.module';
@@ -35,6 +36,7 @@ import { VoiceStreamModule } from './voice-stream/voice-stream.module';
 @Module({
   imports: [
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
+    ScheduleModule.forRoot(),
     PrismaModule,
     RedisStreamsModule,
     AsrRegistryModule,

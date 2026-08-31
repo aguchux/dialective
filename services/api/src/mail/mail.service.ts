@@ -43,6 +43,15 @@ interface AuditHoldNotification {
   submissionCount: number;
 }
 
+interface AnomalyAlertNotification {
+  recipientEmail: string;
+  organizationName: string;
+  ruleKey: string;
+  windowStart: Date;
+  windowEnd: Date;
+  details: Record<string, unknown>;
+}
+
 /**
  * Minimal, mail-service-local shape of a TrainerReport (see
  * wallet/trainer-report.service.ts) -- declared here rather than imported
@@ -254,6 +263,22 @@ export class MailService {
     );
   }
 
+  /**
+   * Fired by AnomalyDetectionService's hourly cron when a threshold rule
+   * breaches for an organization -- one email per OWNER/ADMIN member (the
+   * caller loops), best-effort, the AnomalyEvent row is already durable by
+   * the time this is called.
+   */
+  async sendAnomalyAlertEmail(payload: AnomalyAlertNotification): Promise<void> {
+    const dashboardUrl = `${streamFrontendUrl()}/dashboard/reports`;
+    await this.send(
+      payload.recipientEmail,
+      `Unusual activity detected on your Voice Stream account`,
+      anomalyAlertHtml(payload, dashboardUrl),
+      anomalyAlertText(payload, dashboardUrl),
+    );
+  }
+
   async sendPhoneVerifiedEmail(email: string, phoneNumber: string): Promise<void> {
     const dashboardUrl = `${frontendUrl()}/dashboard`;
     await this.send(
@@ -417,6 +442,28 @@ function referralJoinText(inviteeName: string, inviteeEmail: string, referralsUr
 Name: ${inviteeName}
 Email: ${inviteeEmail}
 Track your referrals: ${referralsUrl}`;
+}
+
+const ANOMALY_RULE_LABELS: Record<string, string> = {
+  denial_rate_spike: 'a spike in denied requests',
+  new_ip_burst: 'a burst of requests from new IP addresses',
+  request_volume_spike: 'a spike in request volume',
+};
+
+function anomalyAlertHtml(payload: AnomalyAlertNotification, dashboardUrl: string): string {
+  const ruleLabel = ANOMALY_RULE_LABELS[payload.ruleKey] ?? payload.ruleKey;
+  return `<p>We detected ${escapeHtml(ruleLabel)} on ${escapeHtml(payload.organizationName)}'s Voice Stream account between ${payload.windowStart.toISOString()} and ${payload.windowEnd.toISOString()}.</p>
+<p>Details: ${escapeHtml(JSON.stringify(payload.details))}</p>
+<p>If this wasn't expected, review your Stream Keys and OAuth clients for anything that looks unfamiliar.</p>
+<p><a href="${dashboardUrl}">${dashboardUrl}</a></p>`;
+}
+
+function anomalyAlertText(payload: AnomalyAlertNotification, dashboardUrl: string): string {
+  const ruleLabel = ANOMALY_RULE_LABELS[payload.ruleKey] ?? payload.ruleKey;
+  return `We detected ${ruleLabel} on ${payload.organizationName}'s Voice Stream account between ${payload.windowStart.toISOString()} and ${payload.windowEnd.toISOString()}.
+Details: ${JSON.stringify(payload.details)}
+If this wasn't expected, review your Stream Keys and OAuth clients for anything that looks unfamiliar.
+${dashboardUrl}`;
 }
 
 function referralInviteHtml(payload: ReferralInviteEmail): string {

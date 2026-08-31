@@ -52,8 +52,9 @@ function setup() {
   };
 
   const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
-  const service = new SubscriberAuthService(prisma as any, mail as any, webhookEvents as any);
-  return { prisma, mail, webhookEvents, service };
+  const orgActivity = { record: jest.fn().mockResolvedValue(undefined) };
+  const service = new SubscriberAuthService(prisma as any, mail as any, webhookEvents as any, orgActivity as any);
+  return { prisma, mail, webhookEvents, orgActivity, service };
 }
 
 describe('SubscriberAuthService', () => {
@@ -348,6 +349,33 @@ describe('SubscriberAuthService', () => {
         expect.objectContaining({ data: { acceptedAt: expect.any(Date) } }),
       );
       expect(result.accessToken).toEqual(expect.any(String));
+    });
+  });
+
+  describe('inviteMember', () => {
+    it('rejects inviting someone already a member of the org', async () => {
+      const { prisma, service } = setup();
+      prisma.subscriberMembership.findFirst.mockResolvedValue({ id: 'm-1' });
+
+      await expect(
+        service.inviteMember('org-1', 'inviter-1', 'a@b.com', SubscriberOrgRole.VALIDATOR),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('sends the invite email and records a MEMBER_INVITED activity event', async () => {
+      const { prisma, mail, orgActivity, service } = setup();
+      prisma.subscriberMembership.findFirst.mockResolvedValue(null);
+      prisma.subscriberOrganization.findUniqueOrThrow.mockResolvedValue({ id: 'org-1', name: 'Acme' });
+
+      await service.inviteMember('org-1', 'inviter-1', 'a@b.com', SubscriberOrgRole.VALIDATOR);
+
+      expect(mail.sendSubscriberInviteEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ inviteeEmail: 'a@b.com', organizationName: 'Acme' }),
+      );
+      expect(orgActivity.record).toHaveBeenCalledWith('org-1', 'MEMBER_INVITED', 'inviter-1', {
+        email: 'a@b.com',
+        role: SubscriberOrgRole.VALIDATOR,
+      });
     });
   });
 });

@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -10,6 +11,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { IsvcConfidence } from '@dialectiva/db';
 
 export class UpsertSubscriptionPlanDto {
   @IsString()
@@ -46,6 +48,23 @@ export class UpsertSubscriptionPlanDto {
   @IsInt()
   @IsPositive()
   maxTeamMembers?: number | null;
+
+  @IsOptional()
+  @IsEnum(IsvcConfidence)
+  minIsvcConfidence?: IsvcConfidence | null;
+
+  /** Bytes, as a JS number (safe well beyond any realistic monthly quota) -- converted to BigInt in SubscriptionPlansService.upsert. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  monthlyByteQuota?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  monthlyRequestQuota?: number | null;
 
   @IsOptional()
   @IsBoolean()

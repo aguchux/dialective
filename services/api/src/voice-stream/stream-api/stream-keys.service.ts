@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { StreamKeyScope, WebhookEventType } from '@dialectiva/db';
+import { ActivityEventType, StreamKeyScope, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { generateOpaqueToken, hashToken } from '../../auth/token.util';
 import { WebhookEventService } from '../webhooks/webhook-event.service';
+import { OrgActivityService } from '../org-activity/org-activity.service';
 
 const KEY_PREFIX = 'dlsk_live_';
 /** Chars of the raw token (after KEY_PREFIX) kept in keyPrefix for dashboard display -- long enough to tell keys apart at a glance, short enough that it alone can't be brute-forced into the full key. */
@@ -28,6 +29,7 @@ export class StreamKeysService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly webhookEvents: WebhookEventService,
+    private readonly orgActivity: OrgActivityService,
   ) {}
 
   list(organizationId: string) {
@@ -78,6 +80,11 @@ export class StreamKeysService {
       key_prefix: row.keyPrefix,
       deck_id: row.deckId,
     });
+    void this.orgActivity.record(organizationId, ActivityEventType.KEY_CREATED, createdByUserId, {
+      keyId: row.id,
+      keyPrefix: row.keyPrefix,
+      deckId: row.deckId,
+    });
 
     return { ...row, plaintextKey: fullKey };
   }
@@ -90,7 +97,7 @@ export class StreamKeysService {
     return key;
   }
 
-  async revoke(organizationId: string, keyId: string) {
+  async revoke(organizationId: string, keyId: string, actorUserId: string) {
     const key = await this.get(organizationId, keyId);
     const revoked = await this.prisma.streamApiKey.update({
       where: { id: key.id },
@@ -101,11 +108,15 @@ export class StreamKeysService {
       key_id: revoked.id,
       key_prefix: revoked.keyPrefix,
     });
+    void this.orgActivity.record(organizationId, ActivityEventType.KEY_REVOKED, actorUserId, {
+      keyId: revoked.id,
+      keyPrefix: revoked.keyPrefix,
+    });
     return revoked;
   }
 
   /** Revokes the old key and mints a new one with the same deck/scope/IP config -- the old row is kept (audit trail), not deleted. */
-  async rotate(organizationId: string, keyId: string) {
+  async rotate(organizationId: string, keyId: string, actorUserId: string) {
     const existing = await this.get(organizationId, keyId);
     await this.prisma.streamApiKey.update({
       where: { id: existing.id },
@@ -135,6 +146,11 @@ export class StreamKeysService {
       key_id: row.id,
       key_prefix: row.keyPrefix,
       deck_id: row.deckId,
+    });
+    void this.orgActivity.record(organizationId, ActivityEventType.KEY_ROTATED, actorUserId, {
+      oldKeyId: existing.id,
+      newKeyId: row.id,
+      keyPrefix: row.keyPrefix,
     });
 
     return { ...row, plaintextKey: fullKey };

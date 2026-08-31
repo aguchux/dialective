@@ -1,13 +1,14 @@
 import { ConflictException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
-import { OtpPurpose, SubscriberOrgRole, SubscriberUser, WebhookEventType } from '@dialectiva/db';
+import { ActivityEventType, OtpPurpose, SubscriberOrgRole, SubscriberUser, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../../mail/mail.service';
 import { generateOpaqueToken, hashToken } from '../../auth/token.util';
 import { generateOtpCode, hashOtpCode } from '../../otp/otp.util';
 import { signSubscriberAccessToken } from './subscriber-jwt.util';
 import { WebhookEventService } from '../webhooks/webhook-event.service';
+import { OrgActivityService } from '../org-activity/org-activity.service';
 
 const BCRYPT_ROUNDS = 12;
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -62,6 +63,7 @@ export class SubscriberAuthService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly webhookEvents: WebhookEventService,
+    private readonly orgActivity: OrgActivityService,
   ) {}
 
   /**
@@ -299,6 +301,11 @@ export class SubscriberAuthService {
       inviteeEmail: email,
       organizationName: org.name,
       token,
+    });
+
+    void this.orgActivity.record(organizationId, ActivityEventType.MEMBER_INVITED, invitedByUserId, {
+      email,
+      role,
     });
   }
 

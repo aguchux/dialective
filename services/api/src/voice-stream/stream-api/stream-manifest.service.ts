@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { IsvcConfidence } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogueService } from '../catalogue/catalogue.service';
 
@@ -27,6 +28,15 @@ export class StreamManifestService {
     if (streamKey.deckId && streamKey.deckId !== deckId) {
       throw new NotFoundException('Stream Deck not found');
     }
+  }
+
+  /** Phase 5 tier gating -- resolves the streamKey's organization's plan floor, if any. Null plan/subscription (shouldn't happen past StreamKeySubscriptionGuard, but defensive) means no floor. */
+  private async planMinConfidence(organizationId: string): Promise<IsvcConfidence | undefined> {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { organizationId },
+      select: { plan: { select: { minIsvcConfidence: true } } },
+    });
+    return subscription?.plan.minIsvcConfidence ?? undefined;
   }
 
   async listDecks(streamKey: AuthenticatedStreamKey) {
@@ -60,8 +70,9 @@ export class StreamManifestService {
       where: { deckId },
       orderBy: { addedAt: 'desc' },
     });
+    const minConfidence = await this.planMinConfidence(streamKey.organizationId);
     const recordings = await Promise.all(
-      items.map((item) => this.catalogue.getEligibleRecording(item.recordingId)),
+      items.map((item) => this.catalogue.getEligibleRecording(item.recordingId, minConfidence)),
     );
     return items
       .map((item, i) => ({ item, recording: recordings[i] }))
@@ -82,7 +93,8 @@ export class StreamManifestService {
     if (!membership) {
       throw new NotFoundException('Recording not found in this Stream Deck');
     }
-    const recording = await this.catalogue.getEligibleRecording(recordingId);
+    const minConfidence = await this.planMinConfidence(streamKey.organizationId);
+    const recording = await this.catalogue.getEligibleRecording(recordingId, minConfidence);
     if (!recording) {
       throw new NotFoundException('Recording not found or not available for Voice Stream');
     }

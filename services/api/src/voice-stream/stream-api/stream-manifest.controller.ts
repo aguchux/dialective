@@ -1,12 +1,14 @@
 import { BadRequestException, Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { StreamKeyScope } from '@dialectiva/db';
-import { StreamKeyAuthGuard, AuthenticatedStreamKeyRequest } from './stream-key-auth.guard';
+import { AuthenticatedStreamKeyRequest } from './stream-key-auth.guard';
 import { StreamKeyScopesGuard } from './stream-key-scopes.guard';
 import { RequireScopes } from './require-scopes.decorator';
 import { StreamKeySubscriptionGuard } from './stream-key-subscription.guard';
 import { StreamKeyRateLimitGuard } from './stream-key-rate-limit.guard';
+import { QuotaGuard } from './quota.guard';
 import { StreamManifestService } from './stream-manifest.service';
 import { StreamAccessLogService } from './stream-access-log.service';
+import { EitherStreamCredentialGuard } from '../oauth/either-stream-credential.guard';
 
 /**
  * Machine-client API (doc sections 25, 29) -- authenticated by Stream Key
@@ -15,7 +17,13 @@ import { StreamAccessLogService } from './stream-access-log.service';
  * `https://api.dialectlibrary.com/stream/v1`.
  */
 @Controller('stream/v1')
-@UseGuards(StreamKeyAuthGuard, StreamKeyScopesGuard, StreamKeySubscriptionGuard, StreamKeyRateLimitGuard)
+@UseGuards(
+  EitherStreamCredentialGuard,
+  StreamKeyScopesGuard,
+  StreamKeySubscriptionGuard,
+  QuotaGuard,
+  StreamKeyRateLimitGuard,
+)
 export class StreamManifestController {
   constructor(
     private readonly manifest: StreamManifestService,
@@ -121,6 +129,7 @@ export class StreamManifestController {
   ) {
     await this.accessLog.record({
       streamApiKeyId: req.streamKey.id,
+      credentialType: req.streamKey.credentialType,
       organizationId: req.streamKey.organizationId,
       deckId,
       recordingId,

@@ -9,6 +9,7 @@ function setup() {
     isvcCurrent: { findMany: jest.fn().mockResolvedValue([]) },
     streamDeckCurrentVersion: { findUnique: jest.fn().mockResolvedValue(null) },
     streamDeckVersion: { findUnique: jest.fn(), findMany: jest.fn() },
+    subscription: { findUnique: jest.fn().mockResolvedValue(null) },
   };
   const catalogue = { getEligibleRecording: jest.fn() };
   const service = new StreamManifestService(prisma as never, catalogue as never);
@@ -44,6 +45,32 @@ describe('StreamManifestService.getDeck', () => {
   });
 });
 
+describe('StreamManifestService.getEligibleItemMetadata', () => {
+  it('resolves the organization plan floor and passes it to getEligibleRecording', async () => {
+    const { service, prisma, catalogue } = setup();
+    prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1' });
+    prisma.streamDeckItem.findUnique.mockResolvedValue({ deckId: 'deck-1', recordingId: 'rec-1' });
+    prisma.subscription.findUnique.mockResolvedValue({ plan: { minIsvcConfidence: 'VERY_HIGH' } });
+    catalogue.getEligibleRecording.mockResolvedValue({ id: 'rec-1' });
+
+    await service.getEligibleItemMetadata(orgWideKey, 'deck-1', 'rec-1');
+
+    expect(catalogue.getEligibleRecording).toHaveBeenCalledWith('rec-1', 'VERY_HIGH');
+  });
+
+  it('throws when the recording is gated out by the plan floor (getEligibleRecording returns null)', async () => {
+    const { service, prisma, catalogue } = setup();
+    prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1' });
+    prisma.streamDeckItem.findUnique.mockResolvedValue({ deckId: 'deck-1', recordingId: 'rec-1' });
+    prisma.subscription.findUnique.mockResolvedValue({ plan: { minIsvcConfidence: 'VERY_HIGH' } });
+    catalogue.getEligibleRecording.mockResolvedValue(null);
+
+    await expect(
+      service.getEligibleItemMetadata(orgWideKey, 'deck-1', 'rec-1'),
+    ).rejects.toThrow(NotFoundException);
+  });
+});
+
 describe('StreamManifestService.listEligibleItems', () => {
   it('silently excludes an ineligible (purged) deck item', async () => {
     const { service, prisma, catalogue } = setup();
@@ -60,6 +87,18 @@ describe('StreamManifestService.listEligibleItems', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].recording.id).toBe('rec-1');
+  });
+
+  it('resolves the organization plan floor and passes it to getEligibleRecording', async () => {
+    const { service, prisma, catalogue } = setup();
+    prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1' });
+    prisma.streamDeckItem.findMany.mockResolvedValue([{ id: 'item-1', recordingId: 'rec-1' }]);
+    prisma.subscription.findUnique.mockResolvedValue({ plan: { minIsvcConfidence: 'HIGH' } });
+    catalogue.getEligibleRecording.mockResolvedValue({ id: 'rec-1' });
+
+    await service.listEligibleItems(orgWideKey, 'deck-1');
+
+    expect(catalogue.getEligibleRecording).toHaveBeenCalledWith('rec-1', 'HIGH');
   });
 });
 

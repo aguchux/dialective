@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import {
   ApiAccessTokenSummary,
+  IsvcConfidence,
   SubscriptionPlan,
   normalizeErrorMessage,
   useDeleteApiAccessTokenMutation,
@@ -12,6 +13,13 @@ import {
   useSetApiAccessTokenMutation,
   useUpsertSubscriptionPlanMutation,
 } from '@/store/api';
+
+const CONFIDENCE_TIER_OPTIONS: { value: IsvcConfidence | ''; label: string }[] = [
+  { value: '', label: 'None (full catalogue access)' },
+  { value: 'ESTABLISHED', label: 'Established or higher' },
+  { value: 'HIGH', label: 'High Confidence or higher' },
+  { value: 'VERY_HIGH', label: 'Premium Verified (VERY_HIGH) only' },
+];
 import { ActionButton } from '@/components/ui/ActionButton';
 
 const inputClass =
@@ -142,9 +150,14 @@ function emptyPlanForm() {
     monthlyUsdAmount: '',
     maxStreamDecks: '',
     maxTeamMembers: '',
+    minIsvcConfidence: '' as IsvcConfidence | '',
+    monthlyByteQuotaGb: '',
+    monthlyRequestQuota: '',
     active: true,
   };
 }
+
+const BYTES_PER_GB = 1024 * 1024 * 1024;
 
 function planToForm(plan: SubscriptionPlan) {
   return {
@@ -154,6 +167,11 @@ function planToForm(plan: SubscriptionPlan) {
     monthlyUsdAmount: plan.monthlyUsdAmount,
     maxStreamDecks: plan.maxStreamDecks?.toString() ?? '',
     maxTeamMembers: plan.maxTeamMembers?.toString() ?? '',
+    minIsvcConfidence: (plan.minIsvcConfidence ?? '') as IsvcConfidence | '',
+    monthlyByteQuotaGb: plan.monthlyByteQuota
+      ? (Number(plan.monthlyByteQuota) / BYTES_PER_GB).toString()
+      : '',
+    monthlyRequestQuota: plan.monthlyRequestQuota?.toString() ?? '',
     active: plan.active,
   };
 }
@@ -193,6 +211,11 @@ function PlanForm({
           monthlyUsdAmount,
           maxStreamDecks: form.maxStreamDecks ? Number(form.maxStreamDecks) : null,
           maxTeamMembers: form.maxTeamMembers ? Number(form.maxTeamMembers) : null,
+          minIsvcConfidence: form.minIsvcConfidence || null,
+          monthlyByteQuota: form.monthlyByteQuotaGb
+            ? Math.round(Number(form.monthlyByteQuotaGb) * BYTES_PER_GB)
+            : null,
+          monthlyRequestQuota: form.monthlyRequestQuota ? Number(form.monthlyRequestQuota) : null,
           active: form.active,
         },
       }).unwrap();
@@ -264,6 +287,41 @@ function PlanForm({
             value={form.maxTeamMembers}
           />
         </label>
+        <label className="grid gap-1 text-sm font-bold">
+          Minimum quality tier
+          <select
+            className={inputClass}
+            onChange={(e) => setForm({ ...form, minIsvcConfidence: e.target.value as IsvcConfidence | '' })}
+            value={form.minIsvcConfidence}
+          >
+            {CONFIDENCE_TIER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-bold">
+          Monthly data quota, GB (blank = unlimited)
+          <input
+            className={inputClass}
+            min="0"
+            onChange={(e) => setForm({ ...form, monthlyByteQuotaGb: e.target.value })}
+            step="0.1"
+            type="number"
+            value={form.monthlyByteQuotaGb}
+          />
+        </label>
+        <label className="grid gap-1 text-sm font-bold">
+          Monthly request quota (blank = unlimited)
+          <input
+            className={inputClass}
+            min="1"
+            onChange={(e) => setForm({ ...form, monthlyRequestQuota: e.target.value })}
+            type="number"
+            value={form.monthlyRequestQuota}
+          />
+        </label>
         <label className="flex items-center gap-2 text-sm font-bold">
           <input
             checked={form.active}
@@ -328,6 +386,15 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
           <p className="mt-1 text-sm text-muted">
             Stream decks: {plan.maxStreamDecks ?? 'unlimited'} -- Team members:{' '}
             {plan.maxTeamMembers ?? 'unlimited'}
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            Quality tier: {plan.minIsvcConfidence ? plan.minIsvcConfidence.replace('_', ' ') + ' or higher' : 'Full catalogue access'}
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            Monthly quota:{' '}
+            {plan.monthlyByteQuota ? `${(Number(plan.monthlyByteQuota) / BYTES_PER_GB).toFixed(1)} GB` : 'unlimited data'}
+            {' -- '}
+            {plan.monthlyRequestQuota ? `${plan.monthlyRequestQuota.toLocaleString()} requests` : 'unlimited requests'}
           </p>
         </div>
         <span

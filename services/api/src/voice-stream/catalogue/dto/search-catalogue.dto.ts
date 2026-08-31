@@ -30,6 +30,10 @@ export class SearchCatalogueDto {
   minConfidence?: IsvcConfidence;
 
   @IsOptional()
+  @IsEnum(['newest', 'isvs_desc'])
+  sortBy?: 'newest' | 'isvs_desc';
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)

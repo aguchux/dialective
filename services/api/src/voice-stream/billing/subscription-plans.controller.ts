@@ -20,7 +20,11 @@ export class SubscriptionPlansController {
 
   @Put(':key')
   upsert(@Param('key') key: string, @Body() dto: UpsertSubscriptionPlanDto) {
-    return this.plans.upsert({ ...dto, key });
+    return this.plans.upsert({
+      ...dto,
+      key,
+      monthlyByteQuota: dto.monthlyByteQuota != null ? BigInt(dto.monthlyByteQuota) : dto.monthlyByteQuota,
+    });
   }
 
   @Delete(':key')

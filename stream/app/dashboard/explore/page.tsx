@@ -11,6 +11,7 @@ import {
 } from '@/store/api';
 import { Card, ErrorText, FieldLabel, PageHeading, SecondaryButton, TextInput } from '@/components/ui';
 import { IsvcBadge } from '@/components/IsvcBadge';
+import { QualityTierBadge } from '@/components/QualityTierBadge';
 import { ValidationForm } from '@/components/ValidationForm';
 
 const CONFIDENCE_OPTIONS: IsvcConfidence[] = ['EMERGING', 'ESTABLISHED', 'HIGH', 'VERY_HIGH'];
@@ -21,6 +22,7 @@ export default function ExplorePage() {
   const [minScore, setMinScore] = useState('');
   const [minIsvs, setMinIsvs] = useState('');
   const [minConfidence, setMinConfidence] = useState<IsvcConfidence | ''>('');
+  const [sortBy, setSortBy] = useState<'newest' | 'isvs_desc'>('newest');
   const [page, setPage] = useState(1);
 
   const { data, isLoading, isError } = useSearchCatalogueQuery({
@@ -29,6 +31,7 @@ export default function ExplorePage() {
     minScore: minScore ? Number(minScore) : undefined,
     minIsvs: minIsvs ? Number(minIsvs) : undefined,
     minConfidence: minConfidence || undefined,
+    sortBy,
     page,
     pageSize: 20,
   });
@@ -123,6 +126,17 @@ export default function ExplorePage() {
               ))}
             </select>
           </div>
+          <div>
+            <FieldLabel>Sort by</FieldLabel>
+            <select
+              className="min-h-10 w-full rounded-lg border border-line bg-white px-3 text-sm"
+              onChange={(e) => setSortBy(e.target.value as 'newest' | 'isvs_desc')}
+              value={sortBy}
+            >
+              <option value="newest">Newest</option>
+              <option value="isvs_desc">Highest ISVC score</option>
+            </select>
+          </div>
           <div className="flex items-end">
             <SecondaryButton onClick={() => setPage(1)} type="button">
               Apply filters
@@ -151,12 +165,13 @@ export default function ExplorePage() {
                     {item.country?.name ?? 'Unknown country'} · {((item.durationMs ?? 0) / 1000).toFixed(1)}s
                     · DL score {item.dlCanonicalScore ?? '—'}
                   </p>
-                  <div className="mt-1.5">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <IsvcBadge
                       confidence={item.isvcConfidence}
                       isvs={item.isvs}
                       organizationCount={item.isvcOrganizationCount}
                     />
+                    <QualityTierBadge tier={item.qualityTier} />
                   </div>
                   {playingId === item.recordingId && audioUrl && (
                     <audio className="mt-2" controls src={audioUrl} />

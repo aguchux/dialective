@@ -97,6 +97,7 @@ describe('StreamKeyAuthGuard', () => {
       organizationId: 'org-1',
       deckId: null,
       scopes: ['MANIFEST_READ'],
+      credentialType: 'stream_key',
     });
   });
 

@@ -1,5 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { IsvcConfidence, SubscriptionPlan } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
+
+/** monthlyByteQuota is a Prisma BigInt -- JSON.stringify can't serialize a bigint, so every controller-reachable return of a SubscriptionPlan row converts it to a string first, matching this codebase's existing convention for StreamAccessLog.bytesStreamed/UsageCounter.bytesUsed. */
+function serializePlan(plan: SubscriptionPlan) {
+  return { ...plan, monthlyByteQuota: plan.monthlyByteQuota?.toString() ?? null };
+}
 
 export interface SubscriptionPlanInput {
   key: string;
@@ -8,6 +14,11 @@ export interface SubscriptionPlanInput {
   monthlyUsdAmount: number;
   maxStreamDecks?: number | null;
   maxTeamMembers?: number | null;
+  /** Phase 5 tiered pricing -- null means full catalogue access (current behavior). */
+  minIsvcConfidence?: IsvcConfidence | null;
+  /** Phase 4b advanced quota policies -- null means unlimited, enforced by QuotaGuard. */
+  monthlyByteQuota?: bigint | null;
+  monthlyRequestQuota?: number | null;
   active?: boolean;
 }
 
@@ -25,8 +36,9 @@ export interface SubscriptionPlanInput {
 export class SubscriptionPlansService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list() {
-    return this.prisma.subscriptionPlan.findMany({ orderBy: { monthlyUsdAmount: 'asc' } });
+  async list() {
+    const plans = await this.prisma.subscriptionPlan.findMany({ orderBy: { monthlyUsdAmount: 'asc' } });
+    return plans.map(serializePlan);
   }
 
   /** Public pricing page -- active plans only, and only the fields a prospective subscriber should see (no Stripe Price id). */
@@ -41,6 +53,9 @@ export class SubscriptionPlansService {
       monthlyUsdAmount: plan.monthlyUsdAmount,
       maxStreamDecks: plan.maxStreamDecks,
       maxTeamMembers: plan.maxTeamMembers,
+      minIsvcConfidence: plan.minIsvcConfidence,
+      monthlyByteQuota: plan.monthlyByteQuota?.toString() ?? null,
+      monthlyRequestQuota: plan.monthlyRequestQuota,
     }));
   }
 
@@ -61,7 +76,7 @@ export class SubscriptionPlansService {
         `stripePriceId is already used by plan "${clashing.key}" -- each plan needs its own Stripe Price id`,
       );
     }
-    return this.prisma.subscriptionPlan.upsert({
+    const row = await this.prisma.subscriptionPlan.upsert({
       where: { key },
       create: {
         key,
@@ -70,6 +85,9 @@ export class SubscriptionPlansService {
         monthlyUsdAmount: input.monthlyUsdAmount,
         maxStreamDecks: input.maxStreamDecks ?? null,
         maxTeamMembers: input.maxTeamMembers ?? null,
+        minIsvcConfidence: input.minIsvcConfidence ?? null,
+        monthlyByteQuota: input.monthlyByteQuota ?? null,
+        monthlyRequestQuota: input.monthlyRequestQuota ?? null,
         active: input.active ?? true,
       },
       update: {
@@ -78,9 +96,13 @@ export class SubscriptionPlansService {
         monthlyUsdAmount: input.monthlyUsdAmount,
         maxStreamDecks: input.maxStreamDecks ?? null,
         maxTeamMembers: input.maxTeamMembers ?? null,
+        minIsvcConfidence: input.minIsvcConfidence ?? null,
+        monthlyByteQuota: input.monthlyByteQuota ?? null,
+        monthlyRequestQuota: input.monthlyRequestQuota ?? null,
         ...(input.active !== undefined && { active: input.active }),
       },
     });
+    return serializePlan(row);
   }
 
   async remove(key: string) {

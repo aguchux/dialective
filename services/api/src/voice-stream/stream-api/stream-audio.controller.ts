@@ -2,16 +2,18 @@ import { BadRequestException, Controller, Get, Param, Req, Res, UseGuards } from
 import { Response } from 'express';
 import { StreamKeyScope, WebhookEventType } from '@dialectiva/db';
 import { StorageService } from '../../storage/storage.service';
-import { StreamKeyAuthGuard, AuthenticatedStreamKeyRequest } from './stream-key-auth.guard';
+import { AuthenticatedStreamKeyRequest } from './stream-key-auth.guard';
 import { StreamKeyScopesGuard } from './stream-key-scopes.guard';
 import { RequireScopes } from './require-scopes.decorator';
 import { StreamKeySubscriptionGuard } from './stream-key-subscription.guard';
 import { StreamKeyRateLimitGuard } from './stream-key-rate-limit.guard';
 import { ConcurrentStreamGuard } from './concurrent-stream.guard';
+import { QuotaGuard } from './quota.guard';
 import { StreamManifestService } from './stream-manifest.service';
 import { StreamAccessLogService } from './stream-access-log.service';
 import { contentTypeForAudioKey } from './audio-content-type.util';
 import { WebhookEventService } from '../webhooks/webhook-event.service';
+import { EitherStreamCredentialGuard } from '../oauth/either-stream-credential.guard';
 
 /**
  * Doc section 35's full authorization order for an audio stream request,
@@ -26,9 +28,10 @@ import { WebhookEventService } from '../webhooks/webhook-event.service';
  */
 @Controller('stream/v1')
 @UseGuards(
-  StreamKeyAuthGuard,
+  EitherStreamCredentialGuard,
   StreamKeyScopesGuard,
   StreamKeySubscriptionGuard,
+  QuotaGuard,
   ConcurrentStreamGuard,
   StreamKeyRateLimitGuard,
 )
@@ -113,6 +116,7 @@ export class StreamAudioController {
       this.concurrentStream.release(req.streamKey.id);
       void this.accessLog.record({
         streamApiKeyId: req.streamKey.id,
+        credentialType: req.streamKey.credentialType,
         organizationId: req.streamKey.organizationId,
         deckId,
         recordingId,

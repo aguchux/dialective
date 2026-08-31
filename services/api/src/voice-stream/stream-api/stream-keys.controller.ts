@@ -41,13 +41,13 @@ export class StreamKeysController {
   @UseGuards(SubscriberRolesGuard, RequireActiveSubscriptionGuard)
   @SubscriberRoles(...CAN_MANAGE_KEYS)
   rotate(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims, @Param('id') id: string) {
-    return this.keys.rotate(subscriber.organizationId, id);
+    return this.keys.rotate(subscriber.organizationId, id, subscriber.sub);
   }
 
   @Delete(':id')
   @UseGuards(SubscriberRolesGuard)
   @SubscriberRoles(...CAN_MANAGE_KEYS)
   revoke(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims, @Param('id') id: string) {
-    return this.keys.revoke(subscriber.organizationId, id);
+    return this.keys.revoke(subscriber.organizationId, id, subscriber.sub);
   }
 }

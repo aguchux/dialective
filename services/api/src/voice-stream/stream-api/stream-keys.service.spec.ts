@@ -13,8 +13,9 @@ function setup() {
     },
   };
   const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
-  const service = new StreamKeysService(prisma as never, webhookEvents as never);
-  return { service, prisma, webhookEvents };
+  const orgActivity = { record: jest.fn().mockResolvedValue(undefined) };
+  const service = new StreamKeysService(prisma as never, webhookEvents as never, orgActivity as never);
+  return { service, prisma, webhookEvents, orgActivity };
 }
 
 describe('StreamKeysService.create', () => {
@@ -87,7 +88,7 @@ describe('StreamKeysService.revoke', () => {
     const { service, prisma } = setup();
     prisma.streamApiKey.findUnique.mockResolvedValue({ id: 'key-1', organizationId: 'other-org' });
 
-    await expect(service.revoke('org-1', 'key-1')).rejects.toThrow(NotFoundException);
+    await expect(service.revoke('org-1', 'key-1', 'user-1')).rejects.toThrow(NotFoundException);
     expect(prisma.streamApiKey.update).not.toHaveBeenCalled();
   });
 
@@ -96,7 +97,7 @@ describe('StreamKeysService.revoke', () => {
     prisma.streamApiKey.findUnique.mockResolvedValue({ id: 'key-1', organizationId: 'org-1' });
     prisma.streamApiKey.update.mockResolvedValue({ id: 'key-1', revokedAt: new Date() });
 
-    await service.revoke('org-1', 'key-1');
+    await service.revoke('org-1', 'key-1', 'user-1');
 
     expect(prisma.streamApiKey.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -124,7 +125,7 @@ describe('StreamKeysService.rotate', () => {
       Promise.resolve({ id: 'key-2', ...data }),
     );
 
-    const result = await service.rotate('org-1', 'key-1');
+    const result = await service.rotate('org-1', 'key-1', 'user-1');
 
     expect(prisma.streamApiKey.update).toHaveBeenCalledWith(
       expect.objectContaining({
