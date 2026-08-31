@@ -65,17 +65,9 @@ export default function StreamPage() {
               license the voice recordings collected by Dialect Library&apos;s trainer community --
               across countries, dialects, and sub-dialects most datasets miss.
             </p>
-            <div className="grid grid-flow-col items-center gap-3 justify-start">
-              <span
-                aria-disabled="true"
-                className="inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-full border border-line bg-[rgba(5,5,5,0.06)] px-5 py-3 font-extrabold text-[rgba(5,5,5,0.45)]"
-              >
-                Subscribe to Stream
-              </span>
-              <span className="rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-sm font-extrabold uppercase tracking-wide text-accent">
-                Coming soon
-              </span>
-            </div>
+            <span className="inline-flex w-fit rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-sm font-extrabold uppercase tracking-wide text-accent">
+              Coming soon
+            </span>
           </div>
 
           <div className="relative min-h-[260px] overflow-hidden rounded-lg border border-[rgba(5,5,5,0.1)] bg-[#f4f1fa] md:min-h-0">

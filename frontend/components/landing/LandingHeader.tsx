@@ -18,7 +18,6 @@ import { roleHomePath } from '@/lib/role-home';
 const menuLinks = [
   { href: '/about', label: 'About Us' },
   { href: '/stream', label: 'Stream' },
-  { href: '/pricing', label: 'Pricing' },
   { href: '/blog', label: 'Blog' },
   { href: '/faq', label: 'FAQs' },
 ];
