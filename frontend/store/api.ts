@@ -1334,6 +1334,9 @@ export interface PlatformSettings {
   speechExpressionEnabled: boolean;
   spellingNormalizationProviderOrder: string;
   sentenceRebuildEnabled: boolean;
+  phraseEscalationEnabled: boolean;
+  phraseTierGenerationEnabled: boolean;
+  phraseTierItemsPerTierPerRun: number;
   smsSenderId: string | null;
   smsProviderOrder: string;
   smslive247NativeOtpEnabled: boolean;
@@ -1440,6 +1443,9 @@ export interface PlatformSettingsInput {
   speechExpressionEnabled?: boolean;
   spellingNormalizationProviderOrder?: string;
   sentenceRebuildEnabled?: boolean;
+  phraseEscalationEnabled?: boolean;
+  phraseTierGenerationEnabled?: boolean;
+  phraseTierItemsPerTierPerRun?: number;
   smsSenderId?: string;
   smsProviderOrder?: string;
   smslive247NativeOtpEnabled?: boolean;

@@ -44,6 +44,8 @@ export function WordGenerationSettingsPanel() {
   const [maxPoolPerDialect, setMaxPoolPerDialect] = useState('50');
   const [backfillItemsPerDialectPerRun, setBackfillItemsPerDialectPerRun] = useState('10');
   const [keyboardLayoutMaxLength, setKeyboardLayoutMaxLength] = useState('1000');
+  const [phraseTierGenerationEnabled, setPhraseTierGenerationEnabled] = useState(false);
+  const [phraseTierItemsPerTierPerRun, setPhraseTierItemsPerTierPerRun] = useState('3');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +59,8 @@ export function WordGenerationSettingsPanel() {
     setMaxPoolPerDialect(String(settings.llmMaxPoolPerDialect));
     setBackfillItemsPerDialectPerRun(String(settings.llmBackfillItemsPerDialectPerRun));
     setKeyboardLayoutMaxLength(String(settings.keyboardLayoutMaxLength));
+    setPhraseTierGenerationEnabled(settings.phraseTierGenerationEnabled);
+    setPhraseTierItemsPerTierPerRun(String(settings.phraseTierItemsPerTierPerRun));
   }, [settings]);
 
   function setChoice(position: 0 | 1 | 2, provider: ProviderKey) {
@@ -92,6 +96,10 @@ export function WordGenerationSettingsPanel() {
           : {}),
         ...(keyboardLayoutMaxLength !== ''
           ? { keyboardLayoutMaxLength: Number(keyboardLayoutMaxLength) }
+          : {}),
+        phraseTierGenerationEnabled,
+        ...(phraseTierItemsPerTierPerRun !== ''
+          ? { phraseTierItemsPerTierPerRun: Number(phraseTierItemsPerTierPerRun) }
           : {}),
       }).unwrap();
       setMessage('Word generation settings saved.');
@@ -291,6 +299,49 @@ export function WordGenerationSettingsPanel() {
               max="10000"
               value={keyboardLayoutMaxLength}
               onChange={(e) => setKeyboardLayoutMaxLength(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="phrase-tier-generation"
+            >
+              <input
+                checked={phraseTierGenerationEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="phrase-tier-generation"
+                onChange={(event) => setPhraseTierGenerationEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Phrase-tier pool generation</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Compose phrases at each escalation tier&apos;s target word-count band (see General
+                  settings&apos; &quot;Phrase recording escalation&quot; toggle), so trainers who
+                  cross a milestone have a pool to draw from. Independent of the word-count/items
+                  settings above.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="phrase-tier-items-per-tier-per-run">
+              Phrases composed per tier per run
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              How many new phrases to compose for EACH escalation tier every scheduled run.
+            </p>
+            <input
+              className={inputClass}
+              id="phrase-tier-items-per-tier-per-run"
+              type="number"
+              step="1"
+              min="1"
+              max="50"
+              value={phraseTierItemsPerTierPerRun}
+              onChange={(e) => setPhraseTierItemsPerTierPerRun(e.target.value)}
             />
           </div>
 

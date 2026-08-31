@@ -24,6 +24,7 @@ export function GeneralSettingsPanel() {
   const [trainingPayoutBonusCapMultiple, setTrainingPayoutBonusCapMultiple] = useState('');
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
   const [sentenceRebuildEnabled, setSentenceRebuildEnabled] = useState(false);
+  const [phraseEscalationEnabled, setPhraseEscalationEnabled] = useState(false);
   const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
   const [phoneVerificationRequired, setPhoneVerificationRequired] = useState(true);
   const [startupBonusAmount, setStartupBonusAmount] = useState('');
@@ -49,6 +50,7 @@ export function GeneralSettingsPanel() {
     setTrainingPayoutBonusCapMultiple(settings.trainingPayoutBonusCapMultiple ?? '');
     setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
     setSentenceRebuildEnabled(settings.sentenceRebuildEnabled);
+    setPhraseEscalationEnabled(settings.phraseEscalationEnabled);
     setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
     setPhoneVerificationRequired(settings.phoneVerificationRequired);
     setStartupBonusAmount(settings.startupBonusAmount ?? '');
@@ -87,6 +89,7 @@ export function GeneralSettingsPanel() {
           : {}),
         reverseWordTrainingEnabled,
         sentenceRebuildEnabled,
+        phraseEscalationEnabled,
         adminPayoutOtpEnabled,
         phoneVerificationRequired,
         ...(startupBonusAmount !== '' ? { startupBonusAmount: Number(startupBonusAmount) } : {}),
@@ -395,6 +398,29 @@ export function GeneralSettingsPanel() {
                   Mix in a tap-the-fragments-in-order sentence exercise during word sessions, using
                   classified word sequences generated for each prompt. Requires part-of-speech
                   classification and segmentation to be populated for at least some prompts.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="phrase-escalation"
+            >
+              <input
+                checked={phraseEscalationEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="phrase-escalation"
+                onChange={(event) => setPhraseEscalationEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Phrase recording escalation</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Once a trainer&apos;s lifetime word-training count crosses a milestone, assign
+                  AI-composed multi-word phrases instead of single words. Requires the phrase pool
+                  to be populated first (see Word Generation settings below).
                 </span>
               </span>
             </label>
