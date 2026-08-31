@@ -1,5 +1,5 @@
+import Image from 'next/image';
 import Link from 'next/link';
-import { BrandMark } from './BrandMark';
 
 interface BrandLogoProps {
   href?: string;
@@ -16,7 +16,14 @@ export function BrandLogo({
 }: BrandLogoProps) {
   const content = (
     <>
-      <BrandMark size={size} />
+      <Image
+        alt=""
+        className="shrink-0"
+        height={size}
+        priority={size >= 36}
+        src="/logo-mark-512.png"
+        width={size}
+      />
       <span className={textClassName}>
         Dialect Library<span className="text-accent"> Stream</span>
       </span>
