@@ -110,8 +110,16 @@ export class KycService {
     const session = await this.didit.createSession(userId, callbackUrl);
     // Didit can hand back an already-known session_id for the same
     // vendor_data (e.g. the user re-opens the verification dialog while
-    // their prior session is still active) -- upsert instead of create so
-    // that replay doesn't 500 on the providerSessionId unique constraint.
+    // their prior session is still active, or retries right after cancelling
+    // -- Didit may still be holding that session open on its side even
+    // though we just marked our row ABANDONED) -- upsert instead of create
+    // so that replay doesn't 500 on the providerSessionId unique constraint.
+    // The update branch must reset status back to IN_PROGRESS (and clear any
+    // prior decline reason) rather than no-op, otherwise a cancel-then-retry
+    // that lands on the same Didit session id would leave this row stuck
+    // ABANDONED while User.kycStatus below is set back to IN_PROGRESS --
+    // the two fall out of sync and cancelMyVerification can no longer find
+    // an "active" row to cancel on a subsequent stuck attempt.
     await this.prisma.kycVerification.upsert({
       where: { providerSessionId: session.sessionId },
       create: {
@@ -119,7 +127,10 @@ export class KycService {
         providerSessionId: session.sessionId,
         status: KycStatus.IN_PROGRESS,
       },
-      update: {},
+      update: {
+        status: KycStatus.IN_PROGRESS,
+        declineReason: null,
+      },
     });
     await this.prisma.user.update({
       where: { id: userId },
@@ -141,6 +152,23 @@ export class KycService {
       orderBy: { createdAt: 'desc' },
     });
     if (!verification) {
+      // Defensive fallback: User.kycStatus (the denormalized read-cache the
+      // dashboard actually renders from) can end up non-terminal with no
+      // matching KycVerification row in that state -- e.g. a prior retry
+      // landed on a Didit session_id that got upserted without resetting
+      // status. Reset the User row directly so the trainer is never stuck
+      // with no way out even if the two fell out of sync.
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { kycStatus: true },
+      });
+      if (user && NON_TERMINAL_STATUSES.includes(user.kycStatus)) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { kycStatus: KycStatus.ABANDONED },
+        });
+        return { cancelled: true };
+      }
       throw new NotFoundException('No active verification to cancel');
     }
     await this.abandon(verification.id, userId, 'Cancelled by user to retry verification.');

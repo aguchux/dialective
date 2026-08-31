@@ -8,25 +8,74 @@ function setup() {
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),
       update: jest.fn(),
+      upsert: jest.fn(),
     },
     user: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findUniqueOrThrow: jest.fn(),
       update: jest.fn(),
     },
     $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
   };
-  const didit = {};
+  const didit = { createSession: jest.fn() };
   const settings = {};
   const service = new KycService(prisma as never, didit as never, settings as never);
-  return { service, prisma };
+  return { service, prisma, didit };
 }
 
+describe('KycService.createVerificationSession', () => {
+  it('resets an existing row back to IN_PROGRESS when Didit replays a session_id from a since-cancelled attempt', async () => {
+    const { service, prisma, didit } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ kycStatus: 'ABANDONED' });
+    didit.createSession.mockResolvedValue({ sessionId: 'sess-1', url: 'https://verify.didit.me/sess-1' });
+
+    await service.createVerificationSession('user-1', 'https://app/callback');
+
+    expect(prisma.kycVerification.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { providerSessionId: 'sess-1' },
+        update: { status: 'IN_PROGRESS', declineReason: null },
+      }),
+    );
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { kycStatus: 'IN_PROGRESS' },
+    });
+  });
+
+  it('rejects when the user is already APPROVED', async () => {
+    const { service, prisma, didit } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ kycStatus: 'APPROVED' });
+
+    await expect(
+      service.createVerificationSession('user-1', 'https://app/callback'),
+    ).rejects.toThrow(BadRequestException);
+    expect(didit.createSession).not.toHaveBeenCalled();
+  });
+});
+
 describe('KycService.cancelMyVerification', () => {
-  it('throws NotFoundException when the user has no active verification', async () => {
+  it('throws NotFoundException when neither the verification row nor User.kycStatus is active', async () => {
     const { service, prisma } = setup();
     prisma.kycVerification.findFirst.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ kycStatus: 'ABANDONED' });
 
     await expect(service.cancelMyVerification('user-1')).rejects.toThrow(NotFoundException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('falls back to resetting User.kycStatus when no matching row exists but the user is still marked non-terminal', async () => {
+    const { service, prisma } = setup();
+    prisma.kycVerification.findFirst.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ kycStatus: 'IN_REVIEW' });
+
+    const result = await service.cancelMyVerification('user-1');
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { kycStatus: 'ABANDONED' },
+    });
+    expect(result).toEqual({ cancelled: true });
   });
 
   it('abandons the most recent non-terminal verification and resets User.kycStatus', async () => {
