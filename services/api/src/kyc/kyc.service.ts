@@ -47,12 +47,18 @@ export class KycService {
       throw new BadRequestException('You are already verified');
     }
     const session = await this.didit.createSession(userId, callbackUrl);
-    await this.prisma.kycVerification.create({
-      data: {
+    // Didit can hand back an already-known session_id for the same
+    // vendor_data (e.g. the user re-opens the verification dialog while
+    // their prior session is still active) -- upsert instead of create so
+    // that replay doesn't 500 on the providerSessionId unique constraint.
+    await this.prisma.kycVerification.upsert({
+      where: { providerSessionId: session.sessionId },
+      create: {
         userId,
         providerSessionId: session.sessionId,
         status: KycStatus.IN_PROGRESS,
       },
+      update: {},
     });
     await this.prisma.user.update({
       where: { id: userId },
