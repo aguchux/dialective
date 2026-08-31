@@ -349,6 +349,14 @@ export function WordTrainingDialog({
     setSourcePlaying(false);
     try {
       setAssignment(await loadNext(session.sessionId, false).unwrap());
+      // Covers the session-start QRAC path: beginSession() sets step to
+      // 'loading' before the first loadNext call, and when that call 403s
+      // for QRAC, handleQracSigned() re-invokes THIS function to retry it.
+      // Without this, step stays stuck on 'loading' forever even though
+      // the assignment fetch above just succeeded -- the 'training' section
+      // below never renders because step === 'loading' still matches first.
+      // A no-op when already 'training' (the normal next-word case).
+      setStep('training');
     } catch (err) {
       if (isNoWordsAvailable(err)) {
         setStep('unavailable');
