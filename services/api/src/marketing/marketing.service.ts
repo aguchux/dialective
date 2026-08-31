@@ -13,7 +13,7 @@ import {
 import { UpdateMarketingHeadlineDto } from './dto/update-marketing-headline.dto';
 import { UpdateMarketingPhotoDto } from './dto/update-marketing-photo.dto';
 
-const MARKETING_BUCKET = process.env.SPACES_MARKETING_BUCKET ?? 'dialectiva-marketing';
+const DEFAULT_MARKETING_BUCKET = 'dialectiva-marketing';
 const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -53,13 +53,14 @@ export class MarketingService {
   async createUploadUrl(dto: CreateMarketingUploadUrlDto) {
     const extension = EXTENSION_BY_CONTENT_TYPE[dto.contentType];
     const key = `ads/${randomUUID()}.${extension}`;
+    const bucket = this.getMarketingBucket();
     const { url, expiresInSeconds } = await this.storage.createPresignedUploadUrl(
-      MARKETING_BUCKET,
+      bucket,
       key,
       dto.contentType,
       true, // publicRead -- the chosen photo becomes the OpenGraph image on a trainer's public /invite link
     );
-    return { uploadUrl: url, key, bucket: MARKETING_BUCKET, expiresInSeconds };
+    return { uploadUrl: url, key, bucket, expiresInSeconds };
   }
 
   createPhoto(dto: CreateMarketingPhotoDto) {
@@ -120,6 +121,19 @@ export class MarketingService {
     const photo = await this.prisma.marketingAdPhoto.findUnique({ where: { id } });
     if (!photo) throw new NotFoundException('Ad photo not found');
     return photo;
+  }
+
+  /**
+   * Marketing can use a dedicated public bucket, but production deployments
+   * that already share blog media storage must not silently sign against the
+   * obsolete default bucket. The explicit marketing setting always wins.
+   */
+  private getMarketingBucket(): string {
+    return (
+      process.env.SPACES_MARKETING_BUCKET ??
+      process.env.SPACES_BLOG_MEDIA_BUCKET ??
+      DEFAULT_MARKETING_BUCKET
+    );
   }
 
   private async mustFindHeadline(id: string) {

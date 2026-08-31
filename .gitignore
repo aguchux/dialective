@@ -1,10 +1,18 @@
 .env
+.env.test
 k8s/overlays/prod/secrets/*
 !k8s/overlays/prod/secrets/*.example
 k8s/overlays/prod/configs/*
 !k8s/overlays/prod/configs/*.example
 node_modules/
 dist/
+# Local-dev-only copy of models/asr-registry.yaml. AsrRegistryService
+# resolves it relative to its own compiled __dirname, which under ts-jest
+# (and any non-Docker "run from source" mode) lands at src/models/ --
+# Dockerfile's own copy step targets a different relative path (dist/models
+# in the built image). Local/non-Docker runs (e2e suite included) need it
+# materialized here too.
+services/api/src/models/
 packages/db/src/generated/
 services/api/prisma/seed.js
 services/api/prisma/seed.js.map

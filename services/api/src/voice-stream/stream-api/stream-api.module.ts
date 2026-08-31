@@ -19,6 +19,7 @@ import { StreamKeyRateLimitGuard } from './stream-key-rate-limit.guard';
 import { ConcurrentStreamGuard } from './concurrent-stream.guard';
 import { UsageCounterModule } from './usage-counter.module';
 import { QuotaGuard } from './quota.guard';
+import { OAuthJwtAuthGuard } from '../oauth/oauth-jwt-auth.guard';
 
 /**
  * Dialect Library Voice Stream -- Phase 3 (Voice Stream API). Stream Key
@@ -44,6 +45,7 @@ import { QuotaGuard } from './quota.guard';
     StreamAccessLogService,
     QuotaGuard,
     StreamKeyAuthGuard,
+    OAuthJwtAuthGuard,
     StreamKeyScopesGuard,
     StreamKeySubscriptionGuard,
     StreamKeyRateLimitGuard,

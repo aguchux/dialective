@@ -81,6 +81,50 @@ describe('MarketingService', () => {
     });
   });
 
+  describe('createUploadUrl', () => {
+    const originalMarketingBucket = process.env.SPACES_MARKETING_BUCKET;
+    const originalBlogBucket = process.env.SPACES_BLOG_MEDIA_BUCKET;
+
+    afterEach(() => {
+      if (originalMarketingBucket === undefined) delete process.env.SPACES_MARKETING_BUCKET;
+      else process.env.SPACES_MARKETING_BUCKET = originalMarketingBucket;
+      if (originalBlogBucket === undefined) delete process.env.SPACES_BLOG_MEDIA_BUCKET;
+      else process.env.SPACES_BLOG_MEDIA_BUCKET = originalBlogBucket;
+    });
+
+    it('uses the configured shared media bucket when no dedicated marketing bucket is set', async () => {
+      delete process.env.SPACES_MARKETING_BUCKET;
+      process.env.SPACES_BLOG_MEDIA_BUCKET = 'shared-media';
+
+      const upload = await service.createUploadUrl({
+        format: 'FEED_SQUARE',
+        contentType: 'image/png',
+      });
+
+      expect(storage.createPresignedUploadUrl).toHaveBeenCalledWith(
+        'shared-media',
+        expect.stringMatching(/^ads\/.+\.png$/),
+        'image/png',
+        true,
+      );
+      expect(upload.bucket).toBe('shared-media');
+    });
+
+    it('prefers a dedicated marketing bucket when configured', async () => {
+      process.env.SPACES_MARKETING_BUCKET = 'marketing-media';
+      process.env.SPACES_BLOG_MEDIA_BUCKET = 'shared-media';
+
+      await service.createUploadUrl({ format: 'STORY', contentType: 'image/webp' });
+
+      expect(storage.createPresignedUploadUrl).toHaveBeenCalledWith(
+        'marketing-media',
+        expect.stringMatching(/^ads\/.+\.webp$/),
+        'image/webp',
+        true,
+      );
+    });
+  });
+
   describe('getOrCreateShare', () => {
     it('rejects pairing a photo and headline of different formats', async () => {
       prisma.marketingAdPhoto.findUnique.mockResolvedValue({ id: 'p1', format: 'STORY' });
