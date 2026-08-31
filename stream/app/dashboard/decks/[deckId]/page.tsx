@@ -2,14 +2,18 @@
 
 import { FormEvent, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { History, Sparkles, Trash2 } from 'lucide-react';
+import { Globe, History, Lock, Sparkles, Trash2 } from 'lucide-react';
 import {
   IsvcConfidence,
+  StreamDeck,
   StreamDeckRule,
   useDeleteStreamDeckMutation,
   useGetStreamDeckQuery,
   useListStreamDeckVersionsQuery,
   useRemoveStreamDeckItemMutation,
+  useRemoveStreamDeckLicenseMutation,
+  useSetStreamDeckLicenseMutation,
+  useSetStreamDeckVisibilityMutation,
   useUpdateStreamDeckRuleMutation,
 } from '@/store/api';
 import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, SecondaryButton, TextInput } from '@/components/ui';
@@ -139,6 +143,141 @@ function RuleEditor({ deckId, rule }: { deckId: string; rule: StreamDeckRule | n
   );
 }
 
+function SharingCard({ deck }: { deck: StreamDeck }) {
+  const [setVisibility, { isLoading: togglingVisibility }] = useSetStreamDeckVisibilityMutation();
+  const [setLicense, { isLoading: savingLicense }] = useSetStreamDeckLicenseMutation();
+  const [removeLicense] = useRemoveStreamDeckLicenseMutation();
+  const [editingLicense, setEditingLicense] = useState(false);
+  const [termsSummary, setTermsSummary] = useState(deck.license?.termsSummary ?? '');
+  const [attributionRequired, setAttributionRequired] = useState(deck.license?.attributionRequired ?? false);
+  const [redistributionAllowed, setRedistributionAllowed] = useState(
+    deck.license?.redistributionAllowed ?? false,
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  const isPublic = deck.visibility === 'PUBLIC';
+
+  async function toggleVisibility() {
+    setError(null);
+    try {
+      await setVisibility({ id: deck.id, visibility: isPublic ? 'PRIVATE' : 'PUBLIC' }).unwrap();
+    } catch (err: any) {
+      setError(err?.data?.message ?? 'Unable to update visibility.');
+    }
+  }
+
+  async function saveLicense(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      await setLicense({ id: deck.id, termsSummary, attributionRequired, redistributionAllowed }).unwrap();
+      setEditingLicense(false);
+    } catch (err: any) {
+      setError(err?.data?.message ?? 'Unable to save this license.');
+    }
+  }
+
+  return (
+    <Card className="mb-6 p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          {isPublic ? (
+            <Globe aria-hidden="true" className="mt-0.5 size-5 text-emerald-600" />
+          ) : (
+            <Lock aria-hidden="true" className="mt-0.5 size-5 text-muted" />
+          )}
+          <div>
+            <p className="font-bold text-ink">{isPublic ? 'Public' : 'Private'}</p>
+            <p className="text-xs text-muted">
+              {isPublic
+                ? 'Other organizations can find this deck and copy its recordings into their own deck, or queue them for their own validators. They can never stream directly from this deck.'
+                : 'Only your organization can see this deck.'}
+            </p>
+          </div>
+        </div>
+        <SecondaryButton disabled={togglingVisibility} onClick={() => void toggleVisibility()} type="button">
+          {isPublic ? 'Make private' : 'Make public'}
+        </SecondaryButton>
+      </div>
+
+      {isPublic && (
+        <div className="mt-4 border-t border-line pt-4">
+          {!editingLicense && deck.license && (
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted">License terms</p>
+                <p className="mt-1 text-sm text-ink">{deck.license.termsSummary}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {deck.license.attributionRequired ? 'Attribution required' : 'No attribution required'} ·{' '}
+                  {deck.license.redistributionAllowed ? 'Redistribution allowed' : 'Redistribution not allowed'}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <SecondaryButton onClick={() => setEditingLicense(true)} type="button">
+                  Edit
+                </SecondaryButton>
+                <SecondaryButton onClick={() => void removeLicense(deck.id)} type="button">
+                  Remove
+                </SecondaryButton>
+              </div>
+            </div>
+          )}
+          {!editingLicense && !deck.license && (
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm text-muted">
+                No license attached -- other organizations can copy from this deck freely.
+              </p>
+              <SecondaryButton onClick={() => setEditingLicense(true)} type="button">
+                Add a license
+              </SecondaryButton>
+            </div>
+          )}
+          {editingLicense && (
+            <form className="grid gap-3" onSubmit={saveLicense}>
+              <div>
+                <FieldLabel>Terms summary</FieldLabel>
+                <textarea
+                  className="min-h-24 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                  onChange={(e) => setTermsSummary(e.target.value)}
+                  required
+                  value={termsSummary}
+                />
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-sm text-ink">
+                  <input
+                    checked={attributionRequired}
+                    onChange={(e) => setAttributionRequired(e.target.checked)}
+                    type="checkbox"
+                  />
+                  Attribution required
+                </label>
+                <label className="flex items-center gap-2 text-sm text-ink">
+                  <input
+                    checked={redistributionAllowed}
+                    onChange={(e) => setRedistributionAllowed(e.target.checked)}
+                    type="checkbox"
+                  />
+                  Redistribution allowed
+                </label>
+              </div>
+              <div className="flex gap-2">
+                <PrimaryButton disabled={savingLicense} type="submit">
+                  {savingLicense ? 'Saving...' : 'Save license'}
+                </PrimaryButton>
+                <SecondaryButton onClick={() => setEditingLicense(false)} type="button">
+                  Cancel
+                </SecondaryButton>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+      {error && <div className="mt-3">{<ErrorText>{error}</ErrorText>}</div>}
+    </Card>
+  );
+}
+
 function VersionHistory({ deckId }: { deckId: string }) {
   const { data: versions, isLoading } = useListStreamDeckVersionsQuery(deckId);
 
@@ -203,6 +342,8 @@ export default function StreamDeckDetailPage() {
           Delete deck
         </SecondaryButton>
       </div>
+
+      <SharingCard deck={deck} />
 
       {isSmart && <RuleEditor deckId={deck.id} rule={deck.rule} />}
 

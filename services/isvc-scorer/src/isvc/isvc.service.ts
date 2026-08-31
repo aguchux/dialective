@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { IsvcConfidence, Prisma } from '@dialectiva/db';
+import { IsvcConfidence, Prisma, ValidationReviewStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisStreamsService, StreamMessage } from '../redis-streams/redis-streams.service';
 import { computeAgreement, computeConfidence, countOutliers, mean, stdDev } from './aggregation.util';
@@ -78,15 +78,33 @@ export class IsvcService implements OnModuleInit {
    * Recomputes every org's normalized score for this recording from raw
    * SubscriberValidation rows -- cheap (a handful of rows per org per
    * recording), and simpler than diffing which org's validators actually
-   * changed since the last run.
+   * changed since the last run. Only APPROVED rows count -- PENDING
+   * validations haven't cleared org-internal peer review yet, and
+   * REJECTED ones were explicitly retracted by the org (Phase 2 approve/
+   * reject workflow, docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md
+   * section 59).
    */
   private async refreshOrgConsensus(recordingId: string): Promise<void> {
     const grouped = await this.prisma.subscriberValidation.groupBy({
       by: ['organizationId'],
-      where: { recordingId },
+      where: { recordingId, status: ValidationReviewStatus.APPROVED },
       _avg: { overallScore: true },
       _count: { _all: true },
     });
+
+    const groupedOrgIds = new Set(grouped.map((g) => g.organizationId));
+
+    // An org that had a consensus row from a now-rejected/resubmitted
+    // validation but no longer has ANY approved validation for this
+    // recording must have its stale consensus row removed -- otherwise
+    // it keeps contributing a now-nonexistent score to ISVC forever.
+    await this.prisma.organizationValidationConsensus.deleteMany({
+      where: { recordingId, organizationId: { notIn: [...groupedOrgIds] } },
+    });
+
+    if (grouped.length === 0) {
+      return;
+    }
 
     await this.prisma.$transaction(
       grouped.map((g) =>

@@ -8,6 +8,7 @@ import { SubscriberAccessTokenClaims } from '../subscriber-auth/subscriber-jwt.u
 import { RequireActiveSubscriptionGuard } from '../billing/require-active-subscription.guard';
 import { IsvpService } from './isvp.service';
 import { SubmitValidationDto } from './dto/submit-validation.dto';
+import { RejectValidationDto } from './dto/reject-validation.dto';
 
 const CAN_VALIDATE = [
   SubscriberOrgRole.OWNER,
@@ -15,6 +16,11 @@ const CAN_VALIDATE = [
   SubscriberOrgRole.DATASET_MANAGER,
   SubscriberOrgRole.VALIDATOR,
 ];
+
+// Peer review is deliberately narrower than CAN_VALIDATE -- a VALIDATOR
+// can submit but not approve/reject (even their own org's queue), so
+// review always comes from someone with broader org authority.
+const CAN_REVIEW = [SubscriberOrgRole.OWNER, SubscriberOrgRole.ADMIN, SubscriberOrgRole.DATASET_MANAGER];
 
 @Controller('voice-stream/isvp')
 @UseGuards(SubscriberAuthGuard)
@@ -30,6 +36,44 @@ export class IsvpController {
     @Body() dto: SubmitValidationDto,
   ) {
     return this.isvp.submit(subscriber.organizationId, subscriber.sub, recordingId, dto);
+  }
+
+  @Get('queue')
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_REVIEW)
+  listQueue(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
+    return this.isvp.listQueue(subscriber.organizationId);
+  }
+
+  @Post(':validationId/approve')
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_REVIEW)
+  approve(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Param('validationId') validationId: string,
+  ) {
+    return this.isvp.approve(subscriber.organizationId, subscriber.sub, validationId);
+  }
+
+  @Post(':validationId/reject')
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_REVIEW)
+  reject(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Param('validationId') validationId: string,
+    @Body() dto: RejectValidationDto,
+  ) {
+    return this.isvp.reject(subscriber.organizationId, subscriber.sub, validationId, dto);
+  }
+
+  @Get(':validationId/audit-log')
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_REVIEW)
+  getAuditLog(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Param('validationId') validationId: string,
+  ) {
+    return this.isvp.getAuditLog(subscriber.organizationId, validationId);
   }
 
   @Get('recordings/:recordingId/mine')

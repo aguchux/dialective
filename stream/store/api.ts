@@ -92,13 +92,30 @@ export interface ValidationDimensions {
   notes?: string;
 }
 
+export type ValidationReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
 export interface SubscriberValidation extends ValidationDimensions {
   id: string;
   organizationId: string;
   userId: string;
   recordingId: string;
   createdAt: string;
+  status: ValidationReviewStatus;
+  reviewedByUserId: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
   user?: { firstName: string; lastName: string; email: string };
+}
+
+export type ValidationAuditAction = 'SUBMITTED' | 'RESUBMITTED' | 'APPROVED' | 'REJECTED';
+
+export interface ValidationAuditLogEntry {
+  id: string;
+  validationId: string;
+  action: ValidationAuditAction;
+  actorUserId: string;
+  reason: string | null;
+  createdAt: string;
 }
 
 export interface OrgContribution {
@@ -152,16 +169,49 @@ export interface StreamDeckVersion {
   createdReason: string;
 }
 
+export type StreamDeckVisibility = 'PRIVATE' | 'PUBLIC';
+
+export interface DeckLicense {
+  termsSummary: string;
+  attributionRequired: boolean;
+  redistributionAllowed: boolean;
+}
+
 export interface StreamDeck {
   id: string;
   deckKey: string;
   name: string;
   type: StreamDeckType;
+  visibility: StreamDeckVisibility;
   rule?: StreamDeckRule | null;
+  license?: DeckLicense | null;
   createdByUserId: string;
   createdAt: string;
   _count?: { items: number };
   items?: StreamDeckItem[];
+}
+
+export interface PublicDeckSummary {
+  id: string;
+  deckKey: string;
+  name: string;
+  organizationName: string;
+  itemCount: number;
+  createdAt: string;
+  hasLicense: boolean;
+  licenseAccepted: boolean;
+  license: DeckLicense | null;
+  minQualityTier: QualityTier;
+  tierBreakdown: Record<QualityTier, number>;
+}
+
+export interface ValidationQueueItem {
+  id: string;
+  organizationId: string;
+  recordingId: string;
+  sourceDeckId: string | null;
+  addedByUserId: string;
+  addedAt: string;
 }
 
 export type StreamKeyScope =
@@ -340,6 +390,8 @@ export const streamApi = createApi({
     'Webhooks',
     'Reports',
     'OAuthClients',
+    'PublicDecks',
+    'ValidationQueue',
   ],
   endpoints: (builder) => ({
     getMe: builder.query<SubscriberMe, void>({
@@ -437,6 +489,29 @@ export const streamApi = createApi({
       providesTags: ['Validations'],
     }),
 
+    listValidationQueue: builder.query<SubscriberValidation[], void>({
+      query: () => '/isvp/queue',
+      providesTags: ['Validations'],
+    }),
+
+    approveValidation: builder.mutation<SubscriberValidation, string>({
+      query: (validationId) => ({ url: `/isvp/${validationId}/approve`, method: 'POST' }),
+      invalidatesTags: ['Validations'],
+    }),
+
+    rejectValidation: builder.mutation<SubscriberValidation, { validationId: string; reason: string }>({
+      query: ({ validationId, reason }) => ({
+        url: `/isvp/${validationId}/reject`,
+        method: 'POST',
+        body: { reason },
+      }),
+      invalidatesTags: ['Validations'],
+    }),
+
+    getValidationAuditLog: builder.query<ValidationAuditLogEntry[], string>({
+      query: (validationId) => `/isvp/${validationId}/audit-log`,
+    }),
+
     listStreamDecks: builder.query<StreamDeck[], void>({
       query: () => '/stream-decks',
       providesTags: ['StreamDecks'],
@@ -497,6 +572,62 @@ export const streamApi = createApi({
         method: 'DELETE',
       }),
       invalidatesTags: (_result, _error, { deckId }) => [{ type: 'StreamDecks', id: deckId }],
+    }),
+
+    setStreamDeckVisibility: builder.mutation<StreamDeck, { id: string; visibility: StreamDeckVisibility }>({
+      query: ({ id, visibility }) => ({
+        url: `/stream-decks/${id}/visibility`,
+        method: 'PATCH',
+        body: { visibility },
+      }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'StreamDecks', id }, 'PublicDecks'],
+    }),
+
+    setStreamDeckLicense: builder.mutation<
+      DeckLicense,
+      { id: string; termsSummary: string; attributionRequired?: boolean; redistributionAllowed?: boolean }
+    >({
+      query: ({ id, ...body }) => ({ url: `/stream-decks/${id}/license`, method: 'POST', body }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'StreamDecks', id }, 'PublicDecks'],
+    }),
+
+    removeStreamDeckLicense: builder.mutation<void, string>({
+      query: (id) => ({ url: `/stream-decks/${id}/license`, method: 'DELETE' }),
+      invalidatesTags: (_result, _error, id) => [{ type: 'StreamDecks', id }, 'PublicDecks'],
+    }),
+
+    listPublicDecks: builder.query<PublicDeckSummary[], { minQualityTier?: QualityTier } | void>({
+      query: (params) => ({ url: '/public-decks', params: params ?? undefined }),
+      providesTags: ['PublicDecks'],
+    }),
+
+    acceptPublicDeckLicense: builder.mutation<{ id: string }, string>({
+      query: (id) => ({ url: `/public-decks/${id}/accept-license`, method: 'POST' }),
+      invalidatesTags: ['PublicDecks'],
+    }),
+
+    copyPublicDeckToMine: builder.mutation<StreamDeck, { id: string; newDeckName: string }>({
+      query: ({ id, newDeckName }) => ({
+        url: `/public-decks/${id}/copy-to-mine`,
+        method: 'POST',
+        body: { newDeckName },
+      }),
+      invalidatesTags: ['StreamDecks'],
+    }),
+
+    importPublicDeckToValidationQueue: builder.mutation<{ queued: number; alreadyQueued: number }, string>({
+      query: (id) => ({ url: `/public-decks/${id}/import-to-validation-queue`, method: 'POST' }),
+      invalidatesTags: ['ValidationQueue'],
+    }),
+
+    listValidationShortlist: builder.query<ValidationQueueItem[], void>({
+      query: () => '/public-decks/validation-queue',
+      providesTags: ['ValidationQueue'],
+    }),
+
+    removeFromValidationShortlist: builder.mutation<void, string>({
+      query: (itemId) => ({ url: `/public-decks/validation-queue/${itemId}`, method: 'DELETE' }),
+      invalidatesTags: ['ValidationQueue'],
     }),
 
     listStreamKeys: builder.query<StreamApiKeySummary[], void>({
@@ -600,6 +731,10 @@ export const {
   useGetMyValidationsForRecordingQuery,
   useListMyValidationsQuery,
   useGetOrgContributionQuery,
+  useListValidationQueueQuery,
+  useApproveValidationMutation,
+  useRejectValidationMutation,
+  useGetValidationAuditLogQuery,
   useListStreamDecksQuery,
   useGetStreamDeckQuery,
   useCreateStreamDeckMutation,
@@ -609,6 +744,15 @@ export const {
   useDeleteStreamDeckMutation,
   useAddStreamDeckItemMutation,
   useRemoveStreamDeckItemMutation,
+  useSetStreamDeckVisibilityMutation,
+  useSetStreamDeckLicenseMutation,
+  useRemoveStreamDeckLicenseMutation,
+  useListPublicDecksQuery,
+  useAcceptPublicDeckLicenseMutation,
+  useCopyPublicDeckToMineMutation,
+  useImportPublicDeckToValidationQueueMutation,
+  useListValidationShortlistQuery,
+  useRemoveFromValidationShortlistMutation,
   useListStreamKeysQuery,
   useCreateStreamKeyMutation,
   useRotateStreamKeyMutation,

@@ -107,7 +107,7 @@ export class StreamDecksService {
   async get(organizationId: string, deckId: string) {
     const deck = await this.prisma.streamDeck.findUnique({
       where: { id: deckId },
-      include: { items: { orderBy: { addedAt: 'desc' } }, rule: true },
+      include: { items: { orderBy: { addedAt: 'desc' } }, rule: true, license: true },
     });
     if (!deck || deck.organizationId !== organizationId) {
       throw new NotFoundException('Stream Deck not found');

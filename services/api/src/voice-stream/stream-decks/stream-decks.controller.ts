@@ -16,10 +16,13 @@ import { CurrentSubscriber } from '../subscriber-auth/current-subscriber.decorat
 import { SubscriberAccessTokenClaims } from '../subscriber-auth/subscriber-jwt.util';
 import { RequireActiveSubscriptionGuard } from '../billing/require-active-subscription.guard';
 import { StreamDecksService } from './stream-decks.service';
+import { PublicDecksService } from './public-decks.service';
 import { CreateStreamDeckDto } from './dto/create-stream-deck.dto';
 import { UpdateStreamDeckDto } from './dto/update-stream-deck.dto';
 import { AddStreamDeckItemDto } from './dto/add-stream-deck-item.dto';
 import { StreamDeckRuleDto } from './dto/stream-deck-rule.dto';
+import { SetDeckVisibilityDto } from './dto/set-deck-visibility.dto';
+import { SetDeckLicenseDto } from './dto/set-deck-license.dto';
 
 const CAN_MANAGE_DECKS = [
   SubscriberOrgRole.OWNER,
@@ -30,7 +33,10 @@ const CAN_MANAGE_DECKS = [
 @Controller('voice-stream/stream-decks')
 @UseGuards(SubscriberAuthGuard)
 export class StreamDecksController {
-  constructor(private readonly decks: StreamDecksService) {}
+  constructor(
+    private readonly decks: StreamDecksService,
+    private readonly publicDecks: PublicDecksService,
+  ) {}
 
   @Post()
   @UseGuards(SubscriberRolesGuard, RequireActiveSubscriptionGuard)
@@ -106,5 +112,34 @@ export class StreamDecksController {
   @Get(':id/versions')
   listVersions(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims, @Param('id') id: string) {
     return this.decks.listVersions(subscriber.organizationId, id);
+  }
+
+  @Patch(':id/visibility')
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_MANAGE_DECKS)
+  setVisibility(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: SetDeckVisibilityDto,
+  ) {
+    return this.publicDecks.setVisibility(subscriber.organizationId, id, dto.visibility);
+  }
+
+  @Post(':id/license')
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_MANAGE_DECKS)
+  setLicense(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: SetDeckLicenseDto,
+  ) {
+    return this.publicDecks.setLicense(subscriber.organizationId, id, subscriber.sub, dto);
+  }
+
+  @Delete(':id/license')
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_MANAGE_DECKS)
+  removeLicense(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims, @Param('id') id: string) {
+    return this.publicDecks.removeLicense(subscriber.organizationId, id);
   }
 }

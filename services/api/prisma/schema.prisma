@@ -183,12 +183,12 @@ model AssistantConversation {
 model AssistantMessage {
   id               String                @id @default(uuid())
   conversationId   String
-  conversation     AssistantConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation     AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   role             String
   content          String
-  createdAt        DateTime               @default(now())
-  convertedToFaqId String?                @unique
-  convertedToFaq   Faq?                   @relation(fields: [convertedToFaqId], references: [id], onDelete: SetNull)
+  createdAt        DateTime              @default(now())
+  convertedToFaqId String?               @unique
+  convertedToFaq   Faq?                  @relation(fields: [convertedToFaqId], references: [id], onDelete: SetNull)
 
   @@index([conversationId, createdAt])
   @@map("assistant_messages")
@@ -2268,19 +2268,21 @@ model SubscriberOrganization {
   stripeCustomerId String?  @unique
   createdAt        DateTime @default(now())
 
-  memberships           SubscriberMembership[]
-  invites               SubscriberInvite[]
-  subscription          Subscription?
-  streamDecks           StreamDeck[]
-  validations           SubscriberValidation[]
-  organizationConsensus OrganizationValidationConsensus[]
-  streamApiKeys         StreamApiKey[]
-  webhookSubscriptions  WebhookSubscription[]
-  oauthClients          OAuthClient[]
-  activityEvents        OrgActivityEvent[]
-  anomalyEvents         AnomalyEvent[]
-  usageCounters         UsageCounter[]
-  sourceDataAccessLead  DataAccessLead?
+  memberships            SubscriberMembership[]
+  invites                SubscriberInvite[]
+  subscription           Subscription?
+  streamDecks            StreamDeck[]
+  validations            SubscriberValidation[]
+  organizationConsensus  OrganizationValidationConsensus[]
+  streamApiKeys          StreamApiKey[]
+  webhookSubscriptions   WebhookSubscription[]
+  oauthClients           OAuthClient[]
+  activityEvents         OrgActivityEvent[]
+  anomalyEvents          AnomalyEvent[]
+  usageCounters          UsageCounter[]
+  sourceDataAccessLead   DataAccessLead?
+  deckLicenseAcceptances DeckLicenseAcceptance[]
+  validationQueueItems   ValidationQueueItem[]
 
   @@map("subscriber_organizations")
 }
@@ -2444,6 +2446,11 @@ enum StreamDeckType {
   SMART
 }
 
+enum StreamDeckVisibility {
+  PRIVATE
+  PUBLIC
+}
+
 model StreamDeck {
   id              String                 @id @default(uuid())
   deckKey         String                 @unique // "DLSD-{country}-{dialect}-{subdialect}-{6 chars}" per the product plan section 9.2
@@ -2454,14 +2461,87 @@ model StreamDeck {
   createdByUserId String
   createdAt       DateTime               @default(now())
 
+  // Phase 5 "high-confidence dataset packages" (doc section 62) -- a public
+  // deck is discoverable and browsable by OTHER organizations, but NEVER
+  // streamable by them: manifest/audio access stays scoped to
+  // organizationId exactly as before, unchanged. A foreign org may only
+  // copy a public deck's recordings into a new deck of their own, or queue
+  // them for their own validators (see ValidationQueueItem below) --
+  // never call the deck's own manifest/audio endpoints directly. Reverting
+  // PUBLIC -> PRIVATE does not retract copies/queue-imports already made.
+  visibility StreamDeckVisibility @default(PRIVATE)
+
   items          StreamDeckItem[]
   streamApiKeys  StreamApiKey[]
   rule           StreamDeckRule?
   versions       StreamDeckVersion[]
   currentVersion StreamDeckCurrentVersion?
+  license        DeckLicense?
 
   @@index([organizationId])
+  @@index([visibility])
   @@map("stream_decks")
+}
+
+/// Terms a browsing (non-owning) org must accept before copying from or
+/// queuing validation on a PUBLIC deck -- doc section 62's "commercial
+/// licensing automation," scoped to acceptance tracking only (no payment
+/// flow: access is already gated by each org's own subscription). Only
+/// meaningful while the deck is PUBLIC; optional even then -- a public
+/// deck with no DeckLicense row requires no acceptance step.
+model DeckLicense {
+  id                    String     @id @default(uuid())
+  deckId                String     @unique
+  deck                  StreamDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  termsSummary          String // shown to the browsing org before they accept
+  attributionRequired   Boolean    @default(false)
+  redistributionAllowed Boolean    @default(false)
+  createdByUserId       String
+  updatedAt             DateTime   @updatedAt
+  createdAt             DateTime   @default(now())
+
+  acceptances DeckLicenseAcceptance[]
+
+  @@map("deck_licenses")
+}
+
+/// One row per (browsing organization, license) -- the license's own
+/// updatedAt is NOT compared against this on every check (re-accepting on
+/// every terms edit would break already-copied data for no benefit);
+/// acceptance is a one-time gate, same posture as the acceptance itself
+/// being a compliance record, not a live permission check.
+model DeckLicenseAcceptance {
+  id               String                 @id @default(uuid())
+  licenseId        String
+  license          DeckLicense            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  organizationId   String
+  organization     SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  acceptedByUserId String
+  acceptedAt       DateTime               @default(now())
+
+  @@unique([licenseId, organizationId])
+  @@map("deck_license_acceptances")
+}
+
+/// A recordingId a browsing org queued from someone else's PUBLIC deck for
+/// its OWN validators to pick up and score -- deliberately NOT a
+/// SubscriberValidation row (no scores exist yet at import time).
+/// SubmitValidationDto submission later against the same recordingId is
+/// unrelated at the schema level; this table is only a shortlist/to-do
+/// surface, matching the "add to validation list" access this org
+/// requested (not any change to ISVP submission itself).
+model ValidationQueueItem {
+  id             String                 @id @default(uuid())
+  organizationId String
+  organization   SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recordingId    String
+  sourceDeckId   String? // the PUBLIC deck this was queued from, if any -- no FK, deck may later go private/be deleted without breaking this record
+  addedByUserId  String
+  addedAt        DateTime               @default(now())
+
+  @@unique([organizationId, recordingId])
+  @@index([organizationId])
+  @@map("validation_queue_items")
 }
 
 model StreamDeckItem {
@@ -2599,6 +2679,18 @@ enum IsvcConfidence {
   VERY_HIGH
 }
 
+/// Org-internal peer review state for a SubscriberValidation -- gates
+/// whether it counts toward ISVC aggregation (product plan section 59's
+/// "validation queues" / "approve/reject" bullets). Reviewed by someone
+/// in the SAME org as the submitter (OWNER/ADMIN/DATASET_MANAGER), never
+/// by Dialect Library platform staff -- this is peer review, not platform
+/// moderation.
+enum ValidationReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 /// One subscriber organization's validation of one WordRecording, submitted
 /// by one validator (userId) on behalf of their org. A single org may have
 /// multiple validators submit for the same recording --
@@ -2620,12 +2712,44 @@ model SubscriberValidation {
   audioQuality          Int
   overallScore          Int // the validator's own rollup; NOT re-derived from the dimensions above (validator's holistic judgment, dimensions are supporting detail)
   notes                 String? // private to the org, never surfaced in ISVC aggregates (product plan section 23)
+  status                ValidationReviewStatus @default(PENDING) // only APPROVED rows feed OrganizationValidationConsensus -- see isvc-scorer's refreshOrgConsensus
+  reviewedByUserId      String? // SubscriberUser.id of the org peer who approved/rejected -- no FK, same loose-coupling shape as recordingId (reviewer may leave the org later without breaking history)
+  reviewedAt            DateTime?
+  rejectionReason       String? // required on reject, shown back to the submitter; cleared on a fresh resubmission
   createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  auditLogs ValidationAuditLog[]
 
   @@unique([organizationId, userId, recordingId]) // one active validation per validator per recording; resubmission overwrites via upsert
   @@index([recordingId])
   @@index([organizationId, recordingId])
+  @@index([organizationId, status])
   @@map("subscriber_validations")
+}
+
+enum ValidationAuditAction {
+  SUBMITTED
+  RESUBMITTED
+  APPROVED
+  REJECTED
+}
+
+/// Append-only audit trail of every SubscriberValidation state transition
+/// (product plan section 59's "validation audit logs" bullet) -- never
+/// updated or deleted, unlike SubscriberValidation itself which is
+/// mutated in place on resubmission/review.
+model ValidationAuditLog {
+  id           String                @id @default(uuid())
+  validationId String
+  validation   SubscriberValidation  @relation(fields: [validationId], references: [id], onDelete: Cascade)
+  action       ValidationAuditAction
+  actorUserId  String // the SubscriberUser who performed the action (submitter for SUBMITTED/RESUBMITTED, reviewer for APPROVED/REJECTED)
+  reason       String? // rejection reason, when action = REJECTED
+  createdAt    DateTime              @default(now())
+
+  @@index([validationId, createdAt])
+  @@map("validation_audit_logs")
 }
 
 /// One row per (organization, recording) -- the org-normalized score

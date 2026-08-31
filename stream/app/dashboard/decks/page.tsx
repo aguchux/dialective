@@ -230,12 +230,19 @@ export default function StreamDecksPage() {
               <Card className="p-5 transition-shadow hover:shadow-md">
                 <div className="mb-2 flex items-center justify-between">
                   <Layers aria-hidden="true" className="size-5 text-accent" />
-                  {deck.type === 'SMART' && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent-dark">
-                      <Sparkles aria-hidden="true" className="size-3" />
-                      Smart
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {deck.visibility === 'PUBLIC' && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                        Public
+                      </span>
+                    )}
+                    {deck.type === 'SMART' && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent-dark">
+                        <Sparkles aria-hidden="true" className="size-3" />
+                        Smart
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <p className="font-bold text-ink">{deck.name}</p>
                 <p className="mt-1 text-xs text-muted">{deck.deckKey}</p>

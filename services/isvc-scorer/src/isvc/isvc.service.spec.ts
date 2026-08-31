@@ -4,7 +4,11 @@ import { IsvcService } from './isvc.service';
 function setup() {
   const prisma = {
     subscriberValidation: { groupBy: jest.fn() },
-    organizationValidationConsensus: { upsert: jest.fn(), findMany: jest.fn() },
+    organizationValidationConsensus: {
+      upsert: jest.fn(),
+      findMany: jest.fn(),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     isvcCurrent: { findUnique: jest.fn(), upsert: jest.fn() },
     isvcAggregation: { create: jest.fn() },
     $transaction: undefined as unknown as jest.Mock,
@@ -30,6 +34,36 @@ describe('IsvcService.recalculate', () => {
     await service.recalculate('rec-1');
 
     expect(prisma.isvcAggregation.create).not.toHaveBeenCalled();
+  });
+
+  it('only counts APPROVED validations in the org-consensus groupBy', async () => {
+    const { prisma, service } = setup();
+    prisma.subscriberValidation.groupBy.mockResolvedValue([]);
+    prisma.organizationValidationConsensus.findMany.mockResolvedValue([]);
+
+    await service.recalculate('rec-1');
+
+    expect(prisma.subscriberValidation.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { recordingId: 'rec-1', status: 'APPROVED' } }),
+    );
+  });
+
+  it('removes stale OrganizationValidationConsensus rows for orgs with no remaining APPROVED validation', async () => {
+    const { prisma, service } = setup();
+    // org-A's only validation was rejected/resubmitted -- no longer appears
+    // in the APPROVED groupBy, so its old consensus row must be dropped.
+    prisma.subscriberValidation.groupBy.mockResolvedValue([
+      { organizationId: 'org-B', _avg: { overallScore: 90 }, _count: { _all: 1 } },
+    ]);
+    prisma.organizationValidationConsensus.findMany.mockResolvedValue([{ meanScore: new Prisma.Decimal(90) }]);
+    prisma.isvcCurrent.findUnique.mockResolvedValue(null);
+    prisma.isvcAggregation.create.mockResolvedValue({ id: 'agg-1' });
+
+    await service.recalculate('rec-1');
+
+    expect(prisma.organizationValidationConsensus.deleteMany).toHaveBeenCalledWith({
+      where: { recordingId: 'rec-1', organizationId: { notIn: ['org-B'] } },
+    });
   });
 
   it('org-normalizes: two validators from the same org contribute one org-score, not two', async () => {
