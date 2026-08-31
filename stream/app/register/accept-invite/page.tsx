@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
+import { AuthShellHeader } from '@/components/AuthShellHeader';
 import { Card, ErrorText, FieldLabel, PrimaryButton, TextInput } from '@/components/ui';
 
 function AcceptInviteForm() {
@@ -55,10 +56,7 @@ export default function AcceptInvitePage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-12">
       <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <p className="text-sm font-bold uppercase tracking-widest text-accent">Voice Stream</p>
-          <h1 className="mt-1 text-2xl font-black text-ink">Join your team</h1>
-        </div>
+        <AuthShellHeader title="Join your team" />
         <Card className="p-6">
           <Suspense fallback={<p className="text-sm text-muted">Loading...</p>}>
             <AcceptInviteForm />

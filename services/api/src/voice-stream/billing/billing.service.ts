@@ -58,10 +58,44 @@ export class BillingService {
     organizationId: string,
     userEmail: string,
     planKey: string,
-  ): Promise<{ checkoutUrl: string }> {
+  ): Promise<{ checkoutUrl?: string; activated?: true }> {
     const plan = await this.prisma.subscriptionPlan.findUnique({ where: { key: planKey } });
     if (!plan || !plan.active) {
       throw new NotFoundException('Unknown subscription plan');
+    }
+
+    if (plan.monthlyUsdAmount.eq(0)) {
+      const currentSubscription = await this.prisma.subscription.findUnique({
+        where: { organizationId },
+        select: { stripeSubscriptionId: true },
+      });
+      // A downgrade must stop any existing Stripe billing before the internal
+      // free access is activated. Fresh free organizations need no Stripe key.
+      if (currentSubscription?.stripeSubscriptionId) {
+        const stripe = await this.getStripe();
+        await stripe.subscriptions.cancel(currentSubscription.stripeSubscriptionId);
+      }
+      await this.prisma.subscription.upsert({
+        where: { organizationId },
+        create: { organizationId, planId: plan.id, status: SubscriptionStatus.ACTIVE },
+        update: {
+          planId: plan.id,
+          status: SubscriptionStatus.ACTIVE,
+          stripeSubscriptionId: null,
+          currentPeriodStart: null,
+          currentPeriodEnd: null,
+          cancelAtPeriodEnd: false,
+        },
+      });
+      void this.webhookEvents.emit(organizationId, WebhookEventType.SUBSCRIPTION_ACTIVATED, {
+        organization_id: organizationId,
+        plan_key: plan.key,
+        free: true,
+      });
+      return { activated: true };
+    }
+    if (!plan.stripePriceId) {
+      throw new BadRequestException('This paid plan has no Stripe Price ID configured');
     }
 
     const org = await this.prisma.subscriberOrganization.findUniqueOrThrow({

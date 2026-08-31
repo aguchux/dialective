@@ -2389,7 +2389,8 @@ model SubscriptionPlan {
   id                   String          @id @default(uuid())
   key                  String          @unique // "starter" | "professional" | "enterprise"
   name                 String
-  stripePriceId        String          @unique
+  // Free plans never go through Stripe Checkout and therefore have no Price.
+  stripePriceId        String?         @unique
   monthlyUsdAmount     Decimal         @db.Decimal(10, 2)
   maxStreamDecks       Int? // null = unlimited
   maxTeamMembers       Int?

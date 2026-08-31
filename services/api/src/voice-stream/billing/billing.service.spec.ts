@@ -4,6 +4,7 @@ jest.mock('stripe', () => {
     webhooks: { constructEvent: constructEventMock },
     customers: { create: jest.fn() },
     checkout: { sessions: { create: jest.fn() } },
+    subscriptions: { cancel: jest.fn() },
   }));
 });
 
@@ -145,6 +146,36 @@ describe('BillingService.handleWebhook', () => {
       where: { stripeSubscriptionId: 'sub_1' },
       data: { status: SubscriptionStatus.CANCELED },
     });
+  });
+});
+
+describe('BillingService.createCheckoutSession', () => {
+  it('activates a free plan without creating a Stripe customer or Checkout session', async () => {
+    const { service, prisma, webhookEvents } = setup();
+    prisma.subscriptionPlan.findUnique.mockResolvedValue({
+      id: 'plan-free',
+      key: 'community',
+      active: true,
+      monthlyUsdAmount: { eq: (amount: number) => amount === 0 },
+      stripePriceId: null,
+    });
+    prisma.subscription.findUnique.mockResolvedValue(null);
+
+    await expect(service.createCheckoutSession('org-1', 'owner@example.com', 'community')).resolves.toEqual({
+      activated: true,
+    });
+
+    expect(prisma.subscription.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { organizationId: 'org-1' },
+        create: expect.objectContaining({ planId: 'plan-free', status: SubscriptionStatus.ACTIVE }),
+      }),
+    );
+    expect(webhookEvents.emit).toHaveBeenCalledWith(
+      'org-1',
+      expect.anything(),
+      expect.objectContaining({ free: true }),
+    );
   });
 });
 

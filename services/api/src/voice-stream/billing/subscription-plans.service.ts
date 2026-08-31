@@ -10,7 +10,7 @@ function serializePlan(plan: SubscriptionPlan) {
 export interface SubscriptionPlanInput {
   key: string;
   name: string;
-  stripePriceId: string;
+  stripePriceId?: string | null;
   monthlyUsdAmount: number;
   maxStreamDecks?: number | null;
   maxTeamMembers?: number | null;
@@ -26,9 +26,9 @@ export interface SubscriptionPlanInput {
 
 /**
  * Admin CRUD over SubscriptionPlan -- the 3 Voice Stream tiers (starter,
- * professional, enterprise) and their Stripe Price ids. BillingService.
- * createCheckoutSession reads plan.stripePriceId straight from this table,
- * so this is the only place a Price id is ever configured -- no env var,
+ * professional, enterprise) and their Stripe Price ids. Free plans have no
+ * Price id and are activated internally; paid plans are sent to Checkout.
+ * This is the only place a Price id is ever configured -- no env var,
  * no k8s secret (see docs/Dialect_Library_Voice_Stream_ISVP_ISVC_Plan.md's
  * Stripe billing section). Deliberately upsert-by-key rather than a
  * separate create/update pair: an admin editing the "starter" row and an
@@ -64,28 +64,35 @@ export class SubscriptionPlansService {
 
   async upsert(input: SubscriptionPlanInput) {
     const key = input.key.trim();
-    const stripePriceId = input.stripePriceId.trim();
+    const monthlyUsdAmount = Number(input.monthlyUsdAmount);
+    const stripePriceId = input.stripePriceId?.trim() || null;
     if (!key) {
       throw new BadRequestException('key is required');
     }
-    if (!stripePriceId) {
-      throw new BadRequestException('stripePriceId is required');
+    if (!Number.isFinite(monthlyUsdAmount) || monthlyUsdAmount < 0) {
+      throw new BadRequestException('monthlyUsdAmount must be zero or greater');
     }
-    const clashing = await this.prisma.subscriptionPlan.findFirst({
-      where: { stripePriceId, key: { not: key } },
-    });
-    if (clashing) {
-      throw new BadRequestException(
-        `stripePriceId is already used by plan "${clashing.key}" -- each plan needs its own Stripe Price id`,
-      );
+    if (monthlyUsdAmount > 0 && !stripePriceId) {
+      throw new BadRequestException('stripePriceId is required for a paid plan');
+    }
+    const effectiveStripePriceId = monthlyUsdAmount === 0 ? null : stripePriceId;
+    if (effectiveStripePriceId) {
+      const clashing = await this.prisma.subscriptionPlan.findFirst({
+        where: { stripePriceId: effectiveStripePriceId, key: { not: key } },
+      });
+      if (clashing) {
+        throw new BadRequestException(
+          `stripePriceId is already used by plan "${clashing.key}" -- each plan needs its own Stripe Price id`,
+        );
+      }
     }
     const row = await this.prisma.subscriptionPlan.upsert({
       where: { key },
       create: {
         key,
         name: input.name.trim(),
-        stripePriceId,
-        monthlyUsdAmount: input.monthlyUsdAmount,
+        stripePriceId: effectiveStripePriceId,
+        monthlyUsdAmount,
         maxStreamDecks: input.maxStreamDecks ?? null,
         maxTeamMembers: input.maxTeamMembers ?? null,
         minIsvcConfidence: input.minIsvcConfidence ?? null,
@@ -96,8 +103,8 @@ export class SubscriptionPlansService {
       },
       update: {
         name: input.name.trim(),
-        stripePriceId,
-        monthlyUsdAmount: input.monthlyUsdAmount,
+        stripePriceId: effectiveStripePriceId,
+        monthlyUsdAmount,
         maxStreamDecks: input.maxStreamDecks ?? null,
         maxTeamMembers: input.maxTeamMembers ?? null,
         minIsvcConfidence: input.minIsvcConfidence ?? null,

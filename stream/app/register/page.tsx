@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { apiClient, ApiError } from '@/lib/api-client';
+import { AuthShellHeader } from '@/components/AuthShellHeader';
 import { Card, ErrorText, FieldLabel, PrimaryButton, TextInput } from '@/components/ui';
 
 export default function RegisterPage() {
@@ -57,10 +58,7 @@ export default function RegisterPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-12">
       <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <p className="text-sm font-bold uppercase tracking-widest text-accent">Voice Stream</p>
-          <h1 className="mt-1 text-2xl font-black text-ink">Create your organization</h1>
-        </div>
+        <AuthShellHeader title="Create your organization" />
         <Card className="p-6">
           {step === 'details' ? (
             <form className="grid gap-4" onSubmit={submitDetails}>

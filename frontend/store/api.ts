@@ -1231,7 +1231,7 @@ export interface SubscriptionPlan {
   id: string;
   key: string;
   name: string;
-  stripePriceId: string;
+  stripePriceId: string | null;
   monthlyUsdAmount: string;
   maxStreamDecks: number | null;
   maxTeamMembers: number | null;
@@ -1259,7 +1259,7 @@ export interface PublicSubscriptionPlan {
 export interface SubscriptionPlanInput {
   key: string;
   name: string;
-  stripePriceId: string;
+  stripePriceId?: string | null;
   monthlyUsdAmount: number;
   maxStreamDecks?: number | null;
   maxTeamMembers?: number | null;

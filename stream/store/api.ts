@@ -386,7 +386,7 @@ export const streamApi = createApi({
       providesTags: ['Subscription'],
     }),
 
-    createCheckoutSession: builder.mutation<{ checkoutUrl: string }, { planKey: string }>({
+    createCheckoutSession: builder.mutation<{ checkoutUrl?: string; activated?: true }, { planKey: string }>({
       query: (body) => ({ url: '/billing/checkout-session', method: 'POST', body }),
     }),
 

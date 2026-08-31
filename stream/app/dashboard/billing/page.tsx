@@ -9,12 +9,16 @@ const PLAN_KEYS = ['starter', 'professional', 'enterprise'] as const;
 export default function BillingPage() {
   const searchParams = useSearchParams();
   const checkoutResult = searchParams.get('checkout');
-  const { data: subscription } = useGetSubscriptionQuery();
+  const { data: subscription, refetch: refetchSubscription } = useGetSubscriptionQuery();
   const [createCheckoutSession, { isLoading }] = useCreateCheckoutSessionMutation();
 
   async function subscribe(planKey: string) {
-    const { checkoutUrl } = await createCheckoutSession({ planKey }).unwrap();
-    window.location.href = checkoutUrl;
+    const result = await createCheckoutSession({ planKey }).unwrap();
+    if (result.checkoutUrl) {
+      window.location.href = result.checkoutUrl;
+      return;
+    }
+    await refetchSubscription();
   }
 
   return (

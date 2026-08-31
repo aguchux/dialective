@@ -165,7 +165,7 @@ function planToForm(plan: SubscriptionPlan) {
   return {
     key: plan.key,
     name: plan.name,
-    stripePriceId: plan.stripePriceId,
+    stripePriceId: plan.stripePriceId ?? '',
     monthlyUsdAmount: plan.monthlyUsdAmount,
     maxStreamDecks: plan.maxStreamDecks?.toString() ?? '',
     maxTeamMembers: plan.maxTeamMembers?.toString() ?? '',
@@ -271,12 +271,16 @@ function PlanForm({
     e.preventDefault();
     setError(null);
     const monthlyUsdAmount = Number(form.monthlyUsdAmount);
-    if (!form.key.trim() || !form.name.trim() || !form.stripePriceId.trim()) {
-      setError('Key, name, and Stripe Price id are required.');
+    if (!form.key.trim() || !form.name.trim()) {
+      setError('Key and name are required.');
       return;
     }
-    if (!Number.isFinite(monthlyUsdAmount) || monthlyUsdAmount <= 0) {
-      setError('Monthly USD amount must be a positive number.');
+    if (!Number.isFinite(monthlyUsdAmount) || monthlyUsdAmount < 0) {
+      setError('Monthly USD amount must be zero or greater.');
+      return;
+    }
+    if (monthlyUsdAmount > 0 && !form.stripePriceId.trim()) {
+      setError('Stripe Price id is required for a paid plan.');
       return;
     }
     try {
@@ -285,7 +289,7 @@ function PlanForm({
         data: {
           key: form.key.trim(),
           name: form.name.trim(),
-          stripePriceId: form.stripePriceId.trim(),
+          stripePriceId: monthlyUsdAmount === 0 ? null : form.stripePriceId.trim(),
           monthlyUsdAmount,
           maxStreamDecks: form.maxStreamDecks ? Number(form.maxStreamDecks) : null,
           maxTeamMembers: form.maxTeamMembers ? Number(form.maxTeamMembers) : null,
@@ -327,11 +331,12 @@ function PlanForm({
           />
         </label>
         <label className="grid gap-1 text-sm font-bold sm:col-span-2">
-          Stripe Price id
+          Stripe Price id {Number(form.monthlyUsdAmount) === 0 ? '(not used for free plans)' : ''}
           <input
             className={inputClass}
+            disabled={Number(form.monthlyUsdAmount) === 0}
             onChange={(e) => setForm({ ...form, stripePriceId: e.target.value })}
-            placeholder="price_1AbCdEfGhIjKlMn"
+            placeholder={Number(form.monthlyUsdAmount) === 0 ? 'Free plan: no Stripe price' : 'price_1AbCdEfGhIjKlMn'}
             value={form.stripePriceId}
           />
         </label>
@@ -465,7 +470,9 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
               (key: {plan.key}) -- ${plan.monthlyUsdAmount}/mo
             </span>
           </p>
-          <p className="mt-1 text-sm text-muted">Stripe Price: {plan.stripePriceId}</p>
+          <p className="mt-1 text-sm text-muted">
+            {Number(plan.monthlyUsdAmount) === 0 ? 'Free plan - no Stripe billing' : `Stripe Price: ${plan.stripePriceId}`}
+          </p>
           <p className="mt-1 text-sm text-muted">
             Stream decks: {plan.maxStreamDecks ?? 'unlimited'} -- Team members:{' '}
             {plan.maxTeamMembers ?? 'unlimited'}

@@ -23,11 +23,25 @@ describe('SubscriptionPlansService.upsert', () => {
     ).rejects.toThrow('key is required');
   });
 
-  it('rejects a blank stripePriceId', async () => {
+  it('allows a free plan without a Stripe Price id', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriptionPlan.upsert.mockResolvedValue({ key: 'community', monthlyByteQuota: null });
+
+    await service.upsert({ key: 'community', name: 'Community', monthlyUsdAmount: 0 });
+
+    expect(prisma.subscriptionPlan.findFirst).not.toHaveBeenCalled();
+    expect(prisma.subscriptionPlan.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ stripePriceId: null, monthlyUsdAmount: 0 }),
+      }),
+    );
+  });
+
+  it('requires a Stripe Price id for a paid plan', async () => {
     const { service } = setup();
     await expect(
       service.upsert({ key: 'starter', name: 'Starter', stripePriceId: '  ', monthlyUsdAmount: 10 }),
-    ).rejects.toThrow('stripePriceId is required');
+    ).rejects.toThrow('stripePriceId is required for a paid plan');
   });
 
   it('rejects a stripePriceId already used by a different plan', async () => {

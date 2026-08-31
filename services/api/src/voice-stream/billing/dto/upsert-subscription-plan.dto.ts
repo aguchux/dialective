@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsInt,
   IsNumber,
+  Min,
   IsOptional,
   IsPositive,
   IsString,
@@ -16,8 +17,8 @@ import {
 import { IsvcConfidence } from '@dialectiva/db';
 
 export class UpsertSubscriptionPlanDto {
+  @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(40)
   @Matches(/^[a-z0-9_-]+$/, {
     message: 'key must be lowercase letters, numbers, hyphens, or underscores only',
@@ -32,11 +33,11 @@ export class UpsertSubscriptionPlanDto {
   @IsString()
   @MinLength(1)
   @MaxLength(200)
-  stripePriceId!: string;
+  stripePriceId?: string | null;
 
   @Type(() => Number)
   @IsNumber()
-  @IsPositive()
+  @Min(0)
   monthlyUsdAmount!: number;
 
   @IsOptional()
