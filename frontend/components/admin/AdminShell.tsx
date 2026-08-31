@@ -236,12 +236,12 @@ function AdminSidebar({
         )}
       </div>
 
-      <nav className="grid flex-1 gap-0.5 overflow-y-auto px-3 pb-2">
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-2">
         {navGroups.map((group) => {
           const expanded = openGroup === group.label;
           const groupActive = groupIsActive(group, pathname);
           return (
-            <div className="grid gap-0.5" key={group.label}>
+            <div className="grid shrink-0 gap-0.5" key={group.label}>
               <button
                 aria-expanded={expanded}
                 className={`flex items-center gap-2 rounded-lg px-2 py-2 text-left text-[11px] font-black uppercase tracking-wider transition-colors ${
