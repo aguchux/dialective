@@ -8,15 +8,21 @@ const FEATURES = [
   { title: 'Scalable Streaming', body: 'Stream or integrate via powerful APIs.' },
 ];
 
+const ACCENT = '#2f6fed';
+const ACCENT_SOFT = '#1b2450';
+
 /**
  * Two-panel shell shared by login/register/accept-invite/reset-password:
  * a dark hero panel (product pitch, always dark regardless of the app's
- * light-mode default) beside a light panel holding the actual form. Mirrors
- * the dashboard's .stream-console dark palette for the left panel only.
+ * light-mode default) beside a light panel holding the actual form.
+ * Colors are hardcoded arbitrary-value Tailwind classes rather than the
+ * --color-bg/.stream-console CSS-variable scoping used elsewhere in this
+ * app -- that indirection did not reliably paint in production (root
+ * cause unresolved), so this shell sidesteps it entirely.
  */
 export function AuthShell({ eyebrow, children }: { eyebrow?: ReactNode; children: ReactNode }) {
   return (
-    <div className="stream-console grid min-h-screen bg-bg lg:grid-cols-2">
+    <div className="grid min-h-screen bg-[#0a0f1e] lg:grid-cols-2">
       <div className="relative hidden overflow-hidden px-10 py-10 lg:flex lg:flex-col lg:justify-between">
         <HeroBackdrop />
         <div className="relative z-10">
@@ -29,9 +35,9 @@ export function AuthShell({ eyebrow, children }: { eyebrow?: ReactNode; children
             <br />
             dialect data collected
             <br />
-            by <span className="text-accent">real speakers.</span>
+            by <span className="text-[#5c9bff]">real speakers.</span>
           </h1>
-          <div className="mt-4 h-1 w-14 rounded-full bg-accent" />
+          <div className="mt-4 h-1 w-14 rounded-full bg-[#2f6fed]" />
           <p className="mt-4 text-lg text-white/70">Curated, validated voice datasets for AI teams.</p>
         </div>
 
@@ -48,14 +54,14 @@ export function AuthShell({ eyebrow, children }: { eyebrow?: ReactNode; children
         </div>
       </div>
 
-      <div className="stream-console-light flex min-h-screen items-center justify-center bg-bg px-4 py-12">
+      <div className="flex min-h-screen items-center justify-center bg-white px-4 py-12">
         <div className="w-full max-w-md">
           <div className="mb-6 flex justify-center lg:hidden">
-            <BrandLogo href="" size={32} textClassName="text-lg" />
+            <BrandLogo href="" size={32} textClassName="text-lg text-[#12131f]" />
           </div>
           {eyebrow && (
             <div className="mb-4 flex justify-center">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-bold text-muted">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#dde0ec] bg-white px-3 py-1.5 text-xs font-bold text-[#5b5f76]">
                 {eyebrow}
               </span>
             </div>
@@ -74,7 +80,12 @@ function HeroBackdrop() {
   });
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-40">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,_var(--color-accent-soft),_transparent_55%)]" />
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `radial-gradient(circle at 20% 20%, ${ACCENT_SOFT}, transparent 55%)`,
+        }}
+      />
       <svg
         className="absolute inset-x-0 bottom-24 h-40 w-full"
         preserveAspectRatio="none"
@@ -82,7 +93,7 @@ function HeroBackdrop() {
       >
         {bars.map((h, i) => (
           <rect
-            fill="var(--color-accent)"
+            fill={ACCENT}
             height={h}
             key={i}
             opacity={0.5 + (i % 5) * 0.1}
@@ -98,7 +109,7 @@ function HeroBackdrop() {
 
 function FeatureIcon({ title }: { title: string }) {
   return (
-    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#1b2450] text-[#5c9bff]">
       <svg
         aria-hidden="true"
         className="size-4"
