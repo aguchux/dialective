@@ -568,7 +568,7 @@ export interface AdminWithdrawalRequest {
 }
 
 export type PayoutMethod = 'CRYPTO' | 'BANK' | 'MOBILE_MONEY';
-export type PayoutAccountType = 'BANK' | 'MOBILE_MONEY' | 'STABLECOIN_WALLET';
+export type PayoutAccountType = 'BANK' | 'MOBILE_MONEY' | 'STABLECOIN_WALLET' | 'STRIPE_CONNECT';
 export type PayoutAccountVerificationStatus = 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'FAILED';
 
 export interface PayoutAccount {
@@ -585,6 +585,9 @@ export interface PayoutAccount {
   accountName: string | null;
   mobileMoneyNetwork: string | null;
   mobileMoneyNumberMasked: string | null;
+  stripeConnectAccountId: string | null;
+  stripeDetailsSubmitted: boolean;
+  stripePayoutsEnabled: boolean;
   lastUsedAt: string | null;
   createdAt: string;
 }
@@ -2583,9 +2586,9 @@ export const dialectivaApi = createApi({
       providesTags: ['PayoutAccounts'],
     }),
     createPayoutAccount: builder.mutation<
-      PayoutAccount,
+      PayoutAccount & { onboardingUrl?: string },
       {
-        type: 'BANK' | 'MOBILE_MONEY';
+        type: 'BANK' | 'MOBILE_MONEY' | 'STRIPE_CONNECT';
         country: string;
         currency: string;
         bankCode?: string;
@@ -2600,6 +2603,13 @@ export const dialectivaApi = createApi({
     }),
     updatePayoutAccount: builder.mutation<PayoutAccount, { id: string; isDefault: boolean }>({
       query: ({ id, ...body }) => ({ url: `/payout-accounts/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['PayoutAccounts'],
+    }),
+    createStripePayoutOnboardingLink: builder.mutation<{ onboardingUrl: string }, string>({
+      query: (id) => ({ url: `/payout-accounts/${id}/stripe/onboarding-link`, method: 'POST' }),
+    }),
+    refreshStripePayoutAccountStatus: builder.mutation<PayoutAccount, string>({
+      query: (id) => ({ url: `/payout-accounts/${id}/stripe/refresh-status`, method: 'POST' }),
       invalidatesTags: ['PayoutAccounts'],
     }),
     requestPayoutAccountDeleteOtp: builder.mutation<
@@ -3845,6 +3855,8 @@ export const {
   useListAdminWithdrawalsQuery,
   useListPayoutAccountsQuery,
   useCreatePayoutAccountMutation,
+  useCreateStripePayoutOnboardingLinkMutation,
+  useRefreshStripePayoutAccountStatusMutation,
   useUpdatePayoutAccountMutation,
   useDeletePayoutAccountMutation,
   useRequestPayoutAccountDeleteOtpMutation,

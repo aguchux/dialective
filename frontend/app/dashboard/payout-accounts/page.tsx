@@ -11,8 +11,11 @@ import { DeletePayoutAccountDialog } from '@/components/wallet/DeletePayoutAccou
 import {
   normalizeErrorMessage,
   useCreatePayoutAccountMutation,
+  useCreateStripePayoutOnboardingLinkMutation,
+  useGetPlatformSettingsQuery,
   useListBanksQuery,
   useListPayoutAccountsQuery,
+  useRefreshStripePayoutAccountStatusMutation,
   useUpdatePayoutAccountMutation,
 } from '@/store/api';
 
@@ -44,7 +47,14 @@ export default function PayoutAccountsPage() {
   } = useListPayoutAccountsQuery(undefined, {
     skip: status !== 'authenticated',
   });
+  const { data: platformSettings } = useGetPlatformSettingsQuery(undefined, {
+    skip: status !== 'authenticated',
+  });
   const [updateAccount] = useUpdatePayoutAccountMutation();
+  const [createOnboardingLink, { isLoading: isCreatingLink }] =
+    useCreateStripePayoutOnboardingLinkMutation();
+  const [refreshStatus, { isLoading: isRefreshing }] =
+    useRefreshStripePayoutAccountStatusMutation();
   const [rowError, setRowError] = useState<string | null>(null);
   const [deletingAccount, setDeletingAccount] = useState<{ id: string; label: string } | null>(
     null,
@@ -56,6 +66,25 @@ export default function PayoutAccountsPage() {
       await updateAccount({ id, isDefault: true }).unwrap();
     } catch (err) {
       setRowError(normalizeErrorMessage(err, 'Unable to set this account as default.'));
+    }
+  }
+
+  async function handleContinueStripeOnboarding(id: string) {
+    setRowError(null);
+    try {
+      const { onboardingUrl } = await createOnboardingLink(id).unwrap();
+      window.location.href = onboardingUrl;
+    } catch (err) {
+      setRowError(normalizeErrorMessage(err, 'Unable to continue Stripe onboarding.'));
+    }
+  }
+
+  async function handleRefreshStripeStatus(id: string) {
+    setRowError(null);
+    try {
+      await refreshStatus(id).unwrap();
+    } catch (err) {
+      setRowError(normalizeErrorMessage(err, 'Unable to refresh Stripe status.'));
     }
   }
 
@@ -103,7 +132,9 @@ export default function PayoutAccountsPage() {
               <p className="font-extrabold">
                 {account.type === 'BANK'
                   ? (account.bankName ?? account.bankCode)
-                  : account.mobileMoneyNetwork}
+                  : account.type === 'MOBILE_MONEY'
+                    ? account.mobileMoneyNetwork
+                    : 'Stripe Connect'}
               </p>
               {account.isDefault && (
                 <span className="rounded-md bg-accent-soft px-2.5 py-1 text-xs font-extrabold text-accent-dark">
@@ -114,7 +145,11 @@ export default function PayoutAccountsPage() {
             <p className="text-sm text-muted">
               {account.type === 'BANK'
                 ? account.accountNumberMasked
-                : account.mobileMoneyNumberMasked}
+                : account.type === 'MOBILE_MONEY'
+                  ? account.mobileMoneyNumberMasked
+                  : account.stripePayoutsEnabled
+                    ? 'Onboarding complete -- ready for payouts'
+                    : 'Onboarding not finished yet'}
               {account.accountName ? ` · ${account.accountName}` : ''}
             </p>
             {account.type === 'MOBILE_MONEY' && account.verificationStatus === 'UNVERIFIED' && (
@@ -123,7 +158,34 @@ export default function PayoutAccountsPage() {
                 correct.
               </p>
             )}
+            {account.type === 'STRIPE_CONNECT' && !account.stripePayoutsEnabled && (
+              <p className="text-xs font-bold text-danger">
+                Finish setup on Stripe to enable payouts to this account.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
+              {account.type === 'STRIPE_CONNECT' && !account.stripePayoutsEnabled && (
+                <ActionButton
+                  className={secondaryButtonClass}
+                  onClick={() => handleContinueStripeOnboarding(account.id)}
+                  pending={isCreatingLink}
+                  pendingLabel="Opening Stripe..."
+                  type="button"
+                >
+                  Continue setup on Stripe
+                </ActionButton>
+              )}
+              {account.type === 'STRIPE_CONNECT' && !account.stripePayoutsEnabled && (
+                <ActionButton
+                  className={secondaryButtonClass}
+                  onClick={() => handleRefreshStripeStatus(account.id)}
+                  pending={isRefreshing}
+                  pendingLabel="Checking..."
+                  type="button"
+                >
+                  I finished -- check status
+                </ActionButton>
+              )}
               {!account.isDefault && (
                 <button
                   className={secondaryButtonClass}
@@ -141,7 +203,9 @@ export default function PayoutAccountsPage() {
                     label:
                       account.type === 'BANK'
                         ? (account.bankName ?? account.bankCode ?? 'this bank account')
-                        : (account.mobileMoneyNumberMasked ?? 'this mobile money account'),
+                        : account.type === 'MOBILE_MONEY'
+                          ? (account.mobileMoneyNumberMasked ?? 'this mobile money account')
+                          : 'this Stripe Connect account',
                   })
                 }
                 type="button"
@@ -153,7 +217,7 @@ export default function PayoutAccountsPage() {
         ))}
       </div>
 
-      <AddPayoutAccountDialog />
+      <AddPayoutAccountDialog stripeEnabled={platformSettings?.isStripePayoutsEnabled ?? false} />
       {deletingAccount && (
         <DeletePayoutAccountDialog
           account={deletingAccount}
@@ -164,9 +228,9 @@ export default function PayoutAccountsPage() {
   );
 }
 
-function AddPayoutAccountDialog() {
+function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<'BANK' | 'MOBILE_MONEY'>('BANK');
+  const [type, setType] = useState<'BANK' | 'MOBILE_MONEY' | 'STRIPE_CONNECT'>('BANK');
   const [countryCode, setCountryCode] = useState(FLUTTERWAVE_COUNTRIES[0].code);
   const [bankCode, setBankCode] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
@@ -188,18 +252,26 @@ function AddPayoutAccountDialog() {
       return;
     }
     try {
-      await createAccount({
+      const result = await createAccount({
         type,
         country: countryCode,
-        currency: selectedCountry.currency,
+        currency: type === 'STRIPE_CONNECT' ? 'USD' : selectedCountry.currency,
         ...(type === 'BANK'
           ? { bankCode, accountNumber }
-          : { mobileMoneyNetwork, mobileMoneyNumber }),
+          : type === 'MOBILE_MONEY'
+            ? { mobileMoneyNetwork, mobileMoneyNumber }
+            : {}),
       }).unwrap();
       setBankCode('');
       setAccountNumber('');
       setMobileMoneyNumber('');
       setOpen(false);
+      // A Stripe Connect account is useless until the trainer finishes
+      // Stripe's own hosted onboarding -- send them there immediately
+      // rather than leaving them on a saved-but-unusable account row.
+      if (type === 'STRIPE_CONNECT' && result.onboardingUrl) {
+        window.location.href = result.onboardingUrl;
+      }
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to save this payout account.'));
     }
@@ -215,15 +287,18 @@ function AddPayoutAccountDialog() {
         <form className="grid gap-3" onSubmit={handleSubmit}>
           <fieldset className="grid gap-2">
             <legend className="mb-1 text-sm font-bold">Type</legend>
-            <div className="grid grid-cols-2 gap-2">
+            <div className={`grid gap-2 ${stripeEnabled ? 'grid-cols-3' : 'grid-cols-2'}`}>
               {(
                 [
                   { value: 'BANK', label: 'Bank account' },
                   { value: 'MOBILE_MONEY', label: 'Mobile money' },
+                  ...(stripeEnabled
+                    ? [{ value: 'STRIPE_CONNECT' as const, label: 'Stripe' }]
+                    : []),
                 ] as const
               ).map((option) => (
                 <label
-                  className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border font-extrabold ${type === option.value ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
+                  className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border px-2 text-center font-extrabold ${type === option.value ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
                   key={option.value}
                 >
                   <input
@@ -239,22 +314,31 @@ function AddPayoutAccountDialog() {
             </div>
           </fieldset>
 
-          <label className="grid gap-1.5 text-sm font-bold">
-            Country
-            <select
-              className={inputClass}
-              onChange={(event) => setCountryCode(event.target.value)}
-              value={countryCode}
-            >
-              {FLUTTERWAVE_COUNTRIES.map((option) => (
-                <option key={option.code} value={option.code}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {type === 'STRIPE_CONNECT' && (
+            <p className="text-xs text-muted">
+              You&apos;ll be redirected to Stripe to enter and verify your bank details -- we
+              never see your raw bank account number for this option.
+            </p>
+          )}
 
-          {type === 'BANK' ? (
+          {type !== 'STRIPE_CONNECT' && (
+            <label className="grid gap-1.5 text-sm font-bold">
+              Country
+              <select
+                className={inputClass}
+                onChange={(event) => setCountryCode(event.target.value)}
+                value={countryCode}
+              >
+                {FLUTTERWAVE_COUNTRIES.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {type === 'BANK' && (
             <>
               <label className="grid gap-1.5 text-sm font-bold">
                 Bank
@@ -284,7 +368,9 @@ function AddPayoutAccountDialog() {
                 name before saving.
               </p>
             </>
-          ) : (
+          )}
+
+          {type === 'MOBILE_MONEY' && (
             <>
               <label className="grid gap-1.5 text-sm font-bold">
                 Network
