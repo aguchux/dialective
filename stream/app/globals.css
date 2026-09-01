@@ -56,6 +56,25 @@
   --success: #34d399;
 }
 
+/* Escape hatch for a light-themed island inside a .stream-console scope --
+   e.g. AuthShell's form panel, which stays a light card + dark text even
+   though the auth page around it is always dark. */
+.stream-console-light {
+  color-scheme: light;
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --surface-muted: #eef0f7;
+  --ink: #12131f;
+  --muted: #5b5f76;
+  --line: #dde0ec;
+  --accent: #2f6fed;
+  --accent-dark: #1e51c2;
+  --accent-soft: #e8effe;
+  --warning: #b45309;
+  --danger: #b91c1c;
+  --success: #15803d;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);

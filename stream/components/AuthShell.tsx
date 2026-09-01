@@ -16,8 +16,8 @@ const FEATURES = [
  */
 export function AuthShell({ eyebrow, children }: { eyebrow?: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="stream-console relative hidden overflow-hidden bg-bg px-10 py-10 lg:flex lg:flex-col lg:justify-between">
+    <div className="stream-console grid min-h-screen bg-bg lg:grid-cols-2">
+      <div className="relative hidden overflow-hidden px-10 py-10 lg:flex lg:flex-col lg:justify-between">
         <HeroBackdrop />
         <div className="relative z-10">
           <BrandLogo className="text-white" href="" size={32} textClassName="text-lg" />
@@ -48,14 +48,14 @@ export function AuthShell({ eyebrow, children }: { eyebrow?: ReactNode; children
         </div>
       </div>
 
-      <div className="flex min-h-screen items-center justify-center bg-bg px-4 py-12">
+      <div className="stream-console-light flex min-h-screen items-center justify-center bg-bg px-4 py-12">
         <div className="w-full max-w-md">
           <div className="mb-6 flex justify-center lg:hidden">
             <BrandLogo href="" size={32} textClassName="text-lg" />
           </div>
           {eyebrow && (
             <div className="mb-4 flex justify-center">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-bold text-muted">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-bold text-muted">
                 {eyebrow}
               </span>
             </div>
