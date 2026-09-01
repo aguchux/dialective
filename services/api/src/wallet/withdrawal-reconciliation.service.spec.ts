@@ -14,33 +14,39 @@ describe('WithdrawalReconciliationService', () => {
       nowPaymentsPayoutEvent: { create: jest.fn().mockResolvedValue({}) },
       flutterwavePayoutEvent: { create: jest.fn().mockResolvedValue({}) },
       flutterwaveV4TransferEvent: { create: jest.fn().mockResolvedValue({}) },
+      stripePayoutEvent: { create: jest.fn().mockResolvedValue({}) },
     };
     prisma.$transaction = jest.fn(async (ops: unknown[]) => Promise.all(ops as Promise<unknown>[]));
 
     const nowPayments = { getPayoutStatus: jest.fn() };
     const flutterwave = { getTransferStatus: jest.fn() };
     const flutterwaveV4 = { getTransferStatus: jest.fn() };
+    const stripeConnect = { getPayoutStatus: jest.fn() };
     const platformSettings = {
       isNowPaymentsPayoutsEnabled: jest.fn().mockResolvedValue(true),
       isFlutterwavePayoutsEnabled: jest.fn().mockResolvedValue(true),
+      isStripePayoutsEnabled: jest.fn().mockResolvedValue(true),
     };
     const service = new WithdrawalReconciliationService(
       prisma as never,
       nowPayments as never,
       flutterwave as never,
       flutterwaveV4 as never,
+      stripeConnect as never,
       platformSettings as never,
     );
-    return { service, prisma, nowPayments, flutterwave, flutterwaveV4, platformSettings };
+    return { service, prisma, nowPayments, flutterwave, flutterwaveV4, stripeConnect, platformSettings };
   }
 
-  it('does nothing for either provider when both are disabled', async () => {
+  it('does nothing for any provider when all are disabled', async () => {
     const { service, prisma, platformSettings } = setup({
       nowpayments: [{ id: 'w1', providerPayoutId: 'p1' }],
       flutterwave: [{ id: 'w2', providerPayoutId: 't1' }],
+      stripe: [{ id: 'w3', providerPayoutId: 'tr1' }],
     });
     platformSettings.isNowPaymentsPayoutsEnabled.mockResolvedValue(false);
     platformSettings.isFlutterwavePayoutsEnabled.mockResolvedValue(false);
+    platformSettings.isStripePayoutsEnabled.mockResolvedValue(false);
 
     const result = await service.run();
 
@@ -52,6 +58,13 @@ describe('WithdrawalReconciliationService', () => {
       stale: 0,
     });
     expect(result.flutterwave).toEqual({
+      checked: 0,
+      paid: 0,
+      failed: 0,
+      stillProcessing: 0,
+      stale: 0,
+    });
+    expect(result.stripe).toEqual({
       checked: 0,
       paid: 0,
       failed: 0,
@@ -194,5 +207,59 @@ describe('WithdrawalReconciliationService', () => {
 
     expect(result.nowpayments.paid).toBe(1);
     expect(result.flutterwave.paid).toBe(1);
+  });
+
+  it('marks a Stripe withdrawal PAID when the provider reports transferred', async () => {
+    const { service, prisma, stripeConnect } = setup({
+      stripe: [{ id: 'w3', providerPayoutId: 'tr1', submittedToProviderAt: new Date() }],
+    });
+    stripeConnect.getPayoutStatus.mockResolvedValue({
+      payoutId: 'tr1',
+      status: 'transferred',
+      raw: {},
+    });
+
+    const result = await service.run();
+
+    expect(result.stripe.paid).toBe(1);
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'w3' },
+        data: expect.objectContaining({ status: 'PAID' }),
+      }),
+    );
+    expect(prisma.stripePayoutEvent.create).toHaveBeenCalled();
+  });
+
+  it('marks a Stripe withdrawal FAILED when the provider reports reversed', async () => {
+    const { service, prisma, stripeConnect } = setup({
+      stripe: [{ id: 'w3', providerPayoutId: 'tr1', submittedToProviderAt: new Date() }],
+    });
+    stripeConnect.getPayoutStatus.mockResolvedValue({
+      payoutId: 'tr1',
+      status: 'reversed',
+      raw: {},
+    });
+
+    const result = await service.run();
+
+    expect(result.stripe.failed).toBe(1);
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) }),
+    );
+  });
+
+  it('leaves a Stripe withdrawal PROCESSING when a status poll throws', async () => {
+    const { service, prisma, stripeConnect } = setup({
+      stripe: [{ id: 'w3', providerPayoutId: 'tr1', submittedToProviderAt: new Date() }],
+    });
+    stripeConnect.getPayoutStatus.mockRejectedValue(new Error('network timeout'));
+
+    const result = await service.run();
+
+    expect(result.stripe.checked).toBe(1);
+    expect(result.stripe.failed).toBe(0);
+    expect(result.stripe.paid).toBe(0);
+    expect(prisma.withdrawalRequest.update).not.toHaveBeenCalled();
   });
 });

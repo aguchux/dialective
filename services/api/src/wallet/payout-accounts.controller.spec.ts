@@ -33,6 +33,7 @@ function setup(overrides: { account?: Record<string, unknown> | null } = {}) {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
     otp as never,
   );
   return { controller, prisma, otp };

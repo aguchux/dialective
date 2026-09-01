@@ -466,6 +466,11 @@ export class PlatformSettingsService {
     return row.flutterwaveV4SenderId;
   }
 
+  async isStripePayoutsEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.isStripePayoutsEnabled;
+  }
+
   async getAllowedFlutterwaveCurrencies(): Promise<string[]> {
     const row = await this.getRow();
     return row.allowedFlutterwaveCurrencies
@@ -812,6 +817,7 @@ export class PlatformSettingsService {
       isFlutterwaveV4Enabled: row.isFlutterwaveV4Enabled,
       allowedFlutterwaveCurrencies: row.allowedFlutterwaveCurrencies,
       allowedFlutterwaveCountries: row.allowedFlutterwaveCountries,
+      isStripePayoutsEnabled: row.isStripePayoutsEnabled,
       withdrawalFeeMode: row.withdrawalFeeMode,
       withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
       withdrawalFeePercent: row.withdrawalFeePercent.toString(),
@@ -932,6 +938,7 @@ export class PlatformSettingsService {
     isFlutterwaveV4Enabled?: boolean;
     allowedFlutterwaveCurrencies?: string;
     allowedFlutterwaveCountries?: string;
+    isStripePayoutsEnabled?: boolean;
     withdrawalFeeMode?: string;
     withdrawalFeeTokenAmount?: number;
     withdrawalFeePercent?: number;
@@ -1274,6 +1281,7 @@ export class PlatformSettingsService {
       isFlutterwaveV4Enabled: row.isFlutterwaveV4Enabled,
       allowedFlutterwaveCurrencies: row.allowedFlutterwaveCurrencies,
       allowedFlutterwaveCountries: row.allowedFlutterwaveCountries,
+      isStripePayoutsEnabled: row.isStripePayoutsEnabled,
       withdrawalFeeMode: row.withdrawalFeeMode,
       withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
       withdrawalFeePercent: row.withdrawalFeePercent.toString(),

@@ -29,6 +29,8 @@ import {
   BlogPostStatus,
   LedgerEntryType,
   OtpPurpose,
+  PayoutAccountType,
+  PayoutAccountVerificationStatus,
   PayoutMethod,
   Prisma,
   ReferralInviteStatus,
@@ -49,6 +51,7 @@ import { OtpService } from '../otp/otp.service';
 import { NowPaymentsService } from './nowpayments.service';
 import { FlutterwaveService } from './flutterwave.service';
 import { FlutterwaveV4Service, RecipientCountry } from './flutterwave-v4.service';
+import { StripeConnectService } from './stripe-connect.service';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateFlutterwaveDepositDto } from './dto/create-flutterwave-deposit.dto';
 import { RequestFlutterwaveDepositOtpDto } from './dto/request-flutterwave-deposit-otp.dto';
@@ -115,6 +118,15 @@ const FLUTTERWAVE_TRANSFER_FAILED_STATUSES = new Set(['failed', 'cancelled']);
 const FLUTTERWAVE_V4_TRANSFER_FINISHED_STATUSES = new Set(['successful']);
 const FLUTTERWAVE_V4_TRANSFER_FAILED_STATUSES = new Set(['failed', 'cancelled']);
 
+// Stripe Connect transfer status: StripeConnectService only ever reports
+// 'transferred' (moved to the connected account's Stripe balance -- not the
+// same as a completed bank payout, see its createTransfer doc comment) or
+// 'reversed'. Modeled as a binary outcome, unlike Flutterwave's 3-state
+// finished/failed/still-processing -- a Transfer create() call is
+// synchronous, so there is no "still processing" status to poll for here.
+const STRIPE_TRANSFER_FINISHED_STATUSES = new Set(['transferred']);
+const STRIPE_TRANSFER_FAILED_STATUSES = new Set(['reversed']);
+
 // How many top-ranked rows the dedicated /admin/leaderboard page ranks and
 // paginates through -- see buildEarnersRanking's doc comment for why a
 // leaderboard trades an exact full-table total for a fast bounded one.
@@ -147,6 +159,7 @@ export class WalletController {
     private readonly nowPayments: NowPaymentsService,
     private readonly flutterwave: FlutterwaveService,
     private readonly flutterwaveV4: FlutterwaveV4Service,
+    private readonly stripeConnect: StripeConnectService,
     private readonly platformSettings: PlatformSettingsService,
     private readonly otp: OtpService,
     private readonly mail: MailService,
@@ -1766,17 +1779,37 @@ export class WalletController {
     tokenAmount: number,
     payoutAccountId: string,
   ) {
-    if (!(await this.platformSettings.isFlutterwavePayoutsEnabled())) {
-      throw new UnprocessableEntityException('Fiat withdrawals are currently disabled');
-    }
-    await this.validateCommonWithdrawalRequirements(userId, tokenAmount);
-
     const payoutAccount = await this.prisma.payoutAccount.findUnique({
       where: { id: payoutAccountId },
     });
     if (!payoutAccount || payoutAccount.userId !== userId) {
       throw new NotFoundException('Payout account not found');
     }
+
+    if (payoutAccount.type === PayoutAccountType.STRIPE_CONNECT) {
+      if (!(await this.platformSettings.isStripePayoutsEnabled())) {
+        throw new UnprocessableEntityException('Stripe payouts are currently disabled');
+      }
+      await this.validateCommonWithdrawalRequirements(userId, tokenAmount);
+      // Unlike BANK/MOBILE_MONEY (verified either at resolveAccount time or
+      // left UNVERIFIED by design), a Stripe Connect account only reaches
+      // VERIFIED once Stripe itself reports payoutsEnabled=true for it (see
+      // PayoutAccountsController.refreshStripeAccountStatus and the
+      // account.updated webhook handler) -- a trainer who hasn't finished
+      // Stripe's hosted onboarding must not be able to request a payout.
+      if (payoutAccount.verificationStatus !== PayoutAccountVerificationStatus.VERIFIED) {
+        throw new UnprocessableEntityException(
+          'Finish Stripe onboarding for this payout account before requesting a withdrawal',
+        );
+      }
+      return payoutAccount;
+    }
+
+    if (!(await this.platformSettings.isFlutterwavePayoutsEnabled())) {
+      throw new UnprocessableEntityException('Fiat withdrawals are currently disabled');
+    }
+    await this.validateCommonWithdrawalRequirements(userId, tokenAmount);
+
     const [allowedCurrencies, allowedCountries] = await Promise.all([
       this.platformSettings.getAllowedFlutterwaveCurrencies(),
       this.platformSettings.getAllowedFlutterwaveCountries(),
@@ -1925,13 +1958,21 @@ export class WalletController {
     const wallet = await this.getOrCreateWallet(req.user.sub);
     const rate = await this.getCurrentTokenUsdRate();
     const usdtAmount = tokensToUsdt(body.tokenAmount, rate);
-    const fiatConversion = payoutAccount
-      ? await this.getFiatWithdrawalConversion(
-          payoutAccount.country,
-          payoutAccount.currency,
-          usdtAmount,
-        )
-      : null;
+    const isStripeAccount = payoutAccount?.type === PayoutAccountType.STRIPE_CONNECT;
+    // Stripe Connect transfers stay USD-only for this first cut -- no
+    // local-currency conversion the way Flutterwave gets. fiatAmount is
+    // just the USD amount and fiatUsdExchangeRate is the identity rate 1,
+    // so the admin table/audit trail still has a populated, self-consistent
+    // fiatAmount/fiatUsdExchangeRate pair rather than nulling them out.
+    const fiatConversion = isStripeAccount
+      ? { fiatAmount: new Prisma.Decimal(usdtAmount), fiatUsdExchangeRate: new Prisma.Decimal(1) }
+      : payoutAccount
+        ? await this.getFiatWithdrawalConversion(
+            payoutAccount.country,
+            payoutAccount.currency,
+            usdtAmount,
+          )
+        : null;
     const withdrawalId = randomUUID();
 
     // A snapshot of the PayoutAccount's resolved details onto the
@@ -1939,28 +1980,37 @@ export class WalletController {
     // edit/delete of the PayoutAccount must never retroactively change a
     // pending withdrawal's destination, matching how destinationCurrency/
     // destinationNetwork already snapshot the crypto path's chosen values
-    // rather than referencing a live config row.
+    // rather than referencing a live config row. STRIPE_CONNECT rows leave
+    // every destinationBank*/destinationMobile* column null -- Stripe never
+    // hands us bank details to snapshot in the first place.
     const fiatSnapshot = payoutAccount
       ? {
-          payoutMethod:
-            payoutAccount.type === 'BANK' ? PayoutMethod.BANK : PayoutMethod.MOBILE_MONEY,
+          payoutMethod: isStripeAccount
+            ? PayoutMethod.STRIPE
+            : payoutAccount.type === 'BANK'
+              ? PayoutMethod.BANK
+              : PayoutMethod.MOBILE_MONEY,
           payoutAccountId: payoutAccount.id,
           destinationCountry: payoutAccount.country,
-          ...(payoutAccount.type === 'BANK'
-            ? {
-                destinationBankCode: payoutAccount.bankCode,
-                destinationBankName: payoutAccount.bankName,
-                destinationAccountNumberEncryptedJson: payoutAccount.accountNumberEncryptedJson as
-                  Prisma.InputJsonValue | undefined,
-                destinationAccountNumberMasked: payoutAccount.accountNumberMasked,
-                destinationAccountName: payoutAccount.accountName,
-              }
-            : {
-                destinationMobileNetwork: payoutAccount.mobileMoneyNetwork,
-                destinationMobileNumberEncryptedJson:
-                  payoutAccount.mobileMoneyNumberEncryptedJson as Prisma.InputJsonValue | undefined,
-                destinationMobileNumberMasked: payoutAccount.mobileMoneyNumberMasked,
-              }),
+          ...(isStripeAccount
+            ? {}
+            : payoutAccount.type === 'BANK'
+              ? {
+                  destinationBankCode: payoutAccount.bankCode,
+                  destinationBankName: payoutAccount.bankName,
+                  destinationAccountNumberEncryptedJson:
+                    payoutAccount.accountNumberEncryptedJson as Prisma.InputJsonValue | undefined,
+                  destinationAccountNumberMasked: payoutAccount.accountNumberMasked,
+                  destinationAccountName: payoutAccount.accountName,
+                }
+              : {
+                  destinationMobileNetwork: payoutAccount.mobileMoneyNetwork,
+                  destinationMobileNumberEncryptedJson:
+                    payoutAccount.mobileMoneyNumberEncryptedJson as
+                      | Prisma.InputJsonValue
+                      | undefined,
+                  destinationMobileNumberMasked: payoutAccount.mobileMoneyNumberMasked,
+                }),
         }
       : {};
 
@@ -1982,7 +2032,11 @@ export class WalletController {
           tokenAmount: body.tokenAmount,
           usdtAmount,
           destinationAddress: isFiat ? '' : body.destinationAddress!,
-          destinationCurrency: isFiat ? payoutAccount!.currency : destinationCurrency,
+          destinationCurrency: isFiat
+            ? isStripeAccount
+              ? 'USD'
+              : payoutAccount!.currency
+            : destinationCurrency,
           destinationNetwork: isFiat ? '' : destinationNetwork,
           status: WithdrawalStatus.PENDING,
           ...(fiatConversion ?? {}),
@@ -2171,9 +2225,13 @@ export class WalletController {
     this.logger.log(`Withdrawal approved: admin=${req.user.sub} withdrawal=${id}`);
 
     if (await this.platformSettings.isAutoSubmitAfterApprovalEnabled()) {
-      return withdrawal.payoutMethod === PayoutMethod.CRYPTO
-        ? this.submitWithdrawalToNowPayments(req, id, body)
-        : this.submitWithdrawalToFlutterwave(req, id, body);
+      if (withdrawal.payoutMethod === PayoutMethod.CRYPTO) {
+        return this.submitWithdrawalToNowPayments(req, id, body);
+      }
+      if (withdrawal.payoutMethod === PayoutMethod.STRIPE) {
+        return this.submitWithdrawalToStripe(req, id, body);
+      }
+      return this.submitWithdrawalToFlutterwave(req, id, body);
     }
 
     return { withdrawalId: id, status: approved.status };
@@ -2562,6 +2620,297 @@ export class WalletController {
       );
       throw err;
     }
+  }
+
+  /**
+   * No JwtAuthGuard -- Stripe can't send a JWT, trust comes from
+   * stripeConnect.verifyWebhookSignature instead. Needs the raw request
+   * body (main.ts's `rawBody: true`), same reasoning as the Flutterwave
+   * webhook handler. Handles account.updated (onboarding/payout-capability
+   * status changed on a connected account) and transfer.reversed (a
+   * previously-submitted payout was pulled back) -- every event received is
+   * persisted as a StripePayoutEvent, deduped on the Stripe event's own
+   * event.id (unlike Flutterwave's raw-bytes hash, Stripe's SDK-verified
+   * Event object already has a stable id of its own, so there's no need for
+   * a getWebhookEventHash helper here).
+   */
+  @Post('wallet/webhooks/stripe')
+  @HttpCode(HttpStatus.OK)
+  async handleStripeWebhook(@Req() req: Request & { rawBody?: Buffer }) {
+    const rawBody = req.rawBody;
+    if (!rawBody) {
+      throw new UnauthorizedException('Missing raw request body');
+    }
+    const signature = req.headers['stripe-signature'] as string | undefined;
+    const event = this.stripeConnect.verifyWebhookSignature(rawBody, signature);
+    if (!event) {
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
+
+    const existing = await this.prisma.stripePayoutEvent.findUnique({
+      where: { eventHash: event.id },
+    });
+    if (existing) {
+      return { received: true, duplicate: true };
+    }
+
+    const data = event.data.object as unknown as Record<string, unknown>;
+
+    if (event.type === 'account.updated') {
+      const stripeAccountId = String(data.id ?? '');
+      const detailsSubmitted = Boolean(data.details_submitted);
+      const payoutsEnabled = Boolean(data.payouts_enabled);
+      const account = stripeAccountId
+        ? await this.prisma.payoutAccount.findFirst({ where: { stripeConnectAccountId: stripeAccountId } })
+        : null;
+      await this.prisma.$transaction([
+        ...(account
+          ? [
+              this.prisma.payoutAccount.update({
+                where: { id: account.id },
+                data: {
+                  stripeDetailsSubmitted: detailsSubmitted,
+                  stripePayoutsEnabled: payoutsEnabled,
+                  verificationStatus: payoutsEnabled
+                    ? PayoutAccountVerificationStatus.VERIFIED
+                    : PayoutAccountVerificationStatus.PENDING,
+                },
+              }),
+            ]
+          : []),
+        this.prisma.stripePayoutEvent.create({
+          data: {
+            eventHash: event.id,
+            eventType: event.type,
+            payload: data as unknown as Prisma.InputJsonValue,
+            processingError: account ? undefined : 'No PayoutAccount matched this connected account',
+          },
+        }),
+      ]);
+      return { received: true, matched: Boolean(account) };
+    }
+
+    if (event.type === 'transfer.reversed') {
+      const transferGroup = typeof data.transfer_group === 'string' ? data.transfer_group : null;
+      const withdrawal = transferGroup
+        ? await this.prisma.withdrawalRequest.findUnique({ where: { id: transferGroup } })
+        : null;
+      await this.prisma.$transaction([
+        ...(withdrawal
+          ? [
+              this.prisma.withdrawalRequest.update({
+                where: { id: withdrawal.id },
+                data: {
+                  status: WithdrawalStatus.FAILED,
+                  providerStatus: 'reversed',
+                  providerError: 'Stripe reported this transfer as reversed',
+                  providerPayload: data as unknown as Prisma.InputJsonValue,
+                },
+              }),
+            ]
+          : []),
+        this.prisma.stripePayoutEvent.create({
+          data: {
+            eventHash: event.id,
+            withdrawalRequestId: withdrawal?.id,
+            providerPayoutId: typeof data.id === 'string' ? data.id : undefined,
+            eventType: event.type,
+            providerStatus: 'reversed',
+            payload: data as unknown as Prisma.InputJsonValue,
+            processingError: withdrawal ? undefined : 'No withdrawal matched this transfer_group',
+          },
+        }),
+      ]);
+      return { received: true, matched: Boolean(withdrawal) };
+    }
+
+    await this.prisma.stripePayoutEvent.create({
+      data: {
+        eventHash: event.id,
+        eventType: event.type,
+        payload: data as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return { received: true, matched: false };
+  }
+
+  /**
+   * Third fiat rail's submission endpoint, same atomic-claim/try-catch-
+   * mark-FAILED shape as submitWithdrawalToFlutterwave. Unlike Flutterwave,
+   * there is no per-payout account-name re-verification step here -- Stripe
+   * never hands the platform raw bank details to re-check in the first
+   * place (see PayoutAccount.stripeConnectAccountId's schema doc comment);
+   * the closest equivalent safety check is confirming the connected
+   * account can currently receive payouts (stripePayoutsEnabled), which is
+   * refreshed either by the account.updated webhook or the payout-accounts
+   * manual refresh-status route, not re-checked live here.
+   */
+  @Post('admin/withdrawals/:id/submit-stripe')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async submitWithdrawalToStripe(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: SubmitWithdrawalPayoutDto,
+  ) {
+    if (!(await this.platformSettings.isStripePayoutsEnabled())) {
+      throw new UnprocessableEntityException('Stripe payouts are currently disabled');
+    }
+
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
+    if (!withdrawal) {
+      throw new NotFoundException('Withdrawal request not found');
+    }
+    if (withdrawal.status !== WithdrawalStatus.APPROVED) {
+      throw new UnprocessableEntityException(
+        'Only approved withdrawals can be submitted to Stripe -- re-approve failed withdrawals before retrying',
+      );
+    }
+    if (withdrawal.providerPayoutId) {
+      return this.refreshStripeWithdrawalStatus(id);
+    }
+    if (withdrawal.payoutMethod !== PayoutMethod.STRIPE) {
+      throw new UnprocessableEntityException('This withdrawal is not a Stripe payout');
+    }
+
+    await this.verifyAdminPayoutOtpIfEnabled(req.user.sub, withdrawal, body.otpRequestId, body.code);
+
+    // Same atomic-claim pattern as submit-flutterwave -- only the request
+    // that wins this update proceeds to createTransfer.
+    const claim = await this.prisma.withdrawalRequest.updateMany({
+      where: { id, status: WithdrawalStatus.APPROVED, providerPayoutId: null },
+      data: { providerStatus: 'submitting' },
+    });
+    if (claim.count === 0) {
+      throw new UnprocessableEntityException(
+        'This withdrawal is already being submitted or was already submitted',
+      );
+    }
+
+    try {
+      if (!withdrawal.payoutAccountId) {
+        throw new UnprocessableEntityException(
+          'This withdrawal has no saved payout account to submit under Stripe',
+        );
+      }
+      const payoutAccount = await this.prisma.payoutAccount.findUniqueOrThrow({
+        where: { id: withdrawal.payoutAccountId },
+      });
+      if (
+        payoutAccount.type !== PayoutAccountType.STRIPE_CONNECT ||
+        !payoutAccount.stripeConnectAccountId
+      ) {
+        throw new UnprocessableEntityException(
+          'Withdrawal is missing its Stripe Connect destination account',
+        );
+      }
+      if (!payoutAccount.stripePayoutsEnabled) {
+        throw new UnprocessableEntityException(
+          "This trainer's Stripe Connect account cannot currently receive payouts -- onboarding may be incomplete",
+        );
+      }
+
+      // Stripe Connect stays USD-only for this first cut (see the
+      // isStripeAccount branch in createWithdrawal's fiat-snapshot
+      // comment) -- fiatAmount is already the USD amount, so cents is a
+      // straight *100, no currency-conversion round trip needed the way
+      // Flutterwave's fiat rail requires.
+      const usdAmount = withdrawal.fiatAmount ?? withdrawal.usdtAmount;
+      const amountUsdCents = usdAmount.mul(100).round().toNumber();
+
+      const transfer = await this.stripeConnect.createTransfer({
+        stripeAccountId: payoutAccount.stripeConnectAccountId,
+        amountUsdCents,
+        reference: withdrawal.id,
+        narration: `Dialect Library trainer payout: ${withdrawal.id}`,
+      });
+
+      await this.prisma.$transaction([
+        this.prisma.withdrawalRequest.update({
+          where: { id },
+          data: {
+            status: this.mapStripeTransferStatus(transfer.status),
+            provider: 'stripe',
+            providerPayoutId: transfer.transferId,
+            providerStatus: transfer.status ?? 'created',
+            providerPayload: transfer.raw as Prisma.InputJsonValue,
+            providerError: null,
+            ...(withdrawal.fiatAmount
+              ? {}
+              : { fiatAmount: usdAmount, fiatUsdExchangeRate: new Prisma.Decimal(1) }),
+            submittedToProviderAt: new Date(),
+            providerSettledAt: this.isStripeTransferFinished(transfer.status) ? new Date() : null,
+            resolvedAt: this.isStripeTransferFinished(transfer.status) ? new Date() : null,
+            adminNote: body.adminNote,
+          },
+        }),
+        this.prisma.stripePayoutEvent.create({
+          data: {
+            eventHash: randomUUID(),
+            withdrawalRequestId: id,
+            providerPayoutId: transfer.transferId,
+            eventType: 'create',
+            providerStatus: transfer.status,
+            payload: transfer.raw as Prisma.InputJsonValue,
+          },
+        }),
+      ]);
+      this.logger.log(
+        `Withdrawal submitted to Stripe: admin=${req.user.sub} withdrawal=${id} providerPayoutId=${transfer.transferId}`,
+      );
+
+      return {
+        withdrawalId: id,
+        status: this.mapStripeTransferStatus(transfer.status),
+        providerPayoutId: transfer.transferId,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.prisma.withdrawalRequest.update({
+        where: { id },
+        data: {
+          status: WithdrawalStatus.FAILED,
+          provider: 'stripe',
+          providerError: message,
+          adminNote: body.adminNote,
+        },
+      });
+      await this.prisma.stripePayoutEvent.create({
+        data: {
+          eventHash: randomUUID(),
+          withdrawalRequestId: id,
+          eventType: 'create_failed',
+          payload: { message },
+          processingError: message,
+        },
+      });
+      this.logger.error(
+        `Withdrawal submit-to-Stripe failed: admin=${req.user.sub} withdrawal=${id}: ${message}`,
+      );
+      throw err;
+    }
+  }
+
+  /** Manual-refresh fallback for an already-submitted Stripe withdrawal -- polls getPayoutStatus and re-records, same shape as refreshFlutterwaveWithdrawalStatus. */
+  @Post('admin/withdrawals/:id/refresh-stripe')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async refreshStripeWithdrawalStatus(@Param('id') id: string) {
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
+    if (!withdrawal) {
+      throw new NotFoundException('Withdrawal request not found');
+    }
+    if (!withdrawal.providerPayoutId) {
+      throw new UnprocessableEntityException('Withdrawal has not been submitted to Stripe');
+    }
+
+    const result = await this.stripeConnect.getPayoutStatus(withdrawal.providerPayoutId);
+    await this.recordStripePayoutStatus(id, result.payoutId, 'status', result.status, result.raw);
+    return {
+      withdrawalId: id,
+      status: this.mapStripeTransferStatus(result.status),
+      providerPayoutId: result.payoutId,
+    };
   }
 
   /**
@@ -3063,6 +3412,65 @@ export class WalletController {
         },
       }),
       ...reserveDebitOps,
+    ]);
+  }
+
+  private mapStripeTransferStatus(status: string | null | undefined): WithdrawalStatus {
+    const normalized = status?.toLowerCase();
+    if (normalized && STRIPE_TRANSFER_FINISHED_STATUSES.has(normalized)) return WithdrawalStatus.PAID;
+    if (normalized && STRIPE_TRANSFER_FAILED_STATUSES.has(normalized)) return WithdrawalStatus.FAILED;
+    return WithdrawalStatus.PROCESSING;
+  }
+
+  private isStripeTransferFinished(status: string | null | undefined): boolean {
+    const normalized = status?.toLowerCase();
+    return Boolean(normalized && STRIPE_TRANSFER_FINISHED_STATUSES.has(normalized));
+  }
+
+  /**
+   * Stripe counterpart to recordFlutterwavePayoutStatus -- writes provider:
+   * 'stripe' and the separate StripePayoutEvent table, used by the manual
+   * refresh endpoint and WithdrawalReconciliationService's own poll (this
+   * copy exists because the controller's webhook/refresh paths need the
+   * same write, not because the two are meant to diverge). No reserve-debit
+   * hook here, unlike recordFlutterwavePayoutStatus/
+   * recordFlutterwaveV4PayoutStatus -- there is no Stripe-specific
+   * ReserveAccount; Stripe payouts draw directly against the connected
+   * Transfer, not a platform-held reserve balance this codebase tracks.
+   */
+  private async recordStripePayoutStatus(
+    withdrawalId: string,
+    providerPayoutId: string,
+    eventType: string,
+    providerStatus: string | null,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const status = this.mapStripeTransferStatus(providerStatus);
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.withdrawalRequest.update({
+        where: { id: withdrawalId },
+        data: {
+          status,
+          provider: 'stripe',
+          providerPayoutId,
+          providerStatus: providerStatus ?? undefined,
+          providerPayload: payload as Prisma.InputJsonValue,
+          providerError: null,
+          providerSettledAt: status === WithdrawalStatus.PAID ? now : undefined,
+          resolvedAt: status === WithdrawalStatus.PAID ? now : undefined,
+        },
+      }),
+      this.prisma.stripePayoutEvent.create({
+        data: {
+          eventHash: randomUUID(),
+          withdrawalRequestId: withdrawalId,
+          providerPayoutId,
+          eventType,
+          providerStatus,
+          payload: payload as Prisma.InputJsonValue,
+        },
+      }),
     ]);
   }
 

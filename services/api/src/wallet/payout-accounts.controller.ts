@@ -10,6 +10,7 @@ import {
   Patch,
   Post,
   Req,
+  UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -29,9 +30,14 @@ import { encryptPayoutField, maskAccountNumber } from '../common/payout-crypto.u
 import { payoutAccountDeleteContextHash } from './otp-context.util';
 import { FlutterwaveService } from './flutterwave.service';
 import { FlutterwaveV4Service, RecipientCountry } from './flutterwave-v4.service';
+import { StripeConnectService } from './stripe-connect.service';
 import { CreatePayoutAccountDto } from './dto/create-payout-account.dto';
 import { UpdatePayoutAccountDto } from './dto/update-payout-account.dto';
 import { ConfirmPayoutAccountDeleteDto } from './dto/confirm-payout-account-delete.dto';
+
+function stripeFrontendUrl(): string {
+  return process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
+}
 
 const NON_TERMINAL_WITHDRAWAL_STATUSES: WithdrawalStatus[] = [
   WithdrawalStatus.PENDING,
@@ -45,6 +51,7 @@ export class PayoutAccountsController {
     private readonly prisma: PrismaService,
     private readonly flutterwave: FlutterwaveService,
     private readonly flutterwaveV4: FlutterwaveV4Service,
+    private readonly stripeConnect: StripeConnectService,
     private readonly platformSettings: PlatformSettingsService,
     private readonly otp: OtpService,
   ) {}
@@ -146,7 +153,82 @@ export class PayoutAccountsController {
       return toPublicPayoutAccount(account);
     }
 
+    if (dto.type === 'STRIPE_CONNECT') {
+      if (!(await this.platformSettings.isStripePayoutsEnabled())) {
+        throw new UnprocessableEntityException('Stripe payouts are currently disabled');
+      }
+      const user = await this.prisma.user.findUniqueOrThrow({
+        where: { id: req.user.sub },
+        select: { email: true },
+      });
+      const { stripeAccountId } = await this.stripeConnect.createConnectedAccount({
+        email: user.email,
+        country: dto.country.toUpperCase(),
+      });
+      const account = await this.prisma.payoutAccount.create({
+        data: {
+          userId: req.user.sub,
+          type: PayoutAccountType.STRIPE_CONNECT,
+          country: dto.country,
+          currency: dto.currency,
+          provider: 'stripe',
+          isDefault: dto.isDefault ?? false,
+          verificationStatus: PayoutAccountVerificationStatus.PENDING,
+          stripeConnectAccountId: stripeAccountId,
+          stripeDetailsSubmitted: false,
+          stripePayoutsEnabled: false,
+        },
+      });
+      const link = await this.stripeConnect.createOnboardingLink(
+        stripeAccountId,
+        `${stripeFrontendUrl()}/payout-accounts/${account.id}/stripe/refresh`,
+        `${stripeFrontendUrl()}/payout-accounts/${account.id}/stripe/return`,
+      );
+      return { ...toPublicPayoutAccount(account), onboardingUrl: link.url };
+    }
+
     throw new BadRequestException('Unsupported payout account type');
+  }
+
+  /** Regenerates a fresh onboarding Account Link for an existing STRIPE_CONNECT account -- Account Links expire, so a trainer who didn't finish (or wants to update) onboarding needs a way to get a new one without recreating the connected account itself. */
+  @Post(':id/stripe/onboarding-link')
+  @UseGuards(JwtAuthGuard)
+  async createStripeOnboardingLink(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    const account = await this.requireOwnedAccount(req.user.sub, id);
+    if (account.type !== PayoutAccountType.STRIPE_CONNECT || !account.stripeConnectAccountId) {
+      throw new BadRequestException('This payout account is not a Stripe Connect account');
+    }
+    if (!(await this.platformSettings.isStripePayoutsEnabled())) {
+      throw new UnprocessableEntityException('Stripe payouts are currently disabled');
+    }
+    const link = await this.stripeConnect.createOnboardingLink(
+      account.stripeConnectAccountId,
+      `${stripeFrontendUrl()}/payout-accounts/${account.id}/stripe/refresh`,
+      `${stripeFrontendUrl()}/payout-accounts/${account.id}/stripe/return`,
+    );
+    return { onboardingUrl: link.url };
+  }
+
+  /** Manual-refresh fallback alongside the account.updated webhook path (see WalletController.handleStripeWebhook) -- lets the frontend force a fresh read of onboarding status right after the trainer returns from Stripe's hosted flow, without waiting on webhook delivery. */
+  @Post(':id/stripe/refresh-status')
+  @UseGuards(JwtAuthGuard)
+  async refreshStripeAccountStatus(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    const account = await this.requireOwnedAccount(req.user.sub, id);
+    if (account.type !== PayoutAccountType.STRIPE_CONNECT || !account.stripeConnectAccountId) {
+      throw new BadRequestException('This payout account is not a Stripe Connect account');
+    }
+    const status = await this.stripeConnect.getAccountStatus(account.stripeConnectAccountId);
+    const updated = await this.prisma.payoutAccount.update({
+      where: { id },
+      data: {
+        stripeDetailsSubmitted: status.detailsSubmitted,
+        stripePayoutsEnabled: status.payoutsEnabled,
+        verificationStatus: status.payoutsEnabled
+          ? PayoutAccountVerificationStatus.VERIFIED
+          : PayoutAccountVerificationStatus.PENDING,
+      },
+    });
+    return toPublicPayoutAccount(updated);
   }
 
   @Patch(':id')
@@ -255,11 +337,16 @@ function toPublicPayoutAccount(account: {
   accountName: string | null;
   mobileMoneyNetwork: string | null;
   mobileMoneyNumberMasked: string | null;
+  stripeConnectAccountId: string | null;
+  stripeDetailsSubmitted: boolean;
+  stripePayoutsEnabled: boolean;
   lastUsedAt: Date | null;
   createdAt: Date;
 }) {
   // Never includes accountNumberEncryptedJson/mobileMoneyNumberEncryptedJson
-  // -- ordinary reads never touch the decrypt path.
+  // -- ordinary reads never touch the decrypt path. stripeConnectAccountId
+  // is fine to include (not secret) -- it's the same acct_... id Stripe's
+  // own dashboard shows a connected user.
   return {
     id: account.id,
     type: account.type,
@@ -274,6 +361,9 @@ function toPublicPayoutAccount(account: {
     accountName: account.accountName,
     mobileMoneyNetwork: account.mobileMoneyNetwork,
     mobileMoneyNumberMasked: account.mobileMoneyNumberMasked,
+    stripeConnectAccountId: account.stripeConnectAccountId,
+    stripeDetailsSubmitted: account.stripeDetailsSubmitted,
+    stripePayoutsEnabled: account.stripePayoutsEnabled,
     lastUsedAt: account.lastUsedAt,
     createdAt: account.createdAt,
   };

@@ -1619,6 +1619,7 @@ model WithdrawalRequest {
   providerEvents              NowPaymentsPayoutEvent[]
   providerEventsFlutterwave   FlutterwavePayoutEvent[]     @relation("FlutterwavePayoutEvents")
   providerEventsFlutterwaveV4 FlutterwaveV4TransferEvent[] @relation("FlutterwaveV4TransferEvents")
+  providerEventsStripe        StripePayoutEvent[]          @relation("StripePayoutEvents")
 
   @@index([walletId])
   @@index([status])
@@ -1655,12 +1656,14 @@ enum PayoutMethod {
   CRYPTO
   BANK
   MOBILE_MONEY
+  STRIPE
 }
 
 enum PayoutAccountType {
   BANK
   MOBILE_MONEY
   STABLECOIN_WALLET
+  STRIPE_CONNECT
 }
 
 enum PayoutAccountVerificationStatus {
@@ -1717,6 +1720,19 @@ model PayoutAccount {
   stablecoinNetwork   String?
   walletAddress       String?
   walletAddressMasked String?
+
+  // STRIPE_CONNECT -- a Stripe Connect Express account created on the
+  // trainer's behalf (stripe.accounts.create({type:'express'})). We never
+  // collect/see raw bank details for this rail: identity + bank-account
+  // entry happen entirely on Stripe-hosted pages via an Account Link
+  // (StripeConnectService.createOnboardingLink), so there is no
+  // *EncryptedJson/*Masked field group here the way BANK/MOBILE_MONEY have.
+  // stripeDetailsSubmitted/stripePayoutsEnabled mirror Stripe's own Account
+  // object fields of the same name, refreshed either by the
+  // account.updated webhook or the manual refresh-status route.
+  stripeConnectAccountId String?
+  stripeDetailsSubmitted Boolean @default(false)
+  stripePayoutsEnabled   Boolean @default(false)
 
   lastUsedAt DateTime?
   createdAt  DateTime  @default(now())
@@ -1824,6 +1840,32 @@ model FlutterwaveV4TransferEvent {
   @@index([withdrawalRequestId])
   @@index([transferId])
   @@map("flutterwave_v4_transfer_events")
+}
+
+/// Third fiat payout rail alongside Flutterwave v3/v4 -- Stripe Connect
+/// Express transfers, for trainers whose country/currency Stripe covers.
+/// Mirrors FlutterwavePayoutEvent's role exactly: every
+/// StripeConnectService.createTransfer/getPayoutStatus response, plus
+/// inbound "transfer.reversed"/"account.updated" webhook deliveries, is
+/// persisted here for audit and reconciliation. Kept as its own table
+/// rather than folded into FlutterwavePayoutEvent for the same "a new rail
+/// must not risk an already-working provider's read/write paths" reasoning
+/// FlutterwaveV4TransferEvent's doc comment gives.
+model StripePayoutEvent {
+  id                  String             @id @default(uuid())
+  eventHash           String             @unique
+  withdrawalRequestId String?
+  withdrawalRequest   WithdrawalRequest? @relation("StripePayoutEvents", fields: [withdrawalRequestId], references: [id], onDelete: SetNull)
+  providerPayoutId    String?
+  eventType           String
+  providerStatus      String?
+  payload             Json
+  processingError     String?
+  receivedAt          DateTime           @default(now())
+
+  @@index([withdrawalRequestId])
+  @@index([providerPayoutId])
+  @@map("stripe_payout_events")
 }
 
 enum P2POfferType {
@@ -2078,6 +2120,7 @@ model PlatformSettings {
   allowedFlutterwaveCountries            String    @default("NG,GH,KE,UG,ZA,TZ") // CSV of ISO 3166-1 alpha-2 countries a PayoutAccount/deposit's country may be, validated app-side
   isFlutterwaveV4Enabled                 Boolean   @default(false) // routes fiat deposit/payout/payout-account creation through FlutterwaveV4Service (OAuth2, Customer + PaymentMethod + Charge, Recipient + Sender + Transfer) instead of the v3 hosted-checkout-link flow. Off by default -- v3 stays the active rail; a withdrawal/deposit created under v4 always continues being serviced by v4 regardless of later toggling, via its own stored provider tag ("flutterwave-v4" vs "flutterwave")
   flutterwaveV4SenderId                  String? // Flutterwave v4 Sender id (POST /transfers/senders, type=generic_sender) -- one platform-level identity, not per-trainer, created lazily the first v4 payout is submitted and reused on every later one
+  isStripePayoutsEnabled                 Boolean   @default(false) // master kill switch -- when false, POST /payout-accounts rejects STRIPE_CONNECT creation and admin/withdrawals/:id/submit-stripe is disabled; admins can still resolve fiat withdrawals manually (outcome=paid) while this is off, same posture as isFlutterwavePayoutsEnabled. Off by default until STRIPE_SECRET_KEY/STRIPE_CONNECT_WEBHOOK_SECRET are configured
   authMaintenanceEnabled                 Boolean   @default(false) // master switch for the maintenance window; the five scope flags below decide what it actually blocks while on. PlatformSettingsService auto-clears this the first time any check runs after authMaintenanceUntil passes, so the admin toggle self-resets rather than staying on indefinitely
   authMaintenanceUntil                   DateTime? // scheduled end of the maintenance window
   authMaintenanceMessage                 String? // optional admin-authored note shown alongside the countdown on the login/signup pages and the logged-out notice
@@ -2331,11 +2374,11 @@ model SubscriberUser {
   emailVerifiedAt DateTime?
   createdAt       DateTime  @default(now())
 
-  memberships        SubscriberMembership[]
-  refreshTokens      SubscriberRefreshToken[]
-  otpCodes           SubscriberOtpCode[]
-  validations        SubscriberValidation[]
-  ssoIdentities      SsoIdentity[]
+  memberships         SubscriberMembership[]
+  refreshTokens       SubscriberRefreshToken[]
+  otpCodes            SubscriberOtpCode[]
+  validations         SubscriberValidation[]
+  ssoIdentities       SsoIdentity[]
   passwordResetTokens SubscriberPasswordResetToken[]
 
   @@map("subscriber_users")

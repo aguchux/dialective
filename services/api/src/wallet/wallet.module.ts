@@ -5,6 +5,7 @@ import { MailModule } from '../mail/mail.module';
 import { NowPaymentsService } from './nowpayments.service';
 import { FlutterwaveService } from './flutterwave.service';
 import { FlutterwaveV4Service } from './flutterwave-v4.service';
+import { StripeConnectService } from './stripe-connect.service';
 import { WalletController } from './wallet.controller';
 import { PayoutAccountsController } from './payout-accounts.controller';
 import { WithdrawalReconciliationService } from './withdrawal-reconciliation.service';
@@ -18,6 +19,7 @@ import { TokenomicsModule } from '../tokenomics/tokenomics.module';
     NowPaymentsService,
     FlutterwaveService,
     FlutterwaveV4Service,
+    StripeConnectService,
     WithdrawalReconciliationService,
     TrainerReportService,
   ],
@@ -25,6 +27,7 @@ import { TokenomicsModule } from '../tokenomics/tokenomics.module';
     WithdrawalReconciliationService,
     FlutterwaveService,
     FlutterwaveV4Service,
+    StripeConnectService,
     TrainerReportService,
   ],
 })

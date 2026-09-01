@@ -465,6 +465,10 @@ export class UpdatePlatformSettingsDto {
   @IsBoolean()
   isFlutterwaveV4Enabled?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  isStripePayoutsEnabled?: boolean;
+
   // CSV of ISO 4217 currency codes; validated in PlatformSettingsService.update.
   @IsOptional()
   @IsString()

@@ -1,6 +1,6 @@
 import { IsIn, IsOptional, IsString, Length, ValidateIf } from 'class-validator';
 
-const PAYOUT_ACCOUNT_TYPES = ['BANK', 'MOBILE_MONEY'] as const;
+const PAYOUT_ACCOUNT_TYPES = ['BANK', 'MOBILE_MONEY', 'STRIPE_CONNECT'] as const;
 export type CreatePayoutAccountType = (typeof PAYOUT_ACCOUNT_TYPES)[number];
 
 export class CreatePayoutAccountDto {
@@ -30,6 +30,10 @@ export class CreatePayoutAccountDto {
   @ValidateIf((dto: CreatePayoutAccountDto) => dto.type === 'MOBILE_MONEY')
   @IsString()
   mobileMoneyNumber?: string;
+
+  // STRIPE_CONNECT only needs country/currency (already required above) --
+  // no bankCode/accountNumber/mobileMoneyNetwork/mobileMoneyNumber, since
+  // Stripe collects the bank account itself on its own onboarding pages.
 
   @IsOptional()
   @IsIn([true, false])
