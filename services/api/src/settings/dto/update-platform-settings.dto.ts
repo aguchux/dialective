@@ -509,6 +509,15 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  kycAutoCancelStaleEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  kycAutoCancelStaleMinutes?: number;
+
+  @IsOptional()
+  @IsBoolean()
   authMaintenanceEnabled?: boolean;
 
   // ISO 8601 timestamp, or null to clear it (e.g. when switching maintenance
