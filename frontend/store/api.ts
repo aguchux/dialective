@@ -1357,6 +1357,7 @@ export interface PlatformSettings {
   isFlutterwaveV4Enabled: boolean;
   allowedFlutterwaveCurrencies: string;
   allowedFlutterwaveCountries: string;
+  isStripePayoutsEnabled: boolean;
   withdrawalFeeMode: string;
   withdrawalFeeTokenAmount: string;
   withdrawalFeePercent: string;
@@ -1468,6 +1469,7 @@ export interface PlatformSettingsInput {
   isFlutterwaveV4Enabled?: boolean;
   allowedFlutterwaveCurrencies?: string;
   allowedFlutterwaveCountries?: string;
+  isStripePayoutsEnabled?: boolean;
   withdrawalFeeMode?: string;
   withdrawalFeeTokenAmount?: number;
   withdrawalFeePercent?: number;

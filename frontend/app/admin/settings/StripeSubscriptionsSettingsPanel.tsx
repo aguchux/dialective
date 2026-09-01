@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, Plus, X } from 'lucide-react';
 import {
   ApiAccessTokenSummary,
@@ -10,8 +10,10 @@ import {
   useDeleteApiAccessTokenMutation,
   useDeleteSubscriptionPlanMutation,
   useGetApiAccessTokensQuery,
+  useGetPlatformSettingsQuery,
   useGetSubscriptionPlansQuery,
   useSetApiAccessTokenMutation,
+  useUpdatePlatformSettingsMutation,
   useUpsertSubscriptionPlanMutation,
 } from '@/store/api';
 
@@ -535,6 +537,105 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
   );
 }
 
+/**
+ * Trainer-payout Stripe rail (Stripe Connect Express) -- distinct from the
+ * subscriber-billing Stripe integration this tab otherwise covers (Checkout
+ * sessions/Customers for Voice Stream subscriptions, configured via the
+ * "Stripe Keys" section below). Same STRIPE_SECRET_KEY, different Stripe API
+ * surface (Connect accounts + transfers instead of Checkout), so it gets its
+ * own gate rather than reusing isFlutterwavePayoutsEnabled or being folded
+ * into the subscription-billing keys above.
+ */
+function StripePayoutsSettingsPanel() {
+  const { data: settings, isLoading } = useGetPlatformSettingsQuery();
+  const [updateSettings, { isLoading: isSaving }] = useUpdatePlatformSettingsMutation();
+
+  const [payoutsEnabled, setPayoutsEnabled] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!settings) return;
+    setPayoutsEnabled(settings.isStripePayoutsEnabled);
+  }, [settings]);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    setError(null);
+    try {
+      await updateSettings({ isStripePayoutsEnabled: payoutsEnabled }).unwrap();
+      setMessage('Stripe payout settings saved.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to save Stripe payout settings.'));
+    }
+  }
+
+  return (
+    <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+      <div className="grid gap-1">
+        <h2 className="text-2xl leading-snug">Stripe Connect (Trainer Payouts)</h2>
+        <p className="leading-relaxed text-muted">
+          Controls the Stripe Connect Express payout rail -- an alternative to Flutterwave for
+          trainers who prefer Stripe. Trainers complete onboarding (identity + bank account) on
+          Stripe's own hosted pages; we never see raw bank details for this rail. Uses the same
+          Stripe Secret Key configured below, plus the separate{' '}
+          <code className="rounded bg-surface-muted px-1 py-0.5 text-sm">
+            STRIPE_CONNECT_WEBHOOK_SECRET
+          </code>{' '}
+          environment variable for webhook verification.
+        </p>
+      </div>
+
+      {isLoading && <p className="text-muted">Loading...</p>}
+      {!isLoading && (
+        <form className="grid gap-4 md:max-w-lg" onSubmit={handleSave}>
+          <div>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="stripe-payouts-enabled"
+            >
+              <input
+                checked={payoutsEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="stripe-payouts-enabled"
+                onChange={(event) => setPayoutsEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Stripe Connect payouts enabled</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  When off, trainers cannot create a Stripe payout account and admins cannot
+                  submit withdrawals to Stripe -- keep this off until STRIPE_SECRET_KEY and
+                  STRIPE_CONNECT_WEBHOOK_SECRET are configured and tested.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <ActionButton
+              className={primaryButtonClass}
+              pending={isSaving}
+              pendingLabel="Saving"
+              type="submit"
+            >
+              Save Stripe payout settings
+            </ActionButton>
+          </div>
+        </form>
+      )}
+
+      {message && <p className="leading-relaxed text-accent-dark">{message}</p>}
+      {error && (
+        <p className="leading-relaxed text-danger" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function StripeSubscriptionsSettingsPanel() {
   const { data: tokens, isLoading: tokensLoading } = useGetApiAccessTokensQuery();
   const { data: plans, isLoading: plansLoading } = useGetSubscriptionPlansQuery();
@@ -544,6 +645,8 @@ export function StripeSubscriptionsSettingsPanel() {
 
   return (
     <div className="grid gap-6">
+      <StripePayoutsSettingsPanel />
+
       <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
         <div className="grid gap-1">
           <h2 className="text-2xl leading-snug">Stripe Keys</h2>
