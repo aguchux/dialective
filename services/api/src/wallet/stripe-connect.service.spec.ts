@@ -1,5 +1,6 @@
 import { BadGatewayException } from '@nestjs/common';
 import { StripeConnectService } from './stripe-connect.service';
+import { ApiAccessTokensService } from '../api-access-tokens/api-access-tokens.service';
 
 // Stripe's SDK opens real network handles from its constructor; unit tests
 // must never construct a real client, so the whole module is mocked and
@@ -24,28 +25,29 @@ jest.mock('stripe', () => {
 
 describe('StripeConnectService', () => {
   let service: StripeConnectService;
+  let getDecrypted: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new StripeConnectService();
-  });
-
-  afterEach(() => {
-    delete process.env.STRIPE_SECRET_KEY;
-    delete process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+    getDecrypted = jest.fn();
+    const apiAccessTokens = { getDecrypted } as unknown as ApiAccessTokensService;
+    service = new StripeConnectService(apiAccessTokens);
   });
 
   describe('credential gating', () => {
-    it('throws without calling Stripe when STRIPE_SECRET_KEY is not set', async () => {
+    it('throws without calling Stripe when stripe_secret_key is not configured', async () => {
+      getDecrypted.mockResolvedValue(null);
       await expect(
         service.createConnectedAccount({ email: 'trainer@example.com', country: 'US' }),
-      ).rejects.toThrow('STRIPE_SECRET_KEY is not set');
+      ).rejects.toThrow('stripe_secret_key API access token is not configured');
       expect(mockAccountsCreate).not.toHaveBeenCalled();
     });
 
-    it('verifyWebhookSignature returns null (not throw) when STRIPE_CONNECT_WEBHOOK_SECRET is not set', () => {
-      process.env.STRIPE_SECRET_KEY = 'sk_test_123';
-      const result = service.verifyWebhookSignature(Buffer.from('{}'), 'sig_header');
+    it('verifyWebhookSignature returns null (not throw) when stripe_connect_webhook_secret is not configured', async () => {
+      getDecrypted.mockImplementation((key: string) =>
+        key === 'stripe_secret_key' ? Promise.resolve('sk_test_123') : Promise.resolve(null),
+      );
+      const result = await service.verifyWebhookSignature(Buffer.from('{}'), 'sig_header');
       expect(result).toBeNull();
       expect(mockWebhooksConstructEvent).not.toHaveBeenCalled();
     });
@@ -53,7 +55,7 @@ describe('StripeConnectService', () => {
 
   describe('createConnectedAccount', () => {
     beforeEach(() => {
-      process.env.STRIPE_SECRET_KEY = 'sk_test_123';
+      getDecrypted.mockResolvedValue('sk_test_123');
     });
 
     it('creates an Express account requesting transfers capability', async () => {
@@ -84,7 +86,7 @@ describe('StripeConnectService', () => {
 
   describe('createOnboardingLink', () => {
     beforeEach(() => {
-      process.env.STRIPE_SECRET_KEY = 'sk_test_123';
+      getDecrypted.mockResolvedValue('sk_test_123');
     });
 
     it('returns the account link url', async () => {
@@ -108,7 +110,7 @@ describe('StripeConnectService', () => {
 
   describe('getAccountStatus', () => {
     beforeEach(() => {
-      process.env.STRIPE_SECRET_KEY = 'sk_test_123';
+      getDecrypted.mockResolvedValue('sk_test_123');
     });
 
     it('maps Stripe account fields to the typed status result', async () => {
@@ -132,7 +134,7 @@ describe('StripeConnectService', () => {
 
   describe('createTransfer', () => {
     beforeEach(() => {
-      process.env.STRIPE_SECRET_KEY = 'sk_test_123';
+      getDecrypted.mockResolvedValue('sk_test_123');
     });
 
     it('creates a transfer with a deterministic idempotency key derived from the reference', async () => {
@@ -186,7 +188,7 @@ describe('StripeConnectService', () => {
 
   describe('getPayoutStatus', () => {
     beforeEach(() => {
-      process.env.STRIPE_SECRET_KEY = 'sk_test_123';
+      getDecrypted.mockResolvedValue('sk_test_123');
     });
 
     it('reports transferred when nothing has been reversed', async () => {
@@ -211,33 +213,36 @@ describe('StripeConnectService', () => {
 
   describe('verifyWebhookSignature', () => {
     beforeEach(() => {
-      process.env.STRIPE_SECRET_KEY = 'sk_test_123';
-      process.env.STRIPE_CONNECT_WEBHOOK_SECRET = 'whsec_123';
+      getDecrypted.mockImplementation((key: string) => {
+        if (key === 'stripe_secret_key') return Promise.resolve('sk_test_123');
+        if (key === 'stripe_connect_webhook_secret') return Promise.resolve('whsec_123');
+        return Promise.resolve(null);
+      });
     });
 
-    it('returns the constructed event on success', () => {
+    it('returns the constructed event on success', async () => {
       const fakeEvent = { id: 'evt_123', type: 'transfer.reversed' };
       mockWebhooksConstructEvent.mockReturnValue(fakeEvent);
 
       const rawBody = Buffer.from('{"id":"evt_123"}');
-      const result = service.verifyWebhookSignature(rawBody, 'sig_header');
+      const result = await service.verifyWebhookSignature(rawBody, 'sig_header');
 
       expect(result).toBe(fakeEvent);
       expect(mockWebhooksConstructEvent).toHaveBeenCalledWith(rawBody, 'sig_header', 'whsec_123');
     });
 
-    it('returns null (not throw) when the signature header is missing', () => {
-      const result = service.verifyWebhookSignature(Buffer.from('{}'), undefined);
+    it('returns null (not throw) when the signature header is missing', async () => {
+      const result = await service.verifyWebhookSignature(Buffer.from('{}'), undefined);
       expect(result).toBeNull();
       expect(mockWebhooksConstructEvent).not.toHaveBeenCalled();
     });
 
-    it('returns null (not throw) when the SDK rejects the signature', () => {
+    it('returns null (not throw) when the SDK rejects the signature', async () => {
       mockWebhooksConstructEvent.mockImplementation(() => {
         throw new Error('signature mismatch');
       });
 
-      const result = service.verifyWebhookSignature(Buffer.from('{}'), 'bad_sig');
+      const result = await service.verifyWebhookSignature(Buffer.from('{}'), 'bad_sig');
       expect(result).toBeNull();
     });
   });

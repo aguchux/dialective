@@ -1,6 +1,7 @@
 import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import Stripe from 'stripe';
+import { ApiAccessTokensService } from '../api-access-tokens/api-access-tokens.service';
 import type { PayoutProvider, ProviderPayoutStatus } from './payout-provider.interface';
 
 export interface CreateConnectedAccountParams {
@@ -54,48 +55,55 @@ export interface TransferResult {
  * the actual bank payout happens later still, on Stripe's own automatic
  * payout schedule for that connected account, which we don't control or
  * observe per-transfer.
+ *
+ * Unlike FlutterwaveService, credentials are NOT read from env vars --
+ * voice-stream/billing already established the pattern of storing the
+ * Stripe secret key as an admin-rotatable ApiAccessToken row
+ * (stripe_secret_key, encrypted at rest, set via the admin "Stripe Keys"
+ * panel) rather than a k8s env var, and this is the same Stripe account/key
+ * for both Checkout and Connect, so it's reused here rather than requiring
+ * a second place to configure the same credential. The Connect webhook
+ * endpoint is different from the Checkout one, so it gets its own token key
+ * (stripe_connect_webhook_secret).
  */
 @Injectable()
 export class StripeConnectService implements PayoutProvider {
   private readonly logger = new Logger(StripeConnectService.name);
-  private stripeClient: Stripe | undefined;
 
-  private get secretKey(): string {
-    const key = process.env.STRIPE_SECRET_KEY;
+  constructor(private readonly apiAccessTokens: ApiAccessTokensService) {}
+
+  private async secretKey(): Promise<string> {
+    const key = await this.apiAccessTokens.getDecrypted('stripe_secret_key');
     if (!key) {
-      throw new Error('STRIPE_SECRET_KEY is not set');
+      throw new Error('The stripe_secret_key API access token is not configured');
     }
     return key;
   }
 
-  private get webhookSecret(): string {
-    const secret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+  private async webhookSecret(): Promise<string> {
+    const secret = await this.apiAccessTokens.getDecrypted('stripe_connect_webhook_secret');
     if (!secret) {
-      throw new Error('STRIPE_CONNECT_WEBHOOK_SECRET is not set');
+      throw new Error('The stripe_connect_webhook_secret API access token is not configured');
     }
     return secret;
   }
 
-  private get stripe(): Stripe {
-    // Constructed lazily (not in a constructor) so a missing
-    // STRIPE_SECRET_KEY only throws when a Stripe-Connect code path is
-    // actually exercised, matching FlutterwaveService's lazy-getter
-    // posture. Cached across calls -- the SDK client itself holds no
-    // per-request state worth discarding.
-    if (!this.stripeClient) {
-      this.stripeClient = new Stripe(this.secretKey);
-    }
-    return this.stripeClient;
+  private async stripe(): Promise<Stripe> {
+    // Constructed fresh per call rather than cached -- the secret key is
+    // admin-rotatable at runtime (unlike FlutterwaveService's env-var
+    // getters), so caching a client across a rotation would keep using the
+    // old key. The SDK client itself is cheap to construct.
+    return new Stripe(await this.secretKey());
   }
 
   async createConnectedAccount(
     params: CreateConnectedAccountParams,
   ): Promise<CreateConnectedAccountResult> {
-    // this.stripe is resolved outside the try -- a missing STRIPE_SECRET_KEY
-    // must propagate as-is (matching FlutterwaveService's fail-fast lazy
-    // getters), not get swallowed into a generic BadGatewayException the
-    // way an actual provider-call failure below does.
-    const stripe = this.stripe;
+    // this.stripe() is resolved outside the try -- a missing/unconfigured
+    // secret must propagate as-is (matching FlutterwaveService's fail-fast
+    // lazy getters), not get swallowed into a generic BadGatewayException
+    // the way an actual provider-call failure below does.
+    const stripe = await this.stripe();
     try {
       const account = await stripe.accounts.create({
         type: 'express',
@@ -117,7 +125,7 @@ export class StripeConnectService implements PayoutProvider {
     refreshUrl: string,
     returnUrl: string,
   ): Promise<CreateOnboardingLinkResult> {
-    const stripe = this.stripe;
+    const stripe = await this.stripe();
     try {
       const link = await stripe.accountLinks.create({
         account: stripeAccountId,
@@ -135,7 +143,7 @@ export class StripeConnectService implements PayoutProvider {
   }
 
   async getAccountStatus(stripeAccountId: string): Promise<AccountStatusResult> {
-    const stripe = this.stripe;
+    const stripe = await this.stripe();
     try {
       const account = await stripe.accounts.retrieve(stripeAccountId);
       return {
@@ -166,7 +174,7 @@ export class StripeConnectService implements PayoutProvider {
    * creating a second real one if the first attempt actually landed.
    */
   async createTransfer(params: CreateTransferParams): Promise<TransferResult> {
-    const stripe = this.stripe;
+    const stripe = await this.stripe();
     try {
       const transfer = await stripe.transfers.create(
         {
@@ -195,7 +203,7 @@ export class StripeConnectService implements PayoutProvider {
 
   /** PayoutProvider adapter. Maps a reversed transfer to a failed-ish status; otherwise the transfer is considered 'transferred' (see createTransfer's doc comment on what that does and doesn't mean). */
   async getPayoutStatus(transferId: string): Promise<ProviderPayoutStatus> {
-    const stripe = this.stripe;
+    const stripe = await this.stripe();
     try {
       const transfer = await stripe.transfers.retrieve(transferId);
       const reversed = Boolean(transfer.reversed) || (transfer.amount_reversed ?? 0) > 0;
@@ -218,12 +226,16 @@ export class StripeConnectService implements PayoutProvider {
    * callers can respond 401 the same way the Flutterwave webhook handler
    * does on a failed verifyWebhookSignature call.
    */
-  verifyWebhookSignature(rawBody: Buffer, signatureHeader: string | undefined): Stripe.Event | null {
+  async verifyWebhookSignature(
+    rawBody: Buffer,
+    signatureHeader: string | undefined,
+  ): Promise<Stripe.Event | null> {
     if (!signatureHeader) {
       return null;
     }
     try {
-      return this.stripe.webhooks.constructEvent(rawBody, signatureHeader, this.webhookSecret);
+      const [stripe, webhookSecret] = await Promise.all([this.stripe(), this.webhookSecret()]);
+      return stripe.webhooks.constructEvent(rawBody, signatureHeader, webhookSecret);
     } catch (err) {
       this.logger.warn(
         `Stripe Connect webhook signature verification failed: ${err instanceof Error ? err.message : err}`,

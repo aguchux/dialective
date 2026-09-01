@@ -13,6 +13,7 @@ export const KNOWN_API_ACCESS_TOKEN_KEYS = [
   'huggingface',
   'stripe_secret_key',
   'stripe_webhook_secret',
+  'stripe_connect_webhook_secret',
 ] as const;
 export type ApiAccessTokenKey = (typeof KNOWN_API_ACCESS_TOKEN_KEYS)[number];
 

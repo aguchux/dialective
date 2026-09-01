@@ -2642,7 +2642,7 @@ export class WalletController {
       throw new UnauthorizedException('Missing raw request body');
     }
     const signature = req.headers['stripe-signature'] as string | undefined;
-    const event = this.stripeConnect.verifyWebhookSignature(rawBody, signature);
+    const event = await this.stripeConnect.verifyWebhookSignature(rawBody, signature);
     if (!event) {
       throw new UnauthorizedException('Invalid webhook signature');
     }

@@ -37,6 +37,13 @@ describe('ApiAccessTokensService.list', () => {
         updatedAt: null,
         updatedByEmail: null,
       },
+      {
+        key: 'stripe_connect_webhook_secret',
+        isSet: false,
+        lastFour: null,
+        updatedAt: null,
+        updatedByEmail: null,
+      },
     ]);
   });
 
@@ -71,6 +78,13 @@ describe('ApiAccessTokensService.list', () => {
       },
       {
         key: 'stripe_webhook_secret',
+        isSet: false,
+        lastFour: null,
+        updatedAt: null,
+        updatedByEmail: null,
+      },
+      {
+        key: 'stripe_connect_webhook_secret',
         isSet: false,
         lastFour: null,
         updatedAt: null,
