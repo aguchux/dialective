@@ -1334,6 +1334,8 @@ export class PlatformSettingsService {
       kycMinWithdrawalTokens,
       isKycRequiredOnboarding,
       isFlutterwaveV4Enabled,
+      isFlutterwavePayoutsEnabled,
+      isStripePayoutsEnabled,
     ] = await Promise.all([
       this.getReferralCookiePersistSeconds(),
       this.getReferralInviteExpirySeconds(),
@@ -1350,6 +1352,8 @@ export class PlatformSettingsService {
       this.getKycMinWithdrawalTokens(),
       this.isKycRequiredOnboarding(),
       this.isFlutterwaveV4Enabled(),
+      this.isFlutterwavePayoutsEnabled(),
+      this.isStripePayoutsEnabled(),
     ]);
     return {
       referralCookiePersistSeconds,
@@ -1384,6 +1388,13 @@ export class PlatformSettingsService {
       kycMinWithdrawalTokens: kycMinWithdrawalTokens.toString(),
       isKycRequiredOnboarding,
       isFlutterwaveV4Enabled,
+      // Trainer-facing "which payout rail can I use" gates -- unlike the
+      // config CSVs (allowedFlutterwaveCurrencies/Countries) which are only
+      // needed by the admin settings UI, these two booleans are the only
+      // pieces of that config a trainer's payout-accounts page actually
+      // needs to decide which "add payout method" options to show.
+      isFlutterwavePayoutsEnabled,
+      isStripePayoutsEnabled,
       testimonyEnabled: row.testimonyEnabled,
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,

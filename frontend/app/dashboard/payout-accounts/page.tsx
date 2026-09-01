@@ -12,7 +12,7 @@ import {
   normalizeErrorMessage,
   useCreatePayoutAccountMutation,
   useCreateStripePayoutOnboardingLinkMutation,
-  useGetPlatformSettingsQuery,
+  useGetPublicClientSettingsQuery,
   useListBanksQuery,
   useListPayoutAccountsQuery,
   useRefreshStripePayoutAccountStatusMutation,
@@ -47,9 +47,7 @@ export default function PayoutAccountsPage() {
   } = useListPayoutAccountsQuery(undefined, {
     skip: status !== 'authenticated',
   });
-  const { data: platformSettings } = useGetPlatformSettingsQuery(undefined, {
-    skip: status !== 'authenticated',
-  });
+  const { data: publicSettings } = useGetPublicClientSettingsQuery();
   const [updateAccount] = useUpdatePayoutAccountMutation();
   const [createOnboardingLink, { isLoading: isCreatingLink }] =
     useCreateStripePayoutOnboardingLinkMutation();
@@ -217,7 +215,7 @@ export default function PayoutAccountsPage() {
         ))}
       </div>
 
-      <AddPayoutAccountDialog stripeEnabled={platformSettings?.isStripePayoutsEnabled ?? false} />
+      <AddPayoutAccountDialog stripeEnabled={publicSettings?.isStripePayoutsEnabled ?? false} />
       {deletingAccount && (
         <DeletePayoutAccountDialog
           account={deletingAccount}

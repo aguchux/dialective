@@ -923,6 +923,8 @@ export interface PublicClientSettings {
   kycMinWithdrawalTokens: string;
   isKycRequiredOnboarding: boolean;
   isFlutterwaveV4Enabled: boolean;
+  isFlutterwavePayoutsEnabled: boolean;
+  isStripePayoutsEnabled: boolean;
   testimonyEnabled: boolean;
   testimonyMaxTextLength: number;
   testimonyMaxVideoSeconds: number;
