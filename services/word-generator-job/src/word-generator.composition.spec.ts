@@ -20,6 +20,14 @@ describe('WordGeneratorService.selectWordsForComposition', () => {
     return (service as any).selectWordsForComposition(wordsPerItem, count);
   }
 
+  function callValidateComposition(
+    service: WordGeneratorService,
+    text: string,
+    wordSet: { id: string; text: string }[],
+  ): boolean {
+    return (service as any).isEnglishComposition(text, wordSet);
+  }
+
   const CLASSIFIED_POOL = [
     { id: 'n1', text: 'dog', partOfSpeech: 'NOUN' },
     { id: 'n2', text: 'market', partOfSpeech: 'NOUN' },
@@ -86,5 +94,39 @@ describe('WordGeneratorService.selectWordsForComposition', () => {
 
     expect(sets).toEqual([]);
     expect(prisma.word.findMany).not.toHaveBeenCalled();
+  });
+
+  it('accepts English composition using only selected words and grammar words', () => {
+    const { service } = setup(CLASSIFIED_POOL);
+
+    expect(
+      callValidateComposition(service, 'The quick dog runs.', [
+        { id: 'a1', text: 'quick' },
+        { id: 'n1', text: 'dog' },
+        { id: 'v1', text: 'run' },
+      ]),
+    ).toBe(true);
+  });
+
+  it('rejects dialect or non-English output before it can be persisted', () => {
+    const { service } = setup(CLASSIFIED_POOL);
+
+    expect(
+      callValidateComposition(service, 'Nde ɗon wuro.', [
+        { id: 'n1', text: 'dog' },
+        { id: 'v1', text: 'run' },
+      ]),
+    ).toBe(false);
+  });
+
+  it('rejects extra content words that were not selected for composition', () => {
+    const { service } = setup(CLASSIFIED_POOL);
+
+    expect(
+      callValidateComposition(service, 'The dog runs to market.', [
+        { id: 'n1', text: 'dog' },
+        { id: 'v1', text: 'run' },
+      ]),
+    ).toBe(false);
   });
 });

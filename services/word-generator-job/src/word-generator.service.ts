@@ -17,6 +17,28 @@ import { PHRASE_TIERS } from './phrase-tiers.const';
 
 const DEFAULT_PROVIDER_ORDER: LlmProviderKey[] = ['openai', 'deepseek', 'anthropic'];
 
+// Composition may add only these English grammar words around the selected
+// source vocabulary. This prevents a provider from inserting dialect words
+// into the English prompt/Word bank when it ignores the composition prompt.
+const ENGLISH_FUNCTION_WORDS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'but', 'if', 'then', 'than', 'that', 'this', 'these', 'those',
+  'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+  'my', 'your', 'his', 'its', 'our', 'their', 'mine', 'yours', 'ours', 'theirs',
+  'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'do', 'does', 'did',
+  'have', 'has', 'had', 'will', 'would', 'shall', 'should', 'can', 'could', 'may', 'might',
+  'must', 'not', 'no', 'yes', 'to', 'of', 'in', 'on', 'at', 'by', 'for', 'from', 'with',
+  'without', 'into', 'onto', 'over', 'under', 'before', 'after', 'between', 'through',
+  'during', 'about', 'as', 'like', 'near', 'around', 'up', 'down', 'out', 'off', 'away',
+  'here', 'there', 'where', 'when', 'why', 'how', 'who', 'what', 'which', 'while',
+  'very', 'more', 'most', 'less', 'least', 'all', 'any', 'some', 'many', 'much', 'each',
+  'every', 'both', 'either', 'neither', 'one', 'two', 'three', 'again', 'also', 'just',
+  'now', 'today', 'tomorrow', 'yesterday', 'please', 'not', 'never', 'always', 'often',
+  'can\'t', 'cannot', 'don\'t', 'doesn\'t', 'didn\'t', 'isn\'t', 'aren\'t', 'wasn\'t',
+  'weren\'t', 'won\'t', 'wouldn\'t', 'shouldn\'t', 'couldn\'t', 'i\'m', 'you\'re',
+  'we\'re', 'they\'re', 'it\'s', 'that\'s', 'there\'s', 'i\'ve', 'you\'ve', 'we\'ve',
+  'they\'ve', 'i\'ll', 'you\'ll', 'we\'ll', 'they\'ll', 'i\'d', 'you\'d', 'we\'d', 'they\'d',
+]);
+
 /**
  * Generates new English words/phrases via an admin-configured LLM fallback
  * chain, translates each into every dialect currently opted into generation
@@ -530,11 +552,73 @@ export class WordGeneratorService {
         filteredCount += 1;
         continue;
       }
+      if (!this.isEnglishComposition(item.text, item.wordSet)) {
+        filteredCount += 1;
+        continue;
+      }
       seen.add(key);
       accepted.push(item);
     }
 
     return { accepted, filteredCount };
+  }
+
+  /**
+   * A multi-word source prompt is English only when every token is either
+   * an English grammar word or a selected source word (including a narrow,
+   * predictable inflection). Responses that violate the source-vocabulary
+   * contract never reach Prompt or Word persistence.
+   */
+  private isEnglishComposition(
+    text: string,
+    wordSet: { id: string; text: string }[],
+  ): boolean {
+    if (!/^[A-Za-z\s'.,!?;:-]+$/.test(text)) return false;
+
+    const tokens = text.toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g);
+    if (!tokens || tokens.length < 2) return false;
+
+    const sourceWords = wordSet.map((word) => word.text.toLowerCase());
+    if (!sourceWords.every((source) => this.isEnglishWord(source))) return false;
+
+    return (
+      tokens.every(
+        (token) =>
+          ENGLISH_FUNCTION_WORDS.has(token) ||
+          sourceWords.some((source) => this.isSourceWordVariant(token, source)),
+      ) &&
+      sourceWords.every((source) =>
+        tokens.some((token) => this.isSourceWordVariant(token, source)),
+      )
+    );
+  }
+
+  private isEnglishWord(text: string): boolean {
+    return /^[A-Za-z]+(?:'[A-Za-z]+)?$/.test(text.trim());
+  }
+
+  private isSourceWordVariant(token: string, source: string): boolean {
+    if (token === source) return true;
+
+    const directSuffixes = ['s', 'es', 'ed', 'ing', 'er', 'est', 'ly'];
+    if (directSuffixes.some((suffix) => token === `${source}${suffix}`)) return true;
+
+    if (source.endsWith('e')) {
+      const stem = source.slice(0, -1);
+      if (token === `${stem}ing` || token === `${stem}ed`) return true;
+    }
+    if (source.endsWith('y')) {
+      const stem = source.slice(0, -1);
+      if (token === `${stem}ies` || token === `${stem}ied`) return true;
+    }
+
+    for (const suffix of ['ing', 'ed']) {
+      if (!token.endsWith(suffix)) continue;
+      const stem = token.slice(0, -suffix.length);
+      if (stem.length > 1 && stem.at(-1) === stem.at(-2) && stem.slice(0, -1) === source)
+        return true;
+    }
+    return false;
   }
 
   private filterAndValidatePosItems(
@@ -810,7 +894,7 @@ export class WordGeneratorService {
       let position = 0;
       for (const item of items) {
         try {
-          const word = await this.findOrCreateWordForFragment(item, dialectTag, providerOrder);
+          const word = await this.findOrCreateWordForFragment(item, dialectTag);
           if (!word) {
             failures += 1;
             continue;
@@ -843,18 +927,15 @@ export class WordGeneratorService {
    * Resolves a segmented fragment back to a real, classified Word row.
    * English fragments (dialectTag 'en-us') map directly onto Word.text;
    * dialect fragments look up an existing WordTranslation with matching
-   * text first (case-insensitive), and only mint a brand-new bootstrap
-   * Word (English text = the fragment itself, best-effort) if nothing
-   * matches -- this keeps PromptWord always backed by a real classified
-   * Word without requiring every fragment to already exist in the word
-   * bank ahead of time.
+   * text first (case-insensitive). Unlinked dialect fragments are skipped;
+   * they must never become new English Word rows.
    */
   private async findOrCreateWordForFragment(
     item: PosItem,
     dialectTag: string,
-    providerOrder: LlmProviderKey[],
   ): Promise<{ id: string } | null> {
     if (dialectTag === 'en-us') {
+      if (!this.isEnglishWord(item.text)) return null;
       const existing = await this.prisma.word.findFirst({
         where: { text: { equals: item.text, mode: 'insensitive' } },
         select: { id: true },
@@ -873,25 +954,10 @@ export class WordGeneratorService {
     });
     if (existingTranslation) return { id: existingTranslation.wordId };
 
-    // No matching translation yet -- bootstrap a new Word using the
-    // fragment's own text as a same-text placeholder English entry (best
-    // effort; word-generator-job's regular translation pass will never
-    // touch this row since it isn't in dialectTags' generation flow, but
-    // it's enough to satisfy PromptWord's real-Word requirement and gives
-    // admins a classified row to review/fix).
-    const englishWord = await this.prisma.word.create({
-      data: { text: item.text },
-      select: { id: true },
-    });
-    await this.prisma.wordTranslation.create({
-      data: {
-        wordId: englishWord.id,
-        dialectTag,
-        text: item.text,
-        partOfSpeech: item.partOfSpeech,
-      },
-    });
-    return englishWord;
+    // A dialect fragment that has no known English WordTranslation must not
+    // manufacture a Word row with dialect text. Word is the English source
+    // bank; leave this fragment unlinked until a real translation exists.
+    return null;
   }
 
   // --- Composition ---------------------------------------------------------
@@ -916,10 +982,10 @@ export class WordGeneratorService {
   ): Promise<{ id: string; text: string; partOfSpeech: string }[][]> {
     if (count <= 0) return [];
 
-    const classified = await this.prisma.word.findMany({
+    const classified = (await this.prisma.word.findMany({
       where: { partOfSpeech: { not: null } },
       select: { id: true, text: true, partOfSpeech: true },
-    });
+    })).filter((word) => this.isEnglishWord(word.text));
     if (classified.length < wordsPerItem) return [];
 
     const nouns = classified.filter((w) => w.partOfSpeech === 'NOUN');
