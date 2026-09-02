@@ -32,7 +32,7 @@ This repo contains the **ASR scoring pipeline**: the subsystem that ingests audi
 
 ### Redis Streams and RabbitMQ
 
-Redis Streams remains the live ASR, consensus, and prompt-audio broker. RabbitMQ is now provisioned as a single persistent management-enabled broker (`k8s/base/rabbitmq.yaml`) with its UI at `rabbitmq.dialectlibrary.com`, but no service publishes to or consumes from it yet. Its AMQP port is cluster-private and must not be exposed through an Ingress.
+Redis Streams remains the live ASR, consensus, and prompt-audio broker. RabbitMQ is now provisioned as a single persistent management-enabled broker (`k8s/base/rabbitmq.yaml`) with its UI at `rabbitmq.dialectlibrary.com`, but no real workload publishes to or consumes from it yet. Its AMQP port is cluster-private and must not be exposed through an Ingress. `api` has a generic `RabbitMqService`/`RabbitMqModule` (`services/api/src/rabbitmq/`) wrapping amqplib -- connect/publish/consume/ack/nack, mirroring `RedisStreamsService`'s shape -- so a future workload can declare a queue and a handler against it directly instead of standing up a client from scratch. Connectivity is proven by an admin-only `POST admin/rabbitmq/smoke-test` route (publishes a token to a throwaway queue and consumes it back); this is a diagnostic, not a real queue.
 
 **Revisit RabbitMQ if/when a concrete trigger shows up:**
 

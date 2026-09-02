@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { HealthController } from './health/health.controller';
 import { RedisStreamsModule } from './redis-streams/redis-streams.module';
+import { RabbitMqModule } from './rabbitmq/rabbitmq.module';
 import { AsrRegistryModule } from './asr-registry/asr-registry.module';
 import { SubmissionsModule } from './submissions/submissions.module';
 import { PromptsModule } from './prompts/prompts.module';
@@ -41,6 +42,7 @@ import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.modul
     ScheduleModule.forRoot(),
     PrismaModule,
     RedisStreamsModule,
+    RabbitMqModule,
     AsrRegistryModule,
     SubmissionsModule,
     PromptsModule,

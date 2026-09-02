@@ -58,6 +58,31 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: redis_port
+            - name: RABBITMQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: rabbitmq_host
+            - name: RABBITMQ_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: rabbitmq_port
+            - name: RABBITMQ_VHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: rabbitmq_vhost
+            - name: RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-creds
+                  key: username
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-creds
+                  key: password
             - name: SPACES_REGION
               valueFrom:
                 configMapKeyRef:
