@@ -6,6 +6,7 @@ import { notifyAuthMaintenance } from '@/lib/auth-maintenance-signal';
 
 export type KycStatus =
   'NOT_STARTED' | 'IN_PROGRESS' | 'IN_REVIEW' | 'APPROVED' | 'DECLINED' | 'ABANDONED' | 'EXPIRED';
+export type TrainerRating = 'BAD' | 'GOOD' | 'VERY_GOOD' | 'EXCELLENT';
 
 export interface PublicUser {
   id: string;
@@ -14,6 +15,8 @@ export interface PublicUser {
   email: string;
   role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR';
   status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
+  trainerRating: TrainerRating | null;
+  trainerRatingValue: number | null;
   emailVerified: boolean;
   phoneNumber: string | null;
   phoneVerified: boolean;
@@ -1314,6 +1317,7 @@ export interface PlatformSettings {
   minScoreRange: string;
   maxScoreRange: string;
   llmGenerationEnabled: boolean;
+  singleWordGenerationEnabled: boolean;
   llmProviderOrder: string;
   llmWordsPerItem: number;
   llmItemsPerRun: number;
@@ -1427,6 +1431,7 @@ export interface PlatformSettingsInput {
   minScoreRange?: number;
   maxScoreRange?: number;
   llmGenerationEnabled?: boolean;
+  singleWordGenerationEnabled?: boolean;
   llmProviderOrder?: string;
   llmWordsPerItem?: number;
   llmItemsPerRun?: number;
@@ -3270,6 +3275,14 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['Users'],
     }),
+    updateTrainerRating: builder.mutation<PublicUser, { id: string; rating: TrainerRating }>({
+      query: ({ id, rating }) => ({
+        url: `/auth/admin/users/${id}/trainer-rating`,
+        method: 'PATCH',
+        body: { rating },
+      }),
+      invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
+    }),
     getAdminUser: builder.query<PublicUser, string>({
       query: (id) => `/auth/admin/users/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Users', id }],
@@ -3952,6 +3965,7 @@ export const {
   useRejectAdminManualPhoneVerificationMutation,
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,
+  useUpdateTrainerRatingMutation,
   useGetAdminUserQuery,
   useResetUserDialectMutation,
   useGetUserActivityQuery,

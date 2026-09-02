@@ -62,9 +62,14 @@ export class WordGeneratorService {
     const generatedItemsCount = await this.getGeneratedItemsCount(wordsPerItem);
     const remainingGlobalHeadroom = Math.max(0, maxTotalGeneratedItems - generatedItemsCount);
     if (remainingGlobalHeadroom <= 0) {
+      // Still run phrase-tier generation below -- it has its own enable
+      // flag and per-tier item budget (phraseTierGenerationEnabled,
+      // phraseTierItemsPerTierPerRun) and is meant to pre-populate
+      // independently of the main wordsPerItem-driven pass's global cap.
       this.logger.log(
-        `Generation skipped: global cap reached (generated=${generatedItemsCount} maxTotalGeneratedItems=${maxTotalGeneratedItems})`,
+        `Main generation skipped: global cap reached (generated=${generatedItemsCount} maxTotalGeneratedItems=${maxTotalGeneratedItems})`,
       );
+      await this.runPhraseTierGeneration();
       return;
     }
     const effectiveItemsPerRun = Math.min(itemsPerRun, remainingGlobalHeadroom);
@@ -122,7 +127,16 @@ export class WordGeneratorService {
     let translationFailures = 0;
     let promptWordFailures = 0;
 
-    if (wordsPerItem === 1) {
+    if (wordsPerItem === 1 && !settings.singleWordGenerationEnabled) {
+      // Narrower than llmGenerationEnabled above -- stops ONLY the
+      // single-word branch. Composition (llmWordsPerItem>=2) and
+      // runPhraseTierGeneration below are unaffected by this flag; set
+      // llmWordsPerItem to 2-5 separately to get composition output from
+      // this pass while single-word generation stays off.
+      this.logger.log(
+        'Single-word generation disabled (singleWordGenerationEnabled=false) and llmWordsPerItem=1; skipping main generation pass',
+      );
+    } else if (wordsPerItem === 1) {
       const prompt = this.buildWordGenerationPrompt(effectiveItemsPerRun);
       const { items: rawItems, provider: englishProvider } = await this.chain.generateStructured(
         prompt,

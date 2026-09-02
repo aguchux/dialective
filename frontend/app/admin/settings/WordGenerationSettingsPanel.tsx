@@ -44,6 +44,7 @@ export function WordGenerationSettingsPanel() {
   const [maxPoolPerDialect, setMaxPoolPerDialect] = useState('50');
   const [backfillItemsPerDialectPerRun, setBackfillItemsPerDialectPerRun] = useState('10');
   const [keyboardLayoutMaxLength, setKeyboardLayoutMaxLength] = useState('1000');
+  const [singleWordGenerationEnabled, setSingleWordGenerationEnabled] = useState(true);
   const [phraseTierGenerationEnabled, setPhraseTierGenerationEnabled] = useState(false);
   const [phraseTierItemsPerTierPerRun, setPhraseTierItemsPerTierPerRun] = useState('3');
   const [message, setMessage] = useState<string | null>(null);
@@ -59,6 +60,7 @@ export function WordGenerationSettingsPanel() {
     setMaxPoolPerDialect(String(settings.llmMaxPoolPerDialect));
     setBackfillItemsPerDialectPerRun(String(settings.llmBackfillItemsPerDialectPerRun));
     setKeyboardLayoutMaxLength(String(settings.keyboardLayoutMaxLength));
+    setSingleWordGenerationEnabled(settings.singleWordGenerationEnabled);
     setPhraseTierGenerationEnabled(settings.phraseTierGenerationEnabled);
     setPhraseTierItemsPerTierPerRun(String(settings.phraseTierItemsPerTierPerRun));
   }, [settings]);
@@ -84,6 +86,7 @@ export function WordGenerationSettingsPanel() {
     try {
       await updateSettings({
         llmGenerationEnabled: enabled,
+        singleWordGenerationEnabled,
         llmProviderOrder: order.join(','),
         ...(wordsPerItem !== '' ? { llmWordsPerItem: Number(wordsPerItem) } : {}),
         ...(itemsPerRun !== '' ? { llmItemsPerRun: Number(itemsPerRun) } : {}),
@@ -196,6 +199,30 @@ export function WordGenerationSettingsPanel() {
               value={wordsPerItem}
               onChange={(e) => setWordsPerItem(e.target.value)}
             />
+          </div>
+
+          <div>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="single-word-generation-enabled"
+            >
+              <input
+                checked={singleWordGenerationEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="single-word-generation-enabled"
+                onChange={(event) => setSingleWordGenerationEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Generate single words</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Narrower than "Enable word generation" above -- stops ONLY the single-word
+                  ("Words per item" = 1) branch specifically, without touching composition (2-5)
+                  or the phrase-tier pool below. Turn this off and set "Words per item" to 2-5 to
+                  make the scheduled job generate sentences/phrases instead of single words.
+                </span>
+              </span>
+            </label>
           </div>
 
           <div className="grid gap-1">

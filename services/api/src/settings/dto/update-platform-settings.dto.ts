@@ -212,6 +212,10 @@ export class UpdatePlatformSettingsDto {
   @IsBoolean()
   llmGenerationEnabled?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  singleWordGenerationEnabled?: boolean;
+
   // 3 comma-separated tokens from {openai,deepseek,anthropic}; exact
   // permutation (all 3 distinct, no repeats/omissions) is validated in
   // PlatformSettingsService.update, not expressible via a single regex.
