@@ -32,8 +32,8 @@ export class CreateWithdrawalDto {
   destinationNetwork?: string;
 
   @IsOptional()
-  @IsIn(['CRYPTO', 'BANK', 'MOBILE_MONEY'])
-  payoutMethod?: 'CRYPTO' | 'BANK' | 'MOBILE_MONEY';
+  @IsIn(['CRYPTO', 'BANK', 'MOBILE_MONEY', 'STRIPE'])
+  payoutMethod?: 'CRYPTO' | 'BANK' | 'MOBILE_MONEY' | 'STRIPE';
 
   @ValidateIf(
     (dto: CreateWithdrawalDto) => Boolean(dto.payoutMethod) && dto.payoutMethod !== 'CRYPTO',

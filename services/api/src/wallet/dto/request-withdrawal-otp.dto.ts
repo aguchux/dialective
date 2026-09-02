@@ -33,8 +33,8 @@ export class RequestWithdrawalOtpDto {
   destinationNetwork?: string;
 
   @IsOptional()
-  @IsIn(['CRYPTO', 'BANK', 'MOBILE_MONEY'])
-  payoutMethod?: 'CRYPTO' | 'BANK' | 'MOBILE_MONEY';
+  @IsIn(['CRYPTO', 'BANK', 'MOBILE_MONEY', 'STRIPE'])
+  payoutMethod?: 'CRYPTO' | 'BANK' | 'MOBILE_MONEY' | 'STRIPE';
 
   @ValidateIf(
     (dto: RequestWithdrawalOtpDto) => Boolean(dto.payoutMethod) && dto.payoutMethod !== 'CRYPTO',

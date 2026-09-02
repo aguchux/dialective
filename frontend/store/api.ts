@@ -570,7 +570,7 @@ export interface AdminWithdrawalRequest {
   fiatUsdExchangeRate?: string | null;
 }
 
-export type PayoutMethod = 'CRYPTO' | 'BANK' | 'MOBILE_MONEY';
+export type PayoutMethod = 'CRYPTO' | 'BANK' | 'MOBILE_MONEY' | 'STRIPE';
 export type PayoutAccountType = 'BANK' | 'MOBILE_MONEY' | 'STABLECOIN_WALLET' | 'STRIPE_CONNECT';
 export type PayoutAccountVerificationStatus = 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'FAILED';
 

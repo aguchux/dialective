@@ -107,6 +107,8 @@ import {
   useCreateWithdrawalMutation,
   useListPayoutAccountsQuery,
   LocalCurrency,
+  PayoutAccount,
+  PayoutAccountType,
   WithdrawalCurrency,
   WithdrawalNetwork,
   useGetEarningHistoryQuery,
@@ -3285,7 +3287,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                     <span className="truncate font-extrabold text-ink">
                       {account.type === 'BANK'
                         ? (account.bankName ?? account.bankCode)
-                        : account.mobileMoneyNetwork}
+                        : account.type === 'MOBILE_MONEY'
+                          ? account.mobileMoneyNetwork
+                          : 'Stripe Connect'}
                       {account.isDefault && (
                         <span className="ml-2 rounded-md bg-accent-soft px-2 py-0.5 text-xs font-extrabold text-accent-dark">
                           Default
@@ -3296,11 +3300,21 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                       {account.accountName ? `${account.accountName} · ` : ''}
                       {account.type === 'BANK'
                         ? account.accountNumberMasked
-                        : account.mobileMoneyNumberMasked}
+                        : account.type === 'MOBILE_MONEY'
+                          ? account.mobileMoneyNumberMasked
+                          : account.stripePayoutsEnabled
+                            ? 'Onboarding complete'
+                            : 'Onboarding not finished yet'}
                     </span>
                   </div>
                   <button
-                    aria-label={`Remove ${account.type === 'BANK' ? (account.bankName ?? 'account') : account.mobileMoneyNetwork}`}
+                    aria-label={`Remove ${
+                      account.type === 'BANK'
+                        ? (account.bankName ?? 'account')
+                        : account.type === 'MOBILE_MONEY'
+                          ? account.mobileMoneyNetwork
+                          : 'Stripe Connect account'
+                    }`}
                     className="grid min-h-9 min-w-9 shrink-0 place-items-center rounded-lg border border-line text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-red-950"
                     onClick={() =>
                       setDeletingPayoutAccount({
@@ -3308,7 +3322,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                         label:
                           account.type === 'BANK'
                             ? (account.bankName ?? account.bankCode ?? 'this bank account')
-                            : (account.mobileMoneyNumberMasked ?? 'this mobile money account'),
+                            : account.type === 'MOBILE_MONEY'
+                              ? (account.mobileMoneyNumberMasked ?? 'this mobile money account')
+                              : 'this Stripe Connect account',
                       })
                     }
                     type="button"
@@ -4215,6 +4231,21 @@ const WITHDRAWAL_ADDRESS_PATTERNS: Record<WithdrawalNetwork, RegExp> = {
   POLYGON: /^0x[0-9a-fA-F]{40}$/,
 };
 
+// Mirrors WalletController.createWithdrawal's isStripeAccount branch --
+// Stripe Connect accounts get their own PayoutMethod value distinct from
+// BANK/MOBILE_MONEY, matching the fiatSnapshot the backend actually records.
+function payoutMethodForAccount(type: PayoutAccountType | undefined): 'BANK' | 'MOBILE_MONEY' | 'STRIPE' {
+  if (type === 'STRIPE_CONNECT') return 'STRIPE';
+  if (type === 'MOBILE_MONEY') return 'MOBILE_MONEY';
+  return 'BANK';
+}
+
+function payoutAccountLabel(account: PayoutAccount): string {
+  if (account.type === 'BANK') return `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`;
+  if (account.type === 'MOBILE_MONEY') return `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`;
+  return 'Stripe Connect';
+}
+
 function WithdrawTokensDialog({
   balance,
   minWithdrawalTokens,
@@ -4305,6 +4336,10 @@ function WithdrawTokensDialog({
         setMessage('Choose a payout method before continuing.');
         return;
       }
+      if (selectedPayoutAccount?.type === 'STRIPE_CONNECT' && !selectedPayoutAccount.stripePayoutsEnabled) {
+        setMessage('Finish Stripe onboarding for this payout account before requesting a withdrawal.');
+        return;
+      }
     } else {
       if (!addressLooksValid) {
         setMessage(`That doesn't look like a valid ${destinationNetwork} address.`);
@@ -4324,7 +4359,7 @@ function WithdrawTokensDialog({
       if (method === 'fiat') {
         const result = await requestOtp({
           tokenAmount: amountNumber,
-          payoutMethod: selectedPayoutAccount?.type === 'MOBILE_MONEY' ? 'MOBILE_MONEY' : 'BANK',
+          payoutMethod: payoutMethodForAccount(selectedPayoutAccount?.type),
           payoutAccountId,
         }).unwrap();
         setOtpRequestId(result.otpRequestId);
@@ -4351,7 +4386,7 @@ function WithdrawTokensDialog({
       if (method === 'fiat') {
         await createWithdrawal({
           tokenAmount: amountNumber,
-          payoutMethod: selectedPayoutAccount?.type === 'MOBILE_MONEY' ? 'MOBILE_MONEY' : 'BANK',
+          payoutMethod: payoutMethodForAccount(selectedPayoutAccount?.type),
           payoutAccountId,
           otpRequestId,
           code,
@@ -4571,14 +4606,7 @@ function WithdrawTokensDialog({
                 />
               )}
               {method === 'fiat' && selectedPayoutAccount && (
-                <ConfirmRow
-                  label="Payout account"
-                  value={
-                    selectedPayoutAccount.type === 'BANK'
-                      ? `${selectedPayoutAccount.bankName ?? selectedPayoutAccount.bankCode} · ${selectedPayoutAccount.accountNumberMasked}`
-                      : `${selectedPayoutAccount.mobileMoneyNetwork} · ${selectedPayoutAccount.mobileMoneyNumberMasked}`
-                  }
-                />
+                <ConfirmRow label="Payout account" value={payoutAccountLabel(selectedPayoutAccount)} />
               )}
               {method === 'crypto' && (
                 <ConfirmRow
@@ -4765,9 +4793,10 @@ function WithdrawTokensDialog({
                   </option>
                   {payoutAccounts?.map((account) => (
                     <option key={account.id} value={account.id}>
-                      {account.type === 'BANK'
-                        ? `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`
-                        : `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`}
+                      {payoutAccountLabel(account)}
+                      {account.type === 'STRIPE_CONNECT' && !account.stripePayoutsEnabled
+                        ? ' (setup not finished)'
+                        : ''}
                     </option>
                   ))}
                 </select>
@@ -4776,6 +4805,17 @@ function WithdrawTokensDialog({
                 </Link>
               </label>
             )}
+            {method === 'fiat' &&
+              selectedPayoutAccount?.type === 'STRIPE_CONNECT' &&
+              !selectedPayoutAccount.stripePayoutsEnabled && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                  Finish Stripe onboarding for this payout account before requesting a withdrawal.{' '}
+                  <Link className="underline" href="/dashboard/payout-accounts">
+                    Continue setup
+                  </Link>
+                  .
+                </p>
+              )}
             {message && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
                 {message}
@@ -4786,7 +4826,9 @@ function WithdrawTokensDialog({
               disabled={
                 method === 'crypto'
                   ? !addressLooksValid || !addressConfirmed
-                  : (payoutAccounts?.length ?? 0) === 0
+                  : (payoutAccounts?.length ?? 0) === 0 ||
+                    (selectedPayoutAccount?.type === 'STRIPE_CONNECT' &&
+                      !selectedPayoutAccount.stripePayoutsEnabled)
               }
               type="submit"
             >
