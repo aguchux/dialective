@@ -3,7 +3,7 @@
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Banknote, Smartphone } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
@@ -12,6 +12,7 @@ import {
   normalizeErrorMessage,
   useCreatePayoutAccountMutation,
   useCreateStripePayoutOnboardingLinkMutation,
+  useGetCountriesQuery,
   useGetPublicClientSettingsQuery,
   useListBanksQuery,
   useListPayoutAccountsQuery,
@@ -19,14 +20,20 @@ import {
   useUpdatePayoutAccountMutation,
 } from '@/store/api';
 
-const FLUTTERWAVE_COUNTRIES: { code: string; currency: string; label: string }[] = [
-  { code: 'NG', currency: 'NGN', label: 'Nigeria (NGN)' },
-  { code: 'GH', currency: 'GHS', label: 'Ghana (GHS)' },
-  { code: 'KE', currency: 'KES', label: 'Kenya (KES)' },
-  { code: 'UG', currency: 'UGX', label: 'Uganda (UGX)' },
-  { code: 'ZA', currency: 'ZAR', label: 'South Africa (ZAR)' },
-  { code: 'TZ', currency: 'TZS', label: 'Tanzania (TZS)' },
-];
+// Flutterwave's fiat rail only covers these markets today -- every other
+// country falls straight through to Stripe as the only real option (Stripe
+// Connect Express's own country coverage is broad and changes over time, so
+// rather than hardcode a second list that will go stale, "not Flutterwave"
+// is treated as "try Stripe" and a genuinely unsupported country surfaces as
+// a real error from stripe.accounts.create at submit time).
+const FLUTTERWAVE_COUNTRIES: Record<string, string> = {
+  NG: 'NGN',
+  GH: 'GHS',
+  KE: 'KES',
+  UG: 'UGX',
+  ZA: 'ZAR',
+  TZ: 'TZS',
+};
 
 const MOBILE_MONEY_NETWORKS = ['MTN', 'AIRTEL', 'VODAFONE', 'TIGO'];
 
@@ -36,6 +43,8 @@ const primaryButtonClass =
   'min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark';
 const secondaryButtonClass =
   'inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
+const ghostButtonClass =
+  'inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-sm font-bold text-muted transition-colors hover:bg-surface-muted hover:text-ink';
 
 export default function PayoutAccountsPage() {
   const { status } = useSession();
@@ -127,7 +136,14 @@ export default function PayoutAccountsPage() {
             key={account.id}
           >
             <div className="flex items-center justify-between gap-2">
-              <p className="font-extrabold">
+              <p className="flex items-center gap-2 font-extrabold">
+                <span className="grid size-6 shrink-0 place-items-center rounded-md border border-line bg-white">
+                  {account.type === 'STRIPE_CONNECT' ? (
+                    <StripeIcon className="size-4" />
+                  ) : (
+                    <FlutterwaveIcon className="size-4" />
+                  )}
+                </span>
                 {account.type === 'BANK'
                   ? (account.bankName ?? account.bankCode)
                   : account.type === 'MOBILE_MONEY'
@@ -226,48 +242,91 @@ export default function PayoutAccountsPage() {
   );
 }
 
+type Provider = 'FLUTTERWAVE' | 'STRIPE_CONNECT';
+type WizardStep = 'country' | 'provider' | 'details';
+
+/**
+ * Three-step add-payout-method flow: pick a country, see which rails are
+ * actually usable there (Flutterwave only for its 6 supported markets,
+ * Stripe as the broad fallback everywhere else -- see FLUTTERWAVE_COUNTRIES'
+ * doc comment), then the provider-specific detail form. Replaces the old
+ * single-screen type-picker-at-the-top layout.
+ */
 function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<'BANK' | 'MOBILE_MONEY' | 'STRIPE_CONNECT'>('BANK');
-  const [countryCode, setCountryCode] = useState(FLUTTERWAVE_COUNTRIES[0].code);
+  const [step, setStep] = useState<WizardStep>('country');
+  const [countryCode, setCountryCode] = useState('');
+  const [countryName, setCountryName] = useState('');
+  const [provider, setProvider] = useState<Provider | null>(null);
+  const [flutterwaveType, setFlutterwaveType] = useState<'BANK' | 'MOBILE_MONEY'>('BANK');
   const [bankCode, setBankCode] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [mobileMoneyNetwork, setMobileMoneyNetwork] = useState(MOBILE_MONEY_NETWORKS[0]);
   const [mobileMoneyNumber, setMobileMoneyNumber] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const selectedCountry =
-    FLUTTERWAVE_COUNTRIES.find((c) => c.code === countryCode) ?? FLUTTERWAVE_COUNTRIES[0];
-  const { data: banks, isLoading: isLoadingBanks } = useListBanksQuery(countryCode, {
-    skip: type !== 'BANK' || !open,
+
+  const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery(undefined, {
+    skip: !open,
   });
-  const [createAccount, { isLoading }] = useCreatePayoutAccountMutation();
+  const flutterwaveCurrency = FLUTTERWAVE_COUNTRIES[countryCode];
+  const flutterwaveAvailable = Boolean(flutterwaveCurrency);
+  const { data: banks, isLoading: isLoadingBanks } = useListBanksQuery(countryCode, {
+    skip: provider !== 'FLUTTERWAVE' || flutterwaveType !== 'BANK' || !open,
+  });
+  const [createAccount, { isLoading: isSubmitting }] = useCreatePayoutAccountMutation();
+
+  function reset() {
+    setStep('country');
+    setCountryCode('');
+    setCountryName('');
+    setProvider(null);
+    setFlutterwaveType('BANK');
+    setBankCode('');
+    setAccountNumber('');
+    setMobileMoneyNumber('');
+    setError(null);
+  }
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) reset();
+  }
+
+  function goToProviderStep(code: string, name: string) {
+    setCountryCode(code);
+    setCountryName(name);
+    setProvider(null);
+    setStep('provider');
+  }
+
+  function goToDetailsStep(nextProvider: Provider) {
+    setProvider(nextProvider);
+    setStep('details');
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
-    if (type === 'BANK' && !bankCode) {
+    if (provider === 'FLUTTERWAVE' && flutterwaveType === 'BANK' && !bankCode) {
       setError('Select a bank.');
       return;
     }
     try {
       const result = await createAccount({
-        type,
+        type: provider === 'STRIPE_CONNECT' ? 'STRIPE_CONNECT' : flutterwaveType,
         country: countryCode,
-        currency: type === 'STRIPE_CONNECT' ? 'USD' : selectedCountry.currency,
-        ...(type === 'BANK'
+        currency: provider === 'STRIPE_CONNECT' ? 'USD' : flutterwaveCurrency,
+        ...(provider === 'FLUTTERWAVE' && flutterwaveType === 'BANK'
           ? { bankCode, accountNumber }
-          : type === 'MOBILE_MONEY'
+          : provider === 'FLUTTERWAVE'
             ? { mobileMoneyNetwork, mobileMoneyNumber }
             : {}),
       }).unwrap();
-      setBankCode('');
-      setAccountNumber('');
-      setMobileMoneyNumber('');
-      setOpen(false);
+      handleOpenChange(false);
       // A Stripe Connect account is useless until the trainer finishes
       // Stripe's own hosted onboarding -- send them there immediately
       // rather than leaving them on a saved-but-unusable account row.
-      if (type === 'STRIPE_CONNECT' && result.onboardingUrl) {
+      if (provider === 'STRIPE_CONNECT' && result.onboardingUrl) {
         window.location.href = result.onboardingUrl;
       }
     } catch (err) {
@@ -275,150 +334,275 @@ function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
     }
   }
 
+  const stepTitle: Record<WizardStep, string> = {
+    country: 'Add a payout method',
+    provider: `Payout options for ${countryName}`,
+    details:
+      provider === 'STRIPE_CONNECT' ? 'Connect with Stripe' : 'Bank or mobile money details',
+  };
+  const stepDescription: Record<WizardStep, string> = {
+    country: 'Start by telling us where you are -- this decides which payout providers we can offer.',
+    provider: 'Choose how you want to receive your DL withdrawals.',
+    details: 'Bank details are encrypted and only used to send you DL withdrawals.',
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger className={primaryButtonClass}>+ Add payout method</DialogTrigger>
-      <DialogContent
-        title="Add a payout method"
-        description="Bank details are encrypted and only used to send you DL withdrawals."
-      >
-        <form className="grid gap-3" onSubmit={handleSubmit}>
-          <fieldset className="grid gap-2">
-            <legend className="mb-1 text-sm font-bold">Type</legend>
-            <div className={`grid gap-2 ${stripeEnabled ? 'grid-cols-3' : 'grid-cols-2'}`}>
-              {(
-                [
-                  { value: 'BANK', label: 'Bank account' },
-                  { value: 'MOBILE_MONEY', label: 'Mobile money' },
-                  ...(stripeEnabled
-                    ? [{ value: 'STRIPE_CONNECT' as const, label: 'Stripe' }]
-                    : []),
-                ] as const
-              ).map((option) => (
-                <label
-                  className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border px-2 text-center font-extrabold ${type === option.value ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
-                  key={option.value}
-                >
-                  <input
-                    className="sr-only"
-                    checked={type === option.value}
-                    name="type"
-                    onChange={() => setType(option.value)}
-                    type="radio"
-                  />
-                  {option.label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+      <DialogContent description={stepDescription[step]} title={stepTitle[step]}>
+        {step !== 'country' && (
+          <button
+            className={`${ghostButtonClass} -mt-2 justify-self-start`}
+            onClick={() => setStep(step === 'details' ? 'provider' : 'country')}
+            type="button"
+          >
+            <ArrowLeft className="size-4" aria-hidden="true" /> Back
+          </button>
+        )}
 
-          {type === 'STRIPE_CONNECT' && (
-            <p className="text-xs text-muted">
-              You&apos;ll be redirected to Stripe to enter and verify your bank details -- we
-              never see your raw bank account number for this option.
-            </p>
-          )}
-
-          {type !== 'STRIPE_CONNECT' && (
+        {step === 'country' && (
+          <div className="grid gap-3">
             <label className="grid gap-1.5 text-sm font-bold">
               Country
-              <select
+              <SearchableSelect
                 className={inputClass}
-                onChange={(event) => setCountryCode(event.target.value)}
+                emptyLabel="No countries match your search"
+                loading={isLoadingCountries}
+                loadingLabel="Loading countries..."
+                onChange={(value) => {
+                  const match = countries?.find((c) => c.code === value);
+                  if (match) goToProviderStep(match.code, match.name);
+                }}
+                options={(countries ?? []).map((c) => ({ value: c.code, label: c.name }))}
+                placeholder="Search for your country"
                 value={countryCode}
-              >
-                {FLUTTERWAVE_COUNTRIES.map((option) => (
-                  <option key={option.code} value={option.code}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
-          )}
-
-          {type === 'BANK' && (
-            <>
-              <label className="grid gap-1.5 text-sm font-bold">
-                Bank
-                <SearchableSelect
-                  className={inputClass}
-                  emptyLabel="No banks match your search"
-                  loading={isLoadingBanks}
-                  loadingLabel="Loading banks..."
-                  onChange={setBankCode}
-                  options={(banks ?? []).map((bank) => ({ value: bank.code, label: bank.name }))}
-                  placeholder="Search for a bank"
-                  value={bankCode}
-                />
-              </label>
-              <label className="grid gap-1.5 text-sm font-bold">
-                Account number
-                <input
-                  className={inputClass}
-                  onChange={(event) => setAccountNumber(event.target.value.trim())}
-                  required
-                  type="text"
-                  value={accountNumber}
-                />
-              </label>
-              <p className="text-xs text-muted">
-                We&apos;ll verify this account with your bank and show you the account holder&apos;s
-                name before saving.
-              </p>
-            </>
-          )}
-
-          {type === 'MOBILE_MONEY' && (
-            <>
-              <label className="grid gap-1.5 text-sm font-bold">
-                Network
-                <select
-                  className={inputClass}
-                  onChange={(event) => setMobileMoneyNetwork(event.target.value)}
-                  value={mobileMoneyNetwork}
-                >
-                  {MOBILE_MONEY_NETWORKS.map((network) => (
-                    <option key={network} value={network}>
-                      {network}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1.5 text-sm font-bold">
-                Phone number
-                <input
-                  className={inputClass}
-                  onChange={(event) => setMobileMoneyNumber(event.target.value.trim())}
-                  required
-                  type="tel"
-                  value={mobileMoneyNumber}
-                />
-              </label>
-              <p className="text-xs font-bold text-danger">
-                We cannot pre-verify mobile money accounts -- double-check the number is correct.
-                Funds sent to a wrong number cannot be recovered.
-              </p>
-            </>
-          )}
-
-          {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
-              {error}
-            </p>
-          )}
-          <div className="flex justify-end gap-2">
-            <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
-            <ActionButton
-              className={primaryButtonClass}
-              pending={isLoading}
-              pendingLabel="Saving"
-              type="submit"
-            >
-              Save
-            </ActionButton>
           </div>
-        </form>
+        )}
+
+        {step === 'provider' && (
+          <div className="grid gap-3">
+            {flutterwaveAvailable && (
+              <ProviderCard
+                description="Bank transfer or mobile money, sent directly to a local account via Flutterwave."
+                icon={<FlutterwaveIcon className="size-7" />}
+                onClick={() => goToDetailsStep('FLUTTERWAVE')}
+                title="Flutterwave"
+              />
+            )}
+            {stripeEnabled && (
+              <ProviderCard
+                description="Connect a Stripe account -- Stripe securely collects and verifies your bank details on their own page."
+                icon={<StripeIcon className="size-7" />}
+                onClick={() => goToDetailsStep('STRIPE_CONNECT')}
+                title="Stripe"
+              />
+            )}
+            {!flutterwaveAvailable && !stripeEnabled && (
+              <p className="rounded-lg border border-line bg-surface-muted p-4 text-sm text-muted">
+                No payout provider is available for {countryName} yet. Contact support for help.
+              </p>
+            )}
+          </div>
+        )}
+
+        {step === 'details' && (
+          <form className="grid gap-3" onSubmit={handleSubmit}>
+            {provider === 'STRIPE_CONNECT' && (
+              <p className="text-sm leading-relaxed text-muted">
+                You&apos;ll be redirected to Stripe to enter and verify your bank details -- we
+                never see your raw bank account number for this option.
+              </p>
+            )}
+
+            {provider === 'FLUTTERWAVE' && (
+              <>
+                <fieldset className="grid gap-2">
+                  <legend className="mb-1 text-sm font-bold">Type</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        { value: 'BANK', label: 'Bank account', icon: Banknote },
+                        { value: 'MOBILE_MONEY', label: 'Mobile money', icon: Smartphone },
+                      ] as const
+                    ).map((option) => (
+                      <label
+                        className={`flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 text-center font-extrabold ${flutterwaveType === option.value ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
+                        key={option.value}
+                      >
+                        <input
+                          className="sr-only"
+                          checked={flutterwaveType === option.value}
+                          name="flutterwave-type"
+                          onChange={() => setFlutterwaveType(option.value)}
+                          type="radio"
+                        />
+                        <option.icon className="size-4" aria-hidden="true" />
+                        {option.label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                {flutterwaveType === 'BANK' && (
+                  <>
+                    <label className="grid gap-1.5 text-sm font-bold">
+                      Bank
+                      <SearchableSelect
+                        className={inputClass}
+                        emptyLabel="No banks match your search"
+                        loading={isLoadingBanks}
+                        loadingLabel="Loading banks..."
+                        onChange={setBankCode}
+                        options={(banks ?? []).map((bank) => ({
+                          value: bank.code,
+                          label: bank.name,
+                        }))}
+                        placeholder="Search for a bank"
+                        value={bankCode}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-bold">
+                      Account number
+                      <input
+                        className={inputClass}
+                        onChange={(event) => setAccountNumber(event.target.value.trim())}
+                        required
+                        type="text"
+                        value={accountNumber}
+                      />
+                    </label>
+                    <p className="text-xs text-muted">
+                      We&apos;ll verify this account with your bank and show you the account
+                      holder&apos;s name before saving.
+                    </p>
+                  </>
+                )}
+
+                {flutterwaveType === 'MOBILE_MONEY' && (
+                  <>
+                    <label className="grid gap-1.5 text-sm font-bold">
+                      Network
+                      <select
+                        className={inputClass}
+                        onChange={(event) => setMobileMoneyNetwork(event.target.value)}
+                        value={mobileMoneyNetwork}
+                      >
+                        {MOBILE_MONEY_NETWORKS.map((network) => (
+                          <option key={network} value={network}>
+                            {network}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-bold">
+                      Phone number
+                      <input
+                        className={inputClass}
+                        onChange={(event) => setMobileMoneyNumber(event.target.value.trim())}
+                        required
+                        type="tel"
+                        value={mobileMoneyNumber}
+                      />
+                    </label>
+                    <p className="text-xs font-bold text-danger">
+                      We cannot pre-verify mobile money accounts -- double-check the number is
+                      correct. Funds sent to a wrong number cannot be recovered.
+                    </p>
+                  </>
+                )}
+              </>
+            )}
+
+            {error && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
+              <ActionButton
+                className={primaryButtonClass}
+                pending={isSubmitting}
+                pendingLabel="Saving"
+                type="submit"
+              >
+                {provider === 'STRIPE_CONNECT' ? (
+                  <>
+                    Continue to Stripe <ArrowRight className="size-4" aria-hidden="true" />
+                  </>
+                ) : (
+                  'Save'
+                )}
+              </ActionButton>
+            </div>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ProviderCard({
+  description,
+  icon,
+  onClick,
+  title,
+}: {
+  description: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      className="flex items-start gap-3 rounded-lg border border-line bg-surface p-4 text-left transition-colors hover:border-accent hover:bg-accent-soft"
+      onClick={onClick}
+      type="button"
+    >
+      <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-line bg-white">
+        {icon}
+      </span>
+      <span className="grid gap-0.5">
+        <span className="font-extrabold">{title}</span>
+        <span className="text-sm text-muted">{description}</span>
+      </span>
+      <ArrowRight className="ml-auto mt-2 size-4 shrink-0 text-muted" aria-hidden="true" />
+    </button>
+  );
+}
+
+/** Flutterwave's brand mark (the "star" logomark, no wordmark -- reads cleanly at small sizes). */
+function FlutterwaveIcon({ className = 'size-5' }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} viewBox="0 0 32 32">
+      <rect fill="#F5A623" height="32" rx="7" width="32" />
+      <path
+        d="M16 6.5c1.1 2.4 2.9 4.1 5.3 5.2-2.4 1.1-4.2 2.9-5.3 5.3-1.1-2.4-2.9-4.2-5.3-5.3 2.4-1.1 4.2-2.8 5.3-5.2Z"
+        fill="#fff"
+      />
+      <path
+        d="M22.5 17c.7 1.5 1.8 2.6 3.3 3.3-1.5.7-2.6 1.8-3.3 3.3-.7-1.5-1.8-2.6-3.3-3.3 1.5-.7 2.6-1.8 3.3-3.3Z"
+        fill="#fff"
+      />
+      <path
+        d="M9 18c.6 1.3 1.6 2.3 2.9 2.9-1.3.6-2.3 1.6-2.9 2.9-.6-1.3-1.6-2.3-2.9-2.9 1.3-.6 2.3-1.6 2.9-2.9Z"
+        fill="#fff"
+      />
+    </svg>
+  );
+}
+
+/** Stripe's brand mark (the "S" ribbon on the brand purple). */
+function StripeIcon({ className = 'size-5' }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} viewBox="0 0 32 32">
+      <rect fill="#635BFF" height="32" rx="7" width="32" />
+      <path
+        d="M14.6 13.4c0-.7.6-1 1.6-1 1.4 0 3.2.4 4.6 1.2v-4.4c-1.5-.6-3-.9-4.6-.9-3.8 0-6.3 2-6.3 5.3 0 5.1 7.1 4.3 7.1 6.6 0 .8-.7 1.1-1.7 1.1-1.5 0-3.5-.6-5.1-1.5v4.5c1.7.7 3.4 1 5.1 1 3.9 0 6.5-1.9 6.5-5.3 0-5.5-7.2-4.5-7.2-6.6Z"
+        fill="#fff"
+      />
+    </svg>
   );
 }
