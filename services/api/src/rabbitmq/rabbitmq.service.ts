@@ -112,7 +112,13 @@ export class RabbitMqService implements OnModuleDestroy {
     const token = randomUUID();
     const startedAt = Date.now();
     const channel = await this.getChannel();
-    await channel.assertQueue(SMOKE_TEST_QUEUE, { durable: false, autoDelete: true });
+    // RabbitMQ 4.x's transient_nonexcl_queues feature flag is off by
+    // default (confirmed live: durable:false, exclusive:false rejects with
+    // "INTERNAL_ERROR - Feature `transient_nonexcl_queues` is deprecated"),
+    // so a shared throwaway queue must be durable even though nothing here
+    // needs it to survive a broker restart. autoDelete still cleans it up
+    // once every consumer disconnects.
+    await channel.assertQueue(SMOKE_TEST_QUEUE, { durable: true, autoDelete: true });
 
     const received = new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
