@@ -1,7 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { LlmProvider } from './llm-provider.interface';
 
-const MODEL = 'claude-3-5-haiku-latest';
+// claude-3-5-haiku-latest was retired/renamed and started 404ing on every
+// call (confirmed via a live GET /v1/models call against production's own
+// key -- that model id no longer appears in the account's available list).
+// claude-haiku-4-5-20251001 is the current cheapest/fastest tier, matching
+// this provider's original choice of "Haiku" for cheap normalization calls.
+const MODEL = 'claude-haiku-4-5-20251001';
 
 export class AnthropicProvider implements LlmProvider {
   readonly key = 'anthropic' as const;
