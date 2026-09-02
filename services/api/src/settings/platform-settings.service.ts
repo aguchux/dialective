@@ -321,6 +321,11 @@ export class PlatformSettingsService {
     return row.phraseTierItemsPerTierPerRun;
   }
 
+  async isSingleWordTrainingEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.singleWordTrainingEnabled;
+  }
+
   async getSmsProviderOrder(): Promise<string> {
     const row = await this.getRow();
     return row.smsProviderOrder;
@@ -799,6 +804,7 @@ export class PlatformSettingsService {
       phraseEscalationEnabled: row.phraseEscalationEnabled,
       phraseTierGenerationEnabled: row.phraseTierGenerationEnabled,
       phraseTierItemsPerTierPerRun: row.phraseTierItemsPerTierPerRun,
+      singleWordTrainingEnabled: row.singleWordTrainingEnabled,
       smsSenderId: row.smsSenderId,
       smsProviderOrder: row.smsProviderOrder,
       smslive247NativeOtpEnabled: row.smslive247NativeOtpEnabled,
@@ -920,6 +926,7 @@ export class PlatformSettingsService {
     phraseEscalationEnabled?: boolean;
     phraseTierGenerationEnabled?: boolean;
     phraseTierItemsPerTierPerRun?: number;
+    singleWordTrainingEnabled?: boolean;
     smsSenderId?: string | null;
     smsProviderOrder?: string;
     smslive247NativeOtpEnabled?: boolean;
@@ -1263,6 +1270,7 @@ export class PlatformSettingsService {
       phraseEscalationEnabled: row.phraseEscalationEnabled,
       phraseTierGenerationEnabled: row.phraseTierGenerationEnabled,
       phraseTierItemsPerTierPerRun: row.phraseTierItemsPerTierPerRun,
+      singleWordTrainingEnabled: row.singleWordTrainingEnabled,
       smsSenderId: row.smsSenderId,
       smsProviderOrder: row.smsProviderOrder,
       smslive247NativeOtpEnabled: row.smslive247NativeOtpEnabled,
@@ -1395,6 +1403,7 @@ export class PlatformSettingsService {
       // needs to decide which "add payout method" options to show.
       isFlutterwavePayoutsEnabled,
       isStripePayoutsEnabled,
+      singleWordTrainingEnabled: row.singleWordTrainingEnabled,
       testimonyEnabled: row.testimonyEnabled,
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,

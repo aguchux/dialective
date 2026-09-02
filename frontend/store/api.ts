@@ -925,6 +925,7 @@ export interface PublicClientSettings {
   isFlutterwaveV4Enabled: boolean;
   isFlutterwavePayoutsEnabled: boolean;
   isStripePayoutsEnabled: boolean;
+  singleWordTrainingEnabled: boolean;
   testimonyEnabled: boolean;
   testimonyMaxTextLength: number;
   testimonyMaxVideoSeconds: number;
@@ -1344,6 +1345,7 @@ export interface PlatformSettings {
   phraseEscalationEnabled: boolean;
   phraseTierGenerationEnabled: boolean;
   phraseTierItemsPerTierPerRun: number;
+  singleWordTrainingEnabled: boolean;
   smsSenderId: string | null;
   smsProviderOrder: string;
   smslive247NativeOtpEnabled: boolean;
@@ -1456,6 +1458,7 @@ export interface PlatformSettingsInput {
   phraseEscalationEnabled?: boolean;
   phraseTierGenerationEnabled?: boolean;
   phraseTierItemsPerTierPerRun?: number;
+  singleWordTrainingEnabled?: boolean;
   smsSenderId?: string;
   smsProviderOrder?: string;
   smslive247NativeOtpEnabled?: boolean;

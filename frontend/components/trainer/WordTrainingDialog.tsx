@@ -62,15 +62,16 @@ function countPromptWords(promptText: string | null | undefined): number {
   return Math.max(1, words.length);
 }
 
-// Distinct, stable messages the backend returns when the word bank is
-// empty (see WordsService.nextAssignment's NO_WORDS_AVAILABLE) -- matched
-// here to show a "check back later" empty state instead of a generic error
+// Distinct, stable messages the backend returns when the content pool is
+// empty (see WordsService.nextAssignment's NO_WORDS_AVAILABLE and, when
+// singleWordTrainingEnabled is off, NO_SENTENCES_AVAILABLE) -- matched here
+// to show a "check back later" empty state instead of a generic error
 // banner. There is no per-word usage limit; this only ever means the pool
 // itself has zero rows right now.
 function isNoWordsAvailable(err: unknown): boolean {
   const message = (err as { data?: ApiErrorShape } | undefined)?.data?.message;
   const text = Array.isArray(message) ? message.join(' ') : message;
-  return text === 'NO_WORDS_AVAILABLE';
+  return text === 'NO_WORDS_AVAILABLE' || text === 'NO_SENTENCES_AVAILABLE';
 }
 
 // A course can be marked required (or a session can simply outlive the

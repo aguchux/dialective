@@ -14,6 +14,7 @@ describe('WordsService', () => {
     isReverseWordTrainingEnabled: jest.fn(),
     isSentenceRebuildEnabled: jest.fn(),
     isPhraseEscalationEnabled: jest.fn(),
+    isSingleWordTrainingEnabled: jest.fn(),
     isSpellingNormalizationEnabled: jest.fn().mockResolvedValue(false),
     getSpellingNormalizationProviderOrder: jest.fn().mockResolvedValue('openai,deepseek,anthropic'),
     getWordTrainingRecordingTimeoutSeconds: jest.fn().mockResolvedValue(5),
@@ -71,6 +72,7 @@ describe('WordsService', () => {
     settings.isReverseWordTrainingEnabled.mockReset();
     settings.isSentenceRebuildEnabled.mockReset().mockResolvedValue(false);
     settings.isPhraseEscalationEnabled.mockReset().mockResolvedValue(false);
+    settings.isSingleWordTrainingEnabled.mockReset().mockResolvedValue(true);
     settings.isSpellingNormalizationEnabled.mockResolvedValue(false);
     courses.getIncompleteRequiredCourses.mockReset().mockResolvedValue([]);
     settings.getAuditHoldEveryNSubmissions.mockReset().mockResolvedValue(0);
@@ -992,6 +994,115 @@ describe('WordsService', () => {
           data: expect.objectContaining({ wordId: null, promptId: 'prompt-phrase-1' }),
         }),
       );
+    });
+  });
+
+  describe('singleWordTrainingEnabled off', () => {
+    beforeEach(() => {
+      settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+      settings.isSingleWordTrainingEnabled.mockResolvedValue(false);
+    });
+
+    it('never assigns ENGLISH_TO_DIALECT even when sentenceRebuildEnabled and phraseEscalationEnabled are both off', async () => {
+      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
+      prisma.wordRecording.count.mockResolvedValue(0); // brand-new trainer, below every tier
+      prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-sentence-1' }]);
+      prisma.promptWord.count.mockResolvedValue(3);
+      prisma.promptWord.findMany.mockResolvedValue([
+        { text: 'good' },
+        { text: 'morning' },
+        { text: 'friend' },
+      ]);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-forced-1',
+        direction: 'SENTENCE_REBUILD',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.direction).toBe('SENTENCE_REBUILD');
+      expect(prisma.word.count).not.toHaveBeenCalled();
+      expect(prisma.wordTrainingAssignment.create).toHaveBeenCalledWith({
+        data: { sessionId: session.id, promptId: 'prompt-sentence-1', direction: 'SENTENCE_REBUILD' },
+      });
+    });
+
+    it('gives PHRASE_TO_DIALECT to a brand-new trainer (tier gate bypassed) even with phraseEscalationEnabled off', async () => {
+      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.prompt.count.mockResolvedValue(1);
+      prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-phrase-new', text: 'good morning' }]);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-forced-phrase-1',
+        direction: 'PHRASE_TO_DIALECT',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.direction).toBe('PHRASE_TO_DIALECT');
+      expect(prisma.prompt.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ phraseWordCountMin: { lte: 3 }, phraseWordCountMax: { gte: 2 } }),
+        }),
+      );
+    });
+
+    it('falls through to a forced SENTENCE_REBUILD when the phrase-tier pool is empty', async () => {
+      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.prompt.count.mockResolvedValue(0); // phrase pool empty
+      prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-sentence-fallback' }]);
+      prisma.promptWord.count.mockResolvedValue(2);
+      prisma.promptWord.findMany.mockResolvedValue([{ text: 'hello' }, { text: 'friend' }]);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-forced-2',
+        direction: 'SENTENCE_REBUILD',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.direction).toBe('SENTENCE_REBUILD');
+    });
+
+    it('throws NO_SENTENCES_AVAILABLE when every content pool is empty', async () => {
+      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.prompt.count.mockResolvedValue(0);
+      prisma.prompt.findMany.mockResolvedValue([]);
+
+      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
+        'NO_SENTENCES_AVAILABLE',
+      );
+      expect(prisma.word.count).not.toHaveBeenCalled();
+    });
+
+    it('leaves reverseWordTrainingEnabled independently controlled', async () => {
+      settings.isReverseWordTrainingEnabled.mockResolvedValue(true);
+      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
+      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
+      jest.spyOn(Math, 'random').mockReturnValue(0.1); // within the 1/3 reverse-validation roll
+      // pickReverseSource's own count check (must be nonzero for a source
+      // to be picked) shares this mock with getTrainerPhraseTier's lifetime
+      // count -- the reverse-source branch resolves and returns before
+      // phraseTier's value is ever read, so a single nonzero value here is
+      // safe for both.
+      prisma.wordRecording.count.mockResolvedValue(1);
+      prisma.wordRecording.findMany.mockResolvedValue([
+        { id: 'source-1', wordId: 'word-1', promptId: null, translationText: 'ntị' },
+      ]);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-reverse-1',
+        direction: 'DIALECT_TO_ENGLISH',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.direction).toBe('DIALECT_TO_ENGLISH');
+      jest.restoreAllMocks();
     });
   });
 });

@@ -380,6 +380,10 @@ export class UpdatePlatformSettingsDto {
   @Max(100)
   phraseTierItemsPerTierPerRun?: number;
 
+  @IsOptional()
+  @IsBoolean()
+  singleWordTrainingEnabled?: boolean;
+
   // Sender ID/name shown to recipients, overrides TERMII_SENDER_ID/
   // SMSLIVE247_SENDER_ID/AFRICASTALKING_SENDER_ID for every provider that
   // has one (Twilio has no equivalent). Empty string clears the override

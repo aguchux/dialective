@@ -22,7 +22,7 @@ import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
 import { GetSpellingSuggestionsDto } from './dto/get-spelling-suggestions.dto';
 import { ListSubmissionsDto } from '../submissions/dto/list-submissions.dto';
-import { PhraseTier, getPhraseTier } from './phrase-tiers.const';
+import { PHRASE_TIERS, PhraseTier, getPhraseTier } from './phrase-tiers.const';
 
 const RECORDINGS_BUCKET = process.env.SPACES_WORD_RECORDINGS_BUCKET ?? 'dialectiva-word-recordings';
 const TERMS_VERSION = 'voice-training-v1';
@@ -161,15 +161,28 @@ export class WordsService {
 
     const trainer = await this.getTrainer(userId);
     const reverseEnabled = await this.settings.isReverseWordTrainingEnabled();
-    const sentenceRebuildEnabled = await this.settings.isSentenceRebuildEnabled();
+    const singleWordTrainingEnabled = await this.settings.isSingleWordTrainingEnabled();
+    // With single-word training off, sentence content must always be
+    // available regardless of the legacy per-exercise toggles below --
+    // otherwise turning singleWordTrainingEnabled off while
+    // sentenceRebuildEnabled/phraseEscalationEnabled happen to be off too
+    // would leave nextAssignment with nothing to offer.
+    const sentenceRebuildEnabled =
+      !singleWordTrainingEnabled || (await this.settings.isSentenceRebuildEnabled());
 
     // Live-evaluated every call, never cached/session-fixed -- same posture
     // as the audit-hold/QRAC/required-courses checks above. Only overrides
     // the ENGLISH_TO_DIALECT fallback below: reverseSource/sentenceRebuild
-    // keep their own independent roll, unaffected by tier.
-    const phraseTier = (await this.settings.isPhraseEscalationEnabled())
-      ? await this.getTrainerPhraseTier(userId)
-      : null;
+    // keep their own independent roll, unaffected by tier. When single-word
+    // training is off, PHRASE_TO_DIALECT's normal phraseEscalationEnabled +
+    // lifetime-WordRecording-count tier gate is bypassed and floored at
+    // PHRASE_TIERS[0], so a trainer with zero progress still gets phrases
+    // immediately instead of falling through to a single word.
+    const phraseTier = singleWordTrainingEnabled
+      ? (await this.settings.isPhraseEscalationEnabled())
+        ? await this.getTrainerPhraseTier(userId)
+        : null
+      : (await this.getTrainerPhraseTier(userId)) ?? PHRASE_TIERS[0];
 
     const roll = Math.random();
     const reverseSource =
@@ -212,7 +225,7 @@ export class WordsService {
     }
 
     const sentenceRebuild =
-      sentenceRebuildEnabled && roll < 2 / 3
+      sentenceRebuildEnabled && (roll < 2 / 3 || !singleWordTrainingEnabled)
         ? await this.pickSentenceRebuildSource(trainer.dialect!.tag)
         : null;
 
@@ -258,7 +271,42 @@ export class WordsService {
           phraseTierJustReached: await this.didJustReachTier(userId, phraseTier),
         };
       }
-      // Pool empty for this tier -- fall through to single-word below.
+      // Pool empty for this tier -- fall through below (single-word, or a
+      // forced SENTENCE_REBUILD retry when single-word training is off).
+    }
+
+    if (!singleWordTrainingEnabled) {
+      // Every other path above either didn't fire this roll or found its
+      // pool empty -- SENTENCE_REBUILD's pool is independent of trainer
+      // progress (see pickSentenceRebuildSource), so this is the guaranteed
+      // final fallback rather than ENGLISH_TO_DIALECT below.
+      const forcedSentenceRebuild = await this.pickSentenceRebuildSource(trainer.dialect!.tag);
+      if (!forcedSentenceRebuild) {
+        // Distinct, stable message mirroring NO_WORDS_AVAILABLE -- see
+        // WordTrainingDialog.tsx's empty-state handling.
+        throw new NotFoundException('NO_SENTENCES_AVAILABLE');
+      }
+      const assignment = await this.prisma.wordTrainingAssignment.create({
+        data: {
+          sessionId,
+          promptId: forcedSentenceRebuild.promptId,
+          direction: 'SENTENCE_REBUILD',
+        },
+      });
+      return {
+        assignmentId: assignment.id,
+        wordId: null as string | null,
+        direction: assignment.direction,
+        promptText: null as string | null,
+        sourceLanguage: trainer.dialect!.name,
+        responseLanguage: trainer.dialect!.name,
+        dialectTag: trainer.dialect!.tag,
+        dialectKeyboardLayout: null as string | null,
+        fragments: shuffle(
+          forcedSentenceRebuild.fragments.map((text, position) => ({ text, position })),
+        ),
+        phraseTierJustReached: false,
+      };
     }
 
     const totalWords = await this.prisma.word.count();

@@ -25,6 +25,7 @@ export function GeneralSettingsPanel() {
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
   const [sentenceRebuildEnabled, setSentenceRebuildEnabled] = useState(false);
   const [phraseEscalationEnabled, setPhraseEscalationEnabled] = useState(false);
+  const [singleWordTrainingEnabled, setSingleWordTrainingEnabled] = useState(true);
   const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
   const [phoneVerificationRequired, setPhoneVerificationRequired] = useState(true);
   const [startupBonusAmount, setStartupBonusAmount] = useState('');
@@ -51,6 +52,7 @@ export function GeneralSettingsPanel() {
     setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
     setSentenceRebuildEnabled(settings.sentenceRebuildEnabled);
     setPhraseEscalationEnabled(settings.phraseEscalationEnabled);
+    setSingleWordTrainingEnabled(settings.singleWordTrainingEnabled);
     setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
     setPhoneVerificationRequired(settings.phoneVerificationRequired);
     setStartupBonusAmount(settings.startupBonusAmount ?? '');
@@ -90,6 +92,7 @@ export function GeneralSettingsPanel() {
         reverseWordTrainingEnabled,
         sentenceRebuildEnabled,
         phraseEscalationEnabled,
+        singleWordTrainingEnabled,
         adminPayoutOtpEnabled,
         phoneVerificationRequired,
         ...(startupBonusAmount !== '' ? { startupBonusAmount: Number(startupBonusAmount) } : {}),
@@ -357,6 +360,32 @@ export function GeneralSettingsPanel() {
               </div>
             </div>
           )}
+
+          <div>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="single-word-training"
+            >
+              <input
+                checked={singleWordTrainingEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="single-word-training"
+                onChange={(event) => setSingleWordTrainingEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Single-word training</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  When off, no trainer is ever assigned a plain single word to record -- every word
+                  session instead serves the sentence rebuild exercise or an escalated phrase
+                  (phrase escalation is served from the start, regardless of a trainer&apos;s
+                  lifetime word count). The word-training screen and flow stay the same; only the
+                  content changes. In-progress assignments a trainer already has are unaffected --
+                  this only changes what they&apos;re offered next.
+                </span>
+              </span>
+            </label>
+          </div>
 
           <div>
             <label
