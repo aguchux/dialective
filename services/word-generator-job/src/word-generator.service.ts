@@ -129,10 +129,11 @@ export class WordGeneratorService {
 
     if (wordsPerItem === 1 && !settings.singleWordGenerationEnabled) {
       // Narrower than llmGenerationEnabled above -- stops ONLY the
-      // single-word branch. Composition (llmWordsPerItem>=2) and
+      // single-word branch. Composition (llmWordsPerItem 2-20) and
       // runPhraseTierGeneration below are unaffected by this flag; set
-      // llmWordsPerItem to 2-5 separately to get composition output from
-      // this pass while single-word generation stays off.
+      // llmWordsPerItem to 2-20 separately to get composition output
+      // (short phrases up through full sentences) from this pass while
+      // single-word generation stays off.
       this.logger.log(
         'Single-word generation disabled (singleWordGenerationEnabled=false) and llmWordsPerItem=1; skipping main generation pass',
       );

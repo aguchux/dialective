@@ -182,12 +182,13 @@ export function WordGenerationSettingsPanel() {
             </label>
             <p className="text-sm leading-relaxed text-muted">
               1 = single words (added to the word-training bank, each classified by part of speech).
-              2-5 = short phrases <strong>composed from existing classified words</strong> (not
-              freely invented) -- the system picks that many words from the word bank (favoring a
-              noun + verb pair when available) and asks the LLM to build a natural sentence using
+              2-20 = phrases or full sentences <strong>composed from existing classified words</strong>{' '}
+              (not freely invented) -- the system picks that many words from the word bank (favoring
+              a noun + verb pair when available) and asks the LLM to build a natural sentence using
               only those words, then stores it for the dictation and sentence-rebuild exercises.
               Composition needs a classified word bank to draw from, so run "words per item = 1" (or
-              the classification backfill) first for a dialect before switching this to 2-5.
+              the classification backfill) first for a dialect before raising this. Higher values
+              (e.g. 10-20) produce full sentences instead of short phrases.
             </p>
             <input
               className={inputClass}
@@ -195,7 +196,7 @@ export function WordGenerationSettingsPanel() {
               type="number"
               step="1"
               min="1"
-              max="5"
+              max="20"
               value={wordsPerItem}
               onChange={(e) => setWordsPerItem(e.target.value)}
             />
@@ -217,9 +218,9 @@ export function WordGenerationSettingsPanel() {
                 <span className="block font-bold">Generate single words</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   Narrower than "Enable word generation" above -- stops ONLY the single-word
-                  ("Words per item" = 1) branch specifically, without touching composition (2-5)
-                  or the phrase-tier pool below. Turn this off and set "Words per item" to 2-5 to
-                  make the scheduled job generate sentences/phrases instead of single words.
+                  ("Words per item" = 1) branch specifically, without touching composition (2-20)
+                  or the phrase-tier pool below. Turn this off and set "Words per item" to 2-20 to
+                  make the scheduled job generate phrases or full sentences instead of single words.
                 </span>
               </span>
             </label>

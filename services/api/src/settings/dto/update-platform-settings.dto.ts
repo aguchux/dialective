@@ -227,7 +227,7 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(5)
+  @Max(20)
   llmWordsPerItem?: number;
 
   @IsOptional()
