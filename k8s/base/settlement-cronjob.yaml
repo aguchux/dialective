@@ -22,3 +22,18 @@ spec:
                     secretKeyRef:
                       name: postgres-creds
                       key: connection_string
+                - name: SPACES_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: spaces-creds
+                      key: endpoint
+                - name: SPACES_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: spaces-creds
+                      key: access_key
+                - name: SPACES_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: spaces-creds
+                      key: secret_key

@@ -6,6 +6,7 @@ import {
   Prisma,
 } from '@dialectiva/db';
 import { PrismaService } from './prisma/prisma.service';
+import { StorageService } from './storage.service';
 
 /** Uniform random draw in [min, max] -- a payout-fairness randomizer, not a security value, so Math.random() is fine. */
 function randomInRange(min: number, max: number): number {
@@ -103,7 +104,10 @@ export function computeWordRecordingCompositeScore(
 export class SettlementService {
   private readonly logger = new Logger(SettlementService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async run(): Promise<void> {
     this.logger.log('Settlement run starting');
@@ -143,6 +147,7 @@ export class SettlementService {
       mintingPaused,
     );
     const rejectedRefundCount = await this.refundRejectedSubmissions();
+    const rejectedWordRecordingRefundCount = await this.refundRejectedWordRecordings();
     const stuckRefundCount = await this.refundStuckWordRecordings();
     const timeoutResult = await this.resolveTimedOutScoring();
 
@@ -150,10 +155,15 @@ export class SettlementService {
     const eligibleCount = submissionResult.eligibleCount + wordRecordingResult.eligibleCount;
     const totalPayout = submissionResult.totalPayout + wordRecordingResult.totalPayout;
 
-    if (rejectedRefundCount > 0 || stuckRefundCount > 0 || timeoutResult.refundedCount > 0) {
+    if (
+      rejectedRefundCount > 0 ||
+      rejectedWordRecordingRefundCount > 0 ||
+      stuckRefundCount > 0 ||
+      timeoutResult.refundedCount > 0
+    ) {
       this.logger.log(
-        `Refunded locked tokens: rejected=${rejectedRefundCount} stuckWordRecordings=${stuckRefundCount} ` +
-          `scoringTimeout=${timeoutResult.refundedCount}`,
+        `Refunded locked tokens: rejected=${rejectedRefundCount} rejectedWordRecordings=${rejectedWordRecordingRefundCount} ` +
+          `stuckWordRecordings=${stuckRefundCount} scoringTimeout=${timeoutResult.refundedCount}`,
       );
     }
     if (timeoutResult.scoredCount > 0) {
@@ -399,18 +409,25 @@ export class SettlementService {
   /**
    * REJECTED submissions never reach SCORED, so settleSubmissions never
    * sees them and their locked stake would otherwise sit in lockedBalance
-   * forever. vosk-worker/whisper-worker set REJECTED via a direct SQL
-   * UPDATE (see AGENTS.md "Database access" -- other services touch this
-   * schema only through the generated Prisma client, api owns it), so the
-   * refund itself happens here instead, in the one place already scheduled
-   * to reconcile locked tokens against final outcomes. refundedAt makes
-   * this idempotent/resumable the same way settledAt does for payouts --
-   * a row left REJECTED with refundedAt: null is naturally retried next run.
+   * forever. vosk-worker/whisper-worker/quality-gate-worker set REJECTED via
+   * a direct SQL UPDATE (see AGENTS.md "Database access" -- other services
+   * touch this schema only through the generated Prisma client, api owns
+   * it), so the refund itself happens here instead, in the one place already
+   * scheduled to reconcile locked tokens against final outcomes. refundedAt
+   * makes this idempotent/resumable the same way settledAt does for
+   * payouts -- a row left REJECTED with refundedAt: null is naturally
+   * retried next run.
+   *
+   * Audio is deleted synchronously in the same pass, not left for
+   * audio-retention-job's delayed sweep -- a quality-rejected clip (silence/
+   * noise/unreadable) has no further use once refunded, unlike a
+   * settled/scored recording an admin might still want to audit within the
+   * configured retention window.
    */
   private async refundRejectedSubmissions(): Promise<number> {
     const submissions = await this.prisma.submission.findMany({
       where: { status: 'REJECTED', refundedAt: null },
-      select: { id: true, userId: true, tokensSpent: true },
+      select: { id: true, userId: true, tokensSpent: true, audioBucket: true, audioKey: true },
     });
 
     let refundedCount = 0;
@@ -430,6 +447,12 @@ export class SettlementService {
         if (await this.wasLocked(submission.id)) {
           await this.refundTokens(submission.userId, submission.tokensSpent, submission.id);
         }
+        await this.deleteAudioIfPresent(
+          'submission',
+          submission.id,
+          submission.audioBucket,
+          submission.audioKey,
+        );
         refundedCount += 1;
       } catch (err) {
         this.logger.error(
@@ -439,6 +462,84 @@ export class SettlementService {
     }
 
     return refundedCount;
+  }
+
+  /**
+   * WordRecording counterpart to refundRejectedSubmissions -- same
+   * quality-gate-worker-sets-REJECTED-directly, settlement-job-refunds-and-
+   * deletes-audio shape. Added alongside quality-gate-worker's new
+   * reject_word_recording() (previously a silent/noisy/unreadable word
+   * recording kept its lock and settled/paid normally -- see AGENTS.md/PR
+   * history for "reject and delete... refund exact DL").
+   */
+  private async refundRejectedWordRecordings(): Promise<number> {
+    const recordings = await this.prisma.wordRecording.findMany({
+      where: { status: 'REJECTED', refundedAt: null },
+      select: { id: true, userId: true, tokensSpent: true, audioBucket: true, audioKey: true },
+    });
+
+    let refundedCount = 0;
+    for (const recording of recordings) {
+      if (recording.userId === null) continue;
+      try {
+        const claim = await this.prisma.wordRecording.updateMany({
+          where: { id: recording.id, refundedAt: null },
+          data: { refundedAt: new Date() },
+        });
+        if (claim.count === 0) continue;
+
+        if (await this.wasLocked(recording.id)) {
+          await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
+        }
+        await this.deleteAudioIfPresent(
+          'wordRecording',
+          recording.id,
+          recording.audioBucket,
+          recording.audioKey,
+        );
+        refundedCount += 1;
+      } catch (err) {
+        this.logger.error(
+          `Failed to refund rejected wordRecording=${recording.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    return refundedCount;
+  }
+
+  /**
+   * Deletes the Spaces object and nulls audioBucket/audioKey (setting
+   * audioDeletedAt) in the same shape audio-retention-job's maybePurge
+   * already uses -- so a row deleted here is indistinguishable from one
+   * purged by the delayed sweep, and that sweep's own `audioBucket !=
+   * null, audioKey != null` guard means it will never re-attempt this
+   * object. Best-effort: a Spaces failure is logged, not thrown -- the
+   * refund itself must not roll back because a delete call failed
+   * (the row keeps its audioBucket/audioKey and quietly becomes eligible
+   * for audio-retention-job's own delayed purge as a fallback).
+   */
+  private async deleteAudioIfPresent(
+    kind: 'submission' | 'wordRecording',
+    id: string,
+    bucket: string | null,
+    key: string | null,
+  ): Promise<void> {
+    if (!bucket || !key) return;
+    try {
+      await this.storage.deleteObject(bucket, key);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to delete audio for rejected ${kind}=${id} bucket=${bucket} key=${key}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return;
+    }
+    const data = { audioBucket: null, audioKey: null, audioDeletedAt: new Date() };
+    if (kind === 'submission') {
+      await this.prisma.submission.update({ where: { id }, data });
+    } else {
+      await this.prisma.wordRecording.update({ where: { id }, data });
+    }
   }
 
   /**

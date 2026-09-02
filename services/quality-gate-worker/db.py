@@ -33,6 +33,14 @@ SET status = 'REJECTED',
 WHERE id = %(record_id)s
 """
 
+REJECT_WORD_RECORDING_SQL = """
+UPDATE word_recordings
+SET status = 'REJECTED',
+    "rejectionReason" = %(rejection_reason)s,
+    "qualityGateCheckedAt" = now()
+WHERE id = %(record_id)s
+"""
+
 UPDATE_WORD_RECORDING_SCORES_SQL = """
 UPDATE word_recordings
 SET "noiseScore" = %(noise_score)s,
@@ -203,9 +211,7 @@ def reject_submission(conn, submission_id: str, rejection_reason: str) -> None:
     """
     Same REJECTED-write shape as vosk-worker's prefilter rejection --
     settlement-job's existing refundRejectedSubmissions() sweep picks this
-    up unmodified. Word recordings have no equivalent reject path (no
-    prefilter exists for that flow today), so this only ever applies to
-    Submissions.
+    up unmodified.
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -215,5 +221,28 @@ def reject_submission(conn, submission_id: str, rejection_reason: str) -> None:
         if cur.rowcount == 0:
             logger.warning(
                 "reject_submission matched 0 rows for submission=%s", submission_id
+            )
+    conn.commit()
+
+
+def reject_word_recording(conn, word_recording_id: str, rejection_reason: str) -> None:
+    """
+    Mirrors reject_submission -- settlement-job's refundRejectedWordRecordings()
+    sweep picks this up the same way refundRejectedSubmissions() already does
+    for Submission. This worker never touches Wallet/LedgerEntry/audio
+    deletion directly (same "dumb status flip" posture as reject_submission);
+    the refund and the synchronous Spaces delete both happen in settlement-job,
+    which already owns the Prisma transaction + ledger-entry pattern for
+    every other refund path.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            REJECT_WORD_RECORDING_SQL,
+            {"record_id": word_recording_id, "rejection_reason": rejection_reason},
+        )
+        if cur.rowcount == 0:
+            logger.warning(
+                "reject_word_recording matched 0 rows for word_recording=%s",
+                word_recording_id,
             )
     conn.commit()

@@ -58,7 +58,7 @@ describe('SettlementService resolveTimedOutScoring', () => {
 
   it('moves a timed-out submission to SCORED without crediting payout or settling it', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     const result = await service.resolveTimedOutScoring();
@@ -95,7 +95,7 @@ describe('SettlementService resolveTimedOutScoring', () => {
       minScoreRange: { toNumber: () => 10 },
       maxScoreRange: { toNumber: () => 30 },
     });
-    const service = new SettlementService(prisma as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     const result = await service.resolveTimedOutScoring();
@@ -155,7 +155,7 @@ describe('SettlementService settlement state', () => {
 
   it('marks a settled submission as SETTLED with its payout timestamp', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
 
     // mintingPaused: true -- this test only covers the legacy Wallet credit
     // path, not Tokenomics minting (see the settlement.service.spec.ts
@@ -175,7 +175,7 @@ describe('SettlementService settlement state', () => {
 
   it('marks a settled word recording as SETTLED with its payout timestamp', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
 
     // mintingPaused: true -- see settleSubmissions test above for why.
     // @ts-expect-error -- private method under test
@@ -193,7 +193,7 @@ describe('SettlementService settlement state', () => {
 
   it('mints into the Tokenomics ledger alongside the legacy payout when minting is not paused', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
@@ -209,7 +209,7 @@ describe('SettlementService settlement state', () => {
 
   it('skips minting into the Tokenomics ledger when minting is paused, but still pays the trainer', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
@@ -219,5 +219,186 @@ describe('SettlementService settlement state', () => {
     expect(prisma.submission.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'SETTLED' }) }),
     );
+  });
+});
+
+/**
+ * Covers the "reject and delete... refund exact DL" feature: REJECTED rows
+ * (quality-gate-worker's hard prefilter, both Submission and now
+ * WordRecording) get their locked tokens refunded AND their Spaces audio
+ * deleted synchronously in the same settlement-job pass, rather than
+ * waiting on audio-retention-job's delayed sweep.
+ */
+describe('SettlementService rejected-record refund + immediate audio delete', () => {
+  function buildPrismaMock(overrides: {
+    submissions?: unknown[];
+    wordRecordings?: unknown[];
+  }) {
+    return {
+      submission: {
+        findMany: jest.fn().mockResolvedValue(overrides.submissions ?? []),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      wordRecording: {
+        findMany: jest.fn().mockResolvedValue(overrides.wordRecordings ?? []),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      ledgerEntry: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'ledger-1' }), // wasLocked() -> true
+        create: jest.fn().mockResolvedValue({}),
+      },
+      wallet: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
+        create: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
+      },
+      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+    };
+  }
+
+  it('refunds a rejected submission and deletes its audio object', async () => {
+    const prisma = buildPrismaMock({
+      submissions: [
+        {
+          id: 'sub-rejected-1',
+          userId: 'user-1',
+          tokensSpent: { toNumber: () => 2 },
+          audioBucket: 'dialectiva-submissions',
+          audioKey: 'yo/prompt-1/sub-rejected-1.webm',
+        },
+      ],
+    });
+    const deleteObject = jest.fn().mockResolvedValue(undefined);
+    const service = new SettlementService(prisma as never, { deleteObject } as never);
+
+    // @ts-expect-error -- private method under test
+    const count = await service.refundRejectedSubmissions();
+
+    expect(count).toBe(1);
+    expect(prisma.submission.updateMany).toHaveBeenCalledWith({
+      where: { id: 'sub-rejected-1', refundedAt: null },
+      data: { refundedAt: expect.any(Date) },
+    });
+    expect(prisma.wallet.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          lockedBalance: { decrement: { toNumber: expect.any(Function) } },
+          balance: { increment: { toNumber: expect.any(Function) } },
+        }),
+      }),
+    );
+    expect(deleteObject).toHaveBeenCalledWith(
+      'dialectiva-submissions',
+      'yo/prompt-1/sub-rejected-1.webm',
+    );
+    expect(prisma.submission.update).toHaveBeenCalledWith({
+      where: { id: 'sub-rejected-1' },
+      data: { audioBucket: null, audioKey: null, audioDeletedAt: expect.any(Date) },
+    });
+  });
+
+  it('refunds a rejected word recording and deletes its audio object', async () => {
+    const prisma = buildPrismaMock({
+      wordRecordings: [
+        {
+          id: 'wr-rejected-1',
+          userId: 'user-1',
+          tokensSpent: { toNumber: () => 1 },
+          audioBucket: 'dialectiva-word-recordings',
+          audioKey: 'ig/english_to_dialect/prompt-1/wr-rejected-1.webm',
+        },
+      ],
+    });
+    const deleteObject = jest.fn().mockResolvedValue(undefined);
+    const service = new SettlementService(prisma as never, { deleteObject } as never);
+
+    // @ts-expect-error -- private method under test
+    const count = await service.refundRejectedWordRecordings();
+
+    expect(count).toBe(1);
+    expect(prisma.wordRecording.updateMany).toHaveBeenCalledWith({
+      where: { id: 'wr-rejected-1', refundedAt: null },
+      data: { refundedAt: expect.any(Date) },
+    });
+    expect(deleteObject).toHaveBeenCalledWith(
+      'dialectiva-word-recordings',
+      'ig/english_to_dialect/prompt-1/wr-rejected-1.webm',
+    );
+    expect(prisma.wordRecording.update).toHaveBeenCalledWith({
+      where: { id: 'wr-rejected-1' },
+      data: { audioBucket: null, audioKey: null, audioDeletedAt: expect.any(Date) },
+    });
+  });
+
+  it('does not attempt to delete audio when audioBucket/audioKey are already null (SENTENCE_REBUILD has no audio step)', async () => {
+    const prisma = buildPrismaMock({
+      wordRecordings: [
+        {
+          id: 'wr-rejected-2',
+          userId: 'user-1',
+          tokensSpent: { toNumber: () => 1 },
+          audioBucket: null,
+          audioKey: null,
+        },
+      ],
+    });
+    const deleteObject = jest.fn().mockResolvedValue(undefined);
+    const service = new SettlementService(prisma as never, { deleteObject } as never);
+
+    // @ts-expect-error -- private method under test
+    const count = await service.refundRejectedWordRecordings();
+
+    expect(count).toBe(1);
+    expect(deleteObject).not.toHaveBeenCalled();
+    expect(prisma.wordRecording.update).not.toHaveBeenCalled();
+  });
+
+  it('still refunds the trainer even when audio deletion fails (Spaces down)', async () => {
+    const prisma = buildPrismaMock({
+      submissions: [
+        {
+          id: 'sub-rejected-2',
+          userId: 'user-1',
+          tokensSpent: { toNumber: () => 2 },
+          audioBucket: 'dialectiva-submissions',
+          audioKey: 'yo/prompt-1/sub-rejected-2.webm',
+        },
+      ],
+    });
+    const deleteObject = jest.fn().mockRejectedValue(new Error('Spaces unavailable'));
+    const service = new SettlementService(prisma as never, { deleteObject } as never);
+
+    // @ts-expect-error -- private method under test
+    const count = await service.refundRejectedSubmissions();
+
+    expect(count).toBe(1);
+    expect(prisma.wallet.updateMany).toHaveBeenCalled(); // refund still happened
+    expect(prisma.submission.update).not.toHaveBeenCalled(); // audioDeletedAt write skipped
+  });
+
+  it('skips two overlapping runs from double-refunding the same rejected word recording', async () => {
+    const prisma = buildPrismaMock({
+      wordRecordings: [
+        {
+          id: 'wr-rejected-3',
+          userId: 'user-1',
+          tokensSpent: { toNumber: () => 1 },
+          audioBucket: 'dialectiva-word-recordings',
+          audioKey: 'ig/english_to_dialect/prompt-1/wr-rejected-3.webm',
+        },
+      ],
+    });
+    prisma.wordRecording.updateMany.mockResolvedValue({ count: 0 }); // another run already claimed it
+    const deleteObject = jest.fn().mockResolvedValue(undefined);
+    const service = new SettlementService(prisma as never, { deleteObject } as never);
+
+    // @ts-expect-error -- private method under test
+    const count = await service.refundRejectedWordRecordings();
+
+    expect(count).toBe(0);
+    expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
+    expect(deleteObject).not.toHaveBeenCalled();
   });
 });

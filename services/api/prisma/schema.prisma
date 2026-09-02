@@ -1168,7 +1168,8 @@ model WordRecording {
   durationMs                Int?
   noiseRating               RecordingNoiseRating?
   validationScore           Decimal?                @db.Decimal(5, 4) // 0-1 exact-match score, DIALECT_TO_ENGLISH only
-  status                    SubmissionStatus        @default(PENDING) // PENDING|SCORED|SETTLED only -- no consensus/quorum concept, TRANSCRIBED/REJECTED unused here. ASR (below) never gates or delays reaching SCORED -- it's an async annotation, same posture as noise/quality/livenessScore.
+  status                    SubmissionStatus        @default(PENDING) // PENDING|SCORED|SETTLED|REJECTED. REJECTED is quality-gate-worker's prefilter hard-reject (duration_out_of_range|mostly_silence|unreadable_audio, see rejectionReason) -- still no consensus/quorum concept otherwise; TRANSCRIBED remains unused here.
+  rejectionReason           String? // set only when status=REJECTED; same vocabulary as Submission.rejectionReason (duration_out_of_range | mostly_silence | unreadable_audio)
   tokensSpent               Decimal                 @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
   rawScore                  Decimal?                @db.Decimal(5, 2) // 0.00-100.00 original exact-match/reverse-validation score before any admin score-range weighting/clamp; used for partner data queries
   score                     Decimal?                @db.Decimal(5, 2) // 0.00-100.00 platform score, same scale as Submission.score; null until SCORED

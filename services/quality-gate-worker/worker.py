@@ -10,6 +10,7 @@ from db import (
     build_db_connection,
     get_speech_expression_enabled,
     reject_submission,
+    reject_word_recording,
     write_expression,
     write_scores,
 )
@@ -138,19 +139,15 @@ def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model, emotion
             try:
                 transcode_to_wav(raw_path, wav_path)
             except subprocess.CalledProcessError:
-                # Only Submissions have a REJECTED path -- WordRecording has
-                # no equivalent prefilter-reject flow today (see
-                # AGENTS.md/schema comment: "no ASR step, TRANSCRIBED/
-                # REJECTED unused here"). An unreadable word-recording clip
-                # simply gets no scores written (stays null), same
-                # graceful-absence handling settlement-job already applies.
+                # Both record kinds now share the same hard-reject path --
+                # settlement-job's refundRejectedSubmissions()/
+                # refundRejectedWordRecordings() sweeps pick this up and
+                # release the trainer's locked tokens, then delete the audio
+                # object immediately (see settlement.service.ts).
                 if record_kind == "submission":
                     reject_submission(db_conn, record_id, "unreadable_audio")
                 else:
-                    logger.warning(
-                        "Unreadable audio for word_recording=%s; leaving scores unset",
-                        record_id,
-                    )
+                    reject_word_recording(db_conn, record_id, "unreadable_audio")
                 return
 
             max_duration_s = (
@@ -161,11 +158,7 @@ def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model, emotion
                 if record_kind == "submission":
                     reject_submission(db_conn, record_id, reason)
                 else:
-                    logger.warning(
-                        "word_recording=%s failed prefilter (%s); leaving scores unset",
-                        record_id,
-                        reason,
-                    )
+                    reject_word_recording(db_conn, record_id, reason)
                 return
 
             expression_enabled = get_speech_expression_enabled(db_conn)
