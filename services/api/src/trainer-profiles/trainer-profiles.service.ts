@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Role, SubmissionStatus, UserStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { trainerRatingValue } from '../common/trainer-rating.util';
 
 @Injectable()
 export class TrainerProfilesService {
@@ -27,6 +28,7 @@ export class TrainerProfilesService {
         createdAt: true,
         role: true,
         status: true,
+        trainerRating: true,
         kycStatus: true,
         country: { select: { name: true } },
         dialect: { select: { name: true } },
@@ -91,6 +93,8 @@ export class TrainerProfilesService {
       dialectName: user.dialect?.name ?? null,
       dialectVariantName: user.dialectVariant?.name ?? null,
       identityVerified: user.kycStatus === 'APPROVED',
+      trainerRating: user.trainerRating,
+      trainerRatingValue: trainerRatingValue(user.trainerRating),
       scoredContributions,
       averageScore,
       testimonials: testimonials.map((testimony) => ({

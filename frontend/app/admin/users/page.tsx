@@ -7,6 +7,8 @@ import { AdminShell } from '@/components/admin/AdminShell';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { ActionButton, ActionSpinner } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
+import { TrainerStarRating } from '@/components/ui/TrainerStarRating';
+import { trainerRatingBadgeClass, trainerRatingLabel } from '@/lib/trainer-rating';
 import {
   KycStatus,
   normalizeErrorMessage,
@@ -343,6 +345,16 @@ function UserIdentityCell({ user, selfId }: { user: PublicUser; selfId?: string 
           {[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Name not provided'}
         </Link>
         <p className="break-all text-sm text-muted">{user.email}</p>
+        {user.role === 'TRAINER' && user.trainerRating && (
+          <p className="mt-1">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-extrabold ${trainerRatingBadgeClass(user.trainerRating)}`}
+            >
+              {trainerRatingLabel(user.trainerRating)}
+              <TrainerStarRating rating={user.trainerRating} size="sm" />
+            </span>
+          </p>
+        )}
         <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
           <span>{user.phoneNumber ?? 'No mobile number'}</span>
           <span

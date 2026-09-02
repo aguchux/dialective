@@ -34,7 +34,12 @@ enum UserStatus {
 /// Administrator-assigned trainer quality label. The numeric order is kept
 /// in application code so a public profile can present a compact badge while
 /// the stored enum remains self-describing and constrained.
+/// Admin-set quality label for a trainer, purely informational -- never
+/// affects scoring or payouts. Ordered VERY_BAD (1 star) through EXCELLENT
+/// (5 stars); see AuthService.trainerRatingValue for the numeric mapping
+/// used by both the badge and the 5-star display.
 enum TrainerRating {
+  VERY_BAD
   BAD
   GOOD
   VERY_GOOD

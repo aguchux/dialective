@@ -178,6 +178,65 @@ describe('AuthService auth maintenance gate', () => {
   });
 });
 
+describe('AuthService trainer ratings', () => {
+  it('records a trainer rating and the reviewing admin', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'trainer-1', role: 'TRAINER' });
+    prisma.user.update.mockResolvedValue({
+      id: 'trainer-1',
+      email: 'trainer@example.com',
+      role: 'TRAINER',
+      status: 'ACTIVE',
+      referralCode: 'trainer-code',
+      trainerRating: 'EXCELLENT',
+      auditHoldAt: null,
+      auditHoldReleasedAt: null,
+    });
+
+    const result = await service.updateTrainerRating('admin-1', 'trainer-1', 'EXCELLENT' as never);
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'trainer-1' },
+        data: expect.objectContaining({
+          trainerRating: 'EXCELLENT',
+          trainerRatingUpdatedById: 'admin-1',
+        }),
+      }),
+    );
+    expect(result).toMatchObject({ trainerRating: 'EXCELLENT', trainerRatingValue: 5 });
+  });
+
+  it('maps VERY_BAD to the bottom of the 5-star scale', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'trainer-1', role: 'TRAINER' });
+    prisma.user.update.mockResolvedValue({
+      id: 'trainer-1',
+      email: 'trainer@example.com',
+      role: 'TRAINER',
+      status: 'ACTIVE',
+      referralCode: 'trainer-code',
+      trainerRating: 'VERY_BAD',
+      auditHoldAt: null,
+      auditHoldReleasedAt: null,
+    });
+
+    const result = await service.updateTrainerRating('admin-1', 'trainer-1', 'VERY_BAD' as never);
+
+    expect(result).toMatchObject({ trainerRating: 'VERY_BAD', trainerRatingValue: 1 });
+  });
+
+  it('rejects a rating for an account that is not a trainer', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: 'admin-2', role: 'ADMIN' });
+
+    await expect(
+      service.updateTrainerRating('admin-1', 'admin-2', 'GOOD' as never),
+    ).rejects.toThrow('Only trainers can receive a trainer quality rating');
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+});
+
 describe('AuthService register campaign attribution', () => {
   it('records marketing campaign registration when a campaignShareId is provided', async () => {
     const { service, prisma, marketing } = setup({ enabled: false });

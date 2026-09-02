@@ -1,4 +1,5 @@
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
+import type { TrainerRating } from '@/lib/trainer-rating';
 
 export interface PublicTrainerTestimony {
   id: string;
@@ -17,6 +18,8 @@ export interface PublicTrainerProfile {
   dialectName: string | null;
   dialectVariantName: string | null;
   identityVerified: boolean;
+  trainerRating: TrainerRating | null;
+  trainerRatingValue: number | null;
   scoredContributions: number;
   averageScore: number | null;
   testimonials: PublicTrainerTestimony[];

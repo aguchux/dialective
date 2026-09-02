@@ -31,6 +31,7 @@ import { ListManualPhoneVerificationsDto } from './dto/list-manual-phone-verific
 import { VerifyManualPhoneVerificationDto } from './dto/verify-manual-phone-verification.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { UpdateTrainerRatingDto } from './dto/update-trainer-rating.dto';
 import { LockUserDto } from './dto/lock-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import { ListUserActivityDto } from './dto/list-user-activity.dto';
@@ -272,6 +273,17 @@ export class AuthController {
       throw new BadRequestException('You cannot suspend or block your own account');
     }
     return this.auth.updateUserStatus(id, dto.status);
+  }
+
+  @Patch('admin/users/:id/trainer-rating')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  updateTrainerRating(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: UpdateTrainerRatingDto,
+  ) {
+    return this.auth.updateTrainerRating(admin.sub, id, dto.rating);
   }
 
   @Get('admin/users/:id')

@@ -6,6 +6,8 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { LandingFooter } from '@/components/landing/LandingFooter';
 import { LandingHeader } from '@/components/landing/LandingHeader';
 import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
+import { TrainerStarRating } from '@/components/ui/TrainerStarRating';
+import { trainerRatingBadgeClass, trainerRatingLabel } from '@/lib/trainer-rating';
 import { getPublicTrainerProfile } from '@/lib/trainer-profiles-api';
 
 interface TrainerProfilePageProps {
@@ -60,6 +62,14 @@ export default async function TrainerProfilePage({ params }: TrainerProfilePageP
               {profile.identityVerified && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700">
                   <BadgeCheck className="size-4" aria-hidden="true" /> Identity verified
+                </span>
+              )}
+              {profile.trainerRating && (
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-extrabold ${trainerRatingBadgeClass(profile.trainerRating)}`}
+                >
+                  {trainerRatingLabel(profile.trainerRating)} trainer
+                  <TrainerStarRating rating={profile.trainerRating} size="sm" />
                 </span>
               )}
             </div>

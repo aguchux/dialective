@@ -9,8 +9,15 @@ import { RecordingAuditDialog } from '@/components/admin/RecordingAuditDialog';
 import { ReleaseAuditHoldDialog } from '@/components/admin/ReleaseAuditHoldDialog';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
+import { TrainerStarRating } from '@/components/ui/TrainerStarRating';
 import { activityLabels } from '@/components/trainer/TrainerDashboard';
 import { useDialectName } from '@/lib/dialect-name';
+import {
+  trainerRatingBadgeClass,
+  trainerRatingLabel,
+  trainerRatingOptions,
+  type TrainerRating,
+} from '@/lib/trainer-rating';
 import {
   normalizeErrorMessage,
   useDeleteUserMutation,
@@ -22,6 +29,7 @@ import {
   useRequestUserLockOtpMutation,
   useResetUserDialectMutation,
   useSendInstantTrainerReportMutation,
+  useUpdateTrainerRatingMutation,
   type UserActivityEntry,
 } from '@/store/api';
 
@@ -71,8 +79,10 @@ export default function AdminUserDetailPage() {
   const [resetDialectDialogOpen, setResetDialectDialogOpen] = useState(false);
 
   const [sendReport, { isLoading: isSendingReport }] = useSendInstantTrainerReportMutation();
+  const [updateTrainerRating, { isLoading: isUpdatingTrainerRating }] = useUpdateTrainerRatingMutation();
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [ratingError, setRatingError] = useState<string | null>(null);
 
   async function handleSendReport() {
     if (!user) return;
@@ -83,6 +93,16 @@ export default function AdminUserDetailPage() {
       setReportMessage(`Report sent to ${user.email}.`);
     } catch (err) {
       setReportError(normalizeErrorMessage(err, 'Unable to send this report.'));
+    }
+  }
+
+  async function handleTrainerRating(rating: TrainerRating) {
+    if (!user || user.role !== 'TRAINER' || rating === user.trainerRating) return;
+    setRatingError(null);
+    try {
+      await updateTrainerRating({ id: user.id, rating }).unwrap();
+    } catch (err) {
+      setRatingError(normalizeErrorMessage(err, 'Unable to update this trainer rating.'));
     }
   }
 
@@ -109,6 +129,18 @@ export default function AdminUserDetailPage() {
           <>
             <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)] md:grid-cols-2 lg:grid-cols-3">
               <Field label="Role" value={user.role} />
+              {user.role === 'TRAINER' && (
+                <Field
+                  label="Trainer rating"
+                  value={
+                    user.trainerRating ? (
+                      <TrainerRatingBadge rating={user.trainerRating} />
+                    ) : (
+                      <span className="text-muted">Not rated</span>
+                    )
+                  }
+                />
+              )}
               <Field
                 label="Status"
                 value={
@@ -224,6 +256,44 @@ export default function AdminUserDetailPage() {
                 as a brand-new account.
               </p>
             </section>
+
+            {user.role === 'TRAINER' && (
+              <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+                <div className="grid gap-1">
+                  <h2 className="text-lg font-black">Trainer quality rating</h2>
+                  <p className="text-sm leading-relaxed text-muted">
+                    Apply an administrative quality label. It is informational only and never changes scoring or payouts.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Trainer quality rating">
+                  {trainerRatingOptions.map((rating) => {
+                    const selected = user.trainerRating === rating;
+                    return (
+                      <button
+                        aria-pressed={selected}
+                        className={`inline-flex min-h-10 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-extrabold transition-colors ${
+                          selected
+                            ? trainerRatingBadgeClass(rating)
+                            : 'border border-line bg-surface text-ink hover:bg-surface-muted'
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                        disabled={isUpdatingTrainerRating}
+                        key={rating}
+                        onClick={() => void handleTrainerRating(rating)}
+                        type="button"
+                      >
+                        {trainerRatingLabel(rating)}
+                        <TrainerStarRating rating={rating} size="sm" />
+                      </button>
+                    );
+                  })}
+                </div>
+                {ratingError && (
+                  <p className="text-sm leading-relaxed text-danger" role="alert">
+                    {ratingError}
+                  </p>
+                )}
+              </section>
+            )}
 
             {user.role === 'TRAINER' && (
               <section className="grid gap-3 rounded-lg border border-[#f5c78e] bg-[#fff8ef] p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -464,6 +534,17 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
       <p className="text-xs font-bold uppercase text-muted">{label}</p>
       <p className="font-bold">{value}</p>
     </div>
+  );
+}
+
+function TrainerRatingBadge({ rating }: { rating: TrainerRating }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-extrabold ${trainerRatingBadgeClass(rating)}`}
+    >
+      {trainerRatingLabel(rating)}
+      <TrainerStarRating rating={rating} size="sm" />
+    </span>
   );
 }
 

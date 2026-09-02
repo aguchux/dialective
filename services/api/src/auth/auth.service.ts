@@ -19,6 +19,7 @@ import {
   Prisma,
   ReferralInviteStatus,
   Role,
+  TrainerRating,
   User,
   UserStatus,
   WithdrawalStatus,
@@ -40,6 +41,7 @@ import { phoneVerificationContextHash } from './phone-otp-context.util';
 import { adminActionContextHash } from '../wallet/otp-context.util';
 import { generateOtpCode, hashOtpCode } from '../otp/otp.util';
 import { isOnAuditHold } from '../common/audit-hold.util';
+import { trainerRatingValue } from '../common/trainer-rating.util';
 
 const SMSLIVE247_NATIVE_OTP_REQUEST_ID = 'smslive247-native';
 
@@ -71,6 +73,8 @@ export interface PublicUser {
   email: string;
   role: Role;
   status: UserStatus;
+  trainerRating: TrainerRating | null;
+  trainerRatingValue: number | null;
   emailVerified: boolean;
   phoneNumber: string | null;
   phoneVerified: boolean;
@@ -99,6 +103,7 @@ export interface PublicUser {
   potentialDuplicateNameMatches?: PotentialDuplicateNameMatch[];
 }
 
+
 export interface PotentialDuplicateNameMatch {
   id: string;
   firstName: string | null;
@@ -125,6 +130,8 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     email: user.email,
     role: user.role,
     status: user.status,
+    trainerRating: user.trainerRating,
+    trainerRatingValue: trainerRatingValue(user.trainerRating),
     emailVerified: user.emailVerified !== null,
     phoneNumber: user.phoneNumber,
     phoneVerified: user.phoneVerifiedAt !== null,
@@ -1422,6 +1429,36 @@ export class AuthService {
       });
     }
 
+    return toPublicUser(user);
+  }
+
+  /**
+   * Quality labels are an admin review aid and are deliberately available
+   * only for trainers. They neither change scoring nor influence payouts.
+   */
+  async updateTrainerRating(
+    adminId: string,
+    userId: string,
+    rating: TrainerRating,
+  ): Promise<PublicUser> {
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+    if (!target) throw new NotFoundException('User not found');
+    if (target.role !== Role.TRAINER) {
+      throw new BadRequestException('Only trainers can receive a trainer quality rating');
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        trainerRating: rating,
+        trainerRatingUpdatedAt: new Date(),
+        trainerRatingUpdatedById: adminId,
+      },
+      include: { dialect: true, dialectVariant: true },
+    });
     return toPublicUser(user);
   }
 

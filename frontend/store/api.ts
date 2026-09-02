@@ -6,7 +6,7 @@ import { notifyAuthMaintenance } from '@/lib/auth-maintenance-signal';
 
 export type KycStatus =
   'NOT_STARTED' | 'IN_PROGRESS' | 'IN_REVIEW' | 'APPROVED' | 'DECLINED' | 'ABANDONED' | 'EXPIRED';
-export type TrainerRating = 'BAD' | 'GOOD' | 'VERY_GOOD' | 'EXCELLENT';
+export type TrainerRating = 'VERY_BAD' | 'BAD' | 'GOOD' | 'VERY_GOOD' | 'EXCELLENT';
 
 export interface PublicUser {
   id: string;
