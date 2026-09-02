@@ -456,6 +456,7 @@ export class WalletController {
       inviteExpirySeconds,
       minWithdrawalTokens,
       minCompletedTasksForWithdrawal,
+      minWalletBalanceTokens,
     ] = await Promise.all([
       this.getCurrentTokenUsdRate(),
       this.getLocalCurrency(req.user.sub),
@@ -467,6 +468,7 @@ export class WalletController {
       this.platformSettings.getReferralInviteExpirySeconds(),
       this.platformSettings.getMinWithdrawalTokens(),
       this.platformSettings.getMinCompletedTasksForWithdrawal(),
+      this.platformSettings.getMinWalletBalanceTokens(),
     ]);
 
     return {
@@ -480,6 +482,11 @@ export class WalletController {
       minWithdrawalTokens: minWithdrawalTokens.toString(),
       minCompletedTasksForWithdrawal,
       completedTasksForWithdrawal,
+      minWalletBalanceTokens: minWalletBalanceTokens.toString(),
+      withdrawableBalanceTokens: Math.max(
+        wallet.balance.toNumber() - minWalletBalanceTokens,
+        0,
+      ).toString(),
       localCurrency: dashboardLocalCurrency,
       balanceInLocalCurrency: dashboardLocalCurrency
         ? tokensToLocalCurrency(
@@ -1687,6 +1694,7 @@ export class WalletController {
     if (tokenAmount < minTokens) {
       throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);
     }
+    await this.requireMinWalletBalanceAfterWithdrawal(userId, tokenAmount);
     await this.requireMinCompletedTasksForWithdrawal(userId);
 
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
@@ -1764,6 +1772,39 @@ export class WalletController {
     if (completedTasks < minTasks) {
       throw new UnprocessableEntityException(
         `Complete at least ${minTasks} tasks before requesting a withdrawal (${completedTasks}/${minTasks} so far)`,
+      );
+    }
+  }
+
+  /**
+   * Shared by validateWithdrawalRequest and validateFiatWithdrawalRequest --
+   * a trainer must always keep at least PlatformSettings.minWalletBalanceTokens
+   * in their wallet after the withdrawal debits. Admin-gated, defaults to 0
+   * (no reserve, matches every deployment's existing behavior until an admin
+   * opts in). This is a *reserve* check on top of the plain
+   * balance>=tokenAmount check the debit transaction itself already
+   * enforces atomically (see createWithdrawal's updateMany WHERE) -- read
+   * here rather than trusted from the client so a stale/tampered balance
+   * figure can't bypass it.
+   */
+  private async requireMinWalletBalanceAfterWithdrawal(
+    userId: string,
+    tokenAmount: number,
+  ): Promise<void> {
+    const minBalance = await this.platformSettings.getMinWalletBalanceTokens();
+    const wallet = await this.getOrCreateWallet(userId);
+    const balance = wallet.balance.toNumber();
+    if (tokenAmount > balance) {
+      throw new UnprocessableEntityException(
+        `Insufficient balance -- your balance is ${balance} DL`,
+      );
+    }
+    const withdrawableBalance = balance - minBalance;
+    if (tokenAmount > withdrawableBalance) {
+      throw new UnprocessableEntityException(
+        minBalance > 0
+          ? `You must keep at least ${minBalance} DL in your wallet -- you can withdraw up to ${Math.max(withdrawableBalance, 0)} DL right now`
+          : `Insufficient balance -- your balance is ${balance} DL`,
       );
     }
   }

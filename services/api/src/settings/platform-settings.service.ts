@@ -143,6 +143,11 @@ export class PlatformSettingsService {
     return min;
   }
 
+  async getMinWalletBalanceTokens(): Promise<number> {
+    const row = await this.getRow();
+    return row.minWalletBalanceTokens.toNumber();
+  }
+
   async getMinCompletedTasksForWithdrawal(): Promise<number> {
     const row = await this.getRow();
     if (
@@ -739,6 +744,7 @@ export class PlatformSettingsService {
     return {
       tokenUsdRate: row.tokenUsdRate?.toString() ?? null,
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
+      minWalletBalanceTokens: row.minWalletBalanceTokens.toString(),
       minCompletedTasksForWithdrawal: row.minCompletedTasksForWithdrawal ?? null,
       resendFromAddress: row.resendFromAddress,
       leadsNotificationAddress: row.leadsNotificationAddress,
@@ -862,6 +868,7 @@ export class PlatformSettingsService {
   async update(data: {
     tokenUsdRate?: number | null;
     minWithdrawalTokens?: number | null;
+    minWalletBalanceTokens?: number;
     minCompletedTasksForWithdrawal?: number | null;
     resendFromAddress?: string | null;
     leadsNotificationAddress?: string | null;
@@ -1152,6 +1159,12 @@ export class PlatformSettingsService {
       throw new BadRequestException('qualityWeightAsrMatch must be >= 0');
     }
 
+    // 0 is the explicit "no reserve" value (default) -- only negative values
+    // are actually invalid.
+    if (data.minWalletBalanceTokens !== undefined && data.minWalletBalanceTokens < 0) {
+      throw new BadRequestException('minWalletBalanceTokens must be >= 0');
+    }
+
     // 0 is the explicit "feature off" value (see schema doc comment) --
     // only negative values are actually invalid.
     if (data.auditHoldEveryNSubmissions !== undefined && data.auditHoldEveryNSubmissions < 0) {
@@ -1210,6 +1223,7 @@ export class PlatformSettingsService {
     return {
       tokenUsdRate: row.tokenUsdRate?.toString() ?? null,
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
+      minWalletBalanceTokens: row.minWalletBalanceTokens.toString(),
       minCompletedTasksForWithdrawal: row.minCompletedTasksForWithdrawal ?? null,
       resendFromAddress: row.resendFromAddress,
       leadsNotificationAddress: row.leadsNotificationAddress,

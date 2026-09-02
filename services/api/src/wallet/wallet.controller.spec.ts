@@ -25,6 +25,8 @@ describe('WalletController crypto withdrawal eligibility', () => {
     settledSubmissions?: number;
     settledWordRecordings?: number;
     user?: { emailVerified: boolean; phoneVerifiedAt: Date | null; kycStatus: string };
+    walletBalance?: number;
+    minWalletBalanceTokens?: number;
   }) {
     const prisma = {
       submission: { count: jest.fn().mockResolvedValue(overrides?.settledSubmissions ?? 100) },
@@ -38,10 +40,19 @@ describe('WalletController crypto withdrawal eligibility', () => {
           ...overrides?.user,
         }),
       },
+      wallet: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'wallet-1',
+          userId: 'trainer-1',
+          balance: { toNumber: () => overrides?.walletBalance ?? 1000 },
+        }),
+        create: jest.fn(),
+      },
     };
     const platformSettings = {
       isCryptoWithdrawalsEnabled: jest.fn().mockResolvedValue(true),
       getMinWithdrawalTokens: jest.fn().mockResolvedValue(50),
+      getMinWalletBalanceTokens: jest.fn().mockResolvedValue(overrides?.minWalletBalanceTokens ?? 0),
       getMinCompletedTasksForWithdrawal: jest.fn().mockResolvedValue(100),
       isPhoneVerificationRequired: jest.fn().mockResolvedValue(true),
       isKycRequiredForWithdrawals: jest.fn().mockResolvedValue(true),
@@ -87,6 +98,33 @@ describe('WalletController crypto withdrawal eligibility', () => {
       'Verify your phone number before requesting a withdrawal',
     );
     expect(otp.issueForUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects a withdrawal that would exceed the wallet balance', async () => {
+    const { controller, otp } = setup({ walletBalance: 40 });
+
+    await expect(controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody)).rejects.toThrow(
+      'Insufficient balance -- your balance is 40 DL',
+    );
+    expect(otp.issueForUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects a withdrawal that would dip below the configured minimum wallet balance', async () => {
+    // balance=1000, minWalletBalanceTokens=970 -> withdrawable=30, request is 50
+    const { controller, otp } = setup({ walletBalance: 1000, minWalletBalanceTokens: 970 });
+
+    await expect(controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody)).rejects.toThrow(
+      'You must keep at least 970 DL in your wallet -- you can withdraw up to 30 DL right now',
+    );
+    expect(otp.issueForUser).not.toHaveBeenCalled();
+  });
+
+  it('allows a withdrawal that leaves exactly the configured minimum wallet balance', async () => {
+    // balance=1000, minWalletBalanceTokens=950 -> withdrawable=50, request is exactly 50
+    const { controller, otp } = setup({ walletBalance: 1000, minWalletBalanceTokens: 950 });
+
+    await controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody);
+    expect(otp.issueForUser).toHaveBeenCalled();
   });
 });
 

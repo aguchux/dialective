@@ -787,6 +787,8 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
             minWithdrawalTokens={data.minWithdrawalTokens}
             minCompletedTasksForWithdrawal={data.minCompletedTasksForWithdrawal}
             completedTasksForWithdrawal={data.completedTasksForWithdrawal}
+            minWalletBalanceTokens={data.minWalletBalanceTokens}
+            withdrawableBalanceTokens={data.withdrawableBalanceTokens}
             tokenUsdRate={data.tokenUsdRate}
             localCurrency={data.localCurrency}
           />
@@ -880,6 +882,8 @@ function TokensView({
             minWithdrawalTokens={summary.minWithdrawalTokens}
             minCompletedTasksForWithdrawal={summary.minCompletedTasksForWithdrawal}
             completedTasksForWithdrawal={summary.completedTasksForWithdrawal}
+            minWalletBalanceTokens={summary.minWalletBalanceTokens}
+            withdrawableBalanceTokens={summary.withdrawableBalanceTokens}
             tokenUsdRate={summary.tokenUsdRate}
             localCurrency={summary.localCurrency}
           />
@@ -1023,6 +1027,8 @@ function EarningsView({
             minWithdrawalTokens={data.minWithdrawalTokens}
             minCompletedTasksForWithdrawal={data.minCompletedTasksForWithdrawal}
             completedTasksForWithdrawal={data.completedTasksForWithdrawal}
+            minWalletBalanceTokens={data.minWalletBalanceTokens}
+            withdrawableBalanceTokens={data.withdrawableBalanceTokens}
             tokenUsdRate={data.tokenUsdRate}
             localCurrency={data.localCurrency}
           />
@@ -4251,6 +4257,8 @@ function WithdrawTokensDialog({
   minWithdrawalTokens,
   minCompletedTasksForWithdrawal,
   completedTasksForWithdrawal,
+  minWalletBalanceTokens,
+  withdrawableBalanceTokens,
   tokenUsdRate,
   localCurrency,
 }: {
@@ -4258,6 +4266,8 @@ function WithdrawTokensDialog({
   minWithdrawalTokens: string;
   minCompletedTasksForWithdrawal: number;
   completedTasksForWithdrawal: number;
+  minWalletBalanceTokens: string;
+  withdrawableBalanceTokens: string;
   tokenUsdRate: number;
   localCurrency: LocalCurrency | null;
 }) {
@@ -4296,6 +4306,9 @@ function WithdrawTokensDialog({
   const kycBlocked = kycRequired && kycStatus !== 'APPROVED';
   const tasksRemaining = Math.max(0, minCompletedTasksForWithdrawal - completedTasksForWithdrawal);
   const tasksBlocked = tasksRemaining > 0;
+  const withdrawableBalanceNumber = Number(withdrawableBalanceTokens);
+  const minWalletBalanceNumber = Number(minWalletBalanceTokens);
+  const exceedsWithdrawableBalance = amountNumber > withdrawableBalanceNumber;
 
   async function startKycVerification() {
     setMessage(null);
@@ -4331,6 +4344,14 @@ function WithdrawTokensDialog({
   function submitDetails(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
+    if (exceedsWithdrawableBalance) {
+      setMessage(
+        minWalletBalanceNumber > 0
+          ? `You must keep at least ${formatTokens(minWalletBalanceTokens)} DL in your wallet -- you can withdraw up to ${formatTokens(withdrawableBalanceTokens)} DL right now.`
+          : `Insufficient balance -- your balance is ${formatTokens(balance)} DL.`,
+      );
+      return;
+    }
     if (method === 'fiat') {
       if (!payoutAccountId) {
         setMessage('Choose a payout method before continuing.');
@@ -4649,7 +4670,11 @@ function WithdrawTokensDialog({
       ) : (
         <DialogContent
           title="Withdraw DL"
-          description={`Available balance: ${formatTokens(balance)} DL.`}
+          description={
+            minWalletBalanceNumber > 0
+              ? `Available balance: ${formatTokens(balance)} DL · withdrawable: ${formatTokens(withdrawableBalanceTokens)} DL (${formatTokens(minWalletBalanceTokens)} DL minimum balance required).`
+              : `Available balance: ${formatTokens(balance)} DL.`
+          }
         >
           <form className="grid gap-4" onSubmit={submitDetails}>
             <fieldset className="grid gap-2">
@@ -4688,13 +4713,20 @@ function WithdrawTokensDialog({
                 type="number"
                 value={amount}
               />
-              {amountNumber > 0 && (
+              {amountNumber > 0 && !exceedsWithdrawableBalance && (
                 <span className="text-xs font-semibold text-muted">
                   ≈ {formatUsd(usdAmount)}
                   {method === 'fiat' &&
                     localCurrency &&
                     localAmount !== null &&
                     ` · ≈ ${formatLocalCurrency(localAmount, localCurrency.code)}`}
+                </span>
+              )}
+              {amountNumber > 0 && exceedsWithdrawableBalance && (
+                <span className="text-xs font-bold text-danger">
+                  {minWalletBalanceNumber > 0
+                    ? `You must keep at least ${formatTokens(minWalletBalanceTokens)} DL in your wallet -- you can withdraw up to ${formatTokens(withdrawableBalanceTokens)} DL.`
+                    : `Exceeds your available balance of ${formatTokens(balance)} DL.`}
                 </span>
               )}
             </label>
@@ -4824,11 +4856,12 @@ function WithdrawTokensDialog({
             <button
               className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
               disabled={
-                method === 'crypto'
+                exceedsWithdrawableBalance ||
+                (method === 'crypto'
                   ? !addressLooksValid || !addressConfirmed
                   : (payoutAccounts?.length ?? 0) === 0 ||
                     (selectedPayoutAccount?.type === 'STRIPE_CONNECT' &&
-                      !selectedPayoutAccount.stripePayoutsEnabled)
+                      !selectedPayoutAccount.stripePayoutsEnabled))
               }
               type="submit"
             >

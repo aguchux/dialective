@@ -19,6 +19,7 @@ export function GeneralSettingsPanel() {
 
   const [tokenUsdRate, setTokenUsdRate] = useState('');
   const [minWithdrawalTokens, setMinWithdrawalTokens] = useState('');
+  const [minWalletBalanceTokens, setMinWalletBalanceTokens] = useState('0');
   const [minCompletedTasksForWithdrawal, setMinCompletedTasksForWithdrawal] = useState('');
   const [taskTokenCost, setTaskTokenCost] = useState('');
   const [trainingPayoutBonusCapMultiple, setTrainingPayoutBonusCapMultiple] = useState('');
@@ -42,6 +43,7 @@ export function GeneralSettingsPanel() {
     if (!settings) return;
     setTokenUsdRate(settings.tokenUsdRate ?? '');
     setMinWithdrawalTokens(settings.minWithdrawalTokens ?? '');
+    setMinWalletBalanceTokens(settings.minWalletBalanceTokens);
     setMinCompletedTasksForWithdrawal(
       settings.minCompletedTasksForWithdrawal !== null
         ? String(settings.minCompletedTasksForWithdrawal)
@@ -82,6 +84,7 @@ export function GeneralSettingsPanel() {
       await updateSettings({
         ...(tokenUsdRate !== '' ? { tokenUsdRate: Number(tokenUsdRate) } : {}),
         ...(minWithdrawalTokens !== '' ? { minWithdrawalTokens: Number(minWithdrawalTokens) } : {}),
+        minWalletBalanceTokens: Number(minWalletBalanceTokens) || 0,
         ...(minCompletedTasksForWithdrawal !== ''
           ? { minCompletedTasksForWithdrawal: Number(minCompletedTasksForWithdrawal) }
           : {}),
@@ -160,6 +163,26 @@ export function GeneralSettingsPanel() {
               placeholder="Default"
               value={minWithdrawalTokens}
               onChange={(e) => setMinWithdrawalTokens(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="min-wallet-balance">
+              Minimum wallet balance (DL)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              Reserve every trainer must keep in their wallet -- a withdrawal request can never
+              bring their balance below this floor. Default 0.00 (no reserve).
+            </p>
+            <input
+              className={inputClass}
+              id="min-wallet-balance"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={minWalletBalanceTokens}
+              onChange={(e) => setMinWalletBalanceTokens(e.target.value)}
             />
           </div>
 

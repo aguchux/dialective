@@ -865,6 +865,8 @@ export interface TrainerDashboardSummary {
   minWithdrawalTokens: string;
   minCompletedTasksForWithdrawal: number;
   completedTasksForWithdrawal: number;
+  minWalletBalanceTokens: string;
+  withdrawableBalanceTokens: string;
   localCurrency: LocalCurrency | null;
   balanceInLocalCurrency: string | null;
   fundedTokens: string;
@@ -1285,6 +1287,7 @@ export interface SubscriptionPlanInput {
 export interface PlatformSettings {
   tokenUsdRate: string | null;
   minWithdrawalTokens: string | null;
+  minWalletBalanceTokens: string;
   minCompletedTasksForWithdrawal: number | null;
   resendFromAddress: string | null;
   leadsNotificationAddress: string | null;
@@ -1399,6 +1402,7 @@ export interface PlatformSettings {
 export interface PlatformSettingsInput {
   tokenUsdRate?: number | null;
   minWithdrawalTokens?: number | null;
+  minWalletBalanceTokens?: number;
   minCompletedTasksForWithdrawal?: number | null;
   resendFromAddress?: string | null;
   leadsNotificationAddress?: string | null;

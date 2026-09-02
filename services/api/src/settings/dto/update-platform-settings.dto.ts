@@ -45,6 +45,11 @@ export class UpdatePlatformSettingsDto {
   minWithdrawalTokens?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minWalletBalanceTokens?: number;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   minCompletedTasksForWithdrawal?: number;
