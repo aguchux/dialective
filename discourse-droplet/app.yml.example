@@ -1,0 +1,87 @@
+## Dialect Library community platform -- Discourse app.yml
+##
+## Copy to app.yml on the droplet (gitignored -- contains no secrets by
+## itself, but real values get filled in there), then follow
+## discourse-droplet/README.md to bootstrap. This is the OFFICIAL,
+## supported way to run Discourse (via discourse_docker's `launcher`) --
+## not a hand-rolled k8s Deployment. Discourse's own Postgres/Redis run
+## bundled inside this one container (postgres.template.yml /
+## redis.template.yml below), which is how the overwhelming majority of
+## self-hosted Discourse instances run, including large ones -- there is
+## no need to split them out for a community forum's scale.
+
+templates:
+  - "templates/postgres.template.yml"
+  - "templates/redis.template.yml"
+  - "templates/web.template.yml"
+  - "templates/web.ratelimited.template.yml"
+  # Terminates TLS for community.dialectlibrary.com directly on this
+  # droplet via Let's Encrypt -- DNS for this subdomain points straight at
+  # the droplet's IP, not through the k8s cluster's nginx ingress (that
+  # ingress only fronts services actually running in-cluster).
+  - "templates/web.letsencrypt.ssl.template.yml"
+
+expose:
+  - "80:80"
+  - "443:443"
+
+params:
+  # bump as needed; 2 is a reasonable default for a single small droplet
+  db_shared_buffers: "256MB"
+
+env:
+  LANG: en_US.UTF-8
+  DISCOURSE_DEFAULT_LOCALE: en
+
+  DISCOURSE_HOSTNAME: community.dialectlibrary.com
+  DISCOURSE_DEVELOPER_EMAILS: "agu.chux@golojan.co.uk"
+
+  # Let's Encrypt cert -- must be a real mailbox, receives renewal-failure
+  # notices from Let's Encrypt.
+  LETSENCRYPT_ACCOUNT_EMAIL: "agu.chux@golojan.co.uk"
+
+  # Discourse's own outbound mail (digests, notifications, break-glass
+  # admin password resets). Reuses the same Resend SMTP credentials already
+  # generated for this (resend.com -> API Keys -> SMTP) -- independent of
+  # api's own resend_api_key.
+  DISCOURSE_SMTP_ADDRESS: smtp.resend.com
+  DISCOURSE_SMTP_PORT: 587
+  DISCOURSE_SMTP_USER_NAME: resend
+  DISCOURSE_SMTP_PASSWORD: "changeme"
+  DISCOURSE_SMTP_ENABLE_START_TLS: true
+  DISCOURSE_NOTIFICATION_EMAIL: community@dialectlibrary.com
+
+  # DiscourseConnect (SSO) -- delegates all login/registration to
+  # frontend's /api/discourse-sso route (NextAuth session), so Discourse
+  # never owns a password for any Dialect Library user except the
+  # break-glass admin created at bootstrap.
+  DISCOURSE_ENABLE_SSO: true
+  DISCOURSE_SSO_URL: "https://dialectlibrary.com/api/discourse-sso"
+  # Must match frontend's DISCOURSE_SSO_SECRET Vercel env var exactly --
+  # generate once with `openssl rand -hex 32` and use the SAME value in
+  # both places. Do not put the real value in this committed template;
+  # override it in the droplet's own copy of app.yml.
+  DISCOURSE_SSO_SECRET: "changeme"
+  DISCOURSE_SSO_OVERRIDES_EMAIL: true
+  DISCOURSE_SSO_OVERRIDES_USERNAME: false
+  DISCOURSE_SSO_OVERRIDES_NAME: true
+
+volumes:
+  - volume:
+      host: /var/discourse/shared/standalone
+      guest: /shared
+    volume:
+      host: /var/discourse/shared/standalone/log/var-log
+      guest: /var/log
+  - volume:
+      host: /var/discourse/shared/standalone/postgres_data
+      guest: /shared/postgres_data
+
+hooks:
+  after_code:
+    - exec:
+        cd: $home/plugins
+        cmd:
+          - git clone --depth 1 https://github.com/discourse/docker_manager.git
+
+docker_args: ""
