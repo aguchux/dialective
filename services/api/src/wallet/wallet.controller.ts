@@ -36,7 +36,6 @@ import {
   ReferralInviteStatus,
   Role,
   SubmissionStatus,
-  SubscriptionPoolStatus,
   UserStatus,
   WithdrawalStatus,
   adjustAdminWallet,
@@ -3622,11 +3621,6 @@ export class WalletController {
       referralBonusAgg,
       trainingPayoutAgg,
       withdrawalPaidAgg,
-      subscriptionPoolsCount,
-      activeSubscriptionPools,
-      subscriptionPoolAgg,
-      settledWordRecordingPayoutAgg,
-      tokenUsdRate,
       blogPostsCount,
       publishedBlogPostsCount,
       draftBlogPostsCount,
@@ -3683,17 +3677,6 @@ export class WalletController {
         where: { status: WithdrawalStatus.PAID },
         _sum: { tokenAmount: true, usdtAmount: true },
       }),
-      this.prisma.subscriptionPool.count(),
-      this.prisma.subscriptionPool.count({ where: { status: SubscriptionPoolStatus.ACTIVE } }),
-      this.prisma.subscriptionPool.aggregate({
-        where: { status: SubscriptionPoolStatus.ACTIVE },
-        _sum: { usdAmount: true },
-      }),
-      this.prisma.wordRecording.aggregate({
-        where: { settledAt: { not: null } },
-        _sum: { payoutTokenAmount: true },
-      }),
-      this.getCurrentTokenUsdRate(),
       this.prisma.blogPost.count(),
       this.prisma.blogPost.count({ where: { status: BlogPostStatus.PUBLISHED } }),
       this.prisma.blogPost.count({ where: { status: BlogPostStatus.DRAFT } }),
@@ -3738,18 +3721,6 @@ export class WalletController {
       totalTrainingPayouts: trainingPayoutAgg._sum.amount?.toString() ?? '0',
       totalWithdrawnTokens: withdrawalPaidAgg._sum.tokenAmount?.toString() ?? '0',
       totalWithdrawnUsdt: withdrawalPaidAgg._sum.usdtAmount?.toString() ?? '0',
-      subscriptionPoolsCount,
-      activeSubscriptionPools,
-      activeSubscriptionPoolUsd: subscriptionPoolAgg._sum.usdAmount?.toString() ?? '0',
-      // Reward Pool available: SUM(active SubscriptionPool.usdAmount) converted to
-      // tokens via getTokenUsdRate, minus tokens already settled -- same formula
-      // settlement-job's getRewardPoolAvailableTokens uses (informational only,
-      // never gates a payout; see computeTrainingPayout's no-loss guarantee).
-      // Can legitimately go negative -- that's the signal more pools need opening.
-      rewardPoolAvailableTokens: new Prisma.Decimal(subscriptionPoolAgg._sum.usdAmount ?? 0)
-        .div(tokenUsdRate)
-        .sub(settledWordRecordingPayoutAgg._sum.payoutTokenAmount ?? 0)
-        .toString(),
       blogPostsCount,
       publishedBlogPostsCount,
       draftBlogPostsCount,

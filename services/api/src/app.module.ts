@@ -19,7 +19,6 @@ import { AuthModule } from './auth/auth.module';
 import { SettingsModule } from './settings/settings.module';
 import { BlogModule } from './blog/blog.module';
 import { CoursesModule } from './courses/courses.module';
-import { PoolsModule } from './pools/pools.module';
 import { P2PModule } from './p2p/p2p.module';
 import { KycModule } from './kyc/kyc.module';
 import { DistributorsModule } from './distributors/distributors.module';
@@ -54,7 +53,6 @@ import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.modul
     SettingsModule,
     BlogModule,
     CoursesModule,
-    PoolsModule,
     P2PModule,
     KycModule,
     DistributorsModule,

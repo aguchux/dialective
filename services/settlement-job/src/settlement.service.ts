@@ -133,10 +133,8 @@ export class SettlementService {
       return;
     }
 
-    const poolBalance = await this.getRewardPoolAvailableTokens();
     this.logger.log(
-      `Settlement run complete: settled=${settledCount}/${eligibleCount} totalPayout=${totalPayout.toFixed(2)} ` +
-        `poolAvailable=${poolBalance.toFixed(2)}`,
+      `Settlement run complete: settled=${settledCount}/${eligibleCount} totalPayout=${totalPayout.toFixed(2)}`,
     );
   }
 
@@ -665,41 +663,4 @@ export class SettlementService {
     return Number.isFinite(cap) && cap >= 0 ? cap : 1.0;
   }
 
-  private async getTokenUsdRate(): Promise<number> {
-    const row = await this.prisma.platformSettings.upsert({
-      where: { id: 'default' },
-      update: {},
-      create: { id: 'default' },
-    });
-    if (row.tokenUsdRate) {
-      return row.tokenUsdRate.toNumber();
-    }
-    const raw = process.env.TOKEN_USD_RATE ?? '0.10';
-    const rate = Number(raw);
-    return Number.isFinite(rate) && rate > 0 ? rate : 0.1;
-  }
-
-  /**
-   * Informational only -- logged for admin visibility, never gates a
-   * payout. The no-loss guarantee is unconditional; this can legitimately
-   * go negative, which is itself the signal that more subscription pools
-   * need opening.
-   */
-  private async getRewardPoolAvailableTokens(): Promise<number> {
-    const [activeAgg, settledWordAgg, rate] = await Promise.all([
-      this.prisma.subscriptionPool.aggregate({
-        where: { status: 'ACTIVE' },
-        _sum: { usdAmount: true },
-      }),
-      this.prisma.wordRecording.aggregate({
-        where: { settledAt: { not: null } },
-        _sum: { payoutTokenAmount: true },
-      }),
-      this.getTokenUsdRate(),
-    ]);
-
-    const totalAvailableUsd = Number(activeAgg._sum.usdAmount ?? 0);
-    const totalSettled = Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
-    return totalAvailableUsd / rate - totalSettled;
-  }
 }

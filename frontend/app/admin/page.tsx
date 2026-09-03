@@ -5,7 +5,6 @@ import {
   BookOpenText,
   CircleDollarSign,
   Clock3,
-  Database,
   Globe2,
   Landmark,
   LibraryBig,
@@ -225,27 +224,6 @@ export default function AdminDashboardPage() {
       hint: stats ? `${formatCompactUsd(stats.totalWithdrawnUsdt)} USDT equivalent` : undefined,
       icon: CircleDollarSign,
       tone: 'cyan',
-    },
-    {
-      key: 'rewardPools',
-      label: 'Reward pools',
-      value: stats ? formatCount(stats.activeSubscriptionPools) : loadingValue,
-      hint: stats
-        ? `${formatCompactUsd(stats.activeSubscriptionPoolUsd)} active funding`
-        : undefined,
-      icon: Database,
-      tone: 'blue',
-    },
-    {
-      key: 'rewardPoolAvailable',
-      label: 'Reward pool available',
-      value: stats ? formatCompactTokens(stats.rewardPoolAvailableTokens) : loadingValue,
-      hint:
-        stats && Number(stats.rewardPoolAvailableTokens) < 0
-          ? 'Negative -- settled payouts exceed client funding. Open more pools.'
-          : 'Client funding minus settled trainer payouts',
-      icon: PiggyBank,
-      tone: stats && Number(stats.rewardPoolAvailableTokens) < 0 ? 'rose' : 'green',
     },
     {
       key: 'ipnEvents',

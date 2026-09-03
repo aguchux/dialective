@@ -164,7 +164,6 @@ model User {
   marketingCampaignShares          MarketingCampaignShare[]
   marketingCampaignRegistration    MarketingCampaignRegistration?
   wordSkips                        WordSkip[]
-  subscriptionPoolsOpened          SubscriptionPool[]               @relation("SubscriptionPoolOpenedBy")
   dataAccessLeadsContacted         DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
   p2pOffers                        P2PTokenOffer[]
   p2pBuyerTrades                   P2PTokenTrade[]                  @relation("P2PBuyerTrades")
@@ -656,41 +655,6 @@ model SentenceTranslation {
   @@unique([sentenceId, dialectTag])
   @@index([dialectTag])
   @@map("sentence_translations")
-}
-
-enum SubscriptionPoolStatus {
-  ACTIVE
-  CLOSED
-}
-
-/// One row per admin-opened data-subscriber funding pool -- ledger-style,
-/// never mutated after creation (closing sets status/closedAt, not the
-/// amount, so historical contribution stays auditable, matching how Deposit
-/// rows are never mutated after confirmed). This is the *only* real reward
-/// pool in the platform: it funds trainer training-payout bonuses (see
-/// computeTrainingPayout in packages/db), and is never shown to trainers.
-/// "Total pool available" is a computed read (SUM(usdAmount) WHERE
-/// status='ACTIVE', converted to tokens via PlatformSettingsService's
-/// getTokenUsdRate, minus SUM(WordRecording.payoutTokenAmount) already
-/// settled) -- not a stored/cached column, since this is an admin-only,
-/// low-QPS read, unlike Wallet.balance's high-QPS denormalization.
-model SubscriptionPool {
-  id               String                 @id @default(uuid())
-  subscriberName   String
-  subscriberEmail  String
-  organization     String?
-  dataAccessLeadId String?
-  dataAccessLead   DataAccessLead?        @relation(fields: [dataAccessLeadId], references: [id], onDelete: SetNull)
-  usdAmount        Decimal                @db.Decimal(20, 8)
-  status           SubscriptionPoolStatus @default(ACTIVE)
-  note             String?
-  openedByUserId   String
-  openedByUser     User                   @relation("SubscriptionPoolOpenedBy", fields: [openedByUserId], references: [id], onDelete: Restrict)
-  createdAt        DateTime               @default(now())
-  closedAt         DateTime?
-
-  @@index([status])
-  @@map("subscription_pools")
 }
 
 /// A single English word from the fixed seed word bank (services/api/prisma/seed.ts).
@@ -2099,7 +2063,6 @@ model DataAccessLead {
   contactedBy       User?     @relation("DataAccessLeadContactedBy", fields: [contactedByUserId], references: [id], onDelete: SetNull)
   createdAt         DateTime  @default(now())
 
-  subscriptionPools     SubscriptionPool[]
   interests             DataAccessLeadInterest[]
   invitedOrganizationId String?                  @unique // set once an admin approves the lead and provisions a SubscriberOrganization + invite from it
   invitedOrganization   SubscriberOrganization?  @relation(fields: [invitedOrganizationId], references: [id], onDelete: SetNull)

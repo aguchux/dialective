@@ -1223,10 +1223,6 @@ export interface AdminStats {
   totalTrainingPayouts: string;
   totalWithdrawnTokens: string;
   totalWithdrawnUsdt: string;
-  subscriptionPoolsCount: number;
-  activeSubscriptionPools: number;
-  activeSubscriptionPoolUsd: string;
-  rewardPoolAvailableTokens: string;
   blogPostsCount: number;
   publishedBlogPostsCount: number;
   draftBlogPostsCount: number;
@@ -1582,44 +1578,6 @@ export interface WordRecordingUpload {
   key: string;
   bucket: string;
   expiresInSeconds: number;
-}
-
-export interface SubscriptionPool {
-  id: string;
-  subscriberName: string;
-  subscriberEmail: string;
-  organization: string | null;
-  usdAmount: string;
-  status: 'ACTIVE' | 'CLOSED';
-  note: string | null;
-  dataAccessLeadId: string | null;
-  openedByUserId: string;
-  createdAt: string;
-  closedAt: string | null;
-}
-
-export interface SubscriptionPoolsPage {
-  items: SubscriptionPool[];
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-}
-
-export interface SubscriptionPoolInput {
-  subscriberName: string;
-  subscriberEmail: string;
-  organization?: string;
-  usdAmount: number;
-  note?: string;
-  dataAccessLeadId?: string;
-}
-
-export interface PoolsSummary {
-  totalAvailableTokens: string;
-  totalAvailableUsd: string;
-  activePoolCount: number;
-  totalSettledTokens: string;
 }
 
 export interface TrainerSubmissionSummary {
@@ -2111,7 +2069,6 @@ export const dialectivaApi = createApi({
     'BlogPosts',
     'Courses',
     'RequiredCourses',
-    'Pools',
     'Submissions',
     'AdminWords',
     'AdminSentences',
@@ -3118,36 +3075,6 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['SubDistributorList', 'SubDistributorActivity'],
     }),
-    getPoolsSummary: builder.query<PoolsSummary, void>({
-      query: () => '/admin/pools/summary',
-      providesTags: ['Pools'],
-    }),
-    listSubscriptionPools: builder.query<
-      SubscriptionPoolsPage,
-      { page?: number; pageSize?: number; status?: 'ACTIVE' | 'CLOSED' } | void
-    >({
-      query: (params) => ({ url: '/admin/pools', params: params ?? undefined }),
-      providesTags: ['Pools'],
-    }),
-    createSubscriptionPool: builder.mutation<SubscriptionPool, SubscriptionPoolInput>({
-      query: (body) => ({ url: '/admin/pools', method: 'POST', body }),
-      invalidatesTags: ['Pools'],
-    }),
-    closeSubscriptionPool: builder.mutation<SubscriptionPool, string>({
-      query: (id) => ({ url: `/admin/pools/${id}/close`, method: 'PATCH' }),
-      invalidatesTags: ['Pools'],
-    }),
-    updateSubscriptionPool: builder.mutation<
-      SubscriptionPool,
-      { id: string; body: Partial<SubscriptionPoolInput> }
-    >({
-      query: ({ id, body }) => ({ url: `/admin/pools/${id}`, method: 'PATCH', body }),
-      invalidatesTags: ['Pools'],
-    }),
-    deleteSubscriptionPool: builder.mutation<{ id: string }, string>({
-      query: (id) => ({ url: `/admin/pools/${id}`, method: 'DELETE' }),
-      invalidatesTags: ['Pools'],
-    }),
     getAdminStats: builder.query<AdminStats, void>({
       query: () => '/admin/stats',
     }),
@@ -3928,12 +3855,6 @@ export const {
   useUpdateSubDistributorStatusMutation,
   useRequestSubDistributorAdjustmentOtpMutation,
   useAdjustSubDistributorWalletMutation,
-  useGetPoolsSummaryQuery,
-  useListSubscriptionPoolsQuery,
-  useCreateSubscriptionPoolMutation,
-  useCloseSubscriptionPoolMutation,
-  useUpdateSubscriptionPoolMutation,
-  useDeleteSubscriptionPoolMutation,
   useGetAdminStatsQuery,
   useGetAdminLeaderboardQuery,
   useGetAdminLeaderboardEarnersQuery,

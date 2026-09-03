@@ -10,8 +10,10 @@ type Decimal = Prisma.Decimal;
  * linearly with the 0-100 consensus score, capped at bonusCapMultiple x
  * tokensSpent (business plan's "cap the bonus payout per task at a fixed
  * multiple, e.g. max 1x stake" guardrail). This is intentionally
- * independent of Reward Pool availability -- the no-loss guarantee is
- * unconditional, pool balance is a read-only admin signal, never a gate.
+ * independent of reserve/tokenomics state -- the no-loss guarantee is
+ * unconditional; see mintTrainingPayoutOps for the reserve-backed minting
+ * that now accompanies every payout (the legacy admin-managed Reward Pool
+ * this comment used to reference has been retired).
  */
 export function computeTrainingPayout(
   tokensSpent: Decimal | number | string,

@@ -1755,14 +1755,13 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    const [blogPostCount, courseCount, subscriptionPoolCount] = await Promise.all([
+    const [blogPostCount, courseCount] = await Promise.all([
       this.prisma.blogPost.count({ where: { authorId: userId } }),
       this.prisma.course.count({ where: { authorId: userId } }),
-      this.prisma.subscriptionPool.count({ where: { openedByUserId: userId } }),
     ]);
-    if (blogPostCount > 0 || courseCount > 0 || subscriptionPoolCount > 0) {
+    if (blogPostCount > 0 || courseCount > 0) {
       throw new UnprocessableEntityException(
-        'This user authored blog posts, courses, or opened subscription pools -- reassign or remove that content before deleting the account',
+        'This user authored blog posts or courses -- reassign or remove that content before deleting the account',
       );
     }
 

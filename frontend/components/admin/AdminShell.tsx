@@ -60,7 +60,6 @@ const navGroups: NavGroup[] = [
     items: [
       { href: '/admin/p2p', label: 'P2P Market', icon: P2PIcon },
       { href: '/admin/withdrawals', label: 'Withdrawals', icon: WithdrawalsIcon },
-      { href: '/admin/pools', label: 'Reward Pool', icon: PoolIcon },
       { href: '/admin/tokenomics', label: 'Tokenomics', icon: TokenomicsIcon },
     ],
   },
@@ -805,37 +804,6 @@ function SettlementIcon() {
     >
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3.5 2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function PoolIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      aria-hidden="true"
-    >
-      <path
-        d="M3 15c2 1.2 4 1.2 6 0s4-1.2 6 0 4 1.2 6 0"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M3 19c2 1.2 4 1.2 6 0s4-1.2 6 0 4 1.2 6 0"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M3 11c2 1.2 4 1.2 6 0s4-1.2 6 0 4 1.2 6 0"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M5 5h14v6H5z" strokeLinejoin="round" />
     </svg>
   );
 }
