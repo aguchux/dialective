@@ -177,6 +177,8 @@ model User {
   distributorAllocationsGranted    DistributorAllocation[]          @relation("DistributorAllocationsGranted")
   notifications                    UserNotification[]
   authoredSystemUpdates            SystemUpdate[]                   @relation("SystemUpdateAuthor")
+  adminSmsSent                     AdminSmsMessage[]                @relation("AdminSmsSender")
+  adminSmsReceived                 AdminSmsMessage[]                @relation("AdminSmsRecipient")
   apiAccessTokensUpdated           ApiAccessToken[]                 @relation("ApiAccessTokenUpdatedBy")
   payoutAccounts                   PayoutAccount[]
   kycVerifications                 KycVerification[]
@@ -275,6 +277,31 @@ model UserNotification {
   @@unique([userId, updateId])
   @@index([userId, readAt, createdAt])
   @@map("user_notifications")
+}
+
+enum AdminSmsStatus {
+  SENT
+  FAILED
+}
+
+/// Append-only record of an administrator's direct transactional SMS. It
+/// records provider acceptance, not handset delivery confirmation.
+model AdminSmsMessage {
+  id            String         @id @default(uuid())
+  senderId      String?
+  sender        User?          @relation("AdminSmsSender", fields: [senderId], references: [id], onDelete: SetNull)
+  recipientId   String?
+  recipient     User?          @relation("AdminSmsRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  phoneNumber   String
+  body          String
+  provider      String?
+  status        AdminSmsStatus
+  failureReason String?
+  createdAt     DateTime       @default(now())
+
+  @@index([recipientId, createdAt])
+  @@index([senderId, createdAt])
+  @@map("admin_sms_messages")
 }
 
 /// One pending/resolved invite an inviter sent to an email via the explicit

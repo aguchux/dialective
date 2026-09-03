@@ -99,6 +99,25 @@ export interface AdminSystemUpdate {
   readCount: number;
 }
 
+export interface AdminSmsContact {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  phoneNumber: string;
+  phoneVerified: boolean;
+  smsNotificationsEnabled: boolean;
+  status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
+}
+
+export interface AdminSmsContactsPage {
+  items: AdminSmsContact[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface AuthResult {
   accessToken: string;
   refreshToken: string;
@@ -2088,6 +2107,7 @@ export const dialectivaApi = createApi({
     'Testimony',
     'Marketing',
     'Faqs',
+    'AdminSms',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -3189,6 +3209,20 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/auth/admin/phone-verifications/${id}/reject`, method: 'POST' }),
       invalidatesTags: ['Users'],
     }),
+    listAdminSmsContacts: builder.query<
+      AdminSmsContactsPage,
+      { page?: number; pageSize?: number; search?: string } | void
+    >({
+      query: (params) => ({ url: '/admin/sms/contacts', params: params ?? undefined }),
+      providesTags: ['AdminSms'],
+    }),
+    sendAdminSms: builder.mutation<
+      { id: string; status: 'SENT'; provider: string; createdAt: string },
+      { recipientId: string; message: string }
+    >({
+      query: (body) => ({ url: '/admin/sms/send', method: 'POST', body }),
+      invalidatesTags: ['AdminSms'],
+    }),
     updateUserRole: builder.mutation<PublicUser, { id: string; role: string }>({
       query: ({ id, role }) => ({
         url: `/auth/admin/users/${id}/role`,
@@ -3878,6 +3912,8 @@ export const {
   useListAdminManualPhoneVerificationsQuery,
   useVerifyAdminManualPhoneVerificationMutation,
   useRejectAdminManualPhoneVerificationMutation,
+  useListAdminSmsContactsQuery,
+  useSendAdminSmsMutation,
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,
   useUpdateTrainerRatingMutation,
