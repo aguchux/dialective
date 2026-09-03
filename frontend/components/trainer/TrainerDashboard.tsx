@@ -810,6 +810,7 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
           subValue={formatCompactUsd(Number(data.lockedBalance) * data.tokenUsdRate)}
           tone="blue"
           compact
+          href="/dashboard/held-in-review"
         />
         <MetricCard
           icon={Banknote}
@@ -1251,13 +1252,13 @@ function EarningTypeLabel({ type }: { type: LedgerEntryType }) {
  * second request. Falls back to 60min only for the brief window before the
  * dashboard query has resolved.
  */
-function useScoringSlaMs(): number {
+export function useScoringSlaMs(): number {
   const { data } = useGetTrainerDashboardQuery();
   return (data?.scoringSlaMinutes ?? 60) * 60 * 1000;
 }
 
 /** e.g. 90_000 -> "1m", 5_400_000 -> "1h 30m", 3_600_000 -> "1h" -- now that the SLA is minute-configurable, a fixed "Xh" label would misrepresent sub-hour or non-round-hour values. */
-function formatDurationLabel(ms: number): string {
+export function formatDurationLabel(ms: number): string {
   const totalMinutes = Math.max(1, Math.round(ms / 60000));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -1500,7 +1501,7 @@ function qualityBreakdownTitle(submission: TrainerSubmissionSummary): string | u
  */
 const MERGE_FETCH_PAGE_SIZE = 50;
 
-function useMergedSubmissions(
+export function useMergedSubmissions(
   status: TrainerSubmissionSummary['status'][],
   page: number,
   pageSize: number,
@@ -1758,7 +1759,13 @@ function TaskAudioButton({ audioUrl, label }: { audioUrl: string | null; label: 
   );
 }
 
-function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; now: number }) {
+export function TaskRow({
+  submission,
+  now,
+}: {
+  submission: TrainerSubmissionSummary;
+  now: number;
+}) {
   const displayStatus = deriveTaskStatus(submission, now, useScoringSlaMs());
   const dialectName = useDialectName(submission.dialectTag);
   return (
@@ -1792,7 +1799,13 @@ function TaskRow({ submission, now }: { submission: TrainerSubmissionSummary; no
   );
 }
 
-function TaskCard({ submission, now }: { submission: TrainerSubmissionSummary; now: number }) {
+export function TaskCard({
+  submission,
+  now,
+}: {
+  submission: TrainerSubmissionSummary;
+  now: number;
+}) {
   const displayStatus = deriveTaskStatus(submission, now, useScoringSlaMs());
   const dialectName = useDialectName(submission.dialectTag);
   const finalized =
@@ -4900,6 +4913,7 @@ function MetricCard({
   subValue,
   tone,
   compact = false,
+  href,
 }: {
   icon: typeof WalletCards;
   label: string;
@@ -4907,6 +4921,7 @@ function MetricCard({
   subValue?: string;
   tone: 'purple' | 'green' | 'amber' | 'blue';
   compact?: boolean;
+  href?: string;
 }) {
   const tones = {
     purple: 'bg-accent-soft text-accent',
@@ -4914,13 +4929,20 @@ function MetricCard({
     amber: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
     blue: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
   };
+  const Wrapper = href ? Link : 'article';
   return (
-    <article className={`${cardClass} flex min-h-32 items-start gap-3 p-4 md:p-5`}>
+    <Wrapper
+      className={`${cardClass} flex min-h-32 items-start gap-3 p-4 md:p-5 ${href ? 'transition-colors hover:border-accent hover:bg-surface-muted' : ''}`}
+      href={href as never}
+    >
       <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${tones[tone]}`}>
         <Icon className="size-5" aria-hidden="true" />
       </span>
-      <div className="min-w-0">
-        <p className="text-sm font-bold text-muted">{label}</p>
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1 text-sm font-bold text-muted">
+          {label}
+          {href && <ArrowRight className="size-3.5 shrink-0" aria-hidden="true" />}
+        </p>
         <p
           className={`mt-2 break-words font-black leading-tight ${compact ? 'text-xl' : 'text-2xl'}`}
         >
@@ -4928,7 +4950,7 @@ function MetricCard({
         </p>
         {subValue && <p className="mt-1 text-xs font-bold text-muted">≈ {subValue}</p>}
       </div>
-    </article>
+    </Wrapper>
   );
 }
 
@@ -5431,7 +5453,7 @@ function DashboardError({ retry }: { retry: () => void }) {
   );
 }
 
-function formatTokens(value: string | number) {
+export function formatTokens(value: string | number) {
   return Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
@@ -5443,7 +5465,7 @@ function formatCompactTokensLabel(value: string | number) {
   return `${formatCompactNumber(value)} DL`;
 }
 
-function formatUsd(value: number) {
+export function formatUsd(value: number) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
