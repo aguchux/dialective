@@ -29,7 +29,11 @@ describe('AdminSmsService', () => {
       message: 'Your payout is ready.',
     });
 
-    expect(sms.sendTransactional).toHaveBeenCalledWith('+2348012345678', 'Your payout is ready.');
+    expect(sms.sendTransactional).toHaveBeenCalledWith(
+      '+2348012345678',
+      'Your payout is ready.',
+      undefined,
+    );
     expect(prisma.adminSmsMessage.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         senderId: 'admin-1',
@@ -45,6 +49,53 @@ describe('AdminSmsService', () => {
       status: 'SENT',
       provider: 'smslive247',
       createdAt: new Date('2026-09-03T12:00:00.000Z'),
+    });
+  });
+
+  it('passes a chosen provider override through to sendTransactional and records it on success', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 'recipient-1', phoneNumber: '+2348012345678' });
+    sms.sendTransactional.mockResolvedValue({ provider: 'twilio' });
+    prisma.adminSmsMessage.create.mockResolvedValue({
+      id: 'message-3',
+      status: 'SENT',
+      createdAt: new Date('2026-09-03T12:00:00.000Z'),
+    });
+
+    await service.send('admin-1', {
+      recipientId: 'recipient-1',
+      message: 'Testing twilio.',
+      provider: 'twilio',
+    });
+
+    expect(sms.sendTransactional).toHaveBeenCalledWith(
+      '+2348012345678',
+      'Testing twilio.',
+      'twilio',
+    );
+    expect(prisma.adminSmsMessage.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ provider: 'twilio', status: 'SENT' }),
+    });
+  });
+
+  it('records which provider was attempted when a forced-provider send fails', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 'recipient-1', phoneNumber: '+2348012345678' });
+    sms.sendTransactional.mockRejectedValue(new Error('Twilio credentials rejected'));
+    prisma.adminSmsMessage.create.mockResolvedValue({ id: 'message-4' });
+
+    await expect(
+      service.send('admin-1', {
+        recipientId: 'recipient-1',
+        message: 'Testing twilio.',
+        provider: 'twilio',
+      }),
+    ).rejects.toThrow('Twilio credentials rejected');
+
+    expect(prisma.adminSmsMessage.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        provider: 'twilio',
+        status: 'FAILED',
+        failureReason: 'Twilio credentials rejected',
+      }),
     });
   });
 

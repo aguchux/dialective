@@ -52,6 +52,25 @@ describe('SmsService', () => {
     );
   });
 
+  it('sendTransactional forces a single provider with no fallback when an override is given', async () => {
+    platformSettings.getForAdmin.mockResolvedValue({
+      smsProviderOrder: 'termii,twilio,africastalking',
+      smsTransactionalProviderOrder: 'smslive247,termii,twilio,africastalking',
+    });
+    const sendSpy = jest
+      .spyOn((service as any).chain, 'send')
+      .mockResolvedValue({ provider: 'twilio' });
+
+    await service.sendTransactional('+2348012345678', 'Testing twilio directly.', 'twilio');
+
+    expect(sendSpy).toHaveBeenCalledWith(
+      '+2348012345678',
+      'Testing twilio directly.',
+      ['twilio'],
+      undefined,
+    );
+  });
+
   it('passes the admin-configured smsSenderId through to the fallback chain', async () => {
     platformSettings.getForAdmin.mockResolvedValue({
       smsProviderOrder: 'termii,twilio,africastalking',

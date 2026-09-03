@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, Check, MessageSquare, Search, Send, ShieldCheck, Smartphone } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, ChevronDown, MessageSquare, Search, Send, ShieldCheck, Smartphone } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
+  ALL_SMS_PROVIDER_KEYS,
   AdminSmsContact,
   AdminSmsMessage,
   normalizeErrorMessage,
+  SmsProviderKey,
   useListAdminSmsContactsQuery,
   useListAdminSmsMessagesQuery,
   useSendAdminSmsMutation,
@@ -15,6 +17,13 @@ import {
 
 const MESSAGE_LIMIT = 480;
 const WARN_AT_REMAINING = 40;
+
+const PROVIDER_LABELS: Record<SmsProviderKey, string> = {
+  smslive247: 'SMSLive247',
+  termii: 'Termii',
+  twilio: 'Twilio',
+  africastalking: "Africa's Talking",
+};
 
 export default function AdminSmsPage() {
   const [searchInput, setSearchInput] = useState('');
@@ -25,6 +34,10 @@ export default function AdminSmsPage() {
   // panes side by side regardless of this value (see the aside/section
   // classNames below).
   const [mobileView, setMobileView] = useState<'list' | 'thread'>('list');
+  // 'auto' uses the admin-configured fallback order (PlatformSettings.
+  // smsTransactionalProviderOrder); any other value forces that single
+  // provider with no fallback (see SmsService.sendTransactional).
+  const [provider, setProvider] = useState<SmsProviderKey | 'auto'>('auto');
   const [message, setMessage] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,9 +79,12 @@ export default function AdminSmsPage() {
               the full history of what&apos;s been sent to them.
             </p>
           </div>
-          <p className="text-sm font-semibold text-muted">
-            {data?.total ?? 0} contact{(data?.total ?? 0) === 1 ? '' : 's'} with mobile numbers
-          </p>
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <ProviderSelect onChange={setProvider} value={provider} />
+            <p className="text-sm font-semibold text-muted">
+              {data?.total ?? 0} contact{(data?.total ?? 0) === 1 ? '' : 's'} with mobile numbers
+            </p>
+          </div>
         </header>
 
         <div className="grid h-[calc(100vh-260px)] min-h-[520px] overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)] lg:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.6fr)]">
@@ -163,6 +179,7 @@ export default function AdminSmsPage() {
                 notice={notice}
                 onBack={() => setMobileView('list')}
                 onMessageChange={setMessage}
+                provider={provider}
                 setError={setError}
                 setMessage={setMessage}
                 setNotice={setNotice}
@@ -187,6 +204,7 @@ function ThreadPane({
   error,
   onBack,
   onMessageChange,
+  provider,
   setMessage,
   setNotice,
   setError,
@@ -197,6 +215,7 @@ function ThreadPane({
   error: string | null;
   onBack: () => void;
   onMessageChange: (value: string) => void;
+  provider: SmsProviderKey | 'auto';
   setMessage: (value: string) => void;
   setNotice: (value: string | null) => void;
   setError: (value: string | null) => void;
@@ -223,7 +242,11 @@ function ThreadPane({
     setError(null);
     setNotice(null);
     try {
-      const result = await sendSms({ recipientId: contact.id, message: message.trim() }).unwrap();
+      const result = await sendSms({
+        recipientId: contact.id,
+        message: message.trim(),
+        ...(provider !== 'auto' ? { provider } : {}),
+      }).unwrap();
       setMessage('');
       setNotice(`Delivered to ${result.provider}.`);
     } catch (sendError) {
@@ -312,9 +335,16 @@ function ThreadPane({
           />
         </label>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className={`text-sm ${remaining <= WARN_AT_REMAINING ? 'font-bold text-amber-700' : 'text-muted'}`}>
-            {message.length}/{MESSAGE_LIMIT} characters
-          </p>
+          <div className="grid gap-0.5">
+            <p className={`text-sm ${remaining <= WARN_AT_REMAINING ? 'font-bold text-amber-700' : 'text-muted'}`}>
+              {message.length}/{MESSAGE_LIMIT} characters
+            </p>
+            <p className="text-xs text-muted">
+              {provider === 'auto'
+                ? 'Sending via the configured provider order'
+                : `Sending via ${PROVIDER_LABELS[provider]} only -- no fallback`}
+            </p>
+          </div>
           <ActionButton
             className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:opacity-60"
             disabled={!canSend}
@@ -379,6 +409,39 @@ function MessageBubble({ message }: { message: AdminSmsMessage }) {
         {senderName} &middot; {time.toLocaleDateString()} {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </p>
     </div>
+  );
+}
+
+function ProviderSelect({
+  value,
+  onChange,
+}: {
+  value: SmsProviderKey | 'auto';
+  onChange: (value: SmsProviderKey | 'auto') => void;
+}) {
+  return (
+    <label className="grid gap-1 text-right text-xs font-bold text-muted" htmlFor="sms-provider">
+      SMS provider
+      <span className="relative block">
+        <select
+          className="min-h-10 w-full appearance-none rounded-lg border border-line bg-white py-2 pl-3 pr-9 text-sm font-bold text-ink outline-none focus:border-accent sm:w-56"
+          id="sms-provider"
+          onChange={(event) => onChange(event.target.value as SmsProviderKey | 'auto')}
+          value={value}
+        >
+          <option value="auto">Auto (configured order)</option>
+          {ALL_SMS_PROVIDER_KEYS.map((key) => (
+            <option key={key} value={key}>
+              {PROVIDER_LABELS[key]} only
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+        />
+      </span>
+    </label>
   );
 }
 

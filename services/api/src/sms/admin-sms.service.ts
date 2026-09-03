@@ -118,7 +118,7 @@ export class AdminSmsService {
     if (!recipient?.phoneNumber) throw new NotFoundException('Recipient phone number was not found');
 
     try {
-      const result = await this.sms.sendTransactional(recipient.phoneNumber, dto.message);
+      const result = await this.sms.sendTransactional(recipient.phoneNumber, dto.message, dto.provider);
       const record = await this.prisma.adminSmsMessage.create({
         data: {
           senderId: adminId,
@@ -138,6 +138,11 @@ export class AdminSmsService {
           recipientId: recipient.id,
           phoneNumber: recipient.phoneNumber,
           body: dto.message,
+          // dto.provider is the forced provider that was actually attempted
+          // (see SmsService.sendTransactional); undefined when no override
+          // was given, since then the whole fallback chain was tried and no
+          // single provider name applies.
+          provider: dto.provider,
           status: 'FAILED',
           failureReason,
         },

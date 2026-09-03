@@ -136,6 +136,14 @@ export interface AdminSmsMessagesPage {
   totalPages: number;
 }
 
+export type SmsProviderKey = 'termii' | 'twilio' | 'africastalking' | 'smslive247';
+export const ALL_SMS_PROVIDER_KEYS: SmsProviderKey[] = [
+  'termii',
+  'twilio',
+  'africastalking',
+  'smslive247',
+];
+
 export interface AuthResult {
   accessToken: string;
   refreshToken: string;
@@ -3246,7 +3254,7 @@ export const dialectivaApi = createApi({
     }),
     sendAdminSms: builder.mutation<
       { id: string; status: 'SENT'; provider: string; createdAt: string },
-      { recipientId: string; message: string }
+      { recipientId: string; message: string; provider?: SmsProviderKey }
     >({
       query: (body) => ({ url: '/admin/sms/send', method: 'POST', body }),
       invalidatesTags: ['AdminSms'],
