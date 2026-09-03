@@ -1,0 +1,11 @@
+-- One-off data cleanup: the dictation, SENTENCE_REBUILD, and PHRASE_TO_DIALECT
+-- flows now always source English (`en-us`) Prompt rows for display text/fragments
+-- (see WordsService.pickPhraseSource/pickSentenceRebuildSource,
+-- SubmissionsController.createUploadUrl/create, PromptsController.getNext) --
+-- existing per-dialect translated Prompt rows are no longer read by any
+-- trainer-facing picker. Deactivate rather than delete: Prompt.submissions has
+-- onDelete: Restrict, so any translated Prompt with real historical Submissions
+-- cannot be hard-deleted; deactivation achieves the same "stop serving this" outcome
+-- without the FK/data-loss risk, using the exact same `active` flag every prompt-
+-- picking query already filters on.
+UPDATE "prompts" SET "active" = false WHERE "dialectTag" != 'en-us' AND "active" = true;

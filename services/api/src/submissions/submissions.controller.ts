@@ -65,8 +65,13 @@ export class SubmissionsController {
       throw new UnprocessableEntityException(`Unsupported dialect: ${body.dialectTag}`);
     }
 
+    // Prompt source text is always English -- the trainer reads/records it
+    // in their own dialect from their own fluency, matching word-training's
+    // ENGLISH_TO_DIALECT pattern. body.dialectTag still identifies the
+    // trainer's real dialect for routing/storage-path/Submission purposes
+    // below; only which Prompt row supplies the source text changes.
     const prompt = await this.prisma.prompt.findFirst({
-      where: { id: body.promptId, dialectTag: body.dialectTag, active: true },
+      where: { id: body.promptId, dialectTag: 'en-us', active: true },
       select: { id: true, text: true },
     });
     if (!prompt) {
@@ -169,8 +174,12 @@ export class SubmissionsController {
       throw new UnprocessableEntityException(`Unsupported dialect: ${body.dialectTag}`);
     }
 
+    // Prompt source text is always English -- see createUploadUrl's
+    // identical comment. body.dialectTag (below, in Submission.dialectTag,
+    // asrRegistry.resolve, and the trainer cross-check) still identifies
+    // the trainer's real dialect; only prompt lookup changes.
     const prompt = await this.prisma.prompt.findFirst({
-      where: { id: body.promptId, dialectTag: body.dialectTag, active: true },
+      where: { id: body.promptId, dialectTag: 'en-us', active: true },
     });
     if (!prompt) {
       throw new NotFoundException('Prompt not found');

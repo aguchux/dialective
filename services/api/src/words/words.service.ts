@@ -226,7 +226,7 @@ export class WordsService {
 
     const sentenceRebuild =
       sentenceRebuildEnabled && (roll < 2 / 3 || !singleWordTrainingEnabled)
-        ? await this.pickSentenceRebuildSource(trainer.dialect!.tag)
+        ? await this.pickSentenceRebuildSource()
         : null;
 
     if (sentenceRebuild) {
@@ -238,7 +238,7 @@ export class WordsService {
         wordId: null as string | null,
         direction: assignment.direction,
         promptText: null as string | null,
-        sourceLanguage: trainer.dialect!.name,
+        sourceLanguage: 'English',
         responseLanguage: trainer.dialect!.name,
         dialectTag: trainer.dialect!.tag,
         dialectKeyboardLayout: null as string | null,
@@ -253,7 +253,7 @@ export class WordsService {
     // sometimes-single-word-by-chance. Falls through to single-word only
     // when the phrase pool for this tier is empty.
     if (phraseTier) {
-      const phraseSource = await this.pickPhraseSource(trainer.dialect!.tag, phraseTier);
+      const phraseSource = await this.pickPhraseSource(phraseTier);
       if (phraseSource) {
         const assignment = await this.prisma.wordTrainingAssignment.create({
           data: { sessionId, promptId: phraseSource.promptId, direction: 'PHRASE_TO_DIALECT' },
@@ -280,7 +280,7 @@ export class WordsService {
       // pool empty -- SENTENCE_REBUILD's pool is independent of trainer
       // progress (see pickSentenceRebuildSource), so this is the guaranteed
       // final fallback rather than ENGLISH_TO_DIALECT below.
-      const forcedSentenceRebuild = await this.pickSentenceRebuildSource(trainer.dialect!.tag);
+      const forcedSentenceRebuild = await this.pickSentenceRebuildSource();
       if (!forcedSentenceRebuild) {
         // Distinct, stable message mirroring NO_WORDS_AVAILABLE -- see
         // WordTrainingDialog.tsx's empty-state handling.
@@ -298,7 +298,7 @@ export class WordsService {
         wordId: null as string | null,
         direction: assignment.direction,
         promptText: null as string | null,
-        sourceLanguage: trainer.dialect!.name,
+        sourceLanguage: 'English',
         responseLanguage: trainer.dialect!.name,
         dialectTag: trainer.dialect!.tag,
         dialectKeyboardLayout: null as string | null,
@@ -603,9 +603,12 @@ export class WordsService {
       throw new UnprocessableEntityException('This assignment has no associated prompt');
     }
 
+    // dialectTag (the trainer's real dialect) still stamps WordRecording
+    // below -- only the PromptWord fragment lookup changes to always use
+    // the shared English fragment set (see pickSentenceRebuildSource).
     const dialectTag = assignment.session.user.dialect!.tag;
     const promptWords = assignment.prompt.words
-      .filter((w) => w.dialectTag === dialectTag)
+      .filter((w) => w.dialectTag === 'en-us')
       .sort((a, b) => a.position - b.position);
     if (promptWords.length < 2) {
       throw new UnprocessableEntityException('This assignment has no fragment sequence to score');
@@ -1067,21 +1070,34 @@ export class WordsService {
     return word;
   }
 
-  private async pickSentenceRebuildSource(
-    dialectTag: string,
-  ): Promise<{ promptId: string; fragments: string[] } | null> {
-    const where = { dialectTag, active: true, words: { some: { dialectTag } } };
+  /**
+   * Source fragments are always English -- the tap-to-reorder exercise
+   * itself is a word-order puzzle, not a translation-comprehension one, so
+   * switching from a per-dialect-translated Prompt to the shared en-us pool
+   * doesn't change what's being tested. Dialect production stays covered by
+   * ENGLISH_TO_DIALECT/PHRASE_TO_DIALECT/DIALECT_TO_ENGLISH elsewhere. The
+   * en-us PromptWord set is created unconditionally for every composed
+   * sentence (see word-generator-job's composition branch), so this never
+   * needs a translated fallback.
+   */
+  private async pickSentenceRebuildSource(): Promise<{
+    promptId: string;
+    fragments: string[];
+  } | null> {
+    const where = { dialectTag: 'en-us', active: true, words: { some: { dialectTag: 'en-us' } } };
     const promptIds = await this.prisma.prompt.findMany({ where, select: { id: true } });
     const eligible: string[] = [];
     for (const { id } of promptIds) {
-      const wordCount = await this.prisma.promptWord.count({ where: { promptId: id, dialectTag } });
+      const wordCount = await this.prisma.promptWord.count({
+        where: { promptId: id, dialectTag: 'en-us' },
+      });
       if (wordCount >= 2) eligible.push(id);
     }
     if (eligible.length === 0) return null;
 
     const promptId = eligible[Math.floor(Math.random() * eligible.length)];
     const words = await this.prisma.promptWord.findMany({
-      where: { promptId, dialectTag },
+      where: { promptId, dialectTag: 'en-us' },
       orderBy: { position: 'asc' },
       select: { text: true },
     });
@@ -1091,22 +1107,23 @@ export class WordsService {
   /**
    * Mirrors pickSentenceRebuildSource's shape but reads a Prompt's own
    * `text` directly (audio-recording task, no tap-to-reorder fragments
-   * needed) and filters by tier word-count range instead of dialect-only.
-   * Deliberately pure random, no anti-repetition/ban-after-N-skips
-   * fairness (unlike pickEnglishToDialectWord) -- appropriate for a small,
+   * needed) and filters by tier word-count range. Source text is always
+   * English -- the trainer records their own dialect from their own
+   * fluency, matching ENGLISH_TO_DIALECT's pattern (see the response's
+   * sourceLanguage: 'English' in nextAssignment). Deliberately pure random,
+   * no anti-repetition/ban-after-N-skips fairness (unlike
+   * pickEnglishToDialectWord) -- appropriate for a small,
    * continuously-growing pool with no product requirement for phrase-level
    * fairness, same posture as pickSentenceRebuildSource already has.
    */
   private async pickPhraseSource(
-    dialectTag: string,
     tier: PhraseTier,
   ): Promise<{ promptId: string; promptText: string } | null> {
     const where = {
-      dialectTag,
+      dialectTag: 'en-us',
       active: true,
       phraseWordCountMin: { lte: tier.wordCountMax },
       phraseWordCountMax: { gte: tier.wordCountMin },
-      words: { some: { dialectTag } },
     };
     const count = await this.prisma.prompt.count({ where });
     if (count === 0) return null;

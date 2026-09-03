@@ -562,7 +562,7 @@ describe('WordsService', () => {
     ).rejects.toThrow('Recording exceeds the 5s limit for this word');
   });
 
-  it('picks a sentence-rebuild assignment and shuffles its fragments when enabled', async () => {
+  it('picks a sentence-rebuild assignment from the shared English pool and shuffles its fragments when enabled', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
     settings.isSentenceRebuildEnabled.mockResolvedValue(true);
     jest.spyOn(Math, 'random').mockReturnValue(0.5);
@@ -576,12 +576,26 @@ describe('WordsService', () => {
 
     const result = await service.nextAssignment(trainer.id, session.id);
 
+    // Source fragments are always the shared en-us pool -- decoupled from
+    // the trainer's own dialect (ig here), even though responseLanguage/
+    // dialectTag still reflect it.
+    expect(prisma.prompt.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { dialectTag: 'en-us', active: true, words: { some: { dialectTag: 'en-us' } } },
+      }),
+    );
+    expect(prisma.promptWord.count).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { promptId: 'prompt-1', dialectTag: 'en-us' } }),
+    );
+    expect(prisma.promptWord.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { promptId: 'prompt-1', dialectTag: 'en-us' } }),
+    );
     expect(result).toMatchObject({
       assignmentId: 'assignment-3',
       wordId: null,
       direction: 'SENTENCE_REBUILD',
       promptText: null,
-      sourceLanguage: 'Igbo',
+      sourceLanguage: 'English',
       responseLanguage: 'Igbo',
       dialectTag: 'ig',
     });
@@ -591,7 +605,7 @@ describe('WordsService', () => {
     jest.restoreAllMocks();
   });
 
-  it('scores an exact-order sentence-rebuild submission as 100', async () => {
+  it('scores an exact-order sentence-rebuild submission as 100, selecting the en-us fragment set even when a stale trainer-dialect set coexists', async () => {
     const assignment = {
       id: 'assignment-3',
       sessionId: session.id,
@@ -601,10 +615,16 @@ describe('WordsService', () => {
       consumedAt: null,
       word: null,
       prompt: {
+        // Simulates a not-yet-cleaned-up historical row: both the en-us
+        // fragment set (now the only one ever read) and a leftover
+        // trainer-dialect ('ig') set coexist on the same Prompt.
         words: [
-          { position: 0, dialectTag: 'ig', text: 'A' },
-          { position: 1, dialectTag: 'ig', text: 'na' },
-          { position: 2, dialectTag: 'ig', text: 'agba' },
+          { position: 0, dialectTag: 'en-us', text: 'A' },
+          { position: 1, dialectTag: 'en-us', text: 'na' },
+          { position: 2, dialectTag: 'en-us', text: 'agba' },
+          { position: 0, dialectTag: 'ig', text: 'wrong-A' },
+          { position: 1, dialectTag: 'ig', text: 'wrong-na' },
+          { position: 2, dialectTag: 'ig', text: 'wrong-agba' },
         ],
       },
       session: { userId: trainer.id, user: trainer },
@@ -644,9 +664,9 @@ describe('WordsService', () => {
       word: null,
       prompt: {
         words: [
-          { position: 0, dialectTag: 'ig', text: 'A' },
-          { position: 1, dialectTag: 'ig', text: 'na' },
-          { position: 2, dialectTag: 'ig', text: 'agba' },
+          { position: 0, dialectTag: 'en-us', text: 'A' },
+          { position: 1, dialectTag: 'en-us', text: 'na' },
+          { position: 2, dialectTag: 'en-us', text: 'agba' },
         ],
       },
       session: { userId: trainer.id, user: trainer },
@@ -836,9 +856,13 @@ describe('WordsService', () => {
       expect(prisma.wordTrainingAssignment.create).toHaveBeenCalledWith({
         data: { sessionId: session.id, promptId: 'prompt-phrase-1', direction: 'PHRASE_TO_DIALECT' },
       });
+      // Phrase source is always the shared en-us pool -- decoupled from the
+      // trainer's own dialect (ig here), even though responseLanguage/
+      // dialectTag in the response above still reflect it.
       expect(prisma.prompt.count).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
+            dialectTag: 'en-us',
             phraseWordCountMin: { lte: 3 },
             phraseWordCountMax: { gte: 2 },
           }),
@@ -1022,6 +1046,7 @@ describe('WordsService', () => {
       const result = await service.nextAssignment(trainer.id, session.id);
 
       expect(result.direction).toBe('SENTENCE_REBUILD');
+      expect(result.sourceLanguage).toBe('English');
       expect(prisma.word.count).not.toHaveBeenCalled();
       expect(prisma.wordTrainingAssignment.create).toHaveBeenCalledWith({
         data: { sessionId: session.id, promptId: 'prompt-sentence-1', direction: 'SENTENCE_REBUILD' },

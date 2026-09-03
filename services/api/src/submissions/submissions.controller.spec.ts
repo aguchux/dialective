@@ -114,3 +114,96 @@ describe('SubmissionsController.create audit-hold gate', () => {
     );
   });
 });
+
+// Prompt source text is always English regardless of the trainer's dialect
+// -- the trainer reads/records it in their own dialect from their own
+// fluency (see WordsService's ENGLISH_TO_DIALECT pattern). Submission.
+// dialectTag/asrRegistry routing must stay keyed on the trainer's real
+// dialect throughout, decoupled from which Prompt row supplied the text.
+describe('SubmissionsController prompt source is always English', () => {
+  const submissionId = '11111111-1111-1111-1111-111111111111';
+  const promptId = '22222222-2222-2222-2222-222222222222';
+
+  function setup() {
+    const prisma: any = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          auditHoldAt: null,
+          auditHoldReleasedAt: null,
+          dialect: { tag: 'ig', active: true },
+          dialectVariantId: null,
+          dialectVariant: null,
+        }),
+      },
+      prompt: { findFirst: jest.fn().mockResolvedValue({ id: promptId, text: 'Hello there.' }) },
+      wallet: {
+        upsert: jest.fn().mockResolvedValue({ id: 'wallet-1' }),
+      },
+      $transaction: jest.fn(async (fn: any) => fn(prismaTx)),
+      submission: {},
+    };
+    const prismaTx: any = {
+      wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      ledgerEntry: { create: jest.fn() },
+      submission: { create: jest.fn().mockResolvedValue({ id: submissionId }) },
+    };
+    const streams: any = { publish: jest.fn() };
+    const storage: any = {
+      createPresignedUploadUrl: jest
+        .fn()
+        .mockResolvedValue({ url: 'https://upload.example/x', expiresInSeconds: 900 }),
+    };
+    const asrRegistry: any = { resolve: jest.fn().mockReturnValue({ stream: 'asr-jobs-vosk' }) };
+    const platformSettings: any = {
+      getTaskTokenCost: jest.fn().mockResolvedValue(1),
+      getDictationMaxRecordingSeconds: jest.fn().mockResolvedValue(30),
+    };
+    const courses: any = { getIncompleteRequiredCourses: jest.fn().mockResolvedValue([]) };
+    const controller = new SubmissionsController(
+      storage,
+      streams,
+      asrRegistry,
+      prisma,
+      platformSettings,
+      courses,
+    );
+    return { controller, prisma, prismaTx, asrRegistry };
+  }
+
+  const body = {
+    submissionId,
+    dialectTag: 'ig',
+    promptId,
+    bucket: 'dialectiva-submissions',
+    audioKey: `ig/${promptId}/${submissionId}.wav`,
+  } as any;
+
+  it('createUploadUrl queries the Prompt by en-us regardless of the trainer dialect', async () => {
+    const { controller, prisma } = setup();
+
+    await controller.createUploadUrl({
+      promptId,
+      dialectTag: 'ig',
+      contentType: 'audio/wav',
+    } as any);
+
+    expect(prisma.prompt.findFirst).toHaveBeenCalledWith({
+      where: { id: promptId, dialectTag: 'en-us', active: true },
+      select: { id: true, text: true },
+    });
+  });
+
+  it('create() queries the Prompt by en-us, but still stamps Submission.dialectTag with the trainer real dialect and routes ASR by it', async () => {
+    const { controller, prisma, prismaTx, asrRegistry } = setup();
+
+    await controller.create({ user: { sub: 'user-1' } } as any, body);
+
+    expect(prisma.prompt.findFirst).toHaveBeenCalledWith({
+      where: { id: promptId, dialectTag: 'en-us', active: true },
+    });
+    expect(asrRegistry.resolve).toHaveBeenCalledWith('ig');
+    expect(prismaTx.submission.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ dialectTag: 'ig' }),
+    });
+  });
+});

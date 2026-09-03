@@ -65,20 +65,14 @@ describe('WordGeneratorService backfillDialectTranslations', () => {
     });
   });
 
-  it('queries Prompt rows (en-us, active) missing a translation for this dialect when wordsPerItem > 1', async () => {
+  it('is a no-op for wordsPerItem > 1 -- composed Prompt content is English-only now, nothing to backfill per-dialect', async () => {
     const { service, prisma } = setup();
-    prisma.prompt.findMany.mockResolvedValue([{ id: 'p1', text: 'the big house' }]);
 
     const result = await callBackfill(service, 'ig', 3, 5);
 
-    expect(prisma.prompt.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { dialectTag: 'en-us', active: true, translations: { none: { dialectTag: 'ig' } } },
-        orderBy: { createdAt: 'asc' },
-        take: 5,
-      }),
-    );
-    expect(result.backfilled).toBe(1);
+    expect(prisma.prompt.findMany).not.toHaveBeenCalled();
+    expect(prisma.promptTranslation.create).not.toHaveBeenCalled();
+    expect(result).toEqual({ backfilled: 0, skippedDuplicate: 0, failed: 0 });
   });
 
   it('returns zero counts and does not query the database when maxItemsThisRun is 0 (dialect already at cap)', async () => {

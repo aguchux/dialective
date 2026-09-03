@@ -62,16 +62,21 @@ export class PromptsController {
     ) {
       throw new UnprocessableEntityException('Complete dialect onboarding before dictation');
     }
+    // Trainer's real dialect -- returned to the client and used for
+    // routing/upload-key/Submission.dialectTag downstream. Source text
+    // itself is always English (see submissions.controller.ts's identical
+    // comment): the trainer reads/records it in their own dialect from
+    // their own fluency, so prompt selection below always queries en-us.
     const dialectTag = trainer.dialect.tag;
 
-    const count = await this.prisma.prompt.count({ where: { dialectTag, active: true } });
+    const count = await this.prisma.prompt.count({ where: { dialectTag: 'en-us', active: true } });
     if (count === 0) {
       throw new NotFoundException('NO_PROMPTS_AVAILABLE');
     }
 
     const skip = Math.floor(Math.random() * count);
     const [prompt] = await this.prisma.prompt.findMany({
-      where: { dialectTag, active: true },
+      where: { dialectTag: 'en-us', active: true },
       skip,
       take: 1,
     });

@@ -104,23 +104,19 @@ describe('WordGeneratorService.runPhraseTierGeneration', () => {
     expect(enUsCreateCalls).toHaveLength(0);
   });
 
-  it('stamps the same tier range on the translated-dialect Prompt row', async () => {
+  it('never creates a per-dialect translated Prompt row -- phrase-tier content is English-only now', async () => {
     const { service, prisma } = setup();
     (service as any).chain.generate = jest
       .fn()
-      .mockResolvedValueOnce({ items: ['the quick dog'], provider: 'openai' }) // composition
-      .mockResolvedValue({ items: ['nkịta ọsọ ọsọ'], provider: 'openai' }); // translation(s)
+      .mockResolvedValue({ items: ['the quick dog'], provider: 'openai' });
 
     await callRun(service);
 
     const dialectCreateCalls = prisma.prompt.create.mock.calls.filter(
-      ([args]: any) => args.data.dialectTag === 'ig',
+      ([args]: any) => args.data.dialectTag !== 'en-us',
     );
-    expect(dialectCreateCalls.length).toBeGreaterThan(0);
-    expect(dialectCreateCalls[0][0].data).toMatchObject({
-      phraseWordCountMin: 2,
-      phraseWordCountMax: 3,
-    });
+    expect(dialectCreateCalls).toHaveLength(0);
+    expect(prisma.promptTranslation.create).not.toHaveBeenCalled();
   });
 
   it('leaves phraseWordCountMin/Max null for the regular (non-tier) composition path', async () => {
