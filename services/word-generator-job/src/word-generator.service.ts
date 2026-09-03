@@ -17,6 +17,12 @@ import { PHRASE_TIERS } from './phrase-tiers.const';
 
 const DEFAULT_PROVIDER_ORDER: LlmProviderKey[] = ['openai', 'deepseek', 'anthropic'];
 
+// A composed sentence below this token count is almost certainly a
+// fragment (e.g. a bare noun phrase like "big dog"), not a complete,
+// translatable statement -- reject it before it reaches Sentence/
+// SentenceTranslation persistence.
+const MIN_COMPOSITION_TOKENS = 3;
+
 // Composition may add only these English grammar words around the selected
 // source vocabulary. This prevents a provider from inserting dialect words
 // into the English prompt/Word bank when it ignores the composition prompt.
@@ -410,9 +416,10 @@ export class WordGeneratorService {
 
   private buildWordGenerationPrompt(itemsPerRun: number): string {
     return [
-      `Generate exactly ${itemsPerRun} distinct items for a language-learning dictation/vocabulary app used by adult learners.`,
+      `Generate exactly ${itemsPerRun} distinct items for a language-learning dictation/vocabulary app used by beginner adult learners who are still building basic vocabulary.`,
       'Each item must be exactly one word each (a single word, no spaces, no punctuation).',
-      'Use common, everyday English vocabulary that an ordinary adult would recognize -- plain words are fine even if their origin is Latin or Greek (e.g. "family", "photograph"), but avoid rare, obscure, archaic, overly technical, or academic vocabulary.',
+      'Use only short, high-frequency, everyday words that a beginner would meet in their first months of learning the language -- the kind of vocabulary found in a basic picture dictionary: common nouns (house, water, mother, dog), common verbs (go, eat, sleep, help), common adjectives (big, hot, happy), everyday numbers, colors, family terms, foods, and household items.',
+      'Prefer words with 1-2 syllables. Avoid rare, obscure, archaic, technical, academic, abstract, or multi-syllable Latin/Greek-derived words (no words like "photograph", "obligation", "consequence", or "phenomenon") -- a word that is hard to translate into another language or hard to picture in your mind does not belong in this list.',
       'Do not include profanity, slurs, sexual content, violence, or anything inappropriate for a general audience.',
       'Do not repeat any item.',
       `For each word, also classify its part of speech as exactly one of: ${PART_OF_SPEECH_VALUES.join(', ')}.`,
@@ -433,10 +440,12 @@ export class WordGeneratorService {
   private buildCompositionPrompt(words: { text: string; partOfSpeech: string }[]): string {
     const wordList = words.map((w) => `"${w.text}" (${w.partOfSpeech})`).join(', ');
     return [
-      'You are composing one short sentence or phrase for a language-learning dictation app used by adult learners.',
+      'You are composing one short sentence for a language-learning dictation app used by beginner adult learners, so that trainers can use the same word list to build and translate it into their own dialect.',
       `Using ONLY these words: ${wordList}.`,
       'You may inflect or conjugate them as needed for correct grammar (e.g. "run" -> "runs", "walk" -> "walked"), and add ordinary function words (articles, prepositions, pronouns) if the sentence needs them to read naturally, but do NOT introduce any new content words (nouns, verbs, adjectives, adverbs) beyond the list above.',
-      'Use every word from the list at least once. Produce one natural, grammatically correct English sentence or short phrase.',
+      'Use every word from the list at least once.',
+      'Keep the sentence short and simple: one main clause only, plain subject-verb-object word order, no subordinate clauses, no semicolons, no relative clauses ("that", "which", "who"), and no compound sentences joined with commas.',
+      'The result must be a complete, meaningful, self-contained statement (a full sentence with a clear subject and verb, ending in a period) -- not a sentence fragment, list, or phrase missing a verb -- so that it makes sense and can be understood and translated on its own.',
       'Do not include profanity, slurs, sexual content, violence, or anything inappropriate for a general audience.',
       'Respond with ONLY a JSON object of the exact shape {"items": ["<sentence>"]} containing exactly one string. No other text.',
     ].join(' ');
@@ -499,16 +508,21 @@ export class WordGeneratorService {
    * A multi-word source prompt is English only when every token is either
    * an English grammar word or a selected source word (including a narrow,
    * predictable inflection). Responses that violate the source-vocabulary
-   * contract never reach Prompt or Word persistence.
+   * contract never reach Prompt or Word persistence. Also rejects sentence
+   * fragments (see MIN_COMPOSITION_TOKENS/terminal-punctuation checks
+   * below) -- the composition prompt asks the LLM for a complete,
+   * translatable statement, but instructions alone aren't reliable enough
+   * to trust without a code-level backstop.
    */
   private isEnglishComposition(
     text: string,
     wordSet: { id: string; text: string }[],
   ): boolean {
     if (!/^[A-Za-z\s'.,!?;:-]+$/.test(text)) return false;
+    if (!/[.!?]$/.test(text.trim())) return false;
 
     const tokens = text.toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g);
-    if (!tokens || tokens.length < 2) return false;
+    if (!tokens || tokens.length < MIN_COMPOSITION_TOKENS) return false;
 
     const sourceWords = wordSet.map((word) => word.text.toLowerCase());
     if (!sourceWords.every((source) => this.isEnglishWord(source))) return false;
@@ -774,19 +788,19 @@ export class WordGeneratorService {
       const chosen = new Map<string, { id: string; text: string; partOfSpeech: string }>();
 
       if (wordsPerItem >= 2 && nouns.length > 0) {
-        const noun = nouns[Math.floor(Math.random() * nouns.length)];
+        const noun = this.pickWordFavoringShorter(nouns);
         chosen.set(noun.id, noun as { id: string; text: string; partOfSpeech: string });
       }
       if (wordsPerItem >= 2 && verbs.length > 0 && chosen.size < wordsPerItem) {
-        const verb = verbs[Math.floor(Math.random() * verbs.length)];
+        const verb = this.pickWordFavoringShorter(verbs);
         chosen.set(verb.id, verb as { id: string; text: string; partOfSpeech: string });
       }
 
-      const remaining = classified.filter((w) => !chosen.has(w.id));
+      let remaining = classified.filter((w) => !chosen.has(w.id));
       while (chosen.size < wordsPerItem && remaining.length > 0) {
-        const idx = Math.floor(Math.random() * remaining.length);
-        const word = remaining.splice(idx, 1)[0];
+        const word = this.pickWordFavoringShorter(remaining);
         chosen.set(word.id, word as { id: string; text: string; partOfSpeech: string });
+        remaining = remaining.filter((w) => w.id !== word.id);
       }
 
       if (chosen.size < wordsPerItem) break; // pool exhausted -- return what we could build
@@ -794,6 +808,24 @@ export class WordGeneratorService {
     }
 
     return sets;
+  }
+
+  /**
+   * Weighted random pick that favors shorter words -- a proxy for
+   * simplicity, since the Word bank has no explicit difficulty rating.
+   * Weight is 1/wordLength, so a 4-letter word is ~2x as likely to be
+   * picked as an 8-letter word, without fully excluding longer words when
+   * the pool is short on simple ones.
+   */
+  private pickWordFavoringShorter<T extends { text: string }>(pool: T[]): T {
+    const weights = pool.map((word) => 1 / Math.max(1, word.text.length));
+    const total = weights.reduce((sum, w) => sum + w, 0);
+    let roll = Math.random() * total;
+    for (let i = 0; i < pool.length; i++) {
+      roll -= weights[i];
+      if (roll <= 0) return pool[i];
+    }
+    return pool[pool.length - 1];
   }
 
   // --- Settings / coverage --------------------------------------------------

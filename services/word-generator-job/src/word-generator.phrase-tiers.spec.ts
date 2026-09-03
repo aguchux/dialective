@@ -37,7 +37,7 @@ describe('WordGeneratorService.runPhraseTierGeneration', () => {
     // constructing real LLM providers, only chain.generate is exercised by
     // the composition/translation call sites this test covers.
     (service as any).chain = {
-      generate: jest.fn().mockResolvedValue({ items: ['quick dog runs'], provider: 'openai' }),
+      generate: jest.fn().mockResolvedValue({ items: ['Quick dog runs.'], provider: 'openai' }),
       generateStructured: jest.fn().mockResolvedValue({
         items: [
           { text: 'the', partOfSpeech: 'OTHER' },
@@ -65,14 +65,14 @@ describe('WordGeneratorService.runPhraseTierGeneration', () => {
 
   it('composes phrases for each configured tier and stamps wordCount on the inserted Sentence row', async () => {
     const { service, prisma } = setup();
-    // 'quick dog runs' -- 3 words, fits tier 1's [2,3] range, and uses all 3 selected words.
+    // 'Quick dog runs.' -- 3 words, fits tier 1's [2,3] range, and uses all 3 selected words.
 
     await callRun(service);
 
     // 5 tiers configured in phrase-tiers.const.ts -> at least one Sentence insert attempted
     expect(prisma.sentence.create.mock.calls.length).toBeGreaterThan(0);
     expect(prisma.sentence.create.mock.calls[0][0].data).toMatchObject({
-      text: 'quick dog runs',
+      text: 'Quick dog runs.',
       wordCount: 3,
     });
   });
@@ -82,7 +82,7 @@ describe('WordGeneratorService.runPhraseTierGeneration', () => {
     // Tier 1 wants 2-3 words; this composition returns 6 -- must be discarded, not inserted.
     (service as any).chain.generate = jest
       .fn()
-      .mockResolvedValue({ items: ['the quick dog runs very fast'], provider: 'openai' });
+      .mockResolvedValue({ items: ['The quick dog runs very fast.'], provider: 'openai' });
 
     await callRun(service);
 
