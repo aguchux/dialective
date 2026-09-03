@@ -233,7 +233,7 @@ export class WordsService {
     // only when the sentence pool for this tier is empty (and word training
     // is actually allowed).
     if (sentenceTrainingEnabled && phraseTier) {
-      const sentenceSource = await this.pickSentenceSource(phraseTier);
+      const sentenceSource = await this.pickSentenceSource(userId, phraseTier);
       if (sentenceSource) {
         const assignment = await this.prisma.wordTrainingAssignment.create({
           data: { sessionId, sentenceId: sentenceSource.sentenceId, direction: 'ENGLISH_TO_DIALECT' },
@@ -262,7 +262,7 @@ export class WordsService {
     // exhausted-pool case.
     if (!wordTrainingEnabled) {
       if (sentenceTrainingEnabled) {
-        const anySentence = await this.pickSentenceSource(null);
+        const anySentence = await this.pickSentenceSource(userId, null);
         if (anySentence) {
           const assignment = await this.prisma.wordTrainingAssignment.create({
             data: { sessionId, sentenceId: anySentence.sentenceId, direction: 'ENGLISH_TO_DIALECT' },
@@ -929,18 +929,38 @@ export class WordsService {
    * NO_WORDS_AVAILABLE. Source text is always English -- the trainer
    * records their own dialect from their own fluency, matching
    * ENGLISH_TO_DIALECT's pattern (see the response's sourceLanguage:
-   * 'English' in nextAssignment). Deliberately pure random, no
-   * anti-repetition/ban-after-N-skips fairness (unlike
-   * pickEnglishToDialectWord) -- appropriate for a small,
-   * continuously-growing pool with no product requirement for
-   * sentence-level fairness.
+   * 'English' in nextAssignment).
+   *
+   * Same anti-repetition posture as pickEnglishToDialectWord: prefers
+   * Sentences this trainer has never attempted (submitted a WordRecording
+   * for) yet within the current tier-filtered pool, so the same sentence
+   * can never repeat for a trainer until every other sentence in that pool
+   * has had a turn; only once every sentence in scope has been attempted
+   * does the pool widen back to the full tier-filtered set. This makes an
+   * immediate repeat impossible whenever 2+ sentences are available.
    */
   private async pickSentenceSource(
+    userId: string,
     tier: PhraseTier | null,
   ): Promise<{ sentenceId: string; sentenceText: string } | null> {
-    const where = tier ? { wordCount: { gte: tier.wordCountMin, lte: tier.wordCountMax } } : {};
-    const count = await this.prisma.sentence.count({ where });
+    const tierWhere = tier ? { wordCount: { gte: tier.wordCountMin, lte: tier.wordCountMax } } : {};
+
+    const attempted = await this.prisma.wordRecording.findMany({
+      where: { userId, direction: 'ENGLISH_TO_DIALECT', sentenceId: { not: null } },
+      select: { sentenceId: true },
+      distinct: ['sentenceId'],
+    });
+    const attemptedIds = attempted.flatMap(({ sentenceId }) => (sentenceId ? [sentenceId] : []));
+
+    const unattemptedCount = await this.prisma.sentence.count({
+      where: { ...tierWhere, id: { notIn: attemptedIds } },
+    });
+    const where =
+      unattemptedCount > 0 ? { ...tierWhere, id: { notIn: attemptedIds } } : tierWhere;
+    const count =
+      unattemptedCount > 0 ? unattemptedCount : await this.prisma.sentence.count({ where: tierWhere });
     if (count === 0) return null;
+
     const [sentence] = await this.prisma.sentence.findMany({
       where,
       take: 1,

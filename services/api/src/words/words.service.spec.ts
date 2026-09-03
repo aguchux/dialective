@@ -831,6 +831,57 @@ describe('WordsService', () => {
       });
       expect(prisma.sentence.count).toHaveBeenCalledWith(
         expect.objectContaining({
+          where: { wordCount: { gte: 2, lte: 3 }, id: { notIn: [] } },
+        }),
+      );
+    });
+
+    it('never re-serves a sentence the trainer has already attempted, until every sentence in the pool has had a turn', async () => {
+      prisma.wordRecording.count.mockResolvedValue(150); // tier 1: 100-199 -> 2-3 words
+      prisma.wordRecording.findMany.mockResolvedValue([
+        { sentenceId: 'sentence-1' },
+        { sentenceId: 'sentence-2' },
+      ]);
+      prisma.sentence.count.mockResolvedValue(1); // only 1 sentence left unattempted in this tier
+      prisma.sentence.findMany.mockResolvedValue([{ id: 'sentence-3', text: 'good evening' }]);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-sentence-unattempted',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.promptText).toBe('good evening');
+      expect(prisma.sentence.count).toHaveBeenCalledWith({
+        where: { wordCount: { gte: 2, lte: 3 }, id: { notIn: ['sentence-1', 'sentence-2'] } },
+      });
+      expect(prisma.sentence.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { wordCount: { gte: 2, lte: 3 }, id: { notIn: ['sentence-1', 'sentence-2'] } },
+        }),
+      );
+    });
+
+    it('widens back to the full tier pool once every sentence in it has been attempted', async () => {
+      prisma.wordRecording.count.mockResolvedValue(150); // tier 1: 100-199 -> 2-3 words
+      prisma.wordRecording.findMany.mockResolvedValue([{ sentenceId: 'sentence-1' }]);
+      // No unattempted sentences left in the tier pool.
+      prisma.sentence.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+      prisma.sentence.findMany.mockResolvedValue([{ id: 'sentence-1', text: 'good morning' }]);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-sentence-widened',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.promptText).toBe('good morning');
+      // Second count call widens back to the plain tier filter, no exclusion.
+      expect(prisma.sentence.count).toHaveBeenNthCalledWith(2, {
+        where: { wordCount: { gte: 2, lte: 3 } },
+      });
+      expect(prisma.sentence.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
           where: { wordCount: { gte: 2, lte: 3 } },
         }),
       );
@@ -1011,7 +1062,7 @@ describe('WordsService', () => {
       expect(result.wordId).toBeNull();
       expect(result.promptText).toBe('good morning');
       // Unfiltered pick (tier=null) -- no wordCount range in the query.
-      expect(prisma.sentence.count).toHaveBeenCalledWith({ where: {} });
+      expect(prisma.sentence.count).toHaveBeenCalledWith({ where: { id: { notIn: [] } } });
       expect(prisma.word.count).not.toHaveBeenCalled();
     });
 
