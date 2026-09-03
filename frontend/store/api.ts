@@ -118,6 +118,24 @@ export interface AdminSmsContactsPage {
   totalPages: number;
 }
 
+export interface AdminSmsMessage {
+  id: string;
+  body: string;
+  status: 'SENT' | 'FAILED';
+  failureReason: string | null;
+  provider: string | null;
+  createdAt: string;
+  sender: { firstName: string | null; lastName: string | null; email: string } | null;
+}
+
+export interface AdminSmsMessagesPage {
+  items: AdminSmsMessage[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface AuthResult {
   accessToken: string;
   refreshToken: string;
@@ -3216,6 +3234,16 @@ export const dialectivaApi = createApi({
       query: (params) => ({ url: '/admin/sms/contacts', params: params ?? undefined }),
       providesTags: ['AdminSms'],
     }),
+    listAdminSmsMessages: builder.query<
+      AdminSmsMessagesPage,
+      { contactId: string; page?: number; pageSize?: number }
+    >({
+      query: ({ contactId, ...params }) => ({
+        url: `/admin/sms/contacts/${contactId}/messages`,
+        params,
+      }),
+      providesTags: ['AdminSms'],
+    }),
     sendAdminSms: builder.mutation<
       { id: string; status: 'SENT'; provider: string; createdAt: string },
       { recipientId: string; message: string }
@@ -3913,6 +3941,7 @@ export const {
   useVerifyAdminManualPhoneVerificationMutation,
   useRejectAdminManualPhoneVerificationMutation,
   useListAdminSmsContactsQuery,
+  useListAdminSmsMessagesQuery,
   useSendAdminSmsMutation,
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Role } from '@dialectiva/db';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -9,6 +9,7 @@ import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { AdminSmsService } from './admin-sms.service';
 import { CreateAdminSmsDto } from './dto/create-admin-sms.dto';
 import { ListAdminSmsContactsDto } from './dto/list-admin-sms-contacts.dto';
+import { ListAdminSmsMessagesDto } from './dto/list-admin-sms-messages.dto';
 
 @Controller('admin/sms')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -19,6 +20,11 @@ export class AdminSmsController {
   @Get('contacts')
   listContacts(@Query() query: ListAdminSmsContactsDto) {
     return this.adminSms.listContacts(query);
+  }
+
+  @Get('contacts/:contactId/messages')
+  listMessages(@Param('contactId') contactId: string, @Query() query: ListAdminSmsMessagesDto) {
+    return this.adminSms.listMessages(contactId, query);
   }
 
   @Post('send')

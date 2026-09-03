@@ -8,7 +8,8 @@ describe('AdminSmsService', () => {
   beforeEach(() => {
     prisma = {
       user: { findUnique: jest.fn() },
-      adminSmsMessage: { create: jest.fn() },
+      adminSmsMessage: { create: jest.fn(), findMany: jest.fn(), count: jest.fn() },
+      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops as Promise<unknown>[])),
     };
     sms = { sendTransactional: jest.fn() };
     service = new AdminSmsService(prisma, sms);
@@ -61,6 +62,50 @@ describe('AdminSmsService', () => {
         status: 'FAILED',
         failureReason: 'All providers failed',
       }),
+    });
+  });
+
+  describe('listMessages', () => {
+    it('throws NotFoundException when the contact does not exist', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.listMessages('missing-1', {})).rejects.toThrow(
+        'Contact was not found',
+      );
+      expect(prisma.adminSmsMessage.findMany).not.toHaveBeenCalled();
+    });
+
+    it('returns the thread oldest-first even though the DB query is newest-first', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'contact-1' });
+      prisma.adminSmsMessage.findMany.mockResolvedValue([
+        { id: 'msg-2', body: 'second', status: 'SENT', createdAt: new Date('2026-09-02') },
+        { id: 'msg-1', body: 'first', status: 'SENT', createdAt: new Date('2026-09-01') },
+      ]);
+      prisma.adminSmsMessage.count.mockResolvedValue(2);
+
+      const result = await service.listMessages('contact-1', {});
+
+      expect(result.items.map((item: { id: string }) => item.id)).toEqual(['msg-1', 'msg-2']);
+      expect(result.total).toBe(2);
+      expect(prisma.adminSmsMessage.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { recipientId: 'contact-1' },
+          orderBy: { createdAt: 'desc' },
+        }),
+      );
+    });
+
+    it('paginates using page/pageSize defaults', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'contact-1' });
+      prisma.adminSmsMessage.findMany.mockResolvedValue([]);
+      prisma.adminSmsMessage.count.mockResolvedValue(0);
+
+      const result = await service.listMessages('contact-1', {});
+
+      expect(result).toMatchObject({ page: 1, pageSize: 50, total: 0, totalPages: 1 });
+      expect(prisma.adminSmsMessage.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 0, take: 50 }),
+      );
     });
   });
 });
