@@ -6,10 +6,8 @@ import {
   CircleDollarSign,
   Clock3,
   Database,
-  FileText,
   Globe2,
   Landmark,
-  Languages,
   LibraryBig,
   ListChecks,
   MailCheck,
@@ -103,20 +101,12 @@ export default function AdminDashboardPage() {
       tone: 'purple',
     },
     {
-      key: 'prompts',
-      label: 'Prompts',
-      value: stats ? formatCount(stats.promptsCount) : loadingValue,
-      hint: stats ? `${formatCount(stats.activePromptsCount)} active` : undefined,
+      key: 'sentences',
+      label: 'Sentences',
+      value: stats ? formatCount(stats.sentencesCount) : loadingValue,
+      hint: 'Multi-word training content',
       icon: BookOpenText,
       tone: 'blue',
-    },
-    {
-      key: 'promptTranslations',
-      label: 'Prompt translations',
-      value: stats ? formatCount(stats.promptTranslationsCount) : loadingValue,
-      hint: 'Generated dialect prompts',
-      icon: Languages,
-      tone: 'cyan',
     },
     {
       key: 'coverage',
@@ -164,32 +154,6 @@ export default function AdminDashboardPage() {
       hint: stats ? `${formatCount(stats.wordRecordingsSettled)} settled` : undefined,
       icon: Sparkles,
       tone: 'blue',
-    },
-    {
-      key: 'submissions',
-      label: 'Sentence submissions',
-      value: stats ? formatCount(stats.submissionsCount) : loadingValue,
-      hint: stats ? `${formatCount(stats.submissionsPending)} pending ASR` : undefined,
-      icon: FileText,
-      tone: 'cyan',
-    },
-    {
-      key: 'scoredSubmissions',
-      label: 'Submissions scored',
-      value: stats ? formatCount(stats.submissionsScored) : loadingValue,
-      hint: stats
-        ? `${formatCount(stats.submissionsTranscribed)} transcribed, ${formatCount(stats.submissionsRejected)} rejected`
-        : undefined,
-      icon: Database,
-      tone: 'amber',
-    },
-    {
-      key: 'settledSubmissions',
-      label: 'Submissions settled',
-      value: stats ? formatCount(stats.submissionsSettled) : loadingValue,
-      hint: 'Paid by settlement job',
-      icon: CircleDollarSign,
-      tone: 'green',
     },
   ];
 
