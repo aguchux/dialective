@@ -4,7 +4,6 @@ function setup() {
   const prisma: any = {
     audioRetentionRule: { findMany: jest.fn() },
     dialect: { findMany: jest.fn().mockResolvedValue([]) },
-    submission: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
     wordRecording: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
   };
   const storage = { deleteObject: jest.fn().mockResolvedValue(undefined) };
@@ -50,26 +49,6 @@ describe('RetentionService.run -- smart-deck-jobs publish on WordRecording purge
       trigger: 'recording_eligible',
       recording_id: 'rec-1',
     });
-  });
-
-  it('does not publish for a Submission purge', async () => {
-    const { service, prisma, streams } = setup();
-    prisma.audioRetentionRule.findMany.mockResolvedValue([catchAllRule]);
-    prisma.submission.findMany.mockResolvedValue([
-      {
-        id: 'sub-1',
-        dialectTag: 'ig',
-        audioBucket: 'bucket',
-        audioKey: 'key.wav',
-        settledAt: new Date(Date.now() - 100_000),
-        refundedAt: null,
-      },
-    ]);
-
-    await service.run();
-
-    expect(prisma.submission.update).toHaveBeenCalled();
-    expect(streams.publish).not.toHaveBeenCalled();
   });
 
   it('does not fail the purge when the publish itself fails', async () => {

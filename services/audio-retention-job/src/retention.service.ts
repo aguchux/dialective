@@ -78,48 +78,27 @@ export class RetentionService {
     const dialects = await this.prisma.dialect.findMany({ select: { tag: true, countryId: true } });
     const countryIdByDialectTag = new Map(dialects.map((d) => [d.tag, d.countryId] as const));
 
-    const [submissions, wordRecordings] = await Promise.all([
-      this.prisma.submission.findMany({
-        where: {
-          audioKey: { not: null },
-          audioDeletedAt: null,
-          OR: [{ settledAt: { not: null } }, { refundedAt: { not: null } }],
-        },
-        select: {
-          id: true,
-          dialectTag: true,
-          audioBucket: true,
-          audioKey: true,
-          settledAt: true,
-          refundedAt: true,
-        },
-      }),
-      this.prisma.wordRecording.findMany({
-        where: {
-          audioKey: { not: null },
-          audioDeletedAt: null,
-          OR: [{ settledAt: { not: null } }, { refundedAt: { not: null } }],
-        },
-        select: {
-          id: true,
-          dialectTag: true,
-          audioBucket: true,
-          audioKey: true,
-          settledAt: true,
-          refundedAt: true,
-        },
-      }),
-    ]);
+    const wordRecordings = await this.prisma.wordRecording.findMany({
+      where: {
+        audioKey: { not: null },
+        audioDeletedAt: null,
+        OR: [{ settledAt: { not: null } }, { refundedAt: { not: null } }],
+      },
+      select: {
+        id: true,
+        dialectTag: true,
+        audioBucket: true,
+        audioKey: true,
+        settledAt: true,
+        refundedAt: true,
+      },
+    });
 
     let purged = 0;
     let skipped = 0;
 
-    for (const row of submissions) {
-      if (await this.maybePurge(row, rules, countryIdByDialectTag, 'submission')) purged++;
-      else skipped++;
-    }
     for (const row of wordRecordings) {
-      if (await this.maybePurge(row, rules, countryIdByDialectTag, 'wordRecording')) purged++;
+      if (await this.maybePurge(row, rules, countryIdByDialectTag)) purged++;
       else skipped++;
     }
 
@@ -130,7 +109,6 @@ export class RetentionService {
     row: AudioRow,
     rules: Rule[],
     countryIdByDialectTag: Map<string, string | null>,
-    kind: 'submission' | 'wordRecording',
   ): Promise<boolean> {
     if (!row.audioBucket || !row.audioKey) return false;
 
@@ -151,33 +129,27 @@ export class RetentionService {
       await this.storage.deleteObject(row.audioBucket, row.audioKey);
     } catch (err) {
       this.logger.warn(
-        `Failed to delete audio object: kind=${kind} id=${row.id} bucket=${row.audioBucket} key=${row.audioKey} err=${err}`,
+        `Failed to delete audio object: id=${row.id} bucket=${row.audioBucket} key=${row.audioKey} err=${err}`,
       );
       return false;
     }
 
     const data = { audioBucket: null, audioKey: null, audioDeletedAt: new Date() };
-    if (kind === 'submission') {
-      await this.prisma.submission.update({ where: { id: row.id }, data });
-    } else {
-      await this.prisma.wordRecording.update({ where: { id: row.id }, data });
-      // Only WordRecording purges matter for Stream Decks (StreamDeckItem.
-      // recordingId references WordRecording.id, never Submission). Best-
-      // effort, mirrors IsvpService.submit's publish pattern -- a Redis
-      // outage must never fail the purge itself, since the purge is
-      // already durable in Postgres and this is just a notification that
-      // any Smart Deck containing this recording (or a Manual deck whose
-      // version snapshot should reflect the purge) may need re-evaluation.
-      try {
-        await this.streams.publish(SMART_DECK_STREAM, {
-          trigger: 'recording_eligible',
-          recording_id: row.id,
-        });
-      } catch (err) {
-        this.logger.error(
-          `Failed to publish smart-deck-jobs for recording=${row.id}: ${err instanceof Error ? err.message : err}`,
-        );
-      }
+    await this.prisma.wordRecording.update({ where: { id: row.id }, data });
+    // Best-effort, mirrors IsvpService.submit's publish pattern -- a Redis
+    // outage must never fail the purge itself, since the purge is already
+    // durable in Postgres and this is just a notification that any Smart
+    // Deck containing this recording (or a Manual deck whose version
+    // snapshot should reflect the purge) may need re-evaluation.
+    try {
+      await this.streams.publish(SMART_DECK_STREAM, {
+        trigger: 'recording_eligible',
+        recording_id: row.id,
+      });
+    } catch (err) {
+      this.logger.error(
+        `Failed to publish smart-deck-jobs for recording=${row.id}: ${err instanceof Error ? err.message : err}`,
+      );
     }
     return true;
   }
