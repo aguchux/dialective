@@ -19,6 +19,10 @@ export function TrainingTasksSettingsPanel() {
   const [auditHoldEveryN, setAuditHoldEveryN] = useState('500');
   const [submissionRateLimitEnabled, setSubmissionRateLimitEnabled] = useState(false);
   const [submissionRateLimitPerHour, setSubmissionRateLimitPerHour] = useState('120');
+  const [wordTrainingEnabled, setWordTrainingEnabled] = useState(true);
+  const [sentenceTrainingEnabled, setSentenceTrainingEnabled] = useState(true);
+  const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
+  const [phraseEscalationEnabled, setPhraseEscalationEnabled] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +37,10 @@ export function TrainingTasksSettingsPanel() {
     setAuditHoldEveryN(String(platformSettings.auditHoldEveryNSubmissions));
     setSubmissionRateLimitEnabled(platformSettings.submissionRateLimitEnabled);
     setSubmissionRateLimitPerHour(String(platformSettings.submissionRateLimitPerHour));
+    setWordTrainingEnabled(platformSettings.wordTrainingEnabled);
+    setSentenceTrainingEnabled(platformSettings.sentenceTrainingEnabled);
+    setReverseWordTrainingEnabled(platformSettings.reverseWordTrainingEnabled);
+    setPhraseEscalationEnabled(platformSettings.phraseEscalationEnabled);
   }, [platformSettings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -47,6 +55,10 @@ export function TrainingTasksSettingsPanel() {
         auditHoldEveryNSubmissions: Number(auditHoldEveryN),
         submissionRateLimitEnabled,
         submissionRateLimitPerHour: Number(submissionRateLimitPerHour),
+        wordTrainingEnabled,
+        sentenceTrainingEnabled,
+        reverseWordTrainingEnabled,
+        phraseEscalationEnabled,
       }).unwrap();
       setMessage('Training & tasks settings saved.');
     } catch (err) {
@@ -66,6 +78,113 @@ export function TrainingTasksSettingsPanel() {
       {isLoadingPlatformSettings && <p className="text-muted">Loading...</p>}
       {!isLoadingPlatformSettings && (
         <form className="grid gap-4 md:max-w-xl" onSubmit={handleSave}>
+          <div className="grid gap-3 rounded-lg border border-line p-4">
+            <div>
+              <p className="font-black">Content sources</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted">
+                Controls what trainers are shown when they open a training session. All three can
+                be turned off at once -- when Word and Sentence training are both off, trainers are
+                shown reverse-validation (Dialect-to-English) exclusively instead of an error, as
+                long as it stays on. Only when all three are off does a trainer see a "nothing
+                available" screen.
+              </p>
+            </div>
+
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="word-training-enabled"
+            >
+              <input
+                checked={wordTrainingEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="word-training-enabled"
+                onChange={(event) => setWordTrainingEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Enable single words</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Trainers are shown single English words from the Word bank to translate and
+                  record in their dialect (English &rarr; Dialect). Turn this off to stop
+                  single-word assignments entirely.
+                </span>
+              </span>
+            </label>
+
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="sentence-training-enabled"
+            >
+              <input
+                checked={sentenceTrainingEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="sentence-training-enabled"
+                onChange={(event) => setSentenceTrainingEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Enable sentences</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Trainers are shown English sentences from the Sentence bank to translate and
+                  record in their dialect (English &rarr; Dialect). Turn this off to stop sentence
+                  assignments entirely, including phrase-recording escalation below.
+                </span>
+              </span>
+            </label>
+
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="reverse-word-training"
+            >
+              <input
+                checked={reverseWordTrainingEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="reverse-word-training"
+                onChange={(event) => setReverseWordTrainingEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Enable Dialect-to-English validation</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Trainers listen to another trainer&apos;s dialect recording, write the English
+                  they hear, and record their own fresh dialect take of it for reverse-consensus
+                  validation. Independent of Word/Sentence training above -- and the only source
+                  left once both are off.
+                </span>
+              </span>
+            </label>
+
+            {!wordTrainingEnabled && !sentenceTrainingEnabled && !reverseWordTrainingEnabled && (
+              <p className="rounded-lg bg-[#fee8ef] px-3 py-2 text-sm font-bold text-[#D9366A]">
+                All three content sources are off -- trainers will see a &quot;nothing
+                available&quot; screen with no way to train until at least one is turned back on.
+              </p>
+            )}
+
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="phrase-escalation"
+            >
+              <input
+                checked={phraseEscalationEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="phrase-escalation"
+                onChange={(event) => setPhraseEscalationEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Phrase recording escalation</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Once a trainer&apos;s lifetime word-training count crosses a milestone, assign
+                  AI-composed multi-word sentences instead of single words. Requires the sentence
+                  pool to be populated first (see Word Generation settings below) and only has an
+                  effect while Sentence training above is on -- when Sentence training is off,
+                  this setting is inert.
+                </span>
+              </span>
+            </label>
+          </div>
+
           <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
             <p className="font-bold">Live recording timeout</p>
             <p className="leading-relaxed text-muted">

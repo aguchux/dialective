@@ -23,10 +23,6 @@ export function GeneralSettingsPanel() {
   const [minCompletedTasksForWithdrawal, setMinCompletedTasksForWithdrawal] = useState('');
   const [taskTokenCost, setTaskTokenCost] = useState('');
   const [trainingPayoutBonusCapMultiple, setTrainingPayoutBonusCapMultiple] = useState('');
-  const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
-  const [wordTrainingEnabled, setWordTrainingEnabled] = useState(true);
-  const [sentenceTrainingEnabled, setSentenceTrainingEnabled] = useState(true);
-  const [phraseEscalationEnabled, setPhraseEscalationEnabled] = useState(false);
   const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
   const [phoneVerificationRequired, setPhoneVerificationRequired] = useState(true);
   const [startupBonusAmount, setStartupBonusAmount] = useState('');
@@ -51,10 +47,6 @@ export function GeneralSettingsPanel() {
     );
     setTaskTokenCost(settings.taskTokenCost ?? '');
     setTrainingPayoutBonusCapMultiple(settings.trainingPayoutBonusCapMultiple ?? '');
-    setReverseWordTrainingEnabled(settings.reverseWordTrainingEnabled);
-    setWordTrainingEnabled(settings.wordTrainingEnabled);
-    setSentenceTrainingEnabled(settings.sentenceTrainingEnabled);
-    setPhraseEscalationEnabled(settings.phraseEscalationEnabled);
     setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
     setPhoneVerificationRequired(settings.phoneVerificationRequired);
     setStartupBonusAmount(settings.startupBonusAmount ?? '');
@@ -80,13 +72,6 @@ export function GeneralSettingsPanel() {
       return;
     }
 
-    if (!wordTrainingEnabled && !sentenceTrainingEnabled) {
-      setError(
-        'At least one of "Word training" or "Sentence training" must stay enabled, or trainers will have no content to train on.',
-      );
-      return;
-    }
-
     try {
       await updateSettings({
         ...(tokenUsdRate !== '' ? { tokenUsdRate: Number(tokenUsdRate) } : {}),
@@ -99,10 +84,6 @@ export function GeneralSettingsPanel() {
         ...(trainingPayoutBonusCapMultiple !== ''
           ? { trainingPayoutBonusCapMultiple: Number(trainingPayoutBonusCapMultiple) }
           : {}),
-        reverseWordTrainingEnabled,
-        wordTrainingEnabled,
-        sentenceTrainingEnabled,
-        phraseEscalationEnabled,
         adminPayoutOtpEnabled,
         phoneVerificationRequired,
         ...(startupBonusAmount !== '' ? { startupBonusAmount: Number(startupBonusAmount) } : {}),
@@ -390,116 +371,6 @@ export function GeneralSettingsPanel() {
               </div>
             </div>
           )}
-
-          <div className="grid gap-3 rounded-lg border border-line p-4">
-            <div>
-              <p className="font-black">Training content gates</p>
-              <p className="mt-1 text-sm leading-relaxed text-muted">
-                Control whether trainers are shown single words, sentences, or both to translate
-                into their dialect (ENGLISH_TO_DIALECT). At least one must stay on -- turning both
-                off is rejected on save.
-              </p>
-            </div>
-
-            <label
-              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
-              htmlFor="word-training-enabled"
-            >
-              <input
-                checked={wordTrainingEnabled}
-                className="mt-0.5 size-5 accent-accent"
-                id="word-training-enabled"
-                onChange={(event) => setWordTrainingEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <span>
-                <span className="block font-bold">Word training</span>
-                <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Trainers are shown single English words from the Word bank to translate and
-                  record in their dialect. Turn this off to stop single-word assignments entirely
-                  -- trainers will only ever be offered sentences (requires Sentence training
-                  below to stay on).
-                </span>
-              </span>
-            </label>
-
-            <label
-              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
-              htmlFor="sentence-training-enabled"
-            >
-              <input
-                checked={sentenceTrainingEnabled}
-                className="mt-0.5 size-5 accent-accent"
-                id="sentence-training-enabled"
-                onChange={(event) => setSentenceTrainingEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <span>
-                <span className="block font-bold">Sentence training</span>
-                <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Trainers are shown English sentences from the Sentence bank to translate and
-                  record in their dialect. Turn this off to stop sentence assignments entirely
-                  (including phrase-recording escalation below) -- trainers will only ever be
-                  offered single words (requires Word training above to stay on).
-                </span>
-              </span>
-            </label>
-
-            {!wordTrainingEnabled && !sentenceTrainingEnabled && (
-              <p className="rounded-lg bg-[#fee8ef] px-3 py-2 text-sm font-bold text-[#D9366A]">
-                Both gates are off -- trainers will have no word/sentence content to train on.
-                Turn at least one back on before saving.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label
-              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
-              htmlFor="reverse-word-training"
-            >
-              <input
-                checked={reverseWordTrainingEnabled}
-                className="mt-0.5 size-5 accent-accent"
-                id="reverse-word-training"
-                onChange={(event) => setReverseWordTrainingEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <span>
-                <span className="block font-bold">Dialect-to-English validation</span>
-                <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Mix translations submitted by other trainers into word sessions for reverse
-                  validation and scoring. Independent of the content gates above -- runs
-                  regardless of which of Word/Sentence training is enabled.
-                </span>
-              </span>
-            </label>
-          </div>
-
-          <div>
-            <label
-              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
-              htmlFor="phrase-escalation"
-            >
-              <input
-                checked={phraseEscalationEnabled}
-                className="mt-0.5 size-5 accent-accent"
-                id="phrase-escalation"
-                onChange={(event) => setPhraseEscalationEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <span>
-                <span className="block font-bold">Phrase recording escalation</span>
-                <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Once a trainer&apos;s lifetime word-training count crosses a milestone, assign
-                  AI-composed multi-word sentences instead of single words. Requires the sentence
-                  pool to be populated first (see Word Generation settings below) and only has an
-                  effect while Sentence training above is on -- when Sentence training is off,
-                  this setting is inert.
-                </span>
-              </span>
-            </label>
-          </div>
 
           <div>
             <label

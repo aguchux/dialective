@@ -160,26 +160,36 @@ export class WordsService {
     }
 
     const trainer = await this.getTrainer(userId);
-    const reverseEnabled = await this.settings.isReverseWordTrainingEnabled();
 
     // Live-evaluated every call, never cached/session-fixed -- same posture
-    // as the audit-hold/QRAC/required-courses checks above. Independent
-    // admin content gates: wordTrainingEnabled/sentenceTrainingEnabled
-    // (see PlatformSettingsService.update's both-off guard -- at least one
-    // always stays true) restrict which ENGLISH_TO_DIALECT source types
-    // nextAssignment may hand out, on top of (not instead of)
-    // phraseEscalationEnabled's tier-based escalation timing.
-    const [wordTrainingEnabled, sentenceTrainingEnabled] = await Promise.all([
+    // as the audit-hold/QRAC/required-courses checks above. Three
+    // independent admin content-source gates -- word/sentence training
+    // restrict which ENGLISH_TO_DIALECT source types nextAssignment may
+    // hand out (on top of, not instead of, phraseEscalationEnabled's
+    // tier-based escalation timing); reverseWordTrainingEnabled gates
+    // DIALECT_TO_ENGLISH separately. All three CAN be turned off at once
+    // (PlatformSettingsService.update no longer blocks that combination) --
+    // that is the trainer sees NO_WORDS_AVAILABLE, same as any other
+    // exhausted-pool case, since there is genuinely nothing left to serve.
+    const [wordTrainingEnabled, sentenceTrainingEnabled, reverseEnabled] = await Promise.all([
       this.settings.isWordTrainingEnabled(),
       this.settings.isSentenceTrainingEnabled(),
+      this.settings.isReverseWordTrainingEnabled(),
     ]);
     const phraseTier = (await this.settings.isPhraseEscalationEnabled())
       ? await this.getTrainerPhraseTier(userId)
       : null;
 
+    // Both ENGLISH_TO_DIALECT content gates off means there is nothing else
+    // to serve -- reverse-validation becomes the ALWAYS-served source
+    // (skipping the normal 1/3 roll below) rather than sometimes still
+    // 404ing with NO_WORDS_AVAILABLE. Falls through to the empty-pool
+    // NO_WORDS_AVAILABLE case (unchanged) only when reverseEnabled is also
+    // off, or the reverse-source pool itself is empty.
+    const contentGatesBothOff = !wordTrainingEnabled && !sentenceTrainingEnabled;
     const roll = Math.random();
     const reverseSource =
-      reverseEnabled && roll < 1 / 3
+      reverseEnabled && (contentGatesBothOff || roll < 1 / 3)
         ? await this.pickReverseSource(userId, sessionId, trainer.dialect!.tag)
         : null;
 

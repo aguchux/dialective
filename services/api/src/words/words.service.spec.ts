@@ -1040,5 +1040,52 @@ describe('WordsService', () => {
       expect(result.wordId).toBe('word-1');
       expect(prisma.sentence.count).not.toHaveBeenCalled();
     });
+
+    it('ALWAYS serves reverse-validation (ignoring the normal 1/3 roll) when both content gates are off and reverse is enabled', async () => {
+      settings.isWordTrainingEnabled.mockResolvedValue(false);
+      settings.isSentenceTrainingEnabled.mockResolvedValue(false);
+      settings.isReverseWordTrainingEnabled.mockResolvedValue(true);
+      // A roll that would normally fall OUTSIDE the 1/3 window, proving the
+      // both-off case bypasses that check entirely.
+      jest.spyOn(Math, 'random').mockReturnValue(0.9);
+      prisma.wordRecording.count.mockResolvedValue(1);
+      prisma.wordRecording.findMany.mockResolvedValue([
+        { id: 'source-1', wordId: 'word-1', sentenceId: null, translationText: 'nnọọ' },
+      ]);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-reverse-always-1',
+        direction: 'DIALECT_TO_ENGLISH',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.direction).toBe('DIALECT_TO_ENGLISH');
+      expect(prisma.wordRecording.findMany).toHaveBeenCalled();
+      jest.restoreAllMocks();
+    });
+
+    it('throws NO_WORDS_AVAILABLE when all three gates (word/sentence/reverse) are off', async () => {
+      settings.isWordTrainingEnabled.mockResolvedValue(false);
+      settings.isSentenceTrainingEnabled.mockResolvedValue(false);
+      settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+
+      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
+        'NO_WORDS_AVAILABLE',
+      );
+      expect(prisma.wordRecording.findMany).not.toHaveBeenCalled();
+      expect(prisma.word.count).not.toHaveBeenCalled();
+    });
+
+    it('falls through to NO_WORDS_AVAILABLE when both content gates are off, reverse is on, but the reverse pool is empty', async () => {
+      settings.isWordTrainingEnabled.mockResolvedValue(false);
+      settings.isSentenceTrainingEnabled.mockResolvedValue(false);
+      settings.isReverseWordTrainingEnabled.mockResolvedValue(true);
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.sentence.count.mockResolvedValue(0);
+
+      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
+        'NO_WORDS_AVAILABLE',
+      );
+    });
   });
 });

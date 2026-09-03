@@ -1114,22 +1114,13 @@ export class PlatformSettingsService {
       throw new BadRequestException('auditHoldEveryNSubmissions must be >= 0');
     }
 
-    // Guard against leaving ENGLISH_TO_DIALECT with no content source at
-    // all -- checked against the EFFECTIVE post-update state (existing row
-    // value where this partial update doesn't touch a field), not just the
-    // fields present in this call, so a second partial update that only
-    // flips one flag can't silently combine with an already-off other flag.
-    if (data.wordTrainingEnabled !== undefined || data.sentenceTrainingEnabled !== undefined) {
-      const current = await this.getRow();
-      const effectiveWordTrainingEnabled = data.wordTrainingEnabled ?? current.wordTrainingEnabled;
-      const effectiveSentenceTrainingEnabled =
-        data.sentenceTrainingEnabled ?? current.sentenceTrainingEnabled;
-      if (!effectiveWordTrainingEnabled && !effectiveSentenceTrainingEnabled) {
-        throw new BadRequestException(
-          'At least one of word training or sentence training must stay enabled',
-        );
-      }
-    }
+    // wordTrainingEnabled/sentenceTrainingEnabled/reverseWordTrainingEnabled
+    // may ALL be turned off at once -- no validation guard here. When both
+    // ENGLISH_TO_DIALECT content gates are off, WordsService.nextAssignment
+    // always serves DIALECT_TO_ENGLISH reverse-validation instead (as long
+    // as reverseWordTrainingEnabled is on); only when all three are off does
+    // a trainer see NO_WORDS_AVAILABLE, which is the intended terminal state
+    // for that admin configuration, not an error to prevent.
 
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
