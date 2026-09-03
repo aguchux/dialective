@@ -1,9 +1,8 @@
 /**
  * A hold is active once auditHoldAt is set and stays active until released
  * AFTER it was set -- an older release doesn't clear a newer hold. Shared
- * between AuthService.toPublicUser (display), WordsService (gate + set), and
- * SubmissionsController (gate) so all three agree on the exact same
- * definition of "currently on hold".
+ * between AuthService.toPublicUser (display) and WordsService (gate + set)
+ * so both agree on the exact same definition of "currently on hold".
  */
 export function isOnAuditHold(user: {
   auditHoldAt: Date | null;

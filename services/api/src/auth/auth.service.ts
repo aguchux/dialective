@@ -95,7 +95,6 @@ export interface PublicUser {
   courseNotificationsEnabled: boolean;
   pwaInstalledAt: string | null;
   walletBalance?: string;
-  submissionsCount?: number;
   wordRecordingsCount?: number;
   auditHoldAt: string | null;
   auditHoldReleasedAt: string | null;
@@ -119,7 +118,7 @@ type UserWithDialect = User & {
   dialect?: { tag: string; active?: boolean } | null;
   dialectVariant?: { id: string; tag: string; active?: boolean } | null;
   wallet?: { balance: Prisma.Decimal } | null;
-  _count?: { submissions: number; wordRecordings: number };
+  _count?: { wordRecordings: number };
 };
 
 function toPublicUser(user: UserWithDialect): PublicUser {
@@ -160,12 +159,7 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     courseNotificationsEnabled: user.courseNotificationsEnabled,
     pwaInstalledAt: user.pwaInstalledAt?.toISOString() ?? null,
     ...(user.wallet ? { walletBalance: user.wallet.balance.toString() } : {}),
-    ...(user._count
-      ? {
-          submissionsCount: user._count.submissions,
-          wordRecordingsCount: user._count.wordRecordings,
-        }
-      : {}),
+    ...(user._count ? { wordRecordingsCount: user._count.wordRecordings } : {}),
     auditHoldAt: user.auditHoldAt?.toISOString() ?? null,
     auditHoldReleasedAt: user.auditHoldReleasedAt?.toISOString() ?? null,
     onAuditHold: isOnAuditHold(user),
@@ -1335,7 +1329,7 @@ export class AuthService {
         dialect: true,
         dialectVariant: true,
         wallet: { select: { balance: true } },
-        _count: { select: { submissions: true, wordRecordings: true } },
+        _count: { select: { wordRecordings: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -1496,7 +1490,7 @@ export class AuthService {
         dialect: true,
         dialectVariant: true,
         wallet: { select: { balance: true } },
-        _count: { select: { submissions: true, wordRecordings: true } },
+        _count: { select: { wordRecordings: true } },
       },
     });
     if (!user) throw new NotFoundException('User not found');
@@ -1654,7 +1648,7 @@ export class AuthService {
         dialect: true,
         dialectVariant: true,
         wallet: { select: { balance: true } },
-        _count: { select: { submissions: true, wordRecordings: true } },
+        _count: { select: { wordRecordings: true } },
       },
       orderBy: { auditHoldAt: 'desc' },
     });
@@ -1788,18 +1782,12 @@ export class AuthService {
    * tolerance for non-critical cleanup steps.
    */
   private async deleteUserAudio(userId: string): Promise<void> {
-    const [submissions, wordRecordings] = await Promise.all([
-      this.prisma.submission.findMany({
-        where: { userId, audioBucket: { not: null }, audioKey: { not: null } },
-        select: { audioBucket: true, audioKey: true },
-      }),
-      this.prisma.wordRecording.findMany({
-        where: { userId, audioBucket: { not: null }, audioKey: { not: null } },
-        select: { audioBucket: true, audioKey: true },
-      }),
-    ]);
+    const wordRecordings = await this.prisma.wordRecording.findMany({
+      where: { userId, audioBucket: { not: null }, audioKey: { not: null } },
+      select: { audioBucket: true, audioKey: true },
+    });
 
-    for (const { audioBucket, audioKey } of [...submissions, ...wordRecordings]) {
+    for (const { audioBucket, audioKey } of wordRecordings) {
       if (!audioBucket || !audioKey) continue;
       try {
         await this.storage.deleteObject(audioBucket, audioKey);

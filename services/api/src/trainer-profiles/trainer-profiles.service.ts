@@ -45,12 +45,7 @@ export class TrainerProfilesService {
       status: { in: [SubmissionStatus.SCORED, SubmissionStatus.SETTLED] },
       score: { not: null },
     };
-    const [submissionScores, recordingScores, testimonials] = await Promise.all([
-      this.prisma.submission.aggregate({
-        where: scoredWhere,
-        _count: { _all: true },
-        _avg: { score: true },
-      }),
+    const [recordingScores, testimonials] = await Promise.all([
       this.prisma.wordRecording.aggregate({
         where: scoredWhere,
         _count: { _all: true },
@@ -71,17 +66,9 @@ export class TrainerProfilesService {
       }),
     ]);
 
-    const submissionCount = submissionScores._count._all;
-    const recordingCount = recordingScores._count._all;
-    const scoredContributions = submissionCount + recordingCount;
+    const scoredContributions = recordingScores._count._all;
     const averageScore = scoredContributions
-      ? Number(
-          (
-            ((submissionScores._avg.score?.toNumber() ?? 0) * submissionCount +
-              (recordingScores._avg.score?.toNumber() ?? 0) * recordingCount) /
-            scoredContributions
-          ).toFixed(2),
-        )
+      ? Number((recordingScores._avg.score?.toNumber() ?? 0).toFixed(2))
       : null;
 
     return {

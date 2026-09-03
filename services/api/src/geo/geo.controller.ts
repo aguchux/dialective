@@ -88,9 +88,7 @@ export class GeoController {
       countryCount,
       dialectCount,
       totalTrainers,
-      submissionCount,
       wordRecordingCount,
-      settledSubmissionAgg,
       settledWordAgg,
       rate,
       visibility,
@@ -98,12 +96,7 @@ export class GeoController {
       this.prisma.country.count(),
       this.prisma.dialect.count(),
       this.prisma.user.count({ where: { role: Role.TRAINER } }),
-      this.prisma.submission.count(),
       this.prisma.wordRecording.count(),
-      this.prisma.submission.aggregate({
-        where: { settledAt: { not: null } },
-        _sum: { payoutTokenAmount: true },
-      }),
       this.prisma.wordRecording.aggregate({
         where: { settledAt: { not: null } },
         _sum: { payoutTokenAmount: true },
@@ -112,10 +105,8 @@ export class GeoController {
       this.platformSettings.getLandingVisibility(),
     ]);
 
-    const totalRecordings = submissionCount + wordRecordingCount;
-    const totalSettledTokens =
-      Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) +
-      Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
+    const totalRecordings = wordRecordingCount;
+    const totalSettledTokens = Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
     const totalPayoutUsd = totalSettledTokens * rate;
 
     // Every figure is still computed regardless of visibility -- these flags
@@ -378,9 +369,9 @@ export class GeoController {
   // --- Admin: dialect variants ---------------------------------------------
 
   /**
-   * Variant list with basic usage counts (users, recordings, submissions
-   * tagged with each variant) for the admin Coverage table's expandable
-   * dialect row -- see the dialect-variants plan's "Reporting" phase.
+   * Variant list with basic usage counts (users, recordings tagged with
+   * each variant) for the admin Coverage table's expandable dialect row --
+   * see the dialect-variants plan's "Reporting" phase.
    */
   @Get('admin/dialects/:id/variants')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -392,7 +383,7 @@ export class GeoController {
     }
     return this.prisma.dialectVariant.findMany({
       where: { dialectId: id },
-      include: { _count: { select: { users: true, wordRecordings: true, submissions: true } } },
+      include: { _count: { select: { users: true, wordRecordings: true } } },
       orderBy: { name: 'asc' },
     });
   }

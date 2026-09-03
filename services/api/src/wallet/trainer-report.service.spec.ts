@@ -11,7 +11,6 @@ describe('TrainerReportService', () => {
         groupBy: jest.fn().mockResolvedValue([]),
         findMany: jest.fn().mockResolvedValue([]),
       },
-      submission: { findMany: jest.fn().mockResolvedValue([]) },
       wordRecording: { findMany: jest.fn().mockResolvedValue([]) },
       user: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({ createdAt: new Date('2026-01-01T00:00:00Z') }),
@@ -37,9 +36,6 @@ describe('TrainerReportService', () => {
     await service.buildReport('user-1', from, to);
 
     expect(prisma.user.findUniqueOrThrow).not.toHaveBeenCalled();
-    expect(prisma.submission.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: 'user-1', createdAt: { gte: from, lte: to } } }),
-    );
     expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 'user-1', createdAt: { gte: from, lte: to } } }),
     );
@@ -60,14 +56,12 @@ describe('TrainerReportService', () => {
     expect(report.daily.every((day) => day.recordings === 0 && day.earningsTokens === '0')).toBe(true);
   });
 
-  it('aggregates recordings, average score, and earnings across submissions/wordRecordings/ledger', async () => {
+  it('aggregates recordings, average score, and earnings across wordRecordings/ledger', async () => {
     const from = new Date('2026-08-01T00:00:00Z');
     const to = new Date('2026-08-01T23:59:59Z');
-    prisma.submission.findMany.mockResolvedValue([
+    prisma.wordRecording.findMany.mockResolvedValue([
       { score: 80, compositeScore: 78, createdAt: new Date('2026-08-01T10:00:00Z') },
       { score: null, compositeScore: null, createdAt: new Date('2026-08-01T11:00:00Z') },
-    ]);
-    prisma.wordRecording.findMany.mockResolvedValue([
       { score: 90, compositeScore: 88, createdAt: new Date('2026-08-01T12:00:00Z') },
     ]);
     prisma.ledgerEntry.groupBy.mockResolvedValue([

@@ -1,26 +1,29 @@
 import { Prisma } from '@dialectiva/db';
-import { computeCompositeScore, computeWordRecordingCompositeScore } from './settlement.service';
+import { computeWordRecordingCompositeScore } from './settlement.service';
 
 const decimal = (n: number) => new Prisma.Decimal(n);
 const SCORE_RANGE = { min: 0, max: 100 };
 
 describe('computeWordRecordingCompositeScore', () => {
-  it('produces the identical result computeCompositeScore already gives when asrMatch weight is 0 (the shipped default)', () => {
+  it('an asrMatch weight of 0 does not move the blend, regardless of the ASR match score value', () => {
     const weights = { consensus: 60, noise: 15, quality: 10, liveness: 15 };
     const realScore = decimal(80);
     const noiseScore = decimal(90);
     const qualityScore = decimal(70);
     const livenessScore = decimal(85);
+    // (80*60 + 90*15 + 70*10 + 85*15) / 100 = 81.25
+    const expected = 81.25;
 
-    const original = computeCompositeScore(
+    const withGoodAsrMatch = computeWordRecordingCompositeScore(
       realScore,
       noiseScore,
       qualityScore,
       livenessScore,
-      weights,
+      decimal(100),
+      { ...weights, asrMatch: 0 },
       SCORE_RANGE,
     );
-    const withAsrMatch = computeWordRecordingCompositeScore(
+    const withBadAsrMatch = computeWordRecordingCompositeScore(
       realScore,
       noiseScore,
       qualityScore,
@@ -30,7 +33,8 @@ describe('computeWordRecordingCompositeScore', () => {
       SCORE_RANGE,
     );
 
-    expect(withAsrMatch).toBe(original);
+    expect(withGoodAsrMatch).toBe(expected);
+    expect(withBadAsrMatch).toBe(expected);
   });
 
   it("falls back to neutral 100 for a null asrMatchScore (ASR hasn't landed yet)", () => {

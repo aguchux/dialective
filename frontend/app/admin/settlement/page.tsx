@@ -4,19 +4,12 @@ import { useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
-  RecordingKind,
   UnsettledRow,
   normalizeErrorMessage,
   useGetUnsettledQuery,
   useSettleAllMutation,
   useSettleOneMutation,
 } from '@/store/api';
-
-const KIND_TABS: { label: string; value: RecordingKind | 'ALL' }[] = [
-  { label: 'All', value: 'ALL' },
-  { label: 'Sentence submissions', value: 'submission' },
-  { label: 'Word training', value: 'word' },
-];
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString();
@@ -29,11 +22,9 @@ function trainerLabel(trainer: UnsettledRow['trainer']) {
 }
 
 export default function AdminSettlementPage() {
-  const [tab, setTab] = useState<RecordingKind | 'ALL'>('ALL');
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const { data, isLoading, isFetching, isError, refetch } = useGetUnsettledQuery({
-    kind: tab === 'ALL' ? undefined : tab,
     page,
     pageSize,
   });
@@ -45,7 +36,7 @@ export default function AdminSettlementPage() {
     setSettleAllError('');
     setSettleAllResult('');
     try {
-      const result = await settleAll({ kind: tab === 'ALL' ? undefined : tab, force }).unwrap();
+      const result = await settleAll({ force }).unwrap();
       setSettleAllResult(
         `Settled ${result.settledCount}, skipped ${result.skippedDelayCount} (still in delay window), failed ${result.failedCount}.`,
       );
@@ -60,28 +51,13 @@ export default function AdminSettlementPage() {
         <div>
           <h1 className="text-3xl font-black">Unsettled Tasks</h1>
           <p className="mt-2 text-muted">
-            Scored submissions and word recordings that have not yet been paid out. The automated
-            settlement job clears these on its own schedule -- use this page to force-settle a row
-            it hasn&apos;t reached yet, or one that keeps failing.
+            Scored word recordings that have not yet been paid out. The automated settlement job
+            clears these on its own schedule -- use this page to force-settle a row it
+            hasn&apos;t reached yet, or one that keeps failing.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            {KIND_TABS.map((option) => (
-              <button
-                className={`min-h-9 rounded-lg border px-3 text-sm font-extrabold ${tab === option.value ? 'border-accent bg-accent text-white' : 'border-line bg-white text-ink'}`}
-                key={option.value}
-                onClick={() => {
-                  setTab(option.value);
-                  setPage(1);
-                }}
-                type="button"
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-wrap items-center justify-end gap-3">
           {data && data.total > 0 && (
             <div className="flex items-center gap-2">
               <ActionButton
@@ -123,7 +99,6 @@ export default function AdminSettlementPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="bg-surface text-muted">
               <tr>
-                <th className="px-4 py-3">Kind</th>
                 <th className="px-4 py-3">Trainer</th>
                 <th className="px-4 py-3">Tokens spent</th>
                 <th className="px-4 py-3">Score</th>
@@ -135,14 +110,14 @@ export default function AdminSettlementPage() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td className="px-4 py-5" colSpan={7}>
+                  <td className="px-4 py-5" colSpan={6}>
                     Loading unsettled tasks...
                   </td>
                 </tr>
               )}
               {isError && !isLoading && (
                 <tr>
-                  <td className="px-4 py-5" colSpan={7}>
+                  <td className="px-4 py-5" colSpan={6}>
                     <div className="flex items-center gap-3">
                       <span>Could not load unsettled tasks.</span>
                       <button
@@ -158,14 +133,14 @@ export default function AdminSettlementPage() {
               )}
               {!isLoading && !isError && data && data.items.length === 0 && (
                 <tr>
-                  <td className="px-4 py-5" colSpan={7}>
+                  <td className="px-4 py-5" colSpan={6}>
                     Nothing unsettled -- the automated job is fully caught up.
                   </td>
                 </tr>
               )}
               {!isLoading &&
                 !isError &&
-                data?.items.map((row) => <UnsettledTaskRow key={`${row.kind}:${row.id}`} row={row} />)}
+                data?.items.map((row) => <UnsettledTaskRow key={row.id} row={row} />)}
             </tbody>
           </table>
         </div>
@@ -210,7 +185,7 @@ function UnsettledTaskRow({ row }: { row: UnsettledRow }) {
   async function handleSettle(force: boolean) {
     setError('');
     try {
-      await settleOne({ kind: row.kind, id: row.id, force }).unwrap();
+      await settleOne({ id: row.id, force }).unwrap();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not settle this task'));
     }
@@ -218,9 +193,6 @@ function UnsettledTaskRow({ row }: { row: UnsettledRow }) {
 
   return (
     <tr className="border-t border-line align-top">
-      <td className="px-4 py-3 font-bold text-ink">
-        {row.kind === 'submission' ? 'Submission' : 'Word'}
-      </td>
       <td className="px-4 py-3">{trainerLabel(row.trainer)}</td>
       <td className="px-4 py-3">{row.tokensSpent} DL</td>
       <td className="px-4 py-3">{row.score ?? '—'}</td>

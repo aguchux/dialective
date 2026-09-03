@@ -83,8 +83,8 @@ export class PoolsController {
   /**
    * "Total reward pool available" = SUM(usdAmount) of ACTIVE pools,
    * converted to tokens at the current tokenUsdRate, minus tokens already
-   * settled out via Submission.payoutTokenAmount. This is a computed read,
-   * not a cached balance -- admin-only, low-QPS. Can be negative: the
+   * settled out via WordRecording.payoutTokenAmount. This is a computed
+   * read, not a cached balance -- admin-only, low-QPS. Can be negative: the
    * no-loss payout guarantee is unconditional (see computeTrainingPayout in
    * @dialectiva/db), so settlement never blocks on pool availability -- a
    * negative figure here is a visibility signal to open more subscriptions,
@@ -92,16 +92,12 @@ export class PoolsController {
    */
   @Get('summary')
   async summary() {
-    const [activeAgg, activeCount, settledSubmissionAgg, settledWordAgg] = await Promise.all([
+    const [activeAgg, activeCount, settledWordAgg] = await Promise.all([
       this.prisma.subscriptionPool.aggregate({
         where: { status: SubscriptionPoolStatus.ACTIVE },
         _sum: { usdAmount: true },
       }),
       this.prisma.subscriptionPool.count({ where: { status: SubscriptionPoolStatus.ACTIVE } }),
-      this.prisma.submission.aggregate({
-        where: { settledAt: { not: null } },
-        _sum: { payoutTokenAmount: true },
-      }),
       this.prisma.wordRecording.aggregate({
         where: { settledAt: { not: null } },
         _sum: { payoutTokenAmount: true },
@@ -110,9 +106,7 @@ export class PoolsController {
 
     const rate = await this.platformSettings.getTokenUsdRate();
     const totalAvailableUsd = Number(activeAgg._sum.usdAmount ?? 0);
-    const totalSettledTokens =
-      Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) +
-      Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
+    const totalSettledTokens = Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
     const totalAvailableTokens = totalAvailableUsd / rate - totalSettledTokens;
 
     return {

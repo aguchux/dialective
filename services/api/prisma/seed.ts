@@ -92,22 +92,16 @@ const WORDS = [
   'slow',
 ];
 
-// Sentence-prompt bank for the dictation flow, migrated verbatim from
-// PromptsController's old in-memory PROMPTS_BY_DIALECT (see that file's
-// comment for sourcing notes -- non-English sentences are from beginner-phrase
-// references, not invented). Every dialectTag here must have a matching
-// entry in models/asr-registry.yaml.
-const PROMPTS_BY_DIALECT: Record<string, string[]> = {
-  'en-us': [
-    'The quick brown fox jumps over the lazy dog.',
-    'Please call Stella and ask her to bring these things.',
-    'The rainbow is a division of white light into many beautiful colors.',
-    'A pot of tea helps to pass the evening.',
-  ],
-  ig: ['Kedu ka ị mere?', 'Aha m bụ Alex.', 'Obi dị m ụtọ.', 'Daalụ nke ukwuu.'],
-  yo: ['Bawo ni o se wa?', 'Mo wa dada, ese.', 'Ese gan.', 'Ko ye mi.'],
-  ha: ['Yaya lafiya?', 'Sannu abokina.', 'Ina kwana?', 'Na gode sosai.'],
-};
+// Seed English Sentence bank for word-training's ENGLISH_TO_DIALECT
+// escalation (see WordsService.pickSentenceSource) -- always English, the
+// trainer records their own dialect from their own fluency. Non-English
+// per-dialect content no longer applies (dictation/Prompt were retired).
+const SEED_SENTENCES: string[] = [
+  'The quick brown fox jumps over the lazy dog.',
+  'Please call Stella and ask her to bring these things.',
+  'The rainbow is a division of white light into many beautiful colors.',
+  'A pot of tea helps to pass the evening.',
+];
 
 // Sub-dialect seed data (see DialectVariant in schema.prisma) -- keyed by
 // parent dialect tag, not country, since a variant belongs to a dialect.
@@ -123,9 +117,9 @@ const DIALECT_VARIANTS_BY_TAG: Record<string, { tag: string; name: string }[]> =
 
 // Onboarding country/dialect list: all African Union member countries
 // (africa-countries-dialects.ts) plus the United States, kept for the
-// `en-us` tag already referenced by PROMPTS_BY_DIALECT. Nigeria's ig/yo/ha
-// tags here match the 3 existing tags used by PromptsController and
-// WordRecording -- not new dialects, just the same values as real rows.
+// `en-us` tag Sentence content is always seeded under. Nigeria's ig/yo/ha
+// tags here match the tags used by WordRecording -- not new dialects, just
+// the same values as real rows.
 const COUNTRIES: CountrySeed[] = [
   ...AFRICA_COUNTRIES,
   { code: 'US', name: 'United States', dialects: [{ tag: 'en-us', name: 'English (US)' }] },
@@ -175,8 +169,8 @@ async function main() {
 
     // First real DialectVariant data (see the dialect-variants plan's
     // Phase 2) -- Izzi/Ezza/Ezeagu are mutually-intelligible Igbo
-    // sub-dialects that share ig's entire prompt/word/keyboard/ASR setup;
-    // these rows only exist so trainers can optionally self-identify their
+    // sub-dialects that share ig's entire word/keyboard/ASR setup; these
+    // rows only exist so trainers can optionally self-identify their
     // specific variety, and so admin can see tagged activity per variant.
     const igbo = dialectRows.find((d) => d.tag === 'ig');
     if (igbo) {
@@ -190,23 +184,20 @@ async function main() {
         ),
       );
     }
-    const promptRows = Object.entries(PROMPTS_BY_DIALECT).flatMap(([dialectTag, texts]) =>
-      texts.map((text) => ({ dialectTag, text, origin: 'SEED' as const })),
-    );
-    let promptsSeeded = 0;
-    for (const prompt of promptRows) {
-      const existing = await prisma.prompt.findFirst({
-        where: { dialectTag: prompt.dialectTag, text: prompt.text },
-        select: { id: true },
-      });
+
+    let sentencesSeeded = 0;
+    for (const text of SEED_SENTENCES) {
+      const existing = await prisma.sentence.findUnique({ where: { text }, select: { id: true } });
       if (!existing) {
-        await prisma.prompt.create({ data: prompt });
-        promptsSeeded += 1;
+        await prisma.sentence.create({
+          data: { text, wordCount: text.trim().split(/\s+/).length },
+        });
+        sentencesSeeded += 1;
       }
     }
 
     console.log(
-      `Seeded ${COUNTRIES.length} countries, ${dialects.length} dialects, added ${wordResult.count} new words, and added ${promptsSeeded} new prompts.`,
+      `Seeded ${COUNTRIES.length} countries, ${dialects.length} dialects, added ${wordResult.count} new words, and added ${sentencesSeeded} new sentences.`,
     );
   } finally {
     await prisma.$disconnect();

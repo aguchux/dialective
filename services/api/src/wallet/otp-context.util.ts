@@ -81,7 +81,7 @@ export function adminActionContextHash(
     | { action: 'sub-distributor-adjustment'; userId: string; amount: number; reference: string }
     | {
         action: 'recording-audit-clawback';
-        kind: 'word' | 'submission';
+        kind: 'word';
         recordingId: string;
         tokenAmount: number;
       }

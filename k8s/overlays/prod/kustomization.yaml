@@ -78,9 +78,6 @@ configMapGenerator:
   - name: prompt-audio-service-config
     envs:
       - configs/prompt-audio-service.env
-  - name: consensus-scorer-config
-    envs:
-      - configs/consensus-scorer.env
   - name: isvc-scorer-config
     envs:
       - configs/isvc-scorer.env

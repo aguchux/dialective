@@ -15,8 +15,8 @@ import { mintTrainingPayoutOps } from '@dialectiva/db';
  * Covers the bug this file fixes: resolveTimedOutScoring used to score AND
  * settle a timed-out (noFailOnTrainEnabled) row in the same instant, bypassing
  * settlementDelayMinutes entirely. It must now only move the row to SCORED --
- * the normal settleSubmissions/settleWordRecordings delay-respecting pass is
- * what actually pays out, on a later run once the delay has elapsed.
+ * the normal settleWordRecordings delay-respecting pass is what actually pays
+ * out, on a later run once the delay has elapsed.
  */
 describe('SettlementService resolveTimedOutScoring', () => {
   function buildPrismaMock() {
@@ -29,17 +29,12 @@ describe('SettlementService resolveTimedOutScoring', () => {
           maxScoreRange: { toNumber: () => 30 },
         }),
       },
-      submission: {
+      wordRecording: {
         findMany: jest
           .fn()
           .mockResolvedValue([
-            { id: 'sub-1', userId: 'user-1', tokensSpent: { toNumber: () => 1 } },
+            { id: 'rec-1', userId: 'user-1', tokensSpent: { toNumber: () => 1 } },
           ]),
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-        update: jest.fn().mockResolvedValue({}),
-      },
-      wordRecording: {
-        findMany: jest.fn().mockResolvedValue([]),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest.fn().mockResolvedValue({}),
       },
@@ -56,7 +51,7 @@ describe('SettlementService resolveTimedOutScoring', () => {
     };
   }
 
-  it('moves a timed-out submission to SCORED without crediting payout or settling it', async () => {
+  it('moves a timed-out word recording to SCORED without crediting payout or settling it', async () => {
     const prisma = buildPrismaMock();
     const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
 
@@ -66,23 +61,23 @@ describe('SettlementService resolveTimedOutScoring', () => {
     expect(result.scoredCount).toBe(1);
     expect(result.refundedCount).toBe(0);
 
-    // Claimed as EXPIRED first (unblocks the ASR/consensus race).
-    expect(prisma.submission.updateMany).toHaveBeenCalledWith({
-      where: { id: 'sub-1', status: { in: ['PENDING', 'TRANSCRIBED'] }, refundedAt: null },
+    // Claimed as EXPIRED first (unblocks the scoring race).
+    expect(prisma.wordRecording.updateMany).toHaveBeenCalledWith({
+      where: { id: 'rec-1', status: 'PENDING', refundedAt: null },
       data: { status: 'EXPIRED', refundedAt: expect.any(Date) },
     });
 
     // Then moved to SCORED (not SETTLED) with no payoutTokenAmount/settledAt --
-    // that's the whole fix. It must wait for settleSubmissions to pick it up.
-    expect(prisma.submission.update).toHaveBeenCalledWith({
-      where: { id: 'sub-1' },
+    // that's the whole fix. It must wait for settleWordRecordings to pick it up.
+    expect(prisma.wordRecording.update).toHaveBeenCalledWith({
+      where: { id: 'rec-1' },
       data: expect.objectContaining({ status: 'SCORED', scoredAt: expect.any(Date) }),
     });
-    const updateArgs = prisma.submission.update.mock.calls[0][0];
+    const updateArgs = prisma.wordRecording.update.mock.calls[0][0];
     expect(updateArgs.data).not.toHaveProperty('settledAt');
     expect(updateArgs.data).not.toHaveProperty('payoutTokenAmount');
 
-    // No payout credited, no lock released -- settleSubmissions does that later.
+    // No payout credited, no lock released -- settleWordRecordings does that later.
     expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -102,28 +97,13 @@ describe('SettlementService resolveTimedOutScoring', () => {
 
     expect(result.scoredCount).toBe(0);
     expect(result.refundedCount).toBe(1);
-    expect(prisma.submission.update).not.toHaveBeenCalled();
+    expect(prisma.wordRecording.update).not.toHaveBeenCalled();
   });
 });
 
 describe('SettlementService settlement state', () => {
   function buildPrismaMock() {
     return {
-      submission: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            id: 'sub-1',
-            userId: 'user-1',
-            tokensSpent: { toNumber: () => 5 },
-            rawScore: null,
-            score: { toNumber: () => 80 },
-            noiseScore: null,
-            qualityScore: null,
-            livenessScore: null,
-          },
-        ]),
-        update: jest.fn().mockResolvedValue({}),
-      },
       wordRecording: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -153,31 +133,13 @@ describe('SettlementService settlement state', () => {
   const qualityWeights = { consensus: 100, noise: 0, quality: 0, liveness: 0 };
   const scoreRange = { min: 0, max: 100 };
 
-  it('marks a settled submission as SETTLED with its payout timestamp', async () => {
-    const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
-
-    // mintingPaused: true -- this test only covers the legacy Wallet credit
-    // path, not Tokenomics minting (see the settlement.service.spec.ts
-    // "settlement mints into Tokenomics" tests below for that).
-    // @ts-expect-error -- private method under test
-    await service.settleSubmissions(1, false, qualityWeights, scoreRange, 0, true);
-
-    expect(prisma.submission.update).toHaveBeenCalledWith({
-      where: { id: 'sub-1' },
-      data: expect.objectContaining({
-        status: 'SETTLED',
-        payoutTokenAmount: expect.anything(),
-        settledAt: expect.any(Date),
-      }),
-    });
-  });
-
   it('marks a settled word recording as SETTLED with its payout timestamp', async () => {
     const prisma = buildPrismaMock();
     const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
 
-    // mintingPaused: true -- see settleSubmissions test above for why.
+    // mintingPaused: true -- this test only covers the legacy Wallet credit
+    // path, not Tokenomics minting (see the "mints into Tokenomics" tests
+    // below for that).
     // @ts-expect-error -- private method under test
     await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
 
@@ -197,13 +159,13 @@ describe('SettlementService settlement state', () => {
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
-    await service.settleSubmissions(1, false, qualityWeights, scoreRange, 0, false);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, false);
 
     expect(mintTrainingPayoutOps).toHaveBeenCalledWith(
       prisma,
       'user-1',
       expect.anything(),
-      'sub-1',
+      'recording-1',
     );
   });
 
@@ -213,33 +175,51 @@ describe('SettlementService settlement state', () => {
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
-    await service.settleSubmissions(1, false, qualityWeights, scoreRange, 0, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
 
     expect(mintTrainingPayoutOps).not.toHaveBeenCalled();
-    expect(prisma.submission.update).toHaveBeenCalledWith(
+    expect(prisma.wordRecording.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'SETTLED' }) }),
     );
+  });
+
+  it('settles a Sentence-sourced word recording identically to a Word-sourced one', async () => {
+    const prisma = buildPrismaMock();
+    prisma.wordRecording.findMany.mockResolvedValue([
+      {
+        id: 'recording-sentence-1',
+        userId: 'user-1',
+        tokensSpent: { toNumber: () => 5 },
+        rawScore: null,
+        score: { toNumber: () => 80 },
+        noiseScore: null,
+        qualityScore: null,
+        livenessScore: null,
+        asrMatchScore: null,
+      },
+    ]);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
+
+    // @ts-expect-error -- private method under test
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
+
+    expect(prisma.wordRecording.update).toHaveBeenCalledWith({
+      where: { id: 'recording-sentence-1' },
+      data: expect.objectContaining({ status: 'SETTLED' }),
+    });
   });
 });
 
 /**
- * Covers the "reject and delete... refund exact DL" feature: REJECTED rows
- * (quality-gate-worker's hard prefilter, both Submission and now
- * WordRecording) get their locked tokens refunded AND their Spaces audio
- * deleted synchronously in the same settlement-job pass, rather than
- * waiting on audio-retention-job's delayed sweep.
+ * Covers the "reject and delete... refund exact DL" feature: REJECTED
+ * WordRecording rows (quality-gate-worker's hard prefilter) get their
+ * locked tokens refunded AND their Spaces audio deleted synchronously in
+ * the same settlement-job pass, rather than waiting on
+ * audio-retention-job's delayed sweep.
  */
 describe('SettlementService rejected-record refund + immediate audio delete', () => {
-  function buildPrismaMock(overrides: {
-    submissions?: unknown[];
-    wordRecordings?: unknown[];
-  }) {
+  function buildPrismaMock(overrides: { wordRecordings?: unknown[] }) {
     return {
-      submission: {
-        findMany: jest.fn().mockResolvedValue(overrides.submissions ?? []),
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-        update: jest.fn().mockResolvedValue({}),
-      },
       wordRecording: {
         findMany: jest.fn().mockResolvedValue(overrides.wordRecordings ?? []),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -257,47 +237,6 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
       $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
     };
   }
-
-  it('refunds a rejected submission and deletes its audio object', async () => {
-    const prisma = buildPrismaMock({
-      submissions: [
-        {
-          id: 'sub-rejected-1',
-          userId: 'user-1',
-          tokensSpent: { toNumber: () => 2 },
-          audioBucket: 'dialectiva-submissions',
-          audioKey: 'yo/prompt-1/sub-rejected-1.webm',
-        },
-      ],
-    });
-    const deleteObject = jest.fn().mockResolvedValue(undefined);
-    const service = new SettlementService(prisma as never, { deleteObject } as never);
-
-    // @ts-expect-error -- private method under test
-    const count = await service.refundRejectedSubmissions();
-
-    expect(count).toBe(1);
-    expect(prisma.submission.updateMany).toHaveBeenCalledWith({
-      where: { id: 'sub-rejected-1', refundedAt: null },
-      data: { refundedAt: expect.any(Date) },
-    });
-    expect(prisma.wallet.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          lockedBalance: { decrement: { toNumber: expect.any(Function) } },
-          balance: { increment: { toNumber: expect.any(Function) } },
-        }),
-      }),
-    );
-    expect(deleteObject).toHaveBeenCalledWith(
-      'dialectiva-submissions',
-      'yo/prompt-1/sub-rejected-1.webm',
-    );
-    expect(prisma.submission.update).toHaveBeenCalledWith({
-      where: { id: 'sub-rejected-1' },
-      data: { audioBucket: null, audioKey: null, audioDeletedAt: expect.any(Date) },
-    });
-  });
 
   it('refunds a rejected word recording and deletes its audio object', async () => {
     const prisma = buildPrismaMock({
@@ -322,6 +261,14 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
       where: { id: 'wr-rejected-1', refundedAt: null },
       data: { refundedAt: expect.any(Date) },
     });
+    expect(prisma.wallet.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          lockedBalance: { decrement: { toNumber: expect.any(Function) } },
+          balance: { increment: { toNumber: expect.any(Function) } },
+        }),
+      }),
+    );
     expect(deleteObject).toHaveBeenCalledWith(
       'dialectiva-word-recordings',
       'ig/english_to_dialect/prompt-1/wr-rejected-1.webm',
@@ -332,7 +279,7 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
     });
   });
 
-  it('does not attempt to delete audio when audioBucket/audioKey are already null (SENTENCE_REBUILD has no audio step)', async () => {
+  it('does not attempt to delete audio when audioBucket/audioKey are already null', async () => {
     const prisma = buildPrismaMock({
       wordRecordings: [
         {
@@ -357,13 +304,13 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
 
   it('still refunds the trainer even when audio deletion fails (Spaces down)', async () => {
     const prisma = buildPrismaMock({
-      submissions: [
+      wordRecordings: [
         {
-          id: 'sub-rejected-2',
+          id: 'wr-rejected-4',
           userId: 'user-1',
           tokensSpent: { toNumber: () => 2 },
-          audioBucket: 'dialectiva-submissions',
-          audioKey: 'yo/prompt-1/sub-rejected-2.webm',
+          audioBucket: 'dialectiva-word-recordings',
+          audioKey: 'yo/english_to_dialect/prompt-1/wr-rejected-4.webm',
         },
       ],
     });
@@ -371,11 +318,11 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
     const service = new SettlementService(prisma as never, { deleteObject } as never);
 
     // @ts-expect-error -- private method under test
-    const count = await service.refundRejectedSubmissions();
+    const count = await service.refundRejectedWordRecordings();
 
     expect(count).toBe(1);
     expect(prisma.wallet.updateMany).toHaveBeenCalled(); // refund still happened
-    expect(prisma.submission.update).not.toHaveBeenCalled(); // audioDeletedAt write skipped
+    expect(prisma.wordRecording.update).not.toHaveBeenCalled(); // audioDeletedAt write skipped
   });
 
   it('skips two overlapping runs from double-refunding the same rejected word recording', async () => {

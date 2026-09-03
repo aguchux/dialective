@@ -410,16 +410,14 @@ export class WalletController {
       this.getPendingReferralInvites(req.user.sub),
     ]);
 
-    // Same SETTLED-submission-or-word-recording count validateWithdrawalRequest
-    // enforces server-side (requireMinCompletedTasksForWithdrawal) -- surfaced
-    // here too so the dashboard can show trainers where they stand *before*
-    // they attempt a withdrawal, instead of only finding out from a rejected
+    // Same SETTLED-word-recording count validateWithdrawalRequest enforces
+    // server-side (requireMinCompletedTasksForWithdrawal) -- surfaced here
+    // too so the dashboard can show trainers where they stand *before* they
+    // attempt a withdrawal, instead of only finding out from a rejected
     // request.
-    const [submissionCount, wordRecordingCount] = await Promise.all([
-      this.prisma.submission.count({ where: { userId: req.user.sub, status: 'SETTLED' } }),
-      this.prisma.wordRecording.count({ where: { userId: req.user.sub, status: 'SETTLED' } }),
-    ]);
-    const completedTasksForWithdrawal = submissionCount + wordRecordingCount;
+    const completedTasksForWithdrawal = await this.prisma.wordRecording.count({
+      where: { userId: req.user.sub, status: 'SETTLED' },
+    });
 
     const ledgerAmount = (types: string[]) =>
       ledgerTotals
@@ -1757,18 +1755,15 @@ export class WalletController {
 
   /**
    * Shared by validateWithdrawalRequest and validateFiatWithdrawalRequest --
-   * a trainer must have this many SETTLED (actually scored + paid) tasks
-   * before any withdrawal, fiat or crypto, is allowed. Counts submissions
-   * and word recordings together since both are trainer "tasks".
+   * a trainer must have this many SETTLED (actually scored + paid) word
+   * recordings before any withdrawal, fiat or crypto, is allowed.
    */
   private async requireMinCompletedTasksForWithdrawal(userId: string): Promise<void> {
     const minTasks = await this.platformSettings.getMinCompletedTasksForWithdrawal();
     if (minTasks <= 0) return;
-    const [submissionCount, wordRecordingCount] = await Promise.all([
-      this.prisma.submission.count({ where: { userId, status: 'SETTLED' } }),
-      this.prisma.wordRecording.count({ where: { userId, status: 'SETTLED' } }),
-    ]);
-    const completedTasks = submissionCount + wordRecordingCount;
+    const completedTasks = await this.prisma.wordRecording.count({
+      where: { userId, status: 'SETTLED' },
+    });
     if (completedTasks < minTasks) {
       throw new UnprocessableEntityException(
         `Complete at least ${minTasks} tasks before requesting a withdrawal (${completedTasks}/${minTasks} so far)`,
@@ -3612,20 +3607,12 @@ export class WalletController {
       dialectsCount,
       wordsCount,
       wordTranslationsCount,
-      promptsCount,
-      activePromptsCount,
-      promptTranslationsCount,
+      sentencesCount,
       trainingSessionsCount,
       wordRecordingsCount,
       wordRecordingsPending,
       wordRecordingsScored,
       wordRecordingsSettled,
-      submissionsCount,
-      submissionsPending,
-      submissionsTranscribed,
-      submissionsScored,
-      submissionsSettled,
-      submissionsRejected,
       walletsCount,
       walletAgg,
       depositAgg,
@@ -3638,7 +3625,6 @@ export class WalletController {
       subscriptionPoolsCount,
       activeSubscriptionPools,
       subscriptionPoolAgg,
-      settledSubmissionPayoutAgg,
       settledWordRecordingPayoutAgg,
       tokenUsdRate,
       blogPostsCount,
@@ -3662,20 +3648,12 @@ export class WalletController {
       this.prisma.dialect.count(),
       this.prisma.word.count(),
       this.prisma.wordTranslation.count(),
-      this.prisma.prompt.count(),
-      this.prisma.prompt.count({ where: { active: true } }),
-      this.prisma.promptTranslation.count(),
+      this.prisma.sentence.count(),
       this.prisma.trainingSession.count(),
       this.prisma.wordRecording.count(),
       this.prisma.wordRecording.count({ where: { status: SubmissionStatus.PENDING } }),
       this.prisma.wordRecording.count({ where: { status: SubmissionStatus.SCORED } }),
       this.prisma.wordRecording.count({ where: { status: SubmissionStatus.SETTLED } }),
-      this.prisma.submission.count(),
-      this.prisma.submission.count({ where: { status: SubmissionStatus.PENDING } }),
-      this.prisma.submission.count({ where: { status: SubmissionStatus.TRANSCRIBED } }),
-      this.prisma.submission.count({ where: { status: SubmissionStatus.SCORED } }),
-      this.prisma.submission.count({ where: { status: SubmissionStatus.SETTLED } }),
-      this.prisma.submission.count({ where: { status: SubmissionStatus.REJECTED } }),
       this.prisma.wallet.count(),
       this.prisma.wallet.aggregate({ _sum: { balance: true, lockedBalance: true } }),
       this.prisma.deposit.aggregate({
@@ -3711,10 +3689,6 @@ export class WalletController {
         where: { status: SubscriptionPoolStatus.ACTIVE },
         _sum: { usdAmount: true },
       }),
-      this.prisma.submission.aggregate({
-        where: { settledAt: { not: null } },
-        _sum: { payoutTokenAmount: true },
-      }),
       this.prisma.wordRecording.aggregate({
         where: { settledAt: { not: null } },
         _sum: { payoutTokenAmount: true },
@@ -3746,20 +3720,12 @@ export class WalletController {
       dialectsCount,
       wordsCount,
       wordTranslationsCount,
-      promptsCount,
-      activePromptsCount,
-      promptTranslationsCount,
+      sentencesCount,
       trainingSessionsCount,
       wordRecordingsCount,
       wordRecordingsPending,
       wordRecordingsScored,
       wordRecordingsSettled,
-      submissionsCount,
-      submissionsPending,
-      submissionsTranscribed,
-      submissionsScored,
-      submissionsSettled,
-      submissionsRejected,
       walletsCount,
       totalWalletBalance: walletAgg._sum.balance?.toString() ?? '0',
       totalLockedTokens: walletAgg._sum.lockedBalance?.toString() ?? '0',
@@ -3782,7 +3748,6 @@ export class WalletController {
       // Can legitimately go negative -- that's the signal more pools need opening.
       rewardPoolAvailableTokens: new Prisma.Decimal(subscriptionPoolAgg._sum.usdAmount ?? 0)
         .div(tokenUsdRate)
-        .sub(settledSubmissionPayoutAgg._sum.payoutTokenAmount ?? 0)
         .sub(settledWordRecordingPayoutAgg._sum.payoutTokenAmount ?? 0)
         .toString(),
       blogPostsCount,
@@ -3869,31 +3834,21 @@ export class WalletController {
     return { rows, total: rows.length };
   }
 
-  /** Same bounded-ranking shape as buildEarnersRanking, ranked by word recordings + submissions instead of DL earned. */
+  /** Same bounded-ranking shape as buildEarnersRanking, ranked by word recordings. */
   private async buildContributorsRanking(limit: number) {
-    const [wordContributorTotals, submissionContributorTotals] = await Promise.all([
-      this.prisma.wordRecording.groupBy({ by: ['userId'], _count: { _all: true } }),
-      this.prisma.submission.groupBy({ by: ['userId'], _count: { _all: true } }),
-    ]);
+    const wordContributorTotals = await this.prisma.wordRecording.groupBy({
+      by: ['userId'],
+      _count: { _all: true },
+    });
 
-    const contributorCounts = new Map<string, { wordRecordings: number; submissions: number }>();
+    const contributorCounts = new Map<string, number>();
     for (const entry of wordContributorTotals) {
       if (!entry.userId) continue;
-      contributorCounts.set(entry.userId, {
-        wordRecordings: entry._count._all,
-        submissions: contributorCounts.get(entry.userId)?.submissions ?? 0,
-      });
-    }
-    for (const entry of submissionContributorTotals) {
-      if (!entry.userId) continue;
-      contributorCounts.set(entry.userId, {
-        wordRecordings: contributorCounts.get(entry.userId)?.wordRecordings ?? 0,
-        submissions: entry._count._all,
-      });
+      contributorCounts.set(entry.userId, entry._count._all);
     }
 
     const sortedContributorIds = [...contributorCounts.entries()]
-      .sort(([, a], [, b]) => b.wordRecordings + b.submissions - (a.wordRecordings + a.submissions))
+      .sort(([, a], [, b]) => b - a)
       .slice(0, limit)
       .map(([userId]) => userId);
 
@@ -3905,14 +3860,14 @@ export class WalletController {
 
     const rows = sortedContributorIds.flatMap((userId) => {
       const user = userById.get(userId);
-      const counts = contributorCounts.get(userId);
-      if (!user || !counts) return [];
+      const wordRecordings = contributorCounts.get(userId);
+      if (!user || wordRecordings === undefined) return [];
       return [
         {
           user,
-          totalTasks: counts.wordRecordings + counts.submissions,
-          wordRecordings: counts.wordRecordings,
-          submissions: counts.submissions,
+          totalTasks: wordRecordings,
+          wordRecordings,
+          submissions: 0,
         },
       ];
     });

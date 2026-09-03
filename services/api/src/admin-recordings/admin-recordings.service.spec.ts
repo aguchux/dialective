@@ -22,12 +22,6 @@ describe('AdminRecordingsService', () => {
         update: jest.fn(),
         count: jest.fn().mockResolvedValue(0),
       },
-      submission: {
-        findMany: jest.fn().mockResolvedValue([]),
-        findUnique: jest.fn(),
-        update: jest.fn(),
-        count: jest.fn().mockResolvedValue(0),
-      },
       user: {
         findUniqueOrThrow: jest
           .fn()
@@ -48,16 +42,16 @@ describe('AdminRecordingsService', () => {
   });
 
   describe('listForTrainer', () => {
-    it('merges word recordings and submissions, newest first, then paginates the merged list', async () => {
+    it('lists word recordings for a trainer, newest first, DB-paginated', async () => {
       prisma.wordRecording.findMany.mockResolvedValue([
         {
-          id: 'word-old',
-          createdAt: new Date('2026-01-01'),
+          id: 'word-new',
+          createdAt: new Date('2026-01-02'),
           direction: 'ENGLISH_TO_DIALECT',
           dialectTag: 'ig',
           translationText: 'nnọọ',
           word: { text: 'welcome' },
-          prompt: null,
+          sentence: null,
           audioBucket: 'b',
           audioKey: 'k1',
           status: 'SCORED',
@@ -75,53 +69,29 @@ describe('AdminRecordingsService', () => {
           settledAt: null,
         },
       ]);
-      prisma.submission.findMany.mockResolvedValue([
-        {
-          id: 'sub-new',
-          createdAt: new Date('2026-01-02'),
-          dialectTag: 'ig',
-          transcript: 'hello there',
-          prompt: { text: 'Say hello' },
-          audioBucket: 'b',
-          audioKey: 'k2',
-          status: 'SETTLED',
-          tokensSpent: { toString: () => '1' },
-          rawScore: null,
-          score: null,
-          noiseScore: null,
-          qualityScore: null,
-          livenessScore: null,
-          compositeScore: null,
-          payoutTokenAmount: null,
-          rejectionReason: null,
-          adminAuditStatus: null,
-          adminAuditedAt: null,
-          scoredAt: null,
-          settledAt: null,
-        },
-      ]);
+      prisma.wordRecording.count.mockResolvedValue(1);
 
       const result = await service.listForTrainer('trainer-1', { page: 1, pageSize: 20 });
 
-      expect(result.total).toBe(2);
-      expect(result.items.map((item) => item.id)).toEqual(['sub-new', 'word-old']);
-      expect(result.items[0].kind).toBe('submission');
+      expect(result.total).toBe(1);
+      expect(result.items.map((item) => item.id)).toEqual(['word-new']);
+      expect(result.items[0].kind).toBe('word');
       expect(result.items[0].audioUrl).toBe('https://signed.example/audio');
       expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { userId: 'trainer-1' } }),
       );
     });
 
-    it('paginates the merged list, not each source query separately', async () => {
+    it('paginates at the DB level', async () => {
       prisma.wordRecording.findMany.mockResolvedValue(
-        Array.from({ length: 3 }, (_, i) => ({
+        Array.from({ length: 2 }, (_, i) => ({
           id: `word-${i}`,
           createdAt: new Date(2026, 0, i + 1),
           direction: 'ENGLISH_TO_DIALECT',
           dialectTag: 'ig',
           translationText: 't',
           word: null,
-          prompt: null,
+          sentence: null,
           audioBucket: null,
           audioKey: null,
           status: 'SCORED',
@@ -139,13 +109,15 @@ describe('AdminRecordingsService', () => {
           settledAt: null,
         })),
       );
+      prisma.wordRecording.count.mockResolvedValue(3);
 
       const page1 = await service.listForTrainer('trainer-1', { page: 1, pageSize: 2 });
       expect(page1.items).toHaveLength(2);
       expect(page1.totalPages).toBe(2);
 
-      const page2 = await service.listForTrainer('trainer-1', { page: 2, pageSize: 2 });
-      expect(page2.items).toHaveLength(1);
+      expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 0, take: 2 }),
+      );
     });
   });
 
@@ -155,7 +127,6 @@ describe('AdminRecordingsService', () => {
       prisma.wordRecording.count.mockResolvedValue(0);
 
       await service.listAll({
-        kind: 'word',
         page: 2,
         pageSize: 10,
         sortBy: 'score',
@@ -172,15 +143,13 @@ describe('AdminRecordingsService', () => {
           take: 10,
         }),
       );
-      expect(prisma.submission.findMany).not.toHaveBeenCalled();
     });
 
-    it('queries submissions when kind is submission and applies the unreviewed filter', async () => {
-      prisma.submission.findMany.mockResolvedValue([]);
-      prisma.submission.count.mockResolvedValue(0);
+    it('applies the unreviewed filter', async () => {
+      prisma.wordRecording.findMany.mockResolvedValue([]);
+      prisma.wordRecording.count.mockResolvedValue(0);
 
       await service.listAll({
-        kind: 'submission',
         page: 1,
         pageSize: 20,
         sortBy: 'createdAt',
@@ -188,22 +157,25 @@ describe('AdminRecordingsService', () => {
         reviewState: 'unreviewed',
       } as never);
 
-      expect(prisma.submission.findMany).toHaveBeenCalledWith(
+      expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ adminAuditStatus: null }) }),
       );
     });
 
     it('maps rows to summaries including the trainer info and reports total/totalPages', async () => {
-      prisma.submission.findMany.mockResolvedValue([
+      prisma.wordRecording.findMany.mockResolvedValue([
         {
-          id: 'sub-1',
+          id: 'word-1',
           createdAt: new Date('2026-01-01'),
+          direction: 'ENGLISH_TO_DIALECT',
           dialectTag: 'ig',
-          transcript: 'hi',
-          prompt: { text: 'Say hi' },
+          translationText: 'nnọọ',
+          transcript: 'nno',
+          word: { text: 'welcome' },
+          sentence: null,
           audioBucket: 'b',
           audioKey: 'k',
-          status: 'SETTLED',
+          status: 'SCORED',
           tokensSpent: { toString: () => '1' },
           rawScore: null,
           score: null,
@@ -212,7 +184,6 @@ describe('AdminRecordingsService', () => {
           livenessScore: null,
           compositeScore: null,
           payoutTokenAmount: null,
-          rejectionReason: null,
           adminAuditStatus: null,
           adminAuditedAt: null,
           scoredAt: null,
@@ -220,10 +191,9 @@ describe('AdminRecordingsService', () => {
           user: { id: 'trainer-1', email: 't@example.com', firstName: 'A', lastName: 'B' },
         },
       ]);
-      prisma.submission.count.mockResolvedValue(1);
+      prisma.wordRecording.count.mockResolvedValue(1);
 
       const result = await service.listAll({
-        kind: 'submission',
         page: 1,
         pageSize: 20,
         sortBy: 'createdAt',
@@ -240,7 +210,7 @@ describe('AdminRecordingsService', () => {
       });
     });
 
-    it('exposes the ASR transcript separately from the typed answer for word recordings', async () => {
+    it('exposes the ASR transcript separately from the typed answer', async () => {
       prisma.wordRecording.findMany.mockResolvedValue([
         {
           id: 'word-1',
@@ -250,7 +220,7 @@ describe('AdminRecordingsService', () => {
           translationText: 'nnọọ',
           transcript: 'nno',
           word: { text: 'welcome' },
-          prompt: null,
+          sentence: null,
           audioBucket: 'b',
           audioKey: 'k',
           status: 'SCORED',
@@ -271,7 +241,6 @@ describe('AdminRecordingsService', () => {
       prisma.wordRecording.count.mockResolvedValue(1);
 
       const result = await service.listAll({
-        kind: 'word',
         page: 1,
         pageSize: 20,
         sortBy: 'createdAt',
@@ -282,17 +251,20 @@ describe('AdminRecordingsService', () => {
       expect(result.items[0].asrTranscript).toBe('nno');
     });
 
-    it('sets asrTranscript equal to responseText for submissions (both already come from the ASR transcript)', async () => {
-      prisma.submission.findMany.mockResolvedValue([
+    it('falls back to Sentence text for promptText when the recording has no Word source', async () => {
+      prisma.wordRecording.findMany.mockResolvedValue([
         {
-          id: 'sub-2',
+          id: 'word-2',
           createdAt: new Date('2026-01-01'),
+          direction: 'ENGLISH_TO_DIALECT',
           dialectTag: 'ig',
-          transcript: 'hello there',
-          prompt: { text: 'Say hello' },
+          translationText: 'ụtụtụ ọma',
+          transcript: null,
+          word: null,
+          sentence: { text: 'good morning' },
           audioBucket: 'b',
           audioKey: 'k',
-          status: 'SETTLED',
+          status: 'PENDING',
           tokensSpent: { toString: () => '1' },
           rawScore: null,
           score: null,
@@ -301,25 +273,22 @@ describe('AdminRecordingsService', () => {
           livenessScore: null,
           compositeScore: null,
           payoutTokenAmount: null,
-          rejectionReason: null,
           adminAuditStatus: null,
           adminAuditedAt: null,
           scoredAt: null,
           settledAt: null,
         },
       ]);
-      prisma.submission.count.mockResolvedValue(1);
+      prisma.wordRecording.count.mockResolvedValue(1);
 
       const result = await service.listAll({
-        kind: 'submission',
         page: 1,
         pageSize: 20,
         sortBy: 'createdAt',
         sortDir: 'desc',
       } as never);
 
-      expect(result.items[0].responseText).toBe('hello there');
-      expect(result.items[0].asrTranscript).toBe('hello there');
+      expect(result.items[0].promptText).toBe('good morning');
     });
   });
 
@@ -335,44 +304,42 @@ describe('AdminRecordingsService', () => {
         adminAuditedAt: new Date(),
       });
 
-      const result = await service.audit('admin-1', 'word', 'word-1', { status: 'VALID' as never });
+      const result = await service.audit('admin-1', 'word-1', { status: 'VALID' as never });
 
       expect(result.clawedBack).toBe(false);
       expect(adjustAdminWallet).not.toHaveBeenCalled();
     });
 
     it('marks INVALID without clawback when clawback is not requested', async () => {
-      prisma.submission.findUnique.mockResolvedValue({
-        id: 'sub-1',
+      prisma.wordRecording.findUnique.mockResolvedValue({
+        id: 'word-1',
         userId: 'trainer-1',
         payoutTokenAmount: { toNumber: () => 5 },
       });
-      prisma.submission.update.mockResolvedValue({
+      prisma.wordRecording.update.mockResolvedValue({
         adminAuditStatus: 'INVALID',
         adminAuditedAt: new Date(),
       });
 
-      const result = await service.audit('admin-1', 'submission', 'sub-1', {
-        status: 'INVALID' as never,
-      });
+      const result = await service.audit('admin-1', 'word-1', { status: 'INVALID' as never });
 
       expect(result.clawedBack).toBe(false);
       expect(adjustAdminWallet).not.toHaveBeenCalled();
     });
 
     it('claws back the payout when INVALID + clawback and OTP is disabled', async () => {
-      prisma.submission.findUnique.mockResolvedValue({
-        id: 'sub-1',
+      prisma.wordRecording.findUnique.mockResolvedValue({
+        id: 'word-1',
         userId: 'trainer-1',
         payoutTokenAmount: { toNumber: () => 5 },
       });
-      prisma.submission.update.mockResolvedValue({
+      prisma.wordRecording.update.mockResolvedValue({
         adminAuditStatus: 'INVALID',
         adminAuditedAt: new Date(),
       });
       (adjustAdminWallet as jest.Mock).mockResolvedValue({ balance: '10' });
 
-      const result = await service.audit('admin-1', 'submission', 'sub-1', {
+      const result = await service.audit('admin-1', 'word-1', {
         status: 'INVALID' as never,
         clawback: true,
       });
@@ -382,20 +349,20 @@ describe('AdminRecordingsService', () => {
         prisma,
         'trainer-1',
         -5,
-        'recording-audit:submission:sub-1',
+        'recording-audit:word:word-1',
       );
     });
 
     it('requires OTP for a clawback when adminPayoutOtpEnabled is on', async () => {
       settings.isAdminPayoutOtpEnabled.mockResolvedValue(true);
-      prisma.submission.findUnique.mockResolvedValue({
-        id: 'sub-1',
+      prisma.wordRecording.findUnique.mockResolvedValue({
+        id: 'word-1',
         userId: 'trainer-1',
         payoutTokenAmount: { toNumber: () => 5 },
       });
 
       await expect(
-        service.audit('admin-1', 'submission', 'sub-1', {
+        service.audit('admin-1', 'word-1', {
           status: 'INVALID' as never,
           clawback: true,
         }),
@@ -405,18 +372,18 @@ describe('AdminRecordingsService', () => {
 
     it('verifies OTP then claws back when code/otpRequestId are supplied', async () => {
       settings.isAdminPayoutOtpEnabled.mockResolvedValue(true);
-      prisma.submission.findUnique.mockResolvedValue({
-        id: 'sub-1',
+      prisma.wordRecording.findUnique.mockResolvedValue({
+        id: 'word-1',
         userId: 'trainer-1',
         payoutTokenAmount: { toNumber: () => 5 },
       });
-      prisma.submission.update.mockResolvedValue({
+      prisma.wordRecording.update.mockResolvedValue({
         adminAuditStatus: 'INVALID',
         adminAuditedAt: new Date(),
       });
       (adjustAdminWallet as jest.Mock).mockResolvedValue({ balance: '10' });
 
-      const result = await service.audit('admin-1', 'submission', 'sub-1', {
+      const result = await service.audit('admin-1', 'word-1', {
         status: 'INVALID' as never,
         clawback: true,
         otpRequestId: '11111111-1111-1111-1111-111111111111',
@@ -428,8 +395,8 @@ describe('AdminRecordingsService', () => {
     });
 
     it('surfaces insufficient balance as a 422, not a raw error', async () => {
-      prisma.submission.findUnique.mockResolvedValue({
-        id: 'sub-1',
+      prisma.wordRecording.findUnique.mockResolvedValue({
+        id: 'word-1',
         userId: 'trainer-1',
         payoutTokenAmount: { toNumber: () => 5 },
       });
@@ -438,7 +405,7 @@ describe('AdminRecordingsService', () => {
       );
 
       await expect(
-        service.audit('admin-1', 'submission', 'sub-1', {
+        service.audit('admin-1', 'word-1', {
           status: 'INVALID' as never,
           clawback: true,
         }),
@@ -453,7 +420,7 @@ describe('AdminRecordingsService', () => {
         userId: 'trainer-1',
         payoutTokenAmount: null,
       });
-      await expect(service.requestAuditClawbackOtp('admin-1', 'word', 'word-1')).rejects.toThrow(
+      await expect(service.requestAuditClawbackOtp('admin-1', 'word-1')).rejects.toThrow(
         'no payout to claw back',
       );
     });

@@ -22,48 +22,17 @@ export interface QualityWeights {
 }
 
 /**
- * Blends the real consensus/exact-match score with the quality-gate-worker's
- * three signals (weighted average, admin-configurable weights), then clamps
- * the result into [minScoreRange, maxScoreRange] -- the same range the
- * no-fail-on-train synthetic-timeout path already respects (see
+ * Blends the real exact-match/reverse-validation score with quality-gate-
+ * worker's four signals (weighted average, admin-configurable weights, plus
+ * asrMatchScore -- see WordRecording.asrMatchScore's schema comment), then
+ * clamps the result into [minScoreRange, maxScoreRange] -- the same range
+ * the no-fail-on-train synthetic-timeout path already respects (see
  * scoreWithSyntheticScore's randomInRange). Unlike that path, this is a
  * deterministic computation from real signals, never a random draw. Missing
- * noise/quality/liveness scores (gate disabled when the row was created, or
- * the async worker hasn't written them yet) fall back to a neutral 100 so
- * absence never penalizes a trainer -- see schema.prisma's compositeScore
- * comment.
- */
-export function computeCompositeScore(
-  realScore: Prisma.Decimal,
-  noiseScore: Prisma.Decimal | null,
-  qualityScore: Prisma.Decimal | null,
-  livenessScore: Prisma.Decimal | null,
-  weights: QualityWeights,
-  scoreRange: { min: number; max: number },
-): number {
-  const weightSum = weights.consensus + weights.noise + weights.quality + weights.liveness;
-  const blended =
-    weightSum <= 0
-      ? realScore.toNumber()
-      : (realScore.toNumber() * weights.consensus +
-          (noiseScore?.toNumber() ?? 100) * weights.noise +
-          (qualityScore?.toNumber() ?? 100) * weights.quality +
-          (livenessScore?.toNumber() ?? 100) * weights.liveness) /
-        weightSum;
-
-  return Math.max(scoreRange.min, Math.min(scoreRange.max, blended));
-}
-
-/**
- * WordRecording-only variant of computeCompositeScore, adding a 5th
- * asrMatchScore term (how closely the ASR transcript matches the trainer's
- * typed answer -- see WordRecording.asrMatchScore's schema comment).
- * Deliberately a separate function rather than a 5th parameter bolted onto
- * computeCompositeScore: Submission's ASR pipeline IS its consensus signal
- * already, so Submission settlement has no equivalent value to pass here,
- * and every Submission call site would otherwise need a dummy always-null
- * argument. qualityWeightAsrMatch defaults to 0, so until an admin opts in,
- * this produces the identical result computeCompositeScore always did.
+ * noise/quality/liveness/asrMatch scores (gate disabled when the row was
+ * created, or the async worker hasn't written them yet) fall back to a
+ * neutral 100 so absence never penalizes a trainer -- see schema.prisma's
+ * compositeScore comment.
  */
 export function computeWordRecordingCompositeScore(
   realScore: Prisma.Decimal,
@@ -90,8 +59,8 @@ export function computeWordRecordingCompositeScore(
 }
 
 /**
- * Reads scored-but-unsettled submissions from Postgres, computes each
- * payout via the shared no-loss formula (computeTrainingPayout in
+ * Reads scored-but-unsettled WordRecording rows from Postgres, computes
+ * each payout via the shared no-loss formula (computeTrainingPayout in
  * @dialectiva/db -- same math api's manual admin/training-payouts route
  * uses), and writes wallet ledger entries against the client-funded Reward
  * Pool (never funded by other trainers' token purchases -- see business
@@ -129,14 +98,6 @@ export class SettlementService {
       this.isTokenomicsMintingPaused(),
     ]);
 
-    const submissionResult = await this.settleSubmissions(
-      bonusCapMultiple,
-      qualityGateEnabled,
-      qualityWeights,
-      scoreRange,
-      settlementDelayMinutes,
-      mintingPaused,
-    );
     const wordRecordingResult = await this.settleWordRecordings(
       bonusCapMultiple,
       qualityGateEnabled,
@@ -146,23 +107,17 @@ export class SettlementService {
       settlementDelayMinutes,
       mintingPaused,
     );
-    const rejectedRefundCount = await this.refundRejectedSubmissions();
     const rejectedWordRecordingRefundCount = await this.refundRejectedWordRecordings();
     const stuckRefundCount = await this.refundStuckWordRecordings();
     const timeoutResult = await this.resolveTimedOutScoring();
 
-    const settledCount = submissionResult.settledCount + wordRecordingResult.settledCount;
-    const eligibleCount = submissionResult.eligibleCount + wordRecordingResult.eligibleCount;
-    const totalPayout = submissionResult.totalPayout + wordRecordingResult.totalPayout;
+    const settledCount = wordRecordingResult.settledCount;
+    const eligibleCount = wordRecordingResult.eligibleCount;
+    const totalPayout = wordRecordingResult.totalPayout;
 
-    if (
-      rejectedRefundCount > 0 ||
-      rejectedWordRecordingRefundCount > 0 ||
-      stuckRefundCount > 0 ||
-      timeoutResult.refundedCount > 0
-    ) {
+    if (rejectedWordRecordingRefundCount > 0 || stuckRefundCount > 0 || timeoutResult.refundedCount > 0) {
       this.logger.log(
-        `Refunded locked tokens: rejected=${rejectedRefundCount} rejectedWordRecordings=${rejectedWordRecordingRefundCount} ` +
+        `Refunded locked tokens: rejectedWordRecordings=${rejectedWordRecordingRefundCount} ` +
           `stuckWordRecordings=${stuckRefundCount} scoringTimeout=${timeoutResult.refundedCount}`,
       );
     }
@@ -185,122 +140,11 @@ export class SettlementService {
     );
   }
 
-  private async settleSubmissions(
-    bonusCapMultiple: number,
-    qualityGateEnabled: boolean,
-    qualityWeights: QualityWeights,
-    scoreRange: { min: number; max: number },
-    settlementDelayMinutes: number,
-    mintingPaused: boolean,
-  ) {
-    const submissions = await this.prisma.submission.findMany({
-      where: {
-        status: 'SCORED',
-        settledAt: null,
-        ...(settlementDelayMinutes > 0
-          ? { scoredAt: { lte: new Date(Date.now() - settlementDelayMinutes * 60_000) } }
-          : {}),
-      },
-      select: {
-        id: true,
-        userId: true,
-        tokensSpent: true,
-        rawScore: true,
-        score: true,
-        noiseScore: true,
-        qualityScore: true,
-        livenessScore: true,
-      },
-    });
-
-    let settledCount = 0;
-    let totalPayout = 0;
-
-    for (const submission of submissions) {
-      if (submission.score === null) {
-        this.logger.warn(`Skipping submission=${submission.id}: status SCORED but score is null`);
-        continue;
-      }
-
-      try {
-        // compositeScore is only used to influence payout once
-        // qualityGateEnabled -- otherwise it's still computed and stored
-        // (useful for admin visibility/tuning) but computeTrainingPayout
-        // gets the raw score, matching today's behavior exactly. See
-        // computeCompositeScore's doc comment for the blend/clamp mechanism.
-        const realScore = submission.rawScore ?? submission.score;
-        const compositeScore = computeCompositeScore(
-          realScore,
-          submission.noiseScore,
-          submission.qualityScore,
-          submission.livenessScore,
-          qualityWeights,
-          scoreRange,
-        );
-        const payoutScore = qualityGateEnabled ? compositeScore : submission.score;
-        const payout = computeTrainingPayout(submission.tokensSpent, payoutScore, bonusCapMultiple);
-        const { ops } = await creditTrainingPayoutOps(
-          this.prisma,
-          submission.userId,
-          payout,
-          submission.id,
-        );
-        // Mints into the Tokenomics engine's TokenAccount ledger alongside
-        // the legacy Wallet credit above -- see mintTrainingPayoutOps's doc
-        // comment. Paused independently of the legacy payout itself: pausing
-        // minting stops new supply from being ISSUED into the Tokenomics
-        // ledger, it does not (and must not) block trainers from actually
-        // getting paid, since the no-loss guarantee is unconditional.
-        const mintOps = mintingPaused
-          ? []
-          : (await mintTrainingPayoutOps(this.prisma, submission.userId, payout, submission.id))
-              .ops;
-
-        // Release the lock taken at submit time in the same transaction as
-        // the payout credit -- no window where tokensSpent is neither
-        // locked nor spendable. The lock is replaced, not "returned then
-        // re-spent": the payout (stake + bonus) lands fresh in balance.
-        // Legacy (pre-locking) rows never locked anything, so skip that decrement for them.
-        const lockOps = (await this.wasLocked(submission.id))
-          ? [
-              this.prisma.wallet.updateMany({
-                where: { userId: submission.userId },
-                data: { lockedBalance: { decrement: submission.tokensSpent } },
-              }),
-            ]
-          : [];
-        await this.prisma.$transaction([
-          ...lockOps,
-          ...ops,
-          ...mintOps,
-          this.prisma.submission.update({
-            where: { id: submission.id },
-            data: {
-              status: 'SETTLED',
-              compositeScore,
-              payoutTokenAmount: payout,
-              settledAt: new Date(),
-            },
-          }),
-        ]);
-
-        settledCount += 1;
-        totalPayout += payout.toNumber();
-      } catch (err) {
-        this.logger.error(
-          `Failed to settle submission=${submission.id}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-
-    return { settledCount, eligibleCount: submissions.length, totalPayout };
-  }
-
   /**
-   * Same no-loss formula/ledger path as settleSubmissions, against
-   * WordRecording rows instead -- see the model's doc comment in
-   * schema.prisma for why word training has its own SCORED path (no
-   * consensus/quorum) but shares this settlement step.
+   * Reads scored-but-unsettled WordRecording rows, computes each payout via
+   * the shared no-loss formula, and writes wallet ledger entries against
+   * the client-funded Reward Pool -- see the model's doc comment in
+   * schema.prisma.
    */
   private async settleWordRecordings(
     bonusCapMultiple: number,
@@ -407,12 +251,12 @@ export class SettlementService {
   }
 
   /**
-   * REJECTED submissions never reach SCORED, so settleSubmissions never
-   * sees them and their locked stake would otherwise sit in lockedBalance
-   * forever. vosk-worker/whisper-worker/quality-gate-worker set REJECTED via
-   * a direct SQL UPDATE (see AGENTS.md "Database access" -- other services
-   * touch this schema only through the generated Prisma client, api owns
-   * it), so the refund itself happens here instead, in the one place already
+   * REJECTED word recordings never reach SCORED, so settleWordRecordings
+   * never sees them and their locked stake would otherwise sit in
+   * lockedBalance forever. quality-gate-worker sets REJECTED via a direct
+   * SQL UPDATE (see AGENTS.md "Database access" -- other services touch
+   * this schema only through the generated Prisma client, api owns it), so
+   * the refund itself happens here instead, in the one place already
    * scheduled to reconcile locked tokens against final outcomes. refundedAt
    * makes this idempotent/resumable the same way settledAt does for
    * payouts -- a row left REJECTED with refundedAt: null is naturally
@@ -423,54 +267,6 @@ export class SettlementService {
    * noise/unreadable) has no further use once refunded, unlike a
    * settled/scored recording an admin might still want to audit within the
    * configured retention window.
-   */
-  private async refundRejectedSubmissions(): Promise<number> {
-    const submissions = await this.prisma.submission.findMany({
-      where: { status: 'REJECTED', refundedAt: null },
-      select: { id: true, userId: true, tokensSpent: true, audioBucket: true, audioKey: true },
-    });
-
-    let refundedCount = 0;
-    for (const submission of submissions) {
-      try {
-        // Atomic claim on refundedAt: null before touching tokens -- see the
-        // matching comment in refundStuckWordRecordings for why (prevents
-        // two overlapping runs from double-refunding the same row).
-        const claim = await this.prisma.submission.updateMany({
-          where: { id: submission.id, refundedAt: null },
-          data: { refundedAt: new Date() },
-        });
-        if (claim.count === 0) continue;
-
-        // Legacy (pre-locking) rows spent balance directly and never locked
-        // anything -- nothing to refund, just mark them resolved.
-        if (await this.wasLocked(submission.id)) {
-          await this.refundTokens(submission.userId, submission.tokensSpent, submission.id);
-        }
-        await this.deleteAudioIfPresent(
-          'submission',
-          submission.id,
-          submission.audioBucket,
-          submission.audioKey,
-        );
-        refundedCount += 1;
-      } catch (err) {
-        this.logger.error(
-          `Failed to refund rejected submission=${submission.id}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-
-    return refundedCount;
-  }
-
-  /**
-   * WordRecording counterpart to refundRejectedSubmissions -- same
-   * quality-gate-worker-sets-REJECTED-directly, settlement-job-refunds-and-
-   * deletes-audio shape. Added alongside quality-gate-worker's new
-   * reject_word_recording() (previously a silent/noisy/unreadable word
-   * recording kept its lock and settled/paid normally -- see AGENTS.md/PR
-   * history for "reject and delete... refund exact DL").
    */
   private async refundRejectedWordRecordings(): Promise<number> {
     const recordings = await this.prisma.wordRecording.findMany({
@@ -491,12 +287,7 @@ export class SettlementService {
         if (await this.wasLocked(recording.id)) {
           await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
         }
-        await this.deleteAudioIfPresent(
-          'wordRecording',
-          recording.id,
-          recording.audioBucket,
-          recording.audioKey,
-        );
+        await this.deleteAudioIfPresent(recording.id, recording.audioBucket, recording.audioKey);
         refundedCount += 1;
       } catch (err) {
         this.logger.error(
@@ -520,7 +311,6 @@ export class SettlementService {
    * for audio-retention-job's own delayed purge as a fallback).
    */
   private async deleteAudioIfPresent(
-    kind: 'submission' | 'wordRecording',
     id: string,
     bucket: string | null,
     key: string | null,
@@ -530,16 +320,14 @@ export class SettlementService {
       await this.storage.deleteObject(bucket, key);
     } catch (err) {
       this.logger.warn(
-        `Failed to delete audio for rejected ${kind}=${id} bucket=${bucket} key=${key}: ${err instanceof Error ? err.message : String(err)}`,
+        `Failed to delete audio for rejected wordRecording=${id} bucket=${bucket} key=${key}: ${err instanceof Error ? err.message : String(err)}`,
       );
       return;
     }
-    const data = { audioBucket: null, audioKey: null, audioDeletedAt: new Date() };
-    if (kind === 'submission') {
-      await this.prisma.submission.update({ where: { id }, data });
-    } else {
-      await this.prisma.wordRecording.update({ where: { id }, data });
-    }
+    await this.prisma.wordRecording.update({
+      where: { id },
+      data: { audioBucket: null, audioKey: null, audioDeletedAt: new Date() },
+    });
   }
 
   /**
@@ -597,20 +385,18 @@ export class SettlementService {
   }
 
   /**
-   * A task still unscored (Submission PENDING/TRANSCRIBED, or WordRecording
-   * PENDING outside the ENGLISH_TO_DIALECT stuck-timeout path already
-   * covered by refundStuckWordRecordings) past scoringSlaMinutes needs some
-   * resolution -- otherwise its lock sits forever waiting on a
-   * consensus/reverse-validation outcome that may never land. When
-   * noFailOnTrainEnabled is off, this is a plain refund (same shape as
-   * refundRejectedSubmissions/refundStuckWordRecordings -- stake back, no
-   * bonus). When on, the trainer did complete and submit real work, so
+   * A WordRecording still PENDING outside the ENGLISH_TO_DIALECT
+   * stuck-timeout path already covered by refundStuckWordRecordings) past
+   * scoringSlaMinutes needs some resolution -- otherwise its lock sits
+   * forever waiting on a reverse-validation outcome that may never land.
+   * When noFailOnTrainEnabled is off, this is a plain refund (same shape as
+   * refundRejectedWordRecordings/refundStuckWordRecordings -- stake back,
+   * no bonus). When on, the trainer did complete and submit real work, so
    * instead of a bare refund it's given a synthetic score drawn uniformly
-   * from [minScoreRange, maxScoreRange] and moved to SCORED (not straight to
-   * SETTLED) -- this hands it to the normal settleSubmissions/
-   * settleWordRecordings pass above, so it still waits out
-   * settlementDelayMinutes like every other scored row instead of paying out
-   * in the same instant it's scored.
+   * from [minScoreRange, maxScoreRange] and moved to SCORED (not straight
+   * to SETTLED) -- this hands it to the normal settleWordRecordings pass
+   * above, so it still waits out settlementDelayMinutes like every other
+   * scored row instead of paying out in the same instant it's scored.
    */
   private async resolveTimedOutScoring() {
     const [slaMinutes, noFailEnabled, scoreRange] = await Promise.all([
@@ -620,66 +406,28 @@ export class SettlementService {
     ]);
     const cutoff = new Date(Date.now() - slaMinutes * 60 * 1000);
 
-    const [timedOutSubmissions, timedOutRecordings] = await Promise.all([
-      this.prisma.submission.findMany({
-        where: {
-          status: { in: ['PENDING', 'TRANSCRIBED'] },
-          refundedAt: null,
-          createdAt: { lt: cutoff },
-        },
-        select: { id: true, userId: true, tokensSpent: true },
-      }),
-      this.prisma.wordRecording.findMany({
-        where: {
-          status: 'PENDING',
-          refundedAt: null,
-          userId: { not: null },
-          createdAt: { lt: cutoff },
-        },
-        select: { id: true, userId: true, tokensSpent: true },
-      }),
-    ]);
+    const timedOutRecordings = await this.prisma.wordRecording.findMany({
+      where: {
+        status: 'PENDING',
+        refundedAt: null,
+        userId: { not: null },
+        createdAt: { lt: cutoff },
+      },
+      select: { id: true, userId: true, tokensSpent: true },
+    });
 
     let scoredCount = 0;
     let refundedCount = 0;
 
-    for (const submission of timedOutSubmissions) {
-      try {
-        // Atomic claim, guarded on the same status this row was read with --
-        // this is the hard handoff point: once claimed, ASR/consensus-scorer's
-        // own status-guarded writes (see whisper-worker/vosk-worker db.py and
-        // ConsensusService.scoreCluster) can no longer touch this row, even if
-        // a transcription/scoring job for it is mid-flight right now. If a
-        // concurrent settlement-job run already claimed it first, count is 0
-        // and this run skips it -- no double refund/payout.
-        const claim = await this.prisma.submission.updateMany({
-          where: {
-            id: submission.id,
-            status: { in: ['PENDING', 'TRANSCRIBED'] },
-            refundedAt: null,
-          },
-          data: { status: 'EXPIRED', refundedAt: new Date() },
-        });
-        if (claim.count === 0) continue;
-
-        if (noFailEnabled) {
-          await this.scoreWithSyntheticScore('submission', submission.id, scoreRange);
-          scoredCount += 1;
-        } else {
-          await this.refundTokens(submission.userId, submission.tokensSpent, submission.id);
-          refundedCount += 1;
-        }
-      } catch (err) {
-        this.logger.error(
-          `Failed to resolve timed-out submission=${submission.id}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-
     for (const recording of timedOutRecordings) {
       if (recording.userId === null) continue;
       try {
-        // Same atomic claim as above, for the WordRecording pipeline.
+        // Atomic claim, guarded on the same status this row was read with --
+        // this is the hard handoff point: once claimed, quality-gate-worker's
+        // own status-guarded writes can no longer touch this row, even if a
+        // scoring job for it is mid-flight right now. If a concurrent
+        // settlement-job run already claimed it first, count is 0 and this
+        // run skips it -- no double refund/payout.
         const claim = await this.prisma.wordRecording.updateMany({
           where: { id: recording.id, status: 'PENDING', refundedAt: null },
           data: { status: 'EXPIRED', refundedAt: new Date() },
@@ -687,7 +435,7 @@ export class SettlementService {
         if (claim.count === 0) continue;
 
         if (noFailEnabled) {
-          await this.scoreWithSyntheticScore('wordRecording', recording.id, scoreRange);
+          await this.scoreWithSyntheticScore(recording.id, scoreRange);
           scoredCount += 1;
         } else {
           await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
@@ -706,29 +454,21 @@ export class SettlementService {
   /**
    * Moves a timed-out (EXPIRED, noFailOnTrainEnabled) row to SCORED with a
    * synthetic score -- it does NOT credit payout or touch locked tokens.
-   * That happens later, in settleSubmissions/settleWordRecordings, once
+   * That happens later, in settleWordRecordings, once
    * settlementDelayMinutes has elapsed since this scoredAt -- the same path
-   * every real consensus/exact-match score goes through. See
+   * every real exact-match/reverse-validation score goes through. See
    * resolveTimedOutScoring's doc comment for why this was split out of what
    * used to be a single score+settle step.
    */
   private async scoreWithSyntheticScore(
-    kind: 'submission' | 'wordRecording',
     id: string,
     scoreRange: { min: number; max: number },
   ): Promise<void> {
     const score = randomInRange(scoreRange.min, scoreRange.max);
-    if (kind === 'submission') {
-      await this.prisma.submission.update({
-        where: { id },
-        data: { rawScore: score, score, status: 'SCORED', scoredAt: new Date() },
-      });
-    } else {
-      await this.prisma.wordRecording.update({
-        where: { id },
-        data: { rawScore: score, score, status: 'SCORED', scoredAt: new Date() },
-      });
-    }
+    await this.prisma.wordRecording.update({
+      where: { id },
+      data: { rawScore: score, score, status: 'SCORED', scoredAt: new Date() },
+    });
   }
 
   private async refundTokens(
@@ -946,14 +686,10 @@ export class SettlementService {
    * need opening.
    */
   private async getRewardPoolAvailableTokens(): Promise<number> {
-    const [activeAgg, settledSubmissionAgg, settledWordAgg, rate] = await Promise.all([
+    const [activeAgg, settledWordAgg, rate] = await Promise.all([
       this.prisma.subscriptionPool.aggregate({
         where: { status: 'ACTIVE' },
         _sum: { usdAmount: true },
-      }),
-      this.prisma.submission.aggregate({
-        where: { settledAt: { not: null } },
-        _sum: { payoutTokenAmount: true },
       }),
       this.prisma.wordRecording.aggregate({
         where: { settledAt: { not: null } },
@@ -963,9 +699,7 @@ export class SettlementService {
     ]);
 
     const totalAvailableUsd = Number(activeAgg._sum.usdAmount ?? 0);
-    const totalSettled =
-      Number(settledSubmissionAgg._sum.payoutTokenAmount ?? 0) +
-      Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
+    const totalSettled = Number(settledWordAgg._sum.payoutTokenAmount ?? 0);
     return totalAvailableUsd / rate - totalSettled;
   }
 }

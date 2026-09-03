@@ -17,12 +17,11 @@ import {
 import { useGetTrainerDashboardQuery } from '@/store/api';
 
 // Held-in-review = the locked-token states: task started (PENDING/TRANSCRIBED,
-// awaiting transcription/scoring) or SCORED but not yet SETTLED by
-// settlement-job -- all three still hold tokensSpent out of the trainer's
-// spendable balance (see Wallet.lockedBalance and its increment/decrement
-// call sites in submissions.controller.ts, words.service.ts,
-// settlement-admin.service.ts). REJECTED/EXPIRED/SETTLED all release the
-// lock already, so they're deliberately excluded here.
+// awaiting scoring) or SCORED but not yet SETTLED by settlement-job -- all
+// three still hold tokensSpent out of the trainer's spendable balance (see
+// Wallet.lockedBalance and its increment/decrement call sites in
+// words.service.ts, settlement-admin.service.ts). REJECTED/EXPIRED/SETTLED
+// all release the lock already, so they're deliberately excluded here.
 const HELD_STATUSES = ['PENDING', 'TRANSCRIBED', 'SCORED'] as const;
 
 export default function HeldInReviewPage() {

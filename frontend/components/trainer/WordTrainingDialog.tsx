@@ -13,7 +13,6 @@ import {
   Mic,
   Pause,
   Play,
-  RotateCcw,
   Send,
   Square,
   Trash2,
@@ -62,16 +61,15 @@ function countPromptWords(promptText: string | null | undefined): number {
   return Math.max(1, words.length);
 }
 
-// Distinct, stable messages the backend returns when the content pool is
-// empty (see WordsService.nextAssignment's NO_WORDS_AVAILABLE and, when
-// singleWordTrainingEnabled is off, NO_SENTENCES_AVAILABLE) -- matched here
-// to show a "check back later" empty state instead of a generic error
+// Distinct, stable message the backend returns when the content pool is
+// empty (see WordsService.nextAssignment's NO_WORDS_AVAILABLE) -- matched
+// here to show a "check back later" empty state instead of a generic error
 // banner. There is no per-word usage limit; this only ever means the pool
 // itself has zero rows right now.
 function isNoWordsAvailable(err: unknown): boolean {
   const message = (err as { data?: ApiErrorShape } | undefined)?.data?.message;
   const text = Array.isArray(message) ? message.join(' ') : message;
-  return text === 'NO_WORDS_AVAILABLE' || text === 'NO_SENTENCES_AVAILABLE';
+  return text === 'NO_WORDS_AVAILABLE';
 }
 
 // A course can be marked required (or a session can simply outlive the
@@ -129,10 +127,6 @@ export function WordTrainingDialog({
   );
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const [pickedIndexes, setPickedIndexes] = useState<number[]>([]);
-  const [rebuildSubmitting, setRebuildSubmitting] = useState(false);
-  const [rebuildSubmitted, setRebuildSubmitted] = useState(false);
-  const [rebuildScore, setRebuildScore] = useState<number | null>(null);
   const [sourcePlaying, setSourcePlaying] = useState(false);
   const [qracOpen, setQracOpen] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
@@ -223,10 +217,6 @@ export function WordTrainingDialog({
     setSuggestions([]);
     setSuggestionsOpen(false);
     setKeyboardOpen(false);
-    setPickedIndexes([]);
-    setRebuildSubmitting(false);
-    setRebuildSubmitted(false);
-    setRebuildScore(null);
     setSourcePlaying(false);
     setQracOpen(false);
     setShowLevelUp(false);
@@ -354,10 +344,6 @@ export function WordTrainingDialog({
     setSuggestions([]);
     setSuggestionsOpen(false);
     setKeyboardOpen(false);
-    setPickedIndexes([]);
-    setRebuildSubmitting(false);
-    setRebuildSubmitted(false);
-    setRebuildScore(null);
     setSourcePlaying(false);
     try {
       setAssignment(await loadNext(session.sessionId, false).unwrap());
@@ -396,8 +382,6 @@ export function WordTrainingDialog({
   const canSkipAssignment =
     !!assignment &&
     !isLoadingNext &&
-    !rebuildSubmitting &&
-    !rebuildSubmitted &&
     recorderState !== 'recording' &&
     recorderState !== 'submitting' &&
     recorderState !== 'submitted';
@@ -575,41 +559,6 @@ export function WordTrainingDialog({
     } finally {
       submittingRef.current = false;
     }
-  }
-
-  async function submitSentenceRebuild() {
-    if (
-      !assignment ||
-      !assignment.fragments ||
-      pickedIndexes.length !== assignment.fragments.length
-    ) {
-      setError('Tap all the fragments in order before submitting.');
-      return;
-    }
-    setError(null);
-    setRebuildSubmitting(true);
-    try {
-      const submittedOrder = pickedIndexes.map((index) => assignment.fragments![index].position);
-      const result = await submitRecording({
-        assignmentId: assignment.assignmentId,
-        submittedOrder,
-      }).unwrap();
-      setRebuildScore(result.validationScore);
-      setRebuildSubmitted(true);
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to submit your answer.'));
-    } finally {
-      setRebuildSubmitting(false);
-    }
-  }
-
-  function pickFragment(index: number) {
-    if (pickedIndexes.includes(index)) return;
-    setPickedIndexes((current) => [...current, index]);
-  }
-
-  function unpickLast() {
-    setPickedIndexes((current) => current.slice(0, -1));
   }
 
   const progress = Math.min(1, elapsedMs / maxRecordingMs);
@@ -792,108 +741,6 @@ export function WordTrainingDialog({
                   )}
                   {!assignment ? (
                     <LoadingState label="Generating next word" />
-                  ) : assignment.direction === 'SENTENCE_REBUILD' ? (
-                    <>
-                      <div>
-                        <div className="flex flex-wrap items-center justify-center gap-3">
-                          <span className="inline-flex rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
-                            {assignment.responseLanguage} sentence rebuild
-                          </span>
-                          <SkipAssignmentButton
-                            disabled={!canSkipAssignment}
-                            loading={isLoadingNext}
-                            onClick={() => void nextWord()}
-                          />
-                        </div>
-                        <p className="mt-4 text-sm font-bold text-muted">
-                          Tap the fragments in the correct order
-                        </p>
-                      </div>
-
-                      <div className="mx-auto flex min-h-16 w-full max-w-xl flex-wrap items-center justify-center gap-2 rounded-lg border-2 border-dashed border-line bg-surface p-4">
-                        {pickedIndexes.length === 0 && (
-                          <span className="text-sm text-muted">
-                            Tap fragments below to build the sentence
-                          </span>
-                        )}
-                        {pickedIndexes.map((index, position) => (
-                          <span
-                            className="rounded-md bg-accent px-3 py-1.5 font-bold text-white"
-                            key={`${index}-${position}`}
-                          >
-                            {assignment.fragments![index].text}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-center gap-2">
-                        {assignment.fragments!.map((fragment, index) => (
-                          <button
-                            className="rounded-md border border-line bg-white px-3 py-1.5 font-bold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
-                            disabled={
-                              pickedIndexes.includes(index) || rebuildSubmitting || rebuildSubmitted
-                            }
-                            key={index}
-                            onClick={() => pickFragment(index)}
-                            type="button"
-                          >
-                            {fragment.text}
-                          </button>
-                        ))}
-                      </div>
-
-                      {error && (
-                        <p className="text-sm font-bold text-danger" role="alert">
-                          {error}
-                        </p>
-                      )}
-
-                      {!rebuildSubmitted && (
-                        <div className="flex flex-wrap items-center justify-center gap-3">
-                          <button
-                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-45"
-                            disabled={pickedIndexes.length === 0 || rebuildSubmitting}
-                            onClick={unpickLast}
-                            type="button"
-                          >
-                            <RotateCcw className="size-4" aria-hidden="true" />
-                            Undo
-                          </button>
-                          <ActionButton
-                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45"
-                            disabled={pickedIndexes.length !== assignment.fragments!.length}
-                            onClick={() => void submitSentenceRebuild()}
-                            pending={rebuildSubmitting}
-                            pendingLabel="Submitting"
-                            type="button"
-                          >
-                            <Send className="size-4" aria-hidden="true" />
-                            Submit
-                          </ActionButton>
-                        </div>
-                      )}
-
-                      {rebuildSubmitted && (
-                        <div className="mx-auto grid w-full max-w-md gap-4 rounded-lg border border-line bg-surface p-5">
-                          <div className="flex items-center justify-center gap-2 font-black text-emerald-700 dark:text-emerald-300">
-                            <Check className="size-5" aria-hidden="true" />
-                            Answer submitted
-                          </div>
-                          {rebuildScore !== null && (
-                            <p className="text-sm font-bold text-muted">
-                              Order match: {rebuildScore === 1 ? 'Correct' : 'Not quite'}
-                            </p>
-                          )}
-                          <button
-                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark"
-                            onClick={() => void nextWord()}
-                            type="button"
-                          >
-                            Next word <ArrowRight className="size-4" aria-hidden="true" />
-                          </button>
-                        </div>
-                      )}
-                    </>
                   ) : (
                     <>
                       <div>

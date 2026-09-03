@@ -1,7 +1,8 @@
 /**
- * Lifetime WordRecording-count thresholds -> target phrase word-count
- * range for PHRASE_TO_DIALECT escalation (see WordsService.getTrainerPhraseTier).
- * Tier boundaries are PROPOSED, pending final product-owner sign-off --
+ * Lifetime WordRecording-count thresholds -> target Sentence word-count
+ * range for ENGLISH_TO_DIALECT's sentence escalation (see WordsService.
+ * getTrainerPhraseTier/pickSentenceSource). Tier boundaries are PROPOSED,
+ * pending final product-owner sign-off --
  * only the shape (threshold, wordCountMin, wordCountMax) is confirmed
  * design, not these exact numbers.
  *

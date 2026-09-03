@@ -22,15 +22,13 @@ describe('WalletController crypto withdrawal eligibility', () => {
   } as never;
 
   function setup(overrides?: {
-    settledSubmissions?: number;
     settledWordRecordings?: number;
     user?: { emailVerified: boolean; phoneVerifiedAt: Date | null; kycStatus: string };
     walletBalance?: number;
     minWalletBalanceTokens?: number;
   }) {
     const prisma = {
-      submission: { count: jest.fn().mockResolvedValue(overrides?.settledSubmissions ?? 100) },
-      wordRecording: { count: jest.fn().mockResolvedValue(overrides?.settledWordRecordings ?? 0) },
+      wordRecording: { count: jest.fn().mockResolvedValue(overrides?.settledWordRecordings ?? 100) },
       user: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({
           email: 'trainer@example.com',
@@ -75,14 +73,11 @@ describe('WalletController crypto withdrawal eligibility', () => {
   }
 
   it('requires the configured settled-task count before issuing a crypto withdrawal OTP', async () => {
-    const { controller, prisma, otp } = setup({ settledSubmissions: 99 });
+    const { controller, prisma, otp } = setup({ settledWordRecordings: 99 });
 
     await expect(controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody)).rejects.toThrow(
       'Complete at least 100 tasks before requesting a withdrawal (99/100 so far)',
     );
-    expect(prisma.submission.count).toHaveBeenCalledWith({
-      where: { userId: 'trainer-1', status: 'SETTLED' },
-    });
     expect(prisma.wordRecording.count).toHaveBeenCalledWith({
       where: { userId: 'trainer-1', status: 'SETTLED' },
     });
@@ -1201,12 +1196,6 @@ describe('WalletController admin leaderboard', () => {
           { userId: 'user-b', _count: { _all: 4 } },
         ]),
       },
-      submission: {
-        groupBy: jest.fn().mockResolvedValue([
-          { userId: 'user-a', _count: { _all: 5 } },
-          { userId: null, _count: { _all: 99 } },
-        ]),
-      },
       wallet: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -1289,18 +1278,6 @@ describe('WalletController admin leaderboard', () => {
       topContributors: [
         {
           user: {
-            id: 'user-a',
-            firstName: 'Ada',
-            lastName: 'Tasks',
-            email: 'ada@example.com',
-            role: 'TRAINER',
-          },
-          totalTasks: 7,
-          wordRecordings: 2,
-          submissions: 5,
-        },
-        {
-          user: {
             id: 'user-b',
             firstName: 'Ben',
             lastName: 'Words',
@@ -1309,6 +1286,18 @@ describe('WalletController admin leaderboard', () => {
           },
           totalTasks: 4,
           wordRecordings: 4,
+          submissions: 0,
+        },
+        {
+          user: {
+            id: 'user-a',
+            firstName: 'Ada',
+            lastName: 'Tasks',
+            email: 'ada@example.com',
+            role: 'TRAINER',
+          },
+          totalTasks: 2,
+          wordRecordings: 2,
           submissions: 0,
         },
       ],
@@ -1335,9 +1324,6 @@ describe('WalletController paginated leaderboard', () => {
       },
       wordRecording: {
         groupBy: jest.fn().mockResolvedValue([{ userId: 'user-1', _count: { _all: 3 } }]),
-      },
-      submission: {
-        groupBy: jest.fn().mockResolvedValue([{ userId: 'user-2', _count: { _all: 5 } }]),
       },
       wallet: {
         findMany: jest.fn().mockResolvedValue([
@@ -1427,34 +1413,27 @@ describe('WalletController paginated leaderboard', () => {
     ]);
   });
 
-  it('paginates contributors ranked by word recordings + submissions', async () => {
+  it('paginates contributors ranked by word recordings', async () => {
     const { controller } = setup();
 
     const page1 = await controller.getAdminLeaderboardContributors({ page: 1, pageSize: 1 });
     expect(page1).toEqual({
       items: [
         {
-          user: expect.objectContaining({ id: 'user-2' }),
-          totalTasks: 5,
-          wordRecordings: 0,
-          submissions: 5,
+          user: expect.objectContaining({ id: 'user-1' }),
+          totalTasks: 3,
+          wordRecordings: 3,
+          submissions: 0,
         },
       ],
       page: 1,
       pageSize: 1,
-      total: 2,
-      totalPages: 2,
+      total: 1,
+      totalPages: 1,
     });
 
     const page2 = await controller.getAdminLeaderboardContributors({ page: 2, pageSize: 1 });
-    expect(page2.items).toEqual([
-      {
-        user: expect.objectContaining({ id: 'user-1' }),
-        totalTasks: 3,
-        wordRecordings: 3,
-        submissions: 0,
-      },
-    ]);
+    expect(page2.items).toEqual([]);
   });
 });
 

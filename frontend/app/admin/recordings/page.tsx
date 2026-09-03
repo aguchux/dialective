@@ -6,17 +6,11 @@ import { AdminShell } from '@/components/admin/AdminShell';
 import { RecordingDetailDialog } from '@/components/admin/RecordingAuditDialog';
 import {
   AdminRecordingSummary,
-  RecordingKind,
   RecordingSortField,
   useGetAdminAllRecordingsQuery,
   useGetAllDialectsQuery,
 } from '@/store/api';
 import { resolveDialectName } from '@/lib/dialect-name';
-
-const tabs: { key: RecordingKind; label: string }[] = [
-  { key: 'word', label: 'Word training' },
-  { key: 'submission', label: 'Sentence submissions' },
-];
 
 const secondaryButtonClass =
   'inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
@@ -109,7 +103,6 @@ function expressionCell(rec: AdminRecordingSummary): string {
 }
 
 export default function AdminRecordingsPage() {
-  const [kind, setKind] = useState<RecordingKind>('word');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [dialectTag, setDialectTag] = useState('');
@@ -123,10 +116,9 @@ export default function AdminRecordingsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [kind, debouncedSearch, dialectTag, status, reviewState, sortBy, sortDir]);
+  }, [debouncedSearch, dialectTag, status, reviewState, sortBy, sortDir]);
 
   const { data, isLoading, isFetching, isError, refetch } = useGetAdminAllRecordingsQuery({
-    kind,
     page,
     pageSize,
     sortBy,
@@ -161,23 +153,6 @@ export default function AdminRecordingsPage() {
           </p>
         </div>
 
-        <div className="flex gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setKind(tab.key)}
-              className={`rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
-                kind === tab.key
-                  ? 'bg-accent text-white'
-                  : 'bg-white text-ink hover:bg-surface-muted'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
         <section className="grid gap-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
           <div className="flex flex-wrap items-center gap-3 border-b border-line p-3">
             <div className="relative max-w-sm">
@@ -188,9 +163,7 @@ export default function AdminRecordingsPage() {
               <input
                 className="min-h-10 w-full rounded-lg border border-line bg-white py-2 pl-9 pr-3 text-sm text-ink dark:bg-surface-muted"
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={
-                  kind === 'word' ? 'Search word or text...' : 'Search prompt or transcript...'
-                }
+                placeholder="Search word or text..."
                 type="search"
                 value={search}
                 aria-label="Search recordings"
@@ -305,16 +278,14 @@ export default function AdminRecordingsPage() {
                         Trainer
                       </th>
                       <th className="px-5 py-3.5" scope="col">
-                        {kind === 'word' ? 'Word' : 'Prompt'}
+                        Word
                       </th>
                       <th className="px-5 py-3.5" scope="col">
-                        {kind === 'word' ? 'Typed answer' : 'Transcript'}
+                        Typed answer
                       </th>
-                      {kind === 'word' && (
-                        <th className="px-5 py-3.5" scope="col">
-                          ASR Transcript
-                        </th>
-                      )}
+                      <th className="px-5 py-3.5" scope="col">
+                        ASR Transcript
+                      </th>
                       <th className="px-5 py-3.5" scope="col">
                         Dialect
                       </th>
@@ -371,14 +342,12 @@ export default function AdminRecordingsPage() {
                         >
                           {rec.responseText || '—'}
                         </td>
-                        {kind === 'word' && (
-                          <td
-                            className="max-w-xs truncate px-5 py-3.5 text-muted"
-                            title={rec.asrTranscript ?? undefined}
-                          >
-                            {rec.asrTranscript || '—'}
-                          </td>
-                        )}
+                        <td
+                          className="max-w-xs truncate px-5 py-3.5 text-muted"
+                          title={rec.asrTranscript ?? undefined}
+                        >
+                          {rec.asrTranscript || '—'}
+                        </td>
                         <td className="px-5 py-3.5 text-muted">
                           {resolveDialectName(rec.dialectTag, dialects)}
                         </td>

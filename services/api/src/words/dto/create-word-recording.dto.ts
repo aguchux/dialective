@@ -1,24 +1,12 @@
-import {
-  ArrayMinSize,
-  IsArray,
-  IsIn,
-  IsInt,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  Max,
-  Min,
-} from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
 
 /**
- * Covers all three WordTrainingDirection submit shapes -- ENGLISH_TO_DIALECT/
- * DIALECT_TO_ENGLISH require responseText+bucket+audioKey+durationMs+
- * noiseRating; SENTENCE_REBUILD requires only submittedOrder, no audio.
- * WordsService.createRecording branches on the owned assignment's
- * direction and validates the direction-appropriate fields are present --
- * kept as one DTO/one POST /words/recordings endpoint rather than a
- * second route, since the assignment (not client-declared intent)
- * determines which shape is expected.
+ * Covers both WordTrainingDirection submit shapes -- ENGLISH_TO_DIALECT and
+ * DIALECT_TO_ENGLISH both require responseText+bucket+audioKey+durationMs+
+ * noiseRating (DIALECT_TO_ENGLISH's audio is the trainer's own fresh
+ * dialect redo recording of the source item -- see WordsService.
+ * insertRedoRecording). WordsService.createRecording branches on the owned
+ * assignment's direction to validate/score the response.
  */
 export class CreateWordRecordingDto {
   @IsString()
@@ -55,10 +43,4 @@ export class CreateWordRecordingDto {
   @IsOptional()
   @IsIn(['NOISY', 'FAIR', 'QUIET'])
   noiseRating?: 'NOISY' | 'FAIR' | 'QUIET';
-
-  @IsOptional()
-  @IsArray()
-  @ArrayMinSize(2)
-  @IsInt({ each: true })
-  submittedOrder?: number[];
 }

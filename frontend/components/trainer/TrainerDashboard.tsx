@@ -52,7 +52,6 @@ import {
 import { resolveDialectName, useDialectName } from '@/lib/dialect-name';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
 import { TestimonyDialog } from '@/components/trainer/TestimonyDialog';
-import { DictationDialog } from '@/components/trainer/DictationDialog';
 import { MarketView } from '@/components/p2p/MarketView';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationListPanel } from '@/components/notifications/NotificationListPanel';
@@ -113,7 +112,6 @@ import {
   WithdrawalNetwork,
   useGetEarningHistoryQuery,
   useGetEarningsChartQuery,
-  useGetMySubmissionsQuery,
   useGetMyWordRecordingsQuery,
   useGetTrainerDashboardQuery,
   useGetReferralInvitationsQuery,
@@ -173,7 +171,6 @@ export function TrainerDashboard() {
   const searchParams = useSearchParams();
   const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);
   const [trainingOpen, setTrainingOpen] = useState(false);
-  const [dictationOpen, setDictationOpen] = useState(false);
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
   const [requiredCoursesOpen, setRequiredCoursesOpen] = useState(false);
   const [midSessionRequiredCourses, setMidSessionRequiredCourses] = useState<
@@ -207,8 +204,8 @@ export function TrainerDashboard() {
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
 
   // Same "check client-side first, server is still the authoritative
-  // backstop" pattern as the balance check below -- WordsService.startSession/
-  // SubmissionsController.create both 403 on an incomplete required course
+  // backstop" pattern as the balance check below -- WordsService.
+  // startSession/nextAssignment still 403s on an incomplete required course
   // regardless, this just surfaces it before opening the recording dialog
   // instead of after.
   function handleStartTask() {
@@ -223,20 +220,6 @@ export function TrainerDashboard() {
     setTrainingOpen(true);
   }
 
-  // Same client-side-first, server-is-still-authoritative gating as
-  // handleStartTask above -- SubmissionsController.create 403s on an
-  // incomplete required course regardless.
-  function handleStartDictation() {
-    if (incompleteRequiredCourses && incompleteRequiredCourses.length > 0) {
-      setRequiredCoursesOpen(true);
-      return;
-    }
-    if (data && Number(data.balance) < Number(data.taskTokenCost)) {
-      setLowBalanceOpen(true);
-      return;
-    }
-    setDictationOpen(true);
-  }
 
   useEffect(() => {
     if (status !== 'authenticated') return;
@@ -333,14 +316,12 @@ export function TrainerDashboard() {
               email={session.user.email ?? ''}
               refreshing={isFetching}
               onStartTask={handleStartTask}
-              onStartDictation={handleStartDictation}
               onGiveTestimony={() => setTestimonyOpen(true)}
             />
           )}
         </main>
 
         <MobileNavigation activeView={activeView} />
-        <DictationDialog onOpenChange={setDictationOpen} open={dictationOpen} />
         <WordTrainingDialog
           onOpenChange={setTrainingOpen}
           open={trainingOpen}
@@ -672,7 +653,6 @@ function DashboardViewContent({
   email,
   refreshing,
   onStartTask,
-  onStartDictation,
   onGiveTestimony,
 }: {
   activeView: DashboardView;
@@ -681,18 +661,11 @@ function DashboardViewContent({
   email: string;
   refreshing: boolean;
   onStartTask: () => void;
-  onStartDictation: () => void;
   onGiveTestimony: () => void;
 }) {
   if (activeView === 'earnings') return <EarningsView data={data} refreshing={refreshing} />;
   if (activeView === 'training')
-    return (
-      <TrainingView
-        dialectTag={dialectTag}
-        onStartTask={onStartTask}
-        onStartDictation={onStartDictation}
-      />
-    );
+    return <TrainingView dialectTag={dialectTag} onStartTask={onStartTask} />;
   if (activeView === 'market') return <MarketView />;
   if (activeView === 'referrals') return <MarketingView data={data} email={email} />;
   if (activeView === 'campaigns') return <CampaignsView referralCode={data.referrals.code} />;
@@ -1272,11 +1245,9 @@ type TrainingTab = 'training' | 'tasks';
 function TrainingView({
   dialectTag,
   onStartTask,
-  onStartDictation,
 }: {
   dialectTag: string | null;
   onStartTask: () => void;
-  onStartDictation: () => void;
 }) {
   const [tab, setTab] = useState<TrainingTab>('tasks');
   const dialectName = useDialectName(dialectTag);
@@ -1333,8 +1304,8 @@ function TrainingView({
               </div>
               <h3 className="text-xl font-black">Word training</h3>
               <p className="mt-2 leading-relaxed text-muted">
-                Translate individual words, record their pronunciation, and validate dialect
-                submissions.
+                Translate individual words and sentences, record their pronunciation, and
+                validate dialect submissions.
               </p>
             </div>
             <div>
@@ -1350,39 +1321,6 @@ function TrainingView({
                 type="button"
               >
                 Start task <ArrowRight className="size-4" aria-hidden="true" />
-              </button>
-            </div>
-          </article>
-
-          <article className={`${cardClass} grid min-h-64 content-between gap-6 p-5 md:p-6`}>
-            <div>
-              <div className="mb-5 flex items-start justify-between gap-3">
-                <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent">
-                  <Headphones className="size-5" aria-hidden="true" />
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                  <span className="size-1.5 rounded-full bg-emerald-500" /> Available
-                </span>
-              </div>
-              <h3 className="text-xl font-black">Dictation</h3>
-              <p className="mt-2 leading-relaxed text-muted">
-                Read a prompt aloud, from a single word to a full sentence -- your recording is
-                transcribed and cross-checked with other trainers.
-              </p>
-            </div>
-            <div>
-              <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
-                <span className="rounded-md bg-surface-muted px-2 py-1">Reading + voice</span>
-                <span className="rounded-md bg-surface-muted px-2 py-1">
-                  {dialectName ?? 'Your dialect'}
-                </span>
-              </div>
-              <button
-                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto"
-                onClick={onStartDictation}
-                type="button"
-              >
-                Start dictation <ArrowRight className="size-4" aria-hidden="true" />
               </button>
             </div>
           </article>
@@ -1493,11 +1431,10 @@ function qualityBreakdownTitle(submission: TrainerSubmissionSummary): string | u
 
 /**
  * Two independent task pipelines feed My Tasks/My Scores: sentence-dictation
- * Submissions (consensus-scored) and word-training WordRecordings (scored
- * via exact-match / peer reverse-validation) -- see WordRecording's doc
- * comment in schema.prisma. Both share the same status/score/payout shape,
- * so they're merged into one client-side-paginated list here rather than
- * shown as two separate tables.
+ * Word-training WordRecordings (scored via exact-match / peer
+ * reverse-validation) -- see WordRecording's doc comment in schema.prisma.
+ * Thin wrapper kept so callers don't need to change shape now that
+ * dictation (Submission) no longer exists as a separate source to merge in.
  */
 const MERGE_FETCH_PAGE_SIZE = 50;
 
@@ -1507,20 +1444,16 @@ export function useMergedSubmissions(
   pageSize: number,
   pollingInterval?: number,
 ) {
-  const submissions = useGetMySubmissionsQuery(
-    { page: 1, pageSize: MERGE_FETCH_PAGE_SIZE, status },
-    { pollingInterval },
-  );
   const wordRecordings = useGetMyWordRecordingsQuery(
     { page: 1, pageSize: MERGE_FETCH_PAGE_SIZE, status },
     { pollingInterval },
   );
 
-  const isLoading = submissions.isLoading || wordRecordings.isLoading;
-  const isFetching = submissions.isFetching || wordRecordings.isFetching;
-  const isError = submissions.isError && wordRecordings.isError;
+  const isLoading = wordRecordings.isLoading;
+  const isFetching = wordRecordings.isFetching;
+  const isError = wordRecordings.isError;
 
-  const merged = [...(submissions.data?.items ?? []), ...(wordRecordings.data?.items ?? [])].sort(
+  const merged = [...(wordRecordings.data?.items ?? [])].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
   const total = merged.length;
@@ -1528,7 +1461,6 @@ export function useMergedSubmissions(
   const items = merged.slice((page - 1) * pageSize, page * pageSize);
 
   function refetch() {
-    void submissions.refetch();
     void wordRecordings.refetch();
   }
 
@@ -1552,8 +1484,8 @@ function MyTasksView() {
         <div>
           <h3 className="font-black">Submitted tasks</h3>
           <p className="text-sm text-muted">
-            Consensus scoring completes once enough trainers submit the same prompt, typically
-            within {scoringSlaLabel}.
+            Reverse-validation scoring completes once a peer trainer validates your recording,
+            typically within {scoringSlaLabel}.
           </p>
         </div>
       </div>

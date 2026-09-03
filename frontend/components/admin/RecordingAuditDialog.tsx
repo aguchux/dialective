@@ -179,12 +179,11 @@ export function RecordingCard({
     const wantsClawback = status === 'INVALID' && clawback && Boolean(recording.payoutTokenAmount);
     try {
       if (wantsClawback && !otpRequestId) {
-        const result = await requestOtp({ kind: recording.kind, id: recording.id }).unwrap();
+        const result = await requestOtp({ id: recording.id }).unwrap();
         setOtpRequestId(result.otpRequestId);
         return;
       }
       await audit({
-        kind: recording.kind,
         id: recording.id,
         status,
         clawback: wantsClawback,
@@ -209,7 +208,7 @@ export function RecordingCard({
     <div className="grid w-full max-w-2xl gap-5">
       <div className="flex flex-wrap items-center justify-center gap-2">
         <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-extrabold uppercase tracking-wide">
-          {recording.kind === 'word' ? 'Word training' : 'Sentence submission'}
+          Word training
         </span>
         <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">
           {recording.status}

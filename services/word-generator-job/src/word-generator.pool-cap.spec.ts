@@ -2,11 +2,11 @@ import { WordGeneratorService } from './word-generator.service';
 
 describe('WordGeneratorService pool-cap gate', () => {
   function setup(
-    promptCounts: { dialectTag: string; _count: { _all: number } }[],
+    sentenceTranslationCounts: { dialectTag: string; _count: { _all: number } }[],
     wordTranslationCounts: { dialectTag: string; _count: { _all: number } }[],
   ) {
     const prisma: any = {
-      prompt: { groupBy: jest.fn().mockResolvedValue(promptCounts) },
+      sentenceTranslation: { groupBy: jest.fn().mockResolvedValue(sentenceTranslationCounts) },
       wordTranslation: { groupBy: jest.fn().mockResolvedValue(wordTranslationCounts) },
     };
     const service = new WordGeneratorService(prisma as never);
@@ -23,7 +23,7 @@ describe('WordGeneratorService pool-cap gate', () => {
     return (service as any).filterDialectsUnderPoolCap(dialectTags, maxPoolPerDialect);
   }
 
-  it('keeps a dialect whose combined prompt + word-translation pool is below the cap', async () => {
+  it('keeps a dialect whose combined sentence + word-translation pool is below the cap', async () => {
     const { service } = setup(
       [{ dialectTag: 'ig', _count: { _all: 5 } }],
       [{ dialectTag: 'ig', _count: { _all: 3 } }],
@@ -73,6 +73,6 @@ describe('WordGeneratorService pool-cap gate', () => {
     const result = await callFilter(service, [], 20);
 
     expect(result).toEqual([]);
-    expect(prisma.prompt.groupBy).not.toHaveBeenCalled();
+    expect(prisma.sentenceTranslation.groupBy).not.toHaveBeenCalled();
   });
 });

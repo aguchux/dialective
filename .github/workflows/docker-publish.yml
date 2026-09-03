@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - "services/api/**"
-      - "services/consensus-scorer/**"
       - "services/isvc-scorer/**"
       - "services/prompt-audio-service/**"
       - "services/settlement-job/**"
@@ -32,12 +31,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # All Node services (api, consensus-scorer, settlement-job) build
-          # from repo-root context: they depend on the @dialectiva/db
-          # workspace package (packages/db), whose generated Prisma client
-          # is produced from services/api's schema during each image's own
-          # build stage -- see each Dockerfile's comment. The Python workers
-          # and prompt-audio-service also need repo-root context to reach
+          # All Node services (api, settlement-job) build from repo-root
+          # context: they depend on the @dialectiva/db workspace package
+          # (packages/db), whose generated Prisma client is produced from
+          # services/api's schema during each image's own build stage --
+          # see each Dockerfile's comment. The Python workers and
+          # prompt-audio-service also need repo-root context to reach
           # models/*.yaml.
           - service: api
             context: .
@@ -47,9 +46,6 @@ jobs:
             context: .
             image: api-prisma
             target: prisma-release
-          - service: consensus-scorer
-            context: .
-            image: consensus-scorer
           - service: isvc-scorer
             context: .
             image: isvc-scorer

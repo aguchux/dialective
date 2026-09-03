@@ -1,4 +1,4 @@
-# AGENTS.md
+﻿# AGENTS.md
 
 This file gives coding agents (Claude Code, Cursor, etc.) the context needed to work safely and productively in this repository. It describes the project, repo layout, conventions, commands, and guardrails specific to the Dialectiva ASR pipeline.
 
@@ -105,9 +105,9 @@ Rough build order for turning this from docs into a working pilot. Treat phases 
 │   │       ├── mail/                      # MailService — Resend sender for reset/verify/magic-link emails
 │   │       ├── common/                    # global filter, middleware — CORS/prefix/pipes set in main.ts
 │   │       ├── storage/                   # StorageService — DO Spaces client + presign
-│   │       ├── submissions/               # POST /api/v1/submissions/{upload-url,create}, GET /api/v1/submissions/:id/result
-│   │       ├── prompts/                   # GET /api/v1/prompts/random — fixed text bank, test flow only (no Postgres prompts table yet)
-│   │       ├── asr-registry/              # AsrRegistryService -- loads models/asr-registry.yaml, routes submissions to asr-jobs-vosk/asr-jobs-whisper
+│   │       ├── words/                     # POST /api/v1/words/{sessions,recordings}, GET /api/v1/words/sessions/:id/next — all trainer-facing training/recording
+│   │       ├── sentences/                 # GET/DELETE /api/v1/sentences/admin — admin CRUD for the multi-word Sentence bank
+│   │       ├── asr-registry/              # AsrRegistryService -- loads models/asr-registry.yaml, routes word recordings to asr-jobs-vosk/asr-jobs-whisper
 │   │       ├── dataset-storage/           # admin CRUD for AudioRetentionRule -- rules only, never touches Spaces or Submission/WordRecording directly
 │   │       └── redis-streams/             # shared Redis Streams produce/consume + retry/DLQ
 │   ├── vosk-worker/                   # Python — ASR transcription worker for Vosk-covered languages (Redis Streams consumer, asr-jobs-vosk)
@@ -189,17 +189,9 @@ Rough build order for turning this from docs into a working pilot. Treat phases 
 - **Security headers**: `helmet()` is applied globally in `main.ts`. Don't remove it or hand-roll individual headers instead.
 - **Request logging**: `RequestLoggerMiddleware` (`common/middleware/`) logs method/path/status/duration for every request, applied globally via `AppModule.configure`. Keep new services following the same pattern if/when they gain an HTTP surface, rather than inventing a different logging approach per service.
 
-### ASR pipeline test flow (`frontend/app/page.tsx`, `prompts/`, `submissions/create` + `:id/result`)
-
-The landing page (`/`) exercises the real ASR pipeline end-to-end with a lightweight prompt bank: `GET /api/v1/prompts/random` returns a prompt from a fixed in-memory text bank (no TTS, no Postgres) → browser records via `MediaRecorder` → `POST /submissions/upload-url` + direct PUT to Spaces (existing flow) → `POST /submissions/create` publishes an `asr-jobs` message → `vosk-worker`/`whisper-worker` transcribes and, in addition to its `write_result` log line, `SET`s `result:<submissionId>` in Redis (24h TTL) → frontend polls `GET /submissions/:id/result` until it resolves.
-
-- **This is scaffolding, not the real submissions system.** The prompt bank and the Redis result key are explicit stand-ins for the not-yet-built Postgres `prompts`/`submissions` tables (Project Plan step 2) — once that schema exists, `prompts/` becomes a real DB-backed picker and the Redis result key goes away in favor of a submissions row the workers write to directly.
-- **`GET /submissions/:id/result` is `JwtAuthGuard`-protected and ownership-checked** (`userId: req.user.sub`) — this doc previously called the flow "no-auth"; that was only ever true for `GET /prompts/random`, not this route. **The transcribed text is deliberately never returned here** — `getResult` strips `transcript`/`word_confidences` from the raw Redis payload before responding, since only admins should see what ASR transcribed (see "Per-word ASR transcript detail" above; `admin-recordings.service.ts`'s `toSubmissionSummary` is the only trainer-facing-code-adjacent path that's allowed to expose it, and that route is `@Roles(Role.ADMIN)`-guarded). If you touch `getResult`, keep that strip in place — don't let a refactor accidentally pass the raw parsed payload straight through again.
-- `write_result` in `vosk-worker/worker.py`/`whisper-worker/worker.py` takes `redis_client` as its first argument specifically to also write this scratch key — if you touch that function, keep both the log line and the `SET` in sync with whatever `submissions.controller.ts`'s `getResult` expects to parse (and continues to strip).
-
 ### Word training (`frontend/components/trainer/WordTrainingDialog.tsx`, `words/`)
 
-The authenticated trainer dashboard runs word training in a full-screen session dialog. `POST /api/v1/words/sessions` records the trainer's acceptance of the current voice-data terms; `GET /words/sessions/:id/next` creates a server-owned assignment. English-to-dialect assignments come from the fixed `Word` seed list. When the admin's `reverseWordTrainingEnabled` setting is on, the API may instead issue dialect-to-English assignments sourced from another trainer's prior dialect recording. The browser requests a signed upload against the assignment, PUTs audio directly to Spaces, then submits spelling, duration, and noise classification to `POST /words/recordings`. Reverse answers are normalized and scored against the original English word. The legacy `/pipeline-test` and anonymous `WordLibraryFlow` frontend surfaces have been removed.
+The authenticated trainer dashboard runs all training -- single words and multi-word sentences alike -- in a full-screen session dialog. `POST /api/v1/words/sessions` records the trainer's acceptance of the current voice-data terms; `GET /words/sessions/:id/next` creates a server-owned assignment. Source content is always English text, read from either `Word` (single words) or `Sentence` (multi-word, tier-gated by lifetime recording count -- see `phrase-tiers.const.ts`); the trainer records their own dialect from their own fluency, never a machine translation. When the admin's `reverseWordTrainingEnabled` setting is on, the API may instead issue a `DIALECT_TO_ENGLISH` assignment: the trainer listens to another trainer's prior dialect recording, types the English they hear (reverse-validating that recording), and separately records their own fresh dialect take of the same item -- that redo recording is itself inserted as a new `PENDING` `ENGLISH_TO_DIALECT` recording, which is how the dialect pool keeps growing recording-by-recording. The browser requests a signed upload against the assignment, PUTs audio directly to Spaces, then submits spelling, duration, and noise classification to `POST /words/recordings`. There is no dictation/prompt-based flow and no consensus-scorer -- every trainer-facing recording flows through this one path. The legacy `/pipeline-test` and anonymous `WordLibraryFlow` frontend surfaces have been removed.
 
 ### Authentication
 
@@ -308,7 +300,7 @@ Vosk's model catalog is language-limited — it has no coverage for many languag
 - Checkpoints are **not** baked into the `whisper-worker` image — `cache_dir="/models"` (pointed at `whisper-model-repo-pvc`, mounted `readOnly: false`) downloads them lazily on first use per dialect, same lazy-download pattern as `prompt-audio-service`'s TTS checkpoints (not an `initContainer` bake like Vosk's single fixed model, since these download via `transformers`' own mechanism rather than a `wget`+`unzip` zip file).
 - `vosk-worker`'s own stream/consumer-group were renamed `asr-jobs` → `asr-jobs-vosk` and `asr-workers` → `asr-workers-vosk` when `whisper-worker` was added, to keep both engines' streams/groups clearly namespaced. If you're looking for the old `asr-jobs` name in an older branch/doc, this is why it's gone.
 - Both `vosk-worker-keda.yaml` and `whisper-worker-keda.yaml` use `lagCount`/`activationLagCount: "0"`, not `pendingEntriesCount` — see "Kubernetes manifest conventions" below for why.
-- Adding a fourth language: add an `asr-registry.yaml` entry (`engine: whisper`, a `checkpoint`), and a matching prompt bank entry in `services/api/src/prompts/prompts.controller.ts` (sourced from a real phrasebook, never invented — a wrong prompt actively misleads someone learning the language) and `frontend/app/page.tsx`'s `DIALECT_OPTIONS`. No new worker/stream/Deployment needed unless the language needs a third engine Whisper/Vosk can't cover either.
+- Adding a fourth language: add an `asr-registry.yaml` entry (`engine: whisper`, a `checkpoint`), and seed real Word/Sentence content for the new dialect (sourced from a real phrasebook, never invented — a wrong entry actively misleads someone learning the language) via word-generator-job or `services/api/prisma/seed.ts`. No new worker/stream/Deployment needed unless the language needs a third engine Whisper/Vosk can't cover either.
 
 ### WAXAL dataset benchmarking (`datasets/waxal/`, `tools/asr-benchmark/`)
 
@@ -328,10 +320,10 @@ Entirely **offline** tooling for benchmarking WAXAL (`google/WaxalNLP` on Huggin
 - **`tools/asr-benchmark/` duplicates, rather than imports, the small transcription pieces** it needs from `vosk-worker`/`whisper-worker` (registry resolution, `transcode_to_wav`, the Vosk `KaldiRecognizer` call, the Whisper `transformers.pipeline` call) — this repo has no cross-service Python package mechanism (confirmed by `spaces.py` being duplicated byte-for-byte across all three Python services already), so duplicating a handful of small functions here follows the existing convention rather than inventing a new one. It reads `models/asr-registry.yaml`/`models/registry.yaml` (the same registries production uses) since it's deliberately testing the same engines/checkpoints, not a WAXAL-specific model list.
 - Raw/downloaded audio and generated manifests under `datasets/waxal/data/` are git-ignored (directory-scoped `.gitignore`, matching the `k8s/overlays/prod/secrets/*` scoped-ignore pattern) — never committed, same as Vosk model weights or Whisper checkpoints. `reports/waxal/*.json`/`summary.md` ARE committed (small text, useful historical record).
 
-### Per-word ASR transcript detail (`Submission.asrWordDetail`)
+### Per-word ASR transcript detail (`WordRecording.asrWordDetail`)
 
-- `Submission.asrWordDetail` is a `Json?` column holding `[{word, start, end, conf}]` (seconds, `conf` in `[0,1]` or `null`). **Vosk** already computes this per transcription (`KaldiRecognizer.FinalResult()`'s `result` array) — it's now persisted as-is rather than being collapsed to `asrConfidence`'s mean and discarded. **Whisper** has no per-word confidence signal at all (HF ASR pipelines are architecturally incapable of it — only Vosk's lattice decoder produces one); `whisper-worker` requests `return_timestamps="word"` from the `transformers` pipeline and maps the resulting `chunks` to the same `{word, start, end, conf: null}` shape, so both engines produce a uniform structure with `conf` simply absent for Whisper-origin words.
-- Exposed read-only through `admin-recordings.service.ts`'s `toSubmissionSummary` (never for `WordRecording` — it has no ASR step). Rendered in `RecordingAuditDialog.tsx`'s `TranscriptWords` component: words are color-banded by confidence when `conf` is present, and highlighted in sync with the existing `<audio>` element's `timeupdate` event regardless of engine. Falls back to the plain transcript string when `asrWordDetail` is null/empty (rejected rows, or any row whose audio has since been purged — see "Audio retention" below).
+- `WordRecording.asrWordDetail` is a `Json?` column holding `[{word, start, end, conf}]` (seconds, `conf` in `[0,1]` or `null`). **Vosk** already computes this per transcription (`KaldiRecognizer.FinalResult()`'s `result` array) — it's now persisted as-is rather than being collapsed to `asrConfidence`'s mean and discarded. **Whisper** has no per-word confidence signal at all (HF ASR pipelines are architecturally incapable of it — only Vosk's lattice decoder produces one); `whisper-worker` requests `return_timestamps="word"` from the `transformers` pipeline and maps the resulting `chunks` to the same `{word, start, end, conf: null}` shape, so both engines produce a uniform structure with `conf` simply absent for Whisper-origin words.
+- Exposed read-only through `admin-recordings.service.ts`'s `toWordRecordingSummary`. Rendered in `RecordingAuditDialog.tsx`'s `TranscriptWords` component: words are color-banded by confidence when `conf` is present, and highlighted in sync with the existing `<audio>` element's `timeupdate` event regardless of engine. Falls back to the plain transcript string when `asrWordDetail` is null/empty (rejected rows, or any row whose audio has since been purged — see "Audio retention" below).
 - If you touch either worker's transcription call, keep the persisted shape (`word`/`start`/`end`/`conf` keys, seconds not ms) in sync between `vosk-worker` and `whisper-worker` — the frontend renders both through one code path that assumes a uniform shape.
 
 ### Audio retention (Dataset & Storage)
@@ -367,15 +359,10 @@ Raw submission/word-recording audio in Spaces had no deletion mechanism and was 
 
 - **DigitalOcean Spaces** is the object storage backend, addressed via its S3-compatible API — `@aws-sdk/client-s3` (NestJS, with `@aws-sdk/s3-request-presigner` for presigning) and `boto3` (Python) both work against it unmodified by pointing `endpoint`/`endpoint_url` at the Spaces region host (`SPACES_ENDPOINT`, e.g. `https://nyc3.digitaloceanspaces.com`). Don't introduce a separate DO-specific SDK — there isn't a meaningful one, and the S3 API surface is sufficient.
 - Two buckets, kept separate because their access patterns differ:
-  - `dialectiva-submissions` — trainer-uploaded audio. **Private.** Trainer clients never get direct write credentials; `api`'s `StorageService`/`SubmissionsController` (`POST /api/v1/submissions/upload-url`) issues short-lived presigned PUT URLs (15 min expiry) scoped to a single `{dialect_tag}/{prompt_id}/{submission_id}.{ext}` key, so raw audio bytes go straight from the trainer's device to Spaces — never proxied through `api`. `vosk-worker` reads these objects using its own `spaces-creds`, not a public URL.
+  - `dialectiva-word-recordings` — trainer-uploaded audio. **Private.** Trainer clients never get direct write credentials; `api`'s `StorageService`/`WordsController` (`POST /api/v1/words/recordings/upload-url`) issues short-lived presigned PUT URLs (15 min expiry) scoped to a single `{dialect_tag}/{direction}/{assignment_id}.{ext}` key, so raw audio bytes go straight from the trainer's device to Spaces — never proxied through `api`. `vosk-worker` reads these objects using its own `spaces-creds`, not a public URL.
   - `dialectiva-prompt-audio` — MMS-TTS output from `prompt-audio-service`. Written `public-read` since any trainer's client needs to play it back directly; put a CDN in front of it later if bandwidth cost becomes a concern, don't presign reads for this bucket.
-- Never accept a client-supplied object key or bucket name verbatim for a presigned PUT — `SubmissionsController` generates the key server-side (`randomUUID()` + a content-type allowlist) precisely so a trainer's client can't request an upload URL for an arbitrary path or overwrite another submission's object.
-- Content-type allowlist for submission uploads lives in `services/api/src/submissions/dto/create-upload-url.dto.ts` — extend it deliberately (e.g. adding a new audio codec), don't accept arbitrary `contentType` values.
-
-### Consensus scoring
-
-- Never compute a score for a submission before its prompt/dialect cluster has reached the configured quorum (`MIN_QUORUM`, defined in `consensus-scorer` config — check the actual config rather than assuming a number).
-- Flag statistical outliers for human QA review; do not auto-reject them. Dialect variation is expected and must not be penalized as if it were fraud (design doc §7).
+- Never accept a client-supplied object key or bucket name verbatim for a presigned PUT — `WordsService` generates the key server-side (`randomUUID()` + a content-type allowlist) precisely so a trainer's client can't request an upload URL for an arbitrary path or overwrite another recording's object.
+- Content-type allowlist for word-recording uploads lives in `services/api/src/words/dto/create-word-recording-upload-url.dto.ts` — extend it deliberately (e.g. adding a new audio codec), don't accept arbitrary `contentType` values.
 
 ### Redis Streams reliability (retry/DLQ)
 
@@ -383,14 +370,14 @@ Redis Streams doesn't provide dead-lettering out of the box, so every consumer g
 
 - **Stuck pending-entry reclaim:** periodically run `XAUTOCLAIM` (or `XPENDING` + `XCLAIM` on older Redis) against each stream's consumer group to reclaim entries idle longer than a threshold (e.g., 5 minutes) — these are jobs a worker picked up (`XREADGROUP`) but never acked, likely due to a crash or hang.
 - **Attempt tracking:** track delivery count per message (Redis Streams' `XPENDING` exposes a delivery counter; alternatively stamp an `attempt` field on the message payload and increment on reclaim).
-- **Dead-lettering:** after N failed attempts (e.g., 3), stop retrying — `XADD` the message to a companion dead stream (`asr-jobs-vosk-dead`, `asr-jobs-whisper-dead`, `consensus-jobs-dead`) with the failure reason, then `XACK` the original entry off the live stream so it stops being reclaimed.
-- **Applies per stream:** `asr-jobs-vosk` (consumed by `vosk-worker`), `asr-jobs-whisper` (consumed by `whisper-worker`), `consensus-jobs` (consumed by `consensus-scorer`), and `prompt-audio-jobs` (consumed by `prompt-audio-service`) all need this — implement it as one shared piece of logic (a small reclaim/DLQ loop) reused across consumer groups rather than duplicated per service.
+- **Dead-lettering:** after N failed attempts (e.g., 3), stop retrying — `XADD` the message to a companion dead stream (`asr-jobs-vosk-dead`, `asr-jobs-whisper-dead`) with the failure reason, then `XACK` the original entry off the live stream so it stops being reclaimed.
+- **Applies per stream:** `asr-jobs-vosk` (consumed by `vosk-worker`), `asr-jobs-whisper` (consumed by `whisper-worker`), and `prompt-audio-jobs` (consumed by `prompt-audio-service`) all need this — implement it as one shared piece of logic (a small reclaim/DLQ loop) reused across consumer groups rather than duplicated per service.
 - **Observability:** dead-stream depth should be an alertable metric — a growing `-dead` stream means jobs are silently failing and needs human attention, not just automatic retry forever.
 
 ### Database access
 
-- **PostgreSQL** is the single source of truth for users/auth, submissions, scores, wallet ledger, and task history.
-- **`api` is the sole owner of Postgres access across the entire repo** — via **Prisma** (`services/api/prisma/schema.prisma`). `consensus-scorer` and `settlement-job` currently have their own `DATABASE_URL`/`connection_string` wiring from earlier scaffolding, but as the schema grows, prefer routing DB reads/writes through `api` (or a shared Prisma client package) rather than each service maintaining its own schema/migrations against the same database — see "Authentication" above for why this matters (one source of truth for identity, not per-service drift).
+- **PostgreSQL** is the single source of truth for users/auth, word/sentence recordings, scores, wallet ledger, and task history.
+- **`api` is the sole owner of Postgres access across the entire repo** — via **Prisma** (`services/api/prisma/schema.prisma`). `settlement-job` and the other worker services consume the generated `@dialectiva/db` Prisma client rather than owning their own schema/migrations against the same database — see "Authentication" above for why this matters (one source of truth for identity, not per-service drift).
 - Migrations go through `prisma migrate` (`npm run prisma:migrate` locally, `npm run prisma:deploy` in the release Job) — never rely on `prisma db push`/auto-sync outside local dev. API replicas only start the application; they never migrate or seed the database.
 - **Prisma 7 (driver-adapter architecture, not the old Rust engine):** `schema.prisma`'s `datasource` block has no `url` — the connection string lives in `services/api/prisma.config.ts` (`datasource.url: env('DATABASE_URL')`), read by the Prisma CLI (`generate`/`migrate`). `PrismaService` constructs `PrismaClient` explicitly with a `@prisma/adapter-pg` `PrismaPg` adapter (`new PrismaPg({ connectionString: process.env.DATABASE_URL })`) — the client no longer reads `DATABASE_URL` on its own at runtime. The generator (`provider = "prisma-client"`, not the old `prisma-client-js`) emits into `services/api/src/generated/prisma` (gitignored, `output` is mandatory in Prisma 7) — import from `../generated/prisma/client` (relative path), never `@prisma/client` directly; the old "magic" `node_modules` generation is gone. `prisma migrate dev`/`db push` no longer auto-run `prisma generate` — always run it explicitly (already wired into `npm run build` and the CI workflow).
 
@@ -476,18 +463,11 @@ curl -X POST localhost:3000/api/v1/auth/magic-link/request \
   -H 'Content-Type: application/json' \
   -d '{"email":"trainer@example.com"}'
 
-# Request a presigned submission upload URL (requires SPACES_* env vars set)
-curl -X POST localhost:3000/api/v1/submissions/upload-url \
-  -H 'Content-Type: application/json' \
-  -d '{"promptId":"p1","dialectTag":"en-us","contentType":"audio/wav"}'
-
-# No-auth pipeline test flow (see "No-auth pipeline test flow" above)
-curl localhost:3000/api/v1/prompts/random?dialectTag=en-us
-# ... PUT audio to uploadUrl from upload-url, then:
-curl -X POST localhost:3000/api/v1/submissions/create \
-  -H 'Content-Type: application/json' \
-  -d '{"submissionId":"...","promptId":"p1","dialectTag":"en-us","bucket":"...","audioKey":"..."}'
-curl localhost:3000/api/v1/submissions/<submissionId>/result
+# Request a presigned word-recording upload URL (requires SPACES_* env vars
+# set and an owned assignmentId from POST /words/sessions/:id/next)
+curl -X POST localhost:3000/api/v1/words/recordings/upload-url \
+  -H 'Content-Type: application/json' -H 'Authorization: Bearer <accessToken>' \
+  -d '{"assignmentId":"a1","contentType":"audio/wav"}'
 
 # Health check stays unprefixed (k8s probes hit this)
 curl localhost:3000/health

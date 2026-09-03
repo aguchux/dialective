@@ -1,7 +1,7 @@
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
-export class ListPromptsAdminDto {
+export class ListSentencesAdminDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -14,10 +14,6 @@ export class ListPromptsAdminDto {
   @Min(1)
   @Max(100)
   pageSize = 20;
-
-  @IsOptional()
-  @IsString()
-  dialectTag?: string;
 
   @IsOptional()
   @IsString()

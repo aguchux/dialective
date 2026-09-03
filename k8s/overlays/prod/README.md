@@ -36,20 +36,19 @@ cd k8s/overlays/prod/configs
 cp api.env.example api.env
 cp vosk-worker.env.example vosk-worker.env
 cp prompt-audio-service.env.example prompt-audio-service.env
-cp consensus-scorer.env.example consensus-scorer.env
 cp isvc-scorer.env.example isvc-scorer.env
 cp postgres.env.example postgres.env
 cp pgadmin.env.example pgadmin.env
 cd -
 ```
 
-`kustomization.yaml`'s `configMapGenerator` reads these into six ConfigMaps — `api-config`, `vosk-worker-config`, `prompt-audio-service-config`, `consensus-scorer-config`, `postgres-config`, `pgadmin-config` — consumed via `configMapKeyRef` the same way Secrets are consumed via `secretKeyRef` (including the same content-hash-suffix-forces-rolling-restart behavior). `postgres-config`'s `postgres_db` **must match** `secrets/postgres.env`'s `username`/`connection_string` database name — Postgres creates the DB/user named by `POSTGRES_DB`/`POSTGRES_USER` on first boot, so a mismatch means `api` can never connect.
+`kustomization.yaml`'s `configMapGenerator` reads these into ConfigMaps — `api-config`, `vosk-worker-config`, `prompt-audio-service-config`, `isvc-scorer-config`, `postgres-config`, `pgadmin-config` — consumed via `configMapKeyRef` the same way Secrets are consumed via `secretKeyRef` (including the same content-hash-suffix-forces-rolling-restart behavior). `postgres-config`'s `postgres_db` **must match** `secrets/postgres.env`'s `username`/`connection_string` database name — Postgres creates the DB/user named by `POSTGRES_DB`/`POSTGRES_USER` on first boot, so a mismatch means `api` can never connect.
 
 ## DigitalOcean Spaces buckets
 
 Two buckets, created out-of-band (these manifests don't provision them):
 
-- `dialectiva-submissions` — trainer-uploaded audio. Private; `api` issues presigned PUT URLs (`POST /submissions/upload-url`) so trainer clients upload directly without routing bytes through `api`. `vosk-worker` reads via its `spaces-creds` credentials, not a public URL.
+- `dialectiva-word-recordings` — trainer-uploaded audio. Private; `api` issues presigned PUT URLs (`POST /words/recordings/upload-url`) so trainer clients upload directly without routing bytes through `api`. `vosk-worker` reads via its `spaces-creds` credentials, not a public URL.
 - `dialectiva-prompt-audio` — MMS-TTS-generated prompt audio, written by `prompt-audio-service`. Objects are written `public-read` since trainer clients play this audio directly; front it with Spaces CDN if bandwidth costs matter later.
 - `dialectiva-blog-media` — admin-uploaded blog images and videos. The API signs `public-read` PUTs because published pages embed these objects directly.
 

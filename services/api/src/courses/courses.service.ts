@@ -353,12 +353,12 @@ export class CoursesService {
   /**
    * Compliance gate: every PUBLISHED course with required=true that this
    * trainer hasn't completed yet (no CourseProgress row, or one with
-   * completedAt: null). Called from both WordsService.startSession and
-   * SubmissionsController.create before any task is handed out or accepted
-   * -- a trainer who becomes non-compliant mid-session (admin marks a new
-   * course required while they're already training) is still blocked on
-   * their *next* task, since this re-checks on every call rather than once
-   * per session. Ordered by createdAt so the oldest still-outstanding
+   * completedAt: null). Called from WordsService.startSession/
+   * nextAssignment before any task is handed out or accepted -- a trainer
+   * who becomes non-compliant mid-session (admin marks a new course
+   * required while they're already training) is still blocked on their
+   * *next* task, since this re-checks on every call rather than once per
+   * session. Ordered by createdAt so the oldest still-outstanding
    * requirement surfaces first, matching how it was likely assigned.
    */
   async getIncompleteRequiredCourses(userId: string) {

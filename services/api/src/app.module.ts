@@ -6,9 +6,8 @@ import { HealthController } from './health/health.controller';
 import { RedisStreamsModule } from './redis-streams/redis-streams.module';
 import { RabbitMqModule } from './rabbitmq/rabbitmq.module';
 import { AsrRegistryModule } from './asr-registry/asr-registry.module';
-import { SubmissionsModule } from './submissions/submissions.module';
-import { PromptsModule } from './prompts/prompts.module';
 import { WordsModule } from './words/words.module';
+import { SentencesModule } from './sentences/sentences.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
 import { MarketingModule } from './marketing/marketing.module';
 import { WalletModule } from './wallet/wallet.module';
@@ -44,9 +43,8 @@ import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.modul
     RedisStreamsModule,
     RabbitMqModule,
     AsrRegistryModule,
-    SubmissionsModule,
-    PromptsModule,
     WordsModule,
+    SentencesModule,
     TestimonialsModule,
     MarketingModule,
     WalletModule,

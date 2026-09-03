@@ -1512,8 +1512,7 @@ export interface PlatformSettingsInput {
   landingShowPayout?: boolean;
 }
 
-export type WordTrainingDirection =
-  'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD' | 'PHRASE_TO_DIALECT';
+export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';
 export type RecordingNoiseRating = 'NOISY' | 'FAIR' | 'QUIET';
 
 export interface WordTrainingSession {
@@ -1534,7 +1533,6 @@ export interface WordTrainingAssignment {
   responseLanguage: string;
   dialectTag: string | null;
   dialectKeyboardLayout: string | null;
-  fragments: { text: string; position: number }[] | null;
   phraseTierJustReached: boolean;
 }
 
@@ -1548,31 +1546,6 @@ export interface WordRecordingUpload {
   key: string;
   bucket: string;
   expiresInSeconds: number;
-}
-
-export interface NextPrompt {
-  promptId: string;
-  dialectTag: string;
-  text: string;
-  wordCount: number;
-  /** Per-prompt recording countdown (perWordSeconds x wordCount, clamped) -- the same value the server passes to quality-gate-worker's prefilter, see PromptsController.getNext. */
-  maxRecordingSeconds: number;
-}
-
-export interface SubmissionUploadUrl {
-  submissionId: string;
-  uploadUrl: string;
-  key: string;
-  bucket: string;
-  expiresInSeconds: number;
-  maxRecordingSeconds: number;
-}
-
-/** GET /submissions/:id/result -- transcript/word_confidences are deliberately stripped server-side before this reaches a trainer (see submissions.controller.ts getResult). */
-export interface SubmissionResult {
-  status: 'ok' | 'rejected' | 'unsupported_dialect';
-  reason?: string;
-  dialect_tag?: string;
 }
 
 export interface SubscriptionPool {
@@ -1642,7 +1615,7 @@ export interface SubmissionsPage {
 }
 
 export type AdminAuditStatus = 'VALID' | 'INVALID';
-export type RecordingKind = 'word' | 'submission';
+export type RecordingKind = 'word';
 
 export interface AdminRecordingTrainer {
   id: string;
@@ -1678,7 +1651,7 @@ export interface AdminRecordingSummary {
   id: string;
   kind: RecordingKind;
   trainer?: AdminRecordingTrainer | null;
-  direction: 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | 'SENTENCE_REBUILD' | 'PHRASE_TO_DIALECT' | null;
+  direction: 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | null;
   promptText: string;
   responseText: string | null;
   asrTranscript: string | null;
@@ -1730,7 +1703,6 @@ export type RecordingSortField =
   'createdAt' | 'score' | 'compositeScore' | 'rawScore' | 'payoutTokenAmount';
 
 export interface ListAllRecordingsParams {
-  kind: RecordingKind;
   page: number;
   pageSize: number;
   sortBy?: RecordingSortField;
@@ -1824,24 +1796,23 @@ export interface AdminWordsPage {
   totalPages: number;
 }
 
-export interface AdminPromptTranslation {
+export interface AdminSentenceTranslation {
   id: string;
   dialectTag: string;
   text: string;
   createdAt: string;
 }
 
-export interface AdminPrompt {
+export interface AdminSentence {
   id: string;
-  dialectTag: string;
   text: string;
-  active: boolean;
+  wordCount: number;
   createdAt: string;
-  translations: AdminPromptTranslation[];
+  translations: AdminSentenceTranslation[];
 }
 
-export interface AdminPromptsPage {
-  items: AdminPrompt[];
+export interface AdminSentencesPage {
+  items: AdminSentence[];
   page: number;
   pageSize: number;
   total: number;
@@ -2107,7 +2078,7 @@ export const dialectivaApi = createApi({
     'Pools',
     'Submissions',
     'AdminWords',
-    'AdminPrompts',
+    'AdminSentences',
     'AdminRecordings',
     'AudioRetentionRules',
     'DataAccessLeads',
@@ -2304,41 +2275,6 @@ export const dialectivaApi = createApi({
       query: ({ range }) => ({ url: '/wallet/earnings-chart', params: { range } }),
       providesTags: ['Wallet'],
     }),
-    getNextPrompt: builder.query<NextPrompt, void>({
-      query: () => '/prompts/next',
-    }),
-    createSubmissionUploadUrl: builder.mutation<
-      SubmissionUploadUrl,
-      { promptId: string; dialectTag: string; contentType: string }
-    >({
-      query: (body) => ({ url: '/submissions/upload-url', method: 'POST', body }),
-    }),
-    createSubmission: builder.mutation<
-      { submissionId: string; status: string; tokensSpent: string },
-      {
-        submissionId: string;
-        promptId: string;
-        dialectTag: string;
-        bucket: string;
-        audioKey: string;
-      }
-    >({
-      query: (body) => ({ url: '/submissions/create', method: 'POST', body }),
-      invalidatesTags: ['Wallet', 'Submissions'],
-    }),
-    getSubmissionResult: builder.query<SubmissionResult, string>({
-      query: (submissionId) => `/submissions/${submissionId}/result`,
-    }),
-    getMySubmissions: builder.query<
-      SubmissionsPage,
-      { page: number; pageSize: number; status?: TrainerSubmissionSummary['status'][] }
-    >({
-      query: ({ page, pageSize, status }) => ({
-        url: '/submissions/mine',
-        params: { page, pageSize, status: status?.join(',') },
-      }),
-      providesTags: ['Submissions'],
-    }),
     getMyWordRecordings: builder.query<
       SubmissionsPage,
       { page: number; pageSize: number; status?: TrainerSubmissionSummary['status'][] }
@@ -2503,7 +2439,6 @@ export const dialectivaApi = createApi({
         audioKey?: string;
         durationMs?: number;
         noiseRating?: RecordingNoiseRating;
-        submittedOrder?: number[];
       }
     >({
       query: (body) => ({ url: '/words/recordings', method: 'POST', body }),
@@ -3410,40 +3345,34 @@ export const dialectivaApi = createApi({
       query: (params) => ({ url: '/admin-recordings', params }),
       providesTags: ['AdminRecordings'],
     }),
-    getUnsettled: builder.query<
-      UnsettledPage,
-      { kind?: RecordingKind; page: number; pageSize: number }
-    >({
+    getUnsettled: builder.query<UnsettledPage, { page: number; pageSize: number }>({
       query: (params) => ({ url: '/admin-settlement/unsettled', params }),
       providesTags: ['AdminSettlement'],
     }),
-    settleOne: builder.mutation<SettleResult, { kind: RecordingKind; id: string; force?: boolean }>(
-      {
-        query: ({ kind, id, force }) => ({
-          url: `/admin-settlement/${kind}/${id}/settle`,
-          method: 'POST',
-          body: { force },
-        }),
-        invalidatesTags: ['AdminSettlement', 'Wallet', 'Tokenomics'],
-      },
-    ),
-    settleAll: builder.mutation<SettleAllResult, { kind?: RecordingKind; force?: boolean }>({
+    settleOne: builder.mutation<SettleResult, { id: string; force?: boolean }>({
+      query: ({ id, force }) => ({
+        url: `/admin-settlement/${id}/settle`,
+        method: 'POST',
+        body: { force },
+      }),
+      invalidatesTags: ['AdminSettlement', 'Wallet', 'Tokenomics'],
+    }),
+    settleAll: builder.mutation<SettleAllResult, { force?: boolean }>({
       query: (body) => ({ url: '/admin-settlement/settle-all', method: 'POST', body }),
       invalidatesTags: ['AdminSettlement', 'Wallet', 'Tokenomics'],
     }),
     requestRecordingAuditClawbackOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
-      { kind: RecordingKind; id: string }
+      { id: string }
     >({
-      query: ({ kind, id }) => ({
-        url: `/admin-recordings/${kind}/${id}/audit/otp`,
+      query: ({ id }) => ({
+        url: `/admin-recordings/${id}/audit/otp`,
         method: 'POST',
       }),
     }),
     auditRecording: builder.mutation<
       AuditRecordingResult,
       {
-        kind: RecordingKind;
         id: string;
         status: AdminAuditStatus;
         clawback?: boolean;
@@ -3452,8 +3381,8 @@ export const dialectivaApi = createApi({
         trainerId?: string;
       }
     >({
-      query: ({ kind, id, trainerId: _trainerId, ...body }) => ({
-        url: `/admin-recordings/${kind}/${id}/audit`,
+      query: ({ id, trainerId: _trainerId, ...body }) => ({
+        url: `/admin-recordings/${id}/audit`,
         method: 'POST',
         body,
       }),
@@ -3691,23 +3620,19 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/words/admin/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminWords'],
     }),
-    getAdminPrompts: builder.query<
-      AdminPromptsPage,
-      { page: number; pageSize: number; dialectTag?: string; search?: string }
+    getAdminSentences: builder.query<
+      AdminSentencesPage,
+      { page: number; pageSize: number; search?: string }
     >({
-      query: ({ page, pageSize, dialectTag, search }) => ({
-        url: '/prompts/admin',
-        params: { page, pageSize, dialectTag, search },
+      query: ({ page, pageSize, search }) => ({
+        url: '/sentences/admin',
+        params: { page, pageSize, search },
       }),
-      providesTags: ['AdminPrompts'],
+      providesTags: ['AdminSentences'],
     }),
-    updatePrompt: builder.mutation<AdminPrompt, { id: string; active: boolean }>({
-      query: ({ id, active }) => ({
-        url: `/prompts/admin/${id}`,
-        method: 'PATCH',
-        body: { active },
-      }),
-      invalidatesTags: ['AdminPrompts'],
+    deleteSentence: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/sentences/admin/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['AdminSentences'],
     }),
     getAdminBlogPosts: builder.query<BlogPost[], void>({
       query: () => '/blog/admin/posts',
@@ -3834,12 +3759,7 @@ export const {
   useGetEarningHistoryQuery,
   useGetWalletActivityQuery,
   useGetEarningsChartQuery,
-  useGetMySubmissionsQuery,
   useGetMyWordRecordingsQuery,
-  useLazyGetNextPromptQuery,
-  useCreateSubmissionUploadUrlMutation,
-  useCreateSubmissionMutation,
-  useLazyGetSubmissionResultQuery,
   useStartWordTrainingSessionMutation,
   useLazyGetNextWordTrainingAssignmentQuery,
   useLazyGetSpellingSuggestionsQuery,
@@ -4029,8 +3949,8 @@ export const {
   useGetPublicSubscriptionPlansQuery,
   useGetAdminWordsQuery,
   useDeleteWordMutation,
-  useGetAdminPromptsQuery,
-  useUpdatePromptMutation,
+  useGetAdminSentencesQuery,
+  useDeleteSentenceMutation,
   useGetAdminBlogPostsQuery,
   useGetAdminBlogPostQuery,
   useCreateBlogPostMutation,

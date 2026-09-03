@@ -40,16 +40,16 @@ const ENGLISH_FUNCTION_WORDS = new Set([
 ]);
 
 /**
- * Generates new English words/phrases via an admin-configured LLM fallback
- * chain, translates each into every dialect currently opted into generation
- * (Country.llmGenerationEnabled AND Dialect.llmGenerationEnabled both true),
- * and inserts everything -- deduped, wordlist-filtered -- into the existing
- * Word/Prompt tables so it's immediately available to trainers through the
- * existing random-pick flows (WordsService's assignment picker, Prompts
- * Controller.getRandom) with no further wiring. Runs as a scheduled
- * CronJob, same cadence as settlement-job (see AGENTS.md "Database access"
- * -- this service, like settlement-job, only ever consumes the
- * already-generated @dialectiva/db client; api owns the schema).
+ * Generates new English words/sentences via an admin-configured LLM
+ * fallback chain, translates each into every dialect currently opted into
+ * generation (Country.llmGenerationEnabled AND Dialect.llmGenerationEnabled
+ * both true), and inserts everything -- deduped, wordlist-filtered -- into
+ * the existing Word/Sentence tables so it's immediately available to
+ * trainers through WordsService's assignment picker with no further
+ * wiring. Runs as a scheduled CronJob, same cadence as settlement-job (see
+ * AGENTS.md "Database access" -- this service, like settlement-job, only
+ * ever consumes the already-generated @dialectiva/db client; api owns the
+ * schema).
  */
 @Injectable()
 export class WordGeneratorService {
@@ -147,7 +147,6 @@ export class WordGeneratorService {
     let translationsInserted = 0;
     let translationsSkipped = 0;
     let translationFailures = 0;
-    let promptWordFailures = 0;
 
     if (wordsPerItem === 1 && !settings.singleWordGenerationEnabled) {
       // Narrower than llmGenerationEnabled above -- stops ONLY the
@@ -224,30 +223,32 @@ export class WordGeneratorService {
         this.filterAndValidateComposed(composed);
       filteredCount += lengthFilteredCount;
 
-      const result = await this.insertComposedPrompts(accepted);
+      const result = await this.insertComposedSentences(accepted);
       inserted = result.inserted;
       skippedDuplicate = result.skippedDuplicate;
 
-      for (const promptRow of result.insertedRows) {
-        // Composed sentences are always English-only now -- trainers read/
-        // record the shared en-us Prompt+PromptWord set in their own
-        // dialect from their own fluency (see WordsService.
-        // pickSentenceRebuildSource), so no per-dialect translated Prompt
-        // copy is created here anymore.
-        promptWordFailures += await this.segmentAndLinkPromptWords(
-          promptRow.id,
-          promptRow.text,
-          'en-us',
-          providerOrder,
-          promptRow.wordSet,
-        );
+      // Composed sentences are always English-only -- trainers read/record
+      // the shared Sentence row in their own dialect from their own
+      // fluency (see WordsService.pickSentenceSource). SentenceTranslation
+      // rows are curation/reference only (mirrors WordTranslation), never a
+      // second trainer-facing Sentence row.
+      for (const sentenceRow of result.insertedRows) {
+        for (const dialectTag of dialectTags) {
+          const outcome = await this.translateAndLinkSentence(
+            sentenceRow.id,
+            sentenceRow.text,
+            dialectTag,
+            providerOrder,
+          );
+          if (outcome === 'failed') translationFailures += 1;
+        }
       }
     }
 
     this.logger.log(
       `Generation run complete: inserted=${inserted} skippedDuplicate=${skippedDuplicate} ` +
         `translationsInserted=${translationsInserted} translationsSkippedDuplicate=${translationsSkipped} ` +
-        `translationFailures=${translationFailures} promptWordFailures=${promptWordFailures} ` +
+        `translationFailures=${translationFailures} ` +
         `backfilled=${backfilled} backfillSkippedDuplicate=${backfillSkippedDuplicate} backfillFailures=${backfillFailures}`,
     );
 
@@ -255,14 +256,14 @@ export class WordGeneratorService {
   }
 
   /**
-   * Composes AI phrases sized for each PHRASE_TIERS band (see
-   * phrase-tiers.const.ts) into the SAME Prompt/PromptWord tables the
-   * regular composition path above uses, tagged with phraseWordCountMin/Max
-   * so WordsService.pickPhraseSource can find them by tier -- see that
-   * service's PHRASE_TO_DIALECT escalation feature. Runs independently of
-   * the regular wordsPerItem-driven composition/generation above (own
-   * enable flag, own per-tier item budget) so the phrase pool can
-   * pre-populate on its own schedule.
+   * Composes AI sentences sized for each PHRASE_TIERS band (see
+   * phrase-tiers.const.ts) into the SAME Sentence table the regular
+   * composition path above uses -- wordCount alone is what
+   * WordsService.pickSentenceSource filters on, so no separate tier-range
+   * columns are needed the way Prompt.phraseWordCountMin/Max used to
+   * require. Runs independently of the regular wordsPerItem-driven
+   * composition/generation above (own enable flag, own per-tier item
+   * budget) so the sentence pool can pre-populate on its own schedule.
    */
   private async runPhraseTierGeneration(): Promise<void> {
     const settings = await this.getSettings();
@@ -273,6 +274,7 @@ export class WordGeneratorService {
 
     const providerOrder = this.parseProviderOrder(settings.llmProviderOrder);
     const itemsPerTier = settings.phraseTierItemsPerTierPerRun;
+    const dialectTags = await this.getEnabledDialectTags();
 
     let totalInserted = 0;
     let totalSkippedDuplicate = 0;
@@ -308,20 +310,16 @@ export class WordGeneratorService {
 
       const { accepted, filteredCount } = this.filterAndValidateComposed(composed);
       totalSkippedDuplicate += filteredCount;
-      const result = await this.insertComposedPrompts(accepted, tier);
+      const result = await this.insertComposedSentences(accepted);
       totalInserted += result.inserted;
       totalSkippedDuplicate += result.skippedDuplicate;
 
-      // Phrase-tier prompts are always English-only now -- see the identical
+      // Phrase-tier sentences are always English-only -- see the identical
       // comment on the main composition branch above.
-      for (const promptRow of result.insertedRows) {
-        await this.segmentAndLinkPromptWords(
-          promptRow.id,
-          promptRow.text,
-          'en-us',
-          providerOrder,
-          promptRow.wordSet,
-        );
+      for (const sentenceRow of result.insertedRows) {
+        for (const dialectTag of dialectTags) {
+          await this.translateAndLinkSentence(sentenceRow.id, sentenceRow.text, dialectTag, providerOrder);
+        }
       }
     }
 
@@ -332,12 +330,11 @@ export class WordGeneratorService {
 
   /**
    * One-off backfill for content that predates part-of-speech
-   * classification/PromptWord segmentation (the static seed list, and any
-   * generation run before this feature shipped). Idempotent -- only
-   * touches Word/WordTranslation rows with partOfSpeech IS NULL and
-   * Prompt rows with zero PromptWord rows for a given dialect, so it's
-   * safe to re-run if interrupted. Not scheduled; invoked manually via
-   * `npm run backfill` (see main.backfill.ts).
+   * classification (the static seed list, and any generation run before
+   * this feature shipped). Idempotent -- only touches Word/WordTranslation
+   * rows with partOfSpeech IS NULL, so it's safe to re-run if interrupted.
+   * Not scheduled; invoked manually via `npm run backfill` (see
+   * main.backfill.ts).
    */
   async backfillClassification(): Promise<void> {
     const settings = await this.getSettings();
@@ -402,32 +399,9 @@ export class WordGeneratorService {
       }
     }
 
-    const prompts = await this.prisma.prompt.findMany({
-      select: { id: true, text: true, dialectTag: true },
-    });
-    this.logger.log(
-      `Backfill: checking ${prompts.length} prompt(s) for missing PromptWord segmentation`,
-    );
-    let promptWordFailures = 0;
-    let promptsSegmented = 0;
-    for (const promptRow of prompts) {
-      const existingCount = await this.prisma.promptWord.count({
-        where: { promptId: promptRow.id, dialectTag: promptRow.dialectTag },
-      });
-      if (existingCount > 0) continue;
-      promptWordFailures += await this.segmentAndLinkPromptWords(
-        promptRow.id,
-        promptRow.text,
-        promptRow.dialectTag,
-        providerOrder,
-      );
-      promptsSegmented += 1;
-    }
-
     this.logger.log(
       `Backfill complete: wordsClassified=${wordsClassified}/${unclassifiedWords.length} ` +
         `translationsClassified=${translationsClassified}/${unclassifiedTranslations.length} ` +
-        `promptsSegmented=${promptsSegmented} promptWordFailures=${promptWordFailures} ` +
         `translationDialects=${dialectTags.length ? dialectTags.join(',') : 'none'}`,
     );
   }
@@ -478,12 +452,12 @@ export class WordGeneratorService {
     ].join(' ');
   }
 
-  private buildSegmentationPrompt(sentence: string, dialectName: string): string {
+  private buildSentenceTranslationPrompt(sourceText: string, dialectName: string): string {
     return [
-      `Break this ${dialectName} sentence into its individual words, in original order: "${sentence}"`,
-      'Preserve each word/token exactly as it appears in the sentence (including any inflection), just split it out -- do not translate, correct, or normalize spelling.',
-      `For each word, classify its part of speech as exactly one of: ${PART_OF_SPEECH_VALUES.join(', ')}.`,
-      'Respond with ONLY a JSON object of the exact shape {"items": [{"text": "...", "partOfSpeech": "..."}, ...]} in original sentence order. No other text.',
+      `Translate the following English sentence into ${dialectName}: "${sourceText}"`,
+      'Provide the natural, everyday equivalent a native speaker would actually say -- not a literal word-for-word translation.',
+      'Do not include profanity, slurs, sexual content, violence, or anything inappropriate for a general audience.',
+      'Respond with ONLY a JSON object of the exact shape {"items": [{"text": "<translation>", "partOfSpeech": "OTHER"}]} containing exactly one item. No other text.',
     ].join(' ');
   }
 
@@ -641,44 +615,35 @@ export class WordGeneratorService {
   }
 
   /**
-   * Inserts composed sentences as origin: WORD_COMPOSED Prompt rows,
-   * carrying each row's source word set through to the caller so
-   * segmentAndLinkPromptWords can set PromptWord.sourceWordId on the
-   * English fragments that came from a selected Word.
+   * Inserts composed sentences as Sentence rows -- always English, since
+   * trainers read/record them in their own dialect from their own fluency
+   * (see WordsService.pickSentenceSource). wordCount is stamped from the
+   * actual composed text so the tier-gated trainer-side picker can filter
+   * on it directly without re-splitting text at pick time.
    */
-  private async insertComposedPrompts(
+  private async insertComposedSentences(
     items: { text: string; wordSet: { id: string; text: string }[] }[],
-    phraseTier?: { wordCountMin: number; wordCountMax: number },
   ): Promise<{
     inserted: number;
     skippedDuplicate: number;
-    insertedRows: { id: string; text: string; wordSet: { id: string; text: string }[] }[];
+    insertedRows: { id: string; text: string }[];
   }> {
     if (items.length === 0) return { inserted: 0, skippedDuplicate: 0, insertedRows: [] };
 
-    const existing = await this.prisma.prompt.findMany({
-      where: { dialectTag: 'en-us' },
-      select: { text: true },
-    });
+    const existing = await this.prisma.sentence.findMany({ select: { text: true } });
     const existingSet = new Set(existing.map((row) => row.text.trim().toLowerCase()));
     const newItems = items.filter((item) => !existingSet.has(item.text.toLowerCase()));
 
-    const insertedRows: { id: string; text: string; wordSet: { id: string; text: string }[] }[] =
-      [];
+    const insertedRows: { id: string; text: string }[] = [];
     for (const item of newItems) {
-      const row = await this.prisma.prompt.create({
+      const row = await this.prisma.sentence.create({
         data: {
-          dialectTag: 'en-us',
           text: item.text,
-          active: true,
-          origin: 'WORD_COMPOSED',
-          ...(phraseTier
-            ? { phraseWordCountMin: phraseTier.wordCountMin, phraseWordCountMax: phraseTier.wordCountMax }
-            : {}),
+          wordCount: item.text.trim().split(/\s+/).length,
         },
         select: { id: true, text: true },
       });
-      insertedRows.push({ ...row, wordSet: item.wordSet });
+      insertedRows.push(row);
     }
 
     return {
@@ -730,125 +695,47 @@ export class WordGeneratorService {
   }
 
   /**
-   * Segments a Prompt's sentence (English source or a dialect translation)
-   * into its constituent words, in order, mapping each to (or creating) a
-   * classified Word + WordTranslation and inserting the corresponding
-   * PromptWord row -- this is the ordered fragment sequence the
-   * SENTENCE_REBUILD trainer exercise shuffles and asks the trainer to
-   * reassemble. Returns the number of items that failed to link (for
-   * logging only; a partial segmentation still leaves a usable, just
-   * shorter, exercise -- WordsService.nextAssignment requires >=2
-   * PromptWord rows to offer an assignment).
-   *
-   * `sourceWordSet`, when given (WORD_COMPOSED English pass only -- see
-   * insertComposedPrompts), lets each resulting fragment be matched back to
-   * the Word it was originally selected from (case-insensitive text match
-   * against the fragment as segmented, which may be inflected -- a
-   * same-stem match is good enough for audit purposes, an exact-form match
-   * isn't required). Fragments that don't match any selected word (e.g. an
-   * added function word like "the") simply leave sourceWordId null, same as
-   * every non-composed PromptWord already does.
+   * Mirrors translateAndLinkWord's shape but for Sentence -- curation/
+   * reference only (see SentenceTranslation's schema doc comment), never a
+   * second trainer-facing Sentence row the way Prompt used to work.
    */
-  private async segmentAndLinkPromptWords(
-    promptId: string,
-    sentence: string,
+  private async translateAndLinkSentence(
+    sentenceId: string,
+    sourceText: string,
     dialectTag: string,
     providerOrder: LlmProviderKey[],
-    sourceWordSet?: { id: string; text: string }[],
-  ): Promise<number> {
+  ): Promise<'inserted' | 'duplicate' | 'failed'> {
     try {
-      const existingCount = await this.prisma.promptWord.count({ where: { promptId, dialectTag } });
-      if (existingCount > 0) return 0;
+      const dialect = await this.prisma.dialect.findUnique({
+        where: { tag: dialectTag },
+        select: { name: true },
+      });
+      if (!dialect) return 'failed';
 
-      const dialect =
-        dialectTag === 'en-us'
-          ? { name: 'English' }
-          : await this.prisma.dialect.findUnique({
-              where: { tag: dialectTag },
-              select: { name: true },
-            });
-      if (!dialect) return 1;
+      const existing = await this.prisma.sentenceTranslation.findUnique({
+        where: { sentenceId_dialectTag: { sentenceId, dialectTag } },
+      });
+      if (existing) return 'duplicate';
 
-      const prompt = this.buildSegmentationPrompt(sentence, dialect.name);
+      const prompt = this.buildSentenceTranslationPrompt(sourceText, dialect.name);
       const { items } = await this.chain.generateStructured(
         prompt,
         providerOrder,
         parsePosItemArray,
       );
-      if (items.length < 2) return 1;
+      const item = items[0];
+      if (!item?.text || isFlaggedContent(item.text)) return 'failed';
 
-      const sourceWordByText = new Map(
-        (sourceWordSet ?? []).map((w) => [w.text.toLowerCase(), w.id] as const),
-      );
-
-      let failures = 0;
-      let position = 0;
-      for (const item of items) {
-        try {
-          const word = await this.findOrCreateWordForFragment(item, dialectTag);
-          if (!word) {
-            failures += 1;
-            continue;
-          }
-          await this.prisma.promptWord.create({
-            data: {
-              promptId,
-              dialectTag,
-              position,
-              wordId: word.id,
-              text: item.text,
-              sourceWordId: sourceWordByText.get(item.text.toLowerCase()) ?? null,
-            },
-          });
-          position += 1;
-        } catch {
-          failures += 1;
-        }
-      }
-      return failures;
+      await this.prisma.sentenceTranslation.create({
+        data: { sentenceId, dialectTag, text: item.text },
+      });
+      return 'inserted';
     } catch (err) {
       this.logger.warn(
-        `Segmentation failed prompt=${promptId} dialect=${dialectTag}: ${err instanceof Error ? err.message : String(err)}`,
+        `Translation failed sentence=${sentenceId} dialect=${dialectTag}: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return 1;
+      return 'failed';
     }
-  }
-
-  /**
-   * Resolves a segmented fragment back to a real, classified Word row.
-   * English fragments (dialectTag 'en-us') map directly onto Word.text;
-   * dialect fragments look up an existing WordTranslation with matching
-   * text first (case-insensitive). Unlinked dialect fragments are skipped;
-   * they must never become new English Word rows.
-   */
-  private async findOrCreateWordForFragment(
-    item: PosItem,
-    dialectTag: string,
-  ): Promise<{ id: string } | null> {
-    if (dialectTag === 'en-us') {
-      if (!this.isEnglishWord(item.text)) return null;
-      const existing = await this.prisma.word.findFirst({
-        where: { text: { equals: item.text, mode: 'insensitive' } },
-        select: { id: true },
-      });
-      if (existing) return existing;
-      const created = await this.prisma.word.create({
-        data: { text: item.text, partOfSpeech: item.partOfSpeech },
-        select: { id: true },
-      });
-      return created;
-    }
-
-    const existingTranslation = await this.prisma.wordTranslation.findFirst({
-      where: { dialectTag, text: { equals: item.text, mode: 'insensitive' } },
-      select: { wordId: true },
-    });
-    if (existingTranslation) return { id: existingTranslation.wordId };
-
-    // A dialect fragment that has no known English WordTranslation must not
-    // manufacture a Word row with dialect text. Word is the English source
-    // bank; leave this fragment unlinked until a real translation exists.
-    return null;
   }
 
   // --- Composition ---------------------------------------------------------
@@ -944,13 +831,12 @@ export class WordGeneratorService {
   }
 
   /**
-   * Consensus scoring and peer reverse-validation both need multiple
-   * trainers submitting the *same* prompt/word in a dialect -- growing the
-   * pool of distinct dialect content faster than that dialect's trainer
-   * base can cover means most of it never accumulates enough submissions to
-   * score (AGENTS.md/consensus-scorer's MIN_QUORUM). This throttles new
-   * translations per dialect once that dialect's existing pool (active
-   * Prompt translations + WordTranslation rows) already meets the
+   * Peer reverse-validation needs multiple trainers submitting the *same*
+   * sentence/word in a dialect -- growing the pool of distinct dialect
+   * content faster than that dialect's trainer base can cover means most of
+   * it never accumulates enough reverse-validations. This throttles new
+   * translations per dialect once that dialect's existing pool (translated
+   * SentenceTranslation + WordTranslation rows) already meets the
    * admin-configured ceiling, so the pool only grows again once an admin
    * raises the limit deliberately (e.g. as that dialect's trainer count
    * grows) rather than automatically every scheduled run.
@@ -964,15 +850,15 @@ export class WordGeneratorService {
     return dialectTags.filter((tag) => (poolSizeByDialect.get(tag) ?? 0) < maxPoolPerDialect);
   }
 
-  /** Combined active-Prompt + translated-Word count per dialect tag -- the same "how full is this dialect's pool" signal filterDialectsUnderPoolCap and the backfill step's remaining-headroom calculation both need. */
+  /** Combined translated-Sentence + translated-Word count per dialect tag -- the same "how full is this dialect's pool" signal filterDialectsUnderPoolCap and the backfill step's remaining-headroom calculation both need. */
   private async getPoolSizesByDialect(dialectTags: string[]): Promise<Map<string, number>> {
     const poolSizeByDialect = new Map<string, number>();
     if (dialectTags.length === 0) return poolSizeByDialect;
 
-    const [promptCounts, wordTranslationCounts] = await Promise.all([
-      this.prisma.prompt.groupBy({
+    const [sentenceTranslationCounts, wordTranslationCounts] = await Promise.all([
+      this.prisma.sentenceTranslation.groupBy({
         by: ['dialectTag'],
-        where: { dialectTag: { in: dialectTags }, active: true },
+        where: { dialectTag: { in: dialectTags } },
         _count: { _all: true },
       }),
       this.prisma.wordTranslation.groupBy({
@@ -982,7 +868,7 @@ export class WordGeneratorService {
       }),
     ]);
 
-    for (const row of promptCounts)
+    for (const row of sentenceTranslationCounts)
       poolSizeByDialect.set(
         row.dialectTag,
         (poolSizeByDialect.get(row.dialectTag) ?? 0) + row._count._all,
@@ -1007,11 +893,10 @@ export class WordGeneratorService {
    * uses, so content-filtering and dedup behave identically whether a
    * translation came from fresh generation or backfill.
    *
-   * Word-only (wordsPerItem === 1): composed sentences/phrases (Prompt rows)
-   * are always English-only now -- trainers read/record them in their own
-   * dialect from their own fluency (see WordsService.pickSentenceRebuildSource/
-   * pickPhraseSource), so there's no per-dialect Prompt translation to
-   * backfill anymore. wordsPerItem > 1 runs are a no-op here.
+   * Word-only (wordsPerItem === 1): composed sentences (Sentence rows) are
+   * translated inline as each one is inserted (see run()'s composition
+   * branch/translateAndLinkSentence), so there's no separate Sentence
+   * backfill needed here. wordsPerItem > 1 runs are a no-op here.
    */
   private async backfillDialectTranslations(
     dialectTag: string,
@@ -1048,6 +933,6 @@ export class WordGeneratorService {
     if (wordsPerItem === 1) {
       return this.prisma.word.count();
     }
-    return this.prisma.prompt.count({ where: { dialectTag: 'en-us' } });
+    return this.prisma.sentence.count();
   }
 }

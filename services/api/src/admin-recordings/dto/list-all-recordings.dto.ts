@@ -14,9 +14,6 @@ const SORT_FIELDS: RecordingSortField[] = [
 ];
 
 export class ListAllRecordingsDto {
-  @IsIn(['word', 'submission'])
-  kind!: 'word' | 'submission';
-
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -38,7 +35,7 @@ export class ListAllRecordingsDto {
   @IsIn(['asc', 'desc'])
   sortDir: 'asc' | 'desc' = 'desc';
 
-  // Matches word text (kind=word) or prompt text (both kinds), case-insensitive contains.
+  // Matches word or sentence text, case-insensitive contains.
   @IsOptional()
   @IsString()
   search?: string;

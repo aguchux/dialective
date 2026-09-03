@@ -13,8 +13,8 @@ import { CoursesService } from './courses.service';
   imports: [StorageModule, NotificationsModule, MailModule],
   controllers: [CoursesPublicController, CoursesProtectedController, CoursesAdminController],
   providers: [CoursesService],
-  // WordsModule/SubmissionsModule import this to call
-  // CoursesService.getIncompleteRequiredCourses as their training-task gate.
+  // WordsModule imports this to call
+  // CoursesService.getIncompleteRequiredCourses as its training-task gate.
   exports: [CoursesService],
 })
 export class CoursesModule {}

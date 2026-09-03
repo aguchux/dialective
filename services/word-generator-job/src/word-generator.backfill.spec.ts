@@ -4,7 +4,7 @@ describe('WordGeneratorService backfillDialectTranslations', () => {
   function setup() {
     const prisma: any = {
       word: { findMany: jest.fn().mockResolvedValue([]) },
-      prompt: {
+      sentence: {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn(),
@@ -14,12 +14,12 @@ describe('WordGeneratorService backfillDialectTranslations', () => {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({}),
       },
-      promptTranslation: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn() },
+      sentenceTranslation: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn() },
       $transaction: jest.fn(async (ops: unknown[]) => Promise.all(ops as Promise<unknown>[])),
     };
     const service = new WordGeneratorService(prisma as never);
     // Bypass the real LLM providers constructed in WordGeneratorService's
-    // constructor -- translateAndLinkWord/translateAndLinkPrompt only ever
+    // constructor -- translateAndLinkWord/translateAndLinkSentence only ever
     // call chain.generateStructured/chain.generate, so a minimal mock chain
     // is enough to unit-test backfill's row-selection logic in isolation.
     (service as any).chain = {
@@ -65,13 +65,13 @@ describe('WordGeneratorService backfillDialectTranslations', () => {
     });
   });
 
-  it('is a no-op for wordsPerItem > 1 -- composed Prompt content is English-only now, nothing to backfill per-dialect', async () => {
+  it('is a no-op for wordsPerItem > 1 -- Sentence rows are translated inline as they are inserted, nothing to backfill per-dialect here', async () => {
     const { service, prisma } = setup();
 
     const result = await callBackfill(service, 'ig', 3, 5);
 
-    expect(prisma.prompt.findMany).not.toHaveBeenCalled();
-    expect(prisma.promptTranslation.create).not.toHaveBeenCalled();
+    expect(prisma.sentence.findMany).not.toHaveBeenCalled();
+    expect(prisma.sentenceTranslation.create).not.toHaveBeenCalled();
     expect(result).toEqual({ backfilled: 0, skippedDuplicate: 0, failed: 0 });
   });
 
@@ -115,9 +115,8 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
         findMany: jest.fn().mockResolvedValue([{ tag: 'ig' }]),
         findUnique: jest.fn().mockResolvedValue({ name: 'Igbo' }),
       },
-      prompt: {
+      sentenceTranslation: {
         groupBy: jest.fn().mockResolvedValue([]),
-        findMany: jest.fn().mockResolvedValue([]),
       },
       wordTranslation: {
         groupBy: jest.fn().mockResolvedValue([]),

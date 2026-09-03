@@ -12,9 +12,7 @@ describe('WordsService', () => {
   const settings = {
     getTaskTokenCost: jest.fn(),
     isReverseWordTrainingEnabled: jest.fn(),
-    isSentenceRebuildEnabled: jest.fn(),
     isPhraseEscalationEnabled: jest.fn(),
-    isSingleWordTrainingEnabled: jest.fn(),
     isSpellingNormalizationEnabled: jest.fn().mockResolvedValue(false),
     getSpellingNormalizationProviderOrder: jest.fn().mockResolvedValue('openai,deepseek,anthropic'),
     getWordTrainingRecordingTimeoutSeconds: jest.fn().mockResolvedValue(5),
@@ -50,7 +48,12 @@ describe('WordsService', () => {
         findMany: jest.fn().mockResolvedValue([{ id: 'word-1', text: 'welcome' }]),
       },
       wallet: { upsert: jest.fn().mockResolvedValue({ id: 'wallet-1', balance: 10 }) },
-      wordRecording: { count: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      wordRecording: {
+        count: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+      },
       wordTrainingAssignment: {
         create: jest.fn(),
         findUnique: jest.fn(),
@@ -61,18 +64,15 @@ describe('WordsService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         upsert: jest.fn().mockResolvedValue({}),
       },
-      prompt: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
-      promptWord: {
-        count: jest.fn().mockResolvedValue(0),
+      sentence: {
         findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
       },
       $transaction: jest.fn(),
     };
     settings.getTaskTokenCost.mockResolvedValue(1);
     settings.isReverseWordTrainingEnabled.mockReset();
-    settings.isSentenceRebuildEnabled.mockReset().mockResolvedValue(false);
     settings.isPhraseEscalationEnabled.mockReset().mockResolvedValue(false);
-    settings.isSingleWordTrainingEnabled.mockReset().mockResolvedValue(true);
     settings.isSpellingNormalizationEnabled.mockResolvedValue(false);
     courses.getIncompleteRequiredCourses.mockReset().mockResolvedValue([]);
     settings.getAuditHoldEveryNSubmissions.mockReset().mockResolvedValue(0);
@@ -168,6 +168,7 @@ describe('WordsService', () => {
         }),
       );
       prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.wordRecording.findUnique.mockResolvedValue(null); // no sourceRecordingId here -> insertRedoRecording no-ops
       prisma.user.update = jest.fn().mockResolvedValue({ email: 'trainer@example.com' });
     });
 
@@ -222,9 +223,8 @@ describe('WordsService', () => {
     });
   });
 
-  it('only issues English-to-dialect assignments when reverse training and sentence-rebuild are disabled', async () => {
+  it('only issues English-to-dialect assignments when reverse training is disabled', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
-    settings.isSentenceRebuildEnabled.mockResolvedValue(false);
     prisma.wordTrainingAssignment.create.mockResolvedValue({
       id: 'assignment-1',
       direction: 'ENGLISH_TO_DIALECT',
@@ -239,7 +239,6 @@ describe('WordsService', () => {
       responseLanguage: 'Igbo',
       dialectTag: 'ig',
       dialectKeyboardLayout: null,
-      fragments: null,
       phraseTierJustReached: false,
     });
     expect(prisma.wordRecording.count).not.toHaveBeenCalled();
@@ -247,7 +246,6 @@ describe('WordsService', () => {
 
   it('blocks nextAssignment when a required course becomes incomplete mid-session', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
-    settings.isSentenceRebuildEnabled.mockResolvedValue(false);
     courses.getIncompleteRequiredCourses.mockResolvedValue([
       { id: 'c1', slug: 'safety', title: 'Safety' },
     ]);
@@ -261,7 +259,6 @@ describe('WordsService', () => {
   describe('QRAC gate in nextAssignment', () => {
     beforeEach(() => {
       settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
-      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-1',
         direction: 'ENGLISH_TO_DIALECT',
@@ -340,7 +337,6 @@ describe('WordsService', () => {
 
   it('excludes words the trainer has already recorded when picking an ENGLISH_TO_DIALECT word', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
-    settings.isSentenceRebuildEnabled.mockResolvedValue(false);
     prisma.word.count
       .mockResolvedValueOnce(3) // totalWords
       .mockResolvedValueOnce(1); // unattemptedCount, after excluding word-1/word-2
@@ -367,7 +363,6 @@ describe('WordsService', () => {
 
   it('widens back to the full word bank once the trainer has attempted every word', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
-    settings.isSentenceRebuildEnabled.mockResolvedValue(false);
     prisma.word.count
       .mockResolvedValueOnce(2) // totalWords
       .mockResolvedValueOnce(0); // unattemptedCount -- trainer has done both
@@ -387,7 +382,6 @@ describe('WordsService', () => {
   describe('word skip tracking', () => {
     beforeEach(() => {
       settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
-      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-next',
         direction: 'ENGLISH_TO_DIALECT',
@@ -427,7 +421,7 @@ describe('WordsService', () => {
     it('does not bump the skip count for a non-ENGLISH_TO_DIALECT last assignment', async () => {
       prisma.wordTrainingAssignment.findFirst.mockResolvedValue({
         id: 'assignment-prev',
-        direction: 'SENTENCE_REBUILD',
+        direction: 'DIALECT_TO_ENGLISH',
         wordId: null,
         consumedAt: null,
       });
@@ -469,11 +463,10 @@ describe('WordsService', () => {
 
   it('uses another trainer submission for reverse validation when enabled', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(true);
-    settings.isSentenceRebuildEnabled.mockResolvedValue(false);
     jest.spyOn(Math, 'random').mockReturnValue(0.1);
     prisma.wordRecording.count.mockResolvedValue(1);
     prisma.wordRecording.findMany.mockResolvedValue([
-      { id: 'source-1', wordId: 'word-1', translationText: 'nnabata' },
+      { id: 'source-1', wordId: 'word-1', sentenceId: null, translationText: 'nnabata' },
     ]);
     prisma.wordTrainingAssignment.create.mockResolvedValue({
       id: 'assignment-2',
@@ -488,7 +481,7 @@ describe('WordsService', () => {
     });
     expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ userId: { not: trainer.id } }),
+        where: expect.objectContaining({ userId: { not: trainer.id }, direction: 'ENGLISH_TO_DIALECT' }),
       }),
     );
     jest.restoreAllMocks();
@@ -505,8 +498,10 @@ describe('WordsService', () => {
       uploadKey: 'ig/reverse/audio.webm',
       word: { text: 'Welcome!' },
       session: { userId: trainer.id, user: trainer },
+      sourceRecordingId: null,
     };
     prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+    prisma.wordRecording.findUnique.mockResolvedValue(null);
     prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
       callback({
         ledgerEntry: { create: jest.fn() },
@@ -562,137 +557,111 @@ describe('WordsService', () => {
     ).rejects.toThrow('Recording exceeds the 5s limit for this word');
   });
 
-  it('picks a sentence-rebuild assignment from the shared English pool and shuffles its fragments when enabled', async () => {
-    settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
-    settings.isSentenceRebuildEnabled.mockResolvedValue(true);
-    jest.spyOn(Math, 'random').mockReturnValue(0.5);
-    prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-1' }]);
-    prisma.promptWord.count.mockResolvedValue(3);
-    prisma.promptWord.findMany.mockResolvedValue([{ text: 'I' }, { text: 'am' }, { text: 'well' }]);
-    prisma.wordTrainingAssignment.create.mockResolvedValue({
-      id: 'assignment-3',
-      direction: 'SENTENCE_REBUILD',
+  describe('createRecording DIALECT_TO_ENGLISH redo-recording mechanic', () => {
+    const sourceRecording = {
+      id: 'source-1',
+      translationText: 'nnabata',
+    };
+    const assignment = {
+      id: 'assignment-redo',
+      sessionId: session.id,
+      wordId: 'word-1',
+      sentenceId: null,
+      direction: 'DIALECT_TO_ENGLISH',
+      consumedAt: null,
+      uploadBucket: 'recordings',
+      uploadKey: 'ig/dialect_to_english/audio.webm',
+      word: { text: 'welcome' },
+      sourceRecordingId: sourceRecording.id,
+      session: {
+        id: session.id,
+        userId: trainer.id,
+        user: { ...trainer, dialectVariantId: null },
+      },
+    };
+
+    beforeEach(() => {
+      prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+      prisma.wordRecording.findUnique.mockResolvedValue(sourceRecording);
+      prisma.wordRecording.updateMany = jest.fn().mockResolvedValue({ count: 1 });
+      prisma.wordRecording.create.mockResolvedValue({
+        id: 'redo-recording-1',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+      prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
+        callback({
+          ledgerEntry: { create: jest.fn() },
+          wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          wordRecording: {
+            create: jest.fn().mockImplementation(({ data }) => ({
+              id: 'recording-validation',
+              direction: data.direction,
+              validationScore: { toNumber: () => data.validationScore },
+            })),
+          },
+        }),
+      );
     });
 
-    const result = await service.nextAssignment(trainer.id, session.id);
+    it('inserts a second PENDING ENGLISH_TO_DIALECT recording from the same audio, linked via redoOfRecordingId', async () => {
+      await service.createRecording(trainer.id, {
+        assignmentId: assignment.id,
+        responseText: 'welcome',
+        bucket: assignment.uploadBucket,
+        audioKey: assignment.uploadKey,
+        durationMs: 1200,
+        noiseRating: 'QUIET',
+      } as any);
 
-    // Source fragments are always the shared en-us pool -- decoupled from
-    // the trainer's own dialect (ig here), even though responseLanguage/
-    // dialectTag still reflect it.
-    expect(prisma.prompt.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { dialectTag: 'en-us', active: true, words: { some: { dialectTag: 'en-us' } } },
-      }),
-    );
-    expect(prisma.promptWord.count).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { promptId: 'prompt-1', dialectTag: 'en-us' } }),
-    );
-    expect(prisma.promptWord.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { promptId: 'prompt-1', dialectTag: 'en-us' } }),
-    );
-    expect(result).toMatchObject({
-      assignmentId: 'assignment-3',
-      wordId: null,
-      direction: 'SENTENCE_REBUILD',
-      promptText: null,
-      sourceLanguage: 'English',
-      responseLanguage: 'Igbo',
-      dialectTag: 'ig',
+      expect(prisma.wordRecording.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          wordId: 'word-1',
+          sentenceId: null,
+          direction: 'ENGLISH_TO_DIALECT',
+          status: 'PENDING',
+          translationText: sourceRecording.translationText,
+          audioBucket: assignment.uploadBucket,
+          audioKey: assignment.uploadKey,
+          redoOfRecordingId: sourceRecording.id,
+        }),
+      });
     });
-    expect(result.fragments).toHaveLength(3);
-    expect(result.fragments!.map((f) => f.text).sort()).toEqual(['I', 'am', 'well']);
-    expect(result.fragments!.map((f) => f.position).sort()).toEqual([0, 1, 2]);
-    jest.restoreAllMocks();
-  });
 
-  it('scores an exact-order sentence-rebuild submission as 100, selecting the en-us fragment set even when a stale trainer-dialect set coexists', async () => {
-    const assignment = {
-      id: 'assignment-3',
-      sessionId: session.id,
-      wordId: null,
-      promptId: 'prompt-1',
-      direction: 'SENTENCE_REBUILD',
-      consumedAt: null,
-      word: null,
-      prompt: {
-        // Simulates a not-yet-cleaned-up historical row: both the en-us
-        // fragment set (now the only one ever read) and a leftover
-        // trainer-dialect ('ig') set coexist on the same Prompt.
-        words: [
-          { position: 0, dialectTag: 'en-us', text: 'A' },
-          { position: 1, dialectTag: 'en-us', text: 'na' },
-          { position: 2, dialectTag: 'en-us', text: 'agba' },
-          { position: 0, dialectTag: 'ig', text: 'wrong-A' },
-          { position: 1, dialectTag: 'ig', text: 'wrong-na' },
-          { position: 2, dialectTag: 'ig', text: 'wrong-agba' },
-        ],
-      },
-      session: { userId: trainer.id, user: trainer },
-    };
-    prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
-    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
-      callback({
-        ledgerEntry: { create: jest.fn() },
-        wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-        wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-        wordRecording: {
-          create: jest.fn().mockImplementation(({ data }) => ({
-            id: 'recording-2',
-            direction: data.direction,
-            validationScore: { toNumber: () => data.validationScore },
-          })),
-        },
-      }),
-    );
-
-    await expect(
-      service.createRecording(trainer.id, {
+    it('publishes a quality-gate-jobs message for the new redo recording', async () => {
+      await service.createRecording(trainer.id, {
         assignmentId: assignment.id,
-        submittedOrder: [0, 1, 2],
-      }),
-    ).resolves.toMatchObject({ validationScore: 1 });
-  });
+        responseText: 'welcome',
+        bucket: assignment.uploadBucket,
+        audioKey: assignment.uploadKey,
+        durationMs: 1200,
+        noiseRating: 'QUIET',
+      } as any);
 
-  it('scores a shuffled/wrong-order sentence-rebuild submission as 0', async () => {
-    const assignment = {
-      id: 'assignment-3',
-      sessionId: session.id,
-      wordId: null,
-      promptId: 'prompt-1',
-      direction: 'SENTENCE_REBUILD',
-      consumedAt: null,
-      word: null,
-      prompt: {
-        words: [
-          { position: 0, dialectTag: 'en-us', text: 'A' },
-          { position: 1, dialectTag: 'en-us', text: 'na' },
-          { position: 2, dialectTag: 'en-us', text: 'agba' },
-        ],
-      },
-      session: { userId: trainer.id, user: trainer },
-    };
-    prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
-    prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
-      callback({
-        ledgerEntry: { create: jest.fn() },
-        wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-        wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-        wordRecording: {
-          create: jest.fn().mockImplementation(({ data }) => ({
-            id: 'recording-3',
-            direction: data.direction,
-            validationScore: { toNumber: () => data.validationScore },
-          })),
-        },
-      }),
-    );
+      expect(streams.publish).toHaveBeenCalledWith(
+        'quality-gate-jobs',
+        expect.objectContaining({
+          record_kind: 'word_recording',
+          word_recording_id: 'redo-recording-1',
+          expected_text: sourceRecording.translationText,
+        }),
+      );
+    });
 
-    await expect(
-      service.createRecording(trainer.id, {
+    it('does nothing extra when the source recording can no longer be found', async () => {
+      prisma.wordRecording.findUnique.mockResolvedValue(null);
+
+      await service.createRecording(trainer.id, {
         assignmentId: assignment.id,
-        submittedOrder: [2, 0, 1],
-      }),
-    ).resolves.toMatchObject({ validationScore: 0 });
+        responseText: 'welcome',
+        bucket: assignment.uploadBucket,
+        audioKey: assignment.uploadKey,
+        durationMs: 1200,
+        noiseRating: 'QUIET',
+      } as any);
+
+      expect(prisma.wordRecording.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('getSpellingSuggestions', () => {
@@ -813,14 +782,13 @@ describe('WordsService', () => {
     });
   });
 
-  describe('PHRASE_TO_DIALECT escalation', () => {
+  describe('Sentence-tier escalation (pickSentenceSource)', () => {
     beforeEach(() => {
       settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
-      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
       settings.isPhraseEscalationEnabled.mockResolvedValue(true);
     });
 
-    it('stays on ENGLISH_TO_DIALECT when the trainer is below every tier threshold', async () => {
+    it('stays on Word-sourced ENGLISH_TO_DIALECT when the trainer is below every tier threshold', async () => {
       prisma.wordRecording.count.mockResolvedValue(99);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-1',
@@ -830,49 +798,43 @@ describe('WordsService', () => {
       const result = await service.nextAssignment(trainer.id, session.id);
 
       expect(result.direction).toBe('ENGLISH_TO_DIALECT');
-      expect(prisma.prompt.count).not.toHaveBeenCalled();
+      expect(result.wordId).toBe('word-1');
+      expect(prisma.sentence.count).not.toHaveBeenCalled();
     });
 
-    it('assigns PHRASE_TO_DIALECT when tiered and a matching phrase exists', async () => {
+    it('assigns a Sentence-sourced ENGLISH_TO_DIALECT when tiered and a matching sentence exists', async () => {
       prisma.wordRecording.count.mockResolvedValue(150); // tier 1: 100-199 -> 2-3 words
-      prisma.prompt.count.mockResolvedValue(1);
-      prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-phrase-1', text: 'good morning' }]);
+      prisma.sentence.count.mockResolvedValue(1);
+      prisma.sentence.findMany.mockResolvedValue([{ id: 'sentence-1', text: 'good morning' }]);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
-        id: 'assignment-phrase-1',
-        direction: 'PHRASE_TO_DIALECT',
+        id: 'assignment-sentence-1',
+        direction: 'ENGLISH_TO_DIALECT',
       });
 
       const result = await service.nextAssignment(trainer.id, session.id);
 
       expect(result).toMatchObject({
-        assignmentId: 'assignment-phrase-1',
+        assignmentId: 'assignment-sentence-1',
         wordId: null,
-        direction: 'PHRASE_TO_DIALECT',
+        direction: 'ENGLISH_TO_DIALECT',
         promptText: 'good morning',
         sourceLanguage: 'English',
         responseLanguage: 'Igbo',
         dialectTag: 'ig',
       });
       expect(prisma.wordTrainingAssignment.create).toHaveBeenCalledWith({
-        data: { sessionId: session.id, promptId: 'prompt-phrase-1', direction: 'PHRASE_TO_DIALECT' },
+        data: { sessionId: session.id, sentenceId: 'sentence-1', direction: 'ENGLISH_TO_DIALECT' },
       });
-      // Phrase source is always the shared en-us pool -- decoupled from the
-      // trainer's own dialect (ig here), even though responseLanguage/
-      // dialectTag in the response above still reflect it.
-      expect(prisma.prompt.count).toHaveBeenCalledWith(
+      expect(prisma.sentence.count).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            dialectTag: 'en-us',
-            phraseWordCountMin: { lte: 3 },
-            phraseWordCountMax: { gte: 2 },
-          }),
+          where: { wordCount: { gte: 2, lte: 3 } },
         }),
       );
     });
 
-    it('falls back to ENGLISH_TO_DIALECT when tiered but the phrase pool is empty', async () => {
+    it('falls back to a Word-sourced pick when tiered but the sentence pool is empty', async () => {
       prisma.wordRecording.count.mockResolvedValue(150);
-      prisma.prompt.count.mockResolvedValue(0);
+      prisma.sentence.count.mockResolvedValue(0);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-fallback-1',
         direction: 'ENGLISH_TO_DIALECT',
@@ -881,10 +843,11 @@ describe('WordsService', () => {
       const result = await service.nextAssignment(trainer.id, session.id);
 
       expect(result.direction).toBe('ENGLISH_TO_DIALECT');
-      expect(prisma.prompt.findMany).not.toHaveBeenCalled();
+      expect(result.wordId).toBe('word-1');
+      expect(prisma.sentence.findMany).not.toHaveBeenCalled();
     });
 
-    it('never phrase-escalates when phraseEscalationEnabled is false, regardless of count', async () => {
+    it('never escalates to sentences when phraseEscalationEnabled is false, regardless of count', async () => {
       settings.isPhraseEscalationEnabled.mockResolvedValue(false);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-off-1',
@@ -895,15 +858,15 @@ describe('WordsService', () => {
 
       expect(result.direction).toBe('ENGLISH_TO_DIALECT');
       expect(prisma.wordRecording.count).not.toHaveBeenCalled();
-      expect(prisma.prompt.count).not.toHaveBeenCalled();
+      expect(prisma.sentence.count).not.toHaveBeenCalled();
     });
 
     it('reports phraseTierJustReached true only on the exact call where lifetime count equals the tier threshold', async () => {
-      prisma.prompt.count.mockResolvedValue(1);
-      prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-phrase-1', text: 'good morning' }]);
+      prisma.sentence.count.mockResolvedValue(1);
+      prisma.sentence.findMany.mockResolvedValue([{ id: 'sentence-1', text: 'good morning' }]);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
-        id: 'assignment-phrase-1',
-        direction: 'PHRASE_TO_DIALECT',
+        id: 'assignment-sentence-1',
+        direction: 'ENGLISH_TO_DIALECT',
       });
 
       prisma.wordRecording.count.mockResolvedValue(100);
@@ -915,16 +878,21 @@ describe('WordsService', () => {
       expect(pastThreshold.phraseTierJustReached).toBe(false);
     });
 
-    it('reverse-validation can source from a PHRASE_TO_DIALECT recording, carrying promptId not wordId', async () => {
+    it('reverse-validation can source from a Sentence-sourced recording, carrying sentenceId not wordId', async () => {
       settings.isReverseWordTrainingEnabled.mockResolvedValue(true);
       settings.isPhraseEscalationEnabled.mockResolvedValue(false);
       jest.spyOn(Math, 'random').mockReturnValue(0.1);
       prisma.wordRecording.count.mockResolvedValue(1);
       prisma.wordRecording.findMany.mockResolvedValue([
-        { id: 'source-phrase-1', wordId: null, promptId: 'prompt-phrase-1', translationText: 'ụtụtụ ọma' },
+        {
+          id: 'source-sentence-1',
+          wordId: null,
+          sentenceId: 'sentence-1',
+          translationText: 'ụtụtụ ọma',
+        },
       ]);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
-        id: 'assignment-reverse-phrase-1',
+        id: 'assignment-reverse-sentence-1',
         direction: 'DIALECT_TO_ENGLISH',
       });
 
@@ -934,33 +902,31 @@ describe('WordsService', () => {
         data: {
           sessionId: session.id,
           wordId: null,
-          promptId: 'prompt-phrase-1',
+          sentenceId: 'sentence-1',
           direction: 'DIALECT_TO_ENGLISH',
-          sourceRecordingId: 'source-phrase-1',
+          sourceRecordingId: 'source-sentence-1',
         },
       });
       expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            direction: { in: ['ENGLISH_TO_DIALECT', 'PHRASE_TO_DIALECT'] },
-          }),
+          where: expect.objectContaining({ direction: 'ENGLISH_TO_DIALECT' }),
         }),
       );
       jest.restoreAllMocks();
     });
 
-    it('createRecording scales the duration limit off promptText for a PHRASE_TO_DIALECT assignment', async () => {
+    it('createRecording scales the duration limit off promptText for a Sentence-sourced assignment', async () => {
       const assignment = {
-        id: 'assignment-phrase-2',
+        id: 'assignment-sentence-2',
         sessionId: session.id,
         wordId: null,
-        promptId: 'prompt-phrase-1',
-        direction: 'PHRASE_TO_DIALECT',
+        sentenceId: 'sentence-1',
+        direction: 'ENGLISH_TO_DIALECT',
         consumedAt: null,
         uploadBucket: 'recordings',
-        uploadKey: 'ig/phrase_to_dialect/audio.webm',
+        uploadKey: 'ig/english_to_dialect/audio.webm',
         word: null,
-        prompt: { text: 'good morning friend' }, // 3 words -> 3 x 5s = 15s allowed
+        sentence: { text: 'good morning friend' }, // 3 words -> 3 x 5s = 15s allowed
         session: { userId: trainer.id, user: trainer },
       };
       prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
@@ -969,7 +935,7 @@ describe('WordsService', () => {
         service.createRecording(trainer.id, {
           assignmentId: assignment.id,
           bucket: 'recordings',
-          audioKey: 'ig/phrase_to_dialect/audio.webm',
+          audioKey: 'ig/english_to_dialect/audio.webm',
           responseText: 'ụtụtụ ọma enyi',
           durationMs: 25_000,
           noiseRating: 'QUIET',
@@ -977,24 +943,24 @@ describe('WordsService', () => {
       ).rejects.toThrow('Recording exceeds the 15s limit for this word');
     });
 
-    it('createRecording stores wordId=null, promptId=<x> for a PHRASE_TO_DIALECT recording', async () => {
+    it('createRecording stores wordId=null, sentenceId=<x> for a Sentence-sourced recording', async () => {
       const assignment = {
-        id: 'assignment-phrase-3',
+        id: 'assignment-sentence-3',
         sessionId: session.id,
         wordId: null,
-        promptId: 'prompt-phrase-1',
-        direction: 'PHRASE_TO_DIALECT',
+        sentenceId: 'sentence-1',
+        direction: 'ENGLISH_TO_DIALECT',
         consumedAt: null,
         uploadBucket: 'recordings',
-        uploadKey: 'ig/phrase_to_dialect/audio.webm',
+        uploadKey: 'ig/english_to_dialect/audio.webm',
         word: null,
-        prompt: { text: 'good morning' },
+        sentence: { text: 'good morning' },
         session: { id: session.id, userId: trainer.id, user: trainer },
       };
       prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
       const createRecordingMock = jest
         .fn()
-        .mockImplementation(({ data }: any) => ({ id: 'recording-phrase-1', ...data }));
+        .mockImplementation(({ data }: any) => ({ id: 'recording-sentence-1', ...data }));
       prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
         callback({
           wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
@@ -1007,7 +973,7 @@ describe('WordsService', () => {
       await service.createRecording(trainer.id, {
         assignmentId: assignment.id,
         bucket: 'recordings',
-        audioKey: 'ig/phrase_to_dialect/audio.webm',
+        audioKey: 'ig/english_to_dialect/audio.webm',
         responseText: 'ụtụtụ ọma',
         durationMs: 5_000,
         noiseRating: 'QUIET',
@@ -1015,119 +981,9 @@ describe('WordsService', () => {
 
       expect(createRecordingMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ wordId: null, promptId: 'prompt-phrase-1' }),
+          data: expect.objectContaining({ wordId: null, sentenceId: 'sentence-1' }),
         }),
       );
-    });
-  });
-
-  describe('singleWordTrainingEnabled off', () => {
-    beforeEach(() => {
-      settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
-      settings.isSingleWordTrainingEnabled.mockResolvedValue(false);
-    });
-
-    it('never assigns ENGLISH_TO_DIALECT even when sentenceRebuildEnabled and phraseEscalationEnabled are both off', async () => {
-      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
-      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
-      prisma.wordRecording.count.mockResolvedValue(0); // brand-new trainer, below every tier
-      prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-sentence-1' }]);
-      prisma.promptWord.count.mockResolvedValue(3);
-      prisma.promptWord.findMany.mockResolvedValue([
-        { text: 'good' },
-        { text: 'morning' },
-        { text: 'friend' },
-      ]);
-      prisma.wordTrainingAssignment.create.mockResolvedValue({
-        id: 'assignment-forced-1',
-        direction: 'SENTENCE_REBUILD',
-      });
-
-      const result = await service.nextAssignment(trainer.id, session.id);
-
-      expect(result.direction).toBe('SENTENCE_REBUILD');
-      expect(result.sourceLanguage).toBe('English');
-      expect(prisma.word.count).not.toHaveBeenCalled();
-      expect(prisma.wordTrainingAssignment.create).toHaveBeenCalledWith({
-        data: { sessionId: session.id, promptId: 'prompt-sentence-1', direction: 'SENTENCE_REBUILD' },
-      });
-    });
-
-    it('gives PHRASE_TO_DIALECT to a brand-new trainer (tier gate bypassed) even with phraseEscalationEnabled off', async () => {
-      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
-      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
-      prisma.wordRecording.count.mockResolvedValue(0);
-      prisma.prompt.count.mockResolvedValue(1);
-      prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-phrase-new', text: 'good morning' }]);
-      prisma.wordTrainingAssignment.create.mockResolvedValue({
-        id: 'assignment-forced-phrase-1',
-        direction: 'PHRASE_TO_DIALECT',
-      });
-
-      const result = await service.nextAssignment(trainer.id, session.id);
-
-      expect(result.direction).toBe('PHRASE_TO_DIALECT');
-      expect(prisma.prompt.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ phraseWordCountMin: { lte: 3 }, phraseWordCountMax: { gte: 2 } }),
-        }),
-      );
-    });
-
-    it('falls through to a forced SENTENCE_REBUILD when the phrase-tier pool is empty', async () => {
-      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
-      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
-      prisma.wordRecording.count.mockResolvedValue(0);
-      prisma.prompt.count.mockResolvedValue(0); // phrase pool empty
-      prisma.prompt.findMany.mockResolvedValue([{ id: 'prompt-sentence-fallback' }]);
-      prisma.promptWord.count.mockResolvedValue(2);
-      prisma.promptWord.findMany.mockResolvedValue([{ text: 'hello' }, { text: 'friend' }]);
-      prisma.wordTrainingAssignment.create.mockResolvedValue({
-        id: 'assignment-forced-2',
-        direction: 'SENTENCE_REBUILD',
-      });
-
-      const result = await service.nextAssignment(trainer.id, session.id);
-
-      expect(result.direction).toBe('SENTENCE_REBUILD');
-    });
-
-    it('throws NO_SENTENCES_AVAILABLE when every content pool is empty', async () => {
-      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
-      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
-      prisma.wordRecording.count.mockResolvedValue(0);
-      prisma.prompt.count.mockResolvedValue(0);
-      prisma.prompt.findMany.mockResolvedValue([]);
-
-      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
-        'NO_SENTENCES_AVAILABLE',
-      );
-      expect(prisma.word.count).not.toHaveBeenCalled();
-    });
-
-    it('leaves reverseWordTrainingEnabled independently controlled', async () => {
-      settings.isReverseWordTrainingEnabled.mockResolvedValue(true);
-      settings.isSentenceRebuildEnabled.mockResolvedValue(false);
-      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
-      jest.spyOn(Math, 'random').mockReturnValue(0.1); // within the 1/3 reverse-validation roll
-      // pickReverseSource's own count check (must be nonzero for a source
-      // to be picked) shares this mock with getTrainerPhraseTier's lifetime
-      // count -- the reverse-source branch resolves and returns before
-      // phraseTier's value is ever read, so a single nonzero value here is
-      // safe for both.
-      prisma.wordRecording.count.mockResolvedValue(1);
-      prisma.wordRecording.findMany.mockResolvedValue([
-        { id: 'source-1', wordId: 'word-1', promptId: null, translationText: 'ntị' },
-      ]);
-      prisma.wordTrainingAssignment.create.mockResolvedValue({
-        id: 'assignment-reverse-1',
-        direction: 'DIALECT_TO_ENGLISH',
-      });
-
-      const result = await service.nextAssignment(trainer.id, session.id);
-
-      expect(result.direction).toBe('DIALECT_TO_ENGLISH');
-      jest.restoreAllMocks();
     });
   });
 });

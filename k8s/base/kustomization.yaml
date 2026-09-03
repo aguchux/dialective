@@ -31,8 +31,6 @@ resources:
   - quality-gate-worker-keda.yaml
   - prompt-audio-service-deployment.yaml
   - prompt-audio-service-keda.yaml
-  - consensus-scorer-deployment.yaml
-  - consensus-scorer-hpa.yaml
   - isvc-scorer-deployment.yaml
   - isvc-scorer-hpa.yaml
   - settlement-cronjob.yaml

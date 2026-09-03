@@ -46,7 +46,7 @@ export class TrainerReportService {
       select: { id: true },
     });
 
-    const [ledgerTotals, ledgerDaily, submissions, wordRecordings] = await Promise.all([
+    const [ledgerTotals, ledgerDaily, wordRecordings] = await Promise.all([
       wallet
         ? this.prisma.ledgerEntry.groupBy({
             by: ['type'],
@@ -60,10 +60,6 @@ export class TrainerReportService {
             select: { amount: true, createdAt: true },
           })
         : Promise.resolve([]),
-      this.prisma.submission.findMany({
-        where: { userId, createdAt: createdAtRange },
-        select: { score: true, compositeScore: true, createdAt: true },
-      }),
       this.prisma.wordRecording.findMany({
         where: { userId, createdAt: createdAtRange },
         select: { score: true, compositeScore: true, createdAt: true },
@@ -88,7 +84,7 @@ export class TrainerReportService {
       LedgerEntryType.REFERRAL_PAYOUT_BONUS,
     ]);
 
-    const allRecordings = [...submissions, ...wordRecordings];
+    const allRecordings = wordRecordings;
     const scored = allRecordings.filter((row) => row.score !== null);
     const withComposite = allRecordings.filter((row) => row.compositeScore !== null);
     const avgOf = (values: number[]): string | null =>
