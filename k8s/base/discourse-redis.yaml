@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: discourse-redis
+  labels:
+    app: discourse-redis
+spec:
+  clusterIP: None
+  selector:
+    app: discourse-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: discourse-redis
+  labels:
+    app: discourse-redis
+spec:
+  serviceName: discourse-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: discourse-redis
+  template:
+    metadata:
+      labels:
+        app: discourse-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.2-alpine
+          args: ["--appendonly", "yes"]
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: discourse-redis-data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+  volumeClaimTemplates:
+    - metadata:
+        name: discourse-redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+        storageClassName: do-block-storage

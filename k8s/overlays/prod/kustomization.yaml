@@ -61,6 +61,12 @@ secretGenerator:
   - name: rabbitmq-creds
     envs:
       - secrets/rabbitmq.env
+  - name: discourse-postgres-creds
+    envs:
+      - secrets/discourse-postgres.env
+  - name: discourse-creds
+    envs:
+      - secrets/discourse.env
 
 configMapGenerator:
   - name: api-config
@@ -93,3 +99,9 @@ configMapGenerator:
   - name: chatdialect-agent-config
     envs:
       - configs/chatdialect-agent.env
+  - name: discourse-postgres-config
+    envs:
+      - configs/discourse-postgres.env
+  - name: discourse-config
+    envs:
+      - configs/discourse.env
