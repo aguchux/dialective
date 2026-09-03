@@ -188,3 +188,64 @@ describe('PlatformSettingsService.getLandingVisibility', () => {
     });
   });
 });
+
+describe('PlatformSettingsService wordTrainingEnabled / sentenceTrainingEnabled gates', () => {
+  it('isWordTrainingEnabled/isSentenceTrainingEnabled reflect the row, defaulting true per the schema default', async () => {
+    const { service } = setup({ wordTrainingEnabled: true, sentenceTrainingEnabled: true });
+
+    await expect(service.isWordTrainingEnabled()).resolves.toBe(true);
+    await expect(service.isSentenceTrainingEnabled()).resolves.toBe(true);
+  });
+
+  it('update rejects turning wordTrainingEnabled off when sentenceTrainingEnabled is already off on the row', async () => {
+    const { service } = setup({ wordTrainingEnabled: true, sentenceTrainingEnabled: false });
+
+    await expect(service.update({ wordTrainingEnabled: false })).rejects.toThrow(
+      'At least one of word training or sentence training must stay enabled',
+    );
+  });
+
+  it('update rejects turning sentenceTrainingEnabled off when wordTrainingEnabled is already off on the row', async () => {
+    const { service } = setup({ wordTrainingEnabled: false, sentenceTrainingEnabled: true });
+
+    await expect(service.update({ sentenceTrainingEnabled: false })).rejects.toThrow(
+      'At least one of word training or sentence training must stay enabled',
+    );
+  });
+
+  it('update rejects a single call that sets both to false at once', async () => {
+    const { service } = setup({ wordTrainingEnabled: true, sentenceTrainingEnabled: true });
+
+    await expect(
+      service.update({ wordTrainingEnabled: false, sentenceTrainingEnabled: false }),
+    ).rejects.toThrow('At least one of word training or sentence training must stay enabled');
+  });
+
+  it('update allows turning one off when the other stays on', async () => {
+    const { service, prisma } = setup({ wordTrainingEnabled: true, sentenceTrainingEnabled: true });
+    prisma.platformSettings.upsert.mockResolvedValue({
+      id: 'default',
+      wordTrainingEnabled: false,
+      sentenceTrainingEnabled: true,
+      minWalletBalanceTokens: { toString: () => '0' },
+      minScoreRange: { toString: () => '0' },
+      maxScoreRange: { toString: () => '100' },
+      manualPhoneVerificationFeeTokens: { toString: () => '0' },
+      testimonyTextRewardTokens: { toString: () => '0' },
+      testimonyVideoRewardTokens: { toString: () => '0' },
+      qualityWeightConsensus: { toString: () => '60' },
+      qualityWeightNoise: { toString: () => '15' },
+      qualityWeightQuality: { toString: () => '10' },
+      qualityWeightLiveness: { toString: () => '15' },
+      qualityWeightAsrMatch: { toString: () => '0' },
+      kycMinWithdrawalTokens: { toString: () => '0' },
+      withdrawalFeePercent: { toString: () => '0' },
+      withdrawalFeeTokenAmount: { toString: () => '0' },
+    });
+
+    await expect(service.update({ wordTrainingEnabled: false })).resolves.toMatchObject({
+      wordTrainingEnabled: false,
+      sentenceTrainingEnabled: true,
+    });
+  });
+});

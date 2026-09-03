@@ -111,6 +111,14 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  wordTrainingEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  sentenceTrainingEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   adminPayoutOtpEnabled?: boolean;
 
   @IsOptional()

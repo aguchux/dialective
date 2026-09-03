@@ -1289,6 +1289,8 @@ export interface PlatformSettings {
   trainingPayoutBonusCapMultiple: string | null;
   taskTokenCost: string | null;
   reverseWordTrainingEnabled: boolean;
+  wordTrainingEnabled: boolean;
+  sentenceTrainingEnabled: boolean;
   adminPayoutOtpEnabled: boolean;
   phoneVerificationRequired: boolean;
   manualPhoneVerificationEnabled: boolean;
@@ -1402,6 +1404,8 @@ export interface PlatformSettingsInput {
   trainingPayoutBonusCapMultiple?: number | null;
   taskTokenCost?: number | null;
   reverseWordTrainingEnabled?: boolean;
+  wordTrainingEnabled?: boolean;
+  sentenceTrainingEnabled?: boolean;
   adminPayoutOtpEnabled?: boolean;
   phoneVerificationRequired?: boolean;
   manualPhoneVerificationEnabled?: boolean;

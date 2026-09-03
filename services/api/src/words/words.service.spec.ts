@@ -13,6 +13,8 @@ describe('WordsService', () => {
     getTaskTokenCost: jest.fn(),
     isReverseWordTrainingEnabled: jest.fn(),
     isPhraseEscalationEnabled: jest.fn(),
+    isWordTrainingEnabled: jest.fn(),
+    isSentenceTrainingEnabled: jest.fn(),
     isSpellingNormalizationEnabled: jest.fn().mockResolvedValue(false),
     getSpellingNormalizationProviderOrder: jest.fn().mockResolvedValue('openai,deepseek,anthropic'),
     getWordTrainingRecordingTimeoutSeconds: jest.fn().mockResolvedValue(5),
@@ -73,6 +75,8 @@ describe('WordsService', () => {
     settings.getTaskTokenCost.mockResolvedValue(1);
     settings.isReverseWordTrainingEnabled.mockReset();
     settings.isPhraseEscalationEnabled.mockReset().mockResolvedValue(false);
+    settings.isWordTrainingEnabled.mockReset().mockResolvedValue(true);
+    settings.isSentenceTrainingEnabled.mockReset().mockResolvedValue(true);
     settings.isSpellingNormalizationEnabled.mockResolvedValue(false);
     courses.getIncompleteRequiredCourses.mockReset().mockResolvedValue([]);
     settings.getAuditHoldEveryNSubmissions.mockReset().mockResolvedValue(0);
@@ -984,6 +988,57 @@ describe('WordsService', () => {
           data: expect.objectContaining({ wordId: null, sentenceId: 'sentence-1' }),
         }),
       );
+    });
+  });
+
+  describe('wordTrainingEnabled / sentenceTrainingEnabled content gates', () => {
+    beforeEach(() => {
+      settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+    });
+
+    it('never serves a Word when wordTrainingEnabled is false, even below every phrase tier', async () => {
+      settings.isWordTrainingEnabled.mockResolvedValue(false);
+      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
+      prisma.sentence.count.mockResolvedValue(1);
+      prisma.sentence.findMany.mockResolvedValue([{ id: 'sentence-1', text: 'good morning' }]);
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-sentence-only-1',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.wordId).toBeNull();
+      expect(result.promptText).toBe('good morning');
+      // Unfiltered pick (tier=null) -- no wordCount range in the query.
+      expect(prisma.sentence.count).toHaveBeenCalledWith({ where: {} });
+      expect(prisma.word.count).not.toHaveBeenCalled();
+    });
+
+    it('throws NO_WORDS_AVAILABLE when wordTrainingEnabled is false and the sentence pool is empty', async () => {
+      settings.isWordTrainingEnabled.mockResolvedValue(false);
+      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
+      prisma.sentence.count.mockResolvedValue(0);
+
+      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
+        'NO_WORDS_AVAILABLE',
+      );
+      expect(prisma.word.count).not.toHaveBeenCalled();
+    });
+
+    it('never serves a Sentence when sentenceTrainingEnabled is false, even when tiered', async () => {
+      settings.isSentenceTrainingEnabled.mockResolvedValue(false);
+      settings.isPhraseEscalationEnabled.mockResolvedValue(true);
+      prisma.wordRecording.count.mockResolvedValue(150); // tier 1 -- would normally escalate
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-word-only-1',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+
+      const result = await service.nextAssignment(trainer.id, session.id);
+
+      expect(result.wordId).toBe('word-1');
+      expect(prisma.sentence.count).not.toHaveBeenCalled();
     });
   });
 });

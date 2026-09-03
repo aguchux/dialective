@@ -163,7 +163,16 @@ export class WordsService {
     const reverseEnabled = await this.settings.isReverseWordTrainingEnabled();
 
     // Live-evaluated every call, never cached/session-fixed -- same posture
-    // as the audit-hold/QRAC/required-courses checks above.
+    // as the audit-hold/QRAC/required-courses checks above. Independent
+    // admin content gates: wordTrainingEnabled/sentenceTrainingEnabled
+    // (see PlatformSettingsService.update's both-off guard -- at least one
+    // always stays true) restrict which ENGLISH_TO_DIALECT source types
+    // nextAssignment may hand out, on top of (not instead of)
+    // phraseEscalationEnabled's tier-based escalation timing.
+    const [wordTrainingEnabled, sentenceTrainingEnabled] = await Promise.all([
+      this.settings.isWordTrainingEnabled(),
+      this.settings.isSentenceTrainingEnabled(),
+    ]);
     const phraseTier = (await this.settings.isPhraseEscalationEnabled())
       ? await this.getTrainerPhraseTier(userId)
       : null;
@@ -210,9 +219,10 @@ export class WordsService {
     // Gated before the ENGLISH_TO_DIALECT fallback, not blended into the
     // roll above: once escalated, a trainer should always get a sentence
     // instead of a single word (when the tier's pool has one), not
-    // sometimes-single-word-by-chance. Falls through to single-word only
-    // when the sentence pool for this tier is empty.
-    if (phraseTier) {
+    // sometimes-single-word-by-chance. Falls through to single-word below
+    // only when the sentence pool for this tier is empty (and word training
+    // is actually allowed).
+    if (sentenceTrainingEnabled && phraseTier) {
       const sentenceSource = await this.pickSentenceSource(phraseTier);
       if (sentenceSource) {
         const assignment = await this.prisma.wordTrainingAssignment.create({
@@ -230,7 +240,37 @@ export class WordsService {
           phraseTierJustReached: await this.didJustReachTier(userId, phraseTier),
         };
       }
-      // Pool empty for this tier -- fall through to a single word below.
+      // Pool empty for this tier -- fall through below.
+    }
+
+    // wordTrainingEnabled=false means single words are never offered --
+    // when sentenceTrainingEnabled is also on, serve any Sentence
+    // regardless of tier (a trainer who hasn't escalated yet, or whose
+    // tier's pool was empty above, still needs SOME content); when both
+    // gates somehow end up unusable (empty sentence pool + word training
+    // off), fall through to NO_WORDS_AVAILABLE below like any other
+    // exhausted-pool case.
+    if (!wordTrainingEnabled) {
+      if (sentenceTrainingEnabled) {
+        const anySentence = await this.pickSentenceSource(null);
+        if (anySentence) {
+          const assignment = await this.prisma.wordTrainingAssignment.create({
+            data: { sessionId, sentenceId: anySentence.sentenceId, direction: 'ENGLISH_TO_DIALECT' },
+          });
+          return {
+            assignmentId: assignment.id,
+            wordId: null as string | null,
+            direction: assignment.direction,
+            promptText: anySentence.sentenceText,
+            sourceLanguage: 'English',
+            responseLanguage: trainer.dialect!.name,
+            dialectTag: trainer.dialect!.tag,
+            dialectKeyboardLayout: trainer.dialect!.keyboardLayout,
+            phraseTierJustReached: false,
+          };
+        }
+      }
+      throw new NotFoundException('NO_WORDS_AVAILABLE');
     }
 
     const totalWords = await this.prisma.word.count();
@@ -871,20 +911,24 @@ export class WordsService {
 
   /**
    * Reads a Sentence's own `text` directly, filtered by tier word-count
-   * range. Source text is always English -- the trainer records their own
-   * dialect from their own fluency, matching ENGLISH_TO_DIALECT's pattern
-   * (see the response's sourceLanguage: 'English' in nextAssignment).
-   * Deliberately pure random, no anti-repetition/ban-after-N-skips fairness
-   * (unlike pickEnglishToDialectWord) -- appropriate for a small,
-   * continuously-growing pool with no product requirement for sentence-level
-   * fairness.
+   * range when a tier is given, or unfiltered (any Sentence) when `tier` is
+   * null -- the unfiltered form is used when sentenceTrainingEnabled is on
+   * but wordTrainingEnabled is off, so a trainer who hasn't reached a
+   * phrase-escalation tier yet (or has phraseEscalationEnabled off
+   * entirely) still gets sentence content instead of dead-ending into
+   * NO_WORDS_AVAILABLE. Source text is always English -- the trainer
+   * records their own dialect from their own fluency, matching
+   * ENGLISH_TO_DIALECT's pattern (see the response's sourceLanguage:
+   * 'English' in nextAssignment). Deliberately pure random, no
+   * anti-repetition/ban-after-N-skips fairness (unlike
+   * pickEnglishToDialectWord) -- appropriate for a small,
+   * continuously-growing pool with no product requirement for
+   * sentence-level fairness.
    */
   private async pickSentenceSource(
-    tier: PhraseTier,
+    tier: PhraseTier | null,
   ): Promise<{ sentenceId: string; sentenceText: string } | null> {
-    const where = {
-      wordCount: { gte: tier.wordCountMin, lte: tier.wordCountMax },
-    };
+    const where = tier ? { wordCount: { gte: tier.wordCountMin, lte: tier.wordCountMax } } : {};
     const count = await this.prisma.sentence.count({ where });
     if (count === 0) return null;
     const [sentence] = await this.prisma.sentence.findMany({

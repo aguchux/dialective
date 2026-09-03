@@ -306,6 +306,16 @@ export class PlatformSettingsService {
     return row.spellingNormalizationProviderOrder;
   }
 
+  async isWordTrainingEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.wordTrainingEnabled;
+  }
+
+  async isSentenceTrainingEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.sentenceTrainingEnabled;
+  }
+
   async isPhraseEscalationEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.phraseEscalationEnabled;
@@ -692,6 +702,8 @@ export class PlatformSettingsService {
       trainingPayoutBonusCapMultiple: row.trainingPayoutBonusCapMultiple?.toString() ?? null,
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
+      wordTrainingEnabled: row.wordTrainingEnabled,
+      sentenceTrainingEnabled: row.sentenceTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       phoneVerificationRequired: row.phoneVerificationRequired,
       manualPhoneVerificationEnabled: row.manualPhoneVerificationEnabled,
@@ -812,6 +824,8 @@ export class PlatformSettingsService {
     trainingPayoutBonusCapMultiple?: number | null;
     taskTokenCost?: number | null;
     reverseWordTrainingEnabled?: boolean;
+    wordTrainingEnabled?: boolean;
+    sentenceTrainingEnabled?: boolean;
     adminPayoutOtpEnabled?: boolean;
     phoneVerificationRequired?: boolean;
     manualPhoneVerificationEnabled?: boolean;
@@ -1100,6 +1114,23 @@ export class PlatformSettingsService {
       throw new BadRequestException('auditHoldEveryNSubmissions must be >= 0');
     }
 
+    // Guard against leaving ENGLISH_TO_DIALECT with no content source at
+    // all -- checked against the EFFECTIVE post-update state (existing row
+    // value where this partial update doesn't touch a field), not just the
+    // fields present in this call, so a second partial update that only
+    // flips one flag can't silently combine with an already-off other flag.
+    if (data.wordTrainingEnabled !== undefined || data.sentenceTrainingEnabled !== undefined) {
+      const current = await this.getRow();
+      const effectiveWordTrainingEnabled = data.wordTrainingEnabled ?? current.wordTrainingEnabled;
+      const effectiveSentenceTrainingEnabled =
+        data.sentenceTrainingEnabled ?? current.sentenceTrainingEnabled;
+      if (!effectiveWordTrainingEnabled && !effectiveSentenceTrainingEnabled) {
+        throw new BadRequestException(
+          'At least one of word training or sentence training must stay enabled',
+        );
+      }
+    }
+
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
       create: { id: 'default', ...data },
@@ -1149,6 +1180,8 @@ export class PlatformSettingsService {
       trainingPayoutBonusCapMultiple: row.trainingPayoutBonusCapMultiple?.toString() ?? null,
       taskTokenCost: row.taskTokenCost?.toString() ?? null,
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
+      wordTrainingEnabled: row.wordTrainingEnabled,
+      sentenceTrainingEnabled: row.sentenceTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       phoneVerificationRequired: row.phoneVerificationRequired,
       manualPhoneVerificationEnabled: row.manualPhoneVerificationEnabled,
