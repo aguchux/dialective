@@ -96,6 +96,8 @@ Required env vars on the **`frontend` Vercel project** (not in this repo's k8s s
 
 First-boot setup (one-time, after the first successful `kubectl apply -k k8s/overlays/prod/` and DNS propagation): visit `https://community.dialectlibrary.com`, log in once with the bootstrap admin, then under Admin → Settings → Login, confirm "enable sso"/"sso url"/"sso secret" match the env vars above (bitnami's image sets these from `DISCOURSE_ENABLE_SSO`/`DISCOURSE_SSO_URL`/`DISCOURSE_SSO_SECRET` automatically, but double-check after first boot) and enable "sso overrides email"/"sso overrides name".
 
+Visual theme (Inter font, the app's purple accent/palette, rounded cards) is a separate git-installed Discourse theme at [`discourse-theme/`](../../../discourse-theme/) — see that directory's README for one-time install steps (Admin → Customize → Themes → Install from a git repository).
+
 `dialectlibrary.com` (the frontend, apex domain), `labs.dialectlibrary.com` (`chatdialect/apps/web`), and `stream.dialectlibrary.com` (`/stream`, Dialect Library Voice Stream) are **not** in this cluster — all three are Vercel deployments, each its own Vercel project. Point each at its own Vercel DNS target per that project's domain settings, not at the ingress controller.
 
 ## Frontend (Vercel) env vars
