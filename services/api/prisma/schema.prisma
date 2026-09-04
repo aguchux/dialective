@@ -1020,7 +1020,7 @@ model WordRecording {
   durationMs                Int?
   noiseRating               RecordingNoiseRating?
   validationScore           Decimal?                @db.Decimal(5, 4) // 0-1 exact-match score, DIALECT_TO_ENGLISH only
-  status                    SubmissionStatus        @default(PENDING) // PENDING|SCORED|SETTLED|REJECTED. REJECTED is quality-gate-worker's prefilter hard-reject (duration_out_of_range|mostly_silence|unreadable_audio, see rejectionReason) -- still no consensus/quorum concept otherwise; TRANSCRIBED remains unused here.
+  status                    SubmissionStatus        @default(PENDING) // PENDING|SCORED|SETTLED|REJECTED|EXPIRED. REJECTED is quality-gate-worker's prefilter hard-reject (duration_out_of_range|mostly_silence|unreadable_audio, see rejectionReason); EXPIRED is settlement-job's terminal state once scoringSlaMinutes/wordStuckTimeoutMinutes elapses with no reverse-validation (see refundStuckWordRecordings/resolveTimedOutScoring) -- still no consensus/quorum concept otherwise; TRANSCRIBED remains unused here.
   rejectionReason           String? // set only when status=REJECTED (duration_out_of_range | mostly_silence | unreadable_audio)
   tokensSpent               Decimal                 @default(0) @db.Decimal(20, 8) // task cost locked from the trainer's wallet at submit time (see Wallet.lockedBalance)
   rawScore                  Decimal?                @db.Decimal(5, 2) // 0.00-100.00 original exact-match/reverse-validation score before any admin score-range weighting/clamp; used for partner data queries

@@ -365,10 +365,20 @@ export class SettlementService {
   /**
    * An ENGLISH_TO_DIALECT WordRecording only scores once a peer's
    * DIALECT_TO_ENGLISH reverse-validation lands (see WordsService.
-   * scoreReverseValidatedSource) -- if that never happens it stays PENDING
-   * forever by design (avoids punishing a correct translation for someone
-   * else's bad transcription), so its lock needs its own release path
-   * rather than waiting on a SCORED transition that may never come.
+   * scoreReverseValidatedSource) -- if that never happens within
+   * wordStuckTimeoutMinutes, its lock needs its own release path rather
+   * than waiting on a SCORED transition that may never come. The row
+   * itself moves to EXPIRED (same terminal state resolveTimedOutScoring
+   * uses) so it stops reading as "still awaiting validation" forever --
+   * it remains just as eligible for WordsService.pickReverseSource as a
+   * peer-validation source afterward, since that query has no status
+   * filter; only this row's own lifecycle is what's being resolved here.
+   * (Previously this only set refundedAt and left status untouched, which
+   * both correctly refunded the trainer AND permanently hid the row from
+   * every future settlement-job sweep -- both this one and
+   * resolveTimedOutScoring filter on refundedAt: null -- leaving it
+   * stuck at PENDING forever. See the 2026-09 migration that backfills
+   * every row this bug already left stranded.)
    */
   private async refundStuckWordRecordings(): Promise<number> {
     const timeoutMinutes = await this.getWordStuckTimeoutMinutes();
@@ -396,7 +406,7 @@ export class SettlementService {
         // second write, but only after refundTokens already ran).
         const claim = await this.prisma.wordRecording.updateMany({
           where: { id: recording.id, refundedAt: null },
-          data: { refundedAt: new Date() },
+          data: { status: 'EXPIRED', refundedAt: new Date() },
         });
         if (claim.count === 0) continue;
 
@@ -536,19 +546,48 @@ export class SettlementService {
     userId: string;
     tokensSpent: Prisma.Decimal;
   }): Promise<void> {
-    const claimed = await this.prisma.wordRecording.updateMany({
-      where: { id: recording.id, status: 'SCORED', settledAt: null },
-      data: {
-        status: 'SETTLED',
-        payoutTokenAmount: new Prisma.Decimal(0),
-        settledAt: new Date(),
-      },
+    const resolved = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.wordRecording.updateMany({
+        where: { id: recording.id, status: 'SCORED', settledAt: null },
+        data: {
+          status: 'SETTLED',
+          payoutTokenAmount: new Prisma.Decimal(0),
+          settledAt: new Date(),
+        },
+      });
+      if (claimed.count === 0) return false;
+
+      const lock = await tx.ledgerEntry.findFirst({
+        where: { reference: recording.id, type: 'TASK_LOCK' },
+        select: { id: true },
+      });
+      if (!lock) return true;
+
+      const wallet = await tx.wallet.upsert({
+        where: { userId: recording.userId },
+        update: {},
+        create: { userId: recording.userId },
+      });
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: {
+          lockedBalance: { decrement: recording.tokensSpent },
+          balance: { increment: recording.tokensSpent },
+        },
+      });
+      await tx.ledgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          type: 'TASK_REFUND',
+          amount: recording.tokensSpent,
+          reference: recording.id,
+        },
+      });
+      return true;
     });
-    if (claimed.count === 0) return;
-    if (await this.wasLocked(recording.id)) {
-      await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
+    if (resolved) {
+      this.logger.warn(`Settled repeat source without reward wordRecording=${recording.id}`);
     }
-    this.logger.warn(`Settled repeat source without reward wordRecording=${recording.id}`);
   }
 
   /**

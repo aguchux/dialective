@@ -101,6 +101,78 @@ describe('SettlementService resolveTimedOutScoring', () => {
   });
 });
 
+/**
+ * Covers a real production bug: refundStuckWordRecordings used to set only
+ * refundedAt, never status, leaving the row at PENDING forever -- and since
+ * both this sweep and resolveTimedOutScoring filter on refundedAt: null,
+ * once claimed it became invisible to every future settlement-job run,
+ * permanently stuck (confirmed live: 4,396 ENGLISH_TO_DIALECT rows stuck
+ * PENDING in production, ~4,311 of them already refunded and orphaned).
+ * The row must now move to EXPIRED in the same atomic claim, matching
+ * resolveTimedOutScoring's terminal-state convention.
+ */
+describe('SettlementService refundStuckWordRecordings', () => {
+  function buildPrismaMock() {
+    return {
+      platformSettings: {
+        upsert: jest.fn().mockResolvedValue({ wordStuckTimeoutMinutes: 60 }),
+      },
+      wordRecording: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 'rec-1', userId: 'user-1', tokensSpent: { toNumber: () => 1 } },
+          ]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      ledgerEntry: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'lock-1' }), // wasLocked -> true
+        create: jest.fn().mockResolvedValue({}),
+      },
+      wallet: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
+        create: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
+      },
+      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+    };
+  }
+
+  it('claims the row as EXPIRED (not just refundedAt) so it reaches a terminal state', async () => {
+    const prisma = buildPrismaMock();
+    const service = new SettlementService(prisma as never, {
+      deleteObject: jest.fn().mockResolvedValue(undefined),
+    } as never);
+
+    // @ts-expect-error -- private method under test
+    const refundedCount = await service.refundStuckWordRecordings();
+
+    expect(refundedCount).toBe(1);
+    expect(prisma.wordRecording.updateMany).toHaveBeenCalledWith({
+      where: { id: 'rec-1', refundedAt: null },
+      data: { status: 'EXPIRED', refundedAt: expect.any(Date) },
+    });
+    expect(prisma.wallet.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+      data: { lockedBalance: { decrement: expect.anything() }, balance: { increment: expect.anything() } },
+    });
+  });
+
+  it('skips a row another concurrent run already claimed', async () => {
+    const prisma = buildPrismaMock();
+    prisma.wordRecording.updateMany.mockResolvedValue({ count: 0 });
+    const service = new SettlementService(prisma as never, {
+      deleteObject: jest.fn().mockResolvedValue(undefined),
+    } as never);
+
+    // @ts-expect-error -- private method under test
+    const refundedCount = await service.refundStuckWordRecordings();
+
+    expect(refundedCount).toBe(0);
+    expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('SettlementService settlement state', () => {
   function buildPrismaMock() {
     return {
