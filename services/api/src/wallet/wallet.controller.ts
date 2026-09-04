@@ -3598,6 +3598,8 @@ export class WalletController {
       activeUsers,
       suspendedUsers,
       verifiedUsers,
+      trainersSignedUpLastHour,
+      trainersSignedUpLast24h,
       referralSettings,
       pendingWithdrawals,
       pendingWithdrawalAgg,
@@ -3631,6 +3633,12 @@ export class WalletController {
       this.prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
       this.prisma.user.count({ where: { status: UserStatus.SUSPENDED } }),
       this.prisma.user.count({ where: { emailVerified: { not: null } } }),
+      this.prisma.user.count({
+        where: { role: Role.TRAINER, createdAt: { gte: new Date(Date.now() - 60 * 60_000) } },
+      }),
+      this.prisma.user.count({
+        where: { role: Role.TRAINER, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60_000) } },
+      }),
       this.getReferralSettings(),
       this.prisma.withdrawalRequest.count({ where: { status: WithdrawalStatus.PENDING } }),
       this.prisma.withdrawalRequest.aggregate({
@@ -3689,6 +3697,13 @@ export class WalletController {
       activeUsers,
       suspendedUsers,
       verifiedUsers,
+      // Trainer sign-up rate (tr/hr): trainersSignedUpLastHour is the raw
+      // rolling-60-minute count (immediate but spiky -- can read 0 between
+      // signups even during healthy growth). trainerSignupRatePerHour
+      // divides the rolling-24h trainer count by 24 for a steadier headline
+      // number, same "24h average" posture as a server RPS gauge.
+      trainersSignedUpLastHour,
+      trainerSignupRatePerHour: (trainersSignedUpLast24h / 24).toFixed(2),
       referralSettings: {
         fundingBonusRate: referralSettings.fundingBonusRate.toString(),
         fundingBonusEnabled: referralSettings.fundingBonusEnabled,

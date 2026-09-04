@@ -15,6 +15,7 @@ import {
   PiggyBank,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
   Trophy,
   Users,
   WalletCards,
@@ -71,6 +72,14 @@ export default function AdminDashboardPage() {
       hint: stats ? `${formatCount(stats.activeUsers)} active accounts` : undefined,
       icon: Mic2,
       tone: 'purple',
+    },
+    {
+      key: 'signupRate',
+      label: 'Sign-up rate',
+      value: stats ? `${stats.trainerSignupRatePerHour} tr/hr` : loadingValue,
+      hint: stats ? `${formatCount(stats.trainersSignedUpLastHour)} in the last hour` : undefined,
+      icon: TrendingUp,
+      tone: 'cyan',
     },
     {
       key: 'admins',

@@ -1191,6 +1191,8 @@ export interface AdminStats {
   activeUsers: number;
   suspendedUsers: number;
   verifiedUsers: number;
+  trainersSignedUpLastHour: number;
+  trainerSignupRatePerHour: string;
   referralSettings: {
     fundingBonusRate: string;
     fundingBonusEnabled: boolean;
