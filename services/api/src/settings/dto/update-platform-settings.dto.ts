@@ -122,6 +122,16 @@ export class UpdatePlatformSettingsDto {
   adminPayoutOtpEnabled?: boolean;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  sessionIdleTimeoutMinutes?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  sessionMaxHours?: number;
+
+  @IsOptional()
   @IsBoolean()
   phoneVerificationRequired?: boolean;
 

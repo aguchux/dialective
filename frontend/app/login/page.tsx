@@ -61,6 +61,13 @@ export default function LoginPage() {
     if (params.get('reason') === 'maintenance') {
       setForcedMaintenance({ until: params.get('until'), message: params.get('message') });
     }
+    // Set by proxy.ts when the JWT's idle timeout or absolute session
+    // ceiling is exceeded (PlatformSettings.sessionIdleTimeoutMinutes/
+    // sessionMaxHours) -- distinct from a plain expired-refresh-token
+    // sign-out, which redirects here with no reason at all.
+    if (params.get('reason') === 'idle') {
+      setMessage('You were signed out after a period of inactivity. Please log in again.');
+    }
   }, []);
 
   useEffect(() => {

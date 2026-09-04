@@ -252,3 +252,69 @@ describe('PlatformSettingsService wordTrainingEnabled / sentenceTrainingEnabled 
     });
   });
 });
+
+describe('PlatformSettingsService session idle/absolute timeout settings', () => {
+  it('getSessionIdleTimeoutMinutes/getSessionMaxHours reflect the row, defaulting per the schema default', async () => {
+    const { service } = setup({ sessionIdleTimeoutMinutes: 30, sessionMaxHours: 12 });
+
+    await expect(service.getSessionIdleTimeoutMinutes()).resolves.toBe(30);
+    await expect(service.getSessionMaxHours()).resolves.toBe(12);
+  });
+
+  it('getPublicClientSettings surfaces both thresholds so the frontend can enforce them client-side', async () => {
+    const { service } = setup({
+      sessionIdleTimeoutMinutes: 45,
+      sessionMaxHours: 8,
+      manualPhoneVerificationFeeTokens: { toNumber: () => 0 },
+      supportChatMode: 'TAWK',
+      kycMinWithdrawalTokens: { toNumber: () => 0 },
+      testimonyTextRewardTokens: { toString: () => '0' },
+      testimonyVideoRewardTokens: { toString: () => '0' },
+    });
+
+    const result = await service.getPublicClientSettings();
+    expect(result.sessionIdleTimeoutMinutes).toBe(45);
+    expect(result.sessionMaxHours).toBe(8);
+  });
+
+  it('update rejects sessionIdleTimeoutMinutes below 1', async () => {
+    const { service } = setup({ sessionIdleTimeoutMinutes: 30, sessionMaxHours: 12 });
+    await expect(service.update({ sessionIdleTimeoutMinutes: 0 })).rejects.toThrow(
+      'sessionIdleTimeoutMinutes must be >= 1',
+    );
+  });
+
+  it('update rejects sessionMaxHours below 1', async () => {
+    const { service } = setup({ sessionIdleTimeoutMinutes: 30, sessionMaxHours: 12 });
+    await expect(service.update({ sessionMaxHours: 0 })).rejects.toThrow(
+      'sessionMaxHours must be >= 1',
+    );
+  });
+
+  it('update persists a new idle timeout and max hours', async () => {
+    const { service, prisma } = setup({ sessionIdleTimeoutMinutes: 30, sessionMaxHours: 12 });
+    prisma.platformSettings.upsert.mockResolvedValue({
+      id: 'default',
+      sessionIdleTimeoutMinutes: 15,
+      sessionMaxHours: 8,
+      minWalletBalanceTokens: { toString: () => '0' },
+      minScoreRange: { toString: () => '0' },
+      maxScoreRange: { toString: () => '100' },
+      manualPhoneVerificationFeeTokens: { toString: () => '0' },
+      testimonyTextRewardTokens: { toString: () => '0' },
+      testimonyVideoRewardTokens: { toString: () => '0' },
+      qualityWeightConsensus: { toString: () => '60' },
+      qualityWeightNoise: { toString: () => '15' },
+      qualityWeightQuality: { toString: () => '10' },
+      qualityWeightLiveness: { toString: () => '15' },
+      qualityWeightAsrMatch: { toString: () => '0' },
+      kycMinWithdrawalTokens: { toString: () => '0' },
+      withdrawalFeePercent: { toString: () => '0' },
+      withdrawalFeeTokenAmount: { toString: () => '0' },
+    });
+
+    await expect(
+      service.update({ sessionIdleTimeoutMinutes: 15, sessionMaxHours: 8 }),
+    ).resolves.toMatchObject({ sessionIdleTimeoutMinutes: 15, sessionMaxHours: 8 });
+  });
+});

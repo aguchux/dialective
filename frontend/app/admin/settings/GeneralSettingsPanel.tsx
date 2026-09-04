@@ -24,6 +24,8 @@ export function GeneralSettingsPanel() {
   const [taskTokenCost, setTaskTokenCost] = useState('');
   const [trainingPayoutBonusCapMultiple, setTrainingPayoutBonusCapMultiple] = useState('');
   const [adminPayoutOtpEnabled, setAdminPayoutOtpEnabled] = useState(false);
+  const [sessionIdleTimeoutMinutes, setSessionIdleTimeoutMinutes] = useState('');
+  const [sessionMaxHours, setSessionMaxHours] = useState('');
   const [phoneVerificationRequired, setPhoneVerificationRequired] = useState(true);
   const [startupBonusAmount, setStartupBonusAmount] = useState('');
   const [wordStuckTimeoutMinutes, setWordStuckTimeoutMinutes] = useState('');
@@ -48,6 +50,8 @@ export function GeneralSettingsPanel() {
     setTaskTokenCost(settings.taskTokenCost ?? '');
     setTrainingPayoutBonusCapMultiple(settings.trainingPayoutBonusCapMultiple ?? '');
     setAdminPayoutOtpEnabled(settings.adminPayoutOtpEnabled);
+    setSessionIdleTimeoutMinutes(String(settings.sessionIdleTimeoutMinutes));
+    setSessionMaxHours(String(settings.sessionMaxHours));
     setPhoneVerificationRequired(settings.phoneVerificationRequired);
     setStartupBonusAmount(settings.startupBonusAmount ?? '');
     setWordStuckTimeoutMinutes(String(settings.wordStuckTimeoutMinutes));
@@ -85,6 +89,10 @@ export function GeneralSettingsPanel() {
           ? { trainingPayoutBonusCapMultiple: Number(trainingPayoutBonusCapMultiple) }
           : {}),
         adminPayoutOtpEnabled,
+        ...(sessionIdleTimeoutMinutes !== ''
+          ? { sessionIdleTimeoutMinutes: Number(sessionIdleTimeoutMinutes) }
+          : {}),
+        ...(sessionMaxHours !== '' ? { sessionMaxHours: Number(sessionMaxHours) } : {}),
         phoneVerificationRequired,
         ...(startupBonusAmount !== '' ? { startupBonusAmount: Number(startupBonusAmount) } : {}),
         ...(wordStuckTimeoutMinutes !== ''
@@ -371,6 +379,45 @@ export function GeneralSettingsPanel() {
               </div>
             </div>
           )}
+
+          <div className="grid gap-1">
+            <span className="font-bold">Session timeout (all accounts)</span>
+            <span className="text-sm leading-relaxed text-muted">
+              Applies uniformly to every trainer and admin session. Idle timeout signs a session
+              out after this many minutes of inactivity; the absolute limit forces a fresh login
+              at least this often regardless of activity.
+            </span>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <div className="grid gap-1">
+                <label className="font-bold" htmlFor="session-idle-timeout-minutes">
+                  Idle timeout (minutes)
+                </label>
+                <input
+                  className={inputClass}
+                  id="session-idle-timeout-minutes"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={sessionIdleTimeoutMinutes}
+                  onChange={(e) => setSessionIdleTimeoutMinutes(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1">
+                <label className="font-bold" htmlFor="session-max-hours">
+                  Absolute limit (hours)
+                </label>
+                <input
+                  className={inputClass}
+                  id="session-max-hours"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={sessionMaxHours}
+                  onChange={(e) => setSessionMaxHours(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
 
           <div>
             <label

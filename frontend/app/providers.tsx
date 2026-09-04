@@ -10,12 +10,14 @@ import { AiAssistantWidget } from '@/components/AiAssistantWidget';
 import { RequireNameDialog } from '@/components/RequireNameDialog';
 import { PwaServiceWorker } from '@/components/PwaServiceWorker';
 import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
+import { SessionActivityTracker } from '@/components/SessionActivityTracker';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus>
       <InvalidSessionHandler />
       <AuthMaintenanceSessionHandler />
+      <SessionActivityTracker />
       <ThemeProvider
         attribute="class"
         defaultTheme="light"
@@ -41,8 +43,15 @@ function InvalidSessionHandler() {
   const { data: session, status } = useSession();
 
   useEffect(() => {
-    if (status === 'authenticated' && session.authError === 'RefreshTokenInvalid') {
+    if (status !== 'authenticated') return;
+    if (session.authError === 'RefreshTokenInvalid') {
       void signOut({ callbackUrl: '/login?reason=session-expired' });
+    } else if (session.authError === 'SessionExpired') {
+      // proxy.ts already enforces this server-side on the next navigation --
+      // this is the client-side fast path so an idle tab signs itself out
+      // as soon as the next refetchInterval poll notices, rather than
+      // waiting for the trainer to click something first.
+      void signOut({ callbackUrl: '/login?reason=idle' });
     }
   }, [session?.authError, status]);
 

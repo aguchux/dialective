@@ -951,6 +951,8 @@ export interface PublicClientSettings {
   referralInviteExpirySeconds: number;
   wordTrainingRecordingTimeoutSeconds: number;
   wordTrainingRecordingMaxTimeoutSeconds: number;
+  sessionIdleTimeoutMinutes: number;
+  sessionMaxHours: number;
   phoneVerificationRequired: boolean;
   manualPhoneVerificationEnabled: boolean;
   manualPhoneVerificationFeeTokens: string;
@@ -1335,6 +1337,8 @@ export interface PlatformSettings {
   wordTrainingEnabled: boolean;
   sentenceTrainingEnabled: boolean;
   adminPayoutOtpEnabled: boolean;
+  sessionIdleTimeoutMinutes: number;
+  sessionMaxHours: number;
   phoneVerificationRequired: boolean;
   manualPhoneVerificationEnabled: boolean;
   manualPhoneVerificationFeeTokens: string;
@@ -1450,6 +1454,8 @@ export interface PlatformSettingsInput {
   wordTrainingEnabled?: boolean;
   sentenceTrainingEnabled?: boolean;
   adminPayoutOtpEnabled?: boolean;
+  sessionIdleTimeoutMinutes?: number;
+  sessionMaxHours?: number;
   phoneVerificationRequired?: boolean;
   manualPhoneVerificationEnabled?: boolean;
   manualPhoneVerificationFeeTokens?: number;

@@ -387,6 +387,16 @@ export class PlatformSettingsService {
     return row.phoneVerificationRequired;
   }
 
+  async getSessionIdleTimeoutMinutes(): Promise<number> {
+    const row = await this.getRow();
+    return row.sessionIdleTimeoutMinutes;
+  }
+
+  async getSessionMaxHours(): Promise<number> {
+    const row = await this.getRow();
+    return row.sessionMaxHours;
+  }
+
   async getManualPhoneVerificationSettings(): Promise<{
     enabled: boolean;
     feeTokens: number;
@@ -705,6 +715,8 @@ export class PlatformSettingsService {
       wordTrainingEnabled: row.wordTrainingEnabled,
       sentenceTrainingEnabled: row.sentenceTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
+      sessionIdleTimeoutMinutes: row.sessionIdleTimeoutMinutes,
+      sessionMaxHours: row.sessionMaxHours,
       phoneVerificationRequired: row.phoneVerificationRequired,
       manualPhoneVerificationEnabled: row.manualPhoneVerificationEnabled,
       manualPhoneVerificationFeeTokens: row.manualPhoneVerificationFeeTokens.toString(),
@@ -827,6 +839,8 @@ export class PlatformSettingsService {
     wordTrainingEnabled?: boolean;
     sentenceTrainingEnabled?: boolean;
     adminPayoutOtpEnabled?: boolean;
+    sessionIdleTimeoutMinutes?: number;
+    sessionMaxHours?: number;
     phoneVerificationRequired?: boolean;
     manualPhoneVerificationEnabled?: boolean;
     manualPhoneVerificationFeeTokens?: number;
@@ -1114,6 +1128,18 @@ export class PlatformSettingsService {
       throw new BadRequestException('auditHoldEveryNSubmissions must be >= 0');
     }
 
+    // No "off" value for either -- unlike auditHoldEveryNSubmissions, a
+    // session timeout has no meaningful "disabled" state (0 would mean
+    // instant logout, not "never time out"). Both must stay strictly
+    // positive; the frontend session logic assumes a real, positive minutes/
+    // hours value to compare against.
+    if (data.sessionIdleTimeoutMinutes !== undefined && data.sessionIdleTimeoutMinutes < 1) {
+      throw new BadRequestException('sessionIdleTimeoutMinutes must be >= 1');
+    }
+    if (data.sessionMaxHours !== undefined && data.sessionMaxHours < 1) {
+      throw new BadRequestException('sessionMaxHours must be >= 1');
+    }
+
     // wordTrainingEnabled/sentenceTrainingEnabled/reverseWordTrainingEnabled
     // may ALL be turned off at once -- no validation guard here. When both
     // ENGLISH_TO_DIALECT content gates are off, WordsService.nextAssignment
@@ -1174,6 +1200,8 @@ export class PlatformSettingsService {
       wordTrainingEnabled: row.wordTrainingEnabled,
       sentenceTrainingEnabled: row.sentenceTrainingEnabled,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
+      sessionIdleTimeoutMinutes: row.sessionIdleTimeoutMinutes,
+      sessionMaxHours: row.sessionMaxHours,
       phoneVerificationRequired: row.phoneVerificationRequired,
       manualPhoneVerificationEnabled: row.manualPhoneVerificationEnabled,
       manualPhoneVerificationFeeTokens: row.manualPhoneVerificationFeeTokens.toString(),
@@ -1316,6 +1344,8 @@ export class PlatformSettingsService {
       referralInviteExpirySeconds,
       wordTrainingRecordingTimeoutSeconds,
       wordTrainingRecordingMaxTimeoutSeconds,
+      sessionIdleTimeoutMinutes: row.sessionIdleTimeoutMinutes,
+      sessionMaxHours: row.sessionMaxHours,
       phoneVerificationRequired,
       manualPhoneVerificationEnabled: manualPhone.enabled,
       manualPhoneVerificationFeeTokens: manualPhone.feeTokens.toString(),
