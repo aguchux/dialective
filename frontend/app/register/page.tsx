@@ -15,6 +15,8 @@ import { AuthMaintenanceNotice } from '@/components/AuthMaintenanceNotice';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { roleHomePath } from '@/lib/role-home';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { PasswordRequirementsList } from '@/components/ui/PasswordRequirementsList';
+import { isStrongPassword } from '@/lib/password-strength';
 import {
   clearReferralCookie,
   clearMarketingCampaignCookie,
@@ -264,14 +266,15 @@ function RegisterContent() {
             autoComplete="new-password"
             className={inputClass}
             type="password"
-            placeholder="Password (min 8 characters)"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
             required
           />
+          {password && <PasswordRequirementsList password={password} />}
           <ActionButton
             className={primaryButtonClass}
+            disabled={!isStrongPassword(password)}
             type="submit"
             pending={isSubmitting}
             pendingLabel="Creating account"

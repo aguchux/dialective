@@ -7,6 +7,8 @@ import { normalizeErrorMessage, useResetPasswordMutation } from '@/store/api';
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { PasswordRequirementsList } from '@/components/ui/PasswordRequirementsList';
+import { isStrongPassword } from '@/lib/password-strength';
 
 const inputClass =
   'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
@@ -88,16 +90,15 @@ function ResetPasswordContent() {
             autoComplete="new-password"
             className={inputClass}
             type="password"
-            placeholder="New password (min 8 characters)"
+            placeholder="New password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
             required
           />
+          {password && <PasswordRequirementsList password={password} />}
           <input
             autoComplete="new-password"
             className={inputClass}
-            minLength={8}
             onChange={(e) => setConfirmPassword(e.target.value)}
             placeholder="Confirm new password"
             required
@@ -106,6 +107,7 @@ function ResetPasswordContent() {
           />
           <ActionButton
             className={primaryButtonClass}
+            disabled={!isStrongPassword(password)}
             type="submit"
             pending={isLoading}
             pendingLabel="Resetting"
