@@ -41,7 +41,3 @@ resources:
   - tokenomics-valuation-cronjob.yaml
   - weekly-trainer-report-cronjob.yaml
   - reserve-balance-poll-cronjob.yaml
-  - discourse-postgres.yaml
-  - discourse-redis.yaml
-  - discourse-deployment.yaml
-  - discourse-ingress.yaml
