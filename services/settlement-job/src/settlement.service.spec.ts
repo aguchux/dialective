@@ -123,6 +123,10 @@ describe('SettlementService settlement state', () => {
       ledgerEntry: {
         findFirst: jest.fn().mockResolvedValue(null),
       },
+      trainingPayoutClaim: {
+        create: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
       wallet: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
@@ -167,6 +171,33 @@ describe('SettlementService settlement state', () => {
       expect.anything(),
       'recording-1',
     );
+  });
+
+  it('atomically claims a trainer source before crediting its training payout', async () => {
+    const prisma = buildPrismaMock();
+    prisma.wordRecording.findMany.mockResolvedValue([
+      {
+        id: 'recording-source-1',
+        userId: 'user-1',
+        wordId: 'word-1',
+        sentenceId: null,
+        tokensSpent: { toNumber: () => 5 },
+        rawScore: null,
+        score: { toNumber: () => 80 },
+        noiseScore: null,
+        qualityScore: null,
+        livenessScore: null,
+        asrMatchScore: null,
+      },
+    ]);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn() } as never);
+
+    // @ts-expect-error -- private method under test
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
+
+    expect(prisma.trainingPayoutClaim.create).toHaveBeenCalledWith({
+      data: { userId: 'user-1', sourceKey: 'word:word-1', recordingId: 'recording-source-1' },
+    });
   });
 
   it('skips minting into the Tokenomics ledger when minting is paused, but still pays the trainer', async () => {

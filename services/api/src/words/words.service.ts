@@ -290,7 +290,7 @@ export class WordsService {
       // WordTrainingDialog.tsx.
       throw new NotFoundException('NO_WORDS_AVAILABLE');
     }
-    const word = await this.pickEnglishToDialectWord(userId, totalWords);
+    const word = await this.pickEnglishToDialectWord(userId);
     if (!word) throw new NotFoundException('NO_WORDS_AVAILABLE');
     const assignment = await this.prisma.wordTrainingAssignment.create({
       data: { sessionId, wordId: word.id, direction: 'ENGLISH_TO_DIALECT' },
@@ -876,12 +876,12 @@ export class WordsService {
    * instead of pure `random()` sampling, which -- given a large bank and a
    * trainer doing many short sessions -- lets a small subset of words get
    * picked repeatedly by chance while others are never touched. Prefers
-   * words this trainer has never recorded yet; only once the trainer has
-   * attempted every word does the pool widen back to the full bank (a
-   * word can still be re-assigned across sessions by design, just not
-   * before every other word has had a turn).
+   * words this trainer has never recorded. A source never returns after an
+   * attempt: training is compensated only for the first completed source
+   * contribution, so reopening the pool after exhaustion would create an
+   * avoidable repeat-payout surface.
    */
-  private async pickEnglishToDialectWord(userId: string, totalWords: number) {
+  private async pickEnglishToDialectWord(userId: string) {
     const [attempted, banned] = await Promise.all([
       this.prisma.wordRecording.findMany({
         where: { userId, direction: 'ENGLISH_TO_DIALECT', wordId: { not: null } },
@@ -902,19 +902,13 @@ export class WordsService {
     const unattemptedCount = await this.prisma.word.count({
       where: { id: { notIn: excludedIds } },
     });
-    const where =
-      unattemptedCount > 0
-        ? { id: { notIn: excludedIds } }
-        : bannedIds.length > 0
-          ? { id: { notIn: bannedIds } }
-          : {};
-    const count = unattemptedCount > 0 ? unattemptedCount : totalWords - bannedIds.length;
-    if (count <= 0) return null;
+    if (unattemptedCount <= 0) return null;
+    const where = { id: { notIn: excludedIds } };
 
     const [word] = await this.prisma.word.findMany({
       where,
       take: 1,
-      skip: Math.floor(Math.random() * count),
+      skip: Math.floor(Math.random() * unattemptedCount),
     });
     return word;
   }
@@ -934,10 +928,8 @@ export class WordsService {
    * Same anti-repetition posture as pickEnglishToDialectWord: prefers
    * Sentences this trainer has never attempted (submitted a WordRecording
    * for) yet within the current tier-filtered pool, so the same sentence
-   * can never repeat for a trainer until every other sentence in that pool
-   * has had a turn; only once every sentence in scope has been attempted
-   * does the pool widen back to the full tier-filtered set. This makes an
-   * immediate repeat impossible whenever 2+ sentences are available.
+   * never repeats for a trainer. This keeps the task source and its payout
+   * strictly first-attempt-only, even after the tier pool is exhausted.
    */
   private async pickSentenceSource(
     userId: string,
@@ -955,25 +947,32 @@ export class WordsService {
     const unattemptedCount = await this.prisma.sentence.count({
       where: { ...tierWhere, id: { notIn: attemptedIds } },
     });
-    const where =
-      unattemptedCount > 0 ? { ...tierWhere, id: { notIn: attemptedIds } } : tierWhere;
-    const count =
-      unattemptedCount > 0 ? unattemptedCount : await this.prisma.sentence.count({ where: tierWhere });
-    if (count === 0) return null;
+    if (unattemptedCount === 0) return null;
+    const where = { ...tierWhere, id: { notIn: attemptedIds } };
 
     const [sentence] = await this.prisma.sentence.findMany({
       where,
       take: 1,
-      skip: Math.floor(Math.random() * count),
+      skip: Math.floor(Math.random() * unattemptedCount),
     });
     return sentence ? { sentenceId: sentence.id, sentenceText: sentence.text } : null;
   }
 
   private async pickReverseSource(userId: string, sessionId: string, dialectTag: string) {
-    const usedSources = await this.prisma.wordTrainingAssignment.findMany({
-      where: { sessionId, sourceRecordingId: { not: null } },
-      select: { sourceRecordingId: true },
-    });
+    const [usedSources, attemptedSources] = await Promise.all([
+      this.prisma.wordTrainingAssignment.findMany({
+        where: { sessionId, sourceRecordingId: { not: null } },
+        select: { sourceRecordingId: true },
+      }),
+      this.prisma.wordRecording.findMany({
+        where: { userId, OR: [{ wordId: { not: null } }, { sentenceId: { not: null } }] },
+        select: { wordId: true, sentenceId: true },
+      }),
+    ]);
+    const attemptedWordIds = attemptedSources.flatMap(({ wordId }) => (wordId ? [wordId] : []));
+    const attemptedSentenceIds = attemptedSources.flatMap(({ sentenceId }) =>
+      sentenceId ? [sentenceId] : [],
+    );
     const where = {
       id: {
         notIn: usedSources.flatMap(({ sourceRecordingId }) =>
@@ -986,6 +985,10 @@ export class WordsService {
       direction: 'ENGLISH_TO_DIALECT' as const,
       userId: { not: userId },
       noiseRating: { not: 'NOISY' as const },
+      OR: [
+        { wordId: { not: null, notIn: attemptedWordIds } },
+        { sentenceId: { not: null, notIn: attemptedSentenceIds } },
+      ],
     };
     const count = await this.prisma.wordRecording.count({ where });
     if (count === 0) return null;

@@ -14,6 +14,16 @@ function randomInRange(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
 
+function trainingPayoutSourceKey(wordId: string | null, sentenceId: string | null): string | null {
+  if (wordId) return `word:${wordId}`;
+  if (sentenceId) return `sentence:${sentenceId}`;
+  return null;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+}
+
 export interface QualityWeights {
   consensus: number;
   noise: number;
@@ -165,6 +175,8 @@ export class SettlementService {
       select: {
         id: true,
         userId: true,
+        wordId: true,
+        sentenceId: true,
         tokensSpent: true,
         rawScore: true,
         score: true,
@@ -185,6 +197,7 @@ export class SettlementService {
         );
         continue;
       }
+      const userId = recording.userId;
 
       try {
         const realScore = recording.rawScore ?? recording.score;
@@ -199,9 +212,10 @@ export class SettlementService {
         );
         const payoutScore = qualityGateEnabled ? compositeScore : recording.score;
         const payout = computeTrainingPayout(recording.tokensSpent, payoutScore, bonusCapMultiple);
+        const sourceKey = trainingPayoutSourceKey(recording.wordId, recording.sentenceId);
         const { ops } = await creditTrainingPayoutOps(
           this.prisma,
-          recording.userId,
+          userId,
           payout,
           recording.id,
         );
@@ -209,32 +223,52 @@ export class SettlementService {
         // settleSubmissions -- see mintTrainingPayoutOps's doc comment.
         const mintOps = mintingPaused
           ? []
-          : (await mintTrainingPayoutOps(this.prisma, recording.userId, payout, recording.id)).ops;
+          : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
 
         // Same lock-release-alongside-payout pattern as settleSubmissions,
         // same legacy-row guard.
         const lockOps = (await this.wasLocked(recording.id))
           ? [
               this.prisma.wallet.updateMany({
-                where: { userId: recording.userId },
+                where: { userId },
                 data: { lockedBalance: { decrement: recording.tokensSpent } },
               }),
             ]
           : [];
-        await this.prisma.$transaction([
-          ...lockOps,
-          ...ops,
-          ...mintOps,
-          this.prisma.wordRecording.update({
-            where: { id: recording.id },
-            data: {
-              status: 'SETTLED',
-              compositeScore,
-              payoutTokenAmount: payout,
-              settledAt: new Date(),
-            },
-          }),
-        ]);
+        try {
+          await this.prisma.$transaction([
+            // The ledger reference protects retries of one recording. This
+            // claim also protects repeat recordings of the same source item.
+            ...(sourceKey
+              ? [
+                  this.prisma.trainingPayoutClaim.create({
+                    data: { userId, sourceKey, recordingId: recording.id },
+                  }),
+                ]
+              : []),
+            ...lockOps,
+            ...ops,
+            ...mintOps,
+            this.prisma.wordRecording.update({
+              where: { id: recording.id },
+              data: {
+                status: 'SETTLED',
+                compositeScore,
+                payoutTokenAmount: payout,
+                settledAt: new Date(),
+              },
+            }),
+          ]);
+        } catch (err) {
+          if (!sourceKey || !isUniqueConstraintError(err)) throw err;
+          const existingClaim = await this.prisma.trainingPayoutClaim.findUnique({
+            where: { userId_sourceKey: { userId, sourceKey } },
+            select: { recordingId: true },
+          });
+          if (existingClaim?.recordingId === recording.id) continue;
+          if (!existingClaim) throw err;
+          await this.settleDuplicateSourceWithoutReward({ ...recording, userId });
+        }
 
         settledCount += 1;
         totalPayout += payout.toNumber();
@@ -494,6 +528,27 @@ export class SettlementService {
         },
       }),
     ]);
+  }
+
+  /** A repeat source is retained as data but cannot earn a second payout. */
+  private async settleDuplicateSourceWithoutReward(recording: {
+    id: string;
+    userId: string;
+    tokensSpent: Prisma.Decimal;
+  }): Promise<void> {
+    const claimed = await this.prisma.wordRecording.updateMany({
+      where: { id: recording.id, status: 'SCORED', settledAt: null },
+      data: {
+        status: 'SETTLED',
+        payoutTokenAmount: new Prisma.Decimal(0),
+        settledAt: new Date(),
+      },
+    });
+    if (claimed.count === 0) return;
+    if (await this.wasLocked(recording.id)) {
+      await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
+    }
+    this.logger.warn(`Settled repeat source without reward wordRecording=${recording.id}`);
   }
 
   /**

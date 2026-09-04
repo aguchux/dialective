@@ -153,6 +153,7 @@ model User {
   manualPhoneVerificationRequests  ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationUser")
   manualPhoneVerificationsReviewed ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationAdmin")
   wallet                           Wallet?
+  trainingPayoutClaims             TrainingPayoutClaim[]
   blogPosts                        BlogPost[]
   authoredCourses                  Course[]
   courseProgress                   CourseProgress[]
@@ -1058,6 +1059,24 @@ model WordRecording {
   @@index([status])
   @@index([rawScore])
   @@map("word_recordings")
+}
+
+/// A trainer may earn one training payout for a given source item. The
+/// sourceKey is `word:<id>` or `sentence:<id>` so the uniqueness rule works
+/// across the nullable WordRecording foreign keys. A trainer can contribute
+/// another take for data quality, but only their first settled take of that
+/// source may create a monetary reward.
+model TrainingPayoutClaim {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceKey   String
+  recordingId String   @unique
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, sourceKey])
+  @@index([userId])
+  @@map("training_payout_claims")
 }
 
 enum LedgerEntryType {

@@ -365,22 +365,14 @@ describe('WordsService', () => {
     );
   });
 
-  it('widens back to the full word bank once the trainer has attempted every word', async () => {
+  it('reports NO_WORDS_AVAILABLE once the trainer has attempted every word', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
     prisma.word.count
       .mockResolvedValueOnce(2) // totalWords
       .mockResolvedValueOnce(0); // unattemptedCount -- trainer has done both
     prisma.wordRecording.findMany.mockResolvedValue([{ wordId: 'word-1' }, { wordId: 'word-2' }]);
-    prisma.word.findMany.mockResolvedValue([{ id: 'word-1', text: 'welcome' }]);
-    prisma.wordTrainingAssignment.create.mockResolvedValue({
-      id: 'assignment-4',
-      direction: 'ENGLISH_TO_DIALECT',
-    });
-
-    await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
-      wordId: 'word-1',
-    });
-    expect(prisma.word.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+    await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow('NO_WORDS_AVAILABLE');
+    expect(prisma.word.findMany).not.toHaveBeenCalled();
   });
 
   describe('word skip tracking', () => {
@@ -435,20 +427,17 @@ describe('WordsService', () => {
       expect(prisma.wordSkip.upsert).not.toHaveBeenCalled();
     });
 
-    it('excludes a word banned for repeated skips, even once the pool widens back to the full bank', async () => {
+    it('does not reopen the word pool after every source has been attempted', async () => {
       prisma.word.count
         .mockResolvedValueOnce(2) // totalWords
         .mockResolvedValueOnce(0); // unattemptedCount -- trainer has attempted both
       prisma.wordRecording.findMany.mockResolvedValue([{ wordId: 'word-1' }, { wordId: 'word-2' }]);
       prisma.wordSkip.findMany.mockResolvedValue([{ wordId: 'word-2' }]);
-      prisma.word.findMany.mockResolvedValue([{ id: 'word-1', text: 'welcome' }]);
 
-      await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
-        wordId: 'word-1',
-      });
-      expect(prisma.word.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: { notIn: ['word-2'] } } }),
+      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
+        'NO_WORDS_AVAILABLE',
       );
+      expect(prisma.word.findMany).not.toHaveBeenCalled();
     });
 
     it('reports NO_WORDS_AVAILABLE once every remaining word is banned', async () => {
@@ -862,29 +851,20 @@ describe('WordsService', () => {
       );
     });
 
-    it('widens back to the full tier pool once every sentence in it has been attempted', async () => {
+    it('does not reopen a sentence tier once every sentence in it has been attempted', async () => {
       prisma.wordRecording.count.mockResolvedValue(150); // tier 1: 100-199 -> 2-3 words
       prisma.wordRecording.findMany.mockResolvedValue([{ sentenceId: 'sentence-1' }]);
       // No unattempted sentences left in the tier pool.
-      prisma.sentence.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
-      prisma.sentence.findMany.mockResolvedValue([{ id: 'sentence-1', text: 'good morning' }]);
+      prisma.sentence.count.mockResolvedValueOnce(0);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
-        id: 'assignment-sentence-widened',
+        id: 'assignment-word-fallback',
         direction: 'ENGLISH_TO_DIALECT',
       });
 
       const result = await service.nextAssignment(trainer.id, session.id);
 
-      expect(result.promptText).toBe('good morning');
-      // Second count call widens back to the plain tier filter, no exclusion.
-      expect(prisma.sentence.count).toHaveBeenNthCalledWith(2, {
-        where: { wordCount: { gte: 2, lte: 3 } },
-      });
-      expect(prisma.sentence.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { wordCount: { gte: 2, lte: 3 } },
-        }),
-      );
+      expect(result.promptText).toBe('welcome');
+      expect(prisma.sentence.findMany).not.toHaveBeenCalled();
     });
 
     it('falls back to a Word-sourced pick when tiered but the sentence pool is empty', async () => {

@@ -208,6 +208,7 @@ export class SettlementAdminService {
         'This word recording has no score or trainer and cannot be settled',
       );
     }
+    const userId = recording.userId;
     if (!force && this.isPendingDelay(recording.scoredAt ?? recording.createdAt, ctx.settlementDelayMinutes)) {
       throw new UnprocessableEntityException(
         'This word recording is still inside the settlement delay window -- pass force to settle it early',
@@ -226,28 +227,50 @@ export class SettlementAdminService {
     );
     const payoutScore = ctx.qualityGateEnabled ? compositeScore : recording.score;
     const payout = computeTrainingPayout(recording.tokensSpent, payoutScore, ctx.bonusCapMultiple);
-    const { ops } = await creditTrainingPayoutOps(this.prisma, recording.userId, payout, recording.id);
+    const sourceKey = trainingPayoutSourceKey(recording.wordId, recording.sentenceId);
+    const { ops } = await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id);
     const mintOps = ctx.mintingPaused
       ? []
-      : (await mintTrainingPayoutOps(this.prisma, recording.userId, payout, recording.id)).ops;
+      : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
     const lockOps = (await this.wasLocked(recording.id))
       ? [
           this.prisma.wallet.updateMany({
-            where: { userId: recording.userId },
+            where: { userId },
             data: { lockedBalance: { decrement: recording.tokensSpent } },
           }),
         ]
       : [];
 
-    await this.prisma.$transaction([
-      ...lockOps,
-      ...ops,
-      ...mintOps,
-      this.prisma.wordRecording.update({
-        where: { id: recording.id },
-        data: { status: 'SETTLED', compositeScore, payoutTokenAmount: payout, settledAt: new Date() },
-      }),
-    ]);
+    try {
+      await this.prisma.$transaction([
+        ...(sourceKey
+          ? [
+              this.prisma.trainingPayoutClaim.create({
+                data: { userId, sourceKey, recordingId: recording.id },
+              }),
+            ]
+          : []),
+        ...lockOps,
+        ...ops,
+        ...mintOps,
+        this.prisma.wordRecording.update({
+          where: { id: recording.id },
+          data: { status: 'SETTLED', compositeScore, payoutTokenAmount: payout, settledAt: new Date() },
+        }),
+      ]);
+    } catch (err) {
+      if (!sourceKey || !isUniqueConstraintError(err)) throw err;
+      const existingClaim = await this.prisma.trainingPayoutClaim.findUnique({
+        where: { userId_sourceKey: { userId, sourceKey } },
+        select: { recordingId: true },
+      });
+      if (existingClaim?.recordingId === recording.id) {
+        throw new UnprocessableEntityException('This word recording is already being settled');
+      }
+      if (!existingClaim) throw err;
+      await this.settleDuplicateSourceWithoutReward({ ...recording, userId });
+      return { id: recording.id, payoutTokenAmount: '0' };
+    }
 
     this.logger.log(`Manually settled wordRecording=${recording.id} payout=${payout.toString()}`);
     return { id: recording.id, payoutTokenAmount: payout.toString() };
@@ -260,6 +283,56 @@ export class SettlementAdminService {
     });
     return lock !== null;
   }
+
+  /** A repeat source remains auditable, but its locked stake is returned without a reward. */
+  private async settleDuplicateSourceWithoutReward(recording: {
+    id: string;
+    userId: string;
+    tokensSpent: Prisma.Decimal;
+  }): Promise<void> {
+    const claimed = await this.prisma.wordRecording.updateMany({
+      where: { id: recording.id, status: 'SCORED', settledAt: null },
+      data: {
+        status: 'SETTLED',
+        payoutTokenAmount: new Prisma.Decimal(0),
+        settledAt: new Date(),
+      },
+    });
+    if (claimed.count === 0 || !(await this.wasLocked(recording.id))) return;
+
+    const wallet = await this.prisma.wallet.upsert({
+      where: { userId: recording.userId },
+      update: {},
+      create: { userId: recording.userId },
+    });
+    await this.prisma.$transaction([
+      this.prisma.wallet.update({
+        where: { id: wallet.id },
+        data: {
+          lockedBalance: { decrement: recording.tokensSpent },
+          balance: { increment: recording.tokensSpent },
+        },
+      }),
+      this.prisma.ledgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          type: 'TASK_REFUND',
+          amount: recording.tokensSpent,
+          reference: recording.id,
+        },
+      }),
+    ]);
+  }
+}
+
+function trainingPayoutSourceKey(wordId: string | null, sentenceId: string | null): string | null {
+  if (wordId) return `word:${wordId}`;
+  if (sentenceId) return `sentence:${sentenceId}`;
+  return null;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
 }
 
 /** Duplicated from services/settlement-job/src/settlement.service.ts -- see this file's own doc comment for why. */
