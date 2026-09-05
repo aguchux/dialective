@@ -210,15 +210,21 @@ function formatTime(value: string) {
   );
 }
 
+const SITE_URL = 'https://www.dialectlibrary.com';
+const SITE_ORIGINS = ['https://www.dialectlibrary.com', 'https://dialectlibrary.com'];
+
 function renderMessage(content: string) {
   const parts = content.split(
-    /(\[[^\]]+\]\((?:\/[A-Za-z0-9_/?=&-]*|https:\/\/(?:www\.youtube\.com\/@DialectLibrary|wa\.me\/447424448030|www\.dialectlibrary\.com\/faq)|mailto:hello@dialectlibrary\.com)\))/g,
+    /(\[[^\]]+\]\((?:\/[A-Za-z0-9_/?=&-]*|https:\/\/(?:www\.)?dialectlibrary\.com(?:\/[A-Za-z0-9_/?=&-]*)?|https:\/\/(?:www\.youtube\.com\/@DialectLibrary|wa\.me\/447424448030)|mailto:hello@dialectlibrary\.com)\))/g,
   );
   return parts.map((part, index) => {
     const match = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
     if (!match) return <span key={index}>{part}</span>;
-    if (!isApprovedAssistantHref(match[2])) return <span key={index}>{part}</span>;
-    if (!match[2].startsWith('/')) {
+    const internalPath = toApprovedInternalPath(match[2]);
+    if (internalPath === null && !isApprovedExternalHref(match[2])) {
+      return <span key={index}>{part}</span>;
+    }
+    if (internalPath === null) {
       return (
         <a
           className="font-bold underline"
@@ -231,20 +237,32 @@ function renderMessage(content: string) {
         </a>
       );
     }
+    // The href stays relative so Link keeps this an instant client-side
+    // navigation, but the visible label is always the full
+    // https://www.dialectlibrary.com/... address -- a user reading (or
+    // copying) chat text should always see a complete, unambiguous URL,
+    // not a bare path that only resolves inside this app's own router.
     return (
-      <Link className="font-bold underline" href={match[2]} key={index}>
-        {match[1]}
+      <Link className="font-bold underline" href={internalPath} key={index}>
+        {`${SITE_URL}${internalPath}`}
       </Link>
     );
   });
 }
 
-function isApprovedAssistantHref(href: string) {
+/** Returns the relative path for an approved internal link, or null if href isn't one. */
+function toApprovedInternalPath(href: string): string | null {
+  if (/^\/[A-Za-z0-9_/?=&-]*$/.test(href)) return href;
+  const origin = SITE_ORIGINS.find((candidate) => href.startsWith(candidate));
+  if (!origin) return null;
+  const path = href.slice(origin.length) || '/';
+  return /^\/[A-Za-z0-9_/?=&-]*$/.test(path) ? path : null;
+}
+
+function isApprovedExternalHref(href: string) {
   return (
-    /^\/[A-Za-z0-9_/?=&-]*$/.test(href) ||
     href === 'https://www.youtube.com/@DialectLibrary' ||
     href === 'https://wa.me/447424448030' ||
-    href === 'https://www.dialectlibrary.com/faq' ||
     href === 'mailto:hello@dialectlibrary.com'
   );
 }

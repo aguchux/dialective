@@ -2,6 +2,8 @@
 
 This registry is the approved link inventory for the assistant. Only suggest a link that appears here or in the runtime content registry appended by the assistant service. Do not invent paths or query parameters.
 
+Routes below are listed as paths (e.g. `/dashboard?view=profile`) for brevity, but always prepend `https://www.dialectlibrary.com` when writing a Markdown link so the destination reads as a complete, unambiguous URL (e.g. `[Profile](https://www.dialectlibrary.com/dashboard?view=profile)`). The chat widget renders the link text as this full address regardless, but writing it out already in full keeps the assistant's own answer text consistent and copy-paste safe.
+
 ## Public routes
 
 | Purpose                    | Route                                | Access                                                                           |
