@@ -194,8 +194,41 @@ describe('CoursesService', () => {
         lastSlideIndex: 4,
         completedAt: new Date('2026-01-01'),
       });
+      prisma.ledgerEntry = { create: jest.fn() };
+      prisma.wallet = { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() };
 
       await service.saveProgress('user-1', 'intro', 4, 5);
+      expect(mail.sendCourseCompletedEmail).not.toHaveBeenCalled();
+      // The actual reward-integrity guarantee: retaking an already-completed
+      // course must never touch the ledger/wallet a second time, not just
+      // skip the email.
+      expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
+      expect(prisma.wallet.update).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('does not re-credit across repeated retakes -- same course, several completed re-saves in a row', async () => {
+      prisma.course.findFirst.mockResolvedValue({
+        id: 'c1',
+        title: 'Intro',
+        completionRewardTokens: new Prisma.Decimal(5),
+      });
+      // Every re-save after the first sees the course already completed --
+      // simulates a trainer re-opening and re-finishing the same course
+      // multiple times.
+      prisma.courseProgress.findUnique.mockResolvedValue({ completedAt: new Date('2026-01-01') });
+      prisma.courseProgress.upsert.mockResolvedValue({
+        lastSlideIndex: 4,
+        completedAt: new Date('2026-01-01'),
+      });
+      prisma.ledgerEntry = { create: jest.fn() };
+      prisma.wallet = { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() };
+
+      await service.saveProgress('user-1', 'intro', 4, 5);
+      await service.saveProgress('user-1', 'intro', 4, 5);
+      await service.saveProgress('user-1', 'intro', 4, 5);
+
+      expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
       expect(mail.sendCourseCompletedEmail).not.toHaveBeenCalled();
     });
 

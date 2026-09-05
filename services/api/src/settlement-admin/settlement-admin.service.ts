@@ -290,38 +290,44 @@ export class SettlementAdminService {
     userId: string;
     tokensSpent: Prisma.Decimal;
   }): Promise<void> {
-    const claimed = await this.prisma.wordRecording.updateMany({
-      where: { id: recording.id, status: 'SCORED', settledAt: null },
-      data: {
-        status: 'SETTLED',
-        payoutTokenAmount: new Prisma.Decimal(0),
-        settledAt: new Date(),
-      },
-    });
-    if (claimed.count === 0 || !(await this.wasLocked(recording.id))) return;
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.wordRecording.updateMany({
+        where: { id: recording.id, status: 'SCORED', settledAt: null },
+        data: {
+          status: 'SETTLED',
+          payoutTokenAmount: new Prisma.Decimal(0),
+          settledAt: new Date(),
+        },
+      });
+      if (claimed.count === 0) return;
 
-    const wallet = await this.prisma.wallet.upsert({
-      where: { userId: recording.userId },
-      update: {},
-      create: { userId: recording.userId },
-    });
-    await this.prisma.$transaction([
-      this.prisma.wallet.update({
+      const lock = await tx.ledgerEntry.findFirst({
+        where: { reference: recording.id, type: 'TASK_LOCK' },
+        select: { id: true },
+      });
+      if (!lock) return;
+
+      const wallet = await tx.wallet.upsert({
+        where: { userId: recording.userId },
+        update: {},
+        create: { userId: recording.userId },
+      });
+      await tx.wallet.update({
         where: { id: wallet.id },
         data: {
           lockedBalance: { decrement: recording.tokensSpent },
           balance: { increment: recording.tokensSpent },
         },
-      }),
-      this.prisma.ledgerEntry.create({
+      });
+      await tx.ledgerEntry.create({
         data: {
           walletId: wallet.id,
           type: 'TASK_REFUND',
           amount: recording.tokensSpent,
           reference: recording.id,
         },
-      }),
-    ]);
+      });
+    });
   }
 }
 
