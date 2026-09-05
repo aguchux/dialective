@@ -46,4 +46,45 @@ describe('respondJsonOrCsv', () => {
 
     expect(res.send).toHaveBeenCalledWith('');
   });
+
+  describe('formula injection', () => {
+    it.each([
+      ['=', '=1+1'],
+      ['+', '+1+1'],
+      ['-', '-2+3'],
+      ['@', '@SUM(1+1)'],
+      ['tab', '\tSUM(1+1)'],
+      ['carriage return', '\rSUM(1+1)'],
+    ])('neutralizes a leading "%s" with a leading apostrophe', (_label, value) => {
+      const res = fakeRes();
+
+      respondJsonOrCsv(res, 'report.csv', 'csv', { rows: [{ name: value }] });
+
+      expect(res.send).toHaveBeenCalledWith(`name\n'${value}`);
+    });
+
+    it('neutralizes and quotes a formula containing a double quote', () => {
+      const res = fakeRes();
+
+      respondJsonOrCsv(res, 'report.csv', 'csv', { rows: [{ name: '=cmd|"/c calc"!A1' }] });
+
+      expect(res.send).toHaveBeenCalledWith('name\n"\'=cmd|""/c calc""!A1"');
+    });
+
+    it('does not treat a mid-string formula-trigger character as dangerous', () => {
+      const res = fakeRes();
+
+      respondJsonOrCsv(res, 'report.csv', 'csv', { rows: [{ name: 'a=b+c' }] });
+
+      expect(res.send).toHaveBeenCalledWith('name\na=b+c');
+    });
+
+    it('quotes a neutralized value that also contains a comma', () => {
+      const res = fakeRes();
+
+      respondJsonOrCsv(res, 'report.csv', 'csv', { rows: [{ name: '=HYPERLINK("http://evil"),oops' }] });
+
+      expect(res.send).toHaveBeenCalledWith('name\n"\'=HYPERLINK(""http://evil""),oops"');
+    });
+  });
 });
