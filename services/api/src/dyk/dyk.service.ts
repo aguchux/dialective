@@ -51,10 +51,11 @@ export class DykService {
     if (!internal && !external) throw new BadRequestException('Choose an internal route or approved HTTPS channel');
     const content = dto.content.trim();
     if (!content) throw new BadRequestException('Content is required');
-    if (dto.stopCondition === 'COURSE' && !await this.prisma.course.findUnique({ where: { id: dto.targetId || '' } })) {
+    const wantsCourse = dto.stopConditions.includes('COURSE');
+    if (wantsCourse && !await this.prisma.course.findUnique({ where: { id: dto.targetId || '' } })) {
       throw new BadRequestException('Choose an existing course ID');
     }
-    const data = { ...dto, href, content, targetId: dto.stopCondition === 'COURSE' ? dto.targetId : null };
+    const data = { ...dto, href, content, targetId: wantsCourse ? dto.targetId : null };
     return this.present(id
       ? await this.prisma.dykNotice.update({ where: { id }, data })
       : await this.prisma.dykNotice.create({ data }));
@@ -64,18 +65,37 @@ export class DykService {
     return this.prisma.dykNotice.delete({ where: { id } });
   }
 
-  private async adopted(tx: Prisma.TransactionClient, userId: string, notice: { stopCondition: string; targetId: string | null }) {
-    switch (notice.stopCondition) {
-      case 'PHONE': return !!(await tx.user.findUnique({ where: { id: userId }, select: { phoneVerifiedAt: true } }))?.phoneVerifiedAt;
-      case 'KYC': return (await tx.user.findUnique({ where: { id: userId }, select: { kycStatus: true } }))?.kycStatus === 'APPROVED';
-      case 'PWA': return !!(await tx.user.findUnique({ where: { id: userId }, select: { pwaInstalledAt: true } }))?.pwaInstalledAt;
-      case 'REFERRAL_SHARE': return !!await tx.marketingCampaignShare.findFirst({ where: { userId }, select: { id: true } });
-      case 'TRAINING': return !!await tx.wordRecording.findFirst({ where: { userId }, select: { id: true } });
-      case 'TESTIMONY': return !!await tx.testimony.findFirst({ where: { userId }, select: { id: true } });
-      case 'QRAC': return !!await tx.qracAffirmationSubmission.findFirst({ where: { userId }, select: { id: true } });
-      case 'COURSE': return !!await tx.courseProgress.findFirst({ where: { userId, courseId: notice.targetId ?? '', completedAt: { not: null } }, select: { id: true } });
-      default: return false;
+  /**
+   * OR logic -- true the moment ANY one of the notice's stopConditions is
+   * satisfied. CLICKED/VISITED read straight off the trainer's own state row
+   * (set by click()/visit()); every other condition is a live DB check, same
+   * as before this became an array.
+   */
+  private async adopted(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    notice: { stopConditions: string[]; targetId: string | null },
+    state: { clickedAt: Date | null; visitedAt: Date | null } | undefined,
+  ) {
+    for (const condition of notice.stopConditions) {
+      const met = await (async () => {
+        switch (condition) {
+          case 'CLICKED': return !!state?.clickedAt;
+          case 'VISITED': return !!state?.visitedAt;
+          case 'PHONE': return !!(await tx.user.findUnique({ where: { id: userId }, select: { phoneVerifiedAt: true } }))?.phoneVerifiedAt;
+          case 'KYC': return (await tx.user.findUnique({ where: { id: userId }, select: { kycStatus: true } }))?.kycStatus === 'APPROVED';
+          case 'PWA': return !!(await tx.user.findUnique({ where: { id: userId }, select: { pwaInstalledAt: true } }))?.pwaInstalledAt;
+          case 'REFERRAL_SHARE': return !!await tx.marketingCampaignShare.findFirst({ where: { userId }, select: { id: true } });
+          case 'TRAINING': return !!await tx.wordRecording.findFirst({ where: { userId }, select: { id: true } });
+          case 'TESTIMONY': return !!await tx.testimony.findFirst({ where: { userId }, select: { id: true } });
+          case 'QRAC': return !!await tx.qracAffirmationSubmission.findFirst({ where: { userId }, select: { id: true } });
+          case 'COURSE': return !!await tx.courseProgress.findFirst({ where: { userId, courseId: notice.targetId ?? '', completedAt: { not: null } }, select: { id: true } });
+          default: return false;
+        }
+      })();
+      if (met) return true;
     }
+    return false;
   }
 
   async feed(userId: string) {
@@ -86,9 +106,9 @@ export class DykService {
     const items = [];
     for (const { states, ...notice } of notices) {
       const state = states[0];
-      if ((state?.displays ?? 0) >= settings.maxDisplays || (notice.stopCondition === 'CLICKED' && state?.clickedAt)) continue;
+      if ((state?.displays ?? 0) >= settings.maxDisplays) continue;
       if (state?.lastShownAt && Date.now() - state.lastShownAt.getTime() < settings.intervalMinutes * 60000) continue;
-      if (await this.adopted(this.prisma, userId, notice)) continue;
+      if (await this.adopted(this.prisma, userId, notice, state)) continue;
       items.push(this.present(notice));
     }
     return { items, nextAt: latest?.lastShownAt ? new Date(latest.lastShownAt.getTime() + settings.intervalMinutes * 60000).toISOString() : null };
@@ -102,14 +122,14 @@ export class DykService {
       const notice = await tx.dykNotice.findUnique({ where: { id: noticeId } });
       if (!settings?.enabled || !notice?.active) return { allowed: false };
       const state = await tx.dykUserState.findUnique({ where: { userId_noticeId: { userId, noticeId } } });
-      if ((state?.displays ?? 0) >= settings.maxDisplays || (notice.stopCondition === 'CLICKED' && state?.clickedAt)) return { allowed: false };
+      if ((state?.displays ?? 0) >= settings.maxDisplays) return { allowed: false };
       const cutoff = Date.now() - settings.intervalMinutes * 60000;
       if (state?.lastShownAt && state.lastShownAt.getTime() > cutoff) return { allowed: false };
       if (!navigation) {
         const latest = await tx.dykUserState.findFirst({ where: { userId, lastShownAt: { gt: new Date(cutoff) } } });
         if (latest) return { allowed: false };
       }
-      if (await this.adopted(tx, userId, notice)) return { allowed: false };
+      if (await this.adopted(tx, userId, notice, state ?? undefined)) return { allowed: false };
       await tx.dykUserState.upsert({
         where: { userId_noticeId: { userId, noticeId } },
         create: { userId, noticeId, displays: 1, lastShownAt: new Date() },
@@ -122,7 +142,33 @@ export class DykService {
   async click(userId: string, noticeId: string) {
     const notice = await this.prisma.dykNotice.findUnique({ where: { id: noticeId } });
     if (!notice?.active) throw new NotFoundException('Notice is no longer available');
-    await this.prisma.dykUserState.upsert({ where: { userId_noticeId: { userId, noticeId } }, create: { userId, noticeId, clickedAt: new Date() }, update: { clickedAt: new Date() } });
+    // An external link leaves the app, so we can never observe real arrival
+    // the way visit() confirms for an internal route -- the click itself is
+    // the closest signal we have, so VISITED is set here too for those.
+    const isInternal = notice.href.startsWith('/');
+    await this.prisma.dykUserState.upsert({
+      where: { userId_noticeId: { userId, noticeId } },
+      create: { userId, noticeId, clickedAt: new Date(), ...(isInternal ? {} : { visitedAt: new Date() }) },
+      update: { clickedAt: new Date(), ...(isInternal ? {} : { visitedAt: new Date() }) },
+    });
     return { href: notice.href };
+  }
+
+  /**
+   * Confirms actual arrival at an internal-route notice's destination --
+   * called by the frontend once that page has loaded (see DykController's
+   * doc comment). Silently no-ops on an unknown/inactive notice or a
+   * mismatched href, rather than erroring, since this is a best-effort
+   * tracking signal, not a user-facing action.
+   */
+  async visit(userId: string, noticeId: string, href: string) {
+    const notice = await this.prisma.dykNotice.findUnique({ where: { id: noticeId } });
+    if (!notice || notice.href !== href) return { recorded: false };
+    await this.prisma.dykUserState.upsert({
+      where: { userId_noticeId: { userId, noticeId } },
+      create: { userId, noticeId, visitedAt: new Date() },
+      update: { visitedAt: new Date() },
+    });
+    return { recorded: true };
   }
 }

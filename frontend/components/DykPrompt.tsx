@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
 import * as Dialog from '@radix-ui/react-dialog';
 import { ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
-import { DykNotice, useClickDykMutation, useDykImpressionMutation, useLazyDykFeedQuery } from '@/store/dyk-api';
+import { DykNotice, useClickDykMutation, useDykImpressionMutation, useLazyDykFeedQuery, useVisitDykMutation } from '@/store/dyk-api';
 
 export function DykPrompt() {
   const { data: session, status } = useSession();
@@ -18,6 +18,7 @@ function ActivePrompt() {
   const [feed] = useLazyDykFeedQuery();
   const [impression] = useDykImpressionMutation();
   const [click] = useClickDykMutation();
+  const [visit] = useVisitDykMutation();
   const router = useRouter();
   const [items, setItems] = useState<DykNotice[]>([]);
   const [index, setIndex] = useState(0);
@@ -67,11 +68,20 @@ function ActivePrompt() {
   };
   const follow = async () => {
     setBusy(true); setError('');
+    const noticeId = items[index].id;
     try {
-      const { href } = await click(items[index].id).unwrap();
+      const { href } = await click(noticeId).unwrap();
       close();
-      if (href.startsWith('/')) router.push(href);
-      else window.location.assign(href);
+      if (href.startsWith('/')) {
+        router.push(href);
+        // click() already marks external links visited (it can't observe
+        // arrival after leaving the app); for an internal route, this is
+        // the closest confirmation of actual arrival available on the
+        // client without instrumenting every possible destination page.
+        void visit({ id: noticeId, href }).catch(() => {});
+      } else {
+        window.location.assign(href);
+      }
     } catch { setError('Unable to open this notice. Please try again.'); }
     finally { setBusy(false); }
   };

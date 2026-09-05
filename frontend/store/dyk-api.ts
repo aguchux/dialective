@@ -1,9 +1,21 @@
 import { dialectivaApi } from './api';
 
 export type DykSettings = { enabled: boolean; intervalMinutes: number; maxDisplays: number };
+export const DYK_CONDITIONS = [
+  { key: 'CLICKED', label: 'Clicked Try it Now' },
+  { key: 'VISITED', label: 'Visited the link (tracked)' },
+  { key: 'PHONE', label: 'Phone verified' },
+  { key: 'KYC', label: 'Identity approved' },
+  { key: 'PWA', label: 'Web app installed' },
+  { key: 'REFERRAL_SHARE', label: 'Referral ad shared' },
+  { key: 'TRAINING', label: 'First recording submitted' },
+  { key: 'COURSE', label: 'Course completed' },
+  { key: 'TESTIMONY', label: 'Testimony submitted' },
+  { key: 'QRAC', label: 'QRAC signed' },
+] as const;
 export type DykNotice = {
   id: string; content: string; imageKey: string; imageBucket: string; imageUrl: string;
-  href: string; stopCondition: string; targetId?: string | null; active: boolean; sortOrder: number;
+  href: string; stopConditions: string[]; targetId?: string | null; active: boolean; sortOrder: number;
 };
 export type DykDraft = Omit<DykNotice, 'id' | 'imageUrl'>;
 const api = dialectivaApi.enhanceEndpoints({ addTagTypes: ['Dyk'] }).injectEndpoints({
@@ -17,6 +29,18 @@ const api = dialectivaApi.enhanceEndpoints({ addTagTypes: ['Dyk'] }).injectEndpo
     dykFeed: b.query<{ items: DykNotice[]; nextAt: string | null }, void>({ query: () => '/dyk' }),
     dykImpression: b.mutation<{ allowed: boolean }, { id: string; navigation?: boolean }>({ query: ({ id, navigation }) => ({ url: `/dyk/${id}/impression`, method: 'POST', body: { navigation } }) }),
     clickDyk: b.mutation<{ href: string }, string>({ query: id => ({ url: `/dyk/${id}/click`, method: 'POST' }) }),
+    visitDyk: b.mutation<{ recorded: boolean }, { id: string; href: string }>({ query: ({ id, href }) => ({ url: `/dyk/${id}/visit`, method: 'POST', body: { href } }) }),
   }),
 });
-export const { useDykSettingsQuery, useSaveDykSettingsMutation, useAdminDykQuery, useSaveDykMutation, useDeleteDykMutation, useUploadDykMutation, useLazyDykFeedQuery, useDykImpressionMutation, useClickDykMutation } = api;
+export const {
+  useDykSettingsQuery,
+  useSaveDykSettingsMutation,
+  useAdminDykQuery,
+  useSaveDykMutation,
+  useDeleteDykMutation,
+  useUploadDykMutation,
+  useLazyDykFeedQuery,
+  useDykImpressionMutation,
+  useClickDykMutation,
+  useVisitDykMutation,
+} = api;

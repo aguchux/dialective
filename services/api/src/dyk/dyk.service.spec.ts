@@ -11,7 +11,7 @@ function baseNotice(overrides: Partial<Record<string, unknown>> = {}) {
     imageKey: 'dyk/abc-123.jpg',
     imageBucket: 'dialectiva-marketing',
     href: '/dashboard',
-    stopCondition: 'CLICKED',
+    stopConditions: ['CLICKED'],
     targetId: null,
     active: true,
     sortOrder: 0,
@@ -35,7 +35,15 @@ function setup(overrides: {
   const notices = overrides.notices ?? [baseNotice()];
   const stateByKey = new Map<string, Record<string, unknown>>();
   if (overrides.state) {
-    stateByKey.set(`${USER_ID}:${NOTICE_ID}`, { userId: USER_ID, noticeId: NOTICE_ID, displays: 0, lastShownAt: null, clickedAt: null, ...overrides.state });
+    stateByKey.set(`${USER_ID}:${NOTICE_ID}`, {
+      userId: USER_ID,
+      noticeId: NOTICE_ID,
+      displays: 0,
+      lastShownAt: null,
+      clickedAt: null,
+      visitedAt: null,
+      ...overrides.state,
+    });
   }
 
   const prisma = {
@@ -69,14 +77,16 @@ function setup(overrides: {
       upsert: jest.fn().mockImplementation(({ where, create, update }: { where: { userId_noticeId: { userId: string; noticeId: string } }; create: Record<string, unknown>; update: Record<string, unknown> }) => {
         const key = `${where.userId_noticeId.userId}:${where.userId_noticeId.noticeId}`;
         const existing = stateByKey.get(key);
-        const next = existing ? { ...existing, displays: (existing.displays as number) + 1, lastShownAt: new Date() } : { ...create };
-        Object.assign(next, update.clickedAt !== undefined ? { clickedAt: update.clickedAt } : {});
+        const next = existing ? { ...existing, ...update, ...(update.displays !== undefined ? { displays: (existing.displays as number) + 1 } : {}) } : { ...create };
         stateByKey.set(key, next);
         return Promise.resolve(next);
       }),
     },
     course: {
       findUnique: jest.fn().mockResolvedValue(overrides.course ?? null),
+    },
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ phoneVerifiedAt: null, kycStatus: 'PENDING', pwaInstalledAt: null }),
     },
     $queryRaw: jest.fn().mockResolvedValue([{ id: USER_ID }]),
     $transaction: undefined as unknown as (fn: (tx: unknown) => unknown) => Promise<unknown>,
@@ -101,7 +111,7 @@ describe('DykService.saveNotice validation', () => {
         imageKey: 'dyk/a.jpg',
         imageBucket: 'wrong-bucket',
         href: '/dashboard',
-        stopCondition: 'CLICKED',
+        stopConditions: ['CLICKED'],
         active: true,
         sortOrder: 0,
       }),
@@ -116,7 +126,7 @@ describe('DykService.saveNotice validation', () => {
         imageKey: 'dyk/a.jpg',
         imageBucket: 'dialectiva-marketing',
         href: 'https://evil.example.com/phish',
-        stopCondition: 'CLICKED',
+        stopConditions: ['CLICKED'],
         active: true,
         sortOrder: 0,
       }),
@@ -130,7 +140,7 @@ describe('DykService.saveNotice validation', () => {
       imageKey: 'dyk/a.jpg',
       imageBucket: 'dialectiva-marketing',
       href: '/dashboard/payout-accounts',
-      stopCondition: 'CLICKED',
+      stopConditions: ['CLICKED'],
       active: true,
       sortOrder: 0,
     });
@@ -144,7 +154,7 @@ describe('DykService.saveNotice validation', () => {
       imageKey: 'dyk/a.jpg',
       imageBucket: 'dialectiva-marketing',
       href: 'https://wa.me/1234567890',
-      stopCondition: 'CLICKED',
+      stopConditions: ['CLICKED'],
       active: true,
       sortOrder: 0,
     });
@@ -159,7 +169,7 @@ describe('DykService.saveNotice validation', () => {
         imageKey: 'dyk/a.jpg',
         imageBucket: 'dialectiva-marketing',
         href: '//evil.example.com',
-        stopCondition: 'CLICKED',
+        stopConditions: ['CLICKED'],
         active: true,
         sortOrder: 0,
       }),
@@ -174,7 +184,7 @@ describe('DykService.saveNotice validation', () => {
         imageKey: 'dyk/a.jpg',
         imageBucket: 'dialectiva-marketing',
         href: '/dashboard',
-        stopCondition: 'CLICKED',
+        stopConditions: ['CLICKED'],
         active: true,
         sortOrder: 0,
       }),
@@ -189,7 +199,7 @@ describe('DykService.saveNotice validation', () => {
         imageKey: 'dyk/a.jpg',
         imageBucket: 'dialectiva-marketing',
         href: '/dashboard',
-        stopCondition: 'COURSE',
+        stopConditions: ['COURSE'],
         targetId: 'nonexistent-course',
         active: true,
         sortOrder: 0,
@@ -197,31 +207,31 @@ describe('DykService.saveNotice validation', () => {
     ).rejects.toThrow('Choose an existing course ID');
   });
 
-  it('accepts a COURSE stop condition with a real course', async () => {
+  it('accepts a COURSE stop condition mixed with others, given a real course', async () => {
     const { service, prisma } = setup({ course: { id: 'course-1' } });
     await service.saveNotice({
       content: 'x',
       imageKey: 'dyk/a.jpg',
       imageBucket: 'dialectiva-marketing',
       href: '/dashboard',
-      stopCondition: 'COURSE',
+      stopConditions: ['CLICKED', 'COURSE'],
       targetId: 'course-1',
       active: true,
       sortOrder: 0,
     });
     expect(prisma.dykNotice.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ targetId: 'course-1' }) }),
+      expect.objectContaining({ data: expect.objectContaining({ targetId: 'course-1', stopConditions: ['CLICKED', 'COURSE'] }) }),
     );
   });
 
-  it('nulls out targetId for a non-COURSE stop condition even if one was submitted', async () => {
+  it('nulls out targetId when COURSE is not among the selected stop conditions, even if one was submitted', async () => {
     const { service, prisma } = setup();
     await service.saveNotice({
       content: 'x',
       imageKey: 'dyk/a.jpg',
       imageBucket: 'dialectiva-marketing',
       href: '/dashboard',
-      stopCondition: 'CLICKED',
+      stopConditions: ['CLICKED'],
       targetId: 'course-1',
       active: true,
       sortOrder: 0,
@@ -245,9 +255,35 @@ describe('DykService.feed', () => {
   });
 
   it('excludes a CLICKED-stop notice the user has already clicked', async () => {
-    const { service } = setup({ notices: [baseNotice({ stopCondition: 'CLICKED' })], state: { clickedAt: new Date() } });
+    const { service } = setup({ notices: [baseNotice({ stopConditions: ['CLICKED'] })], state: { clickedAt: new Date() } });
     const result = await service.feed(USER_ID);
     expect(result.items).toHaveLength(0);
+  });
+
+  it('excludes a VISITED-stop notice the user has actually landed on', async () => {
+    const { service } = setup({ notices: [baseNotice({ stopConditions: ['VISITED'] })], state: { clickedAt: new Date(), visitedAt: null } });
+    const clicked = await service.feed(USER_ID);
+    expect(clicked.items).toHaveLength(1); // clicked but not yet visited -- still shown
+
+    const { service: service2 } = setup({ notices: [baseNotice({ stopConditions: ['VISITED'] })], state: { visitedAt: new Date() } });
+    const visited = await service2.feed(USER_ID);
+    expect(visited.items).toHaveLength(0);
+  });
+
+  it('OR logic: excludes a multi-condition notice once ANY one condition is met', async () => {
+    const { service } = setup({
+      notices: [baseNotice({ stopConditions: ['CLICKED', 'PHONE'] })],
+      state: { clickedAt: null }, // CLICKED not met
+    });
+    const result = await service.feed(USER_ID);
+    expect(result.items).toHaveLength(1); // neither condition met yet
+
+    const { service: service2 } = setup({
+      notices: [baseNotice({ stopConditions: ['CLICKED', 'PHONE'] })],
+      state: { clickedAt: new Date() }, // CLICKED met, PHONE not checked
+    });
+    const result2 = await service2.feed(USER_ID);
+    expect(result2.items).toHaveLength(0); // stops once ANY condition met
   });
 
   it('excludes a notice still inside its reminder interval', async () => {
@@ -266,9 +302,9 @@ describe('DykService.feed', () => {
   });
 
   it('excludes a notice whose stop condition the trainer has already adopted', async () => {
-    const { service, prisma } = setup({ notices: [baseNotice({ stopCondition: 'TRAINING' })] });
+    const { service, prisma } = setup({ notices: [baseNotice({ stopConditions: ['TRAINING'] })] });
     prisma.dykNotice.findMany.mockResolvedValueOnce([
-      { ...baseNotice({ stopCondition: 'TRAINING' }), states: [] },
+      { ...baseNotice({ stopConditions: ['TRAINING'] }), states: [] },
     ]);
     (prisma as unknown as { wordRecording: { findFirst: jest.Mock } }).wordRecording = {
       findFirst: jest.fn().mockResolvedValue({ id: 'rec-1' }),
@@ -292,7 +328,7 @@ describe('DykService.impression', () => {
   });
 
   it('denies a CLICKED-stop notice already clicked', async () => {
-    const { service } = setup({ notices: [baseNotice({ stopCondition: 'CLICKED' })], state: { clickedAt: new Date() } });
+    const { service } = setup({ notices: [baseNotice({ stopConditions: ['CLICKED'] })], state: { clickedAt: new Date() } });
     await expect(service.impression(USER_ID, NOTICE_ID)).resolves.toEqual({ allowed: false });
   });
 
@@ -327,8 +363,41 @@ describe('DykService.click', () => {
     expect(stateByKey.get(`${USER_ID}:${NOTICE_ID}`)?.clickedAt).toBeInstanceOf(Date);
   });
 
+  it('also marks an external link visited at click time, since arrival cannot be observed after leaving the app', async () => {
+    const { service, stateByKey } = setup({ notices: [baseNotice({ href: 'https://wa.me/1234567890' })] });
+    await service.click(USER_ID, NOTICE_ID);
+    expect(stateByKey.get(`${USER_ID}:${NOTICE_ID}`)?.visitedAt).toBeInstanceOf(Date);
+  });
+
+  it('does NOT mark an internal route visited at click time -- only a real visit() call does', async () => {
+    const { service, stateByKey } = setup({ notices: [baseNotice({ href: '/dashboard' })] });
+    await service.click(USER_ID, NOTICE_ID);
+    expect(stateByKey.get(`${USER_ID}:${NOTICE_ID}`)?.visitedAt).toBeFalsy();
+  });
+
   it('404s for an inactive notice', async () => {
     const { service } = setup({ notices: [baseNotice({ active: false })] });
     await expect(service.click(USER_ID, NOTICE_ID)).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('DykService.visit', () => {
+  it('records the visit when the href matches the notice', async () => {
+    const { service, stateByKey } = setup({ notices: [baseNotice({ href: '/dashboard' })] });
+    const result = await service.visit(USER_ID, NOTICE_ID, '/dashboard');
+    expect(result).toEqual({ recorded: true });
+    expect(stateByKey.get(`${USER_ID}:${NOTICE_ID}`)?.visitedAt).toBeInstanceOf(Date);
+  });
+
+  it('does not record when the submitted href does not match the notice -- prevents claiming an unrelated visit', async () => {
+    const { service, stateByKey } = setup({ notices: [baseNotice({ href: '/dashboard' })] });
+    const result = await service.visit(USER_ID, NOTICE_ID, '/admin');
+    expect(result).toEqual({ recorded: false });
+    expect(stateByKey.get(`${USER_ID}:${NOTICE_ID}`)).toBeUndefined();
+  });
+
+  it('no-ops silently for an unknown notice id', async () => {
+    const { service } = setup();
+    await expect(service.visit(USER_ID, 'unknown-notice', '/dashboard')).resolves.toEqual({ recorded: false });
   });
 });
