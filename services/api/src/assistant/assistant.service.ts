@@ -7,6 +7,7 @@ import {
   NotFoundException,
   OnModuleDestroy,
   ServiceUnavailableException,
+  BadRequestException,
 } from '@nestjs/common';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
@@ -18,6 +19,7 @@ import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AssistantHistoryMessageDto } from './dto/chat-assistant.dto';
 import { ListAdminConversationsDto } from './dto/list-admin-conversations.dto';
+import { CreateGithubIssueDto } from './dto/create-github-issue.dto';
 
 const KNOWLEDGE_FILES = ['AI-Assistant-Knowledge-Base.md', 'Links-And-Routes.md'] as const;
 // Keep the two durable Markdown documents and the database-backed content
@@ -147,6 +149,9 @@ export class AssistantService implements OnModuleDestroy {
           id: true,
           createdAt: true,
           updatedAt: true,
+          githubIssueNumber: true,
+          githubIssueUrl: true,
+          githubIssueCreatedAt: true,
           user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
           _count: { select: { messages: true } },
           messages: {
@@ -171,6 +176,73 @@ export class AssistantService implements OnModuleDestroy {
     };
   }
 
+  async createGithubIssue(conversationId: string, input: CreateGithubIssueDto) {
+    const conversation = await this.prisma.assistantConversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        id: true,
+        createdAt: true,
+        updatedAt: true,
+        githubIssueNumber: true,
+        githubIssueUrl: true,
+        githubIssueCreatedAt: true,
+        user: { select: { id: true, firstName: true, lastName: true, role: true } },
+        messages: { orderBy: { createdAt: 'asc' }, take: 500, select: { role: true, content: true, createdAt: true } },
+      },
+    });
+    if (!conversation) throw new NotFoundException('Assistant conversation not found');
+    if (conversation.githubIssueUrl && conversation.githubIssueNumber) {
+      return {
+        created: false,
+        issueNumber: conversation.githubIssueNumber,
+        issueUrl: conversation.githubIssueUrl,
+        createdAt: conversation.githubIssueCreatedAt,
+      };
+    }
+
+    const token = process.env.GITHUB_ISSUES_TOKEN?.trim();
+    const repository = process.env.GITHUB_REPOSITORY?.trim();
+    if (!token || !repository) {
+      throw new ServiceUnavailableException('Git backlog integration is not configured');
+    }
+    const repositoryParts = repository.split('/').filter(Boolean);
+    if (repositoryParts.length !== 2 || repositoryParts.some((part) => !/^[A-Za-z0-9_.-]+$/.test(part))) {
+      throw new BadRequestException('GITHUB_REPOSITORY must use the owner/repository format');
+    }
+
+    const displayName = [conversation.user.firstName, conversation.user.lastName].filter(Boolean).join(' ') || conversation.user.role;
+    const title = input.title?.trim() || `AI assistant conversation: ${displayName}`;
+    const body = input.body?.trim() || buildGithubIssueBody(conversation);
+    let response: Response;
+    try {
+      response = await fetch(`https://api.github.com/repos/${repositoryParts[0]}/${repositoryParts[1]}/issues`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title, body }),
+      });
+    } catch (error) {
+      this.logger.error(`Git backlog request failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw new BadGatewayException('Git backlog is temporarily unavailable');
+    }
+    if (!response.ok) {
+      this.logger.error(`Git backlog returned HTTP ${response.status}`);
+      throw new BadGatewayException('Git backlog rejected the issue');
+    }
+    const result = (await response.json()) as { number?: number; html_url?: string };
+    if (!result.number || !result.html_url) throw new BadGatewayException('Git backlog returned an invalid issue');
+    const createdAt = new Date();
+    await this.prisma.assistantConversation.update({
+      where: { id: conversationId },
+      data: { githubIssueNumber: result.number, githubIssueUrl: result.html_url, githubIssueCreatedAt: createdAt },
+    });
+    return { created: true, issueNumber: result.number, issueUrl: result.html_url, createdAt };
+  }
+
   async getAdminConversation(conversationId: string) {
     const conversation = await this.prisma.assistantConversation.findUnique({
       where: { id: conversationId },
@@ -178,6 +250,9 @@ export class AssistantService implements OnModuleDestroy {
         id: true,
         createdAt: true,
         updatedAt: true,
+        githubIssueNumber: true,
+        githubIssueUrl: true,
+        githubIssueCreatedAt: true,
         user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
         _count: { select: { messages: true } },
         messages: {
@@ -434,4 +509,32 @@ function sanitizeAnswer(answer: string) {
     .replace(/<[^>]*>/g, '')
     .trim()
     .slice(0, 4000);
+}
+
+function buildGithubIssueBody(conversation: {
+  id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  user: { id: string; firstName: string | null; lastName: string | null; role: string };
+  messages: Array<{ role: string; content: string; createdAt: Date }>;
+}) {
+  const transcript = conversation.messages
+    .map((message) => {
+      const speaker = message.role === 'user' ? 'User' : 'Assistant';
+      return `### ${speaker} (${message.createdAt.toISOString()})\n\n${message.content}`;
+    })
+    .join('\n\n');
+  return [
+    '## AI assistant conversation',
+    '',
+    `- Conversation ID: ${conversation.id}`,
+    `- Internal user ID: ${conversation.user.id}`,
+    `- User role: ${conversation.user.role}`,
+    `- Started: ${conversation.createdAt.toISOString()}`,
+    `- Last activity: ${conversation.updatedAt.toISOString()}`,
+    '',
+    '## Transcript',
+    '',
+    transcript || '_No messages were recorded._',
+  ].join('\n');
 }

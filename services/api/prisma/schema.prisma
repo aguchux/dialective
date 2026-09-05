@@ -192,14 +192,14 @@ model User {
 }
 
 model DykSettings {
-  id              String @id @default("default")
+  id              String  @id @default("default")
   enabled         Boolean @default(false)
-  intervalMinutes Int @default(60)
-  maxDisplays     Int @default(3)
+  intervalMinutes Int     @default(60)
+  maxDisplays     Int     @default(3)
 }
 
 model DykNotice {
-  id             String @id @default(uuid())
+  id             String         @id @default(uuid())
   content        String
   imageKey       String
   imageBucket    String
@@ -208,40 +208,44 @@ model DykNotice {
   // conditions is met (DykService.adopted checks each in turn). Replaces the
   // old single stopCondition column -- existing rows were backfilled to a
   // one-element array by the migration that introduced this column.
-  stopConditions String[] @default(["CLICKED"])
+  stopConditions String[]       @default(["CLICKED"])
   targetId       String?
-  active         Boolean @default(true)
-  sortOrder      Int @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  active         Boolean        @default(true)
+  sortOrder      Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
   states         DykUserState[]
 }
 
 model DykUserState {
-  userId        String
-  noticeId      String
-  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  notice        DykNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
-  displays      Int @default(0)
-  lastShownAt   DateTime?
-  clickedAt     DateTime?
+  userId      String
+  noticeId    String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notice      DykNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  displays    Int       @default(0)
+  lastShownAt DateTime?
+  clickedAt   DateTime?
   // Set once the trainer actually lands on the notice's destination --
   // for an internal route, once that page loads (DykController.visit);
   // for an external link (which the app can't observe after navigation),
   // this is set at click time instead, same moment as clickedAt. Distinct
   // from clickedAt, which only means "pressed Try it Now."
-  visitedAt     DateTime?
+  visitedAt   DateTime?
+
   @@id([userId, noticeId])
   @@index([userId, lastShownAt])
 }
 
 model AssistantConversation {
-  id        String             @id @default(uuid())
-  userId    String             @unique
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  messages  AssistantMessage[]
+  id                   String             @id @default(uuid())
+  userId               String             @unique
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  messages             AssistantMessage[]
+  githubIssueNumber    Int?
+  githubIssueUrl       String?
+  githubIssueCreatedAt DateTime?
 
   @@map("assistant_conversations")
 }

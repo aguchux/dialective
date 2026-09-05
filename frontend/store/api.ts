@@ -357,6 +357,9 @@ export interface AdminAssistantConversationSummary {
   };
   _count: { messages: number };
   latestMessage: { content: string; role: 'user' | 'assistant'; createdAt: string } | null;
+  githubIssueNumber: number | null;
+  githubIssueUrl: string | null;
+  githubIssueCreatedAt: string | null;
 }
 
 export interface AdminAssistantConversationPage {
@@ -381,6 +384,9 @@ export interface AdminAssistantConversationDetail {
     convertedToFaqId: string | null;
   }>;
   truncated: boolean;
+  githubIssueNumber: number | null;
+  githubIssueUrl: string | null;
+  githubIssueCreatedAt: string | null;
 }
 
 export interface AdminFaq {
@@ -3557,6 +3563,20 @@ export const dialectivaApi = createApi({
       query: (conversationId) => `/assistant/admin/conversations/${conversationId}`,
       providesTags: (_result, _error, id) => [{ type: 'AdminAssistantConversations', id }],
     }),
+    createAdminAssistantGithubIssue: builder.mutation<
+      { created: boolean; issueNumber: number; issueUrl: string; createdAt: string },
+      { conversationId: string; title?: string; body?: string }
+    >({
+      query: ({ conversationId, title, body }) => ({
+        url: `/assistant/admin/conversations/${conversationId}/github-issue`,
+        method: 'POST',
+        body: { title, body },
+      }),
+      invalidatesTags: (_result, _error, input) => [
+        'AdminAssistantConversations',
+        { type: 'AdminAssistantConversations', id: input.conversationId },
+      ],
+    }),
     getAdminFaqs: builder.query<AdminFaq[], void>({
       query: () => '/admin/faqs',
       providesTags: ['Faqs'],
@@ -3947,6 +3967,7 @@ export const {
   useGetAssistantThreadQuery,
   useGetAdminAssistantConversationsQuery,
   useGetAdminAssistantConversationQuery,
+  useCreateAdminAssistantGithubIssueMutation,
   useGetAdminFaqsQuery,
   useCreateFaqMutation,
   useUpdateFaqMutation,

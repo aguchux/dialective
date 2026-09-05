@@ -8,6 +8,7 @@ import { UserThrottlerGuard } from '../common/guards/user-throttler.guard';
 import { AssistantService } from './assistant.service';
 import { ChatAssistantDto } from './dto/chat-assistant.dto';
 import { ListAdminConversationsDto } from './dto/list-admin-conversations.dto';
+import { CreateGithubIssueDto } from './dto/create-github-issue.dto';
 import {
   OptionalJwtAuthGuard,
   OptionallyAuthenticatedRequest,
@@ -42,5 +43,15 @@ export class AssistantController {
   @Roles(Role.ADMIN)
   getAdminConversation(@Param('conversationId') conversationId: string) {
     return this.assistant.getAdminConversation(conversationId);
+  }
+
+  @Post('admin/conversations/:conversationId/github-issue')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  createGithubIssue(
+    @Param('conversationId') conversationId: string,
+    @Body() body: CreateGithubIssueDto,
+  ) {
+    return this.assistant.createGithubIssue(conversationId, body);
   }
 }

@@ -178,6 +178,18 @@ spec:
                 secretKeyRef:
                   name: auth-creds
                   key: resend_api_key
+            - name: GITHUB_ISSUES_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: auth-creds
+                  key: github_issues_token
+                  optional: true
+            - name: GITHUB_REPOSITORY
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: github_repository
+                  optional: true
             - name: TOKEN_USD_RATE
               valueFrom:
                 configMapKeyRef:

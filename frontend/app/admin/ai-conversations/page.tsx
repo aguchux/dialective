@@ -6,6 +6,9 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  ExternalLink,
+  GitPullRequest,
+  Loader2,
   MessageSquareText,
   Search,
   UserRound,
@@ -13,11 +16,13 @@ import {
 import { skipToken } from '@reduxjs/toolkit/query/react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { FaqEditorDialog } from '@/components/admin/FaqEditorDialog';
+import { Dialog, DialogContent } from '@/components/ui/Dialog';
 import { formatDateTime } from '@/components/dashboard/shared';
 import {
   AdminAssistantConversationSummary,
   useGetAdminAssistantConversationQuery,
   useGetAdminAssistantConversationsQuery,
+  useCreateAdminAssistantGithubIssueMutation,
 } from '@/store/api';
 
 const PAGE_SIZE = 20;
@@ -31,6 +36,11 @@ export default function AdminAiConversationsPage() {
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [faqDraft, setFaqDraft] = useState<{ question: string; messageId: string } | null>(null);
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [issueTitle, setIssueTitle] = useState('');
+  const [issueBody, setIssueBody] = useState('');
+  const [issueError, setIssueError] = useState('');
+  const [createIssue, { isLoading: isCreatingIssue }] = useCreateAdminAssistantGithubIssueMutation();
   const deferredSearch = useDeferredValue(search.trim());
   const { data, isFetching, isLoading, isError } = useGetAdminAssistantConversationsQuery({
     page,
@@ -52,6 +62,15 @@ export default function AdminAiConversationsPage() {
   function changePage(nextPage: number) {
     setSelectedId(null);
     setPage(nextPage);
+  }
+
+  function openIssueDialog() {
+    if (!conversation) return;
+    const name = userName(conversation.user);
+    setIssueTitle(`AI assistant conversation: ${name}`);
+    setIssueBody('');
+    setIssueError('');
+    setIssueOpen(true);
   }
 
   return (
@@ -174,9 +193,32 @@ export default function AdminAiConversationsPage() {
                       <h2 className="truncate font-black">{userName(conversation.user)}</h2>
                       <p className="truncate text-sm text-muted">{conversation.user.email}</p>
                     </div>
-                    <span className="ml-auto shrink-0 rounded-full bg-surface-muted px-2.5 py-1 text-xs font-black text-muted">
-                      Read only
-                    </span>
+                    <div className="ml-auto flex shrink-0 items-center gap-2">
+                      {conversation.githubIssueUrl ? (
+                        <a
+                          className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-xs font-black text-accent hover:bg-accent-soft"
+                          href={conversation.githubIssueUrl}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          <ExternalLink className="size-3.5" aria-hidden="true" />
+                          Issue #{conversation.githubIssueNumber}
+                        </a>
+                      ) : (
+                        <button
+                          className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-black text-white hover:bg-accent-dark disabled:opacity-60"
+                          disabled={isCreatingIssue}
+                          onClick={openIssueDialog}
+                          type="button"
+                        >
+                          <GitPullRequest className="size-3.5" aria-hidden="true" />
+                          Create Git issue
+                        </button>
+                      )}
+                      <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-black text-muted">
+                        Read only
+                      </span>
+                    </div>
                   </div>
                   <p className="mt-3 text-xs text-muted">
                     {conversation._count.messages.toLocaleString()} messages &middot; Last activity{' '}
@@ -259,6 +301,63 @@ export default function AdminAiConversationsPage() {
           open={faqDraft !== null}
           sourceMessageId={faqDraft?.messageId}
         />
+        <Dialog open={issueOpen} onOpenChange={(open) => { if (!isCreatingIssue) setIssueOpen(open); }}>
+          <DialogContent
+            title="Create Git issue"
+            description="Send this monitored conversation to the configured project backlog."
+          >
+            <form
+              className="grid gap-4"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (!conversation) return;
+                setIssueError('');
+                try {
+                  await createIssue({
+                    conversationId: conversation.id,
+                    title: issueTitle.trim(),
+                    body: issueBody.trim() || undefined,
+                  }).unwrap();
+                  setIssueOpen(false);
+                } catch {
+                  setIssueError('Unable to create the Git issue. Check the backlog integration and try again.');
+                }
+              }}
+            >
+              <label className="grid gap-1 text-sm font-bold" htmlFor="github-issue-title">
+                Issue title
+                <input
+                  className="min-h-10 rounded-lg border border-line bg-white px-3 font-medium outline-none focus:border-accent"
+                  id="github-issue-title"
+                  maxLength={160}
+                  minLength={3}
+                  onChange={(event) => setIssueTitle(event.target.value)}
+                  required
+                  value={issueTitle}
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-bold" htmlFor="github-issue-body">
+                Additional context <span className="font-normal text-muted">(optional)</span>
+                <textarea
+                  className="min-h-32 rounded-lg border border-line bg-white px-3 py-2 font-medium outline-none focus:border-accent"
+                  id="github-issue-body"
+                  maxLength={60000}
+                  onChange={(event) => setIssueBody(event.target.value)}
+                  placeholder="The full transcript will be included automatically if this is blank."
+                  value={issueBody}
+                />
+              </label>
+              {issueError && <p className="text-sm font-bold text-danger" role="alert">{issueError}</p>}
+              <div className="flex justify-end gap-2">
+                <button className="min-h-10 rounded-lg border border-line px-4 font-bold" disabled={isCreatingIssue} onClick={() => setIssueOpen(false)} type="button">Cancel</button>
+                <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-accent px-4 font-bold text-white disabled:opacity-60" disabled={isCreatingIssue} type="submit">
+                  {isCreatingIssue && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  {isCreatingIssue ? 'Creating...' : 'Create issue'}
+                </button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminShell>
   );
