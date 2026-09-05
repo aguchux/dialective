@@ -49,7 +49,9 @@ describe('WordsService', () => {
         count: jest.fn().mockResolvedValue(1),
         findMany: jest.fn().mockResolvedValue([{ id: 'word-1', text: 'welcome' }]),
       },
-      wallet: { upsert: jest.fn().mockResolvedValue({ id: 'wallet-1', balance: 10 }) },
+      wallet: {
+        upsert: jest.fn().mockResolvedValue({ id: 'wallet-1', balance: { lt: () => false } }),
+      },
       wordRecording: {
         count: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
@@ -246,6 +248,13 @@ describe('WordsService', () => {
       phraseTierJustReached: false,
     });
     expect(prisma.wordRecording.count).not.toHaveBeenCalled();
+  });
+
+  it('blocks a new assignment when the trainer cannot cover its cost', async () => {
+    prisma.wallet.upsert.mockResolvedValue({ id: 'wallet-1', balance: { lt: () => true } });
+
+    await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow('Insufficient balance');
+    expect(prisma.wordTrainingAssignment.create).not.toHaveBeenCalled();
   });
 
   it('blocks nextAssignment when a required course becomes incomplete mid-session', async () => {

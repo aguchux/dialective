@@ -160,6 +160,21 @@ export class WordsService {
     }
 
     const trainer = await this.getTrainer(userId);
+    const [taskTokenCost, wallet] = await Promise.all([
+      this.settings.getTaskTokenCost(),
+      this.prisma.wallet.upsert({
+        where: { userId },
+        update: {},
+        create: { userId },
+      }),
+    ]);
+    if (wallet.balance.lt(taskTokenCost)) {
+      throw new UnprocessableEntityException({
+        message: `Insufficient balance: this task costs ${taskTokenCost} tokens`,
+        insufficientBalance: true,
+        taskTokenCost,
+      });
+    }
 
     // Live-evaluated every call, never cached/session-fixed -- same posture
     // as the audit-hold/QRAC/required-courses checks above. Three

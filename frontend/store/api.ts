@@ -2003,6 +2003,7 @@ export interface ApiErrorShape {
   error?: string;
   path?: string;
   timestamp?: string;
+  insufficientBalance?: boolean;
   requiredCourses?: IncompleteRequiredCourse[];
   qracRequired?: boolean;
   qracChecklist?: string[];
