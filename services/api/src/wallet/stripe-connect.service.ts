@@ -114,6 +114,16 @@ export class StripeConnectService implements PayoutProvider {
       return { stripeAccountId: account.id };
     } catch (err) {
       this.logSdkError('createConnectedAccount', err);
+      // Country-not-supported is permanent, not a transient provider failure
+      // -- retrying the exact same request will fail identically every time
+      // (confirmed against Stripe's own "is currently not supported" error
+      // string), so this trainer must be told to use a different rail rather
+      // than shown the generic "please try again" that implies retrying helps.
+      if (err instanceof Stripe.errors.StripeInvalidRequestError && err.param === 'country') {
+        throw new BadGatewayException(
+          `Stripe does not support payouts for ${params.country} yet. Please choose a different payout method or contact support.`,
+        );
+      }
       throw new BadGatewayException(
         'The payout provider could not create a connected account. Please try again.',
       );

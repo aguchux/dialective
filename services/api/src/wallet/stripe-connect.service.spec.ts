@@ -1,4 +1,5 @@
 import { BadGatewayException } from '@nestjs/common';
+import Stripe from 'stripe';
 import { StripeConnectService } from './stripe-connect.service';
 import { ApiAccessTokensService } from '../api-access-tokens/api-access-tokens.service';
 
@@ -15,12 +16,27 @@ const mockTransfersRetrieve = jest.fn();
 const mockWebhooksConstructEvent = jest.fn();
 
 jest.mock('stripe', () => {
-  return jest.fn().mockImplementation(() => ({
+  // A real (not jest.fn()-shaped) error class so `instanceof
+  // Stripe.errors.StripeInvalidRequestError` in the service under test
+  // actually narrows -- matches how the real SDK's own error hierarchy
+  // works. Declared inside the factory since jest.mock is hoisted above
+  // module-scope declarations in this file.
+  class StripeInvalidRequestError extends Error {
+    param?: string;
+    constructor(message: string, param?: string) {
+      super(message);
+      this.param = param;
+    }
+  }
+
+  const StripeMock = jest.fn().mockImplementation(() => ({
     accounts: { create: mockAccountsCreate, retrieve: mockAccountsRetrieve },
     accountLinks: { create: mockAccountLinksCreate },
     transfers: { create: mockTransfersCreate, retrieve: mockTransfersRetrieve },
     webhooks: { constructEvent: mockWebhooksConstructEvent },
   }));
+  (StripeMock as unknown as { errors: unknown }).errors = { StripeInvalidRequestError };
+  return StripeMock;
 });
 
 describe('StripeConnectService', () => {
@@ -81,6 +97,17 @@ describe('StripeConnectService', () => {
       await expect(
         service.createConnectedAccount({ email: 'trainer@example.com', country: 'US' }),
       ).rejects.toThrow(BadGatewayException);
+    });
+
+    it('surfaces a country-not-supported reason instead of the generic retry message', async () => {
+      const err = new (Stripe as unknown as {
+        errors: { StripeInvalidRequestError: new (message: string, param: string) => Error };
+      }).errors.StripeInvalidRequestError('ET is not currently supported by Stripe.', 'country');
+      mockAccountsCreate.mockRejectedValue(err);
+
+      await expect(
+        service.createConnectedAccount({ email: 'trainer@example.com', country: 'ET' }),
+      ).rejects.toThrow('Stripe does not support payouts for ET yet');
     });
   });
 
