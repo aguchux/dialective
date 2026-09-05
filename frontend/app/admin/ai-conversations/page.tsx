@@ -66,8 +66,8 @@ export default function AdminAiConversationsPage() {
 
   function openIssueDialog(question: string, messageId: string) {
     if (!conversation) return;
-    const name = userName(conversation.user);
-    setIssueTitle(`AI assistant question: ${name}`);
+    const oneLine = question.replace(/\s+/g, ' ').trim();
+    setIssueTitle(oneLine.length > 160 ? `${oneLine.slice(0, 157)}...` : oneLine);
     setIssueBody('');
     setIssueError('');
     setIssueDraft({ question, messageId });
