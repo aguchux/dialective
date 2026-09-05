@@ -118,6 +118,25 @@ accepts requests from it once the domain is live. `api`'s own
 Stripe Checkout's success/cancel URLs and subscriber-invite emails at this
 same domain.
 
+## Community (Vercel) env vars
+
+`/community` is a fourth, separate Vercel project at
+`community.dialectlibrary.com` — see `docs/COMMUNITY-PLAN.md`. Unlike the
+other three Vercel projects, its `NEXTAUTH_SECRET` is **not** independent —
+it must be byte-for-byte identical to `frontend`'s (same value as
+`secrets/auth.env`'s `nextauth_secret`), since `community` never signs in on
+its own and only decodes the session cookie `frontend` already set at
+`Domain=.dialectlibrary.com`. Set these in _that_ Vercel project's settings:
+
+- `NEXTAUTH_URL` — the Vercel deployment's public URL (`https://community.dialectlibrary.com`)
+- `NEXTAUTH_SECRET` — same value as `frontend`'s (and `secrets/auth.env`'s `nextauth_secret`)
+- `NEXT_PUBLIC_API_BASE_URL` — `https://api.dialectlibrary.com`, exposed client-side
+- `NEXT_PUBLIC_FRONTEND_URL` — `https://dialectlibrary.com` (where signed-out visitors are redirected to log in)
+
+`community.dialectlibrary.com` must also be added to this cluster's
+`CORS_ALLOWED_ORIGINS` (`k8s/overlays/prod/configs/api.env`) so `api`
+accepts requests from it.
+
 ## Apply
 
 ```bash
