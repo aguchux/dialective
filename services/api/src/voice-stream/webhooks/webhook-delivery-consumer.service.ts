@@ -3,6 +3,7 @@ import { createHmac } from 'crypto';
 import { Prisma, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisStreamsService, StreamMessage } from '../../redis-streams/redis-streams.service';
+import { assertPublicHostname } from '../../common/ssrf-guard.util';
 import { WebhookSubscriptionsService } from './webhook-subscriptions.service';
 
 const WEBHOOK_STREAM = process.env.WEBHOOK_STREAM ?? 'webhook-deliveries';
@@ -92,6 +93,17 @@ export class WebhookDeliveryConsumerService implements OnModuleInit {
       return false;
     }
 
+    // Registration-time @IsUrl only checked the URL's shape, not where it
+    // actually resolves -- re-validate immediately before every delivery
+    // attempt so a hostname that reboinds to an internal/metadata address
+    // after registration is still blocked, not just at signup.
+    try {
+      await assertPublicHostname(new URL(subscription.url).hostname);
+    } catch {
+      await this.logDelivery(subscription.id, eventType, payload, attemptNumber, null, false, 'Delivery blocked: endpoint not reachable');
+      return false;
+    }
+
     const body = JSON.stringify(payload);
     const signature = createHmac('sha256', secret).update(body).digest('hex');
 
@@ -119,6 +131,13 @@ export class WebhookDeliveryConsumerService implements OnModuleInit {
       );
       return succeeded;
     } catch (err) {
+      // The raw connect-error message (ECONNREFUSED/ETIMEDOUT + the exact
+      // host:port it hit) is a port-scan oracle over internal infrastructure
+      // once it round-trips back to the org via delivery logs/CSV export --
+      // log the real detail server-side only, store a generic message.
+      this.logger.warn(
+        `Webhook delivery to subscription=${subscription.id} failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       await this.logDelivery(
         subscription.id,
         eventType,
@@ -126,7 +145,7 @@ export class WebhookDeliveryConsumerService implements OnModuleInit {
         attemptNumber,
         null,
         false,
-        err instanceof Error ? err.message : String(err),
+        'Delivery failed: endpoint did not respond',
       );
       return false;
     }

@@ -72,6 +72,13 @@ export class SubscriberOrgsService {
     if (!membership || membership.organizationId !== organizationId) {
       throw new NotFoundException('Membership not found');
     }
+    // Granting or revoking OWNER is an ownership-transfer action -- an ADMIN
+    // (who can otherwise manage members) must never be able to promote
+    // themselves or anyone else to OWNER, or demote an existing OWNER, since
+    // OWNER unlocks billing, security policy, and SSO break-glass login.
+    if (role === SubscriberOrgRole.OWNER || membership.role === SubscriberOrgRole.OWNER) {
+      await this.assertActorIsOwner(organizationId, actorUserId);
+    }
     if (membership.role === SubscriberOrgRole.OWNER && role !== SubscriberOrgRole.OWNER) {
       await this.assertNotLastOwner(organizationId, membershipId);
     }
@@ -95,6 +102,9 @@ export class SubscriberOrgsService {
       throw new NotFoundException('Membership not found');
     }
     if (membership.role === SubscriberOrgRole.OWNER) {
+      // Removing an OWNER is equivalent to an involuntary ownership change --
+      // an ADMIN must not be able to do this to another OWNER.
+      await this.assertActorIsOwner(organizationId, actorUserId);
       await this.assertNotLastOwner(organizationId, membershipId);
     }
     await this.prisma.subscriberMembership.delete({ where: { id: membershipId } });
@@ -113,6 +123,15 @@ export class SubscriberOrgsService {
     });
     if (otherOwners === 0) {
       throw new ForbiddenException('An organization must always have at least one owner');
+    }
+  }
+
+  private async assertActorIsOwner(organizationId: string, actorUserId: string) {
+    const actorMembership = await this.prisma.subscriberMembership.findFirst({
+      where: { organizationId, userId: actorUserId },
+    });
+    if (actorMembership?.role !== SubscriberOrgRole.OWNER) {
+      throw new ForbiddenException('Only an owner can grant or revoke owner access');
     }
   }
 }

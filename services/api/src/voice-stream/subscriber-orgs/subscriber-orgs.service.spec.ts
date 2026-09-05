@@ -6,6 +6,7 @@ function setup() {
   const prisma = {
     subscriberMembership: {
       findUnique: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue({ role: SubscriberOrgRole.OWNER }),
       update: jest.fn(),
       delete: jest.fn(),
       count: jest.fn(),
@@ -89,6 +90,58 @@ describe('SubscriberOrgsService.updateMemberRole', () => {
       newRole: SubscriberOrgRole.ADMIN,
     });
   });
+
+  it('blocks a non-owner actor from promoting a member to owner', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriberMembership.findUnique.mockResolvedValue({
+      id: 'm-1',
+      organizationId: 'org-1',
+      role: SubscriberOrgRole.DATASET_MANAGER,
+      userId: 'target-user',
+    });
+    prisma.subscriberMembership.findFirst.mockResolvedValue({ role: SubscriberOrgRole.ADMIN });
+
+    await expect(
+      service.updateMemberRole('org-1', 'm-1', SubscriberOrgRole.OWNER, 'actor-1'),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.subscriberMembership.update).not.toHaveBeenCalled();
+  });
+
+  it('blocks a non-owner actor from demoting an existing owner', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriberMembership.findUnique.mockResolvedValue({
+      id: 'm-1',
+      organizationId: 'org-1',
+      role: SubscriberOrgRole.OWNER,
+      userId: 'target-user',
+    });
+    prisma.subscriberMembership.findFirst.mockResolvedValue({ role: SubscriberOrgRole.ADMIN });
+
+    await expect(
+      service.updateMemberRole('org-1', 'm-1', SubscriberOrgRole.ADMIN, 'actor-1'),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.subscriberMembership.update).not.toHaveBeenCalled();
+  });
+
+  it('allows an owner actor to promote a member to owner', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriberMembership.findUnique.mockResolvedValue({
+      id: 'm-1',
+      organizationId: 'org-1',
+      role: SubscriberOrgRole.ADMIN,
+      userId: 'target-user',
+    });
+    prisma.subscriberMembership.findFirst.mockResolvedValue({ role: SubscriberOrgRole.OWNER });
+    prisma.subscriberMembership.update.mockResolvedValue({
+      id: 'm-1',
+      userId: 'target-user',
+      role: SubscriberOrgRole.OWNER,
+    });
+
+    await expect(
+      service.updateMemberRole('org-1', 'm-1', SubscriberOrgRole.OWNER, 'actor-1'),
+    ).resolves.toMatchObject({ role: SubscriberOrgRole.OWNER });
+  });
 });
 
 describe('SubscriberOrgsService.removeMember', () => {
@@ -129,5 +182,20 @@ describe('SubscriberOrgsService.removeMember', () => {
     expect(orgActivity.record).toHaveBeenCalledWith('org-1', 'MEMBER_REMOVED', 'actor-1', {
       targetUserId: 'target-user',
     });
+  });
+
+  it('blocks a non-owner actor from removing an owner', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriberMembership.findUnique.mockResolvedValue({
+      id: 'm-1',
+      organizationId: 'org-1',
+      role: SubscriberOrgRole.OWNER,
+      userId: 'target-user',
+    });
+    prisma.subscriberMembership.findFirst.mockResolvedValue({ role: SubscriberOrgRole.ADMIN });
+    prisma.subscriberMembership.count.mockResolvedValue(1);
+
+    await expect(service.removeMember('org-1', 'm-1', 'actor-1')).rejects.toThrow(ForbiddenException);
+    expect(prisma.subscriberMembership.delete).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,10 @@
 import { createHmac } from 'crypto';
+import { lookup } from 'dns/promises';
 import { WebhookEventType } from '@dialectiva/db';
 import { WebhookDeliveryConsumerService } from './webhook-delivery-consumer.service';
+
+jest.mock('dns/promises', () => ({ lookup: jest.fn() }));
+const mockLookup = lookup as jest.MockedFunction<typeof lookup>;
 
 function setup() {
   const prisma = { webhookDeliveryLog: { create: jest.fn().mockResolvedValue({}) } };
@@ -36,7 +40,10 @@ describe('WebhookDeliveryConsumerService', () => {
   beforeEach(() => {
     fetchMock = jest.fn();
     global.fetch = fetchMock as never;
+    mockLookup.mockResolvedValue([{ address: '203.0.113.5', family: 4 }] as never);
   });
+
+  afterEach(() => jest.resetAllMocks());
 
   it('delivers only to subscriptions whose eventTypes includes the incoming event', async () => {
     const { service, subscriptions } = setup();
@@ -112,11 +119,46 @@ describe('WebhookDeliveryConsumerService', () => {
     subscriptions.findActiveSubscribers.mockResolvedValue([
       { id: 'sub-1', url: 'https://example.com/hook' },
     ]);
-    fetchMock.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    fetchMock.mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.5:5432'));
 
     await expect(
       (service as unknown as { handle: (m: unknown) => Promise<void> }).handle(message()),
     ).rejects.toThrow();
+  });
+
+  it('never persists the raw connect-error message (would be a port-scan oracle over delivery logs/CSV export)', async () => {
+    const { service, prisma, subscriptions } = setup();
+    subscriptions.findActiveSubscribers.mockResolvedValue([
+      { id: 'sub-1', url: 'https://example.com/hook' },
+    ]);
+    fetchMock.mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.5:5432'));
+
+    await expect(
+      (service as unknown as { handle: (m: unknown) => Promise<void> }).handle(message()),
+    ).rejects.toThrow();
+
+    const [[call]] = prisma.webhookDeliveryLog.create.mock.calls;
+    expect(call.data.errorMessage).not.toContain('10.0.0.5');
+    expect(call.data.errorMessage).not.toContain('ECONNREFUSED');
+  });
+
+  it('blocks delivery and does not call fetch when the URL resolves to a private/internal address (SSRF/DNS-rebinding guard)', async () => {
+    const { service, prisma, subscriptions } = setup();
+    subscriptions.findActiveSubscribers.mockResolvedValue([
+      { id: 'sub-1', url: 'https://rebinding.example.com/hook' },
+    ]);
+    mockLookup.mockResolvedValue([{ address: '169.254.169.254', family: 4 }] as never);
+
+    await expect(
+      (service as unknown as { handle: (m: unknown) => Promise<void> }).handle(message()),
+    ).rejects.toThrow();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(prisma.webhookDeliveryLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ subscriptionId: 'sub-1', succeeded: false }),
+      }),
+    );
   });
 
   it('does not deliver when there are no active subscribers', async () => {

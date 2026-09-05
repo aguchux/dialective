@@ -1,6 +1,6 @@
 process.env.STREAM_JWT_ACCESS_SECRET = process.env.STREAM_JWT_ACCESS_SECRET ?? 'test-stream-secret';
 
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { SubscriberOrgRole } from '@dialectiva/db';
 import { SubscriberAuthService } from './subscriber-auth.service';
 import { hashToken } from '../../auth/token.util';
@@ -499,6 +499,31 @@ describe('SubscriberAuthService', () => {
         email: 'a@b.com',
         role: SubscriberOrgRole.VALIDATOR,
       });
+    });
+
+    it('blocks a non-owner inviter from inviting someone as owner', async () => {
+      const { prisma, service } = setup();
+      prisma.subscriberMembership.findFirst.mockResolvedValue({ role: SubscriberOrgRole.ADMIN });
+
+      await expect(
+        service.inviteMember('org-1', 'inviter-1', 'a@b.com', SubscriberOrgRole.OWNER),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.subscriberInvite.create).not.toHaveBeenCalled();
+    });
+
+    it('allows an owner inviter to invite someone as owner', async () => {
+      const { prisma, mail, service } = setup();
+      prisma.subscriberMembership.findFirst
+        .mockResolvedValueOnce({ role: SubscriberOrgRole.OWNER })
+        .mockResolvedValueOnce(null);
+      prisma.subscriberOrganization.findUniqueOrThrow.mockResolvedValue({ id: 'org-1', name: 'Acme' });
+
+      await service.inviteMember('org-1', 'inviter-1', 'a@b.com', SubscriberOrgRole.OWNER);
+
+      expect(prisma.subscriberInvite.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ role: SubscriberOrgRole.OWNER }) }),
+      );
+      expect(mail.sendSubscriberInviteEmail).toHaveBeenCalled();
     });
   });
 

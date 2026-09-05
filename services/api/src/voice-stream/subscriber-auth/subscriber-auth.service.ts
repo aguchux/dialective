@@ -1,4 +1,10 @@
-import { ConflictException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { ActivityEventType, OtpPurpose, SubscriberOrgRole, SubscriberUser, WebhookEventType } from '@dialectiva/db';
@@ -283,6 +289,9 @@ export class SubscriberAuthService {
    * Only OWNER|ADMIN may invite (enforced by the controller's
    * @SubscriberRoles guard). Re-inviting the same still-pending email
    * replaces the earlier invite's token rather than creating a duplicate.
+   * Inviting as OWNER is an ownership-transfer action, so it requires the
+   * inviter to already be an OWNER -- otherwise an ADMIN could mint a new
+   * OWNER account for themselves via a throwaway email.
    */
   async inviteMember(
     organizationId: string,
@@ -290,6 +299,15 @@ export class SubscriberAuthService {
     email: string,
     role: SubscriberOrgRole,
   ): Promise<void> {
+    if (role === SubscriberOrgRole.OWNER) {
+      const inviterMembership = await this.prisma.subscriberMembership.findFirst({
+        where: { organizationId, userId: invitedByUserId },
+      });
+      if (inviterMembership?.role !== SubscriberOrgRole.OWNER) {
+        throw new ForbiddenException('Only an owner can invite a new owner');
+      }
+    }
+
     const existingMember = await this.prisma.subscriberMembership.findFirst({
       where: { organizationId, user: { email } },
     });
