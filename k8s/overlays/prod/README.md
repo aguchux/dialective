@@ -71,24 +71,11 @@ Add `http://localhost:3000` too if testing the frontend locally against the real
 
 `pgadmin.dialectlibrary.com`, `api.dialectlibrary.com`, and `livekit.dialectlibrary.com` must point (A/CNAME) at the ingress controller's external IP. TLS is issued automatically via cert-manager (`letsencrypt-prod` ClusterIssuer) — that ClusterIssuer must already exist in the cluster; it's not created by these manifests. Requires an nginx ingress controller (`ingressClassName: nginx`). `livekit.dialectlibrary.com` fronts `livekit-server`'s WS signaling only — its WebRTC media (UDP) goes through the separate `livekit-rtc` LoadBalancer Service, not the ingress controller (see `k8s/base/livekit-service.yaml`).
 
-`dialectlibrary.com` (the frontend, apex domain), `labs.dialectlibrary.com` (`chatdialect/apps/web`), and `stream.dialectlibrary.com` (`/stream`, Dialect Library Voice Stream) are **not** in this cluster — all three are Vercel deployments, each its own Vercel project. Point each at its own Vercel DNS target per that project's domain settings, not at the ingress controller.
+`dialectlibrary.com` (the frontend, apex domain), `labs.dialectlibrary.com` (`chatdialect/apps/web`), `stream.dialectlibrary.com` (`/stream`, Dialect Library Voice Stream), and `community.dialectlibrary.com` (`/community`, the in-house forum) are **not** in this cluster — all four are Vercel deployments, each its own Vercel project. Point each at its own Vercel DNS target per that project's domain settings, not at the ingress controller.
 
-`community.dialectlibrary.com` (self-hosted Discourse) is **also not** in this cluster — see the Community (Discourse) section below.
+## Community
 
-## Community (Discourse)
-
-`community.dialectlibrary.com` runs self-hosted [Discourse](https://www.discourse.org/) on its own dedicated DigitalOcean Droplet, bootstrapped via Discourse's own official `launcher`/`app.yml` tool — **not** as a k8s Deployment in this cluster. Discourse's `discourse/base` image has no supported way to run outside that bootstrap flow (confirmed: the only maintained alternative, `bitnami/discourse`, was pulled from Docker Hub's free tier in 2025), so it lives as a separate piece of infra. Full provisioning runbook and the committed `app.yml` template: [`discourse-droplet/README.md`](../../../discourse-droplet/README.md).
-
-DNS for this subdomain points directly at the droplet's own IP, not at this cluster's ingress controller — Discourse terminates its own TLS via its bundled Let's Encrypt template.
-
-**Authentication is entirely delegated to the main app via [DiscourseConnect](https://meta.discourse.org/t/discourseconnect-official-single-sign-on-for-discourse-sso/13045)** (Discourse's official SSO protocol, HMAC-SHA256 signed, no OAuth server needed) — Discourse never stores a password for any Dialect Library user beyond its own break-glass bootstrap admin:
-
-1. A visitor clicks "Log in" on `community.dialectlibrary.com`. Discourse redirects the browser to `DISCOURSE_SSO_URL` (`https://dialectlibrary.com/api/discourse-sso`) with a signed `sso`/`sig` query pair.
-2. That route (`frontend/app/api/discourse-sso/route.ts`, deployed on Vercel alongside the rest of `frontend`) validates the signature, checks the visitor's NextAuth session:
-   - **No session** → redirects to `/login?callbackUrl=/api/discourse-sso?<original query>` so the visitor logs into the main app first, then bounces straight back through SSO.
-   - **Session present** → builds a new signed payload (`external_id` = the user's id, `email`, `name`, `admin`/`moderator` = true when `role === 'ADMIN'`) and redirects back to Discourse, which creates/updates the matching Discourse account and logs them in.
-
-Visual theme (Inter font, the app's purple accent/palette, rounded cards) is a separate git-installed Discourse theme at [`discourse-theme/`](../../../discourse-theme/) — see that directory's README for one-time install steps (Admin → Customize → Themes → Install from a git repository).
+`community.dialectlibrary.com` is an in-house forum (`community/`, its own Next.js app/Vercel project — see `docs/COMMUNITY-PLAN.md`), replacing an earlier self-hosted Discourse instance that was retired. It shares the main app's login: `frontend`'s NextAuth session cookie is scoped to `Domain=.dialectlibrary.com`, and `community` runs its own session-read-only NextAuth config against the identical `NEXTAUTH_SECRET`, so a login on `frontend` is immediately visible to `community` with no redirect/SSO round trip. `community` has no credential providers of its own.
 
 ## Frontend (Vercel) env vars
 
@@ -99,8 +86,6 @@ Set these in the Vercel project settings, not in this repo's secrets (which only
 - `API_BASE_URL` — `https://api.dialectlibrary.com` (Vercel can't reach the cluster's internal `http://api` Service DNS)
 - `NEXT_PUBLIC_API_BASE_URL` — same as above, exposed client-side
 - `OAUTH_CALLBACK_SECRET` — must match `secrets/auth.env`'s `oauth_callback_secret` / `api`'s `auth-creds` value exactly
-- `DISCOURSE_SSO_SECRET` — must match the droplet's `app.yml`'s `DISCOURSE_SSO_SECRET` exactly (see the Community (Discourse) section below and `discourse-droplet/README.md`)
-- `DISCOURSE_URL` — `https://community.dialectlibrary.com`
 
 ## ChatDialect (Vercel) env vars
 
