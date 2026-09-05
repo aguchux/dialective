@@ -24,5 +24,8 @@ export function signSubscriberAccessToken(claims: SubscriberAccessTokenClaims): 
 }
 
 export function verifySubscriberAccessToken(token: string): SubscriberAccessTokenClaims {
-  return jwt.verify(token, getSecret()) as SubscriberAccessTokenClaims;
+  // Pin the accepted algorithm to what we actually sign with (default HS256)
+  // -- without this, jwt.verify() trusts whatever `alg` the token header
+  // claims, opening the classic alg-confusion/"none" attack surface.
+  return jwt.verify(token, getSecret(), { algorithms: ['HS256'] }) as SubscriberAccessTokenClaims;
 }

@@ -21,6 +21,7 @@ function setup() {
     subscriberMembership: {
       create: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn(),
     },
     subscriberOtpCode: {
       create: jest.fn(),
@@ -41,6 +42,7 @@ function setup() {
     },
     subscriberOrgSecurityPolicy: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
     },
     subscriberPasswordResetToken: {
       create: jest.fn(),
@@ -132,6 +134,21 @@ describe('SubscriberAuthService', () => {
       await expect(service.login('a@b.com', 'anything')).rejects.toThrow(UnauthorizedException);
     });
 
+    it('rejects login when the user has no accepted membership in any org', async () => {
+      const { prisma, service } = setup();
+      const bcrypt = require('bcrypt');
+      prisma.subscriberUser.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+        passwordHash: await bcrypt.hash('correct-password', 12),
+      });
+      prisma.subscriberMembership.findMany.mockResolvedValue([]);
+
+      await expect(service.login('a@b.com', 'correct-password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
     it('rejects an incorrect password', async () => {
       const { prisma, service } = setup();
       const bcrypt = require('bcrypt');
@@ -140,11 +157,10 @@ describe('SubscriberAuthService', () => {
         email: 'a@b.com',
         passwordHash: await bcrypt.hash('correct-password', 12),
       });
-      prisma.subscriberMembership.findFirst.mockResolvedValue({
-        organizationId: 'org-1',
-        role: SubscriberOrgRole.ADMIN,
-      });
-      prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue(null);
+      prisma.subscriberMembership.findMany.mockResolvedValue([
+        { organizationId: 'org-1', role: SubscriberOrgRole.ADMIN },
+      ]);
+      prisma.subscriberOrgSecurityPolicy.findFirst.mockResolvedValue(null);
 
       await expect(service.login('a@b.com', 'wrong-password')).rejects.toThrow(
         UnauthorizedException,
@@ -159,11 +175,36 @@ describe('SubscriberAuthService', () => {
         email: 'a@b.com',
         passwordHash: await bcrypt.hash('correct-password', 12),
       });
-      prisma.subscriberMembership.findFirst.mockResolvedValue({
-        organizationId: 'org-1',
-        role: SubscriberOrgRole.ADMIN,
+      prisma.subscriberMembership.findMany.mockResolvedValue([
+        { organizationId: 'org-1', role: SubscriberOrgRole.ADMIN },
+      ]);
+      prisma.subscriberOrgSecurityPolicy.findFirst.mockResolvedValue({ requireSso: true });
+
+      await expect(service.login('a@b.com', 'correct-password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('rejects password login when the user is a non-OWNER member of a DIFFERENT org that requires SSO, even though their oldest/first membership does not (ambiguous multi-org login must not bypass requireSso)', async () => {
+      const { prisma, service } = setup();
+      const bcrypt = require('bcrypt');
+      prisma.subscriberUser.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+        passwordHash: await bcrypt.hash('correct-password', 12),
       });
-      prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue({ requireSso: true });
+      // Two memberships: org-1 (oldest, no SSO requirement) and org-2 (SSO
+      // required). A naive "check only the first membership" implementation
+      // would look at org-1 alone and let this password login through.
+      prisma.subscriberMembership.findMany.mockResolvedValue([
+        { organizationId: 'org-1', role: SubscriberOrgRole.ADMIN },
+        { organizationId: 'org-2', role: SubscriberOrgRole.VALIDATOR },
+      ]);
+      prisma.subscriberOrgSecurityPolicy.findFirst.mockImplementation(({ where }: any) =>
+        where.organizationId.in.includes('org-2')
+          ? Promise.resolve({ organizationId: 'org-2', requireSso: true })
+          : Promise.resolve(null),
+      );
 
       await expect(service.login('a@b.com', 'correct-password')).rejects.toThrow(
         UnauthorizedException,
@@ -178,10 +219,14 @@ describe('SubscriberAuthService', () => {
         email: 'owner@b.com',
         passwordHash: await bcrypt.hash('correct-password', 12),
       });
+      prisma.subscriberMembership.findMany.mockResolvedValue([
+        { organizationId: 'org-1', role: SubscriberOrgRole.OWNER },
+      ]);
       prisma.subscriberMembership.findFirst.mockResolvedValue({
         organizationId: 'org-1',
         role: SubscriberOrgRole.OWNER,
       });
+      prisma.subscriberOrgSecurityPolicy.findFirst.mockResolvedValue({ requireSso: true });
       prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue({ requireSso: true });
 
       const result = await service.login('owner@b.com', 'correct-password');
@@ -198,11 +243,10 @@ describe('SubscriberAuthService', () => {
         email: 'a@b.com',
         passwordHash: await bcrypt.hash('correct-password', 12),
       });
-      prisma.subscriberMembership.findFirst.mockResolvedValue({
-        organizationId: 'org-1',
-        role: SubscriberOrgRole.ADMIN,
-      });
-      prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue(null);
+      prisma.subscriberMembership.findMany.mockResolvedValue([
+        { organizationId: 'org-1', role: SubscriberOrgRole.ADMIN },
+      ]);
+      prisma.subscriberOrgSecurityPolicy.findFirst.mockResolvedValue(null);
 
       const result = await service.login('a@b.com', 'correct-password');
 

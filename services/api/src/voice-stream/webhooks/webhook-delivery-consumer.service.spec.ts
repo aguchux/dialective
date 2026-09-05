@@ -64,7 +64,27 @@ describe('WebhookDeliveryConsumerService', () => {
     );
   });
 
-  it('computes the HMAC correctly against a known secret/payload', async () => {
+  it('computes the HMAC correctly against a known secret/payload/timestamp', async () => {
+    const { service, subscriptions } = setup();
+    subscriptions.findActiveSubscribers.mockResolvedValue([
+      { id: 'sub-1', url: 'https://example.com/hook' },
+    ]);
+    fetchMock.mockResolvedValue({ status: 200 });
+
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    await (service as unknown as { handle: (m: unknown) => Promise<void> }).handle(message());
+    nowSpy.mockRestore();
+
+    const body = JSON.stringify({ deck_id: 'deck-1' });
+    const expectedTimestamp = '1700000000';
+    const expectedSignature = `sha256=${createHmac('sha256', 'shhh-secret').update(`${expectedTimestamp}.${body}`).digest('hex')}`;
+    const [, options] = fetchMock.mock.calls[0];
+    expect(options.headers['X-Dialectiva-Timestamp']).toBe(expectedTimestamp);
+    expect(options.headers['X-Dialectiva-Signature']).toBe(expectedSignature);
+    expect(options.body).toBe(body);
+  });
+
+  it('sends a fresh timestamp header with every delivery (replay-protection material)', async () => {
     const { service, subscriptions } = setup();
     subscriptions.findActiveSubscribers.mockResolvedValue([
       { id: 'sub-1', url: 'https://example.com/hook' },
@@ -73,11 +93,8 @@ describe('WebhookDeliveryConsumerService', () => {
 
     await (service as unknown as { handle: (m: unknown) => Promise<void> }).handle(message());
 
-    const body = JSON.stringify({ deck_id: 'deck-1' });
-    const expectedSignature = `sha256=${createHmac('sha256', 'shhh-secret').update(body).digest('hex')}`;
     const [, options] = fetchMock.mock.calls[0];
-    expect(options.headers['X-Dialectiva-Signature']).toBe(expectedSignature);
-    expect(options.body).toBe(body);
+    expect(options.headers['X-Dialectiva-Timestamp']).toMatch(/^\d+$/);
   });
 
   it('writes a WebhookDeliveryLog row on success', async () => {

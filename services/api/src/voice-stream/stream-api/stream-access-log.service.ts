@@ -54,6 +54,9 @@ export class StreamAccessLogService {
       );
     }
 
-    void this.usageCounter.increment(entry.organizationId, { bytes: entry.bytesStreamed, requests: 1 });
+    // Request-count quota is now reserved atomically pre-serve in QuotaGuard
+    // (UsageCounterService.tryReserveRequest) -- incrementing requestsUsed
+    // here too would double-count every QuotaGuard-covered request.
+    void this.usageCounter.increment(entry.organizationId, { bytes: entry.bytesStreamed });
   }
 }

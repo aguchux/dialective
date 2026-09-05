@@ -6,26 +6,26 @@ function setup() {
       upsert: jest.fn().mockResolvedValue({}),
       findUnique: jest.fn().mockResolvedValue(null),
     },
+    $queryRaw: jest.fn().mockResolvedValue([{ requestsUsed: 1 }]),
   };
   const service = new UsageCounterService(prisma as never);
   return { service, prisma };
 }
 
 describe('UsageCounterService.increment', () => {
-  it('upserts with the current UTC month as periodStart', async () => {
+  it('upserts bytes with the current UTC month as periodStart', async () => {
     const { service, prisma } = setup();
 
-    await service.increment('org-1', { bytes: BigInt(500), requests: 1 });
+    await service.increment('org-1', { bytes: BigInt(500) });
 
     const call = prisma.usageCounter.upsert.mock.calls[0][0];
     expect(call.where.organizationId_periodStart.organizationId).toBe('org-1');
     expect(call.where.organizationId_periodStart.periodStart.getUTCDate()).toBe(1);
     expect(call.create).toEqual(
-      expect.objectContaining({ organizationId: 'org-1', bytesUsed: BigInt(500), requestsUsed: 1 }),
+      expect.objectContaining({ organizationId: 'org-1', bytesUsed: BigInt(500), requestsUsed: 0 }),
     );
     expect(call.update).toEqual({
       bytesUsed: { increment: BigInt(500) },
-      requestsUsed: { increment: 1 },
     });
   });
 
@@ -33,7 +33,46 @@ describe('UsageCounterService.increment', () => {
     const { service, prisma } = setup();
     prisma.usageCounter.upsert.mockRejectedValue(new Error('db down'));
 
-    await expect(service.increment('org-1', { requests: 1 })).resolves.toBeUndefined();
+    await expect(service.increment('org-1', { bytes: BigInt(1) })).resolves.toBeUndefined();
+  });
+
+  it('is a no-op (does not touch the DB) when bytes is not provided -- requestsUsed is tracked exclusively via tryReserveRequest', async () => {
+    const { service, prisma } = setup();
+
+    await service.increment('org-1', {});
+
+    expect(prisma.usageCounter.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('UsageCounterService.tryReserveRequest', () => {
+  it('reports withinQuota true when the atomically-incremented count is still <= quota', async () => {
+    const { service, prisma } = setup();
+    prisma.$queryRaw = jest.fn().mockResolvedValue([{ requestsUsed: 5 }]);
+
+    const result = await service.tryReserveRequest('org-1', 10);
+
+    expect(result).toEqual({ withinQuota: true });
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports withinQuota false once the atomically-incremented count exceeds quota', async () => {
+    const { service, prisma } = setup();
+    prisma.$queryRaw = jest.fn().mockResolvedValue([{ requestsUsed: 11 }]);
+
+    const result = await service.tryReserveRequest('org-1', 10);
+
+    expect(result).toEqual({ withinQuota: false });
+  });
+
+  it('still performs the increment (accounting stays accurate) even when denying the request', async () => {
+    const { service, prisma } = setup();
+    const queryRaw = jest.fn().mockResolvedValue([{ requestsUsed: 11 }]);
+    prisma.$queryRaw = queryRaw;
+
+    await service.tryReserveRequest('org-1', 10);
+
+    expect(queryRaw).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -90,6 +90,7 @@ export class SsoService {
       callbackUrl: acsUrlFor(config.organizationId),
       entryPoint: config.idpSsoUrl,
       issuer: config.spEntityId, // OUR entity id -- sent as Issuer in the AuthnRequest, validated as Audience on the response
+      idpIssuer: config.idpEntityId, // defense-in-depth: cross-checks the *response's* Issuer against this org's configured IdP entity id, not just the certificate/signature chain -- catches a misconfigured/wrong-org cert accepted for the wrong IdP
       idpCert: config.idpCertificate,
       wantAssertionsSigned: true, // mandatory -- never trust an unsigned assertion
       wantAuthnResponseSigned: false, // most IdPs sign the assertion, not the outer response; assertion-signing stays mandatory above
@@ -186,6 +187,29 @@ export class SsoService {
     const existingUserByEmail = await this.prisma.subscriberUser.findUnique({
       where: { email: assertion.email },
     });
+
+    // A still-pending SubscriberInvite (tokenHash emailed, not yet accepted)
+    // is the invited person's proof-of-email-ownership step -- it hasn't
+    // happened yet. Without this check, an attacker who merely controls
+    // what email the IdP asserts (a misconfigured/permissive IdP, or an IdP
+    // account they registered themselves with the victim's email) could JIT-
+    // create a SubscriberUser for that email THROUGH SSO before the real
+    // invitee ever clicks their invite link, squatting the email: the real
+    // invite's later acceptInvite() call would then attach to the
+    // attacker's account (subscriberUser.findUnique by email) instead of
+    // creating a fresh one. Only blocks brand-new-account creation --
+    // linking SSO to an ALREADY-existing SubscriberUser is unaffected, since
+    // that account's email is already established, not being claimed here.
+    if (!existingUserByEmail) {
+      const pendingInvite = await this.prisma.subscriberInvite.findFirst({
+        where: { email: assertion.email, acceptedAt: null, expiresAt: { gt: new Date() } },
+      });
+      if (pendingInvite) {
+        throw new UnauthorizedException(
+          'This email has a pending invite that must be accepted directly; SSO cannot claim it first',
+        );
+      }
+    }
 
     const user = await this.prisma.$transaction(async (tx) => {
       const targetUser: SubscriberUser =

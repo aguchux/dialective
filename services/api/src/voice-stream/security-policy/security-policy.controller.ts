@@ -17,6 +17,11 @@ const CAN_MANAGE_SECURITY_POLICY = [SubscriberOrgRole.OWNER, SubscriberOrgRole.A
 export class SecurityPolicyController {
   constructor(private readonly policy: SecurityPolicyService) {}
 
+  // GET deliberately omits SecurityPolicyEntitlementGuard: an OWNER/ADMIN
+  // must still be able to *view* the currently-configured policy (e.g. after
+  // a downgrade drops enterprise entitlement) even if the plan can no longer
+  // create/change/remove one -- read access is intentionally less
+  // restrictive here. Mutation (POST/DELETE) must not be.
   @Get()
   @UseGuards(SubscriberRolesGuard)
   @SubscriberRoles(...CAN_MANAGE_SECURITY_POLICY)
@@ -34,9 +39,12 @@ export class SecurityPolicyController {
     return this.policy.upsert(subscriber.organizationId, subscriber.sub, dto);
   }
 
+  // Must carry the same SecurityPolicyEntitlementGuard as POST -- DELETE is a
+  // mutation of the same enterprise-gated resource and must never be less
+  // protected than the route that creates it.
   @Delete()
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(SubscriberRolesGuard)
+  @UseGuards(SubscriberRolesGuard, SecurityPolicyEntitlementGuard)
   @SubscriberRoles(...CAN_MANAGE_SECURITY_POLICY)
   async remove(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims): Promise<void> {
     await this.policy.remove(subscriber.organizationId, subscriber.sub);

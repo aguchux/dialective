@@ -64,4 +64,21 @@ describe('oauth-m2m-jwt.util', () => {
       signM2mToken({ sub: 'dlm2m_abc', organizationId: 'org-1', deckId: null, scopes: [] }),
     ).toThrow('OAUTH_M2M_JWT_SECRET is not set');
   });
+
+  it('rejects a token signed with alg=none (alg-confusion attack)', () => {
+    const claims = { sub: 'dlm2m_abc', organizationId: 'org-1', deckId: null, scopes: [] };
+    const forgedToken = jwt.sign(claims, '', { algorithm: 'none' });
+
+    expect(() => verifyM2mToken(forgedToken)).toThrow();
+  });
+
+  it('rejects a token signed with a different algorithm than HS256', () => {
+    const claims = { sub: 'dlm2m_abc', organizationId: 'org-1', deckId: null, scopes: [] };
+    // HS384 using the same secret string would still verify successfully if
+    // the allowed-algorithms list were derived from the token header instead
+    // of pinned server-side.
+    const token = jwt.sign(claims, 'test-secret', { algorithm: 'HS384' });
+
+    expect(() => verifyM2mToken(token)).toThrow();
+  });
 });

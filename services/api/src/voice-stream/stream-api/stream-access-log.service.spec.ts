@@ -55,7 +55,7 @@ describe('StreamAccessLogService.record', () => {
       bytesStreamed: BigInt(1024),
     });
 
-    expect(usageCounter.increment).toHaveBeenCalledWith('org-1', { bytes: BigInt(1024), requests: 1 });
+    expect(usageCounter.increment).toHaveBeenCalledWith('org-1', { bytes: BigInt(1024) });
   });
 
   it('still increments the usage counter even when the log write itself fails', async () => {
@@ -70,6 +70,6 @@ describe('StreamAccessLogService.record', () => {
       entitlementDecision: 'allowed',
     });
 
-    expect(usageCounter.increment).toHaveBeenCalledWith('org-1', { bytes: undefined, requests: 1 });
+    expect(usageCounter.increment).toHaveBeenCalledWith('org-1', { bytes: undefined });
   });
 });

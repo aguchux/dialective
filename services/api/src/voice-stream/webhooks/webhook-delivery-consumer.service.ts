@@ -105,7 +105,15 @@ export class WebhookDeliveryConsumerService implements OnModuleInit {
     }
 
     const body = JSON.stringify(payload);
-    const signature = createHmac('sha256', secret).update(body).digest('hex');
+    // Sign `${timestamp}.${body}` (not body alone) and ship the timestamp
+    // alongside the signature so a captured delivery can't be replayed
+    // indefinitely: a subscriber that verifies the signature over
+    // `${X-Dialectiva-Timestamp}.${rawBody}` AND rejects timestamps outside
+    // a small tolerance window (e.g. 5 minutes) closes the replay window.
+    // This is delivery-side only -- we cannot force a subscriber to check
+    // the timestamp, but we must give them the material to do so.
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
 
     try {
       const response = await fetch(subscription.url, {
@@ -113,6 +121,7 @@ export class WebhookDeliveryConsumerService implements OnModuleInit {
         headers: {
           'Content-Type': 'application/json',
           'X-Dialectiva-Signature': `sha256=${signature}`,
+          'X-Dialectiva-Timestamp': timestamp,
           'X-Dialectiva-Event': eventType,
         },
         body,

@@ -128,17 +128,33 @@ export class SubscriberAuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // requireSso blocks password login for every role except OWNER -- OWNER
+    // requireSso blocks password login for every role except OWNER (OWNER
     // always keeps a break-glass path so a broken IdP integration never
-    // permanently locks an org out with no recovery path. Same generic
-    // message as the invalid-credential path, so an unauthenticated prober
-    // never learns the org requires SSO.
-    const membership = await this.firstMembership(user.id);
-    if (membership.role !== SubscriberOrgRole.OWNER) {
-      const policy = await this.prisma.subscriberOrgSecurityPolicy.findUnique({
-        where: { organizationId: membership.organizationId },
+    // permanently locks an org out with no recovery path). This endpoint
+    // takes no org context (email+password only), so a user belonging to
+    // several orgs can't declare which one they're targeting -- checking
+    // only firstMembership() (oldest membership, picked arbitrarily) would
+    // let membership in an SSO-exempt org silently authorize a password
+    // login for this account even though a DIFFERENT org they also belong
+    // to requires SSO, since issueAuthResult() below ALSO calls
+    // firstMembership() and would mint a token no more scoped than that
+    // arbitrary pick. Must check every non-OWNER membership. Same generic
+    // message as the invalid-credential path either way, so an
+    // unauthenticated prober never learns any org requires SSO.
+    const memberships = await this.prisma.subscriberMembership.findMany({
+      where: { userId: user.id, acceptedAt: { not: null } },
+    });
+    if (memberships.length === 0) {
+      throw new UnauthorizedException('No organization membership found for this account');
+    }
+    const nonOwnerOrgIds = memberships
+      .filter((m) => m.role !== SubscriberOrgRole.OWNER)
+      .map((m) => m.organizationId);
+    if (nonOwnerOrgIds.length > 0) {
+      const ssoRequiredPolicy = await this.prisma.subscriberOrgSecurityPolicy.findFirst({
+        where: { organizationId: { in: nonOwnerOrgIds }, requireSso: true },
       });
-      if (policy?.requireSso) {
+      if (ssoRequiredPolicy) {
         throw new UnauthorizedException('Invalid email or password');
       }
     }

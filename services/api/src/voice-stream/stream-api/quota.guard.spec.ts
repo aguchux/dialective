@@ -5,7 +5,10 @@ import { AuthenticatedStreamKeyRequest } from './stream-key-auth.guard';
 
 function setup() {
   const prisma = { subscription: { findUnique: jest.fn() } };
-  const usageCounter = { getCurrentUsage: jest.fn() };
+  const usageCounter = {
+    getCurrentUsage: jest.fn(),
+    tryReserveRequest: jest.fn().mockResolvedValue({ withinQuota: true }),
+  };
   const guard = new QuotaGuard(prisma as never, usageCounter as never);
   return { guard, prisma, usageCounter };
 }
@@ -53,7 +56,7 @@ describe('QuotaGuard', () => {
     expect(result).toBe(true);
   });
 
-  it('rejects with 429 when the request quota is exhausted', async () => {
+  it('rejects with 429 when the atomic reservation reports the request quota exhausted', async () => {
     const { guard, prisma, usageCounter } = setup();
     prisma.subscription.findUnique.mockResolvedValue({
       plan: { monthlyByteQuota: null, monthlyRequestQuota: 100 },
@@ -61,10 +64,44 @@ describe('QuotaGuard', () => {
     usageCounter.getCurrentUsage.mockResolvedValue({
       periodStart: new Date('2026-08-01'),
       bytesUsed: BigInt(0),
-      requestsUsed: 100,
+      requestsUsed: 99,
     });
+    usageCounter.tryReserveRequest.mockResolvedValue({ withinQuota: false });
 
     await expect(guard.canActivate(contextWith(streamKey))).rejects.toThrow(HttpException);
+  });
+
+  it('reserves the request atomically (not via a separate read-then-write) when a request quota is set', async () => {
+    const { guard, prisma, usageCounter } = setup();
+    prisma.subscription.findUnique.mockResolvedValue({
+      plan: { monthlyByteQuota: null, monthlyRequestQuota: 100 },
+    });
+    usageCounter.getCurrentUsage.mockResolvedValue({
+      periodStart: new Date('2026-08-01'),
+      bytesUsed: BigInt(0),
+      requestsUsed: 10,
+    });
+
+    const result = await guard.canActivate(contextWith(streamKey));
+
+    expect(result).toBe(true);
+    expect(usageCounter.tryReserveRequest).toHaveBeenCalledWith('org-1', 100);
+  });
+
+  it('does not call tryReserveRequest when there is no request quota (unlimited)', async () => {
+    const { guard, prisma, usageCounter } = setup();
+    prisma.subscription.findUnique.mockResolvedValue({
+      plan: { monthlyByteQuota: BigInt(1_000_000), monthlyRequestQuota: null },
+    });
+    usageCounter.getCurrentUsage.mockResolvedValue({
+      periodStart: new Date('2026-08-01'),
+      bytesUsed: BigInt(0),
+      requestsUsed: 0,
+    });
+
+    await guard.canActivate(contextWith(streamKey));
+
+    expect(usageCounter.tryReserveRequest).not.toHaveBeenCalled();
   });
 
   it('rejects with 429 when the byte quota is exhausted', async () => {

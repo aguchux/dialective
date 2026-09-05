@@ -7,6 +7,7 @@ function setup() {
     ssoIdentity: { findUnique: jest.fn(), update: jest.fn(), create: jest.fn() },
     subscriberUser: { findUnique: jest.fn(), create: jest.fn() },
     subscriberMembership: { findUnique: jest.fn(), create: jest.fn() },
+    subscriberInvite: { findFirst: jest.fn().mockResolvedValue(null) },
     ssoRequestCache: { create: jest.fn(), findUnique: jest.fn(), delete: jest.fn() },
     $transaction: jest.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
   };
@@ -128,6 +129,54 @@ describe('SsoService.handleAssertion', () => {
     expect(prisma.subscriberMembership.create).not.toHaveBeenCalled();
   });
 
+  it('refuses to JIT-create a new SubscriberUser when the email has a pending, unexpired invite (email-squatting hijack)', async () => {
+    const { service, prisma } = setup();
+    prisma.ssoIdentity.findUnique.mockResolvedValue(null);
+    prisma.subscriberUser.findUnique.mockResolvedValue(null);
+    prisma.subscriberInvite.findFirst.mockResolvedValue({
+      id: 'invite-1',
+      email: assertion.email,
+      acceptedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    await expect(service.handleAssertion(config, assertion)).rejects.toThrow(UnauthorizedException);
+    expect(prisma.subscriberUser.create).not.toHaveBeenCalled();
+  });
+
+  it('allows JIT-creating a new SubscriberUser when there is no live (unexpired, unaccepted) invite for that email', async () => {
+    const { service, prisma } = setup();
+    prisma.ssoIdentity.findUnique.mockResolvedValue(null);
+    prisma.subscriberUser.findUnique.mockResolvedValue(null);
+    prisma.subscriberUser.create.mockResolvedValue({ id: 'user-8', email: assertion.email });
+    prisma.subscriberMembership.findUnique.mockResolvedValue(null);
+    // The query itself filters expiresAt > now / acceptedAt: null -- an
+    // expired invite row simply wouldn't be returned by a real DB, so the
+    // mock models that by resolving null (same as the "no invite at all"
+    // case from setup()'s default).
+    prisma.subscriberInvite.findFirst.mockResolvedValue(null);
+
+    await service.handleAssertion(config, assertion);
+
+    expect(prisma.subscriberUser.create).toHaveBeenCalled();
+    expect(prisma.subscriberInvite.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ email: assertion.email, acceptedAt: null }),
+      }),
+    );
+  });
+
+  it('does not check for a pending invite when linking SSO to an already-existing SubscriberUser', async () => {
+    const { service, prisma } = setup();
+    prisma.ssoIdentity.findUnique.mockResolvedValue(null);
+    prisma.subscriberUser.findUnique.mockResolvedValue({ id: 'user-9', email: assertion.email });
+    prisma.subscriberMembership.findUnique.mockResolvedValue({ id: 'membership-1' });
+
+    await service.handleAssertion(config, assertion);
+
+    expect(prisma.subscriberInvite.findFirst).not.toHaveBeenCalled();
+  });
+
   it('never assigns SubscriberOrgRole.OWNER via JIT -- always uses config.defaultRole', async () => {
     const { service, prisma } = setup();
     prisma.ssoIdentity.findUnique.mockResolvedValue(null);
@@ -143,6 +192,21 @@ describe('SsoService.handleAssertion', () => {
     expect(prisma.subscriberMembership.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ role: SubscriberOrgRole.DATASET_MANAGER }),
     });
+  });
+});
+
+describe('SsoService.buildSamlClient', () => {
+  it('passes idpIssuer (the org-configured IdP entity id) to node-saml as defense-in-depth against a misconfigured/wrong cert-to-issuer binding', () => {
+    const { service } = setup();
+
+    const saml = service.buildSamlClient(config);
+
+    // node-saml exposes the resolved config on the instance; assert the
+    // exact field we're responsible for wiring, not the whole shape (which
+    // is the library's concern).
+    expect((saml as unknown as { options: Record<string, unknown> }).options.idpIssuer).toBe(
+      config.idpEntityId,
+    );
   });
 });
 

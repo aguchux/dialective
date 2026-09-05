@@ -29,4 +29,14 @@ describe('OrgActivityService.record', () => {
 
     await expect(service.record('org-1', 'KEY_REVOKED', null, {})).resolves.toBeUndefined();
   });
+
+  it('logs the failure so a silently-failing audit write is still observable (finding: audit writes must not fail silent AND unlogged)', async () => {
+    const { service, prisma } = setup();
+    prisma.orgActivityEvent.create.mockRejectedValue(new Error('db down'));
+    const errorSpy = jest.spyOn((service as unknown as { logger: { error: (msg: string) => void } }).logger, 'error');
+
+    await service.record('org-1', 'KEY_REVOKED', null, {});
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('db down'));
+  });
 });

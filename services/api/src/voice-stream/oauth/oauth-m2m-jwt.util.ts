@@ -33,5 +33,8 @@ export function signM2mToken(claims: M2mTokenClaims): { token: string; expiresIn
 }
 
 export function verifyM2mToken(token: string): M2mTokenClaims {
-  return jwt.verify(token, getSecret()) as M2mTokenClaims;
+  // Pin the accepted algorithm to what we actually sign with (default HS256)
+  // -- without this, jwt.verify() trusts whatever `alg` the token header
+  // claims, opening the classic alg-confusion/"none" attack surface.
+  return jwt.verify(token, getSecret(), { algorithms: ['HS256'] }) as M2mTokenClaims;
 }
