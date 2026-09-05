@@ -24,6 +24,7 @@ import { LandingPageSettingsPanel } from './LandingPageSettingsPanel';
 import { ApiAccessTokensSettingsPanel } from './ApiAccessTokensSettingsPanel';
 import { StripeSubscriptionsSettingsPanel } from './StripeSubscriptionsSettingsPanel';
 import { PwaSettingsPanel } from './PwaSettingsPanel';
+import { DykSettingsPanel } from './DykSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
@@ -35,6 +36,7 @@ const groups = [
   { key: 'notifications', label: 'Notification Settings' },
   { key: 'liveChat', label: 'Live Chat' },
   { key: 'pwa', label: 'Web App Install' },
+  { key: 'dyk', label: 'Do you know?' },
   { key: 'wordGeneration', label: 'Word Generation' },
   { key: 'qualityGate', label: 'Voice Quality Gate' },
   { key: 'testimonials', label: 'Testimony Settings' },
@@ -97,6 +99,7 @@ export default function AdminSettingsPage() {
             {active === 'notifications' && <NotificationSettingsPanel />}
             {active === 'liveChat' && <LiveChatSettingsPanel />}
             {active === 'pwa' && <PwaSettingsPanel />}
+            {active === 'dyk' && <DykSettingsPanel />}
             {active === 'wordGeneration' && <WordGenerationSettingsPanel />}
             {active === 'qualityGate' && <QualityGateSettingsPanel />}
             {active === 'testimonials' && <TestimonySettingsPanel />}

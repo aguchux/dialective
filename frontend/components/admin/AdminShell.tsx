@@ -73,6 +73,7 @@ const navGroups: NavGroup[] = [
       { href: '/admin/updates', label: 'Updates', icon: BellIcon },
       { href: '/admin/ai-conversations', label: 'AI Conversations', icon: ChatIcon },
       { href: '/admin/faqs', label: 'FAQs Manager', icon: HelpIcon },
+      { href: '/admin/dyk', label: 'Do you know?', icon: HelpIcon },
     ],
   },
   {

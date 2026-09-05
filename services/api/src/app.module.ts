@@ -10,6 +10,7 @@ import { WordsModule } from './words/words.module';
 import { SentencesModule } from './sentences/sentences.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
 import { MarketingModule } from './marketing/marketing.module';
+import { DykModule } from './dyk/dyk.module';
 import { WalletModule } from './wallet/wallet.module';
 import { GeoModule } from './geo/geo.module';
 import { LeadsModule } from './leads/leads.module';
@@ -46,6 +47,7 @@ import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.modul
     SentencesModule,
     TestimonialsModule,
     MarketingModule,
+    DykModule,
     WalletModule,
     GeoModule,
     LeadsModule,

@@ -10,6 +10,7 @@ import { AiAssistantWidget } from '@/components/AiAssistantWidget';
 import { RequireNameDialog } from '@/components/RequireNameDialog';
 import { PwaServiceWorker } from '@/components/PwaServiceWorker';
 import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
+import { DykPrompt } from '@/components/DykPrompt';
 import { SessionActivityTracker } from '@/components/SessionActivityTracker';
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <StoreProvider>
           <PwaServiceWorker />
           <PwaInstallPrompt />
+          <DykPrompt />
           <TawkToWidget />
           <AiAssistantWidget />
           <RequireNameDialog />
