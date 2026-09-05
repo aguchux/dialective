@@ -392,26 +392,37 @@ export class WordsService {
     if (assignment.uploadBucket !== body.bucket || assignment.uploadKey !== body.audioKey) {
       throw new ForbiddenException('Recording upload does not belong to this assignment');
     }
-    if (
-      !body.responseText ||
-      !body.audioKey ||
-      !body.bucket ||
-      body.durationMs === undefined ||
-      !body.noiseRating
-    ) {
-      throw new UnprocessableEntityException(
-        'responseText, bucket, audioKey, durationMs, and noiseRating are required for this assignment',
-      );
-    }
     // A Sentence-sourced assignment carries its source text via
     // assignment.sentence (wordId is null). A DIALECT_TO_ENGLISH
     // reverse-validation assignment whose SOURCE was itself a sentence also
     // has wordId null and sentenceId set (see pickReverseSource/
     // nextAssignment's reverseSource branch) -- both cases read from
     // assignment.sentence.text.
+    const isSentenceSourced = !assignment.wordId;
     const promptText = assignment.wordId ? assignment.word?.text : assignment.sentence?.text;
     if (!promptText) {
       throw new UnprocessableEntityException('This assignment has no associated word or sentence');
+    }
+
+    // Typing a transcript is only required for a Word-sourced assignment --
+    // for a Sentence prompt (either direction) the recording alone is the
+    // artifact collected; requiring a full-sentence transcript on top of it
+    // would duplicate the reading/listening exercise without adding
+    // scoring value the recording doesn't already carry. This also means
+    // DIALECT_TO_ENGLISH's validationScore (typed-answer vs. expected-text
+    // match) can't run for a sentence source -- see below.
+    if (
+      (isSentenceSourced ? false : !body.responseText) ||
+      !body.audioKey ||
+      !body.bucket ||
+      body.durationMs === undefined ||
+      !body.noiseRating
+    ) {
+      throw new UnprocessableEntityException(
+        isSentenceSourced
+          ? 'bucket, audioKey, durationMs, and noiseRating are required for this assignment'
+          : 'responseText, bucket, audioKey, durationMs, and noiseRating are required for this assignment',
+      );
     }
 
     // Mirrors the client's countdown (see WordTrainingDialog.tsx): per-word
@@ -433,11 +444,14 @@ export class WordsService {
       );
     }
 
-    const normalizedAnswer = normalizeAnswer(body.responseText);
-    const normalizedEnglish = normalizeAnswer(promptText);
+    // A sentence source has no typed transcript to compare (see the
+    // isSentenceSourced check above), so DIALECT_TO_ENGLISH's exact-match
+    // self-score can't run for it -- validationScore stays null, same as
+    // ENGLISH_TO_DIALECT's status quo, and the recording is scored by the
+    // normal ASR/quality-gate/peer-review path instead.
     const validationScore =
-      assignment.direction === 'DIALECT_TO_ENGLISH'
-        ? normalizedAnswer === normalizedEnglish
+      assignment.direction === 'DIALECT_TO_ENGLISH' && body.responseText
+        ? normalizeAnswer(body.responseText) === normalizeAnswer(promptText)
           ? 1
           : 0
         : null;
@@ -487,7 +501,11 @@ export class WordsService {
           direction: assignment.direction,
           dialectTag: assignment.session.user.dialect!.tag,
           dialectVariantId: assignment.session.user.dialectVariantId,
-          translationText: body.responseText!.trim(),
+          // translationText is a required column; a sentence-sourced
+          // assignment with no typed transcript falls back to the prompt's
+          // own known-correct text (the sentence being read/spoken) rather
+          // than an empty/synthetic value.
+          translationText: body.responseText?.trim() || promptText,
           audioBucket: body.bucket,
           audioKey: body.audioKey,
           durationMs: body.durationMs,
@@ -514,7 +532,7 @@ export class WordsService {
     });
 
     if (assignment.direction === 'DIALECT_TO_ENGLISH' && assignment.sourceRecordingId) {
-      await this.scoreReverseValidatedSource(assignment.sourceRecordingId, validationScore!);
+      await this.scoreReverseValidatedSource(assignment.sourceRecordingId, validationScore);
       await this.insertRedoRecording(userId, assignment, body);
     }
 
@@ -540,7 +558,7 @@ export class WordsService {
       bucket: body.bucket,
       audio_key: body.audioKey,
       dialect_tag: assignment.session.user.dialect!.tag,
-      expected_text: body.responseText!.trim(),
+      expected_text: body.responseText?.trim() || promptText,
       ...(asrRoute ? { asr_stream: asrRoute.stream } : {}),
     });
 
@@ -740,9 +758,12 @@ export class WordsService {
    */
   private async scoreReverseValidatedSource(
     sourceRecordingId: string,
-    reverseValidationScore: number,
+    reverseValidationScore: number | null,
   ) {
-    if (reverseValidationScore < 1) return;
+    // null means the reverse-validation attempt had no transcript to compare
+    // (a sentence-sourced DIALECT_TO_ENGLISH assignment) -- inconclusive,
+    // same as a miss: the source is left PENDING rather than scored.
+    if (reverseValidationScore === null || reverseValidationScore < 1) return;
     await this.prisma.wordRecording.updateMany({
       where: { id: sourceRecordingId, status: 'PENDING' },
       data: { rawScore: 100, score: 100, status: 'SCORED', scoredAt: new Date() },

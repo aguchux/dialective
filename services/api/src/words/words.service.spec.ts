@@ -1020,6 +1020,122 @@ describe('WordsService', () => {
         }),
       );
     });
+
+    it('rejects a Word-sourced recording with no responseText (transcript stays required for words)', async () => {
+      const assignment = {
+        id: 'assignment-word-no-text',
+        sessionId: session.id,
+        wordId: 'word-1',
+        sentenceId: null,
+        direction: 'ENGLISH_TO_DIALECT',
+        consumedAt: null,
+        uploadBucket: 'recordings',
+        uploadKey: 'ig/english_to_dialect/audio.webm',
+        word: { text: 'hello' },
+        sentence: null,
+        session: { userId: trainer.id, user: trainer },
+      };
+      prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+
+      await expect(
+        service.createRecording(trainer.id, {
+          assignmentId: assignment.id,
+          bucket: 'recordings',
+          audioKey: 'ig/english_to_dialect/audio.webm',
+          durationMs: 5_000,
+          noiseRating: 'QUIET',
+        } as any),
+      ).rejects.toThrow('responseText, bucket, audioKey, durationMs, and noiseRating are required');
+    });
+
+    it('accepts a Sentence-sourced ENGLISH_TO_DIALECT recording with no responseText, falling back translationText to the prompt text', async () => {
+      const assignment = {
+        id: 'assignment-sentence-no-text',
+        sessionId: session.id,
+        wordId: null,
+        sentenceId: 'sentence-1',
+        direction: 'ENGLISH_TO_DIALECT',
+        consumedAt: null,
+        uploadBucket: 'recordings',
+        uploadKey: 'ig/english_to_dialect/audio.webm',
+        word: null,
+        sentence: { text: 'good morning friend' },
+        session: { id: session.id, userId: trainer.id, user: trainer },
+      };
+      prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+      const createRecordingMock = jest
+        .fn()
+        .mockImplementation(({ data }: any) => ({ id: 'recording-sentence-no-text', ...data }));
+      prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
+        callback({
+          wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          wordRecording: { create: createRecordingMock },
+          ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
+        }),
+      );
+
+      await service.createRecording(trainer.id, {
+        assignmentId: assignment.id,
+        bucket: 'recordings',
+        audioKey: 'ig/english_to_dialect/audio.webm',
+        durationMs: 10_000,
+        noiseRating: 'QUIET',
+      } as any);
+
+      expect(createRecordingMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            translationText: 'good morning friend',
+            validationScore: null,
+            status: 'PENDING',
+          }),
+        }),
+      );
+    });
+
+    it('accepts a Sentence-sourced DIALECT_TO_ENGLISH recording with no responseText and leaves validationScore null (no transcript to self-score against)', async () => {
+      const assignment = {
+        id: 'assignment-sentence-reverse-no-text',
+        sessionId: session.id,
+        wordId: null,
+        sentenceId: 'sentence-1',
+        direction: 'DIALECT_TO_ENGLISH',
+        consumedAt: null,
+        uploadBucket: 'recordings',
+        uploadKey: 'ig/dialect_to_english/audio.webm',
+        sourceRecordingId: null,
+        word: null,
+        sentence: { text: 'good morning friend' },
+        session: { id: session.id, userId: trainer.id, user: trainer },
+      };
+      prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+      const createRecordingMock = jest
+        .fn()
+        .mockImplementation(({ data }: any) => ({ id: 'recording-sentence-reverse-no-text', ...data }));
+      prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
+        callback({
+          wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          wordRecording: { create: createRecordingMock },
+          ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
+        }),
+      );
+
+      await service.createRecording(trainer.id, {
+        assignmentId: assignment.id,
+        bucket: 'recordings',
+        audioKey: 'ig/dialect_to_english/audio.webm',
+        durationMs: 10_000,
+        noiseRating: 'QUIET',
+      } as any);
+
+      expect(createRecordingMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ validationScore: null, status: 'PENDING' }),
+        }),
+      );
+    });
   });
 
   describe('wordTrainingEnabled / sentenceTrainingEnabled content gates', () => {

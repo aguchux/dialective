@@ -131,6 +131,15 @@ export function WordTrainingDialog({
   const [qracOpen, setQracOpen] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const submittingRef = useRef(false);
+  // A Sentence-sourced assignment has wordId=null (see WordTrainingAssignment
+  // -- WordsService.nextAssignment sets it explicitly for both a
+  // Sentence-sourced ENGLISH_TO_DIALECT pick and a reverse-validation whose
+  // source was itself a sentence). Typing a full-sentence transcript on top
+  // of the recording would duplicate the exercise without adding scoring
+  // value the recording doesn't already carry, so it's skipped for both
+  // directions -- unlike a Word-sourced assignment, where the typed spelling
+  // is required and independently scored/normalized.
+  const isSentenceSourced = !!assignment && !assignment.wordId;
 
   const [startSession, { isLoading: isStarting }] = useStartWordTrainingSessionMutation();
   const [loadNext, { isFetching: isLoadingNext }] = useLazyGetNextWordTrainingAssignmentQuery();
@@ -509,8 +518,12 @@ export function WordTrainingDialog({
   }
 
   async function saveRecording() {
-    if (!assignment || !audioBlob || !responseText.trim()) {
-      setError('Enter the spelling and record the word before submitting.');
+    if (!assignment || !audioBlob || (!isSentenceSourced && !responseText.trim())) {
+      setError(
+        isSentenceSourced
+          ? 'Record the sentence before submitting.'
+          : 'Enter the spelling and record the word before submitting.',
+      );
       return;
     }
     // A fast double-tap on mobile can fire this handler twice before React
@@ -540,7 +553,7 @@ export function WordTrainingDialog({
 
       const result = await submitRecording({
         assignmentId: assignment.assignmentId,
-        responseText: responseText.trim(),
+        ...(isSentenceSourced ? {} : { responseText: responseText.trim() }),
         bucket: upload.bucket,
         audioKey: upload.key,
         durationMs: Math.max(1, Math.round(elapsedMs)),
@@ -796,6 +809,7 @@ export function WordTrainingDialog({
                         )}
                       </div>
 
+                      {!isSentenceSourced && (
                       <div className="mx-auto grid w-full max-w-md gap-2 text-left">
                         <label
                           className="flex items-center gap-1.5 text-sm font-extrabold"
@@ -905,18 +919,21 @@ export function WordTrainingDialog({
                           </div>
                         )}
                       </div>
+                      )}
 
                       <div className="mx-auto grid w-full max-w-md justify-items-center gap-1 text-center">
                         <p className="flex items-center gap-1.5 text-sm font-extrabold">
-                          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-[11px] font-black text-accent">
-                            2
-                          </span>
+                          {!isSentenceSourced && (
+                            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-[11px] font-black text-accent">
+                              2
+                            </span>
+                          )}
                           Say it in{' '}
                           {assignment.direction === 'DIALECT_TO_ENGLISH'
                             ? assignment.sourceLanguage
                             : assignment.responseLanguage}
                         </p>
-                        {assignment.direction === 'DIALECT_TO_ENGLISH' && (
+                        {assignment.direction === 'DIALECT_TO_ENGLISH' && !isSentenceSourced && (
                           <p className="text-xs font-bold text-muted">
                             Your own {assignment.sourceLanguage} pronunciation of this word -- not
                             the English you typed above.
@@ -1032,7 +1049,7 @@ export function WordTrainingDialog({
                           </button>
                           <button
                             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:opacity-45"
-                            disabled={!responseText.trim()}
+                            disabled={!isSentenceSourced && !responseText.trim()}
                             onClick={() => void saveRecording()}
                             type="button"
                           >
