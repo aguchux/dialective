@@ -45,13 +45,10 @@ export class AssistantController {
     return this.assistant.getAdminConversation(conversationId);
   }
 
-  @Post('admin/conversations/:conversationId/github-issue')
+  @Post('admin/messages/:messageId/github-issue')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  createGithubIssue(
-    @Param('conversationId') conversationId: string,
-    @Body() body: CreateGithubIssueDto,
-  ) {
-    return this.assistant.createGithubIssue(conversationId, body);
+  createGithubIssue(@Param('messageId') messageId: string, @Body() body: CreateGithubIssueDto) {
+    return this.assistant.createGithubIssue(messageId, body);
   }
 }

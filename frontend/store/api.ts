@@ -357,9 +357,6 @@ export interface AdminAssistantConversationSummary {
   };
   _count: { messages: number };
   latestMessage: { content: string; role: 'user' | 'assistant'; createdAt: string } | null;
-  githubIssueNumber: number | null;
-  githubIssueUrl: string | null;
-  githubIssueCreatedAt: string | null;
 }
 
 export interface AdminAssistantConversationPage {
@@ -382,11 +379,11 @@ export interface AdminAssistantConversationDetail {
     content: string;
     createdAt: string;
     convertedToFaqId: string | null;
+    githubIssueNumber: number | null;
+    githubIssueUrl: string | null;
+    githubIssueCreatedAt: string | null;
   }>;
   truncated: boolean;
-  githubIssueNumber: number | null;
-  githubIssueUrl: string | null;
-  githubIssueCreatedAt: string | null;
 }
 
 export interface AdminFaq {
@@ -3565,15 +3562,14 @@ export const dialectivaApi = createApi({
     }),
     createAdminAssistantGithubIssue: builder.mutation<
       { created: boolean; issueNumber: number; issueUrl: string; createdAt: string },
-      { conversationId: string; title?: string; body?: string }
+      { conversationId: string; messageId: string; title?: string; body?: string }
     >({
-      query: ({ conversationId, title, body }) => ({
-        url: `/assistant/admin/conversations/${conversationId}/github-issue`,
+      query: ({ messageId, title, body }) => ({
+        url: `/assistant/admin/messages/${messageId}/github-issue`,
         method: 'POST',
         body: { title, body },
       }),
       invalidatesTags: (_result, _error, input) => [
-        'AdminAssistantConversations',
         { type: 'AdminAssistantConversations', id: input.conversationId },
       ],
     }),

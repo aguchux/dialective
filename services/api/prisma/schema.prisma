@@ -237,28 +237,28 @@ model DykUserState {
 }
 
 model AssistantConversation {
-  id                   String             @id @default(uuid())
-  userId               String             @unique
-  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  messages             AssistantMessage[]
-  githubIssueNumber    Int?
-  githubIssueUrl       String?
-  githubIssueCreatedAt DateTime?
+  id        String             @id @default(uuid())
+  userId    String             @unique
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  messages  AssistantMessage[]
 
   @@map("assistant_conversations")
 }
 
 model AssistantMessage {
-  id               String                @id @default(uuid())
-  conversationId   String
-  conversation     AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role             String
-  content          String
-  createdAt        DateTime              @default(now())
-  convertedToFaqId String?               @unique
-  convertedToFaq   Faq?                  @relation(fields: [convertedToFaqId], references: [id], onDelete: SetNull)
+  id                   String                @id @default(uuid())
+  conversationId       String
+  conversation         AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role                 String
+  content              String
+  createdAt            DateTime              @default(now())
+  convertedToFaqId     String?               @unique
+  convertedToFaq       Faq?                  @relation(fields: [convertedToFaqId], references: [id], onDelete: SetNull)
+  githubIssueNumber    Int?
+  githubIssueUrl       String?
+  githubIssueCreatedAt DateTime?
 
   @@index([conversationId, createdAt])
   @@map("assistant_messages")

@@ -149,9 +149,6 @@ export class AssistantService implements OnModuleDestroy {
           id: true,
           createdAt: true,
           updatedAt: true,
-          githubIssueNumber: true,
-          githubIssueUrl: true,
-          githubIssueCreatedAt: true,
           user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
           _count: { select: { messages: true } },
           messages: {
@@ -176,27 +173,33 @@ export class AssistantService implements OnModuleDestroy {
     };
   }
 
-  async createGithubIssue(conversationId: string, input: CreateGithubIssueDto) {
-    const conversation = await this.prisma.assistantConversation.findUnique({
-      where: { id: conversationId },
+  async createGithubIssue(messageId: string, input: CreateGithubIssueDto) {
+    const message = await this.prisma.assistantMessage.findUnique({
+      where: { id: messageId },
       select: {
         id: true,
+        role: true,
+        content: true,
         createdAt: true,
-        updatedAt: true,
         githubIssueNumber: true,
         githubIssueUrl: true,
         githubIssueCreatedAt: true,
-        user: { select: { id: true, firstName: true, lastName: true, role: true } },
-        messages: { orderBy: { createdAt: 'asc' }, take: 500, select: { role: true, content: true, createdAt: true } },
+        conversation: {
+          select: {
+            id: true,
+            user: { select: { id: true, firstName: true, lastName: true, role: true } },
+            messages: { orderBy: { createdAt: 'asc' }, take: 500, select: { role: true, content: true, createdAt: true } },
+          },
+        },
       },
     });
-    if (!conversation) throw new NotFoundException('Assistant conversation not found');
-    if (conversation.githubIssueUrl && conversation.githubIssueNumber) {
+    if (!message) throw new NotFoundException('Assistant message not found');
+    if (message.githubIssueUrl && message.githubIssueNumber) {
       return {
         created: false,
-        issueNumber: conversation.githubIssueNumber,
-        issueUrl: conversation.githubIssueUrl,
-        createdAt: conversation.githubIssueCreatedAt,
+        issueNumber: message.githubIssueNumber,
+        issueUrl: message.githubIssueUrl,
+        createdAt: message.githubIssueCreatedAt,
       };
     }
 
@@ -210,9 +213,10 @@ export class AssistantService implements OnModuleDestroy {
       throw new BadRequestException('GITHUB_REPOSITORY must use the owner/repository format');
     }
 
+    const { conversation } = message;
     const displayName = [conversation.user.firstName, conversation.user.lastName].filter(Boolean).join(' ') || conversation.user.role;
-    const title = input.title?.trim() || `AI assistant conversation: ${displayName}`;
-    const body = input.body?.trim() || buildGithubIssueBody(conversation);
+    const title = input.title?.trim() || `AI assistant question: ${displayName}`;
+    const body = input.body?.trim() || buildGithubIssueBody(message, conversation);
     let response: Response;
     try {
       response = await fetch(`https://api.github.com/repos/${repositoryParts[0]}/${repositoryParts[1]}/issues`, {
@@ -236,8 +240,8 @@ export class AssistantService implements OnModuleDestroy {
     const result = (await response.json()) as { number?: number; html_url?: string };
     if (!result.number || !result.html_url) throw new BadGatewayException('Git backlog returned an invalid issue');
     const createdAt = new Date();
-    await this.prisma.assistantConversation.update({
-      where: { id: conversationId },
+    await this.prisma.assistantMessage.update({
+      where: { id: messageId },
       data: { githubIssueNumber: result.number, githubIssueUrl: result.html_url, githubIssueCreatedAt: createdAt },
     });
     return { created: true, issueNumber: result.number, issueUrl: result.html_url, createdAt };
@@ -250,15 +254,21 @@ export class AssistantService implements OnModuleDestroy {
         id: true,
         createdAt: true,
         updatedAt: true,
-        githubIssueNumber: true,
-        githubIssueUrl: true,
-        githubIssueCreatedAt: true,
         user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
         _count: { select: { messages: true } },
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 500,
-          select: { id: true, role: true, content: true, createdAt: true, convertedToFaqId: true },
+          select: {
+            id: true,
+            role: true,
+            content: true,
+            createdAt: true,
+            convertedToFaqId: true,
+            githubIssueNumber: true,
+            githubIssueUrl: true,
+            githubIssueCreatedAt: true,
+          },
         },
       },
     });
@@ -511,29 +521,34 @@ function sanitizeAnswer(answer: string) {
     .slice(0, 4000);
 }
 
-function buildGithubIssueBody(conversation: {
-  id: string;
-  createdAt: Date;
-  updatedAt: Date;
-  user: { id: string; firstName: string | null; lastName: string | null; role: string };
-  messages: Array<{ role: string; content: string; createdAt: Date }>;
-}) {
+function buildGithubIssueBody(
+  message: { id: string; content: string; createdAt: Date },
+  conversation: {
+    id: string;
+    user: { id: string; firstName: string | null; lastName: string | null; role: string };
+    messages: Array<{ role: string; content: string; createdAt: Date }>;
+  },
+) {
   const transcript = conversation.messages
-    .map((message) => {
-      const speaker = message.role === 'user' ? 'User' : 'Assistant';
-      return `### ${speaker} (${message.createdAt.toISOString()})\n\n${message.content}`;
+    .map((entry) => {
+      const speaker = entry.role === 'user' ? 'User' : 'Assistant';
+      return `### ${speaker} (${entry.createdAt.toISOString()})\n\n${entry.content}`;
     })
     .join('\n\n');
   return [
-    '## AI assistant conversation',
+    '## Flagged question',
+    '',
+    message.content,
+    '',
+    '## Context',
     '',
     `- Conversation ID: ${conversation.id}`,
+    `- Message ID: ${message.id}`,
     `- Internal user ID: ${conversation.user.id}`,
     `- User role: ${conversation.user.role}`,
-    `- Started: ${conversation.createdAt.toISOString()}`,
-    `- Last activity: ${conversation.updatedAt.toISOString()}`,
+    `- Asked: ${message.createdAt.toISOString()}`,
     '',
-    '## Transcript',
+    '## Full transcript',
     '',
     transcript || '_No messages were recorded._',
   ].join('\n');

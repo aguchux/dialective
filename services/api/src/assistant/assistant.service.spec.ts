@@ -211,19 +211,23 @@ describe('AssistantService', () => {
       jest.restoreAllMocks();
     });
 
-    const conversationRow = {
-      id: 'conv-1',
-      createdAt: new Date('2026-01-01T00:00:00.000Z'),
-      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    const messageRow = {
+      id: 'msg-1',
+      role: 'user',
+      content: 'How do I get paid?',
+      createdAt: new Date('2026-01-01T00:01:00.000Z'),
       githubIssueNumber: null as number | null,
       githubIssueUrl: null as string | null,
       githubIssueCreatedAt: null as Date | null,
-      user: { id: 'user-1', firstName: 'Ada', lastName: 'Lovelace', role: 'TRAINER' },
-      messages: [{ role: 'user', content: 'How do I get paid?', createdAt: new Date('2026-01-01T00:01:00.000Z') }],
+      conversation: {
+        id: 'conv-1',
+        user: { id: 'user-1', firstName: 'Ada', lastName: 'Lovelace', role: 'TRAINER' },
+        messages: [{ role: 'user', content: 'How do I get paid?', createdAt: new Date('2026-01-01T00:01:00.000Z') }],
+      },
     };
 
-    it('throws NotFoundException when the conversation does not exist', async () => {
-      const prisma = { assistantConversation: { findUnique: jest.fn().mockResolvedValue(null) } };
+    it('throws NotFoundException when the message does not exist', async () => {
+      const prisma = { assistantMessage: { findUnique: jest.fn().mockResolvedValue(null) } };
       const service = makeService(buildSettings() as never, {} as never, prisma as never);
 
       await expect(service.createGithubIssue('missing', {})).rejects.toBeInstanceOf(NotFoundException);
@@ -231,9 +235,9 @@ describe('AssistantService', () => {
 
     it('returns the existing issue without calling GitHub when one was already created', async () => {
       const prisma = {
-        assistantConversation: {
+        assistantMessage: {
           findUnique: jest.fn().mockResolvedValue({
-            ...conversationRow,
+            ...messageRow,
             githubIssueNumber: 42,
             githubIssueUrl: 'https://github.com/acme/repo/issues/42',
             githubIssueCreatedAt: new Date('2026-01-03T00:00:00.000Z'),
@@ -243,7 +247,7 @@ describe('AssistantService', () => {
       const fetchSpy = jest.spyOn(global, 'fetch');
       const service = makeService(buildSettings() as never, {} as never, prisma as never);
 
-      await expect(service.createGithubIssue('conv-1', {})).resolves.toEqual({
+      await expect(service.createGithubIssue('msg-1', {})).resolves.toEqual({
         created: false,
         issueNumber: 42,
         issueUrl: 'https://github.com/acme/repo/issues/42',
@@ -255,10 +259,10 @@ describe('AssistantService', () => {
     it('throws ServiceUnavailableException when the backlog integration is not configured', async () => {
       delete process.env.GITHUB_ISSUES_TOKEN;
       delete process.env.GITHUB_REPOSITORY;
-      const prisma = { assistantConversation: { findUnique: jest.fn().mockResolvedValue(conversationRow) } };
+      const prisma = { assistantMessage: { findUnique: jest.fn().mockResolvedValue(messageRow) } };
       const service = makeService(buildSettings() as never, {} as never, prisma as never);
 
-      await expect(service.createGithubIssue('conv-1', {})).rejects.toBeInstanceOf(
+      await expect(service.createGithubIssue('msg-1', {})).rejects.toBeInstanceOf(
         ServiceUnavailableException,
       );
     });
@@ -266,19 +270,19 @@ describe('AssistantService', () => {
     it('throws BadRequestException when GITHUB_REPOSITORY is not owner/repository shaped', async () => {
       process.env.GITHUB_ISSUES_TOKEN = 'token';
       process.env.GITHUB_REPOSITORY = 'not-a-valid-repo-format';
-      const prisma = { assistantConversation: { findUnique: jest.fn().mockResolvedValue(conversationRow) } };
+      const prisma = { assistantMessage: { findUnique: jest.fn().mockResolvedValue(messageRow) } };
       const service = makeService(buildSettings() as never, {} as never, prisma as never);
 
-      await expect(service.createGithubIssue('conv-1', {})).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.createGithubIssue('msg-1', {})).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('creates the issue via the GitHub API, persists it, and returns it', async () => {
+    it('creates the issue via the GitHub API, persists it on the message, and returns it', async () => {
       process.env.GITHUB_ISSUES_TOKEN = 'token';
       process.env.GITHUB_REPOSITORY = 'acme/repo';
       const update = jest.fn().mockResolvedValue(undefined);
       const prisma = {
-        assistantConversation: {
-          findUnique: jest.fn().mockResolvedValue(conversationRow),
+        assistantMessage: {
+          findUnique: jest.fn().mockResolvedValue(messageRow),
           update,
         },
       };
@@ -289,7 +293,7 @@ describe('AssistantService', () => {
       );
       const service = makeService(buildSettings() as never, {} as never, prisma as never);
 
-      const result = await service.createGithubIssue('conv-1', { title: 'Custom title' });
+      const result = await service.createGithubIssue('msg-1', { title: 'Custom title' });
 
       expect(fetchSpy).toHaveBeenCalledWith(
         'https://api.github.com/repos/acme/repo/issues',
@@ -300,9 +304,10 @@ describe('AssistantService', () => {
       );
       const requestBody = JSON.parse((fetchSpy.mock.calls[0][1]?.body as string) ?? '{}');
       expect(requestBody.title).toBe('Custom title');
-      expect(requestBody.body).toContain('Conversation ID: conv-1');
+      expect(requestBody.body).toContain('How do I get paid?');
+      expect(requestBody.body).toContain('Message ID: msg-1');
       expect(update).toHaveBeenCalledWith({
-        where: { id: 'conv-1' },
+        where: { id: 'msg-1' },
         data: {
           githubIssueNumber: 7,
           githubIssueUrl: 'https://github.com/acme/repo/issues/7',
@@ -320,21 +325,21 @@ describe('AssistantService', () => {
     it('throws BadGatewayException when GitHub rejects the request', async () => {
       process.env.GITHUB_ISSUES_TOKEN = 'token';
       process.env.GITHUB_REPOSITORY = 'acme/repo';
-      const prisma = { assistantConversation: { findUnique: jest.fn().mockResolvedValue(conversationRow) } };
+      const prisma = { assistantMessage: { findUnique: jest.fn().mockResolvedValue(messageRow) } };
       jest.spyOn(global, 'fetch').mockResolvedValue(new Response('', { status: 500 }));
       const service = makeService(buildSettings() as never, {} as never, prisma as never);
 
-      await expect(service.createGithubIssue('conv-1', {})).rejects.toBeInstanceOf(BadGatewayException);
+      await expect(service.createGithubIssue('msg-1', {})).rejects.toBeInstanceOf(BadGatewayException);
     });
 
     it('throws BadGatewayException when the network request itself fails', async () => {
       process.env.GITHUB_ISSUES_TOKEN = 'token';
       process.env.GITHUB_REPOSITORY = 'acme/repo';
-      const prisma = { assistantConversation: { findUnique: jest.fn().mockResolvedValue(conversationRow) } };
+      const prisma = { assistantMessage: { findUnique: jest.fn().mockResolvedValue(messageRow) } };
       jest.spyOn(global, 'fetch').mockRejectedValue(new Error('network down'));
       const service = makeService(buildSettings() as never, {} as never, prisma as never);
 
-      await expect(service.createGithubIssue('conv-1', {})).rejects.toBeInstanceOf(BadGatewayException);
+      await expect(service.createGithubIssue('msg-1', {})).rejects.toBeInstanceOf(BadGatewayException);
     });
   });
 });
