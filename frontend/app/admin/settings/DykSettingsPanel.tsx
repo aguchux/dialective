@@ -6,6 +6,8 @@ import { DykSettings, useDykSettingsQuery, useSaveDykSettingsMutation } from '@/
 
 const input = 'w-full rounded-md border border-line bg-white p-2 text-ink';
 const button = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-line px-3 py-2 disabled:opacity-50';
+const primaryButtonClass =
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
 /**
  * Gates/config only -- whether "Do you know?" notices show at all, how
@@ -33,12 +35,14 @@ export function DykSettingsPanel() {
   const change = (update: Partial<DykSettings>) => { setDraftSettings({ ...value, ...update }); setSaved(false); };
 
   return (
-    <section className="space-y-6">
-      <h2 className="text-xl font-bold">Do you know?</h2>
-      <p className="text-sm text-muted">
-        Controls whether "Do you know?" notices show at all and how often. Manage the notice
-        photos/content themselves on the dedicated Do you know? page.
-      </p>
+    <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+      <div className="grid gap-1">
+        <h2 className="text-2xl leading-snug">Do you know?</h2>
+        <p className="leading-relaxed text-muted">
+          Controls whether "Do you know?" notices show at all and how often. Manage the notice
+          photos/content themselves on the dedicated Do you know? page.
+        </p>
+      </div>
       <form
         className="space-y-4"
         onSubmit={async (e) => {
@@ -88,12 +92,12 @@ export function DykSettingsPanel() {
             />
           </label>
         </div>
-        <button disabled={saving.isLoading} className={`${button} bg-primary text-white`}>
+        <button disabled={saving.isLoading} className={primaryButtonClass}>
           {saving.isLoading && <Loader2 className="size-4 animate-spin" />}Save settings
         </button>
-        {saved && <p role="status" className="text-sm text-emerald-700">Settings saved.</p>}
+        {saved && <p role="status" className="leading-relaxed text-accent-dark">Settings saved.</p>}
       </form>
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="leading-relaxed text-danger">{error}</p>}
     </section>
   );
 }
