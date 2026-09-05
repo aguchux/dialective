@@ -31,9 +31,10 @@ export class CreateWithdrawalDto {
   @IsIn(['TRC20', 'ERC20', 'BEP20', 'SOL', 'POLYGON'])
   destinationNetwork?: string;
 
+  // See request-withdrawal-otp.dto.ts's doc comment on CRYPTO_SAVED.
   @IsOptional()
-  @IsIn(['CRYPTO', 'BANK', 'MOBILE_MONEY', 'STRIPE'])
-  payoutMethod?: 'CRYPTO' | 'BANK' | 'MOBILE_MONEY' | 'STRIPE';
+  @IsIn(['CRYPTO', 'CRYPTO_SAVED', 'BANK', 'MOBILE_MONEY', 'STRIPE'])
+  payoutMethod?: 'CRYPTO' | 'CRYPTO_SAVED' | 'BANK' | 'MOBILE_MONEY' | 'STRIPE';
 
   @ValidateIf(
     (dto: CreateWithdrawalDto) => Boolean(dto.payoutMethod) && dto.payoutMethod !== 'CRYPTO',

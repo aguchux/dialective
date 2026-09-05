@@ -49,6 +49,27 @@ export function payoutAccountDeleteContextHash(input: { payoutAccountId: string 
 }
 
 /**
+ * Binds a STABLECOIN_WALLET setup OTP to the exact address/asset/network
+ * being saved -- unlike BANK/MOBILE_MONEY (provider-verified or
+ * unverified-by-design) or STRIPE_CONNECT (Stripe's own hosted onboarding
+ * confirms it), a trainer-typed wallet address has no external verification
+ * step, so this OTP is the only confirmation that the trainer actually
+ * intended to save and lock this exact address before it becomes their
+ * permanent payout destination.
+ */
+export function stablecoinWalletSetupContextHash(input: {
+  walletAddress: string;
+  stablecoinAsset: string;
+  stablecoinNetwork: string;
+}): string {
+  return hashContext({
+    walletAddress: input.walletAddress,
+    stablecoinAsset: input.stablecoinAsset,
+    stablecoinNetwork: input.stablecoinNetwork,
+  });
+}
+
+/**
  * Binds an admin-payout OTP (admin/training-payouts, admin/withdrawals/:id/
  * approve|resolve|submit-nowpayments) to the exact action AND the exact
  * transaction details being confirmed -- same anti-replay reasoning as

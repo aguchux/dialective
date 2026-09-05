@@ -3,7 +3,7 @@
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { ArrowLeft, ArrowRight, Banknote, Smartphone } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Banknote, Smartphone, Wallet } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
@@ -17,8 +17,16 @@ import {
   useListBanksQuery,
   useListPayoutAccountsQuery,
   useRefreshStripePayoutAccountStatusMutation,
+  useRequestStablecoinWalletSetupOtpMutation,
   useUpdatePayoutAccountMutation,
 } from '@/store/api';
+
+// TRC20 (Tron) is the only network offered -- cheapest gas of any viable
+// chain and the de facto standard for USDT/USDC liquidity in the markets
+// most trainers actually cash out in. See StripeConnectService/
+// FlutterwaveV4Service for the equivalent per-rail country reasoning.
+const STABLECOIN_ASSETS = ['USDT', 'USDC'] as const;
+const TRON_ADDRESS_PATTERN = /^T[1-9A-HJ-NP-Za-km-z]{33}$/;
 
 // Flutterwave's fiat rail only covers these markets today -- every other
 // country falls straight through to Stripe as the only real option (Stripe
@@ -140,6 +148,8 @@ export default function PayoutAccountsPage() {
                 <span className="grid size-6 shrink-0 place-items-center rounded-md border border-line bg-white">
                   {account.type === 'STRIPE_CONNECT' ? (
                     <StripeIcon className="size-4" />
+                  ) : account.type === 'STABLECOIN_WALLET' ? (
+                    <Wallet className="size-4" aria-hidden="true" />
                   ) : (
                     <FlutterwaveIcon className="size-4" />
                   )}
@@ -148,7 +158,9 @@ export default function PayoutAccountsPage() {
                   ? (account.bankName ?? account.bankCode)
                   : account.type === 'MOBILE_MONEY'
                     ? account.mobileMoneyNetwork
-                    : 'Stripe Connect'}
+                    : account.type === 'STABLECOIN_WALLET'
+                      ? `${account.stablecoinAsset} (${account.stablecoinNetwork})`
+                      : 'Stripe Connect'}
               </p>
               {account.isDefault && (
                 <span className="rounded-md bg-accent-soft px-2.5 py-1 text-xs font-extrabold text-accent-dark">
@@ -161,9 +173,11 @@ export default function PayoutAccountsPage() {
                 ? account.accountNumberMasked
                 : account.type === 'MOBILE_MONEY'
                   ? account.mobileMoneyNumberMasked
-                  : account.stripePayoutsEnabled
-                    ? 'Onboarding complete -- ready for payouts'
-                    : 'Onboarding not finished yet'}
+                  : account.type === 'STABLECOIN_WALLET'
+                    ? account.walletAddressMasked
+                    : account.stripePayoutsEnabled
+                      ? 'Onboarding complete -- ready for payouts'
+                      : 'Onboarding not finished yet'}
               {account.accountName ? ` · ${account.accountName}` : ''}
             </p>
             {account.type === 'MOBILE_MONEY' && account.verificationStatus === 'UNVERIFIED' && (
@@ -219,7 +233,9 @@ export default function PayoutAccountsPage() {
                         ? (account.bankName ?? account.bankCode ?? 'this bank account')
                         : account.type === 'MOBILE_MONEY'
                           ? (account.mobileMoneyNumberMasked ?? 'this mobile money account')
-                          : 'this Stripe Connect account',
+                          : account.type === 'STABLECOIN_WALLET'
+                            ? (account.walletAddressMasked ?? 'this wallet')
+                            : 'this Stripe Connect account',
                   })
                 }
                 type="button"
@@ -231,7 +247,10 @@ export default function PayoutAccountsPage() {
         ))}
       </div>
 
-      <AddPayoutAccountDialog stripeEnabled={publicSettings?.isStripePayoutsEnabled ?? false} />
+      <AddPayoutAccountDialog
+        stripeEnabled={publicSettings?.isStripePayoutsEnabled ?? false}
+        cryptoEnabled={publicSettings?.isCryptoWithdrawalsEnabled ?? false}
+      />
       {deletingAccount && (
         <DeletePayoutAccountDialog
           account={deletingAccount}
@@ -242,17 +261,31 @@ export default function PayoutAccountsPage() {
   );
 }
 
-type Provider = 'FLUTTERWAVE' | 'STRIPE_CONNECT';
-type WizardStep = 'country' | 'provider' | 'details';
+// CRYPTO_WALLET has no country -- it's offered on the provider step for
+// EVERY country (including one Flutterwave and Stripe both reject, like
+// Ethiopia), closing the dead-end a trainer would otherwise hit when no
+// fiat rail covers their country. See stripe-connect.service.ts's
+// StripeInvalidRequestError handling for the error this now gives a real
+// alternative to.
+type Provider = 'FLUTTERWAVE' | 'STRIPE_CONNECT' | 'CRYPTO_WALLET';
+type WizardStep = 'country' | 'provider' | 'details' | 'wallet-otp';
 
 /**
- * Three-step add-payout-method flow: pick a country, see which rails are
- * actually usable there (Flutterwave only for its 6 supported markets,
- * Stripe as the broad fallback everywhere else -- see FLUTTERWAVE_COUNTRIES'
- * doc comment), then the provider-specific detail form. Replaces the old
- * single-screen type-picker-at-the-top layout.
+ * Add-payout-method flow: pick a country, see which rails are actually
+ * usable there (Flutterwave only for its 6 supported markets, Stripe as the
+ * broad fallback everywhere else -- see FLUTTERWAVE_COUNTRIES' doc comment),
+ * plus a USDT/USDC TRC20 wallet offered regardless of country, then the
+ * provider-specific detail form. A wallet setup additionally requires
+ * confirming an emailed OTP (wallet-otp step) before it's saved and locked
+ * -- see PayoutAccountsController.requestStablecoinWalletSetupOtp/create.
  */
-function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
+function AddPayoutAccountDialog({
+  stripeEnabled,
+  cryptoEnabled,
+}: {
+  stripeEnabled: boolean;
+  cryptoEnabled: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<WizardStep>('country');
   const [countryCode, setCountryCode] = useState('');
@@ -263,6 +296,10 @@ function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
   const [accountNumber, setAccountNumber] = useState('');
   const [mobileMoneyNetwork, setMobileMoneyNetwork] = useState(MOBILE_MONEY_NETWORKS[0]);
   const [mobileMoneyNumber, setMobileMoneyNumber] = useState('');
+  const [stablecoinAsset, setStablecoinAsset] = useState<(typeof STABLECOIN_ASSETS)[number]>('USDT');
+  const [walletAddress, setWalletAddress] = useState('');
+  const [walletOtpRequestId, setWalletOtpRequestId] = useState<string | null>(null);
+  const [walletCode, setWalletCode] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const { data: countries, isLoading: isLoadingCountries } = useGetCountriesQuery(undefined, {
@@ -274,6 +311,8 @@ function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
     skip: provider !== 'FLUTTERWAVE' || flutterwaveType !== 'BANK' || !open,
   });
   const [createAccount, { isLoading: isSubmitting }] = useCreatePayoutAccountMutation();
+  const [requestWalletOtp, { isLoading: isRequestingWalletOtp }] =
+    useRequestStablecoinWalletSetupOtpMutation();
 
   function reset() {
     setStep('country');
@@ -284,6 +323,10 @@ function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
     setBankCode('');
     setAccountNumber('');
     setMobileMoneyNumber('');
+    setStablecoinAsset('USDT');
+    setWalletAddress('');
+    setWalletOtpRequestId(null);
+    setWalletCode('');
     setError(null);
   }
 
@@ -302,6 +345,46 @@ function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
   function goToDetailsStep(nextProvider: Provider) {
     setProvider(nextProvider);
     setStep('details');
+  }
+
+  const walletAddressValid = TRON_ADDRESS_PATTERN.test(walletAddress);
+
+  /** Wallet setup's own two-step submit: request the OTP first, then (on the wallet-otp screen) verify + save. Distinct from handleSubmit below, which never issues its own OTP -- BANK/MOBILE_MONEY/STRIPE_CONNECT have no setup-OTP step. */
+  async function handleWalletSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    if (!walletAddressValid) {
+      setError('Enter a valid TRC20 (Tron) wallet address -- it must start with "T" and be 34 characters long.');
+      return;
+    }
+    try {
+      if (!walletOtpRequestId) {
+        const result = await requestWalletOtp({
+          stablecoinAsset,
+          stablecoinNetwork: 'TRC20',
+          walletAddress,
+        }).unwrap();
+        setWalletOtpRequestId(result.otpRequestId);
+        setStep('wallet-otp');
+        return;
+      }
+      await createAccount({
+        type: 'STABLECOIN_WALLET',
+        stablecoinAsset,
+        stablecoinNetwork: 'TRC20',
+        walletAddress,
+        otpRequestId: walletOtpRequestId,
+        code: walletCode,
+      }).unwrap();
+      handleOpenChange(false);
+    } catch (err) {
+      setError(
+        normalizeErrorMessage(
+          err,
+          walletOtpRequestId ? 'Unable to verify this code.' : 'Unable to send a confirmation code.',
+        ),
+      );
+    }
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -338,12 +421,21 @@ function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
     country: 'Add a payout method',
     provider: `Payout options for ${countryName}`,
     details:
-      provider === 'STRIPE_CONNECT' ? 'Connect with Stripe' : 'Bank or mobile money details',
+      provider === 'STRIPE_CONNECT'
+        ? 'Connect with Stripe'
+        : provider === 'CRYPTO_WALLET'
+          ? 'USDT / USDC wallet'
+          : 'Bank or mobile money details',
+    'wallet-otp': 'Confirm your wallet',
   };
   const stepDescription: Record<WizardStep, string> = {
     country: 'Start by telling us where you are -- this decides which payout providers we can offer.',
     provider: 'Choose how you want to receive your DL withdrawals.',
-    details: 'Bank details are encrypted and only used to send you DL withdrawals.',
+    details:
+      provider === 'CRYPTO_WALLET'
+        ? 'This address is saved and locked once confirmed -- double-check it before continuing.'
+        : 'Bank details are encrypted and only used to send you DL withdrawals.',
+    'wallet-otp': `We emailed a 6-digit code to confirm and save this ${stablecoinAsset} wallet.`,
   };
 
   return (
@@ -353,7 +445,16 @@ function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
         {step !== 'country' && (
           <button
             className={`${ghostButtonClass} -mt-2 justify-self-start`}
-            onClick={() => setStep(step === 'details' ? 'provider' : 'country')}
+            onClick={() => {
+              if (step === 'wallet-otp') {
+                setWalletOtpRequestId(null);
+                setWalletCode('');
+                setError(null);
+                setStep('details');
+                return;
+              }
+              setStep(step === 'details' ? 'provider' : 'country');
+            }}
             type="button"
           >
             <ArrowLeft className="size-4" aria-hidden="true" /> Back
@@ -399,7 +500,15 @@ function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
                 title="Stripe"
               />
             )}
-            {!flutterwaveAvailable && !stripeEnabled && (
+            {cryptoEnabled && (
+              <ProviderCard
+                description="Withdraw to your own USDT or USDC wallet on the TRC20 (Tron) network -- fast, low fees, works from any country."
+                icon={<Wallet className="size-7" aria-hidden="true" />}
+                onClick={() => goToDetailsStep('CRYPTO_WALLET')}
+                title="USDT / USDC wallet"
+              />
+            )}
+            {!flutterwaveAvailable && !stripeEnabled && !cryptoEnabled && (
               <p className="rounded-lg border border-line bg-surface-muted p-4 text-sm text-muted">
                 No payout provider is available for {countryName} yet. Contact support for help.
               </p>
@@ -407,7 +516,108 @@ function AddPayoutAccountDialog({ stripeEnabled }: { stripeEnabled: boolean }) {
           </div>
         )}
 
-        {step === 'details' && (
+        {step === 'details' && provider === 'CRYPTO_WALLET' && (
+          <form className="grid gap-3" onSubmit={handleWalletSubmit}>
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-bold">Asset</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {STABLECOIN_ASSETS.map((asset) => (
+                  <label
+                    className={`flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 text-center font-extrabold ${stablecoinAsset === asset ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
+                    key={asset}
+                  >
+                    <input
+                      className="sr-only"
+                      checked={stablecoinAsset === asset}
+                      name="stablecoin-asset"
+                      onChange={() => setStablecoinAsset(asset)}
+                      type="radio"
+                    />
+                    {asset}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <p className="text-xs text-muted">Network: TRC20 (Tron) -- the only network we support today.</p>
+            <label className="grid gap-1.5 text-sm font-bold">
+              Wallet address
+              <input
+                className={inputClass}
+                onChange={(event) => setWalletAddress(event.target.value.trim())}
+                placeholder="T..."
+                required
+                type="text"
+                value={walletAddress}
+              />
+            </label>
+            {walletAddress.length > 0 && !walletAddressValid && (
+              <p className="text-xs font-bold text-danger">
+                This doesn&apos;t look like a valid TRC20 address -- it must start with &quot;T&quot;
+                and be 34 characters long.
+              </p>
+            )}
+            <p className="text-xs font-bold text-danger">
+              Double-check this address. Funds sent to a wrong or unsupported-network address cannot
+              be recovered. This address is locked once confirmed -- to change it later you&apos;ll
+              need to delete this wallet and add a new one.
+            </p>
+            {error && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
+              <ActionButton
+                className={primaryButtonClass}
+                disabled={!walletAddressValid}
+                pending={isRequestingWalletOtp}
+                pendingLabel="Sending code"
+                type="submit"
+              >
+                Send confirmation code
+              </ActionButton>
+            </div>
+          </form>
+        )}
+
+        {step === 'wallet-otp' && (
+          <form className="grid gap-3" onSubmit={handleWalletSubmit}>
+            <p className="text-sm text-muted">
+              Confirming <span className="font-bold text-ink">{stablecoinAsset}</span> to{' '}
+              <span className="font-mono font-bold text-ink">{walletAddress}</span>
+            </p>
+            <input
+              autoFocus
+              className={`${inputClass} text-center text-lg font-bold tracking-[0.3em]`}
+              inputMode="numeric"
+              maxLength={6}
+              onChange={(event) => setWalletCode(event.target.value.replace(/\D/g, ''))}
+              placeholder="000000"
+              required
+              value={walletCode}
+            />
+            {error && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
+              <ActionButton
+                className={primaryButtonClass}
+                disabled={walletCode.length !== 6}
+                pending={isSubmitting}
+                pendingLabel="Saving"
+                type="submit"
+              >
+                Confirm and save
+              </ActionButton>
+            </div>
+          </form>
+        )}
+
+        {step === 'details' && provider !== 'CRYPTO_WALLET' && (
           <form className="grid gap-3" onSubmit={handleSubmit}>
             {provider === 'STRIPE_CONNECT' && (
               <p className="text-sm leading-relaxed text-muted">

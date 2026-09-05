@@ -14,8 +14,10 @@ export class RequestWithdrawalOtpDto {
   @Min(0.00000001)
   tokenAmount!: number;
 
-  // Required only for the default/omitted CRYPTO path -- see
-  // create-withdrawal.dto.ts's identical guard.
+  // Required only for the default/omitted CRYPTO path (a fresh, typed-each-
+  // time address) -- NOT for CRYPTO_SAVED, which resolves its address from
+  // the referenced PayoutAccount instead. See create-withdrawal.dto.ts's
+  // identical guard.
   @ValidateIf((dto: RequestWithdrawalOtpDto) => (dto.payoutMethod ?? 'CRYPTO') === 'CRYPTO')
   @IsString()
   @IsNotEmpty()
@@ -32,9 +34,16 @@ export class RequestWithdrawalOtpDto {
   @IsIn(['TRC20', 'ERC20', 'BEP20', 'SOL', 'POLYGON'])
   destinationNetwork?: string;
 
+  // CRYPTO_SAVED withdraws to a saved STABLECOIN_WALLET PayoutAccount
+  // (address resolved server-side, never re-typed) -- distinct from CRYPTO,
+  // which still takes a freshly-typed destinationAddress every time. Both
+  // produce a PayoutMethod.CRYPTO WithdrawalRequest row and flow through the
+  // same NOWPayments submission pipeline; see
+  // WalletController.validateFiatWithdrawalRequest's STABLECOIN_WALLET
+  // branch and createWithdrawal's isCryptoSaved handling.
   @IsOptional()
-  @IsIn(['CRYPTO', 'BANK', 'MOBILE_MONEY', 'STRIPE'])
-  payoutMethod?: 'CRYPTO' | 'BANK' | 'MOBILE_MONEY' | 'STRIPE';
+  @IsIn(['CRYPTO', 'CRYPTO_SAVED', 'BANK', 'MOBILE_MONEY', 'STRIPE'])
+  payoutMethod?: 'CRYPTO' | 'CRYPTO_SAVED' | 'BANK' | 'MOBILE_MONEY' | 'STRIPE';
 
   @ValidateIf(
     (dto: RequestWithdrawalOtpDto) => Boolean(dto.payoutMethod) && dto.payoutMethod !== 'CRYPTO',

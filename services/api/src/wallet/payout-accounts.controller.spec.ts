@@ -1,17 +1,31 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { OtpPurpose } from '@dialectiva/db';
 import { PayoutAccountsController } from './payout-accounts.controller';
-import { payoutAccountDeleteContextHash } from './otp-context.util';
+import {
+  payoutAccountDeleteContextHash,
+  stablecoinWalletSetupContextHash,
+} from './otp-context.util';
 
 const OWNER_ID = 'trainer-1';
 const ACCOUNT_ID = 'account-1';
+const WALLET_ADDRESS = 'TXYZabc123456789XYZabc123456789XYZ';
 
-function setup(overrides: { account?: Record<string, unknown> | null } = {}) {
+function setup(
+  overrides: {
+    account?: Record<string, unknown> | null;
+    cryptoWithdrawalsEnabled?: boolean;
+    allowedCurrencies?: string[];
+    allowedNetworks?: string[];
+  } = {},
+) {
   const account =
     'account' in overrides ? overrides.account : { id: ACCOUNT_ID, userId: OWNER_ID, type: 'BANK' };
   const prisma = {
     payoutAccount: {
       findUnique: jest.fn().mockResolvedValue(account),
+      create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve({ id: ACCOUNT_ID, ...data }),
+      ),
       delete: jest.fn().mockResolvedValue({ id: ACCOUNT_ID }),
     },
     withdrawalRequest: {
@@ -28,15 +42,26 @@ function setup(overrides: { account?: Record<string, unknown> | null } = {}) {
     issueForUser: jest.fn().mockResolvedValue({ otpRequestId: 'otp-1', expiresInSeconds: 600 }),
     verify: jest.fn().mockResolvedValue({ id: 'otp-1' }),
   };
+  const platformSettings = {
+    isCryptoWithdrawalsEnabled: jest
+      .fn()
+      .mockResolvedValue(overrides.cryptoWithdrawalsEnabled ?? true),
+    getAllowedWithdrawalCurrencies: jest
+      .fn()
+      .mockResolvedValue(overrides.allowedCurrencies ?? ['USDT', 'USDC']),
+    getAllowedWithdrawalNetworks: jest
+      .fn()
+      .mockResolvedValue(overrides.allowedNetworks ?? ['TRC20']),
+  };
   const controller = new PayoutAccountsController(
     prisma as never,
     {} as never,
     {} as never,
     {} as never,
-    {} as never,
+    platformSettings as never,
     otp as never,
   );
-  return { controller, prisma, otp };
+  return { controller, prisma, otp, platformSettings };
 }
 
 const req = { user: { sub: OWNER_ID } } as never;
@@ -108,5 +133,131 @@ describe('PayoutAccountsController.remove', () => {
       controller.remove(req, ACCOUNT_ID, { otpRequestId: 'otp-1', code: '123456' }),
     ).rejects.toThrow(ForbiddenException);
     expect(otp.verify).not.toHaveBeenCalled();
+  });
+});
+
+describe('PayoutAccountsController.requestStablecoinWalletSetupOtp', () => {
+  it('issues an OTP bound to the exact address/asset/network being saved', async () => {
+    const { controller, otp } = setup();
+
+    const result = await controller.requestStablecoinWalletSetupOtp(req, {
+      stablecoinAsset: 'USDT',
+      stablecoinNetwork: 'TRC20',
+      walletAddress: WALLET_ADDRESS,
+    });
+
+    expect(result).toEqual({ otpRequestId: 'otp-1', expiresInSeconds: 600 });
+    expect(otp.issueForUser).toHaveBeenCalledWith(
+      OWNER_ID,
+      OtpPurpose.PAYOUT_ACCOUNT_SETUP,
+      'trainer@example.com',
+      stablecoinWalletSetupContextHash({
+        walletAddress: WALLET_ADDRESS,
+        stablecoinAsset: 'USDT',
+        stablecoinNetwork: 'TRC20',
+      }),
+    );
+  });
+
+  it('rejects when crypto withdrawals are disabled platform-wide', async () => {
+    const { controller, otp } = setup({ cryptoWithdrawalsEnabled: false });
+
+    await expect(
+      controller.requestStablecoinWalletSetupOtp(req, {
+        stablecoinAsset: 'USDT',
+        stablecoinNetwork: 'TRC20',
+        walletAddress: WALLET_ADDRESS,
+      }),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(otp.issueForUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('PayoutAccountsController.create (STABLECOIN_WALLET)', () => {
+  it('saves and locks the wallet only after the setup OTP verifies against the exact address', async () => {
+    const { controller, prisma, otp } = setup();
+
+    const result = await controller.create(req, {
+      type: 'STABLECOIN_WALLET',
+      stablecoinAsset: 'USDT',
+      stablecoinNetwork: 'TRC20',
+      walletAddress: WALLET_ADDRESS,
+      otpRequestId: 'otp-1',
+      code: '123456',
+    } as never);
+
+    expect(otp.verify).toHaveBeenCalledWith({
+      otpRequestId: 'otp-1',
+      userId: OWNER_ID,
+      purpose: OtpPurpose.PAYOUT_ACCOUNT_SETUP,
+      code: '123456',
+      contextHash: stablecoinWalletSetupContextHash({
+        walletAddress: WALLET_ADDRESS,
+        stablecoinAsset: 'USDT',
+        stablecoinNetwork: 'TRC20',
+      }),
+    });
+    expect(prisma.payoutAccount.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: OWNER_ID,
+        type: 'STABLECOIN_WALLET',
+        stablecoinAsset: 'USDT',
+        stablecoinNetwork: 'TRC20',
+        walletAddress: WALLET_ADDRESS,
+        verificationStatus: 'VERIFIED',
+      }),
+    });
+    expect(result).toMatchObject({ type: 'STABLECOIN_WALLET', verificationStatus: 'VERIFIED' });
+    // The raw address is never echoed back -- only the masked form.
+    expect(result).not.toHaveProperty('walletAddress');
+  });
+
+  it('never saves the wallet when the OTP fails to verify', async () => {
+    const { controller, prisma, otp } = setup();
+    otp.verify.mockRejectedValue(new Error('Invalid or expired code'));
+
+    await expect(
+      controller.create(req, {
+        type: 'STABLECOIN_WALLET',
+        stablecoinAsset: 'USDT',
+        stablecoinNetwork: 'TRC20',
+        walletAddress: WALLET_ADDRESS,
+        otpRequestId: 'otp-1',
+        code: '000000',
+      } as never),
+    ).rejects.toThrow('Invalid or expired code');
+    expect(prisma.payoutAccount.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a currency not on the admin allowlist', async () => {
+    const { controller, prisma } = setup({ allowedCurrencies: ['USDT'] });
+
+    await expect(
+      controller.create(req, {
+        type: 'STABLECOIN_WALLET',
+        stablecoinAsset: 'USDC',
+        stablecoinNetwork: 'TRC20',
+        walletAddress: WALLET_ADDRESS,
+        otpRequestId: 'otp-1',
+        code: '123456',
+      } as never),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(prisma.payoutAccount.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects when crypto withdrawals are disabled platform-wide', async () => {
+    const { controller, prisma } = setup({ cryptoWithdrawalsEnabled: false });
+
+    await expect(
+      controller.create(req, {
+        type: 'STABLECOIN_WALLET',
+        stablecoinAsset: 'USDT',
+        stablecoinNetwork: 'TRC20',
+        walletAddress: WALLET_ADDRESS,
+        otpRequestId: 'otp-1',
+        code: '123456',
+      } as never),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(prisma.payoutAccount.create).not.toHaveBeenCalled();
   });
 });

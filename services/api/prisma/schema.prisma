@@ -62,6 +62,7 @@ enum ReferralInviteStatus {
 }
 
 model User {
+  dykStates                     DykUserState[]
   id                            String          @id @default(uuid())
   firstName                     String?
   lastName                      String?
@@ -188,6 +189,40 @@ model User {
   @@index([promotedById])
   @@index([originCountryId])
   @@map("users")
+}
+
+model DykSettings {
+  id              String @id @default("default")
+  enabled         Boolean @default(false)
+  intervalMinutes Int @default(60)
+  maxDisplays     Int @default(3)
+}
+
+model DykNotice {
+  id            String @id @default(uuid())
+  content       String
+  imageKey      String
+  imageBucket   String
+  href          String
+  stopCondition String @default("CLICKED")
+  targetId      String?
+  active        Boolean @default(true)
+  sortOrder     Int @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  states        DykUserState[]
+}
+
+model DykUserState {
+  userId        String
+  noticeId      String
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notice        DykNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  displays      Int @default(0)
+  lastShownAt   DateTime?
+  clickedAt     DateTime?
+  @@id([userId, noticeId])
+  @@index([userId, lastShownAt])
 }
 
 model AssistantConversation {
@@ -501,6 +536,7 @@ enum OtpPurpose {
   P2P_TRADE
   SUB_DISTRIBUTOR_ADJUSTMENT
   PAYOUT_ACCOUNT_DELETE
+  PAYOUT_ACCOUNT_SETUP // confirms a self-typed STABLECOIN_WALLET address before it's saved and locked -- BANK/MOBILE_MONEY/STRIPE_CONNECT don't need this (provider-verified or unverified-by-design), but a trainer-typed wallet address is the one payout-account type nothing else confirms
   SUBSCRIBER_EMAIL_VERIFY // Voice Stream subscriber auth -- shares this enum only for MailService.sendOtpEmail's copy lookup; SubscriberOtpCode is its own table (OtpCode's FK to User can't reference SubscriberUser)
   SUBSCRIBER_LOGIN
 }
@@ -1564,20 +1600,23 @@ enum PayoutAccountVerificationStatus {
   FAILED
 }
 
-/// A trainer's saved, reusable fiat payout destination (Flutterwave bank
-/// transfer or mobile money), created once via /payout-accounts -- this is
-/// the single account list surfaced everywhere a trainer picks where money
-/// goes: WithdrawalRequest.payoutAccountId (withdrawal) and
+/// A trainer's saved, reusable payout destination (Flutterwave bank
+/// transfer/mobile money, Stripe Connect, or a self-custody stablecoin
+/// wallet), created once via /payout-accounts -- this is the single account
+/// list surfaced everywhere a trainer picks where money goes:
+/// WithdrawalRequest.payoutAccountId (withdrawal) and
 /// P2PTokenOffer.paymentMethodId/P2PTokenTrade.sellerPaymentMethodId (P2P
 /// sell side). A snapshot of its resolved details is copied onto the
 /// WithdrawalRequest row at withdrawal time, not a live join, so a later
 /// edit/delete never retroactively changes a pending withdrawal's
 /// destination; P2P instead keeps a live reference (paymentMethodId),
 /// nulled out via onDelete: SetNull if the account is later removed.
-/// Account/phone numbers are AES-256-GCM encrypted at rest
+/// Bank/mobile-money account numbers are AES-256-GCM encrypted at rest
 /// (payout-crypto.util.ts) -- only the masked form is ever read back for
-/// display; the STABLECOIN_WALLET group is reserved for a future unified
-/// payout-account model and is not populated by any code path yet.
+/// display. STABLECOIN_WALLET's walletAddress is stored in plaintext
+/// (masked form still shown by default) -- unlike a bank account number, a
+/// wallet address is meant to be shared to receive funds and isn't secret,
+/// so encrypting it adds no real protection.
 model PayoutAccount {
   id                  String                          @id @default(uuid())
   userId              String
@@ -1606,9 +1645,14 @@ model PayoutAccount {
   mobileMoneyNumberEncryptedJson Json?
   mobileMoneyNumberMasked        String?
 
-  // STABLECOIN_WALLET (reserved, unused by Stages 1-3)
-  stablecoinAsset     String?
-  stablecoinNetwork   String?
+  // STABLECOIN_WALLET -- self-custody USDT/USDC wallet on a network in
+  // PlatformSettings.getAllowedWithdrawalCurrencies/Networks (TRC20 only for
+  // now). Set once at creation (OTP-confirmed, see PayoutAccountsController.
+  // create) and never edited afterward -- changing wallets means deleting
+  // this row (existing OTP-gated delete flow) and creating a new one, same
+  // "locked" posture as a saved bank account.
+  stablecoinAsset     String? // "USDT" | "USDC"
+  stablecoinNetwork   String? // "TRC20"
   walletAddress       String?
   walletAddressMasked String?
 

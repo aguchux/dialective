@@ -1322,6 +1322,7 @@ export class PlatformSettingsService {
       isFlutterwaveV4Enabled,
       isFlutterwavePayoutsEnabled,
       isStripePayoutsEnabled,
+      isCryptoWithdrawalsEnabled,
     ] = await Promise.all([
       this.getReferralCookiePersistSeconds(),
       this.getReferralInviteExpirySeconds(),
@@ -1338,6 +1339,7 @@ export class PlatformSettingsService {
       this.isFlutterwaveV4Enabled(),
       this.isFlutterwavePayoutsEnabled(),
       this.isStripePayoutsEnabled(),
+      this.isCryptoWithdrawalsEnabled(),
     ]);
     return {
       referralCookiePersistSeconds,
@@ -1379,6 +1381,7 @@ export class PlatformSettingsService {
       // needs to decide which "add payout method" options to show.
       isFlutterwavePayoutsEnabled,
       isStripePayoutsEnabled,
+      isCryptoWithdrawalsEnabled,
       testimonyEnabled: row.testimonyEnabled,
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,

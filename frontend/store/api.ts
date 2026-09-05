@@ -615,7 +615,10 @@ export interface AdminWithdrawalRequest {
   fiatUsdExchangeRate?: string | null;
 }
 
-export type PayoutMethod = 'CRYPTO' | 'BANK' | 'MOBILE_MONEY' | 'STRIPE';
+// CRYPTO_SAVED withdraws to a saved STABLECOIN_WALLET PayoutAccount (address
+// resolved server-side); CRYPTO takes a freshly-typed destinationAddress
+// every time. See request-withdrawal-otp.dto.ts's doc comment.
+export type PayoutMethod = 'CRYPTO' | 'CRYPTO_SAVED' | 'BANK' | 'MOBILE_MONEY' | 'STRIPE';
 export type PayoutAccountType = 'BANK' | 'MOBILE_MONEY' | 'STABLECOIN_WALLET' | 'STRIPE_CONNECT';
 export type PayoutAccountVerificationStatus = 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'FAILED';
 
@@ -636,6 +639,9 @@ export interface PayoutAccount {
   stripeConnectAccountId: string | null;
   stripeDetailsSubmitted: boolean;
   stripePayoutsEnabled: boolean;
+  stablecoinAsset: string | null;
+  stablecoinNetwork: string | null;
+  walletAddressMasked: string | null;
   lastUsedAt: string | null;
   createdAt: string;
 }
@@ -977,6 +983,7 @@ export interface PublicClientSettings {
   isFlutterwaveV4Enabled: boolean;
   isFlutterwavePayoutsEnabled: boolean;
   isStripePayoutsEnabled: boolean;
+  isCryptoWithdrawalsEnabled: boolean;
   testimonyEnabled: boolean;
   testimonyMaxTextLength: number;
   testimonyMaxVideoSeconds: number;
@@ -2539,18 +2546,29 @@ export const dialectivaApi = createApi({
     createPayoutAccount: builder.mutation<
       PayoutAccount & { onboardingUrl?: string },
       {
-        type: 'BANK' | 'MOBILE_MONEY' | 'STRIPE_CONNECT';
-        country: string;
-        currency: string;
+        type: 'BANK' | 'MOBILE_MONEY' | 'STRIPE_CONNECT' | 'STABLECOIN_WALLET';
+        country?: string;
+        currency?: string;
         bankCode?: string;
         accountNumber?: string;
         mobileMoneyNetwork?: string;
         mobileMoneyNumber?: string;
+        stablecoinAsset?: 'USDT' | 'USDC';
+        stablecoinNetwork?: 'TRC20';
+        walletAddress?: string;
+        otpRequestId?: string;
+        code?: string;
         isDefault?: boolean;
       }
     >({
       query: (body) => ({ url: '/payout-accounts', method: 'POST', body }),
       invalidatesTags: ['PayoutAccounts'],
+    }),
+    requestStablecoinWalletSetupOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { stablecoinAsset: 'USDT' | 'USDC'; stablecoinNetwork: 'TRC20'; walletAddress: string }
+    >({
+      query: (body) => ({ url: '/payout-accounts/stablecoin-wallet/setup/otp', method: 'POST', body }),
     }),
     updatePayoutAccount: builder.mutation<PayoutAccount, { id: string; isDefault: boolean }>({
       query: ({ id, ...body }) => ({ url: `/payout-accounts/${id}`, method: 'PATCH', body }),
@@ -3793,6 +3811,7 @@ export const {
   useListAdminWithdrawalsQuery,
   useListPayoutAccountsQuery,
   useCreatePayoutAccountMutation,
+  useRequestStablecoinWalletSetupOtpMutation,
   useCreateStripePayoutOnboardingLinkMutation,
   useRefreshStripePayoutAccountStatusMutation,
   useUpdatePayoutAccountMutation,

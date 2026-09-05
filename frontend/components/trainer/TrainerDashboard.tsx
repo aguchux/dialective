@@ -4182,11 +4182,16 @@ const WITHDRAWAL_ADDRESS_PATTERNS: Record<WithdrawalNetwork, RegExp> = {
   POLYGON: /^0x[0-9a-fA-F]{40}$/,
 };
 
-// Mirrors WalletController.createWithdrawal's isStripeAccount branch --
-// Stripe Connect accounts get their own PayoutMethod value distinct from
-// BANK/MOBILE_MONEY, matching the fiatSnapshot the backend actually records.
-function payoutMethodForAccount(type: PayoutAccountType | undefined): 'BANK' | 'MOBILE_MONEY' | 'STRIPE' {
+// Mirrors WalletController.createWithdrawal's isStripeAccount/isCryptoSaved
+// branches -- each PayoutAccount type maps to its own PayoutMethod value
+// (CRYPTO_SAVED for STABLECOIN_WALLET, distinct from the ad-hoc CRYPTO path
+// used by the ""Stablecoin" typed-address method below), matching the
+// fiatSnapshot the backend actually records.
+function payoutMethodForAccount(
+  type: PayoutAccountType | undefined,
+): 'BANK' | 'MOBILE_MONEY' | 'STRIPE' | 'CRYPTO_SAVED' {
   if (type === 'STRIPE_CONNECT') return 'STRIPE';
+  if (type === 'STABLECOIN_WALLET') return 'CRYPTO_SAVED';
   if (type === 'MOBILE_MONEY') return 'MOBILE_MONEY';
   return 'BANK';
 }
@@ -4194,6 +4199,9 @@ function payoutMethodForAccount(type: PayoutAccountType | undefined): 'BANK' | '
 function payoutAccountLabel(account: PayoutAccount): string {
   if (account.type === 'BANK') return `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`;
   if (account.type === 'MOBILE_MONEY') return `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`;
+  if (account.type === 'STABLECOIN_WALLET') {
+    return `${account.stablecoinAsset} (${account.stablecoinNetwork}) · ${account.walletAddressMasked}`;
+  }
   return 'Stripe Connect';
 }
 

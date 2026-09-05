@@ -374,6 +374,11 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
         subject: 'Confirm payout account deletion',
         intro: 'Enter this code to confirm deleting this payout account.',
       };
+    case 'PAYOUT_ACCOUNT_SETUP':
+      return {
+        subject: 'Confirm your payout wallet',
+        intro: 'Enter this code to confirm and save this wallet address.',
+      };
     case 'PHONE_VERIFICATION':
       // Always SMS-delivered in practice (see OtpService.deliver) -- this
       // case exists only so the switch stays exhaustive if ever called by mistake.

@@ -81,3 +81,26 @@ describe('MailService.sendOtpEmail PAYOUT_ACCOUNT_DELETE', () => {
     expect(call.text).toContain('654321');
   });
 });
+
+describe('MailService.sendOtpEmail PAYOUT_ACCOUNT_SETUP', () => {
+  let settings: any;
+  let service: MailService;
+
+  beforeEach(() => {
+    sendMock.mockClear();
+    process.env.RESEND_API_KEY = 'test-key';
+    settings = { getResendFromAddress: jest.fn().mockResolvedValue('noreply@example.com') };
+    service = new MailService(settings as never);
+  });
+
+  it('sends a wallet-setup-confirmation email containing the code', async () => {
+    await service.sendOtpEmail('trainer@example.com', '111222', 'PAYOUT_ACCOUNT_SETUP' as never);
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const call = sendMock.mock.calls[0][0];
+    expect(call.to).toBe('trainer@example.com');
+    expect(call.subject).toContain('wallet');
+    expect(call.html).toContain('111222');
+    expect(call.text).toContain('111222');
+  });
+});

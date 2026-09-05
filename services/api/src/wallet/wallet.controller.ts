@@ -1840,6 +1840,35 @@ export class WalletController {
       return payoutAccount;
     }
 
+    if (payoutAccount.type === PayoutAccountType.STABLECOIN_WALLET) {
+      // Reuses the exact same gates/allowlists as the ad-hoc CRYPTO path
+      // (validateWithdrawalRequest) -- a saved wallet is just a pre-typed,
+      // OTP-confirmed destinationAddress, not a different payout rail.
+      // verificationStatus is already VERIFIED at creation time (see
+      // PayoutAccountsController.create's STABLECOIN_WALLET branch) since the
+      // OTP confirmation IS this rail's verification step -- there is no
+      // further provider-side check the way Stripe onboarding has.
+      if (!(await this.platformSettings.isCryptoWithdrawalsEnabled())) {
+        throw new UnprocessableEntityException('Crypto withdrawals are currently disabled');
+      }
+      await this.validateCommonWithdrawalRequirements(userId, tokenAmount);
+      const [allowedCurrencies, allowedNetworks] = await Promise.all([
+        this.platformSettings.getAllowedWithdrawalCurrencies(),
+        this.platformSettings.getAllowedWithdrawalNetworks(),
+      ]);
+      if (!allowedCurrencies.includes((payoutAccount.stablecoinAsset ?? '').toUpperCase())) {
+        throw new UnprocessableEntityException(
+          `${payoutAccount.stablecoinAsset} is not an allowed withdrawal currency`,
+        );
+      }
+      if (!allowedNetworks.includes((payoutAccount.stablecoinNetwork ?? '').toUpperCase())) {
+        throw new UnprocessableEntityException(
+          `${payoutAccount.stablecoinNetwork} is not an allowed withdrawal network`,
+        );
+      }
+      return payoutAccount;
+    }
+
     if (!(await this.platformSettings.isFlutterwavePayoutsEnabled())) {
       throw new UnprocessableEntityException('Fiat withdrawals are currently disabled');
     }
@@ -1940,7 +1969,14 @@ export class WalletController {
   @UseGuards(JwtAuthGuard, UserThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
   async createWithdrawal(@Req() req: AuthenticatedRequest, @Body() body: CreateWithdrawalDto) {
+    // CRYPTO_SAVED resolves payoutAccountId like a fiat method (isFiat=true
+    // takes that branch below), but is NOT fiat -- it still produces a
+    // PayoutMethod.CRYPTO WithdrawalRequest row with a real
+    // destinationAddress/Currency/Network, so it flows through the existing
+    // NOWPayments submission pipeline unchanged. isCryptoSaved distinguishes
+    // this from BANK/MOBILE_MONEY/STRIPE at every snapshot decision below.
     const isFiat = Boolean(body.payoutMethod && body.payoutMethod !== 'CRYPTO');
+    const isCryptoSaved = body.payoutMethod === 'CRYPTO_SAVED';
     const destinationCurrency = body.destinationCurrency ?? 'USDT';
     const destinationNetwork = body.destinationNetwork ?? 'TRC20';
 
@@ -1999,15 +2035,19 @@ export class WalletController {
     // just the USD amount and fiatUsdExchangeRate is the identity rate 1,
     // so the admin table/audit trail still has a populated, self-consistent
     // fiatAmount/fiatUsdExchangeRate pair rather than nulling them out.
-    const fiatConversion = isStripeAccount
-      ? { fiatAmount: new Prisma.Decimal(usdtAmount), fiatUsdExchangeRate: new Prisma.Decimal(1) }
-      : payoutAccount
-        ? await this.getFiatWithdrawalConversion(
-            payoutAccount.country,
-            payoutAccount.currency,
-            usdtAmount,
-          )
-        : null;
+    // CRYPTO_SAVED gets the same treatment as Stripe here for the same
+    // reason -- it's USD/token-denominated already, no local-currency
+    // conversion applies the way a Flutterwave payout account has.
+    const fiatConversion =
+      isStripeAccount || isCryptoSaved
+        ? { fiatAmount: new Prisma.Decimal(usdtAmount), fiatUsdExchangeRate: new Prisma.Decimal(1) }
+        : payoutAccount
+          ? await this.getFiatWithdrawalConversion(
+              payoutAccount.country,
+              payoutAccount.currency,
+              usdtAmount,
+            )
+          : null;
     const withdrawalId = randomUUID();
 
     // A snapshot of the PayoutAccount's resolved details onto the
@@ -2017,17 +2057,22 @@ export class WalletController {
     // destinationNetwork already snapshot the crypto path's chosen values
     // rather than referencing a live config row. STRIPE_CONNECT rows leave
     // every destinationBank*/destinationMobile* column null -- Stripe never
-    // hands us bank details to snapshot in the first place.
+    // hands us bank details to snapshot in the first place. CRYPTO_SAVED
+    // rows likewise leave them null and instead populate
+    // destinationAddress/Currency/Network below (outside fiatSnapshot) --
+    // see isFiat's destinationAddress/Currency/Network branch further down.
     const fiatSnapshot = payoutAccount
       ? {
           payoutMethod: isStripeAccount
             ? PayoutMethod.STRIPE
-            : payoutAccount.type === 'BANK'
-              ? PayoutMethod.BANK
-              : PayoutMethod.MOBILE_MONEY,
+            : isCryptoSaved
+              ? PayoutMethod.CRYPTO
+              : payoutAccount.type === 'BANK'
+                ? PayoutMethod.BANK
+                : PayoutMethod.MOBILE_MONEY,
           payoutAccountId: payoutAccount.id,
-          destinationCountry: payoutAccount.country,
-          ...(isStripeAccount
+          destinationCountry: isCryptoSaved ? '' : payoutAccount.country,
+          ...(isStripeAccount || isCryptoSaved
             ? {}
             : payoutAccount.type === 'BANK'
               ? {
@@ -2066,13 +2111,23 @@ export class WalletController {
           walletId: wallet.id,
           tokenAmount: body.tokenAmount,
           usdtAmount,
-          destinationAddress: isFiat ? '' : body.destinationAddress!,
-          destinationCurrency: isFiat
-            ? isStripeAccount
-              ? 'USD'
-              : payoutAccount!.currency
-            : destinationCurrency,
-          destinationNetwork: isFiat ? '' : destinationNetwork,
+          destinationAddress: isCryptoSaved
+            ? payoutAccount!.walletAddress!
+            : isFiat
+              ? ''
+              : body.destinationAddress!,
+          destinationCurrency: isCryptoSaved
+            ? payoutAccount!.stablecoinAsset!
+            : isFiat
+              ? isStripeAccount
+                ? 'USD'
+                : payoutAccount!.currency
+              : destinationCurrency,
+          destinationNetwork: isCryptoSaved
+            ? payoutAccount!.stablecoinNetwork!
+            : isFiat
+              ? ''
+              : destinationNetwork,
           status: WithdrawalStatus.PENDING,
           ...(fiatConversion ?? {}),
           ...fiatSnapshot,

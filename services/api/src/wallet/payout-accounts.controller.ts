@@ -27,13 +27,17 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { OtpService } from '../otp/otp.service';
 import { encryptPayoutField, maskAccountNumber } from '../common/payout-crypto.util';
-import { payoutAccountDeleteContextHash } from './otp-context.util';
+import {
+  payoutAccountDeleteContextHash,
+  stablecoinWalletSetupContextHash,
+} from './otp-context.util';
 import { FlutterwaveService } from './flutterwave.service';
 import { FlutterwaveV4Service, RecipientCountry } from './flutterwave-v4.service';
 import { StripeConnectService } from './stripe-connect.service';
 import { CreatePayoutAccountDto } from './dto/create-payout-account.dto';
 import { UpdatePayoutAccountDto } from './dto/update-payout-account.dto';
 import { ConfirmPayoutAccountDeleteDto } from './dto/confirm-payout-account-delete.dto';
+import { RequestPayoutAccountSetupOtpDto } from './dto/request-payout-account-setup-otp.dto';
 
 function stripeFrontendUrl(): string {
   return process.env.FRONTEND_URL ?? 'https://dialectlibrary.com';
@@ -69,6 +73,10 @@ export class PayoutAccountsController {
   @Post()
   @UseGuards(JwtAuthGuard)
   async create(@Req() req: AuthenticatedRequest, @Body() dto: CreatePayoutAccountDto) {
+    if (dto.type !== 'STABLECOIN_WALLET' && (!dto.country || !dto.currency)) {
+      throw new BadRequestException('country and currency are required for this payout account type');
+    }
+
     if (dto.type === 'BANK') {
       if (!dto.bankCode || !dto.accountNumber) {
         throw new BadRequestException('bankCode and accountNumber are required for a bank account');
@@ -85,7 +93,7 @@ export class PayoutAccountsController {
         ? (
             await this.flutterwaveV4.createRecipient({
               type: 'bank',
-              country: dto.country.toUpperCase() as RecipientCountry,
+              country: dto.country!.toUpperCase() as RecipientCountry,
               bankCode: dto.bankCode,
               accountNumber: dto.accountNumber,
               ...splitName(resolved.accountName),
@@ -96,8 +104,8 @@ export class PayoutAccountsController {
         data: {
           userId: req.user.sub,
           type: PayoutAccountType.BANK,
-          country: dto.country,
-          currency: dto.currency,
+          country: dto.country!,
+          currency: dto.currency!,
           isDefault: dto.isDefault ?? false,
           verificationStatus: PayoutAccountVerificationStatus.VERIFIED,
           bankCode: dto.bankCode,
@@ -128,7 +136,7 @@ export class PayoutAccountsController {
         providerRecipientId = (
           await this.flutterwaveV4.createRecipient({
             type: 'mobile_money',
-            country: dto.country.toUpperCase() as RecipientCountry,
+            country: dto.country!.toUpperCase() as RecipientCountry,
             network: dto.mobileMoneyNetwork,
             phoneNumber: dto.mobileMoneyNumber,
             firstName: user.firstName ?? 'Trainer',
@@ -140,8 +148,8 @@ export class PayoutAccountsController {
         data: {
           userId: req.user.sub,
           type: PayoutAccountType.MOBILE_MONEY,
-          country: dto.country,
-          currency: dto.currency,
+          country: dto.country!,
+          currency: dto.currency!,
           isDefault: dto.isDefault ?? false,
           verificationStatus: PayoutAccountVerificationStatus.UNVERIFIED,
           mobileMoneyNetwork: dto.mobileMoneyNetwork,
@@ -163,14 +171,14 @@ export class PayoutAccountsController {
       });
       const { stripeAccountId } = await this.stripeConnect.createConnectedAccount({
         email: user.email,
-        country: dto.country.toUpperCase(),
+        country: dto.country!.toUpperCase(),
       });
       const account = await this.prisma.payoutAccount.create({
         data: {
           userId: req.user.sub,
           type: PayoutAccountType.STRIPE_CONNECT,
-          country: dto.country,
-          currency: dto.currency,
+          country: dto.country!,
+          currency: dto.currency!,
           provider: 'stripe',
           isDefault: dto.isDefault ?? false,
           verificationStatus: PayoutAccountVerificationStatus.PENDING,
@@ -187,7 +195,97 @@ export class PayoutAccountsController {
       return { ...toPublicPayoutAccount(account), onboardingUrl: link.url };
     }
 
+    if (dto.type === 'STABLECOIN_WALLET') {
+      if (!(await this.platformSettings.isCryptoWithdrawalsEnabled())) {
+        throw new UnprocessableEntityException('Crypto withdrawals are currently disabled');
+      }
+      const [allowedCurrencies, allowedNetworks] = await Promise.all([
+        this.platformSettings.getAllowedWithdrawalCurrencies(),
+        this.platformSettings.getAllowedWithdrawalNetworks(),
+      ]);
+      if (!allowedCurrencies.includes(dto.stablecoinAsset!.toUpperCase())) {
+        throw new UnprocessableEntityException(
+          `${dto.stablecoinAsset} is not an allowed withdrawal currency`,
+        );
+      }
+      if (!allowedNetworks.includes(dto.stablecoinNetwork!.toUpperCase())) {
+        throw new UnprocessableEntityException(
+          `${dto.stablecoinNetwork} is not an allowed withdrawal network`,
+        );
+      }
+      // The OTP IS this rail's verification step -- there is no provider to
+      // separately confirm a self-custody wallet address the way Stripe
+      // onboarding or Flutterwave's resolveAccount do, so a wallet reaches
+      // VERIFIED the moment the OTP that was shown this exact address is
+      // consumed, never PENDING/UNVERIFIED.
+      await this.otp.verify({
+        otpRequestId: dto.otpRequestId!,
+        userId: req.user.sub,
+        purpose: OtpPurpose.PAYOUT_ACCOUNT_SETUP,
+        code: dto.code!,
+        contextHash: stablecoinWalletSetupContextHash({
+          walletAddress: dto.walletAddress!,
+          stablecoinAsset: dto.stablecoinAsset!,
+          stablecoinNetwork: dto.stablecoinNetwork!,
+        }),
+      });
+      const account = await this.prisma.payoutAccount.create({
+        data: {
+          userId: req.user.sub,
+          type: PayoutAccountType.STABLECOIN_WALLET,
+          // A wallet has no country/currency in the fiat sense -- these
+          // columns are NOT NULL, so a fixed sentinel/asset code is stored
+          // rather than left null. Nothing reads PayoutAccount.country/
+          // currency for a STABLECOIN_WALLET row (see
+          // WalletController.validateFiatWithdrawalRequest's dedicated
+          // branch, which reads stablecoinAsset/stablecoinNetwork instead).
+          country: 'ZZ',
+          currency: dto.stablecoinAsset!,
+          provider: 'nowpayments',
+          isDefault: dto.isDefault ?? false,
+          verificationStatus: PayoutAccountVerificationStatus.VERIFIED,
+          stablecoinAsset: dto.stablecoinAsset,
+          stablecoinNetwork: dto.stablecoinNetwork,
+          walletAddress: dto.walletAddress,
+          walletAddressMasked: maskAccountNumber(dto.walletAddress!, 6),
+        },
+      });
+      return toPublicPayoutAccount(account);
+    }
+
     throw new BadRequestException('Unsupported payout account type');
+  }
+
+  /**
+   * Issues the OTP that confirms and locks a STABLECOIN_WALLET address
+   * before it's saved -- the one payout-account type with no provider-side
+   * verification step, so this OTP (shown the exact address/asset/network
+   * being saved, via stablecoinWalletSetupContextHash) is the trainer's only
+   * confirmation checkpoint. Unlike PAYOUT_ACCOUNT_DELETE's OTP route, this
+   * runs before the account exists, so it isn't scoped by an :id param.
+   */
+  @Post('stablecoin-wallet/setup/otp')
+  @UseGuards(JwtAuthGuard, UserThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
+  async requestStablecoinWalletSetupOtp(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: RequestPayoutAccountSetupOtpDto,
+  ) {
+    if (!(await this.platformSettings.isCryptoWithdrawalsEnabled())) {
+      throw new UnprocessableEntityException('Crypto withdrawals are currently disabled');
+    }
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    const contextHash = stablecoinWalletSetupContextHash({
+      walletAddress: body.walletAddress,
+      stablecoinAsset: body.stablecoinAsset,
+      stablecoinNetwork: body.stablecoinNetwork,
+    });
+    return this.otp.issueForUser(
+      req.user.sub,
+      OtpPurpose.PAYOUT_ACCOUNT_SETUP,
+      user.email,
+      contextHash,
+    );
   }
 
   /** Regenerates a fresh onboarding Account Link for an existing STRIPE_CONNECT account -- Account Links expire, so a trainer who didn't finish (or wants to update) onboarding needs a way to get a new one without recreating the connected account itself. */
@@ -340,13 +438,17 @@ function toPublicPayoutAccount(account: {
   stripeConnectAccountId: string | null;
   stripeDetailsSubmitted: boolean;
   stripePayoutsEnabled: boolean;
+  stablecoinAsset: string | null;
+  stablecoinNetwork: string | null;
+  walletAddressMasked: string | null;
   lastUsedAt: Date | null;
   createdAt: Date;
 }) {
-  // Never includes accountNumberEncryptedJson/mobileMoneyNumberEncryptedJson
-  // -- ordinary reads never touch the decrypt path. stripeConnectAccountId
-  // is fine to include (not secret) -- it's the same acct_... id Stripe's
-  // own dashboard shows a connected user.
+  // Never includes accountNumberEncryptedJson/mobileMoneyNumberEncryptedJson/
+  // walletAddress (the unmasked address) -- ordinary reads never touch the
+  // decrypt path or the raw address. stripeConnectAccountId is fine to
+  // include (not secret) -- it's the same acct_... id Stripe's own dashboard
+  // shows a connected user.
   return {
     id: account.id,
     type: account.type,
@@ -364,6 +466,9 @@ function toPublicPayoutAccount(account: {
     stripeConnectAccountId: account.stripeConnectAccountId,
     stripeDetailsSubmitted: account.stripeDetailsSubmitted,
     stripePayoutsEnabled: account.stripePayoutsEnabled,
+    stablecoinAsset: account.stablecoinAsset,
+    stablecoinNetwork: account.stablecoinNetwork,
+    walletAddressMasked: account.walletAddressMasked,
     lastUsedAt: account.lastUsedAt,
     createdAt: account.createdAt,
   };
