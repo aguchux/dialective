@@ -34,6 +34,7 @@ import { SettlementAdminModule } from './settlement-admin/settlement-admin.modul
 import { VoiceStreamModule } from './voice-stream/voice-stream.module';
 import { FaqsModule } from './faqs/faqs.module';
 import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.module';
+import { CommunityModule } from './community/community.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.modul
     VoiceStreamModule,
     FaqsModule,
     TrainerProfilesModule,
+    CommunityModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

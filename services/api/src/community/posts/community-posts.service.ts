@@ -1,0 +1,171 @@
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { renderCommunityBody } from '../community-content.util';
+import { slugifyUnique } from '../community-slug.util';
+import { CreateCommunityPostDto } from '../dto/create-community-post.dto';
+import { UpdateCommunityPostDto } from '../dto/update-community-post.dto';
+import { ListCommunityPostsDto } from '../dto/list-community-posts.dto';
+import { CommunityProfilesService } from '../profiles/community-profiles.service';
+import { CommunityTagsService } from '../tags/community-tags.service';
+
+const PAGE_SIZE = 20;
+
+const POST_CARD_INCLUDE = {
+  author: { select: { id: true, firstName: true, lastName: true } },
+  space: { select: { id: true, name: true, slug: true } },
+  tags: { include: { tag: true } },
+} as const;
+
+@Injectable()
+export class CommunityPostsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly profiles: CommunityProfilesService,
+    private readonly tags: CommunityTagsService,
+  ) {}
+
+  async create(userId: string, dto: CreateCommunityPostDto) {
+    await this.profiles.ensureProfile(userId);
+    const space = await this.prisma.communitySpace.findUnique({ where: { id: dto.spaceId } });
+    if (!space || space.isArchived) throw new NotFoundException('Space not found');
+
+    const tagIds = dto.tags?.length ? await this.tags.resolveOrCreateMany(dto.tags) : [];
+    const post = await this.prisma.communityPost.create({
+      data: {
+        authorId: userId,
+        spaceId: dto.spaceId,
+        title: dto.title.trim(),
+        slug: slugifyUnique(dto.title),
+        body: renderCommunityBody(dto.body),
+        tags: { create: tagIds.map((tagId) => ({ tagId })) },
+      },
+      include: POST_CARD_INCLUDE,
+    });
+    await this.prisma.communityProfile.update({
+      where: { userId },
+      data: { postCount: { increment: 1 } },
+    });
+    return this.toCard(post);
+  }
+
+  async update(userId: string, postId: string, dto: UpdateCommunityPostDto) {
+    const post = await this.prisma.communityPost.findUnique({ where: { id: postId } });
+    if (!post || post.status === 'DELETED') throw new NotFoundException('Post not found');
+    if (post.authorId !== userId) throw new ForbiddenException('You can only edit your own post');
+
+    const tagIds = dto.tags !== undefined ? await this.tags.resolveOrCreateMany(dto.tags) : undefined;
+    const updated = await this.prisma.communityPost.update({
+      where: { id: postId },
+      data: {
+        ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+        ...(dto.body !== undefined ? { body: renderCommunityBody(dto.body) } : {}),
+        ...(tagIds !== undefined
+          ? { tags: { deleteMany: {}, create: tagIds.map((tagId) => ({ tagId })) } }
+          : {}),
+      },
+      include: POST_CARD_INCLUDE,
+    });
+    return this.toCard(updated);
+  }
+
+  async delete(userId: string, postId: string) {
+    const post = await this.prisma.communityPost.findUnique({ where: { id: postId } });
+    if (!post || post.status === 'DELETED') throw new NotFoundException('Post not found');
+    if (post.authorId !== userId) throw new ForbiddenException('You can only delete your own post');
+    await this.prisma.communityPost.update({
+      where: { id: postId },
+      data: { status: 'DELETED', deletedAt: new Date() },
+    });
+  }
+
+  async getById(id: string) {
+    const post = await this.prisma.communityPost.findUnique({
+      where: { id },
+      include: POST_CARD_INCLUDE,
+    });
+    if (!post || post.status === 'DELETED' || post.status === 'HIDDEN') {
+      throw new NotFoundException('Post not found');
+    }
+    await this.prisma.communityPost.update({ where: { id }, data: { viewCount: { increment: 1 } } });
+    return this.toCard(post);
+  }
+
+  async list(userId: string, query: ListCommunityPostsDto) {
+    const where = {
+      status: 'PUBLISHED' as const,
+      ...(query.spaceId ? { spaceId: query.spaceId } : {}),
+      ...(query.tab === 'unanswered' ? { replyCount: 0 } : {}),
+    };
+
+    if (query.tab === 'for-you') {
+      return this.listForYou(userId, where);
+    }
+
+    const posts = await this.prisma.communityPost.findMany({
+      where,
+      orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
+      take: PAGE_SIZE + 1,
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
+      include: POST_CARD_INCLUDE,
+    });
+    return this.toCursorPage(posts);
+  }
+
+  /**
+   * MVP heuristic (COMMUNITY-PLAN.md §11.3): posts from the member's joined
+   * spaces first, falling back to recent posts across every space once that
+   * pool is exhausted -- no ML feed required.
+   */
+  private async listForYou(userId: string, baseWhere: Record<string, unknown>) {
+    const profile = await this.prisma.communityProfile.findUnique({
+      where: { userId },
+      include: { spaceMemberships: { select: { spaceId: true } } },
+    });
+    const joinedSpaceIds = profile?.spaceMemberships.map((m) => m.spaceId) ?? [];
+
+    const posts = await this.prisma.communityPost.findMany({
+      where: joinedSpaceIds.length ? { ...baseWhere, spaceId: { in: joinedSpaceIds } } : baseWhere,
+      orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
+      take: PAGE_SIZE + 1,
+      include: POST_CARD_INCLUDE,
+    });
+    return this.toCursorPage(posts);
+  }
+
+  // --- admin/moderator ---
+
+  async setPinned(postId: string, isPinned: boolean) {
+    const post = await this.prisma.communityPost.findUnique({ where: { id: postId } });
+    if (!post) throw new NotFoundException('Post not found');
+    return this.prisma.communityPost.update({ where: { id: postId }, data: { isPinned } });
+  }
+
+  async setLocked(postId: string, isLocked: boolean) {
+    const post = await this.prisma.communityPost.findUnique({ where: { id: postId } });
+    if (!post) throw new NotFoundException('Post not found');
+    return this.prisma.communityPost.update({ where: { id: postId }, data: { isLocked } });
+  }
+
+  async setStatusForModeration(postId: string, status: 'PUBLISHED' | 'HIDDEN' | 'DELETED') {
+    const post = await this.prisma.communityPost.findUnique({ where: { id: postId } });
+    if (!post) throw new NotFoundException('Post not found');
+    return this.prisma.communityPost.update({
+      where: { id: postId },
+      data: { status, deletedAt: status === 'DELETED' ? new Date() : null },
+    });
+  }
+
+  private toCursorPage(posts: Array<Record<string, unknown>>) {
+    const hasMore = posts.length > PAGE_SIZE;
+    const page = hasMore ? posts.slice(0, PAGE_SIZE) : posts;
+    return {
+      items: page.map((p) => this.toCard(p)),
+      nextCursor: hasMore ? (page[page.length - 1] as { id: string }).id : null,
+    };
+  }
+
+  private toCard(post: Record<string, unknown>) {
+    const { tags, ...rest } = post as { tags: Array<{ tag: unknown }> } & Record<string, unknown>;
+    return { ...rest, tags: tags.map((t) => t.tag) };
+  }
+}
