@@ -2,71 +2,35 @@
 
 import Link from 'next/link';
 import { Bell, ChevronRight, CircleHelp, Globe2, ShieldCheck, UserRound } from 'lucide-react';
-import { useState } from 'react';
-import { Card, PageFrame, PageHeading, StatusBanner, Toggle } from '@/components/ui';
+import { Card, PageFrame, PageHeading } from '@/components/ui';
+
+const MAIN_SETTINGS_URL = 'https://dialectlibrary.com/dashboard?view=profile';
 
 export default function SettingsPage() {
-  const [replies, setReplies] = useState(true);
-  const [mentions, setMentions] = useState(true);
-  const [updates, setUpdates] = useState(false);
-  const [translationSuggestions, setTranslationSuggestions] = useState(true);
-
   return (
     <PageFrame className="max-w-[920px]">
       <PageHeading subtitle="Manage your account and community preferences." title="Settings" />
-      <div className="mb-4">
-        <StatusBanner tone="info">
-          Preference controls are ready for the Community settings API. Until it is connected,
-          changes apply to this session only.
-        </StatusBanner>
-      </div>
       <div className="grid gap-4">
         <SettingsSection
           icon={<UserRound aria-hidden="true" />}
           title="Profile settings"
-          subtitle="Update your public profile and account details."
+          subtitle="Update your public community profile."
         >
-          <SettingsLink href="/profile" label="Edit profile" />
-          <SettingsLink
-            external
-            href="https://dialectlibrary.com/dashboard/settings"
-            label="Change email"
-          />
-          <SettingsLink
-            external
-            href="https://dialectlibrary.com/dashboard/settings"
-            label="Change password"
-          />
+          <SettingsLink href="/profile" label="Edit community profile" />
         </SettingsSection>
         <SettingsSection
           icon={<Bell aria-hidden="true" />}
-          title="Notification preferences"
-          subtitle="Choose what you want to be notified about."
+          title="Notifications"
+          subtitle="Community notifications appear in the Notifications tab."
         >
-          <SettingsToggle
-            label="New replies to your posts"
-            checked={replies}
-            onChange={setReplies}
-          />
-          <SettingsToggle label="Mentions (@username)" checked={mentions} onChange={setMentions} />
-          <SettingsToggle label="Community updates" checked={updates} onChange={setUpdates} />
+          <SettingsLink href="/notifications" label="View notifications" />
         </SettingsSection>
         <SettingsSection
           icon={<Globe2 aria-hidden="true" />}
-          title="Language preferences"
-          subtitle="Set your default language and display preferences."
+          title="Account settings"
+          subtitle="Email, password, and account preferences are managed on your main Dialect Library account."
         >
-          <SettingsLink
-            external
-            label="Default language"
-            value="English"
-            href="https://dialectlibrary.com/dashboard/settings"
-          />
-          <SettingsToggle
-            label="Show translation suggestions"
-            checked={translationSuggestions}
-            onChange={setTranslationSuggestions}
-          />
+          <SettingsLink external href={MAIN_SETTINGS_URL} label="Manage account" />
         </SettingsSection>
         <SettingsSection
           icon={<ShieldCheck aria-hidden="true" />}
@@ -74,15 +38,9 @@ export default function SettingsPage() {
           subtitle="Control your visibility and data."
         >
           <SettingsLink
-            label="Profile visibility"
-            value="Public"
-            href="https://dialectlibrary.com/dashboard/settings"
             external
-          />
-          <SettingsLink
-            label="Data and privacy"
+            label="Data and privacy policy"
             href="https://dialectlibrary.com/privacy"
-            external
           />
         </SettingsSection>
         <SettingsSection
@@ -90,8 +48,7 @@ export default function SettingsPage() {
           title="Help"
           subtitle="Get support or learn more about the community."
         >
-          <SettingsLink label="Help center" href="https://dialectlibrary.com/faq" external />
-          <SettingsLink label="Contact support" href="https://dialectlibrary.com/about" external />
+          <SettingsLink external label="Help center" href="https://dialectlibrary.com/faq" />
         </SettingsSection>
       </div>
     </PageFrame>
@@ -127,12 +84,10 @@ function SettingsSection({
 
 function SettingsLink({
   label,
-  value,
   href,
   external = false,
 }: {
   label: string;
-  value?: string;
   href: string;
   external?: boolean;
 }) {
@@ -141,10 +96,7 @@ function SettingsLink({
   const content = (
     <>
       <span>{label}</span>
-      <span className="flex items-center gap-2 text-muted">
-        {value}
-        <ChevronRight aria-hidden="true" className="size-5" />
-      </span>
+      <ChevronRight aria-hidden="true" className="size-5 text-muted" />
     </>
   );
   return external ? (
@@ -155,22 +107,5 @@ function SettingsLink({
     <Link className={className} href={href}>
       {content}
     </Link>
-  );
-}
-
-function SettingsToggle({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <div className="flex min-h-12 items-center justify-between gap-3 py-2 text-sm text-ink sm:text-base">
-      <span>{label}</span>
-      <Toggle checked={checked} label={label} onChange={onChange} />
-    </div>
   );
 }
