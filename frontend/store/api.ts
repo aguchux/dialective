@@ -3638,11 +3638,17 @@ export const dialectivaApi = createApi({
     }),
     getAdminWords: builder.query<
       AdminWordsPage,
-      { page: number; pageSize: number; search?: string; partOfSpeech?: PartOfSpeech }
+      {
+        page: number;
+        pageSize: number;
+        search?: string;
+        partOfSpeech?: PartOfSpeech;
+        disabled?: boolean;
+      }
     >({
-      query: ({ page, pageSize, search, partOfSpeech }) => ({
+      query: ({ page, pageSize, search, partOfSpeech, disabled }) => ({
         url: '/words/admin',
-        params: { page, pageSize, search, partOfSpeech },
+        params: { page, pageSize, search, partOfSpeech, disabled },
       }),
       providesTags: ['AdminWords'],
     }),
@@ -3650,20 +3656,28 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/words/admin/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminWords'],
     }),
+    setWordDisabled: builder.mutation<{ id: string; isDisabled: boolean }, { id: string; disabled: boolean }>({
+      query: ({ id, disabled }) => ({
+        url: `/words/admin/${id}/disable`,
+        method: 'PATCH',
+        body: { disabled },
+      }),
+      invalidatesTags: ['AdminWords'],
+    }),
     bulkDeleteWords: builder.mutation<
       { deleted: number; skipped: number },
-      { ids: string[] } | { search?: string; partOfSpeech?: PartOfSpeech }
+      { ids: string[] } | { search?: string; partOfSpeech?: PartOfSpeech; disabled?: boolean }
     >({
       query: (body) => ({ url: '/words/admin', method: 'DELETE', body }),
       invalidatesTags: ['AdminWords'],
     }),
     getAdminSentences: builder.query<
       AdminSentencesPage,
-      { page: number; pageSize: number; search?: string }
+      { page: number; pageSize: number; search?: string; disabled?: boolean }
     >({
-      query: ({ page, pageSize, search }) => ({
+      query: ({ page, pageSize, search, disabled }) => ({
         url: '/sentences/admin',
-        params: { page, pageSize, search },
+        params: { page, pageSize, search, disabled },
       }),
       providesTags: ['AdminSentences'],
     }),
@@ -3671,9 +3685,20 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/sentences/admin/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminSentences'],
     }),
+    setSentenceDisabled: builder.mutation<
+      { id: string; isDisabled: boolean },
+      { id: string; disabled: boolean }
+    >({
+      query: ({ id, disabled }) => ({
+        url: `/sentences/admin/${id}/disable`,
+        method: 'PATCH',
+        body: { disabled },
+      }),
+      invalidatesTags: ['AdminSentences'],
+    }),
     bulkDeleteSentences: builder.mutation<
       { deleted: number; skipped: number },
-      { ids: string[] } | { search?: string }
+      { ids: string[] } | { search?: string; disabled?: boolean }
     >({
       query: (body) => ({ url: '/sentences/admin', method: 'DELETE', body }),
       invalidatesTags: ['AdminSentences'],
@@ -3992,9 +4017,11 @@ export const {
   useGetPublicSubscriptionPlansQuery,
   useGetAdminWordsQuery,
   useDeleteWordMutation,
+  useSetWordDisabledMutation,
   useBulkDeleteWordsMutation,
   useGetAdminSentencesQuery,
   useDeleteSentenceMutation,
+  useSetSentenceDisabledMutation,
   useBulkDeleteSentencesMutation,
   useGetAdminBlogPostsQuery,
   useGetAdminBlogPostQuery,

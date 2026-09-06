@@ -6,6 +6,7 @@ import {
   HttpCode,
   NotFoundException,
   Param,
+  Patch,
   Query,
   UnprocessableEntityException,
   UseGuards,
@@ -17,6 +18,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { BulkDeleteSentencesAdminDto } from './dto/bulk-delete-sentences-admin.dto';
 import { ListSentencesAdminDto } from './dto/list-sentences-admin.dto';
+import { SetDisabledDto } from './dto/set-disabled.dto';
 
 /**
  * Admin: generated sentence bank -- read/curate the Sentence table.
@@ -32,8 +34,11 @@ export class SentencesController {
 
   @Get('admin')
   async listSentencesForAdmin(@Query() query: ListSentencesAdminDto) {
-    const { page, pageSize, search } = query;
-    const where = search ? { text: { contains: search, mode: 'insensitive' as const } } : {};
+    const { page, pageSize, search, disabled } = query;
+    const where = {
+      isDisabled: disabled,
+      ...(search ? { text: { contains: search, mode: 'insensitive' as const } } : {}),
+    };
     const [items, total] = await Promise.all([
       this.prisma.sentence.findMany({
         where,
@@ -45,6 +50,23 @@ export class SentencesController {
       this.prisma.sentence.count({ where }),
     ]);
     return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+  }
+
+  @Patch('admin/:id/disable')
+  @HttpCode(200)
+  async setSentenceDisabled(@Param('id') id: string, @Body() dto: SetDisabledDto) {
+    try {
+      const sentence = await this.prisma.sentence.update({
+        where: { id },
+        data: { isDisabled: dto.disabled },
+      });
+      return { id: sentence.id, isDisabled: sentence.isDisabled };
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        throw new NotFoundException('Sentence not found');
+      }
+      throw err;
+    }
   }
 
   @Delete('admin/:id')
@@ -102,9 +124,10 @@ export class SentencesController {
   }
 
   private async matchingSentenceIds(filter: BulkDeleteSentencesAdminDto): Promise<string[]> {
-    const where: Prisma.SentenceWhereInput = filter.search
-      ? { text: { contains: filter.search, mode: 'insensitive' as const } }
-      : {};
+    const where: Prisma.SentenceWhereInput = {
+      isDisabled: filter.disabled ?? false,
+      ...(filter.search ? { text: { contains: filter.search, mode: 'insensitive' as const } } : {}),
+    };
     const rows = await this.prisma.sentence.findMany({ where, select: { id: true } });
     return rows.map((row) => row.id);
   }

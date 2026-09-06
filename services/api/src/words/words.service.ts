@@ -921,10 +921,10 @@ export class WordsService {
     const excludedIds = [...new Set([...attemptedIds, ...bannedIds])];
 
     const unattemptedCount = await this.prisma.word.count({
-      where: { id: { notIn: excludedIds } },
+      where: { id: { notIn: excludedIds }, isDisabled: false },
     });
     if (unattemptedCount <= 0) return null;
-    const where = { id: { notIn: excludedIds } };
+    const where = { id: { notIn: excludedIds }, isDisabled: false };
 
     const [word] = await this.prisma.word.findMany({
       where,
@@ -966,10 +966,10 @@ export class WordsService {
     const attemptedIds = attempted.flatMap(({ sentenceId }) => (sentenceId ? [sentenceId] : []));
 
     const unattemptedCount = await this.prisma.sentence.count({
-      where: { ...tierWhere, id: { notIn: attemptedIds } },
+      where: { ...tierWhere, id: { notIn: attemptedIds }, isDisabled: false },
     });
     if (unattemptedCount === 0) return null;
-    const where = { ...tierWhere, id: { notIn: attemptedIds } };
+    const where = { ...tierWhere, id: { notIn: attemptedIds }, isDisabled: false };
 
     const [sentence] = await this.prisma.sentence.findMany({
       where,

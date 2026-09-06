@@ -687,16 +687,18 @@ enum SubmissionStatus {
 /// phrase-tiers.const.ts) can filter on it directly without re-splitting
 /// text at pick time.
 model Sentence {
-  id        String   @id @default(uuid())
-  text      String   @unique
-  wordCount Int
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  text       String   @unique
+  wordCount  Int
+  createdAt  DateTime @default(now())
+  isDisabled Boolean  @default(false) // admin-toggled: excluded from pickSentenceSource so it's never served to a new trainer again, but existing recordings/assignments/FKs are untouched -- the non-destructive alternative to deleting a sentence that already has settled history
 
   recordings          WordRecording[]
   trainingAssignments WordTrainingAssignment[]
   translations        SentenceTranslation[]
 
   @@index([wordCount])
+  @@index([isDisabled])
   @@map("sentences")
 }
 
@@ -727,12 +729,14 @@ model Word {
   text         String        @unique
   partOfSpeech PartOfSpeech? // English part of speech; null until LLM-classified (word-generator-job) or backfilled
   createdAt    DateTime      @default(now())
+  isDisabled   Boolean       @default(false) // admin-toggled: excluded from pickEnglishToDialectWord so it's never served to a new trainer again, but existing recordings/assignments/FKs are untouched -- the non-destructive alternative to deleting a word that already has settled history
 
   recordings          WordRecording[]
   trainingAssignments WordTrainingAssignment[]
   translations        WordTranslation[]
   skips               WordSkip[]
 
+  @@index([isDisabled])
   @@map("words")
 }
 

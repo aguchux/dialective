@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { PartOfSpeech } from '@dialectiva/db';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ListWordsAdminDto {
   @IsOptional()
@@ -23,4 +23,10 @@ export class ListWordsAdminDto {
   @IsOptional()
   @IsEnum(PartOfSpeech)
   partOfSpeech?: PartOfSpeech;
+
+  /** Words tab omits this (defaults to active-only); Disabled tab passes true. */
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  disabled = false;
 }

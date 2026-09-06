@@ -6,6 +6,8 @@ describe('SentencesController delete', () => {
       sentence: {
         delete: jest.fn().mockResolvedValue({}),
         findMany: jest.fn().mockResolvedValue([{ id: 'sentence-1' }, { id: 'sentence-2' }]),
+        count: jest.fn().mockResolvedValue(0),
+        update: jest.fn().mockResolvedValue({ id: 'sentence-1', isDisabled: true }),
       },
       wordRecording: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -53,6 +55,55 @@ describe('SentencesController delete', () => {
     });
   });
 
+  describe('disable toggle', () => {
+    it('disables a sentence without touching its recordings/assignments', async () => {
+      const { controller, prisma } = setup();
+
+      const result = await controller.setSentenceDisabled('sentence-1', { disabled: true });
+
+      expect(prisma.sentence.update).toHaveBeenCalledWith({
+        where: { id: 'sentence-1' },
+        data: { isDisabled: true },
+      });
+      expect(result).toEqual({ id: 'sentence-1', isDisabled: true });
+    });
+
+    it('re-enables a disabled sentence', async () => {
+      const { controller, prisma } = setup();
+      prisma.sentence.update.mockResolvedValueOnce({ id: 'sentence-1', isDisabled: false });
+
+      const result = await controller.setSentenceDisabled('sentence-1', { disabled: false });
+
+      expect(prisma.sentence.update).toHaveBeenCalledWith({
+        where: { id: 'sentence-1' },
+        data: { isDisabled: false },
+      });
+      expect(result).toEqual({ id: 'sentence-1', isDisabled: false });
+    });
+  });
+
+  describe('list filter', () => {
+    it('lists only active (non-disabled) sentences by default', async () => {
+      const { controller, prisma } = setup();
+
+      await controller.listSentencesForAdmin({ page: 1, pageSize: 20, disabled: false });
+
+      expect(prisma.sentence.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { isDisabled: false } }),
+      );
+    });
+
+    it('lists only disabled sentences when the Disabled tab asks for it', async () => {
+      const { controller, prisma } = setup();
+
+      await controller.listSentencesForAdmin({ page: 1, pageSize: 20, disabled: true });
+
+      expect(prisma.sentence.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { isDisabled: true } }),
+      );
+    });
+  });
+
   describe('bulk delete', () => {
     it('deletes exactly the given ids when dto.ids is provided', async () => {
       const { controller, prisma } = setup();
@@ -70,7 +121,7 @@ describe('SentencesController delete', () => {
       const result = await controller.bulkDeleteSentences({ search: 'hello' });
 
       expect(prisma.sentence.findMany).toHaveBeenCalledWith({
-        where: { text: { contains: 'hello', mode: 'insensitive' } },
+        where: { isDisabled: false, text: { contains: 'hello', mode: 'insensitive' } },
         select: { id: true },
       });
       expect(prisma.sentence.delete).toHaveBeenCalledTimes(2);

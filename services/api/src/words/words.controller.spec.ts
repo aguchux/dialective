@@ -6,6 +6,8 @@ describe('WordsController delete', () => {
       word: {
         delete: jest.fn().mockResolvedValue({}),
         findMany: jest.fn().mockResolvedValue([{ id: 'word-1' }, { id: 'word-2' }]),
+        count: jest.fn().mockResolvedValue(0),
+        update: jest.fn().mockResolvedValue({ id: 'word-1', isDisabled: true }),
       },
       wordRecording: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -53,6 +55,55 @@ describe('WordsController delete', () => {
     });
   });
 
+  describe('disable toggle', () => {
+    it('disables a word without touching its recordings/assignments', async () => {
+      const { controller, prisma } = setup();
+
+      const result = await controller.setWordDisabled('word-1', { disabled: true });
+
+      expect(prisma.word.update).toHaveBeenCalledWith({
+        where: { id: 'word-1' },
+        data: { isDisabled: true },
+      });
+      expect(result).toEqual({ id: 'word-1', isDisabled: true });
+    });
+
+    it('re-enables a disabled word', async () => {
+      const { controller, prisma } = setup();
+      prisma.word.update.mockResolvedValueOnce({ id: 'word-1', isDisabled: false });
+
+      const result = await controller.setWordDisabled('word-1', { disabled: false });
+
+      expect(prisma.word.update).toHaveBeenCalledWith({
+        where: { id: 'word-1' },
+        data: { isDisabled: false },
+      });
+      expect(result).toEqual({ id: 'word-1', isDisabled: false });
+    });
+  });
+
+  describe('list filter', () => {
+    it('lists only active (non-disabled) words by default', async () => {
+      const { controller, prisma } = setup();
+
+      await controller.listWordsForAdmin({ page: 1, pageSize: 20, disabled: false });
+
+      expect(prisma.word.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { isDisabled: false } }),
+      );
+    });
+
+    it('lists only disabled words when the Disabled tab asks for it', async () => {
+      const { controller, prisma } = setup();
+
+      await controller.listWordsForAdmin({ page: 1, pageSize: 20, disabled: true });
+
+      expect(prisma.word.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { isDisabled: true } }),
+      );
+    });
+  });
+
   describe('bulk delete', () => {
     it('deletes exactly the given ids when dto.ids is provided', async () => {
       const { controller, prisma } = setup();
@@ -74,6 +125,7 @@ describe('WordsController delete', () => {
 
       expect(prisma.word.findMany).toHaveBeenCalledWith({
         where: {
+          isDisabled: false,
           text: { contains: 'run', mode: 'insensitive' },
           partOfSpeech: 'VERB',
         },

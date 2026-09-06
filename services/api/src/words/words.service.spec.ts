@@ -356,11 +356,11 @@ describe('WordsService', () => {
       promptText: 'river',
     });
     expect(prisma.word.count).toHaveBeenNthCalledWith(2, {
-      where: { id: { notIn: ['word-1', 'word-2'] } },
+      where: { id: { notIn: ['word-1', 'word-2'] }, isDisabled: false },
     });
     expect(prisma.word.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: { notIn: ['word-1', 'word-2'] } },
+        where: { id: { notIn: ['word-1', 'word-2'] }, isDisabled: false },
       }),
     );
   });
@@ -820,7 +820,7 @@ describe('WordsService', () => {
       });
       expect(prisma.sentence.count).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { wordCount: { gte: 2, lte: 3 }, id: { notIn: [] } },
+          where: { wordCount: { gte: 2, lte: 3 }, id: { notIn: [] }, isDisabled: false },
         }),
       );
     });
@@ -842,11 +842,19 @@ describe('WordsService', () => {
 
       expect(result.promptText).toBe('good evening');
       expect(prisma.sentence.count).toHaveBeenCalledWith({
-        where: { wordCount: { gte: 2, lte: 3 }, id: { notIn: ['sentence-1', 'sentence-2'] } },
+        where: {
+          wordCount: { gte: 2, lte: 3 },
+          id: { notIn: ['sentence-1', 'sentence-2'] },
+          isDisabled: false,
+        },
       });
       expect(prisma.sentence.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { wordCount: { gte: 2, lte: 3 }, id: { notIn: ['sentence-1', 'sentence-2'] } },
+          where: {
+            wordCount: { gte: 2, lte: 3 },
+            id: { notIn: ['sentence-1', 'sentence-2'] },
+            isDisabled: false,
+          },
         }),
       );
     });
@@ -1158,7 +1166,9 @@ describe('WordsService', () => {
       expect(result.wordId).toBeNull();
       expect(result.promptText).toBe('good morning');
       // Unfiltered pick (tier=null) -- no wordCount range in the query.
-      expect(prisma.sentence.count).toHaveBeenCalledWith({ where: { id: { notIn: [] } } });
+      expect(prisma.sentence.count).toHaveBeenCalledWith({
+        where: { id: { notIn: [] }, isDisabled: false },
+      });
       expect(prisma.word.count).not.toHaveBeenCalled();
     });
 

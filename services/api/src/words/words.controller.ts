@@ -6,6 +6,7 @@ import {
   HttpCode,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -25,6 +26,7 @@ import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upl
 import { GetSpellingSuggestionsDto } from './dto/get-spelling-suggestions.dto';
 import { BulkDeleteWordsAdminDto } from './dto/bulk-delete-words-admin.dto';
 import { ListWordsAdminDto } from './dto/list-words-admin.dto';
+import { SetDisabledDto } from './dto/set-disabled.dto';
 import { StartTrainingSessionDto } from './dto/start-training-session.dto';
 import { WordsService } from './words.service';
 
@@ -90,8 +92,9 @@ export class WordsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async listWordsForAdmin(@Query() query: ListWordsAdminDto) {
-    const { page, pageSize, search, partOfSpeech } = query;
+    const { page, pageSize, search, partOfSpeech, disabled } = query;
     const where = {
+      isDisabled: disabled,
       ...(search ? { text: { contains: search, mode: 'insensitive' as const } } : {}),
       ...(partOfSpeech ? { partOfSpeech } : {}),
     };
@@ -106,6 +109,25 @@ export class WordsController {
       this.prisma.word.count({ where }),
     ]);
     return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+  }
+
+  @Patch('admin/:id/disable')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async setWordDisabled(@Param('id') id: string, @Body() dto: SetDisabledDto) {
+    try {
+      const word = await this.prisma.word.update({
+        where: { id },
+        data: { isDisabled: dto.disabled },
+      });
+      return { id: word.id, isDisabled: word.isDisabled };
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        throw new NotFoundException('Word not found');
+      }
+      throw err;
+    }
   }
 
   @Delete('admin/:id')
@@ -168,6 +190,7 @@ export class WordsController {
 
   private async matchingWordIds(filter: BulkDeleteWordsAdminDto): Promise<string[]> {
     const where: Prisma.WordWhereInput = {
+      isDisabled: filter.disabled ?? false,
       ...(filter.search ? { text: { contains: filter.search, mode: 'insensitive' as const } } : {}),
       ...(filter.partOfSpeech ? { partOfSpeech: filter.partOfSpeech } : {}),
     };
