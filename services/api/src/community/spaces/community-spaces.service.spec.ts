@@ -11,6 +11,7 @@ describe('CommunitySpacesService admin', () => {
         delete: jest.fn(),
         findMany: jest.fn(),
       },
+      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
     };
     const service = new CommunitySpacesService(prisma as never);
     return { service, prisma };
@@ -72,6 +73,48 @@ describe('CommunitySpacesService admin', () => {
       );
 
       await expect(service.deleteForAdmin('space-1')).rejects.toThrow('archive it instead');
+    });
+  });
+
+  describe('reorderForAdmin', () => {
+    it('rejects an orderedIds list that omits an existing space', async () => {
+      const { service, prisma } = setup();
+      prisma.communitySpace.findMany.mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
+
+      await expect(service.reorderForAdmin(['a'])).rejects.toThrow(
+        'orderedIds must include every existing space exactly once',
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects an orderedIds list containing an id that does not exist', async () => {
+      const { service, prisma } = setup();
+      prisma.communitySpace.findMany.mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
+
+      await expect(service.reorderForAdmin(['a', 'unknown'])).rejects.toThrow(
+        'orderedIds must include every existing space exactly once',
+      );
+    });
+
+    it('updates each space sortOrder to match its index and returns the fresh list', async () => {
+      const { service, prisma } = setup();
+      prisma.communitySpace.findMany
+        .mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }])
+        .mockResolvedValueOnce([{ id: 'b', sortOrder: 0 }, { id: 'a', sortOrder: 1 }]);
+      prisma.communitySpace.update.mockResolvedValue({});
+
+      const result = await service.reorderForAdmin(['b', 'a']);
+
+      expect(prisma.communitySpace.update).toHaveBeenCalledWith({
+        where: { id: 'b' },
+        data: { sortOrder: 0 },
+      });
+      expect(prisma.communitySpace.update).toHaveBeenCalledWith({
+        where: { id: 'a' },
+        data: { sortOrder: 1 },
+      });
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(result).toEqual([{ id: 'b', sortOrder: 0 }, { id: 'a', sortOrder: 1 }]);
     });
   });
 });

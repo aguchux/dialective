@@ -81,6 +81,29 @@ export class CommunitySpacesService {
   }
 
   /**
+   * Persists a full drag-drop reorder in one round trip: orderedIds is the
+   * complete new top-to-bottom order (index becomes sortOrder), not a patch
+   * against a subset -- the admin UI always sends every space it has
+   * loaded. A transaction keeps the list internally consistent even if one
+   * update fails partway through, rather than leaving sortOrder values
+   * interleaved between old and new positions.
+   */
+  async reorderForAdmin(orderedIds: string[]) {
+    const existingIds = new Set(
+      (await this.prisma.communitySpace.findMany({ select: { id: true } })).map((s) => s.id),
+    );
+    if (orderedIds.length !== existingIds.size || orderedIds.some((id) => !existingIds.has(id))) {
+      throw new UnprocessableEntityException('orderedIds must include every existing space exactly once');
+    }
+    await this.prisma.$transaction(
+      orderedIds.map((id, index) =>
+        this.prisma.communitySpace.update({ where: { id }, data: { sortOrder: index } }),
+      ),
+    );
+    return this.listForAdmin();
+  }
+
+  /**
    * CommunityPost.space is onDelete: Restrict -- a space with any posts
    * (including deleted/hidden ones, which are soft-deleted via status, not
    * removed) always fails at the DB level rather than silently cascading.

@@ -2389,6 +2389,10 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/admin/community/spaces/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminCommunitySpaces'],
     }),
+    reorderAdminCommunitySpaces: builder.mutation<AdminCommunitySpace[], { orderedIds: string[] }>({
+      query: (body) => ({ url: '/admin/community/spaces/reorder', method: 'PATCH', body }),
+      invalidatesTags: ['AdminCommunitySpaces'],
+    }),
     getAdminCommunityTags: builder.query<AdminCommunityTag[], void>({
       query: () => '/admin/community/tags',
       providesTags: ['AdminCommunityTags'],
@@ -4050,6 +4054,7 @@ export const {
   useCreateAdminCommunitySpaceMutation,
   useUpdateAdminCommunitySpaceMutation,
   useDeleteAdminCommunitySpaceMutation,
+  useReorderAdminCommunitySpacesMutation,
   useGetAdminCommunityTagsQuery,
   useCreateAdminCommunityTagMutation,
   useRenameAdminCommunityTagMutation,

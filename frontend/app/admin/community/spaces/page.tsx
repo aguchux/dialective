@@ -1,6 +1,14 @@
 'use client';
 
 import { type FormEvent, useEffect, useState } from 'react';
+import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
@@ -10,6 +18,7 @@ import {
   useCreateAdminCommunitySpaceMutation,
   useDeleteAdminCommunitySpaceMutation,
   useGetAdminCommunitySpacesQuery,
+  useReorderAdminCommunitySpacesMutation,
   useUpdateAdminCommunitySpaceMutation,
 } from '@/store/api';
 
@@ -23,11 +32,16 @@ const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
 export default function AdminCommunitySpacesPage() {
-  const { data: spaces, isLoading, isError, refetch } = useGetAdminCommunitySpacesQuery();
+  const { data, isLoading, isError, refetch } = useGetAdminCommunitySpacesQuery();
+  const [spaces, setSpaces] = useState<AdminCommunitySpace[]>([]);
   const [deleteSpace] = useDeleteAdminCommunitySpaceMutation();
+  const [reorderSpaces] = useReorderAdminCommunitySpacesMutation();
   const [editing, setEditing] = useState<AdminCommunitySpace | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  useEffect(() => setSpaces(data ?? []), [data]);
 
   async function handleDelete(id: string) {
     setError(null);
@@ -41,6 +55,20 @@ export default function AdminCommunitySpacesPage() {
     }
   }
 
+  async function handleDragEnd({ active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return;
+    const oldIndex = spaces.findIndex((space) => space.id === active.id);
+    const newIndex = spaces.findIndex((space) => space.id === over.id);
+    const next = arrayMove(spaces, oldIndex, newIndex);
+    setSpaces(next);
+    try {
+      await reorderSpaces({ orderedIds: next.map((space) => space.id) }).unwrap();
+    } catch (err) {
+      setSpaces(spaces);
+      setError(normalizeErrorMessage(err, 'Unable to reorder spaces.'));
+    }
+  }
+
   return (
     <AdminShell>
       <div className="grid gap-6">
@@ -48,8 +76,8 @@ export default function AdminCommunitySpacesPage() {
           <div className="grid gap-2">
             <h1 className="text-3xl font-black">Community Spaces</h1>
             <p className="leading-relaxed text-muted">
-              Topic containers members post into. A space with existing posts can be archived but
-              not deleted.
+              Topic containers members post into. Drag a row to change where it appears in the
+              community's space list. A space with existing posts can be archived but not deleted.
             </p>
           </div>
           <button className={primaryButtonClass} onClick={() => setEditing('new')} type="button">
@@ -73,11 +101,14 @@ export default function AdminCommunitySpacesPage() {
                 Try again
               </button>
             </div>
-          ) : spaces && spaces.length > 0 ? (
+          ) : spaces.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-180 border-collapse text-left text-sm">
+              <table className="w-full min-w-200 border-collapse text-left text-sm">
                 <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                   <tr>
+                    <th className="w-10 px-3 py-3.5" scope="col">
+                      <span className="sr-only">Reorder</span>
+                    </th>
                     <th className="px-5 py-3.5" scope="col">
                       Name
                     </th>
@@ -98,47 +129,24 @@ export default function AdminCommunitySpacesPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line">
-                  {spaces.map((space) => (
-                    <tr key={space.id}>
-                      <td className="px-5 py-3.5 font-extrabold">{space.name}</td>
-                      <td className="px-5 py-3.5 text-muted">{space.slug}</td>
-                      <td className="px-5 py-3.5">
-                        {space.isArchived ? (
-                          <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-bold text-muted">
-                            Archived
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950">
-                            Active
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-muted">{space._count.posts}</td>
-                      <td className="px-5 py-3.5 text-muted">{space._count.memberships}</td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            className={secondaryButtonClass}
-                            onClick={() => setEditing(space)}
-                            type="button"
-                          >
-                            Edit
-                          </button>
-                          <ActionButton
-                            className={dangerButtonClass}
-                            onClick={() => handleDelete(space.id)}
-                            pending={deletingId === space.id}
-                            pendingLabel="Deleting"
-                            type="button"
-                          >
-                            Delete
-                          </ActionButton>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                <DndContext onDragEnd={handleDragEnd} sensors={sensors}>
+                  <SortableContext
+                    items={spaces.map((space) => space.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <tbody className="divide-y divide-line">
+                      {spaces.map((space) => (
+                        <SortableSpaceRow
+                          key={space.id}
+                          space={space}
+                          onDelete={() => handleDelete(space.id)}
+                          onEdit={() => setEditing(space)}
+                          pendingDelete={deletingId === space.id}
+                        />
+                      ))}
+                    </tbody>
+                  </SortableContext>
+                </DndContext>
               </table>
             </div>
           ) : (
@@ -149,6 +157,86 @@ export default function AdminCommunitySpacesPage() {
 
       {editing && <SpaceFormDialog onClose={() => setEditing(null)} space={editing === 'new' ? null : editing} />}
     </AdminShell>
+  );
+}
+
+function SortableSpaceRow({
+  space,
+  onEdit,
+  onDelete,
+  pendingDelete,
+}: {
+  space: AdminCommunitySpace;
+  onEdit: () => void;
+  onDelete: () => void;
+  pendingDelete: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: space.id,
+  });
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={isDragging ? 'relative z-10 bg-white shadow-lg' : ''}
+    >
+      <td className="px-3 py-3.5">
+        <button
+          aria-label={`Drag to reorder ${space.name}`}
+          className="grid size-8 cursor-grab place-items-center rounded-md text-muted hover:bg-surface-muted active:cursor-grabbing"
+          type="button"
+          {...attributes}
+          {...listeners}
+        >
+          <DragIcon />
+        </button>
+      </td>
+      <td className="px-5 py-3.5 font-extrabold">{space.name}</td>
+      <td className="px-5 py-3.5 text-muted">{space.slug}</td>
+      <td className="px-5 py-3.5">
+        {space.isArchived ? (
+          <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-bold text-muted">
+            Archived
+          </span>
+        ) : (
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950">
+            Active
+          </span>
+        )}
+      </td>
+      <td className="px-5 py-3.5 text-muted">{space._count.posts}</td>
+      <td className="px-5 py-3.5 text-muted">{space._count.memberships}</td>
+      <td className="px-5 py-3.5">
+        <div className="flex flex-wrap gap-2">
+          <button className={secondaryButtonClass} onClick={onEdit} type="button">
+            Edit
+          </button>
+          <ActionButton
+            className={dangerButtonClass}
+            onClick={onDelete}
+            pending={pendingDelete}
+            pendingLabel="Deleting"
+            type="button"
+          >
+            Delete
+          </ActionButton>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function DragIcon() {
+  return (
+    <svg aria-hidden="true" fill="currentColor" height="18" viewBox="0 0 24 24" width="18">
+      <circle cx="8" cy="7" r="1.5" />
+      <circle cx="16" cy="7" r="1.5" />
+      <circle cx="8" cy="12" r="1.5" />
+      <circle cx="16" cy="12" r="1.5" />
+      <circle cx="8" cy="17" r="1.5" />
+      <circle cx="16" cy="17" r="1.5" />
+    </svg>
   );
 }
 
