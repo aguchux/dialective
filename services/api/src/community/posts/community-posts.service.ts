@@ -142,6 +142,20 @@ export class CommunityPostsService {
     return this.toCursorPage(posts);
   }
 
+  /** Full post-card search results, reusing the same author/reaction/bookmark join as every other listing -- backs CommunitySearchService. */
+  async searchCards(term: string, userId: string | undefined, limit: number) {
+    const posts = await this.prisma.communityPost.findMany({
+      where: {
+        status: 'PUBLISHED',
+        OR: [{ title: { contains: term, mode: 'insensitive' } }, { body: { contains: term, mode: 'insensitive' } }],
+      },
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: postCardInclude(userId),
+    });
+    return posts.map((post) => this.toCard(post));
+  }
+
   /** Every post authored by the caller, including drafts -- backs My Posts. */
   async listMine(userId: string, cursor?: string) {
     const posts = await this.prisma.communityPost.findMany({

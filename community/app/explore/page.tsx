@@ -5,13 +5,16 @@ import Link from 'next/link';
 import { Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import {
+  useAddBookmarkMutation,
+  useLikePostMutation,
   useListPostsQuery,
   useListSpacesQuery,
   useListTagsQuery,
+  useRemoveBookmarkMutation,
   useSearchQuery,
+  useUnlikePostMutation,
 } from '@/store/api';
 import {
-  Card,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -27,11 +30,18 @@ import {
   TrendingList,
 } from '@/components/community-discovery';
 import { SectionHeading } from '@/components/community-navigation';
+import { PostCard } from '@/components/community-content';
+import { usePostOverflow } from '@/lib/use-post-overflow';
 
 export default function ExplorePage() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [topic, setTopic] = useState('All');
+  const { overflowItemsFor, dialogs } = usePostOverflow();
+  const [likePost] = useLikePostMutation();
+  const [unlikePost] = useUnlikePostMutation();
+  const [addBookmark] = useAddBookmarkMutation();
+  const [removeBookmark] = useRemoveBookmarkMutation();
   const {
     data: spaces,
     isLoading: spacesLoading,
@@ -128,17 +138,15 @@ export default function ExplorePage() {
                   <SectionHeading title="Discussions" />
                   <div className="grid gap-3">
                     {results!.posts.map((post) => (
-                      <Card className="p-4 transition-colors hover:border-accent/40" key={post.id}>
-                        <Link
-                          className="font-black text-ink hover:text-accent"
-                          href={`/post/${post.slug}`}
-                        >
-                          {post.title}
-                        </Link>
-                        <p className="mt-1 text-sm text-muted">
-                          {post.space.name} · {post.replyCount} replies
-                        </p>
-                      </Card>
+                      <PostCard
+                        key={post.id}
+                        onBookmark={() =>
+                          void (post.bookmarkedByMe ? removeBookmark(post.id) : addBookmark(post.id))
+                        }
+                        onLike={() => void (post.likedByMe ? unlikePost(post.id) : likePost(post.id))}
+                        overflowItems={overflowItemsFor(post, () => router.push(`/post/${post.slug}`))}
+                        post={post}
+                      />
                     ))}
                   </div>
                 </section>
@@ -199,6 +207,7 @@ export default function ExplorePage() {
           </div>
         </div>
       )}
+      {dialogs}
     </PageFrame>
   );
 }

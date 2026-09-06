@@ -1,5 +1,5 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../../auth/strategies/jwt-auth.guard';
+import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
+import { AuthenticatedRequest, JwtAuthGuard } from '../../auth/strategies/jwt-auth.guard';
 import { CommunitySearchService } from './community-search.service';
 
 @Controller('community/search')
@@ -8,7 +8,7 @@ export class CommunitySearchController {
   constructor(private readonly searchService: CommunitySearchService) {}
 
   @Get()
-  search(@Query('q') q: string) {
-    return this.searchService.search(q ?? '');
+  search(@Req() req: AuthenticatedRequest, @Query('q') q: string) {
+    return this.searchService.search(q ?? '', req.user.sub);
   }
 }

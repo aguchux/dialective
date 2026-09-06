@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CommunityPostsService } from '../posts/community-posts.service';
 
 const RESULT_LIMIT = 10;
 
@@ -11,22 +12,22 @@ const RESULT_LIMIT = 10;
  */
 @Injectable()
 export class CommunitySearchService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly posts: CommunityPostsService,
+  ) {}
 
-  async search(query: string) {
+  async search(query: string, userId?: string) {
     const term = query.trim();
     if (!term) return { posts: [], tags: [], spaces: [], profiles: [] };
 
     const [posts, tags, spaces, profiles] = await Promise.all([
-      this.prisma.communityPost.findMany({
-        where: {
-          status: 'PUBLISHED',
-          OR: [{ title: { contains: term, mode: 'insensitive' } }, { body: { contains: term, mode: 'insensitive' } }],
-        },
-        take: RESULT_LIMIT,
-        orderBy: { createdAt: 'desc' },
-        select: { id: true, title: true, slug: true },
-      }),
+      // Delegates to CommunityPostsService so search results carry the same
+      // full card shape (author/badge, tags, attachments, likedByMe,
+      // bookmarkedByMe) as every other post listing in the app, instead of
+      // a bespoke {id, title, slug}-only projection the frontend can't
+      // render as a real PostCard.
+      this.posts.searchCards(term, userId, RESULT_LIMIT),
       this.prisma.communityTag.findMany({
         where: { isHidden: false, name: { contains: term, mode: 'insensitive' } },
         take: RESULT_LIMIT,
