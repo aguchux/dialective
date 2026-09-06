@@ -26,6 +26,7 @@ describe('WalletController crypto withdrawal eligibility', () => {
     user?: { emailVerified: boolean; phoneVerifiedAt: Date | null; kycStatus: string };
     walletBalance?: number;
     minWalletBalanceTokens?: number;
+    kycMinTokens?: number;
   }) {
     const prisma = {
       wordRecording: { count: jest.fn().mockResolvedValue(overrides?.settledWordRecordings ?? 100) },
@@ -54,7 +55,7 @@ describe('WalletController crypto withdrawal eligibility', () => {
       getMinCompletedTasksForWithdrawal: jest.fn().mockResolvedValue(100),
       isPhoneVerificationRequired: jest.fn().mockResolvedValue(true),
       isKycRequiredForWithdrawals: jest.fn().mockResolvedValue(true),
-      getKycMinWithdrawalTokens: jest.fn().mockResolvedValue(50),
+      getKycMinWithdrawalTokens: jest.fn().mockResolvedValue(overrides?.kycMinTokens ?? 50),
       getAllowedWithdrawalCurrencies: jest.fn().mockResolvedValue(['USDT']),
       getAllowedWithdrawalNetworks: jest.fn().mockResolvedValue(['TRC20']),
     };
@@ -117,6 +118,33 @@ describe('WalletController crypto withdrawal eligibility', () => {
   it('allows a withdrawal that leaves exactly the configured minimum wallet balance', async () => {
     // balance=1000, minWalletBalanceTokens=950 -> withdrawable=50, request is exactly 50
     const { controller, otp } = setup({ walletBalance: 1000, minWalletBalanceTokens: 950 });
+
+    await controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody);
+    expect(otp.issueForUser).toHaveBeenCalled();
+  });
+
+  it.each(['DECLINED', 'ABANDONED', 'EXPIRED'])(
+    'blocks a withdrawal for a %s KYC status even when the amount is below the KYC token threshold',
+    async (kycStatus) => {
+      // cryptoOtpBody.tokenAmount=50 is below kycMinTokens=100, so this proves
+      // the rejected-status gate isn't bypassable via the small-amount exemption.
+      const { controller, otp } = setup({
+        user: { emailVerified: true, phoneVerifiedAt: new Date(), kycStatus },
+        kycMinTokens: 100,
+      });
+
+      await expect(controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody)).rejects.toThrow(
+        'Your identity verification was not approved',
+      );
+      expect(otp.issueForUser).not.toHaveBeenCalled();
+    },
+  );
+
+  it('allows a below-threshold withdrawal for a user who simply has not completed KYC yet', async () => {
+    const { controller, otp } = setup({
+      user: { emailVerified: true, phoneVerifiedAt: new Date(), kycStatus: 'NOT_STARTED' },
+      kycMinTokens: 100,
+    });
 
     await controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody);
     expect(otp.issueForUser).toHaveBeenCalled();

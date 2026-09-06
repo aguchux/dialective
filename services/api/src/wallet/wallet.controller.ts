@@ -82,6 +82,10 @@ import { decryptPayoutField } from '../common/payout-crypto.util';
 import { MailService } from '../mail/mail.service';
 import { TokenomicsService } from '../tokenomics/tokenomics.service';
 
+/** Resolved negative KYC verdicts -- always block withdrawal, unlike
+ * NOT_STARTED/IN_PROGRESS/IN_REVIEW which just mean no verdict yet. */
+const REJECTED_KYC_STATUSES = new Set(['DECLINED', 'ABANDONED', 'EXPIRED']);
+
 const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.TRAINING_PAYOUT,
   LedgerEntryType.REFERRAL_COMMISSION,
@@ -1742,14 +1746,21 @@ export class WalletController {
    * so this takes the already-fetched kycStatus rather than re-querying.
    */
   private async requireKycIfNeeded(kycStatus: string, tokenAmount: number): Promise<void> {
+    if (kycStatus === 'APPROVED') return;
     if (!(await this.platformSettings.isKycRequiredForWithdrawals())) return;
-    const kycMinTokens = await this.platformSettings.getKycMinWithdrawalTokens();
-    if (tokenAmount < kycMinTokens) return;
-    if (kycStatus !== 'APPROVED') {
+    // A resolved negative verdict always blocks, regardless of amount -- the
+    // token threshold below only exempts users who simply haven't completed
+    // KYC yet, not ones Didit has already declined/expired/abandoned.
+    if (REJECTED_KYC_STATUSES.has(kycStatus)) {
       throw new UnprocessableEntityException(
-        'Complete identity verification before requesting a withdrawal',
+        'Your identity verification was not approved. Please resubmit before requesting a withdrawal',
       );
     }
+    const kycMinTokens = await this.platformSettings.getKycMinWithdrawalTokens();
+    if (tokenAmount < kycMinTokens) return;
+    throw new UnprocessableEntityException(
+      'Complete identity verification before requesting a withdrawal',
+    );
   }
 
   /**
