@@ -1,9 +1,20 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCreatePostMutation, useListSpacesQuery } from '@/store/api';
-import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, TextArea, TextInput } from '@/components/ui';
+import { AttachmentActions, TagInput } from '@/components/community-form';
+import { BackLink } from '@/components/community-navigation';
+import {
+  ErrorText,
+  FieldLabel,
+  PageFrame,
+  PrimaryButton,
+  Select,
+  TextArea,
+  TextInput,
+} from '@/components/ui';
 
 export default function NewPostPage() {
   const router = useRouter();
@@ -12,17 +23,35 @@ export default function NewPostPage() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [spaceId, setSpaceId] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const selectedSpace = useMemo(
+    () => spaces?.find((space) => space.id === spaceId),
+    [spaceId, spaces],
+  );
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setError(null);
     if (!spaceId) {
       setError('Choose a space for this post.');
       return;
     }
+    if (title.trim().length < 3) {
+      setError('Add a title with at least 3 characters.');
+      return;
+    }
+    if (!body.trim()) {
+      setError('Add some details before publishing.');
+      return;
+    }
     try {
-      const post = await createPost({ title, body, spaceId }).unwrap();
+      const post = await createPost({
+        title: title.trim(),
+        body: body.trim(),
+        spaceId,
+        tags,
+      }).unwrap();
       router.push(`/post/${post.slug}`);
     } catch {
       setError('Could not create your post. Please try again.');
@@ -30,55 +59,101 @@ export default function NewPostPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <PageHeading title="Create Post" subtitle="Ask a question, share an idea, or start a discussion." />
-      <Card className="p-6">
-        <form className="grid gap-4" onSubmit={handleSubmit}>
+    <PageFrame className="max-w-[980px]">
+      <BackLink />
+      <div className="mb-6">
+        <h1 className="text-[28px] font-black tracking-tight text-ink sm:text-3xl">
+          Create a post
+        </h1>
+        <p className="mt-1 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
+          Ask a question, share an idea, or start a discussion with enough context for others to
+          help.
+        </p>
+      </div>
+      <form
+        className="rounded-lg border border-line bg-surface p-5 shadow-community-card sm:p-7"
+        onSubmit={handleSubmit}
+      >
+        <div className="grid gap-5">
           <div>
-            <FieldLabel>Space</FieldLabel>
-            <select
-              className="min-h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-accent"
-              onChange={(e) => setSpaceId(e.target.value)}
-              required
-              value={spaceId}
-            >
-              <option value="">Choose a space...</option>
-              {(spaces ?? []).map((space) => (
-                <option key={space.id} value={space.id}>
-                  {space.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <FieldLabel>Title</FieldLabel>
+            <FieldLabel htmlFor="post-title" required>
+              Title
+            </FieldLabel>
             <TextInput
+              id="post-title"
               maxLength={160}
               minLength={3}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="What's your question or topic?"
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="What's your post about?"
               required
               value={title}
             />
           </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              <FieldLabel htmlFor="post-space" required>
+                Space
+              </FieldLabel>
+              <Select
+                id="post-space"
+                onChange={(event) => setSpaceId(event.target.value)}
+                required
+                value={spaceId}
+              >
+                <option value="">Select a space</option>
+                {(spaces ?? []).map((space) => (
+                  <option key={space.id} value={space.id}>
+                    {space.name}
+                  </option>
+                ))}
+              </Select>
+              {selectedSpace && (
+                <p className="mt-1.5 text-xs text-muted">Posting in {selectedSpace.name}</p>
+              )}
+            </div>
+            <div>
+              <FieldLabel>Tags</FieldLabel>
+              <TagInput onChange={setTags} tags={tags} />
+            </div>
+          </div>
           <div>
-            <FieldLabel>Details</FieldLabel>
+            <div className="flex items-center justify-between gap-3">
+              <FieldLabel htmlFor="post-details" required>
+                Post details
+              </FieldLabel>
+              <span className="text-xs font-bold text-muted">{body.length}/5000</span>
+            </div>
             <TextArea
+              id="post-details"
               maxLength={5000}
               minLength={1}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Share the details. Markdown is supported."
+              onChange={(event) => setBody(event.target.value)}
+              placeholder="Share your thoughts, question, or idea..."
               required
-              rows={10}
+              rows={9}
               value={body}
             />
           </div>
+          <div>
+            <p className="mb-2 text-sm font-extrabold text-ink">
+              Add attachments <span className="font-medium text-muted">(optional)</span>
+            </p>
+            <AttachmentActions />
+          </div>
           {error && <ErrorText>{error}</ErrorText>}
-          <PrimaryButton disabled={isLoading} type="submit">
-            {isLoading ? 'Posting...' : 'Post'}
-          </PrimaryButton>
-        </form>
-      </Card>
-    </div>
+          <div className="flex flex-col-reverse gap-3 border-t border-line pt-5 sm:flex-row sm:justify-end">
+            <Link
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-line px-4 py-2.5 text-sm font-extrabold text-ink hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+              href="/"
+            >
+              Cancel
+            </Link>
+            <PrimaryButton pending={isLoading} pendingLabel="Publishing" type="submit">
+              Publish post
+            </PrimaryButton>
+          </div>
+        </div>
+      </form>
+    </PageFrame>
   );
 }

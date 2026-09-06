@@ -1,12 +1,7 @@
 @import 'tailwindcss';
 
-/* Reuses frontend/app/globals.css's exact token names and light-palette
-   values so Community reads as a native extension of the main app, not a
-   bolted-on product (see docs/COMMUNITY-PLAN.md §10.1/§57). No dark-mode
-   variant here yet -- frontend's dark palette is scoped to the trainer
-   dashboard only (.dark .dashboard-theme), not a general site-wide toggle,
-   so Community stays light-only for now like frontend's public pages. */
 @theme {
+  --breakpoint-lg: 1024px;
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
@@ -18,6 +13,25 @@
   --color-accent-soft: var(--accent-soft);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-code: var(--code);
+  --color-code-ink: var(--code-ink);
+  --color-space-blue: #e8f0fe;
+  --color-space-blue-ink: #1a56db;
+  --color-space-purple: #efe8fe;
+  --color-space-purple-ink: #7b3bf0;
+  --color-space-mint: #e2f8f1;
+  --color-space-mint-ink: #0f8a68;
+  --color-space-green: #e6f6ec;
+  --color-space-green-ink: #0f7a3d;
+  --color-space-pink: #fee8ef;
+  --color-space-pink-ink: #d9366a;
+  --color-space-orange: #fff0e8;
+  --color-space-orange-ink: #b54b16;
+  --shadow-community-card: 0 8px 24px rgba(31, 25, 41, 0.04);
 }
 
 :root {
@@ -33,119 +47,151 @@
   --accent-soft: #e8dcf5;
   --warning: #8a4b0f;
   --danger: #a12a2a;
+  --success: #0f7a3d;
+  --success-soft: #e6f6ec;
+  --info: #1a56db;
+  --info-soft: #e8f0fe;
+  --code: #17131d;
+  --code-ink: #f4eff8;
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+    margin: 0;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family:
+      var(--font-inter),
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  a {
+    text-decoration: none;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button,
+  [role='button'],
+  a,
+  label,
+  select,
+  summary,
+  [role='tab'],
+  [role='menuitem'] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  input:disabled,
+  textarea:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
+  button:not(:disabled):active,
+  [role='button']:not([aria-disabled='true']):active {
+    transform: scale(0.98);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
 }
 
-html,
-body {
-  margin: 0;
-  min-height: 100%;
+@layer components {
+  .community-post-body {
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.72;
+  }
+
+  .community-post-body > * + * {
+    margin-top: 1em;
+  }
+
+  .community-post-body a {
+    color: var(--accent);
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .community-post-body blockquote {
+    border-left: 3px solid var(--accent);
+    color: var(--muted);
+    padding-left: 1em;
+  }
+
+  .community-post-body pre {
+    overflow-x: auto;
+    border-radius: 6px;
+    background: var(--code);
+    color: var(--code-ink);
+    padding: 14px;
+    font-size: 13.5px;
+    line-height: 1.6;
+  }
+
+  .community-post-body code {
+    font-size: 0.9em;
+  }
+
+  .community-post-body ul,
+  .community-post-body ol {
+    padding-left: 1.4em;
+  }
+
+  .community-post-body img,
+  .community-post-body video {
+    max-width: 100%;
+    border-radius: 8px;
+  }
 }
 
-body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family:
-    var(--font-inter),
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-}
+@utility scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 
-a {
-  text-decoration: none;
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-
-button,
-[role='button'] {
-  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
-  transition-duration: 150ms;
-}
-
-button:not(:disabled):active,
-[role='button']:not([aria-disabled='true']):active {
-  transform: scale(0.97);
-}
-
-a,
-button,
-label,
-select,
-summary,
-[role='button'],
-[role='tab'],
-[role='menuitem'] {
-  cursor: pointer;
-}
-
-button:disabled,
-select:disabled,
-input:disabled,
-[aria-disabled='true'] {
-  cursor: not-allowed;
-}
-
-.community-post-body {
-  color: var(--ink);
-  font-size: 15px;
-  line-height: 1.7;
-}
-
-.community-post-body > * + * {
-  margin-top: 1em;
-}
-
-.community-post-body a {
-  color: var(--accent);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.community-post-body blockquote {
-  border-left: 3px solid var(--accent);
-  padding-left: 1em;
-  color: var(--muted);
-}
-
-.community-post-body pre {
-  overflow-x: auto;
-  border-radius: 6px;
-  background: #17131d;
-  color: #f4eff8;
-  padding: 14px;
-  font-size: 13.5px;
-  line-height: 1.6;
-}
-
-.community-post-body code {
-  font-size: 0.9em;
-}
-
-.community-post-body ul,
-.community-post-body ol {
-  padding-left: 1.4em;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   button,
   [role='button'] {
     transition-duration: 0ms;
+  }
+
+  .animate-pulse,
+  .animate-spin {
+    animation: none !important;
   }
 }

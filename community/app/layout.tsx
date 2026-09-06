@@ -7,7 +7,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://community.dialectlibrary.com';
-const description = 'Ask questions. Share knowledge. Learn together with Dialect Library contributors.';
+const description =
+  'Ask questions. Share knowledge. Learn together with Dialect Library contributors.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

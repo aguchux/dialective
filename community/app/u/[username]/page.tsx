@@ -1,37 +1,47 @@
 'use client';
 
 import { use } from 'react';
+import { User } from 'lucide-react';
 import { useGetUserProfileQuery } from '@/store/api';
-import { Badge, Card, PageHeading } from '@/components/ui';
+import { ProfileHero } from '@/components/community-content';
+import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeading } from '@/components/ui';
 
 export default function PublicProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = use(params);
-  const { data: profile } = useGetUserProfileQuery(username);
+  const { data: profile, isLoading, isError, refetch } = useGetUserProfileQuery(username);
 
-  if (!profile) {
-    return <p className="px-4 py-12 text-center text-sm text-muted">Loading...</p>;
-  }
+  if (isLoading)
+    return (
+      <PageFrame>
+        <LoadingState label="Loading public profile" />
+      </PageFrame>
+    );
+  if (isError || !profile)
+    return (
+      <PageFrame>
+        <ErrorState
+          onRetry={() => void refetch()}
+          retryLabel="Retry loading profile"
+          title="Profile unavailable."
+          description="We could not load this community profile right now."
+        />
+      </PageFrame>
+    );
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <PageHeading title={profile.displayName} />
-      <Card className="p-6">
-        <div className="flex items-center gap-4">
-          <span className="grid size-16 shrink-0 place-items-center rounded-full bg-accent text-2xl font-black text-white">
-            {profile.displayName.trim()[0]?.toUpperCase()}
-          </span>
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="text-lg font-black text-ink">{profile.displayName}</p>
-              {profile.badge && <Badge>{profile.badge === 'VERIFIED_TRAINER' ? 'Verified Trainer' : 'Distributor'}</Badge>}
-            </div>
-            <p className="text-xs font-semibold text-muted">
-              {profile.postCount} posts &middot; {profile.replyCount} replies
-            </p>
-          </div>
-        </div>
-        {profile.bio && <p className="mt-4 text-sm text-ink">{profile.bio}</p>}
-      </Card>
-    </div>
+    <PageFrame className="max-w-[1040px]">
+      <PageHeading
+        icon={<User aria-hidden="true" className="size-6" />}
+        subtitle="Community activity and language journey."
+        title={profile.displayName}
+      />
+      <ProfileHero profile={profile} />
+      <div className="mt-5">
+        <EmptyState
+          title="Profile activity"
+          description="Public activity will appear here as this profile contributes to the community."
+        />
+      </div>
+    </PageFrame>
   );
 }

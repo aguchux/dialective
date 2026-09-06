@@ -146,7 +146,13 @@ export const communityApi = createApi({
 
     updateMyProfile: builder.mutation<
       CommunityProfile,
-      { displayName?: string; bio?: string; countryId?: string; languages?: string[]; dialects?: string[] }
+      {
+        displayName?: string;
+        bio?: string;
+        countryId?: string;
+        languages?: string[];
+        dialects?: string[];
+      }
     >({
       query: (body) => ({ url: '/me/profile', method: 'PATCH', body }),
       invalidatesTags: ['Profile'],

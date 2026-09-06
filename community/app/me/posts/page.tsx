@@ -1,33 +1,73 @@
 'use client';
 
-import Link from 'next/link';
+import { useMemo, useState } from 'react';
+import { FileText } from 'lucide-react';
 import { useListMyPostsQuery } from '@/store/api';
-import { Card, PageHeading } from '@/components/ui';
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  PageFrame,
+  PageHeading,
+  SegmentedTabs,
+} from '@/components/ui';
+import { PostCard } from '@/components/community-content';
+
+type MyPostsTab = 'published' | 'drafts';
 
 export default function MyPostsPage() {
-  const { data } = useListMyPostsQuery();
+  const [tab, setTab] = useState<MyPostsTab>('published');
+  const { data, isLoading, isError, refetch } = useListMyPostsQuery();
+  const items = useMemo(
+    () =>
+      (data?.items ?? []).filter((post) =>
+        tab === 'drafts' ? post.status === 'DRAFT' : post.status !== 'DRAFT',
+      ),
+    [data, tab],
+  );
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <PageHeading title="My Posts" subtitle="Manage your community contributions." />
-      {(data?.items.length ?? 0) === 0 ? (
-        <Card className="p-8 text-center">
-          <p className="text-sm text-muted">You haven&apos;t posted yet.</p>
-        </Card>
-      ) : (
+    <PageFrame className="max-w-[1040px]">
+      <PageHeading
+        icon={<FileText aria-hidden="true" className="size-6" />}
+        subtitle="Review the discussions you have started."
+        title="My posts"
+      />
+      <div className="mb-5 max-w-md">
+        <SegmentedTabs
+          ariaLabel="Post status"
+          items={[
+            { key: 'published', label: 'Published' },
+            { key: 'drafts', label: 'Drafts' },
+          ]}
+          onChange={setTab}
+          value={tab}
+        />
+      </div>
+      {isLoading ? (
+        <LoadingState label="Loading your posts" />
+      ) : isError ? (
+        <ErrorState onRetry={() => void refetch()} retryLabel="Retry loading posts" />
+      ) : items.length ? (
         <div className="grid gap-3">
-          {data!.items.map((post) => (
-            <Link href={`/post/${post.slug}`} key={post.id}>
-              <Card className="p-4 transition-colors hover:border-accent">
-                <h2 className="text-base font-black text-ink">{post.title}</h2>
-                <p className="mt-1 text-xs font-semibold text-muted">
-                  {post.replyCount} replies &middot; {post.likeCount} likes
-                </p>
-              </Card>
-            </Link>
+          {items.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              status={post.status === 'DRAFT' ? 'DRAFT' : 'PUBLISHED'}
+            />
           ))}
         </div>
+      ) : (
+        <EmptyState
+          description={
+            tab === 'drafts'
+              ? 'Drafts you save will appear here.'
+              : 'Posts you publish will appear here.'
+          }
+          title={tab === 'drafts' ? 'No drafts yet' : 'No published posts yet'}
+        />
       )}
-    </div>
+    </PageFrame>
   );
 }

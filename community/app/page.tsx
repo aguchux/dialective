@@ -2,81 +2,92 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import { useSession } from 'next-auth/react';
-import { MessageSquare, Eye, Heart, Pin } from 'lucide-react';
-import { useListPostsQuery, type CommunityFeedTab } from '@/store/api';
-import { Card, PageHeading } from '@/components/ui';
+import {
+  useAddBookmarkMutation,
+  useLikePostMutation,
+  useListPostsQuery,
+  useRemoveBookmarkMutation,
+  useUnlikePostMutation,
+  type CommunityFeedTab,
+} from '@/store/api';
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  PageFrame,
+  PageHeading,
+  SegmentedTabs,
+} from '@/components/ui';
+import { PostCard } from '@/components/community-content';
 
 const TABS: { key: CommunityFeedTab; label: string }[] = [
+  { key: 'for-you', label: 'For You' },
   { key: 'latest', label: 'Latest' },
   { key: 'unanswered', label: 'Unanswered' },
-  { key: 'for-you', label: 'For You' },
 ];
 
 export default function HomePage() {
   const { status } = useSession();
-  const [tab, setTab] = useState<CommunityFeedTab>('latest');
-  const { data, isFetching } = useListPostsQuery({ tab: tab === 'for-you' && status !== 'authenticated' ? 'latest' : tab });
+  const [tab, setTab] = useState<CommunityFeedTab>('for-you');
+  const queryTab = tab === 'for-you' && status !== 'authenticated' ? 'latest' : tab;
+  const { data, isFetching, isError, refetch } = useListPostsQuery({ tab: queryTab });
+  const [likePost] = useLikePostMutation();
+  const [unlikePost] = useUnlikePostMutation();
+  const [addBookmark] = useAddBookmarkMutation();
+  const [removeBookmark] = useRemoveBookmarkMutation();
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <PageHeading title="Community" subtitle="Ask questions. Share knowledge. Learn together." />
-
-      <div className="mb-5 flex gap-1 border-b border-line">
-        {TABS.map((t) => (
-          <button
-            className={`border-b-2 px-3 py-2.5 text-sm font-bold transition-colors ${
-              tab === t.key ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
-            }`}
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            type="button"
+    <PageFrame className="max-w-[1040px]">
+      <PageHeading
+        action={
+          <Link
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-extrabold text-white transition-colors hover:bg-accent-dark"
+            href="/new"
           >
-            {t.label}
-          </button>
-        ))}
+            <Plus className="size-4" /> New post
+          </Link>
+        }
+        subtitle="Find practical answers, share recording knowledge, and learn with other contributors."
+        title="Community"
+      />
+
+      <div className="mb-5 max-w-2xl">
+        <SegmentedTabs items={TABS} onChange={setTab} value={tab} />
       </div>
 
       {isFetching && !data ? (
-        <p className="py-12 text-center text-sm text-muted">Loading...</p>
+        <LoadingState label="Loading community posts" />
+      ) : isError ? (
+        <ErrorState onRetry={() => void refetch()} />
       ) : (data?.items.length ?? 0) === 0 ? (
-        <Card className="p-8 text-center">
-          <p className="font-bold text-ink">No posts yet</p>
-          <p className="mt-1 text-sm text-muted">Be the first to start a discussion.</p>
-          <Link className="mt-4 inline-block font-bold text-accent" href="/new">
-            Create a post &rarr;
-          </Link>
-        </Card>
+        <EmptyState
+          action={
+            <Link
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-accent bg-accent px-4 py-2.5 text-sm font-extrabold text-white hover:bg-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+              href="/new"
+            >
+              Create a post
+            </Link>
+          }
+          description="Start with a question, a recording tip, or something you learned."
+          title="No posts yet"
+        />
       ) : (
         <div className="grid gap-3">
           {data!.items.map((post) => (
-            <Link href={`/post/${post.slug}`} key={post.id}>
-              <Card className="p-4 transition-colors hover:border-accent">
-                <div className="mb-1.5 flex items-center gap-2 text-xs font-bold text-muted">
-                  {post.isPinned && <Pin aria-hidden="true" className="size-3 text-accent" />}
-                  <span className="rounded-full bg-surface-muted px-2 py-0.5 text-accent-dark">
-                    {post.space.name}
-                  </span>
-                  <span>&middot;</span>
-                  <span>{post.author.displayName}</span>
-                </div>
-                <h2 className="text-base font-black text-ink">{post.title}</h2>
-                <div className="mt-2 flex items-center gap-4 text-xs font-semibold text-muted">
-                  <span className="flex items-center gap-1">
-                    <MessageSquare aria-hidden="true" className="size-3.5" /> {post.replyCount}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Heart aria-hidden="true" className="size-3.5" /> {post.likeCount}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Eye aria-hidden="true" className="size-3.5" /> {post.viewCount}
-                  </span>
-                </div>
-              </Card>
-            </Link>
+            <PostCard
+              key={post.id}
+              onBookmark={() =>
+                void (post.bookmarkedByMe ? removeBookmark(post.id) : addBookmark(post.id))
+              }
+              onLike={() => void (post.likedByMe ? unlikePost(post.id) : likePost(post.id))}
+              post={post}
+            />
           ))}
         </div>
       )}
-    </div>
+    </PageFrame>
   );
 }

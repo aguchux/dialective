@@ -15,7 +15,9 @@ const PROTECTED_PREFIXES = ['/new', '/me', '/saved', '/notifications', '/setting
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (!PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+  if (
+    !PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  ) {
     return NextResponse.next();
   }
 
@@ -30,5 +32,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/new/:path*', '/me/:path*', '/saved/:path*', '/notifications/:path*', '/settings/:path*'],
+  matcher: [
+    '/new/:path*',
+    '/me/:path*',
+    '/saved/:path*',
+    '/notifications/:path*',
+    '/settings/:path*',
+  ],
 };
