@@ -1,7 +1,9 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
+  HttpCode,
   NotFoundException,
   Param,
   Query,
@@ -13,6 +15,7 @@ import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { BulkDeleteSentencesAdminDto } from './dto/bulk-delete-sentences-admin.dto';
 import { ListSentencesAdminDto } from './dto/list-sentences-admin.dto';
 
 /**
@@ -59,5 +62,42 @@ export class SentencesController {
       }
       throw err;
     }
+  }
+
+  /**
+   * "Delete selected" (dto.ids) or "Clear All" (dto.search, ids omitted --
+   * deletes every row matching that filter, mirroring
+   * listSentencesForAdmin's own where-clause). Deletes one row at a time
+   * rather than a single prisma.sentence.deleteMany() so an individual FK
+   * conflict doesn't abort the whole batch -- tallied as skipped instead,
+   * same distinction the single-delete route already makes via P2003.
+   */
+  @Delete('admin')
+  @HttpCode(200)
+  async bulkDeleteSentences(@Body() dto: BulkDeleteSentencesAdminDto) {
+    const ids = dto.ids ?? (await this.matchingSentenceIds(dto));
+    let deleted = 0;
+    let skipped = 0;
+    for (const id of ids) {
+      try {
+        await this.prisma.sentence.delete({ where: { id } });
+        deleted += 1;
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+          skipped += 1;
+          continue;
+        }
+        throw err;
+      }
+    }
+    return { deleted, skipped };
+  }
+
+  private async matchingSentenceIds(filter: BulkDeleteSentencesAdminDto): Promise<string[]> {
+    const where: Prisma.SentenceWhereInput = filter.search
+      ? { text: { contains: filter.search, mode: 'insensitive' as const } }
+      : {};
+    const rows = await this.prisma.sentence.findMany({ where, select: { id: true } });
+    return rows.map((row) => row.id);
   }
 }

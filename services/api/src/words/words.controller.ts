@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   NotFoundException,
   Param,
   Post,
@@ -22,6 +23,7 @@ import { ListSubmissionsDto } from './dto/list-submissions.dto';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
 import { GetSpellingSuggestionsDto } from './dto/get-spelling-suggestions.dto';
+import { BulkDeleteWordsAdminDto } from './dto/bulk-delete-words-admin.dto';
 import { ListWordsAdminDto } from './dto/list-words-admin.dto';
 import { StartTrainingSessionDto } from './dto/start-training-session.dto';
 import { WordsService } from './words.service';
@@ -123,5 +125,46 @@ export class WordsController {
       }
       throw err;
     }
+  }
+
+  /**
+   * "Delete selected" (dto.ids) or "Clear All" (dto.search/partOfSpeech,
+   * ids omitted -- deletes every row matching that filter, mirroring
+   * listWordsForAdmin's own where-clause). Deletes one row at a time rather
+   * than a single prisma.word.deleteMany() so an individual FK conflict
+   * (recordings/assignments still referencing a word) doesn't abort the
+   * whole batch -- it's just tallied as skipped, same distinction the
+   * single-delete route already makes via P2003.
+   */
+  @Delete('admin')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async bulkDeleteWords(@Body() dto: BulkDeleteWordsAdminDto) {
+    const ids = dto.ids ?? (await this.matchingWordIds(dto));
+    let deleted = 0;
+    let skipped = 0;
+    for (const id of ids) {
+      try {
+        await this.prisma.word.delete({ where: { id } });
+        deleted += 1;
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+          skipped += 1;
+          continue;
+        }
+        throw err;
+      }
+    }
+    return { deleted, skipped };
+  }
+
+  private async matchingWordIds(filter: BulkDeleteWordsAdminDto): Promise<string[]> {
+    const where: Prisma.WordWhereInput = {
+      ...(filter.search ? { text: { contains: filter.search, mode: 'insensitive' as const } } : {}),
+      ...(filter.partOfSpeech ? { partOfSpeech: filter.partOfSpeech } : {}),
+    };
+    const rows = await this.prisma.word.findMany({ where, select: { id: true } });
+    return rows.map((row) => row.id);
   }
 }

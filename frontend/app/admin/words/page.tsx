@@ -3,12 +3,15 @@
 import { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
+import { BulkDeleteDialog } from '@/components/admin/BulkDeleteDialog';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { resolveDialectName } from '@/lib/dialect-name';
 import {
   PART_OF_SPEECH_VALUES,
   PartOfSpeech,
   normalizeErrorMessage,
+  useBulkDeleteSentencesMutation,
+  useBulkDeleteWordsMutation,
   useDeleteSentenceMutation,
   useDeleteWordMutation,
   useGetAdminSentencesQuery,
@@ -122,13 +125,20 @@ function WordsTab() {
     partOfSpeech: partOfSpeech || undefined,
   });
   const [deleteWord] = useDeleteWordMutation();
+  const [bulkDeleteWords] = useBulkDeleteWordsMutation();
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDialog, setBulkDialog] = useState<'selected' | 'all' | null>(null);
   const { data: dialects } = useGetAllDialectsQuery();
 
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, partOfSpeech]);
+
+  useEffect(() => {
+    setSelected(new Set());
+  }, [debouncedSearch, partOfSpeech, page]);
 
   async function handleDelete(id: string) {
     setError(null);
@@ -141,6 +151,21 @@ function WordsTab() {
       setDeletingId(null);
     }
   }
+
+  function toggleSelected(id: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllOnPage(checked: boolean) {
+    setSelected(checked ? new Set(data?.items.map((word) => word.id) ?? []) : new Set());
+  }
+
+  const allOnPageSelected = (data?.items.length ?? 0) > 0 && selected.size === data?.items.length;
 
   return (
     <section className="grid gap-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -163,6 +188,22 @@ function WordsTab() {
               </option>
             ))}
           </select>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          {selected.size > 0 && (
+            <button
+              className={dangerButtonClass}
+              onClick={() => setBulkDialog('selected')}
+              type="button"
+            >
+              Delete selected ({selected.size})
+            </button>
+          )}
+          {(data?.total ?? 0) > 0 && (
+            <button className={dangerButtonClass} onClick={() => setBulkDialog('all')} type="button">
+              Clear All
+            </button>
+          )}
         </div>
       </div>
 
@@ -187,6 +228,15 @@ function WordsTab() {
             <table className="w-full min-w-180 border-collapse text-left text-sm">
               <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                 <tr>
+                  <th className="w-10 px-5 py-3.5" scope="col">
+                    <input
+                      aria-label="Select all words on this page"
+                      checked={allOnPageSelected}
+                      className="size-4 accent-accent"
+                      onChange={(e) => toggleSelectAllOnPage(e.target.checked)}
+                      type="checkbox"
+                    />
+                  </th>
                   <th className="px-5 py-3.5" scope="col">
                     Word
                   </th>
@@ -207,6 +257,15 @@ function WordsTab() {
               <tbody className="divide-y divide-line">
                 {data.items.map((word) => (
                   <tr key={word.id}>
+                    <td className="px-5 py-3.5">
+                      <input
+                        aria-label={`Select ${word.text}`}
+                        checked={selected.has(word.id)}
+                        className="size-4 accent-accent"
+                        onChange={(e) => toggleSelected(word.id, e.target.checked)}
+                        type="checkbox"
+                      />
+                    </td>
                     <td className="px-5 py-3.5 font-extrabold">{word.text}</td>
                     <td className="px-5 py-3.5 text-muted">
                       {formatPartOfSpeech(word.partOfSpeech)}
@@ -242,9 +301,18 @@ function WordsTab() {
             {data.items.map((word) => (
               <article className="grid gap-3 p-4" key={word.id}>
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-extrabold">{word.text}</p>
-                    <p className="text-xs text-muted">{formatPartOfSpeech(word.partOfSpeech)}</p>
+                  <div className="flex items-start gap-3">
+                    <input
+                      aria-label={`Select ${word.text}`}
+                      checked={selected.has(word.id)}
+                      className="mt-1 size-4 accent-accent"
+                      onChange={(e) => toggleSelected(word.id, e.target.checked)}
+                      type="checkbox"
+                    />
+                    <div>
+                      <p className="font-extrabold">{word.text}</p>
+                      <p className="text-xs text-muted">{formatPartOfSpeech(word.partOfSpeech)}</p>
+                    </div>
                   </div>
                   <ActionButton
                     className={dangerButtonClass}
@@ -284,6 +352,32 @@ function WordsTab() {
           onChange={setPage}
         />
       )}
+
+      {bulkDialog === 'selected' && (
+        <BulkDeleteDialog
+          description={`This permanently deletes ${selected.size} selected word${selected.size === 1 ? '' : 's'}, along with any recordings or training assignments tied to them.`}
+          onClose={() => setBulkDialog(null)}
+          onConfirm={async () => {
+            const result = await bulkDeleteWords({ ids: [...selected] }).unwrap();
+            setSelected(new Set());
+            return result;
+          }}
+          title="Delete selected words?"
+        />
+      )}
+      {bulkDialog === 'all' && (
+        <BulkDeleteDialog
+          description={`This permanently deletes all ${data?.total ?? 0} word${data?.total === 1 ? '' : 's'} matching the current search and filter, along with any recordings or training assignments tied to them.`}
+          onClose={() => setBulkDialog(null)}
+          onConfirm={() =>
+            bulkDeleteWords({
+              search: debouncedSearch || undefined,
+              partOfSpeech: partOfSpeech || undefined,
+            }).unwrap()
+          }
+          title="Clear all words?"
+        />
+      )}
     </section>
   );
 }
@@ -299,13 +393,20 @@ function SentencesTab() {
     search: debouncedSearch || undefined,
   });
   const [deleteSentence] = useDeleteSentenceMutation();
+  const [bulkDeleteSentences] = useBulkDeleteSentencesMutation();
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDialog, setBulkDialog] = useState<'selected' | 'all' | null>(null);
   const { data: dialects } = useGetAllDialectsQuery();
 
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch]);
+
+  useEffect(() => {
+    setSelected(new Set());
+  }, [debouncedSearch, page]);
 
   async function handleDelete(id: string) {
     setError(null);
@@ -319,10 +420,41 @@ function SentencesTab() {
     }
   }
 
+  function toggleSelected(id: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllOnPage(checked: boolean) {
+    setSelected(checked ? new Set(data?.items.map((sentence) => sentence.id) ?? []) : new Set());
+  }
+
+  const allOnPageSelected = (data?.items.length ?? 0) > 0 && selected.size === data?.items.length;
+
   return (
     <section className="grid gap-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
       <div className="flex flex-wrap items-center gap-3 border-b border-line p-3">
         <SearchBox value={search} onChange={setSearch} placeholder="Search sentence text..." />
+        <div className="ml-auto flex items-center gap-2">
+          {selected.size > 0 && (
+            <button
+              className={dangerButtonClass}
+              onClick={() => setBulkDialog('selected')}
+              type="button"
+            >
+              Delete selected ({selected.size})
+            </button>
+          )}
+          {(data?.total ?? 0) > 0 && (
+            <button className={dangerButtonClass} onClick={() => setBulkDialog('all')} type="button">
+              Clear All
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -346,6 +478,15 @@ function SentencesTab() {
             <table className="w-full min-w-180 border-collapse text-left text-sm">
               <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
                 <tr>
+                  <th className="w-10 px-5 py-3.5" scope="col">
+                    <input
+                      aria-label="Select all sentences on this page"
+                      checked={allOnPageSelected}
+                      className="size-4 accent-accent"
+                      onChange={(e) => toggleSelectAllOnPage(e.target.checked)}
+                      type="checkbox"
+                    />
+                  </th>
                   <th className="px-5 py-3.5" scope="col">
                     Text
                   </th>
@@ -366,6 +507,15 @@ function SentencesTab() {
               <tbody className="divide-y divide-line">
                 {data.items.map((sentence) => (
                   <tr key={sentence.id}>
+                    <td className="px-5 py-3.5">
+                      <input
+                        aria-label={`Select ${sentence.text}`}
+                        checked={selected.has(sentence.id)}
+                        className="size-4 accent-accent"
+                        onChange={(e) => toggleSelected(sentence.id, e.target.checked)}
+                        type="checkbox"
+                      />
+                    </td>
                     <td className="px-5 py-3.5 font-extrabold">{sentence.text}</td>
                     <td className="px-5 py-3.5 text-muted">{sentence.wordCount}</td>
                     <td className="px-5 py-3.5 text-muted">
@@ -399,7 +549,16 @@ function SentencesTab() {
             {data.items.map((sentence) => (
               <article className="grid gap-3 p-4" key={sentence.id}>
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm">{sentence.text}</p>
+                  <div className="flex items-start gap-3">
+                    <input
+                      aria-label={`Select ${sentence.text}`}
+                      checked={selected.has(sentence.id)}
+                      className="mt-1 size-4 accent-accent"
+                      onChange={(e) => toggleSelected(sentence.id, e.target.checked)}
+                      type="checkbox"
+                    />
+                    <p className="text-sm">{sentence.text}</p>
+                  </div>
                   <ActionButton
                     className={dangerButtonClass}
                     onClick={() => handleDelete(sentence.id)}
@@ -436,6 +595,27 @@ function SentencesTab() {
           totalPages={data.totalPages}
           isFetching={isFetching}
           onChange={setPage}
+        />
+      )}
+
+      {bulkDialog === 'selected' && (
+        <BulkDeleteDialog
+          description={`This permanently deletes ${selected.size} selected sentence${selected.size === 1 ? '' : 's'}, along with any recordings or training assignments tied to them.`}
+          onClose={() => setBulkDialog(null)}
+          onConfirm={async () => {
+            const result = await bulkDeleteSentences({ ids: [...selected] }).unwrap();
+            setSelected(new Set());
+            return result;
+          }}
+          title="Delete selected sentences?"
+        />
+      )}
+      {bulkDialog === 'all' && (
+        <BulkDeleteDialog
+          description={`This permanently deletes all ${data?.total ?? 0} sentence${data?.total === 1 ? '' : 's'} matching the current search, along with any recordings or training assignments tied to them.`}
+          onClose={() => setBulkDialog(null)}
+          onConfirm={() => bulkDeleteSentences({ search: debouncedSearch || undefined }).unwrap()}
+          title="Clear all sentences?"
         />
       )}
     </section>

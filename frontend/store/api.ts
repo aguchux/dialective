@@ -3650,6 +3650,13 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/words/admin/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminWords'],
     }),
+    bulkDeleteWords: builder.mutation<
+      { deleted: number; skipped: number },
+      { ids: string[] } | { search?: string; partOfSpeech?: PartOfSpeech }
+    >({
+      query: (body) => ({ url: '/words/admin', method: 'DELETE', body }),
+      invalidatesTags: ['AdminWords'],
+    }),
     getAdminSentences: builder.query<
       AdminSentencesPage,
       { page: number; pageSize: number; search?: string }
@@ -3662,6 +3669,13 @@ export const dialectivaApi = createApi({
     }),
     deleteSentence: builder.mutation<{ id: string; deleted: boolean }, string>({
       query: (id) => ({ url: `/sentences/admin/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['AdminSentences'],
+    }),
+    bulkDeleteSentences: builder.mutation<
+      { deleted: number; skipped: number },
+      { ids: string[] } | { search?: string }
+    >({
+      query: (body) => ({ url: '/sentences/admin', method: 'DELETE', body }),
       invalidatesTags: ['AdminSentences'],
     }),
     getAdminBlogPosts: builder.query<BlogPost[], void>({
@@ -3978,8 +3992,10 @@ export const {
   useGetPublicSubscriptionPlansQuery,
   useGetAdminWordsQuery,
   useDeleteWordMutation,
+  useBulkDeleteWordsMutation,
   useGetAdminSentencesQuery,
   useDeleteSentenceMutation,
+  useBulkDeleteSentencesMutation,
   useGetAdminBlogPostsQuery,
   useGetAdminBlogPostQuery,
   useCreateBlogPostMutation,
