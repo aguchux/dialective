@@ -199,12 +199,39 @@ export class CommunityPostsService {
     });
     const joinedSpaceIds = profile?.spaceMemberships.map((m) => m.spaceId) ?? [];
 
-    const posts = await this.prisma.communityPost.findMany({
-      where: joinedSpaceIds.length ? { ...baseWhere, spaceId: { in: joinedSpaceIds } } : baseWhere,
-      orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
-      take: PAGE_SIZE + 1,
-      include: postCardInclude(userId),
-    });
+    const fromJoinedSpaces = joinedSpaceIds.length
+      ? await this.prisma.communityPost.findMany({
+          where: { ...baseWhere, spaceId: { in: joinedSpaceIds } },
+          orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
+          take: PAGE_SIZE + 1,
+          include: postCardInclude(userId),
+        })
+      : [];
+
+    // "Falling back to recent posts once that pool is exhausted" (see doc
+    // comment above) means exactly that -- not just "the member has joined
+    // zero spaces". A member who joined one quiet space would otherwise
+    // never see any post from a space they haven't joined, no matter how
+    // few posts their own joined spaces have. Top up with the most recent
+    // posts platform-wide (excluding ones already included) whenever the
+    // joined-spaces page came back short of a full page.
+    const posts =
+      fromJoinedSpaces.length >= PAGE_SIZE + 1
+        ? fromJoinedSpaces
+        : [
+            ...fromJoinedSpaces,
+            ...(await this.prisma.communityPost.findMany({
+              where: {
+                ...baseWhere,
+                ...(fromJoinedSpaces.length
+                  ? { id: { notIn: fromJoinedSpaces.map((p) => p.id as string) } }
+                  : {}),
+              },
+              orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
+              take: PAGE_SIZE + 1 - fromJoinedSpaces.length,
+              include: postCardInclude(userId),
+            })),
+          ];
     return this.toCursorPage(posts);
   }
 

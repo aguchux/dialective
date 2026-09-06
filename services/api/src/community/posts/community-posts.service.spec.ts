@@ -218,6 +218,62 @@ describe('CommunityPostsService', () => {
     });
   });
 
+  describe('list for-you fallback', () => {
+    function fakePost(id: string) {
+      return {
+        id,
+        title: `Post ${id}`,
+        tags: [],
+        author: fakeAuthor(),
+        reactions: [],
+        bookmarks: [],
+        attachments: [],
+      };
+    }
+
+    it('returns only joined-space posts when they already fill a page', async () => {
+      prisma.communityProfile.findUnique.mockResolvedValueOnce({
+        spaceMemberships: [{ spaceId: 'space-1' }],
+      });
+      const fullPage = Array.from({ length: 21 }, (_, i) => fakePost(`joined-${i}`));
+      prisma.communityPost.findMany.mockResolvedValueOnce(fullPage);
+
+      const result = await service.list('user-1', { tab: 'for-you' } as any);
+
+      expect(prisma.communityPost.findMany).toHaveBeenCalledTimes(1);
+      expect(result.items).toHaveLength(20);
+    });
+
+    it('tops up with platform-wide recent posts when the joined-space pool is thin', async () => {
+      prisma.communityProfile.findUnique.mockResolvedValueOnce({
+        spaceMemberships: [{ spaceId: 'space-1' }],
+      });
+      prisma.communityPost.findMany
+        .mockResolvedValueOnce([fakePost('joined-1')])
+        .mockResolvedValueOnce([fakePost('other-1'), fakePost('other-2')]);
+
+      const result = await service.list('user-1', { tab: 'for-you' } as any);
+
+      expect(prisma.communityPost.findMany).toHaveBeenCalledTimes(2);
+      expect(prisma.communityPost.findMany.mock.calls[1][0]).toEqual(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: { notIn: ['joined-1'] } }),
+        }),
+      );
+      expect(result.items.map((p: any) => p.id)).toEqual(['joined-1', 'other-1', 'other-2']);
+    });
+
+    it('falls back entirely to platform-wide posts when the member has joined no spaces', async () => {
+      prisma.communityProfile.findUnique.mockResolvedValueOnce({ spaceMemberships: [] });
+      prisma.communityPost.findMany.mockResolvedValueOnce([fakePost('other-1')]);
+
+      const result = await service.list('user-1', { tab: 'for-you' } as any);
+
+      expect(prisma.communityPost.findMany).toHaveBeenCalledTimes(1);
+      expect(result.items.map((p: any) => p.id)).toEqual(['other-1']);
+    });
+  });
+
   describe('listMine', () => {
     it('includes drafts and excludes only deleted posts', async () => {
       await service.listMine('author-1');
