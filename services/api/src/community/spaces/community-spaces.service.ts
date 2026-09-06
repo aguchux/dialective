@@ -1,4 +1,10 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import { Prisma } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpsertCommunitySpaceDto } from '../dto/upsert-community-space.dto';
 
@@ -72,5 +78,30 @@ export class CommunitySpacesService {
       orderBy: { sortOrder: 'asc' },
       include: { _count: { select: { posts: true, memberships: true } } },
     });
+  }
+
+  /**
+   * CommunityPost.space is onDelete: Restrict -- a space with any posts
+   * (including deleted/hidden ones, which are soft-deleted via status, not
+   * removed) always fails at the DB level rather than silently cascading.
+   * Archive (isArchived: true via updateForAdmin) is the intended way to
+   * retire a space that still has content; delete is only for spaces that
+   * never had any.
+   */
+  async deleteForAdmin(id: string) {
+    try {
+      await this.prisma.communitySpace.delete({ where: { id } });
+      return { id, deleted: true };
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === 'P2025') throw new NotFoundException('Space not found');
+        if (err.code === 'P2003') {
+          throw new UnprocessableEntityException(
+            'This space still has posts -- archive it instead of deleting it',
+          );
+        }
+      }
+      throw err;
+    }
   }
 }

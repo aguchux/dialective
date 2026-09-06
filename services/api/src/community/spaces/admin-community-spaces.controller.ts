@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { Role } from '@dialectiva/db';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { RolesGuard } from '../../auth/guards/roles.guard';
@@ -25,5 +25,10 @@ export class AdminCommunitySpacesController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: Partial<UpsertCommunitySpaceDto>) {
     return this.spaces.updateForAdmin(id, dto);
+  }
+
+  @Delete(':id')
+  delete(@Param('id') id: string) {
+    return this.spaces.deleteForAdmin(id);
   }
 }

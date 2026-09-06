@@ -1,48 +1,37 @@
-import { Controller, Body, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { Role } from '@dialectiva/db';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { JwtAuthGuard } from '../../auth/strategies/jwt-auth.guard';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ListCommunityContentAdminDto } from '../dto/list-community-content-admin.dto';
-import { CommunityPostsService } from './community-posts.service';
 
-@Controller('admin/community/posts')
+@Controller('admin/community/replies')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
-export class AdminCommunityPostsController {
-  constructor(
-    private readonly posts: CommunityPostsService,
-    private readonly prisma: PrismaService,
-  ) {}
+export class AdminCommunityRepliesController {
+  constructor(private readonly prisma: PrismaService) {}
 
   @Get()
   async list(@Query() query: ListCommunityContentAdminDto) {
-    const { page, pageSize, authorId } = query;
-    const where = authorId ? { authorId } : {};
+    const { page, pageSize, authorId, postId } = query;
+    const where = {
+      ...(authorId ? { authorId } : {}),
+      ...(postId ? { postId } : {}),
+    };
     const [items, total] = await Promise.all([
-      this.prisma.communityPost.findMany({
+      this.prisma.communityReply.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {
           author: { select: { firstName: true, lastName: true, email: true } },
-          space: { select: { name: true, slug: true } },
+          post: { select: { id: true, title: true, slug: true } },
         },
       }),
-      this.prisma.communityPost.count({ where }),
+      this.prisma.communityReply.count({ where }),
     ]);
     return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
-  }
-
-  @Patch(':id/pin')
-  setPinned(@Param('id') id: string, @Body('isPinned') isPinned: boolean) {
-    return this.posts.setPinned(id, isPinned);
-  }
-
-  @Patch(':id/lock')
-  setLocked(@Param('id') id: string, @Body('isLocked') isLocked: boolean) {
-    return this.posts.setLocked(id, isLocked);
   }
 }

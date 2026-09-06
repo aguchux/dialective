@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { KycStatus, Role } from '@dialectiva/db';
+import { KycStatus, Prisma, Role } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateCommunityProfileDto } from '../dto/update-community-profile.dto';
+import { ListCommunityMembersAdminDto } from '../dto/list-community-members-admin.dto';
 
 /**
  * A trainer's community "badge" is derived at read time from their linked
@@ -127,5 +128,75 @@ export class CommunityProfilesService {
     });
     const { user, country, ...rest } = profile;
     return { ...rest, country, badge: deriveBadge(user) };
+  }
+
+  // --- admin: member tracking/management ---
+
+  async listForAdmin(query: ListCommunityMembersAdminDto) {
+    const { page, pageSize, search, status, role } = query;
+    const where: Prisma.CommunityProfileWhereInput = {
+      ...(status ? { status } : {}),
+      ...(role ? { role } : {}),
+      ...(search
+        ? {
+            OR: [
+              { displayName: { contains: search, mode: 'insensitive' as const } },
+              { user: { email: { contains: search, mode: 'insensitive' as const } } },
+              { user: { firstName: { contains: search, mode: 'insensitive' as const } } },
+              { user: { lastName: { contains: search, mode: 'insensitive' as const } } },
+            ],
+          }
+        : {}),
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.communityProfile.findMany({
+        where,
+        include: { user: { select: { email: true, role: true, kycStatus: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.communityProfile.count({ where }),
+    ]);
+    return {
+      items: items.map(({ user, ...profile }) => ({
+        ...profile,
+        email: user.email,
+        badge: deriveBadge(user),
+      })),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
+  async getDetailForAdmin(id: string) {
+    const profile = await this.prisma.communityProfile.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: { email: true, firstName: true, lastName: true, role: true, kycStatus: true },
+        },
+        country: { select: { name: true, code: true } },
+        spaceMemberships: { include: { space: { select: { id: true, name: true, slug: true } } } },
+      },
+    });
+    if (!profile) throw new NotFoundException('Community profile not found');
+    const { user, spaceMemberships, ...rest } = profile;
+    const moderationHistory = await this.prisma.communityModeratorAction.findMany({
+      where: { targetType: 'PROFILE', targetId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      include: { moderator: { select: { firstName: true, lastName: true, email: true } } },
+    });
+    return {
+      ...rest,
+      email: user.email,
+      accountName: [user.firstName, user.lastName].filter(Boolean).join(' ') || null,
+      badge: deriveBadge(user),
+      spaces: spaceMemberships.map((membership) => membership.space),
+      moderationHistory,
+    };
   }
 }
