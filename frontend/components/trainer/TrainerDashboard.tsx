@@ -331,6 +331,7 @@ export function TrainerDashboard() {
             setMidSessionRequiredCourses(courses);
             setRequiredCoursesOpen(true);
           }}
+          onInsufficientBalance={() => setLowBalanceOpen(true)}
         />
         <LowBalanceDialog
           onOpenChange={setLowBalanceOpen}

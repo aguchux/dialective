@@ -88,6 +88,11 @@ function extractRequiredCourses(
   return data?.requiredCourses && data.requiredCourses.length > 0 ? data.requiredCourses : null;
 }
 
+function hasInsufficientBalance(err: unknown): boolean {
+  const data = (err as { data?: ApiErrorShape } | undefined)?.data;
+  return data?.insufficientBalance === true;
+}
+
 type FlowStep = 'select' | 'terms' | 'loading' | 'training' | 'unavailable';
 type RecorderState =
   'ready' | 'recording' | 'recorded' | 'playing' | 'paused' | 'submitting' | 'submitted';
@@ -98,6 +103,7 @@ export function WordTrainingDialog({
   recordingTimeoutSeconds,
   recordingMaxTimeoutSeconds,
   onRequiredCourses,
+  onInsufficientBalance,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -112,6 +118,7 @@ export function WordTrainingDialog({
    * RequiredCoursesDialog instead of duplicating that UI here.
    */
   onRequiredCourses?: (courses: { id: string; slug: string; title: string }[]) => void;
+  onInsufficientBalance?: () => void;
 }) {
   const portalContainer = usePortalContainer();
   const { status: authStatus, update: updateAuthSession } = useAuthSession();
@@ -367,6 +374,11 @@ export function WordTrainingDialog({
         onRequiredCourses(requiredCourses);
         return;
       }
+      if (hasInsufficientBalance(err) && onInsufficientBalance) {
+        onOpenChange(false);
+        onInsufficientBalance();
+        return;
+      }
       setError(normalizeErrorMessage(err, 'Unable to start a training session.'));
       setStep('terms');
     }
@@ -411,6 +423,13 @@ export function WordTrainingDialog({
         setSession(null);
         onOpenChange(false);
         onRequiredCourses(requiredCourses);
+        return;
+      }
+      if (hasInsufficientBalance(err) && onInsufficientBalance) {
+        void endSession(session.sessionId);
+        setSession(null);
+        onOpenChange(false);
+        onInsufficientBalance();
         return;
       }
       setError(normalizeErrorMessage(err, 'Unable to load the next word.'));
