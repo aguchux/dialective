@@ -17,6 +17,70 @@ describe('CommunitySpacesService admin', () => {
     return { service, prisma };
   }
 
+  describe('getBySlug', () => {
+    it('reports joined: false when no userId is given', async () => {
+      const { service, prisma } = setup();
+      prisma.communitySpace.findUnique.mockResolvedValue({
+        id: 'space-1',
+        slug: 'general',
+        isArchived: false,
+        _count: { posts: 3 },
+      });
+
+      const result = await service.getBySlug('general');
+
+      expect(result.joined).toBe(false);
+      expect(prisma.communitySpace.findUnique).toHaveBeenCalledWith({
+        where: { slug: 'general' },
+        include: { _count: { select: { posts: true } } },
+      });
+    });
+
+    it('reports joined: true when the user has a membership row', async () => {
+      const { service, prisma } = setup();
+      prisma.communitySpace.findUnique.mockResolvedValue({
+        id: 'space-1',
+        slug: 'general',
+        isArchived: false,
+        _count: { posts: 3 },
+        memberships: [{ id: 'membership-1' }],
+      });
+
+      const result = await service.getBySlug('general', 'user-1');
+
+      expect(result.joined).toBe(true);
+      expect(prisma.communitySpace.findUnique).toHaveBeenCalledWith({
+        where: { slug: 'general' },
+        include: {
+          _count: { select: { posts: true } },
+          memberships: { where: { profile: { userId: 'user-1' } }, select: { id: true } },
+        },
+      });
+    });
+
+    it('reports joined: false when the user has no membership row', async () => {
+      const { service, prisma } = setup();
+      prisma.communitySpace.findUnique.mockResolvedValue({
+        id: 'space-1',
+        slug: 'general',
+        isArchived: false,
+        _count: { posts: 3 },
+        memberships: [],
+      });
+
+      const result = await service.getBySlug('general', 'user-1');
+
+      expect(result.joined).toBe(false);
+    });
+
+    it('404s for an archived space', async () => {
+      const { service, prisma } = setup();
+      prisma.communitySpace.findUnique.mockResolvedValue({ isArchived: true });
+
+      await expect(service.getBySlug('general')).rejects.toThrow('Space not found');
+    });
+  });
+
   describe('createForAdmin', () => {
     it('rejects a slug that already exists', async () => {
       const { service, prisma } = setup();

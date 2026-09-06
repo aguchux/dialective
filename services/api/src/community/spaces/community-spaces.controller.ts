@@ -18,8 +18,8 @@ export class CommunitySpacesController {
 
   @Get(':slug')
   @UseGuards(JwtAuthGuard)
-  getBySlug(@Param('slug') slug: string) {
-    return this.spaces.getBySlug(slug);
+  getBySlug(@Req() req: AuthenticatedRequest, @Param('slug') slug: string) {
+    return this.spaces.getBySlug(slug, req.user.sub);
   }
 
   @Post(':id/join')
@@ -30,6 +30,11 @@ export class CommunitySpacesController {
     return { joined: true };
   }
 
+  // The community app's frontend (community/store/api.ts) calls POST
+  // .../leave, not DELETE .../join -- kept both routes rather than changing
+  // the frontend contract, since DELETE .../join was already live and this
+  // is purely additive.
+  @Post(':id/leave')
   @Delete(':id/join')
   @UseGuards(JwtAuthGuard)
   async leave(@Req() req: AuthenticatedRequest, @Param('id') id: string) {

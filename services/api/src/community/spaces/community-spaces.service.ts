@@ -31,14 +31,23 @@ export class CommunitySpacesService {
     });
   }
 
-  async getBySlug(slug: string) {
+  async getBySlug(slug: string, userId?: string) {
     const space = await this.prisma.communitySpace.findUnique({
       where: { slug },
-      include: { _count: { select: { posts: true } } },
+      include: {
+        _count: { select: { posts: true } },
+        ...(userId
+          ? { memberships: { where: { profile: { userId } }, select: { id: true } } }
+          : {}),
+      },
     });
     if (!space || space.isArchived) throw new NotFoundException('Space not found');
-    const { _count, ...rest } = space;
-    return { ...rest, postCount: _count.posts };
+    const { _count, memberships, ...rest } = space as typeof space & { memberships?: unknown[] };
+    return {
+      ...rest,
+      postCount: _count.posts,
+      joined: userId ? (memberships?.length ?? 0) > 0 : false,
+    };
   }
 
   async join(profileId: string, spaceId: string) {
