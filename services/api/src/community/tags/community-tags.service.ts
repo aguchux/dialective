@@ -55,6 +55,16 @@ export class CommunityTagsService {
 
   // --- admin ---
 
+  /**
+   * Unlike list() (member-facing, hides isHidden tags on purpose), admin
+   * management needs to see every tag including hidden ones -- otherwise an
+   * admin who hides a tag has no way to find and unhide it again, since it
+   * would disappear from this exact screen.
+   */
+  async listForAdmin() {
+    return this.prisma.communityTag.findMany({ orderBy: { name: 'asc' } });
+  }
+
   async createForAdmin(dto: CreateCommunityTagDto) {
     const existing = await this.prisma.communityTag.findFirst({
       where: { name: { equals: dto.name, mode: 'insensitive' } },

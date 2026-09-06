@@ -14,7 +14,7 @@ export class AdminCommunityTagsController {
 
   @Get()
   list() {
-    return this.tags.list();
+    return this.tags.listForAdmin();
   }
 
   @Post()
