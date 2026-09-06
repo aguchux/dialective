@@ -19,6 +19,7 @@ describe('CommunityRepliesService', () => {
   let prisma: any;
   let profiles: any;
   let notifications: any;
+  let storage: any;
   let service: CommunityRepliesService;
 
   beforeEach(() => {
@@ -30,7 +31,8 @@ describe('CommunityRepliesService', () => {
     };
     profiles = { ensureProfile: jest.fn() };
     notifications = { notify: jest.fn() };
-    service = new CommunityRepliesService(prisma, profiles, notifications);
+    storage = { getPublicObjectUrl: jest.fn().mockReturnValue('https://public/attachment') };
+    service = new CommunityRepliesService(prisma, profiles, notifications, storage);
   });
 
   describe('list', () => {

@@ -23,6 +23,7 @@ describe('CommunityPostsService', () => {
   let prisma: any;
   let profiles: any;
   let tags: any;
+  let storage: any;
   let service: CommunityPostsService;
 
   beforeEach(() => {
@@ -42,7 +43,8 @@ describe('CommunityPostsService', () => {
     };
     profiles = { ensureProfile: jest.fn().mockResolvedValue({ id: 'profile-1' }) };
     tags = { resolveOrCreateMany: jest.fn().mockResolvedValue([]) };
-    service = new CommunityPostsService(prisma, profiles, tags);
+    storage = { getPublicObjectUrl: jest.fn().mockReturnValue('https://public/attachment') };
+    service = new CommunityPostsService(prisma, profiles, tags, storage);
   });
 
   describe('create', () => {

@@ -1,7 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../../storage/storage.service';
 import { renderCommunityBody } from '../community-content.util';
-import { attachmentsCreateInput } from '../community-attachments.util';
+import { attachmentsCreateInput, toAttachmentDto } from '../community-attachments.util';
 import { CreateCommunityReplyDto } from '../dto/create-community-reply.dto';
 import { AUTHOR_SUMMARY_SELECT, AuthorSummarySource, toAuthorSummary } from '../profiles/community-profiles.service';
 import { CommunityProfilesService } from '../profiles/community-profiles.service';
@@ -24,6 +25,7 @@ export class CommunityRepliesService {
     private readonly prisma: PrismaService,
     private readonly profiles: CommunityProfilesService,
     private readonly notifications: CommunityNotificationsService,
+    private readonly storage: StorageService,
   ) {}
 
   async list(postId: string, sort: ReplySort = 'oldest', userId?: string) {
@@ -140,13 +142,15 @@ export class CommunityRepliesService {
   }
 
   private toDto(reply: Record<string, unknown>) {
-    const { author, reactions, ...rest } = reply as {
+    const { author, reactions, attachments, ...rest } = reply as {
       author: AuthorSummarySource;
       reactions?: unknown[];
+      attachments?: Parameters<typeof toAttachmentDto>[1][];
     } & Record<string, unknown>;
     return {
       ...rest,
       author: toAuthorSummary(author),
+      attachments: (attachments ?? []).map((attachment) => toAttachmentDto(this.storage, attachment)),
       likedByMe: reactions !== undefined ? reactions.length > 0 : undefined,
     };
   }

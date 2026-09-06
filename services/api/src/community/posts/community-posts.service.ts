@@ -1,8 +1,9 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../../storage/storage.service';
 import { renderCommunityBody } from '../community-content.util';
 import { slugifyUnique } from '../community-slug.util';
-import { attachmentsCreateInput } from '../community-attachments.util';
+import { attachmentsCreateInput, toAttachmentDto } from '../community-attachments.util';
 import { AUTHOR_SUMMARY_SELECT, AuthorSummarySource, toAuthorSummary } from '../profiles/community-profiles.service';
 import { CreateCommunityPostDto } from '../dto/create-community-post.dto';
 import { UpdateCommunityPostDto } from '../dto/update-community-post.dto';
@@ -33,6 +34,7 @@ export class CommunityPostsService {
     private readonly prisma: PrismaService,
     private readonly profiles: CommunityProfilesService,
     private readonly tags: CommunityTagsService,
+    private readonly storage: StorageService,
   ) {}
 
   async create(userId: string, dto: CreateCommunityPostDto) {
@@ -206,16 +208,18 @@ export class CommunityPostsService {
   }
 
   private toCard(post: Record<string, unknown>) {
-    const { tags, author, reactions, bookmarks, ...rest } = post as {
+    const { tags, author, reactions, bookmarks, attachments, ...rest } = post as {
       tags: Array<{ tag: unknown }>;
       author: AuthorSummarySource;
       reactions?: unknown[];
       bookmarks?: unknown[];
+      attachments?: Parameters<typeof toAttachmentDto>[1][];
     } & Record<string, unknown>;
     return {
       ...rest,
       author: toAuthorSummary(author),
       tags: tags.map((t) => t.tag),
+      attachments: (attachments ?? []).map((attachment) => toAttachmentDto(this.storage, attachment)),
       likedByMe: reactions !== undefined ? reactions.length > 0 : undefined,
       bookmarkedByMe: bookmarks !== undefined ? bookmarks.length > 0 : undefined,
     };

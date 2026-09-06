@@ -1,4 +1,5 @@
 import { CommunityAttachmentType } from '@dialectiva/db';
+import { StorageService } from '../storage/storage.service';
 import { CommunityAttachmentInputDto } from './dto/community-attachment-input.dto';
 
 const ATTACHMENT_TYPE_BY_CONTENT_TYPE: Record<string, CommunityAttachmentType> = {
@@ -28,4 +29,26 @@ export function attachmentsCreateInput(attachments: CommunityAttachmentInputDto[
     size: attachment.size,
     originalName: attachment.originalName,
   }));
+}
+
+/**
+ * Maps a persisted CommunityAttachment row to its API-facing shape, adding
+ * the computed public URL (attachments are publicRead, see
+ * CommunityAttachmentsService.createUploadUrl) rather than storing it
+ * redundantly in Postgres.
+ */
+export function toAttachmentDto(
+  storage: StorageService,
+  attachment: { id: string; type: CommunityAttachmentType; bucket: string; storageKey: string; mimeType: string; size: number; originalName: string },
+) {
+  return {
+    id: attachment.id,
+    type: attachment.type,
+    bucket: attachment.bucket,
+    storageKey: attachment.storageKey,
+    mimeType: attachment.mimeType,
+    size: attachment.size,
+    originalName: attachment.originalName,
+    url: storage.getPublicObjectUrl(attachment.bucket, attachment.storageKey),
+  };
 }
