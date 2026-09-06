@@ -915,6 +915,96 @@ export interface CommunityStats {
   postsLast24h: number;
 }
 
+export interface AdminCommunitySpace {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  rules: string | null;
+  isArchived: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  _count: { posts: number; memberships: number };
+}
+
+export interface UpsertCommunitySpaceInput {
+  name: string;
+  slug: string;
+  description?: string;
+  icon?: string;
+  rules?: string;
+  isArchived?: boolean;
+  sortOrder?: number;
+}
+
+export interface AdminCommunityTag {
+  id: string;
+  name: string;
+  slug: string;
+  isHidden: boolean;
+  createdAt: string;
+}
+
+export type CommunityMemberStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
+export type CommunityMemberRole = 'MEMBER' | 'MODERATOR' | 'STAFF';
+export type CommunityBadge = 'VERIFIED_TRAINER' | 'DISTRIBUTOR' | null;
+
+export interface AdminCommunityMember {
+  id: string;
+  displayName: string;
+  email: string;
+  bio: string | null;
+  status: CommunityMemberStatus;
+  role: CommunityMemberRole;
+  badge: CommunityBadge;
+  postCount: number;
+  replyCount: number;
+  bookmarkCount: number;
+  createdAt: string;
+}
+
+export interface AdminCommunityMembersPage {
+  items: AdminCommunityMember[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface AdminCommunityMemberDetail extends AdminCommunityMember {
+  accountName: string | null;
+  languages: string[];
+  dialects: string[];
+  country: { name: string; code: string } | null;
+  spaces: { id: string; name: string; slug: string }[];
+  moderationHistory: {
+    id: string;
+    action: string;
+    reason: string | null;
+    createdAt: string;
+    moderator: { firstName: string | null; lastName: string | null; email: string };
+  }[];
+}
+
+export interface CommunitySettingsAdmin {
+  postingEnabled: boolean;
+  repliesEnabled: boolean;
+  attachmentsEnabled: boolean;
+  reactionsEnabled: boolean;
+  newMemberPostingDelayMinutes: number;
+  requireApprovalForNewMembers: boolean;
+}
+
+export interface AdminCommunityContentPage<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface TrainerDashboardSummary {
   balance: string;
   lockedBalance: string;
@@ -2099,6 +2189,10 @@ export const dialectivaApi = createApi({
     'AdminWords',
     'AdminSentences',
     'AdminRecordings',
+    'AdminCommunitySpaces',
+    'AdminCommunityTags',
+    'AdminCommunityMembers',
+    'AdminCommunitySettings',
     'AudioRetentionRules',
     'DataAccessLeads',
     'P2P',
@@ -2275,6 +2369,122 @@ export const dialectivaApi = createApi({
     }),
     getCommunityStats: builder.query<CommunityStats, void>({
       query: () => '/community/stats',
+    }),
+    getAdminCommunitySpaces: builder.query<AdminCommunitySpace[], void>({
+      query: () => '/admin/community/spaces',
+      providesTags: ['AdminCommunitySpaces'],
+    }),
+    createAdminCommunitySpace: builder.mutation<AdminCommunitySpace, UpsertCommunitySpaceInput>({
+      query: (body) => ({ url: '/admin/community/spaces', method: 'POST', body }),
+      invalidatesTags: ['AdminCommunitySpaces'],
+    }),
+    updateAdminCommunitySpace: builder.mutation<
+      AdminCommunitySpace,
+      { id: string; body: Partial<UpsertCommunitySpaceInput> }
+    >({
+      query: ({ id, body }) => ({ url: `/admin/community/spaces/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['AdminCommunitySpaces'],
+    }),
+    deleteAdminCommunitySpace: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/admin/community/spaces/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['AdminCommunitySpaces'],
+    }),
+    getAdminCommunityTags: builder.query<AdminCommunityTag[], void>({
+      query: () => '/admin/community/tags',
+      providesTags: ['AdminCommunityTags'],
+    }),
+    createAdminCommunityTag: builder.mutation<AdminCommunityTag, { name: string }>({
+      query: (body) => ({ url: '/admin/community/tags', method: 'POST', body }),
+      invalidatesTags: ['AdminCommunityTags'],
+    }),
+    renameAdminCommunityTag: builder.mutation<AdminCommunityTag, { id: string; name: string }>({
+      query: ({ id, name }) => ({ url: `/admin/community/tags/${id}`, method: 'PATCH', body: { name } }),
+      invalidatesTags: ['AdminCommunityTags'],
+    }),
+    mergeAdminCommunityTags: builder.mutation<AdminCommunityTag, { id: string; targetId: string }>({
+      query: ({ id, targetId }) => ({
+        url: `/admin/community/tags/${id}/merge/${targetId}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['AdminCommunityTags'],
+    }),
+    hideAdminCommunityTag: builder.mutation<AdminCommunityTag, { id: string; isHidden: boolean }>({
+      query: ({ id, isHidden }) => ({
+        url: `/admin/community/tags/${id}/hidden`,
+        method: 'PATCH',
+        body: { isHidden },
+      }),
+      invalidatesTags: ['AdminCommunityTags'],
+    }),
+    deleteAdminCommunityTag: builder.mutation<void, string>({
+      query: (id) => ({ url: `/admin/community/tags/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['AdminCommunityTags'],
+    }),
+    getAdminCommunityMembers: builder.query<
+      AdminCommunityMembersPage,
+      { page: number; pageSize: number; search?: string; status?: CommunityMemberStatus; role?: CommunityMemberRole }
+    >({
+      query: (params) => ({ url: '/admin/community/members', params }),
+      providesTags: ['AdminCommunityMembers'],
+    }),
+    getAdminCommunityMember: builder.query<AdminCommunityMemberDetail, string>({
+      query: (id) => `/admin/community/members/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'AdminCommunityMembers', id }],
+    }),
+    suspendCommunityMember: builder.mutation<void, { id: string; reason?: string }>({
+      query: ({ id, reason }) => ({
+        url: `/admin/community/moderation/users/${id}/suspend`,
+        method: 'POST',
+        body: { reason },
+      }),
+      invalidatesTags: ['AdminCommunityMembers'],
+    }),
+    banCommunityMember: builder.mutation<void, { id: string; reason?: string }>({
+      query: ({ id, reason }) => ({
+        url: `/admin/community/moderation/users/${id}/ban`,
+        method: 'POST',
+        body: { reason },
+      }),
+      invalidatesTags: ['AdminCommunityMembers'],
+    }),
+    restoreCommunityMember: builder.mutation<void, string>({
+      query: (id) => ({ url: `/admin/community/moderation/users/${id}/restore`, method: 'POST' }),
+      invalidatesTags: ['AdminCommunityMembers'],
+    }),
+    getAdminCommunitySettings: builder.query<CommunitySettingsAdmin, void>({
+      query: () => '/admin/community/settings',
+      providesTags: ['AdminCommunitySettings'],
+    }),
+    updateAdminCommunitySettings: builder.mutation<
+      CommunitySettingsAdmin,
+      Partial<CommunitySettingsAdmin>
+    >({
+      query: (body) => ({ url: '/admin/community/settings', method: 'PATCH', body }),
+      invalidatesTags: ['AdminCommunitySettings'],
+    }),
+    getAdminCommunityPostsByAuthor: builder.query<
+      AdminCommunityContentPage<{
+        id: string;
+        title: string;
+        slug: string;
+        status: string;
+        createdAt: string;
+        space: { name: string; slug: string };
+      }>,
+      { authorId: string; page?: number; pageSize?: number }
+    >({
+      query: (params) => ({ url: '/admin/community/posts', params }),
+    }),
+    getAdminCommunityReplies: builder.query<
+      AdminCommunityContentPage<{
+        id: string;
+        body: string;
+        createdAt: string;
+        post: { id: string; title: string; slug: string };
+      }>,
+      { authorId?: string; postId?: string; page?: number; pageSize?: number }
+    >({
+      query: (params) => ({ url: '/admin/community/replies', params }),
     }),
     getTrainerReport: builder.query<TrainerReport, { from?: string; to?: string }>({
       query: ({ from, to }) => ({ url: '/wallet/report', params: { from, to } }),
@@ -3836,6 +4046,25 @@ export const {
   useRaiseP2PDisputeMutation,
   useGetTrainerDashboardQuery,
   useGetCommunityStatsQuery,
+  useGetAdminCommunitySpacesQuery,
+  useCreateAdminCommunitySpaceMutation,
+  useUpdateAdminCommunitySpaceMutation,
+  useDeleteAdminCommunitySpaceMutation,
+  useGetAdminCommunityTagsQuery,
+  useCreateAdminCommunityTagMutation,
+  useRenameAdminCommunityTagMutation,
+  useMergeAdminCommunityTagsMutation,
+  useHideAdminCommunityTagMutation,
+  useDeleteAdminCommunityTagMutation,
+  useGetAdminCommunityMembersQuery,
+  useGetAdminCommunityMemberQuery,
+  useSuspendCommunityMemberMutation,
+  useBanCommunityMemberMutation,
+  useRestoreCommunityMemberMutation,
+  useGetAdminCommunitySettingsQuery,
+  useUpdateAdminCommunitySettingsMutation,
+  useGetAdminCommunityPostsByAuthorQuery,
+  useGetAdminCommunityRepliesQuery,
   useGetTrainerReportQuery,
   useGetEarningHistoryQuery,
   useGetWalletActivityQuery,
