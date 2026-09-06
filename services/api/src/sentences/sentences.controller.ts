@@ -49,16 +49,17 @@ export class SentencesController {
 
   @Delete('admin/:id')
   async deleteSentence(@Param('id') id: string) {
+    if (await this.hasUnsettledSentenceActivity(id)) {
+      throw new UnprocessableEntityException(
+        'Sentence has recordings awaiting scoring/settlement or an open training assignment -- wait for those to resolve before deleting',
+      );
+    }
     try {
       await this.prisma.sentence.delete({ where: { id } });
       return { id, deleted: true };
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError) {
-        if (err.code === 'P2025') throw new NotFoundException('Sentence not found');
-        if (err.code === 'P2003')
-          throw new UnprocessableEntityException(
-            'Sentence still has recordings or assignments referencing it',
-          );
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        throw new NotFoundException('Sentence not found');
       }
       throw err;
     }
@@ -68,9 +69,12 @@ export class SentencesController {
    * "Delete selected" (dto.ids) or "Clear All" (dto.search, ids omitted --
    * deletes every row matching that filter, mirroring
    * listSentencesForAdmin's own where-clause). Deletes one row at a time
-   * rather than a single prisma.sentence.deleteMany() so an individual FK
-   * conflict doesn't abort the whole batch -- tallied as skipped instead,
-   * same distinction the single-delete route already makes via P2003.
+   * rather than a single prisma.sentence.deleteMany() call so a sentence
+   * with unsettled activity (see hasUnsettledSentenceActivity) is tallied as
+   * skipped instead of silently cascade-deleting a trainer's in-flight/
+   * unpaid work along with it -- WordRecording/WordTrainingAssignment's FKs
+   * to Sentence are onDelete: Cascade, so there is no database constraint to
+   * catch this; it must be checked before the delete, not after.
    */
   @Delete('admin')
   @HttpCode(200)
@@ -79,11 +83,15 @@ export class SentencesController {
     let deleted = 0;
     let skipped = 0;
     for (const id of ids) {
+      if (await this.hasUnsettledSentenceActivity(id)) {
+        skipped += 1;
+        continue;
+      }
       try {
         await this.prisma.sentence.delete({ where: { id } });
         deleted += 1;
       } catch (err) {
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
           skipped += 1;
           continue;
         }
@@ -99,5 +107,26 @@ export class SentencesController {
       : {};
     const rows = await this.prisma.sentence.findMany({ where, select: { id: true } });
     return rows.map((row) => row.id);
+  }
+
+  /**
+   * True if deleting this sentence would cascade away unsettled trainer
+   * work: a WordRecording still PENDING/TRANSCRIBED/SCORED (not yet
+   * SETTLED, REJECTED, or EXPIRED -- those are terminal and safe to lose),
+   * or a WordTrainingAssignment a trainer has been handed but not yet
+   * consumed.
+   */
+  private async hasUnsettledSentenceActivity(sentenceId: string): Promise<boolean> {
+    const [unsettledRecording, openAssignment] = await Promise.all([
+      this.prisma.wordRecording.findFirst({
+        where: { sentenceId, status: { in: ['PENDING', 'TRANSCRIBED', 'SCORED'] } },
+        select: { id: true },
+      }),
+      this.prisma.wordTrainingAssignment.findFirst({
+        where: { sentenceId, consumedAt: null },
+        select: { id: true },
+      }),
+    ]);
+    return Boolean(unsettledRecording || openAssignment);
   }
 }

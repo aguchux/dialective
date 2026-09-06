@@ -355,7 +355,7 @@ function WordsTab() {
 
       {bulkDialog === 'selected' && (
         <BulkDeleteDialog
-          description={`This permanently deletes ${selected.size} selected word${selected.size === 1 ? '' : 's'}, along with any recordings or training assignments tied to them.`}
+          description={`This permanently deletes ${selected.size} selected word${selected.size === 1 ? '' : 's'} and their settled recordings. Any word still awaiting scoring or settlement, or with an open training assignment, is left alone and reported as skipped.`}
           onClose={() => setBulkDialog(null)}
           onConfirm={async () => {
             const result = await bulkDeleteWords({ ids: [...selected] }).unwrap();
@@ -367,7 +367,7 @@ function WordsTab() {
       )}
       {bulkDialog === 'all' && (
         <BulkDeleteDialog
-          description={`This permanently deletes all ${data?.total ?? 0} word${data?.total === 1 ? '' : 's'} matching the current search and filter, along with any recordings or training assignments tied to them.`}
+          description={`This permanently deletes all ${data?.total ?? 0} word${data?.total === 1 ? '' : 's'} matching the current search and filter, and their settled recordings. Any word still awaiting scoring or settlement, or with an open training assignment, is left alone and reported as skipped.`}
           onClose={() => setBulkDialog(null)}
           onConfirm={() =>
             bulkDeleteWords({
@@ -600,7 +600,7 @@ function SentencesTab() {
 
       {bulkDialog === 'selected' && (
         <BulkDeleteDialog
-          description={`This permanently deletes ${selected.size} selected sentence${selected.size === 1 ? '' : 's'}, along with any recordings or training assignments tied to them.`}
+          description={`This permanently deletes ${selected.size} selected sentence${selected.size === 1 ? '' : 's'} and their settled recordings. Any sentence still awaiting scoring or settlement, or with an open training assignment, is left alone and reported as skipped.`}
           onClose={() => setBulkDialog(null)}
           onConfirm={async () => {
             const result = await bulkDeleteSentences({ ids: [...selected] }).unwrap();
@@ -612,7 +612,7 @@ function SentencesTab() {
       )}
       {bulkDialog === 'all' && (
         <BulkDeleteDialog
-          description={`This permanently deletes all ${data?.total ?? 0} sentence${data?.total === 1 ? '' : 's'} matching the current search, along with any recordings or training assignments tied to them.`}
+          description={`This permanently deletes all ${data?.total ?? 0} sentence${data?.total === 1 ? '' : 's'} matching the current search, and their settled recordings. Any sentence still awaiting scoring or settlement, or with an open training assignment, is left alone and reported as skipped.`}
           onClose={() => setBulkDialog(null)}
           onConfirm={() => bulkDeleteSentences({ search: debouncedSearch || undefined }).unwrap()}
           title="Clear all sentences?"

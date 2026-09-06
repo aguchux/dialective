@@ -35,19 +35,41 @@ export function BulkDeleteDialog({
   const [phrase, setPhrase] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [result, setResult] = useState<{ deleted: number; skipped: number } | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setIsDeleting(true);
     try {
-      await onConfirm();
-      onClose();
+      setResult(await onConfirm());
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to complete this bulk delete.'));
     } finally {
       setIsDeleting(false);
     }
+  }
+
+  if (result) {
+    return (
+      <Dialog open onOpenChange={(open) => !open && onClose()}>
+        <DialogContent title="Delete complete" description={`Deleted ${result.deleted}.`}>
+          <div className="grid gap-3">
+            {result.skipped > 0 && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                Skipped {result.skipped} still awaiting scoring/settlement or with an open training
+                assignment.
+              </p>
+            )}
+            <div className="flex justify-end">
+              <button className={secondaryButtonClass} onClick={onClose} type="button">
+                Done
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
   }
 
   return (
