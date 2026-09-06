@@ -70,6 +70,27 @@ const refreshCache = new Map<string, RefreshCacheEntry>();
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
+  // Explicit Domain=.dialectlibrary.com so this cookie is readable by every
+  // subdomain, not just the host it's issued from -- community/lib/auth-
+  // options.ts (community.dialectlibrary.com) has no login/session-issuing
+  // path of its own; it only decodes this same cookie via getToken(), and
+  // its own cookies config already declares this exact name/domain. Without
+  // this block here, NextAuth's v4 default omits Domain entirely, making the
+  // cookie host-only to dialectlibrary.com and never visible to community at
+  // all -- the "shared SSO session" the two apps are built around silently
+  // never worked.
+  cookies: {
+    sessionToken: {
+      name: '__Secure-next-auth.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: true,
+        domain: '.dialectlibrary.com',
+      },
+    },
+  },
   providers: [
     CredentialsProvider({
       name: 'Credentials',
