@@ -34,6 +34,18 @@ async function bootstrap() {
   // route -- they just never read req.rawBody.
   const app = await NestFactory.create(AppModule, { rawBody: true });
 
+  // Express's default HTTP adapter auto-generates a weak ETag for every
+  // JSON response. A client that sends back If-None-Match on a later
+  // request then gets a bare 304 with no body -- fine when the client's
+  // cached body is known-fresh, but RTK Query's fetchBaseQuery uses the
+  // browser's default fetch cache mode, so a response cached before some
+  // data existed (or under a narrower filter) can keep being silently
+  // revalidated as "unchanged" indefinitely, reusing a stale/empty body
+  // no hard refresh reliably clears. Every response here is either
+  // personalized, permission-gated, or time-sensitive enough that this
+  // kind of conditional caching does more harm than it saves.
+  app.getHttpAdapter().getInstance().set('etag', false);
+
   app.use(helmet());
 
   app.enableCors({
