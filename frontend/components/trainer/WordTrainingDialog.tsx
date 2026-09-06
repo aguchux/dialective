@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSession as useAuthSession } from 'next-auth/react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { usePortalContainer } from '@/components/ui/PortalContainer';
 import { notifyFullScreenOverlay } from '@/lib/recording-signal';
@@ -53,6 +54,9 @@ const DEFAULT_SECONDS_PER_WORD = 5;
 const DEFAULT_MAX_RECORDING_MS = 180_000;
 const RING_RADIUS = 104;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+// Matches SessionActivityTracker's own throttle so this dialog's heartbeat
+// and the global DOM-event heartbeat stay on the same cadence.
+const HEARTBEAT_MIN_INTERVAL_MS = 2 * 60_000;
 
 /** Counts words in the assignment's prompt text -- 1-word dictionary entries today, but a general split so a multi-word phrase scales the timeout the same way. */
 function countPromptWords(promptText: string | null | undefined): number {
@@ -110,6 +114,8 @@ export function WordTrainingDialog({
   onRequiredCourses?: (courses: { id: string; slug: string; title: string }[]) => void;
 }) {
   const portalContainer = usePortalContainer();
+  const { status: authStatus, update: updateAuthSession } = useAuthSession();
+  const lastHeartbeatAtRef = useRef(0);
   const [step, setStep] = useState<FlowStep>('select');
   const [accepted, setAccepted] = useState(false);
   const [session, setSession] = useState<WordTrainingSession | null>(null);
@@ -250,6 +256,29 @@ export function WordTrainingDialog({
     notifyFullScreenOverlay(open);
     return () => notifyFullScreenOverlay(false);
   }, [open]);
+
+  // SessionActivityTracker's idle-timeout heartbeat only fires on
+  // mousemove/keydown/touchstart/scroll -- none of which a trainer produces
+  // while sitting still recording an answer. Left uncorrected, a recording
+  // that runs long enough (or that starts after the trainer had already
+  // spent a few idle minutes reading the prompt) can cross
+  // sessionIdleTimeoutMinutes entirely inside this dialog, and the next
+  // 5-minute session poll in providers.tsx force-signs them out mid-flight
+  // (see auth-options.ts's lastActiveAt check). Treat this dialog being
+  // open at all as activity, on the same throttle, so a trainer actively
+  // working through a round never gets timed out from under them.
+  useEffect(() => {
+    if (!open || authStatus !== 'authenticated') return;
+    function heartbeat() {
+      const now = Date.now();
+      if (now - lastHeartbeatAtRef.current < HEARTBEAT_MIN_INTERVAL_MS) return;
+      lastHeartbeatAtRef.current = now;
+      void updateAuthSession({ lastActiveAt: now });
+    }
+    heartbeat();
+    const interval = setInterval(heartbeat, HEARTBEAT_MIN_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [open, authStatus, updateAuthSession]);
 
   useEffect(() => {
     if (
