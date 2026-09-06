@@ -114,6 +114,7 @@ import {
   useGetEarningsChartQuery,
   useGetMyWordRecordingsQuery,
   useGetTrainerDashboardQuery,
+  useGetCommunityStatsQuery,
   useGetReferralInvitationsQuery,
   useGetWalletActivityQuery,
   useSendReferralInviteMutation,
@@ -299,6 +300,8 @@ export function TrainerDashboard() {
               </button>
             </section>
           )}
+
+          {activeView === 'home' && <CommunityStatsCta />}
 
           {activeView === 'profile' ? (
             <ProfileView session={session} update={update} />
@@ -498,6 +501,51 @@ function EmailVerificationBanner() {
 }
 
 type MicPermissionState = 'unknown' | 'granted' | 'prompt' | 'denied';
+
+const COMMUNITY_URL = process.env.NEXT_PUBLIC_COMMUNITY_URL ?? 'https://community.dialectlibrary.com';
+
+/**
+ * Live counts from CommunityStatsService, shown as a "join the community"
+ * CTA on the dashboard home view -- links straight out to the community
+ * app rather than duplicating any of it here, since the two apps share a
+ * NextAuth session cookie (Domain=.dialectlibrary.com) and the trainer
+ * lands already signed in.
+ */
+function CommunityStatsCta() {
+  const { data: stats } = useGetCommunityStatsQuery();
+
+  return (
+    <a
+      className={`${cardClass} mb-7 flex flex-wrap items-center gap-4 p-4 transition-colors hover:border-accent md:p-5`}
+      href={COMMUNITY_URL}
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent">
+        <Users aria-hidden="true" className="size-6" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="font-extrabold">Dialect Library Community</p>
+        <p className="text-sm text-muted">
+          {stats ? (
+            <>
+              {formatCompactNumber(stats.memberCount)} trainers &middot;{' '}
+              {formatCompactNumber(stats.postCount)} discussions
+              {stats.postsLast24h > 0 && (
+                <> &middot; {formatCompactNumber(stats.postsLast24h)} new today</>
+              )}
+            </>
+          ) : (
+            'Ask questions, share tips, and connect with other trainers.'
+          )}
+        </p>
+      </div>
+      <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 font-extrabold text-accent">
+        Join the conversation <ArrowRight aria-hidden="true" className="size-4" />
+      </span>
+    </a>
+  );
+}
 
 /**
  * Checked on every login (mount) and every time the trainer switches to the

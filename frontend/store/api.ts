@@ -908,6 +908,13 @@ export interface P2PDispute {
   trade: P2PTrade;
 }
 
+export interface CommunityStats {
+  memberCount: number;
+  postCount: number;
+  spaceCount: number;
+  postsLast24h: number;
+}
+
 export interface TrainerDashboardSummary {
   balance: string;
   lockedBalance: string;
@@ -2265,6 +2272,9 @@ export const dialectivaApi = createApi({
     getTrainerDashboard: builder.query<TrainerDashboardSummary, void>({
       query: () => '/wallet/dashboard',
       providesTags: ['Wallet'],
+    }),
+    getCommunityStats: builder.query<CommunityStats, void>({
+      query: () => '/community/stats',
     }),
     getTrainerReport: builder.query<TrainerReport, { from?: string; to?: string }>({
       query: ({ from, to }) => ({ url: '/wallet/report', params: { from, to } }),
@@ -3825,6 +3835,7 @@ export const {
   useReleaseP2PTradeMutation,
   useRaiseP2PDisputeMutation,
   useGetTrainerDashboardQuery,
+  useGetCommunityStatsQuery,
   useGetTrainerReportQuery,
   useGetEarningHistoryQuery,
   useGetWalletActivityQuery,
