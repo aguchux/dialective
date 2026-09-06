@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
@@ -28,8 +28,8 @@ import { usePostOverflow } from '@/lib/use-post-overflow';
 
 type SpaceTab = 'posts' | 'about' | 'rules';
 
-export default function SpacePage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = use(params);
+export default function SpacePage({ params }: { params: { slug: string } }) {
+  const { slug } = params;
   const { status } = useSession();
   const [tab, setTab] = useState<SpaceTab>('posts');
   const [actionError, setActionError] = useState<string | null>(null);

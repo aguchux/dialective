@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, use, useRef, useState } from 'react';
+import { FormEvent, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Loader2, Lock, Paperclip, Share2, X } from 'lucide-react';
@@ -54,8 +54,8 @@ import {
 
 type ReportTarget = { targetType: 'POST' | 'REPLY'; targetId: string };
 
-export default function PostDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function PostDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const router = useRouter();
   const { data: session, status } = useSession();
   const viewerId = session?.user?.id;

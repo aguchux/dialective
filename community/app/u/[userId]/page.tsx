@@ -1,13 +1,12 @@
 'use client';
 
-import { use } from 'react';
 import { User } from 'lucide-react';
 import { useGetUserProfileQuery } from '@/store/api';
 import { ProfileHero } from '@/components/community-content';
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeading } from '@/components/ui';
 
-export default function PublicProfilePage({ params }: { params: Promise<{ userId: string }> }) {
-  const { userId } = use(params);
+export default function PublicProfilePage({ params }: { params: { userId: string } }) {
+  const { userId } = params;
   const { data: profile, isLoading, isError, refetch } = useGetUserProfileQuery(userId);
 
   if (isLoading)
