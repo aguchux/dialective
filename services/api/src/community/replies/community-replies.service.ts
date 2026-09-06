@@ -1,9 +1,22 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { renderCommunityBody } from '../community-content.util';
+import { attachmentsCreateInput } from '../community-attachments.util';
 import { CreateCommunityReplyDto } from '../dto/create-community-reply.dto';
+import { AUTHOR_SUMMARY_SELECT, AuthorSummarySource, toAuthorSummary } from '../profiles/community-profiles.service';
 import { CommunityProfilesService } from '../profiles/community-profiles.service';
 import { CommunityNotificationsService } from '../notifications/community-notifications.service';
+
+export const REPLY_SORTS = ['newest', 'oldest', 'top'] as const;
+export type ReplySort = (typeof REPLY_SORTS)[number];
+
+function replyInclude(userId?: string) {
+  return {
+    author: { select: AUTHOR_SUMMARY_SELECT },
+    attachments: true,
+    ...(userId ? { reactions: { where: { userId }, select: { id: true } } } : {}),
+  } as const;
+}
 
 @Injectable()
 export class CommunityRepliesService {
@@ -13,12 +26,19 @@ export class CommunityRepliesService {
     private readonly notifications: CommunityNotificationsService,
   ) {}
 
-  async list(postId: string) {
-    return this.prisma.communityReply.findMany({
+  async list(postId: string, sort: ReplySort = 'oldest', userId?: string) {
+    const orderBy =
+      sort === 'newest'
+        ? [{ createdAt: 'desc' as const }]
+        : sort === 'top'
+          ? [{ likeCount: 'desc' as const }, { createdAt: 'asc' as const }]
+          : [{ createdAt: 'asc' as const }];
+    const replies = await this.prisma.communityReply.findMany({
       where: { postId, status: 'PUBLISHED' },
-      orderBy: { createdAt: 'asc' },
-      include: { author: { select: { id: true, firstName: true, lastName: true } } },
+      orderBy,
+      include: replyInclude(userId),
     });
+    return replies.map((reply) => this.toDto(reply));
   }
 
   async create(userId: string, postId: string, dto: CreateCommunityReplyDto) {
@@ -44,8 +64,11 @@ export class CommunityRepliesService {
           authorId: userId,
           parentReplyId: dto.parentReplyId,
           body: renderCommunityBody(dto.body),
+          attachments: dto.attachments?.length
+            ? { create: attachmentsCreateInput(dto.attachments) }
+            : undefined,
         },
-        include: { author: { select: { id: true, firstName: true, lastName: true } } },
+        include: replyInclude(userId),
       }),
       this.prisma.communityPost.update({ where: { id: postId }, data: { replyCount: { increment: 1 } } }),
       this.prisma.communityProfile.update({
@@ -76,17 +99,19 @@ export class CommunityRepliesService {
       });
     }
 
-    return reply;
+    return this.toDto(reply);
   }
 
   async update(userId: string, replyId: string, body: string) {
     const reply = await this.prisma.communityReply.findUnique({ where: { id: replyId } });
     if (!reply || reply.status === 'DELETED') throw new NotFoundException('Reply not found');
     if (reply.authorId !== userId) throw new ForbiddenException('You can only edit your own reply');
-    return this.prisma.communityReply.update({
+    const updated = await this.prisma.communityReply.update({
       where: { id: replyId },
       data: { body: renderCommunityBody(body) },
+      include: replyInclude(userId),
     });
+    return this.toDto(updated);
   }
 
   async delete(userId: string, replyId: string) {
@@ -112,5 +137,17 @@ export class CommunityRepliesService {
       where: { id: replyId },
       data: { status, deletedAt: status === 'DELETED' ? new Date() : null },
     });
+  }
+
+  private toDto(reply: Record<string, unknown>) {
+    const { author, reactions, ...rest } = reply as {
+      author: AuthorSummarySource;
+      reactions?: unknown[];
+    } & Record<string, unknown>;
+    return {
+      ...rest,
+      author: toAuthorSummary(author),
+      likedByMe: reactions !== undefined ? reactions.length > 0 : undefined,
+    };
   }
 }

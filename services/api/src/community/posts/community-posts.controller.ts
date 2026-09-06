@@ -17,6 +17,13 @@ export class CommunityPostsController {
     return this.posts.list(req.user.sub, query);
   }
 
+  // Must be registered before the `:id` route below, or Nest would try to
+  // resolve "mine" as a post id/slug.
+  @Get('mine')
+  listMine(@Req() req: AuthenticatedRequest, @Query('cursor') cursor?: string) {
+    return this.posts.listMine(req.user.sub, cursor);
+  }
+
   @Post()
   @UseGuards(UserThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
@@ -25,8 +32,8 @@ export class CommunityPostsController {
   }
 
   @Get(':id')
-  getById(@Param('id') id: string) {
-    return this.posts.getById(id);
+  getById(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.posts.getById(id, req.user.sub);
   }
 
   @Patch(':id')

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CommunityNotificationType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AUTHOR_SUMMARY_SELECT, AuthorSummarySource, toAuthorSummary } from '../profiles/community-profiles.service';
 
 const PAGE_SIZE = 30;
 
@@ -52,12 +53,16 @@ export class CommunityNotificationsService {
       mentions: ['MENTION'],
       announcements: ['ANNOUNCEMENT'],
     };
-    return this.prisma.communityNotification.findMany({
+    const notifications = await this.prisma.communityNotification.findMany({
       where: { userId, ...(tab ? { type: { in: typeFilter[tab] } } : {}) },
       orderBy: { createdAt: 'desc' },
       take: PAGE_SIZE,
-      include: { actor: { select: { firstName: true, lastName: true } } },
+      include: { actor: { select: AUTHOR_SUMMARY_SELECT } },
     });
+    return notifications.map(({ actor, ...rest }) => ({
+      ...rest,
+      actor: actor ? toAuthorSummary(actor as AuthorSummarySource) : null,
+    }));
   }
 
   async markRead(userId: string, id: string) {

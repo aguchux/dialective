@@ -2,6 +2,8 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../../prisma/prisma.service';
 import { renderCommunityBody } from '../community-content.util';
 import { slugifyUnique } from '../community-slug.util';
+import { attachmentsCreateInput } from '../community-attachments.util';
+import { AUTHOR_SUMMARY_SELECT, AuthorSummarySource, toAuthorSummary } from '../profiles/community-profiles.service';
 import { CreateCommunityPostDto } from '../dto/create-community-post.dto';
 import { UpdateCommunityPostDto } from '../dto/update-community-post.dto';
 import { ListCommunityPostsDto } from '../dto/list-community-posts.dto';
@@ -10,11 +12,20 @@ import { CommunityTagsService } from '../tags/community-tags.service';
 
 const PAGE_SIZE = 20;
 
-const POST_CARD_INCLUDE = {
-  author: { select: { id: true, firstName: true, lastName: true } },
-  space: { select: { id: true, name: true, slug: true } },
-  tags: { include: { tag: true } },
-} as const;
+function postCardInclude(userId?: string) {
+  return {
+    author: { select: AUTHOR_SUMMARY_SELECT },
+    space: { select: { id: true, name: true, slug: true } },
+    tags: { include: { tag: true } },
+    attachments: true,
+    ...(userId
+      ? {
+          reactions: { where: { userId }, select: { id: true } },
+          bookmarks: { where: { userId }, select: { id: true } },
+        }
+      : {}),
+  } as const;
+}
 
 @Injectable()
 export class CommunityPostsService {
@@ -37,9 +48,13 @@ export class CommunityPostsService {
         title: dto.title.trim(),
         slug: slugifyUnique(dto.title),
         body: renderCommunityBody(dto.body),
+        status: dto.status ?? 'PUBLISHED',
         tags: { create: tagIds.map((tagId) => ({ tagId })) },
+        attachments: dto.attachments?.length
+          ? { create: attachmentsCreateInput(dto.attachments) }
+          : undefined,
       },
-      include: POST_CARD_INCLUDE,
+      include: postCardInclude(userId),
     });
     await this.prisma.communityProfile.update({
       where: { userId },
@@ -52,6 +67,9 @@ export class CommunityPostsService {
     const post = await this.prisma.communityPost.findUnique({ where: { id: postId } });
     if (!post || post.status === 'DELETED') throw new NotFoundException('Post not found');
     if (post.authorId !== userId) throw new ForbiddenException('You can only edit your own post');
+    if (dto.status && !(post.status === 'DRAFT' && dto.status === 'PUBLISHED')) {
+      throw new ForbiddenException('Only a draft can be published from here');
+    }
 
     const tagIds = dto.tags !== undefined ? await this.tags.resolveOrCreateMany(dto.tags) : undefined;
     const updated = await this.prisma.communityPost.update({
@@ -59,11 +77,20 @@ export class CommunityPostsService {
       data: {
         ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
         ...(dto.body !== undefined ? { body: renderCommunityBody(dto.body) } : {}),
+        ...(dto.status !== undefined ? { status: dto.status } : {}),
         ...(tagIds !== undefined
           ? { tags: { deleteMany: {}, create: tagIds.map((tagId) => ({ tagId })) } }
           : {}),
+        ...(dto.attachments !== undefined
+          ? {
+              attachments: {
+                deleteMany: {},
+                create: attachmentsCreateInput(dto.attachments),
+              },
+            }
+          : {}),
       },
-      include: POST_CARD_INCLUDE,
+      include: postCardInclude(userId),
     });
     return this.toCard(updated);
   }
@@ -78,15 +105,16 @@ export class CommunityPostsService {
     });
   }
 
-  async getById(id: string) {
-    const post = await this.prisma.communityPost.findUnique({
-      where: { id },
-      include: POST_CARD_INCLUDE,
+  /** Accepts either a UUID id or the post's slug -- the frontend always routes by slug. */
+  async getById(idOrSlug: string, userId?: string) {
+    const post = await this.prisma.communityPost.findFirst({
+      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+      include: postCardInclude(userId),
     });
     if (!post || post.status === 'DELETED' || post.status === 'HIDDEN') {
       throw new NotFoundException('Post not found');
     }
-    await this.prisma.communityPost.update({ where: { id }, data: { viewCount: { increment: 1 } } });
+    await this.prisma.communityPost.update({ where: { id: post.id }, data: { viewCount: { increment: 1 } } });
     return this.toCard(post);
   }
 
@@ -94,6 +122,7 @@ export class CommunityPostsService {
     const where = {
       status: 'PUBLISHED' as const,
       ...(query.spaceId ? { spaceId: query.spaceId } : {}),
+      ...(query.tagId ? { tags: { some: { tagId: query.tagId } } } : {}),
       ...(query.tab === 'unanswered' ? { replyCount: 0 } : {}),
     };
 
@@ -106,7 +135,19 @@ export class CommunityPostsService {
       orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
       take: PAGE_SIZE + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      include: POST_CARD_INCLUDE,
+      include: postCardInclude(userId),
+    });
+    return this.toCursorPage(posts);
+  }
+
+  /** Every post authored by the caller, including drafts -- backs My Posts. */
+  async listMine(userId: string, cursor?: string) {
+    const posts = await this.prisma.communityPost.findMany({
+      where: { authorId: userId, status: { not: 'DELETED' } },
+      orderBy: [{ createdAt: 'desc' }],
+      take: PAGE_SIZE + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      include: postCardInclude(userId),
     });
     return this.toCursorPage(posts);
   }
@@ -127,7 +168,7 @@ export class CommunityPostsService {
       where: joinedSpaceIds.length ? { ...baseWhere, spaceId: { in: joinedSpaceIds } } : baseWhere,
       orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
       take: PAGE_SIZE + 1,
-      include: POST_CARD_INCLUDE,
+      include: postCardInclude(userId),
     });
     return this.toCursorPage(posts);
   }
@@ -165,7 +206,18 @@ export class CommunityPostsService {
   }
 
   private toCard(post: Record<string, unknown>) {
-    const { tags, ...rest } = post as { tags: Array<{ tag: unknown }> } & Record<string, unknown>;
-    return { ...rest, tags: tags.map((t) => t.tag) };
+    const { tags, author, reactions, bookmarks, ...rest } = post as {
+      tags: Array<{ tag: unknown }>;
+      author: AuthorSummarySource;
+      reactions?: unknown[];
+      bookmarks?: unknown[];
+    } & Record<string, unknown>;
+    return {
+      ...rest,
+      author: toAuthorSummary(author),
+      tags: tags.map((t) => t.tag),
+      likedByMe: reactions !== undefined ? reactions.length > 0 : undefined,
+      bookmarkedByMe: bookmarks !== undefined ? bookmarks.length > 0 : undefined,
+    };
   }
 }

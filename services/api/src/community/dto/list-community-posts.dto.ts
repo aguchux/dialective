@@ -14,5 +14,9 @@ export class ListCommunityPostsDto {
 
   @IsOptional()
   @IsString()
+  tagId?: string;
+
+  @IsOptional()
+  @IsString()
   cursor?: string;
 }

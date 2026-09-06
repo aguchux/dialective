@@ -10,6 +10,7 @@ import { CommunityNotificationsModule } from './notifications/community-notifica
 import { CommunityReportsModule } from './reports/community-reports.module';
 import { CommunityModerationModule } from './moderation/community-moderation.module';
 import { CommunitySearchModule } from './search/community-search.module';
+import { CommunityAttachmentsModule } from './attachments/community-attachments.module';
 
 /**
  * Dialect Library Community (community.dialectlibrary.com) -- see
@@ -31,6 +32,7 @@ import { CommunitySearchModule } from './search/community-search.module';
     CommunityReportsModule,
     CommunityModerationModule,
     CommunitySearchModule,
+    CommunityAttachmentsModule,
   ],
 })
 export class CommunityModule {}

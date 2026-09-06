@@ -11,10 +11,52 @@ import { UpdateCommunityProfileDto } from '../dto/update-community-profile.dto';
  */
 export type CommunityBadge = 'VERIFIED_TRAINER' | 'DISTRIBUTOR' | null;
 
-function deriveBadge(user: { role: Role; kycStatus: KycStatus }): CommunityBadge {
+/**
+ * Exported so posts/replies/notifications services can derive the same
+ * badge for an `author`/`actor` summary without duplicating this logic --
+ * see AUTHOR_SUMMARY_SELECT-shaped selects in those services.
+ */
+export function deriveBadge(user: { role: Role; kycStatus: KycStatus }): CommunityBadge {
   if (user.role === Role.TRAINER && user.kycStatus === KycStatus.APPROVED) return 'VERIFIED_TRAINER';
   if (user.role === Role.DISTRIBUTOR) return 'DISTRIBUTOR';
   return null;
+}
+
+/**
+ * Shared Prisma `select` shape for resolving a user relation (author/actor)
+ * into a {id, displayName, badge} summary -- reused by posts, replies, and
+ * notifications so the join/derivation logic lives in exactly one place.
+ * Falls back to firstName/lastName ("Member" if both are blank) when the
+ * user has no CommunityProfile yet (shouldn't normally happen once
+ * ensureProfile has run, but a defensive fallback costs nothing here).
+ */
+export const AUTHOR_SUMMARY_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  role: true,
+  kycStatus: true,
+  communityProfile: { select: { displayName: true } },
+} as const;
+
+export interface AuthorSummarySource {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  role: Role;
+  kycStatus: KycStatus;
+  communityProfile: { displayName: string } | null;
+}
+
+export function toAuthorSummary(user: AuthorSummarySource) {
+  return {
+    id: user.id,
+    displayName:
+      user.communityProfile?.displayName ||
+      [user.firstName, user.lastName].filter(Boolean).join(' ') ||
+      'Member',
+    badge: deriveBadge(user),
+  };
 }
 
 @Injectable()
