@@ -125,6 +125,34 @@ export default function AdminWithdrawalsPage() {
   );
 }
 
+function CopyableValue({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard access denied or unavailable -- nothing to do
+    }
+  }
+
+  if (!value) return <span>—</span>;
+
+  return (
+    <button
+      className="block max-w-56 truncate text-left hover:underline"
+      onClick={handleCopy}
+      title={copied ? 'Copied!' : `Click to copy: ${value}`}
+      type="button"
+    >
+      {copied ? 'Copied!' : value}
+    </button>
+  );
+}
+
 function WithdrawalRow({
   withdrawal,
   otpRequired,
@@ -190,10 +218,16 @@ function WithdrawalRow({
           <p className="text-xs text-amber-700">Fiat conversion unavailable</p>
         )}
       </td>
-      <td className="max-w-56 truncate px-4 py-3 font-mono text-xs">
+      <td className="max-w-56 px-4 py-3 font-mono text-xs">
         {withdrawal.payoutMethod && withdrawal.payoutMethod !== 'CRYPTO' ? (
           <>
-            {withdrawal.destinationAccountNumberMasked ?? withdrawal.destinationMobileNumberMasked}
+            <CopyableValue
+              value={
+                withdrawal.destinationAccountNumberMasked ??
+                withdrawal.destinationMobileNumberMasked ??
+                ''
+              }
+            />
             <p className="font-sans text-xs text-muted">
               {withdrawal.destinationBankName ??
                 withdrawal.destinationMobileNetwork ??
@@ -203,7 +237,7 @@ function WithdrawalRow({
           </>
         ) : (
           <>
-            <span title={withdrawal.destinationAddress}>{withdrawal.destinationAddress}</span>
+            <CopyableValue value={withdrawal.destinationAddress ?? ''} />
             <p className="font-sans text-xs text-muted">{withdrawal.destinationNetwork}</p>
           </>
         )}
