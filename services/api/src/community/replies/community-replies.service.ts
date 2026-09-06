@@ -7,6 +7,7 @@ import { CreateCommunityReplyDto } from '../dto/create-community-reply.dto';
 import { AUTHOR_SUMMARY_SELECT, AuthorSummarySource, toAuthorSummary } from '../profiles/community-profiles.service';
 import { CommunityProfilesService } from '../profiles/community-profiles.service';
 import { CommunityNotificationsService } from '../notifications/community-notifications.service';
+import { CommunitySettingsService } from '../settings/community-settings.service';
 
 export const REPLY_SORTS = ['newest', 'oldest', 'top'] as const;
 export type ReplySort = (typeof REPLY_SORTS)[number];
@@ -26,6 +27,7 @@ export class CommunityRepliesService {
     private readonly profiles: CommunityProfilesService,
     private readonly notifications: CommunityNotificationsService,
     private readonly storage: StorageService,
+    private readonly settings: CommunitySettingsService,
   ) {}
 
   async list(postId: string, sort: ReplySort = 'oldest', userId?: string) {
@@ -44,6 +46,9 @@ export class CommunityRepliesService {
   }
 
   async create(userId: string, postId: string, dto: CreateCommunityReplyDto) {
+    if (!(await this.settings.isRepliesEnabled())) {
+      throw new ForbiddenException('Replies are currently disabled for the Community');
+    }
     await this.profiles.ensureProfile(userId);
     const post = await this.prisma.communityPost.findUnique({ where: { id: postId } });
     if (!post || post.status === 'DELETED') throw new NotFoundException('Post not found');

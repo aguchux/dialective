@@ -20,6 +20,7 @@ describe('CommunityRepliesService', () => {
   let profiles: any;
   let notifications: any;
   let storage: any;
+  let settings: any;
   let service: CommunityRepliesService;
 
   beforeEach(() => {
@@ -32,7 +33,8 @@ describe('CommunityRepliesService', () => {
     profiles = { ensureProfile: jest.fn() };
     notifications = { notify: jest.fn() };
     storage = { getPublicObjectUrl: jest.fn().mockReturnValue('https://public/attachment') };
-    service = new CommunityRepliesService(prisma, profiles, notifications, storage);
+    settings = { isRepliesEnabled: jest.fn().mockResolvedValue(true) };
+    service = new CommunityRepliesService(prisma, profiles, notifications, storage, settings);
   });
 
   describe('list', () => {
@@ -81,6 +83,15 @@ describe('CommunityRepliesService', () => {
       prisma.communityPost.findUnique.mockResolvedValue({ id: 'post-1', status: 'PUBLISHED', isLocked: true });
 
       await expect(service.create('user-1', 'post-1', { body: 'hi' } as any)).rejects.toThrow('locked');
+    });
+
+    it('refuses to create a reply when replies are disabled', async () => {
+      settings.isRepliesEnabled.mockResolvedValueOnce(false);
+
+      await expect(service.create('user-1', 'post-1', { body: 'hi' } as any)).rejects.toThrow(
+        'Replies are currently disabled',
+      );
+      expect(prisma.communityPost.findUnique).not.toHaveBeenCalled();
     });
   });
 });

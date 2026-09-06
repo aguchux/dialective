@@ -12,6 +12,7 @@ import { CommunityModerationModule } from './moderation/community-moderation.mod
 import { CommunitySearchModule } from './search/community-search.module';
 import { CommunityAttachmentsModule } from './attachments/community-attachments.module';
 import { CommunityStatsModule } from './stats/community-stats.module';
+import { CommunitySettingsModule } from './settings/community-settings.module';
 
 /**
  * Dialect Library Community (community.dialectlibrary.com) -- see
@@ -35,6 +36,7 @@ import { CommunityStatsModule } from './stats/community-stats.module';
     CommunitySearchModule,
     CommunityAttachmentsModule,
     CommunityStatsModule,
+    CommunitySettingsModule,
   ],
 })
 export class CommunityModule {}

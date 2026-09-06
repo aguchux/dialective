@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { StorageService } from '../../storage/storage.service';
 import { CreateCommunityAttachmentUploadUrlDto } from '../dto/create-community-attachment-upload-url.dto';
+import { CommunitySettingsService } from '../settings/community-settings.service';
 
 const COMMUNITY_BUCKET = process.env.SPACES_COMMUNITY_BUCKET ?? 'dialectiva-community';
 const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
@@ -16,7 +17,10 @@ const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
 
 @Injectable()
 export class CommunityAttachmentsService {
-  constructor(private readonly storage: StorageService) {}
+  constructor(
+    private readonly storage: StorageService,
+    private readonly settings: CommunitySettingsService,
+  ) {}
 
   /**
    * publicRead=true -- community content is already visible to any signed-in
@@ -26,6 +30,9 @@ export class CommunityAttachmentsService {
    * videos and DYK notice images elsewhere in this codebase.
    */
   async createUploadUrl(userId: string, dto: CreateCommunityAttachmentUploadUrlDto) {
+    if (!(await this.settings.isAttachmentsEnabled())) {
+      throw new ForbiddenException('Attachments are currently disabled for the Community');
+    }
     const extension = EXTENSION_BY_CONTENT_TYPE[dto.contentType];
     const key = `${userId}/${randomUUID()}.${extension}`;
     const { url, expiresInSeconds } = await this.storage.createPresignedUploadUrl(

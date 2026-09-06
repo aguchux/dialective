@@ -1,12 +1,19 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CommunitySettingsService } from '../settings/community-settings.service';
 
 @Injectable()
 export class CommunityReactionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: CommunitySettingsService,
+  ) {}
 
   async likePost(userId: string, postId: string) {
+    if (!(await this.settings.isReactionsEnabled())) {
+      throw new ForbiddenException('Reactions are currently disabled for the Community');
+    }
     const post = await this.prisma.communityPost.findUnique({ where: { id: postId } });
     if (!post) throw new NotFoundException('Post not found');
     const existing = await this.prisma.communityReaction.findUnique({
@@ -31,6 +38,9 @@ export class CommunityReactionsService {
   }
 
   async likeReply(userId: string, replyId: string) {
+    if (!(await this.settings.isReactionsEnabled())) {
+      throw new ForbiddenException('Reactions are currently disabled for the Community');
+    }
     const reply = await this.prisma.communityReply.findUnique({ where: { id: replyId } });
     if (!reply) throw new NotFoundException('Reply not found');
     const existing = await this.prisma.communityReaction.findUnique({

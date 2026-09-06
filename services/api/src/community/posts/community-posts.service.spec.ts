@@ -24,6 +24,7 @@ describe('CommunityPostsService', () => {
   let profiles: any;
   let tags: any;
   let storage: any;
+  let settings: any;
   let service: CommunityPostsService;
 
   beforeEach(() => {
@@ -41,10 +42,65 @@ describe('CommunityPostsService', () => {
         findUnique: jest.fn().mockResolvedValue({ spaceMemberships: [] }),
       },
     };
-    profiles = { ensureProfile: jest.fn().mockResolvedValue({ id: 'profile-1' }) };
+    profiles = {
+      ensureProfile: jest.fn().mockResolvedValue({ id: 'profile-1', createdAt: new Date('2020-01-01') }),
+    };
     tags = { resolveOrCreateMany: jest.fn().mockResolvedValue([]) };
     storage = { getPublicObjectUrl: jest.fn().mockReturnValue('https://public/attachment') };
-    service = new CommunityPostsService(prisma, profiles, tags, storage);
+    settings = {
+      isPostingEnabled: jest.fn().mockResolvedValue(true),
+      isApprovalRequiredForNewMembers: jest.fn().mockResolvedValue(false),
+      getNewMemberPostingDelayMinutes: jest.fn().mockResolvedValue(0),
+    };
+    service = new CommunityPostsService(prisma, profiles, tags, storage, settings);
+  });
+
+  describe('create gates', () => {
+    it('refuses to create a post when posting is disabled', async () => {
+      settings.isPostingEnabled.mockResolvedValueOnce(false);
+
+      await expect(
+        service.create('author-1', { title: 'x', spaceId: 'space-1', body: 'hi' } as any),
+      ).rejects.toThrow('Posting is currently disabled');
+      expect(prisma.communityPost.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses when new members require approval', async () => {
+      settings.isApprovalRequiredForNewMembers.mockResolvedValueOnce(true);
+
+      await expect(
+        service.create('author-1', { title: 'x', spaceId: 'space-1', body: 'hi' } as any),
+      ).rejects.toThrow('require moderator approval');
+      expect(prisma.communityPost.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a brand-new member before the posting delay elapses', async () => {
+      profiles.ensureProfile.mockResolvedValueOnce({ id: 'profile-1', createdAt: new Date() });
+      settings.getNewMemberPostingDelayMinutes.mockResolvedValueOnce(60);
+
+      await expect(
+        service.create('author-1', { title: 'x', spaceId: 'space-1', body: 'hi' } as any),
+      ).rejects.toThrow('New members can post 60 minutes after joining');
+      expect(prisma.communityPost.create).not.toHaveBeenCalled();
+    });
+
+    it('allows a member whose posting delay has already elapsed', async () => {
+      profiles.ensureProfile.mockResolvedValueOnce({
+        id: 'profile-1',
+        createdAt: new Date(Date.now() - 2 * 60 * 60_000),
+      });
+      settings.getNewMemberPostingDelayMinutes.mockResolvedValueOnce(60);
+      prisma.communityPost.create.mockResolvedValue({
+        id: 'post-1',
+        author: fakeAuthor(),
+        space: { id: 'space-1', name: 'General', slug: 'general' },
+        tags: [],
+        attachments: [],
+      });
+
+      await service.create('author-1', { title: 'x', spaceId: 'space-1', body: 'hi' } as any);
+      expect(prisma.communityPost.create).toHaveBeenCalled();
+    });
   });
 
   describe('create', () => {

@@ -3343,6 +3343,25 @@ enum CommunityModeratorActionType {
   UNPIN_POST
 }
 
+/// Singleton settings row for Community-wide gates, same posture as
+/// PlatformSettings -- CommunitySettingsService upserts the single
+/// id="default" row on read so no seed/migration data-fill is ever needed.
+/// Kept separate from PlatformSettings since these gates are specific to
+/// the Community feature and unrelated to the rest of the platform.
+model CommunitySettings {
+  id                           String   @id @default("default")
+  postingEnabled               Boolean  @default(true)
+  repliesEnabled               Boolean  @default(true)
+  attachmentsEnabled           Boolean  @default(true)
+  reactionsEnabled             Boolean  @default(true)
+  newMemberPostingDelayMinutes Int      @default(0) // a member cannot post until this many minutes after their CommunityProfile was created; 0 = no delay
+  requireApprovalForNewMembers Boolean  @default(false) // a simplified block-with-message posture for this pass, not a full moderation queue -- see CommunityPostsService.create
+  updatedAt                    DateTime @updatedAt
+  createdAt                    DateTime @default(now())
+
+  @@map("community_settings")
+}
+
 /// Community-specific profile data layered onto the main User account by
 /// userId (1:1) -- never duplicates sensitive account data (email, phone,
 /// KYC, wallet, etc). displayName/country are pre-filled from User at

@@ -10,6 +10,7 @@ import { UpdateCommunityPostDto } from '../dto/update-community-post.dto';
 import { ListCommunityPostsDto } from '../dto/list-community-posts.dto';
 import { CommunityProfilesService } from '../profiles/community-profiles.service';
 import { CommunityTagsService } from '../tags/community-tags.service';
+import { CommunitySettingsService } from '../settings/community-settings.service';
 
 const PAGE_SIZE = 20;
 
@@ -35,10 +36,28 @@ export class CommunityPostsService {
     private readonly profiles: CommunityProfilesService,
     private readonly tags: CommunityTagsService,
     private readonly storage: StorageService,
+    private readonly settings: CommunitySettingsService,
   ) {}
 
   async create(userId: string, dto: CreateCommunityPostDto) {
-    await this.profiles.ensureProfile(userId);
+    if (!(await this.settings.isPostingEnabled())) {
+      throw new ForbiddenException('Posting is currently disabled for the Community');
+    }
+    const profile = await this.profiles.ensureProfile(userId);
+    if (await this.settings.isApprovalRequiredForNewMembers()) {
+      throw new ForbiddenException(
+        'New members require moderator approval before posting -- this will be enabled in a future update',
+      );
+    }
+    const delayMinutes = await this.settings.getNewMemberPostingDelayMinutes();
+    if (delayMinutes > 0) {
+      const eligibleAt = new Date(profile.createdAt.getTime() + delayMinutes * 60_000);
+      if (new Date() < eligibleAt) {
+        throw new ForbiddenException(
+          `New members can post ${delayMinutes} minutes after joining the Community`,
+        );
+      }
+    }
     const space = await this.prisma.communitySpace.findUnique({ where: { id: dto.spaceId } });
     if (!space || space.isArchived) throw new NotFoundException('Space not found');
 
