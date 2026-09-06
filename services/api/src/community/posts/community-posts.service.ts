@@ -139,7 +139,7 @@ export class CommunityPostsService {
     return this.toCard(post);
   }
 
-  async list(userId: string, query: ListCommunityPostsDto) {
+  async list(userId: string | undefined, query: ListCommunityPostsDto) {
     const where = {
       status: 'PUBLISHED' as const,
       ...(query.spaceId ? { spaceId: query.spaceId } : {}),
@@ -147,7 +147,11 @@ export class CommunityPostsService {
       ...(query.tab === 'unanswered' ? { replyCount: 0 } : {}),
     };
 
-    if (query.tab === 'for-you') {
+    // "For You" is personal (joined-spaces first) and has no meaning for an
+    // anonymous request -- the community frontend already substitutes
+    // 'latest' when signed out, this is just a safety net for a direct API
+    // call with no session.
+    if (query.tab === 'for-you' && userId) {
       return this.listForYou(userId, where);
     }
 

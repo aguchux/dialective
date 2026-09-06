@@ -1,5 +1,6 @@
 import { Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthenticatedRequest, JwtAuthGuard } from '../../auth/strategies/jwt-auth.guard';
+import { OptionalJwtAuthGuard, OptionallyAuthenticatedRequest } from '../../auth/strategies/optional-jwt-auth.guard';
 import { CommunityProfilesService } from '../profiles/community-profiles.service';
 import { CommunitySpacesService } from './community-spaces.service';
 
@@ -10,16 +11,17 @@ export class CommunitySpacesController {
     private readonly profiles: CommunityProfilesService,
   ) {}
 
+  // Content is public and shareable -- see CommunityPostsController's list().
   @Get()
-  @UseGuards(JwtAuthGuard)
-  list(@Req() req: AuthenticatedRequest) {
-    return this.spaces.list(req.user.sub);
+  @UseGuards(OptionalJwtAuthGuard)
+  list(@Req() req: OptionallyAuthenticatedRequest) {
+    return this.spaces.list(req.user?.sub);
   }
 
   @Get(':slug')
-  @UseGuards(JwtAuthGuard)
-  getBySlug(@Req() req: AuthenticatedRequest, @Param('slug') slug: string) {
-    return this.spaces.getBySlug(slug, req.user.sub);
+  @UseGuards(OptionalJwtAuthGuard)
+  getBySlug(@Req() req: OptionallyAuthenticatedRequest, @Param('slug') slug: string) {
+    return this.spaces.getBySlug(slug, req.user?.sub);
   }
 
   @Post(':id/join')

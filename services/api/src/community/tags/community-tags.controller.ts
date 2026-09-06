@@ -1,9 +1,10 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../../auth/strategies/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../auth/strategies/optional-jwt-auth.guard';
 import { CommunityTagsService } from './community-tags.service';
 
+// Content is public and shareable -- see CommunityPostsController's list().
 @Controller('community/tags')
-@UseGuards(JwtAuthGuard)
+@UseGuards(OptionalJwtAuthGuard)
 export class CommunityTagsController {
   constructor(private readonly tags: CommunityTagsService) {}
 
