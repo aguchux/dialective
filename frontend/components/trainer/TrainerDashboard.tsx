@@ -168,6 +168,19 @@ export const activityLabels: Record<LedgerEntryType, string> = {
 
 export function TrainerDashboard() {
   const { data: session, status, update } = useSession();
+  // NextAuth's refetchInterval (providers.tsx) polls /api/auth/session every
+  // 5 minutes; if that single poll fails or is served something unparseable
+  // (e.g. an intermediary intercepting the request), status can transiently
+  // report 'loading' again on an already-authenticated tab. Without this,
+  // every such blip flashed the trainer's live dashboard back to the
+  // full-page skeleton and back -- a visible flicker every few minutes for
+  // no real state change. Once a session has been seen once, prefer it over
+  // a transient 'loading' status; only the very first, pre-session render
+  // (or a real sign-out) should ever show the loading/redirect screens
+  // below.
+  const hasSeenSessionRef = useRef(false);
+  if (status === 'authenticated') hasSeenSessionRef.current = true;
+  const effectiveStatus = status === 'loading' && hasSeenSessionRef.current ? 'authenticated' : status;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);
@@ -230,8 +243,9 @@ export function TrainerDashboard() {
   }, [router, session, status]);
 
   if (
-    status === 'loading' ||
-    (status === 'authenticated' &&
+    effectiveStatus === 'loading' ||
+    (effectiveStatus === 'authenticated' &&
+      session &&
       (session.user.role === 'ADMIN' ||
         session.user.role === 'DISTRIBUTOR' ||
         !session.user.onboardingComplete))
