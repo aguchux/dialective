@@ -2,8 +2,15 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { User } from 'lucide-react';
-import { useGetMyProfileQuery, useListMyPostsQuery, useUpdateMyProfileMutation } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useGetMyProfileQuery,
+  useListMyPostsQuery,
+  useUpdateMyProfileMutation,
+} from '@/store/api';
+import { useListCountriesQuery } from '@/store/geo-api';
 import { ProfileHero, PostCard } from '@/components/community-content';
+import { TagInput } from '@/components/community-form';
 import {
   EmptyState,
   ErrorState,
@@ -13,6 +20,7 @@ import {
   PageFrame,
   PageHeading,
   PrimaryButton,
+  Select,
   TextArea,
   TextInput,
 } from '@/components/ui';
@@ -31,9 +39,13 @@ export default function ProfilePage() {
     refetch: refetchPosts,
   } = useListMyPostsQuery();
   const [updateProfile, { isLoading }] = useUpdateMyProfileMutation();
+  const { data: countries } = useListCountriesQuery();
   const [editOpen, setEditOpen] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
+  const [countryId, setCountryId] = useState('');
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [dialects, setDialects] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +53,9 @@ export default function ProfilePage() {
     if (!profile) return;
     setDisplayName(profile.displayName);
     setBio(profile.bio ?? '');
+    setCountryId(profile.countryId ?? '');
+    setLanguages(profile.languages);
+    setDialects(profile.dialects);
   }, [profile]);
 
   if (profileLoading)
@@ -70,11 +85,17 @@ export default function ProfilePage() {
       return;
     }
     try {
-      await updateProfile({ displayName: displayName.trim(), bio: bio.trim() }).unwrap();
+      await updateProfile({
+        displayName: displayName.trim(),
+        bio: bio.trim(),
+        countryId,
+        languages,
+        dialects,
+      }).unwrap();
       setSaved(true);
       setEditOpen(false);
-    } catch {
-      setError('Could not update your profile. Please try again.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not update your profile. Please try again.'));
     }
   }
 
@@ -126,6 +147,43 @@ export default function ProfilePage() {
               >
                 {bio.length}/500
               </p>
+            </div>
+            <div>
+              <FieldLabel htmlFor="profile-country">Country</FieldLabel>
+              <Select
+                id="profile-country"
+                onChange={(event) => setCountryId(event.target.value)}
+                value={countryId}
+              >
+                <option value="">Not set</option>
+                {(countries ?? []).map((country) => (
+                  <option key={country.id} value={country.id}>
+                    {country.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <FieldLabel htmlFor="profile-languages">Languages</FieldLabel>
+              <TagInput
+                ariaLabel="Add languages"
+                hashPrefix={false}
+                helperText="Press Enter to add. Add up to 5 languages."
+                onChange={setLanguages}
+                placeholder="Add a language you speak"
+                tags={languages}
+              />
+            </div>
+            <div>
+              <FieldLabel htmlFor="profile-dialects">Dialects</FieldLabel>
+              <TagInput
+                ariaLabel="Add dialects"
+                hashPrefix={false}
+                helperText="Press Enter to add. Add up to 5 dialects."
+                onChange={setDialects}
+                placeholder="Add a dialect you speak"
+                tags={dialects}
+              />
             </div>
             {error && <ErrorText>{error}</ErrorText>}
             <div className="flex flex-col-reverse gap-2 sm:flex-row">

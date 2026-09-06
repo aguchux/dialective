@@ -1,12 +1,17 @@
 'use client';
 
 import { use, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
+  useAddBookmarkMutation,
   useGetSpaceQuery,
   useJoinSpaceMutation,
   useLeaveSpaceMutation,
+  useLikePostMutation,
   useListPostsQuery,
+  useRemoveBookmarkMutation,
+  useUnlikePostMutation,
 } from '@/store/api';
 import {
   EmptyState,
@@ -19,6 +24,7 @@ import {
 import { PostCard } from '@/components/community-content';
 import { BackLink } from '@/components/community-navigation';
 import { SpaceHero } from '@/components/community-discovery';
+import { usePostOverflow } from '@/lib/use-post-overflow';
 
 type SpaceTab = 'posts' | 'about' | 'rules';
 
@@ -38,9 +44,15 @@ export default function SpacePage({ params }: { params: Promise<{ slug: string }
     isLoading: postsLoading,
     isError,
     refetch,
-  } = useListPostsQuery({ spaceSlug: slug }, { skip: !space });
+  } = useListPostsQuery({ spaceId: space?.id }, { skip: !space });
   const [joinSpace, { isLoading: joining }] = useJoinSpaceMutation();
   const [leaveSpace, { isLoading: leaving }] = useLeaveSpaceMutation();
+  const [likePost] = useLikePostMutation();
+  const [unlikePost] = useUnlikePostMutation();
+  const [addBookmark] = useAddBookmarkMutation();
+  const [removeBookmark] = useRemoveBookmarkMutation();
+  const { overflowItemsFor, dialogs } = usePostOverflow();
+  const router = useRouter();
 
   if (spaceLoading)
     return (
@@ -115,7 +127,15 @@ export default function SpacePage({ params }: { params: Promise<{ slug: string }
           ) : (
             <div className="grid gap-3">
               {posts!.items.map((post) => (
-                <PostCard key={post.id} post={post} />
+                <PostCard
+                  key={post.id}
+                  onBookmark={() =>
+                    void (post.bookmarkedByMe ? removeBookmark(post.id) : addBookmark(post.id))
+                  }
+                  onLike={() => void (post.likedByMe ? unlikePost(post.id) : likePost(post.id))}
+                  overflowItems={overflowItemsFor(post, () => router.push(`/post/${post.slug}`))}
+                  post={post}
+                />
               ))}
             </div>
           ))}
@@ -132,6 +152,7 @@ export default function SpacePage({ params }: { params: Promise<{ slug: string }
           </div>
         )}
       </div>
+      {dialogs}
     </PageFrame>
   );
 }

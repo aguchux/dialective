@@ -1,10 +1,12 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createApi, fetchBaseQuery, type BaseQueryFn } from '@reduxjs/toolkit/query/react';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 import { getCurrentSession } from '@/lib/client-session';
+import { notifyAuthMaintenance } from '@/lib/auth-maintenance-signal';
 
 export type CommunityBadge = 'VERIFIED_TRAINER' | 'DISTRIBUTOR' | null;
 export type CommunityRole = 'MEMBER' | 'MODERATOR' | 'STAFF';
 export type CommunityUserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
+export type CommunityPostStatus = 'DRAFT' | 'PUBLISHED' | 'HIDDEN' | 'DELETED';
 
 export interface CommunityProfile {
   id: string;
@@ -33,6 +35,7 @@ export interface CommunitySpace {
   rules: string | null;
   isArchived: boolean;
   sortOrder: number;
+  postCount?: number;
   joined?: boolean;
 }
 
@@ -49,12 +52,23 @@ export interface CommunityPostAuthor {
   badge: CommunityBadge;
 }
 
+export interface CommunityAttachment {
+  id: string;
+  type: 'IMAGE' | 'AUDIO' | 'DOCUMENT';
+  bucket: string;
+  storageKey: string;
+  mimeType: string;
+  size: number;
+  originalName: string;
+  url: string;
+}
+
 export interface CommunityPostCard {
   id: string;
   title: string;
   slug: string;
   body: string;
-  status: 'DRAFT' | 'PUBLISHED' | 'HIDDEN' | 'DELETED';
+  status: CommunityPostStatus;
   isPinned: boolean;
   isLocked: boolean;
   viewCount: number;
@@ -64,6 +78,7 @@ export interface CommunityPostCard {
   author: CommunityPostAuthor;
   space: { id: string; name: string; slug: string };
   tags: CommunityTag[];
+  attachments: CommunityAttachment[];
   likedByMe?: boolean;
   bookmarkedByMe?: boolean;
 }
@@ -74,6 +89,7 @@ export interface CommunityPostPage {
 }
 
 export type CommunityFeedTab = 'latest' | 'unanswered' | 'for-you';
+export type CommunityReplySort = 'newest' | 'oldest' | 'top';
 
 export interface CommunityReply {
   id: string;
@@ -83,6 +99,7 @@ export interface CommunityReply {
   status: 'PUBLISHED' | 'HIDDEN' | 'DELETED';
   createdAt: string;
   author: CommunityPostAuthor;
+  attachments: CommunityAttachment[];
   likeCount: number;
   likedByMe?: boolean;
 }
@@ -92,24 +109,27 @@ export interface CommunityNotification {
   type: 'REPLY_TO_POST' | 'REPLY_TO_REPLY' | 'MENTION' | 'ANNOUNCEMENT' | 'MODERATION_ACTION';
   readAt: string | null;
   createdAt: string;
-  actor: { id: string; displayName: string } | null;
+  actor: CommunityPostAuthor | null;
   postId: string | null;
   replyId: string | null;
 }
 
-export interface CommunityReportReasonInput {
-  targetType: 'POST' | 'REPLY' | 'PROFILE';
+export type CommunityReportTargetType = 'POST' | 'REPLY' | 'PROFILE';
+export type CommunityReportReason =
+  | 'SPAM'
+  | 'ABUSE_HARASSMENT'
+  | 'MISINFORMATION'
+  | 'OFF_TOPIC'
+  | 'INAPPROPRIATE_CONTENT'
+  | 'IMPERSONATION'
+  | 'COPYRIGHT'
+  | 'OTHER';
+
+export interface CommunityReportInput {
+  targetType: CommunityReportTargetType;
   targetId: string;
-  reason:
-    | 'SPAM'
-    | 'ABUSE_HARASSMENT'
-    | 'MISINFORMATION'
-    | 'OFF_TOPIC'
-    | 'INAPPROPRIATE_CONTENT'
-    | 'IMPERSONATION'
-    | 'COPYRIGHT'
-    | 'OTHER';
-  details?: string;
+  reason: CommunityReportReason;
+  notes?: string;
 }
 
 export interface CommunitySearchResults {
@@ -117,6 +137,31 @@ export interface CommunitySearchResults {
   tags: CommunityTag[];
   spaces: CommunitySpace[];
   profiles: CommunityProfile[];
+}
+
+export interface CommunityAttachmentUploadUrl {
+  uploadUrl: string;
+  key: string;
+  bucket: string;
+  expiresInSeconds: number;
+}
+
+export type CommunityAttachmentContentType =
+  | 'image/jpeg'
+  | 'image/png'
+  | 'image/webp'
+  | 'audio/mpeg'
+  | 'audio/wav'
+  | 'audio/webm'
+  | 'application/pdf';
+
+/** Sent alongside a post/reply's create/update body once the bytes are uploaded via createAttachmentUploadUrl. */
+export interface CommunityAttachmentInput {
+  key: string;
+  bucket: string;
+  contentType: CommunityAttachmentContentType;
+  size: number;
+  originalName: string;
 }
 
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -134,9 +179,49 @@ const rawBaseQuery = fetchBaseQuery({
   },
 });
 
+// Mirrors frontend/store/api.ts's identical wrapper -- any authenticated
+// request can come back 503/AuthMaintenance the instant an admin flips
+// authMaintenanceBlockSessions on, and this is the one place every such
+// response passes through in this app.
+const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptions) => {
+  const result = await rawBaseQuery(args, api, extraOptions);
+  if (result.error && result.error.status === 503) {
+    const data = result.error.data as
+      | { error?: string; authMaintenanceUntil?: string; authMaintenanceMessage?: string | null }
+      | undefined;
+    if (data?.error === 'AuthMaintenance') {
+      notifyAuthMaintenance({
+        until: data.authMaintenanceUntil ?? null,
+        message: data.authMaintenanceMessage ?? null,
+      });
+    }
+  }
+  return result;
+};
+
+export interface CommunityApiErrorShape {
+  statusCode?: number;
+  message?: string | string[];
+  error?: string;
+}
+
+/** Mirrors frontend/store/api.ts's identical helper -- extracts NestJS's {message} shape from an RTK Query error. */
+export function normalizeErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'object' && error && 'data' in error) {
+    const data = (error as { data?: CommunityApiErrorShape }).data;
+    if (Array.isArray(data?.message)) {
+      return data.message.join(' ');
+    }
+    if (data?.message) {
+      return data.message;
+    }
+  }
+  return fallback;
+}
+
 export const communityApi = createApi({
   reducerPath: 'communityApi',
-  baseQuery: rawBaseQuery,
+  baseQuery: baseQueryWithMaintenanceSignal,
   tagTypes: ['Profile', 'Spaces', 'Posts', 'Post', 'Replies', 'Bookmarks', 'Notifications', 'Tags'],
   endpoints: (builder) => ({
     getMyProfile: builder.query<CommunityProfile, void>({
@@ -182,18 +267,14 @@ export const communityApi = createApi({
       invalidatesTags: ['Spaces'],
     }),
 
-    listTags: builder.query<CommunityTag[], void>({
-      query: () => '/tags',
+    listTags: builder.query<CommunityTag[], string | void>({
+      query: (q) => ({ url: '/tags', params: q ? { q } : undefined }),
       providesTags: ['Tags'],
-    }),
-
-    autocompleteTags: builder.query<CommunityTag[], string>({
-      query: (q) => ({ url: '/tags/autocomplete', params: { q } }),
     }),
 
     listPosts: builder.query<
       CommunityPostPage,
-      { tab?: CommunityFeedTab; spaceSlug?: string; tag?: string; cursor?: string }
+      { tab?: CommunityFeedTab; spaceId?: string; tagId?: string; cursor?: string }
     >({
       query: (params) => ({ url: '/posts', params }),
       providesTags: (result) =>
@@ -209,7 +290,14 @@ export const communityApi = createApi({
 
     createPost: builder.mutation<
       CommunityPostCard,
-      { title: string; body: string; spaceId: string; tags?: string[] }
+      {
+        title: string;
+        body: string;
+        spaceId: string;
+        tags?: string[];
+        status?: 'DRAFT' | 'PUBLISHED';
+        attachments?: CommunityAttachmentInput[];
+      }
     >({
       query: (body) => ({ url: '/posts', method: 'POST', body }),
       invalidatesTags: ['Posts'],
@@ -217,7 +305,14 @@ export const communityApi = createApi({
 
     updatePost: builder.mutation<
       CommunityPostCard,
-      { id: string; title?: string; body?: string; tags?: string[] }
+      {
+        id: string;
+        title?: string;
+        body?: string;
+        tags?: string[];
+        status?: 'DRAFT' | 'PUBLISHED';
+        attachments?: CommunityAttachmentInput[];
+      }
     >({
       query: ({ id, ...body }) => ({ url: `/posts/${id}`, method: 'PATCH', body }),
       invalidatesTags: (_result, _error, { id }) => [{ type: 'Post', id }, 'Posts'],
@@ -229,18 +324,18 @@ export const communityApi = createApi({
     }),
 
     listMyPosts: builder.query<CommunityPostPage, { cursor?: string } | void>({
-      query: (params) => ({ url: '/me/posts', params: params ?? undefined }),
+      query: (params) => ({ url: '/posts/mine', params: params ?? undefined }),
       providesTags: ['Posts'],
     }),
 
-    listReplies: builder.query<CommunityReply[], string>({
-      query: (postId) => `/posts/${postId}/replies`,
-      providesTags: (_result, _error, postId) => [{ type: 'Replies', id: postId }],
+    listReplies: builder.query<CommunityReply[], { postId: string; sort?: CommunityReplySort }>({
+      query: ({ postId, sort }) => ({ url: `/posts/${postId}/replies`, params: sort ? { sort } : undefined }),
+      providesTags: (_result, _error, { postId }) => [{ type: 'Replies', id: postId }],
     }),
 
     createReply: builder.mutation<
       CommunityReply,
-      { postId: string; body: string; parentReplyId?: string }
+      { postId: string; body: string; parentReplyId?: string; attachments?: CommunityAttachmentInput[] }
     >({
       query: ({ postId, ...body }) => ({ url: `/posts/${postId}/replies`, method: 'POST', body }),
       invalidatesTags: (_result, _error, { postId }) => [
@@ -281,7 +376,7 @@ export const communityApi = createApi({
     }),
 
     listBookmarks: builder.query<CommunityPostCard[], void>({
-      query: () => '/bookmarks',
+      query: () => '/me/bookmarks',
       providesTags: ['Bookmarks'],
     }),
 
@@ -295,8 +390,8 @@ export const communityApi = createApi({
       invalidatesTags: ['Bookmarks'],
     }),
 
-    listNotifications: builder.query<CommunityNotification[], void>({
-      query: () => '/notifications',
+    listNotifications: builder.query<CommunityNotification[], { tab?: 'replies' | 'mentions' | 'announcements' } | void>({
+      query: (params) => ({ url: '/notifications', params: params?.tab ? { tab: params.tab } : undefined }),
       providesTags: ['Notifications'],
     }),
 
@@ -310,12 +405,19 @@ export const communityApi = createApi({
       invalidatesTags: ['Notifications'],
     }),
 
-    fileReport: builder.mutation<void, CommunityReportReasonInput>({
+    fileReport: builder.mutation<void, CommunityReportInput>({
       query: (body) => ({ url: '/reports', method: 'POST', body }),
     }),
 
     search: builder.query<CommunitySearchResults, string>({
       query: (q) => ({ url: '/search', params: { q } }),
+    }),
+
+    createAttachmentUploadUrl: builder.mutation<
+      CommunityAttachmentUploadUrl,
+      { contentType: CommunityAttachmentContentType }
+    >({
+      query: (body) => ({ url: '/attachments/upload-url', method: 'POST', body }),
     }),
   }),
 });
@@ -329,7 +431,7 @@ export const {
   useJoinSpaceMutation,
   useLeaveSpaceMutation,
   useListTagsQuery,
-  useAutocompleteTagsQuery,
+  useLazyListTagsQuery,
   useListPostsQuery,
   useGetPostQuery,
   useCreatePostMutation,
@@ -352,4 +454,5 @@ export const {
   useMarkAllNotificationsReadMutation,
   useFileReportMutation,
   useSearchQuery,
+  useCreateAttachmentUploadUrlMutation,
 } = communityApi;

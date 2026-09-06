@@ -229,24 +229,3 @@ export function PopularTags({ tags }: { tags: { id: string; name: string; slug: 
   );
 }
 
-export function UpcomingEventCard() {
-  return (
-    <Card className="flex flex-col gap-4 border-accent/20 bg-accent-soft/30 p-4 sm:flex-row sm:items-center sm:p-5">
-      <span className="grid size-12 shrink-0 place-items-center rounded-lg bg-surface text-accent">
-        <MessageCircle aria-hidden="true" className="size-5" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <h3 className="font-black text-ink">Have a question or recording tip?</h3>
-        <p className="mt-1 text-sm leading-relaxed text-muted">
-          Start a discussion and give other contributors a useful place to respond.
-        </p>
-      </div>
-      <Link
-        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-extrabold text-ink hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-        href="/new"
-      >
-        Create a post <ArrowRight aria-hidden="true" className="size-4" />
-      </Link>
-    </Card>
-  );
-}

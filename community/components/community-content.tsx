@@ -25,7 +25,7 @@ import type {
   CommunityRole,
   CommunitySpace,
 } from '@/store/api';
-import { Badge, Card, PrimaryButton, SecondaryButton } from '@/components/ui';
+import { Badge, Card, OverflowMenu, PrimaryButton, SecondaryButton, type OverflowMenuItem } from '@/components/ui';
 import {
   formatCompactCount,
   formatRelativeTime,
@@ -231,6 +231,33 @@ export function PostMetrics({
   );
 }
 
+/**
+ * Standard edit/delete/report/copy-link menu shared by post cards, the post
+ * detail header, and reply cards -- the mockups show a "⋮" on every one of
+ * these, and edit/delete already had full backend + RTK Query support with
+ * no UI ever calling them before this.
+ */
+export function buildContentOverflowItems({
+  isOwner,
+  onEdit,
+  onDelete,
+  onReport,
+  onCopyLink,
+}: {
+  isOwner: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onReport?: () => void;
+  onCopyLink?: () => void;
+}): OverflowMenuItem[] {
+  return [
+    { label: 'Copy link', onSelect: () => onCopyLink?.(), hidden: !onCopyLink },
+    { label: 'Edit', onSelect: () => onEdit?.(), hidden: !isOwner || !onEdit },
+    { label: 'Delete', onSelect: () => onDelete?.(), tone: 'danger', hidden: !isOwner || !onDelete },
+    { label: 'Report', onSelect: () => onReport?.(), tone: 'danger', hidden: isOwner || !onReport },
+  ];
+}
+
 export function PostCard({
   post,
   compact = false,
@@ -239,6 +266,7 @@ export function PostCard({
   onLike,
   onBookmark,
   status,
+  overflowItems,
 }: {
   post: CommunityPostCard;
   compact?: boolean;
@@ -247,11 +275,17 @@ export function PostCard({
   onLike?: () => void;
   onBookmark?: () => void;
   status?: 'PUBLISHED' | 'DRAFT';
+  overflowItems?: OverflowMenuItem[];
 }) {
   return (
     <Card className={`overflow-hidden ${compact ? 'p-4' : 'p-4 sm:p-5'}`}>
       <div className="flex items-start gap-3">
         <PostMeta author={post.author} createdAt={post.createdAt} showSpace={false} />
+        {overflowItems && (
+          <div className="ml-auto -mr-2 -mt-2">
+            <OverflowMenu items={overflowItems} label="Post actions" />
+          </div>
+        )}
       </div>
       <Link className="mt-4 block sm:ml-[58px]" href={`/post/${post.slug}`}>
         <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -298,7 +332,15 @@ export function StatusChip({ status }: { status: 'PUBLISHED' | 'DRAFT' }) {
   );
 }
 
-export function ReplyCard({ reply, onLike }: { reply: CommunityReply; onLike?: () => void }) {
+export function ReplyCard({
+  reply,
+  onLike,
+  overflowItems,
+}: {
+  reply: CommunityReply;
+  onLike?: () => void;
+  overflowItems?: OverflowMenuItem[];
+}) {
   return (
     <Card className="p-4 sm:p-5">
       <div className="flex items-start gap-3">
@@ -312,8 +354,16 @@ export function ReplyCard({ reply, onLike }: { reply: CommunityReply; onLike?: (
             <span className="text-xs font-semibold text-muted">
               {formatRelativeTime(reply.createdAt)}
             </span>
+            {overflowItems && (
+              <div className="ml-auto">
+                <OverflowMenu items={overflowItems} label="Reply actions" />
+              </div>
+            )}
           </div>
           <SafePostBody className="mt-3" html={reply.body} />
+          {reply.attachments.length > 0 && (
+            <AttachmentGallery attachments={reply.attachments} className="mt-3" />
+          )}
           {onLike && (
             <div className="mt-3 flex items-center text-sm font-bold text-muted">
               <button
@@ -344,6 +394,54 @@ export function SafePostBody({ html, className = '' }: { html: string; className
       className={`community-post-body ${className}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
+  );
+}
+
+export function AttachmentGallery({
+  attachments,
+  className = '',
+}: {
+  attachments: { id: string; type: 'IMAGE' | 'AUDIO' | 'DOCUMENT'; url: string; originalName: string }[];
+  className?: string;
+}) {
+  if (!attachments.length) return null;
+  const images = attachments.filter((a) => a.type === 'IMAGE');
+  const others = attachments.filter((a) => a.type !== 'IMAGE');
+
+  return (
+    <div className={`grid gap-3 ${className}`}>
+      {images.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {images.map((attachment) => (
+            // eslint-disable-next-line @next/next/no-img-element -- external Spaces URL, not an optimizable local asset
+            <img
+              alt={attachment.originalName}
+              className="aspect-square w-full rounded-lg border border-line object-cover"
+              key={attachment.id}
+              src={attachment.url}
+            />
+          ))}
+        </div>
+      )}
+      {others.map((attachment) =>
+        attachment.type === 'AUDIO' ? (
+          <audio className="w-full" controls key={attachment.id} src={attachment.url}>
+            <track kind="captions" />
+          </audio>
+        ) : (
+          <a
+            className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-surface-muted px-3 text-sm font-bold text-accent hover:underline"
+            href={attachment.url}
+            key={attachment.id}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <FileText aria-hidden="true" className="size-4 shrink-0" />
+            <span className="truncate">{attachment.originalName}</span>
+          </a>
+        ),
+      )}
+    </div>
   );
 }
 

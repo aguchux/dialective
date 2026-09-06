@@ -1,24 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bookmark } from 'lucide-react';
 import { useListBookmarksQuery } from '@/store/api';
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageFrame,
-  PageHeading,
-  SegmentedTabs,
-} from '@/components/ui';
+import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeading } from '@/components/ui';
 import { PostCard } from '@/components/community-content';
-
-type SavedTab = 'all' | 'posts' | 'guides';
+import { usePostOverflow } from '@/lib/use-post-overflow';
 
 export default function SavedPage() {
-  const [tab, setTab] = useState<SavedTab>('all');
+  const router = useRouter();
   const { data, isLoading, isError, refetch } = useListBookmarksQuery();
-  const items = useMemo(() => data ?? [], [data]);
+  const { overflowItemsFor, dialogs } = usePostOverflow();
 
   return (
     <PageFrame className="max-w-[1040px]">
@@ -27,31 +19,19 @@ export default function SavedPage() {
         subtitle="Keep useful community discussions close at hand."
         title="Bookmarks"
       />
-      <div className="mb-5 max-w-xl">
-        <SegmentedTabs
-          ariaLabel="Bookmark type"
-          items={[
-            { key: 'all', label: 'All' },
-            { key: 'posts', label: 'Posts' },
-            { key: 'guides', label: 'Guides' },
-          ]}
-          onChange={setTab}
-          value={tab}
-        />
-      </div>
-      {tab === 'guides' ? (
-        <EmptyState
-          description="Guides will be available as the community library grows."
-          title="No guides saved yet"
-        />
-      ) : isLoading ? (
+      {isLoading ? (
         <LoadingState label="Loading bookmarks" />
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} retryLabel="Retry loading bookmarks" />
-      ) : items.length ? (
+      ) : data?.length ? (
         <div className="grid gap-3">
-          {items.map((post) => (
-            <PostCard key={post.id} post={post} showBookmarkFooter />
+          {data.map((post) => (
+            <PostCard
+              key={post.id}
+              overflowItems={overflowItemsFor(post, () => router.push(`/post/${post.slug}`))}
+              post={post}
+              showBookmarkFooter
+            />
           ))}
         </div>
       ) : (
@@ -60,6 +40,7 @@ export default function SavedPage() {
           title="No bookmarks yet"
         />
       )}
+      {dialogs}
     </PageFrame>
   );
 }

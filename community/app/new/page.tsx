@@ -3,14 +3,15 @@
 import { FormEvent, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCreatePostMutation, useListSpacesQuery } from '@/store/api';
-import { AttachmentActions, TagInput } from '@/components/community-form';
+import { normalizeErrorMessage, useCreatePostMutation, useListSpacesQuery } from '@/store/api';
+import { AttachmentPicker, TagInput, type PendingAttachment } from '@/components/community-form';
 import { BackLink } from '@/components/community-navigation';
 import {
   ErrorText,
   FieldLabel,
   PageFrame,
   PrimaryButton,
+  SecondaryButton,
   Select,
   TextArea,
   TextInput,
@@ -24,37 +25,66 @@ export default function NewPostPage() {
   const [body, setBody] = useState('');
   const [spaceId, setSpaceId] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
   const selectedSpace = useMemo(
     () => spaces?.find((space) => space.id === spaceId),
     [spaceId, spaces],
   );
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
+  function validate(): boolean {
     if (!spaceId) {
       setError('Choose a space for this post.');
-      return;
+      return false;
     }
     if (title.trim().length < 3) {
       setError('Add a title with at least 3 characters.');
-      return;
+      return false;
     }
     if (!body.trim()) {
       setError('Add some details before publishing.');
-      return;
+      return false;
     }
+    return true;
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    if (!validate()) return;
     try {
       const post = await createPost({
         title: title.trim(),
         body: body.trim(),
         spaceId,
         tags,
+        attachments: attachments.map(({ localId: _localId, ...rest }) => rest),
       }).unwrap();
       router.push(`/post/${post.slug}`);
-    } catch {
-      setError('Could not create your post. Please try again.');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not create your post. Please try again.'));
+    }
+  }
+
+  async function saveDraft() {
+    setError(null);
+    if (!validate()) return;
+    setSavingDraft(true);
+    try {
+      await createPost({
+        title: title.trim(),
+        body: body.trim(),
+        spaceId,
+        tags,
+        status: 'DRAFT',
+        attachments: attachments.map(({ localId: _localId, ...rest }) => rest),
+      }).unwrap();
+      router.push('/me/posts');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not save your draft. Please try again.'));
+    } finally {
+      setSavingDraft(false);
     }
   }
 
@@ -138,7 +168,7 @@ export default function NewPostPage() {
             <p className="mb-2 text-sm font-extrabold text-ink">
               Add attachments <span className="font-medium text-muted">(optional)</span>
             </p>
-            <AttachmentActions />
+            <AttachmentPicker attachments={attachments} onChange={setAttachments} />
           </div>
           {error && <ErrorText>{error}</ErrorText>}
           <div className="flex flex-col-reverse gap-3 border-t border-line pt-5 sm:flex-row sm:justify-end">
@@ -148,6 +178,14 @@ export default function NewPostPage() {
             >
               Cancel
             </Link>
+            <SecondaryButton
+              onClick={() => void saveDraft()}
+              pending={savingDraft}
+              pendingLabel="Saving"
+              type="button"
+            >
+              Save as draft
+            </SecondaryButton>
             <PrimaryButton pending={isLoading} pendingLabel="Publishing" type="submit">
               Publish post
             </PrimaryButton>

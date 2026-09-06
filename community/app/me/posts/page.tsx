@@ -1,23 +1,30 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { FileText } from 'lucide-react';
-import { useListMyPostsQuery } from '@/store/api';
+import { normalizeErrorMessage, useListMyPostsQuery, useUpdatePostMutation } from '@/store/api';
 import {
   EmptyState,
   ErrorState,
+  ErrorText,
   LoadingState,
   PageFrame,
   PageHeading,
   SegmentedTabs,
 } from '@/components/ui';
 import { PostCard } from '@/components/community-content';
+import { usePostOverflow } from '@/lib/use-post-overflow';
 
 type MyPostsTab = 'published' | 'drafts';
 
 export default function MyPostsPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<MyPostsTab>('published');
   const { data, isLoading, isError, refetch } = useListMyPostsQuery();
+  const { overflowItemsFor, dialogs } = usePostOverflow();
+  const [updatePost] = useUpdatePostMutation();
+  const [publishError, setPublishError] = useState<string | null>(null);
   const items = useMemo(
     () =>
       (data?.items ?? []).filter((post) =>
@@ -25,6 +32,15 @@ export default function MyPostsPage() {
       ),
     [data, tab],
   );
+
+  async function publish(postId: string) {
+    setPublishError(null);
+    try {
+      await updatePost({ id: postId, status: 'PUBLISHED' }).unwrap();
+    } catch (err) {
+      setPublishError(normalizeErrorMessage(err, 'Could not publish this draft. Please try again.'));
+    }
+  }
 
   return (
     <PageFrame className="max-w-[1040px]">
@@ -44,6 +60,11 @@ export default function MyPostsPage() {
           value={tab}
         />
       </div>
+      {publishError && (
+        <div className="mb-4">
+          <ErrorText>{publishError}</ErrorText>
+        </div>
+      )}
       {isLoading ? (
         <LoadingState label="Loading your posts" />
       ) : isError ? (
@@ -53,6 +74,12 @@ export default function MyPostsPage() {
           {items.map((post) => (
             <PostCard
               key={post.id}
+              overflowItems={[
+                ...(post.status === 'DRAFT'
+                  ? [{ label: 'Publish', onSelect: () => void publish(post.id) }]
+                  : []),
+                ...overflowItemsFor(post, () => router.push(`/post/${post.slug}`)),
+              ]}
               post={post}
               status={post.status === 'DRAFT' ? 'DRAFT' : 'PUBLISHED'}
             />
@@ -68,6 +95,7 @@ export default function MyPostsPage() {
           title={tab === 'drafts' ? 'No drafts yet' : 'No published posts yet'}
         />
       )}
+      {dialogs}
     </PageFrame>
   );
 }

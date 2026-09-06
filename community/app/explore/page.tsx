@@ -25,7 +25,6 @@ import {
   SpaceGrid,
   TopicChips,
   TrendingList,
-  UpcomingEventCard,
 } from '@/components/community-discovery';
 import { SectionHeading } from '@/components/community-navigation';
 
@@ -53,7 +52,7 @@ export default function ExplorePage() {
   const selectedTag = tags?.find((tag) => tag.name === topic || tag.slug === topic);
   const { data: trending, isLoading: trendingLoading } = useListPostsQuery({
     tab: 'latest',
-    tag: selectedTag?.slug,
+    tagId: selectedTag?.id,
   });
   const {
     data: results,
@@ -198,10 +197,6 @@ export default function ExplorePage() {
               <PopularTags tags={tags ?? []} />
             </section>
           </div>
-          <section>
-            <SectionHeading title="Start a discussion" />
-            <UpcomingEventCard />
-          </section>
         </div>
       )}
     </PageFrame>

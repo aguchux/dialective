@@ -1,5 +1,7 @@
 import {
+  useEffect,
   useRef,
+  useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type KeyboardEvent,
@@ -7,7 +9,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
-import { AlertCircle, Inbox, LoaderCircle } from 'lucide-react';
+import { AlertCircle, Inbox, LoaderCircle, MoreVertical } from 'lucide-react';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
@@ -407,5 +409,127 @@ export function ErrorState({
         )}
       </div>
     </Card>
+  );
+}
+
+/**
+ * Minimal centered modal (no portal library) -- used for report/delete
+ * confirmation dialogs. Mobile-first: full-width sheet-style on small
+ * screens, centered card from sm: up.
+ */
+export function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    function handleKey(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  return (
+    <div
+      aria-labelledby="modal-title"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      onClick={onClose}
+      role="dialog"
+    >
+      <div
+        className="w-full max-w-md rounded-t-xl border border-line bg-surface p-5 shadow-2xl sm:rounded-xl sm:p-6"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 className="text-lg font-black text-ink" id="modal-title">
+          {title}
+        </h2>
+        <div className="mt-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export interface OverflowMenuItem {
+  label: string;
+  onSelect: () => void;
+  tone?: 'default' | 'danger';
+  hidden?: boolean;
+}
+
+/**
+ * Self-contained "⋮" menu (no external dropdown library) -- used for post/
+ * reply overflow actions (edit, delete, report, copy link). Same control on
+ * mobile and desktop, matching how the design mockups show it identically
+ * on every card regardless of breakpoint.
+ */
+export function OverflowMenu({ items, label = 'More actions' }: { items: OverflowMenuItem[]; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const visibleItems = items.filter((item) => !item.hidden);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(event: MouseEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function handleKey(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  if (!visibleItems.length) return null;
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <IconButton
+        aria-expanded={open}
+        aria-haspopup="menu"
+        label={label}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+      >
+        <MoreVertical aria-hidden="true" className="size-5" />
+      </IconButton>
+      {open && (
+        <div
+          className="absolute right-0 top-full z-20 mt-1 min-w-40 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-lg"
+          role="menu"
+        >
+          {visibleItems.map((item) => (
+            <button
+              className={`flex min-h-11 w-full items-center px-3.5 text-left text-sm font-bold hover:bg-surface-muted focus-visible:outline-none focus-visible:bg-surface-muted ${
+                item.tone === 'danger' ? 'text-danger' : 'text-ink'
+              }`}
+              key={item.label}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setOpen(false);
+                item.onSelect();
+              }}
+              role="menuitem"
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -6,9 +6,9 @@ import { useGetUserProfileQuery } from '@/store/api';
 import { ProfileHero } from '@/components/community-content';
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeading } from '@/components/ui';
 
-export default function PublicProfilePage({ params }: { params: Promise<{ username: string }> }) {
-  const { username } = use(params);
-  const { data: profile, isLoading, isError, refetch } = useGetUserProfileQuery(username);
+export default function PublicProfilePage({ params }: { params: Promise<{ userId: string }> }) {
+  const { userId } = use(params);
+  const { data: profile, isLoading, isError, refetch } = useGetUserProfileQuery(userId);
 
   if (isLoading)
     return (

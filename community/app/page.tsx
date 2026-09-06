@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import {
@@ -21,6 +22,7 @@ import {
   SegmentedTabs,
 } from '@/components/ui';
 import { PostCard } from '@/components/community-content';
+import { usePostOverflow } from '@/lib/use-post-overflow';
 
 const TABS: { key: CommunityFeedTab; label: string }[] = [
   { key: 'for-you', label: 'For You' },
@@ -29,6 +31,7 @@ const TABS: { key: CommunityFeedTab; label: string }[] = [
 ];
 
 export default function HomePage() {
+  const router = useRouter();
   const { status } = useSession();
   const [tab, setTab] = useState<CommunityFeedTab>('for-you');
   const queryTab = tab === 'for-you' && status !== 'authenticated' ? 'latest' : tab;
@@ -37,6 +40,7 @@ export default function HomePage() {
   const [unlikePost] = useUnlikePostMutation();
   const [addBookmark] = useAddBookmarkMutation();
   const [removeBookmark] = useRemoveBookmarkMutation();
+  const { overflowItemsFor, dialogs } = usePostOverflow();
 
   return (
     <PageFrame className="max-w-[1040px]">
@@ -83,11 +87,13 @@ export default function HomePage() {
                 void (post.bookmarkedByMe ? removeBookmark(post.id) : addBookmark(post.id))
               }
               onLike={() => void (post.likedByMe ? unlikePost(post.id) : likePost(post.id))}
+              overflowItems={overflowItemsFor(post, () => router.push(`/post/${post.slug}`))}
               post={post}
             />
           ))}
         </div>
       )}
+      {dialogs}
     </PageFrame>
   );
 }
