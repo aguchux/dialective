@@ -10,10 +10,19 @@ export function DialogContent({
   title,
   description,
   children,
+  preventClose,
 }: {
   title: string;
   description?: string;
   children: React.ReactNode;
+  /**
+   * Disables Escape, outside-click, and the X button -- for a step where the
+   * user has been shown something (e.g. a one-time code) they must act on
+   * before this dialog may close, so there's no way to dismiss it into a
+   * silent dead end. Use sparingly: the flow must offer its own explicit
+   * cancel affordance when this is set.
+   */
+  preventClose?: boolean;
 }) {
   const container = usePortalContainer();
   return (
@@ -21,6 +30,8 @@ export function DialogContent({
       <RadixDialog.Overlay className="fixed inset-0 z-40 bg-black/50 data-[state=open]:animate-[fadeIn_150ms_ease-out]" />
       <RadixDialog.Content
         className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,480px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_20px_50px_rgba(27,31,27,0.25)] focus:outline-none data-[state=open]:animate-[scaleIn_150ms_ease-out] dark:bg-surface"
+        onEscapeKeyDown={preventClose ? (e) => e.preventDefault() : undefined}
+        onInteractOutside={preventClose ? (e) => e.preventDefault() : undefined}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="grid gap-1">
@@ -34,12 +45,14 @@ export function DialogContent({
 
         {children}
 
-        <RadixDialog.Close
-          className="absolute right-3 top-3 grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-muted hover:text-ink"
-          aria-label="Close"
-        >
-          <CloseIcon />
-        </RadixDialog.Close>
+        {!preventClose && (
+          <RadixDialog.Close
+            className="absolute right-3 top-3 grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+            aria-label="Close"
+          >
+            <CloseIcon />
+          </RadixDialog.Close>
+        )}
       </RadixDialog.Content>
     </RadixDialog.Portal>
   );

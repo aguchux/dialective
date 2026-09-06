@@ -2713,6 +2713,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   );
   const [manualPhoneRequest, setManualPhoneRequest] =
     useState<ManualPhoneVerificationRequestResult | null>(null);
+  const [manualPhoneCancelConfirm, setManualPhoneCancelConfirm] = useState(false);
+  const [manualPhoneCodeCopied, setManualPhoneCodeCopied] = useState(false);
   const [phoneMessage, setPhoneMessage] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [requestPhoneOtp, { isLoading: phoneOtpSending }] = useRequestPhoneOtpMutation();
@@ -2891,9 +2893,19 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       await markManualPhoneVerificationSent(manualPhoneRequest.requestId).unwrap();
       setPhoneMessage('Manual verification is pending admin review.');
       setPhoneVerificationDialogOpen(false);
+      setManualPhoneRequest(null);
+      setManualPhoneCancelConfirm(false);
     } catch (err) {
       setPhoneError(normalizeErrorMessage(err, 'Could not mark this request as sent.'));
     }
+  }
+
+  /** Abandons a generated-but-unsent code -- the only way out of the dialog besides marking it sent, since the dialog itself can no longer be dismissed once a code exists. */
+  function cancelManualPhoneVerification() {
+    setManualPhoneRequest(null);
+    setManualPhoneCancelConfirm(false);
+    setPhoneVerificationMode(null);
+    setPhoneVerificationDialogOpen(false);
   }
 
   /** Only reachable while phoneVerificationRequired is off -- see GeneralSettingsPanel's toggle. */
@@ -3080,10 +3092,21 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               <Dialog
                 open={phoneVerificationDialogOpen}
                 onOpenChange={(open) => {
+                  // Once a WhatsApp code has been generated, this dialog can
+                  // only close via "I have sent the WhatsApp message" or the
+                  // explicit cancel-confirmation below -- otherwise a code
+                  // gets generated and silently abandoned unsent, which is
+                  // exactly the gap that let requests pile up with nothing
+                  // ever showing up for admin review.
+                  if (!open && manualPhoneRequest) {
+                    setManualPhoneCancelConfirm(true);
+                    return;
+                  }
                   setPhoneVerificationDialogOpen(open);
                   if (!open) {
                     setPhoneVerificationMode(null);
                     setManualPhoneRequest(null);
+                    setManualPhoneCancelConfirm(false);
                   }
                 }}
               >
@@ -3099,6 +3122,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                 <DialogContent
                   title="Verify mobile"
                   description="Choose how you want to verify this number."
+                  preventClose={Boolean(manualPhoneRequest)}
                 >
                   <div className="grid gap-4">
                     <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold text-muted">
@@ -3186,22 +3210,74 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                               Confirm and show code
                             </ActionButton>
                           </>
+                        ) : manualPhoneCancelConfirm ? (
+                          <div className="grid gap-3 rounded-lg border-2 border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950">
+                            <p className="font-black text-amber-900 dark:text-amber-200">
+                              Leave without sending?
+                            </p>
+                            <p className="text-sm leading-relaxed text-amber-800 dark:text-amber-300">
+                              Your code hasn&apos;t been sent to WhatsApp yet, so this request can
+                              never be reviewed. If you close now, you&apos;ll need to start over.
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                className="min-h-10 rounded-lg border border-line bg-white px-4 font-extrabold text-ink hover:bg-surface-muted dark:bg-surface"
+                                onClick={() => setManualPhoneCancelConfirm(false)}
+                                type="button"
+                              >
+                                Go back, I&apos;ll send it
+                              </button>
+                              <button
+                                className="min-h-10 rounded-lg border border-red-200 bg-white px-4 font-extrabold text-danger hover:bg-red-50 dark:bg-surface"
+                                onClick={cancelManualPhoneVerification}
+                                type="button"
+                              >
+                                Discard code and close
+                              </button>
+                            </div>
+                          </div>
                         ) : (
                           <>
-                            <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-4">
-                              <span className="text-xs font-bold uppercase text-muted">
-                                Send this code to WhatsApp
-                              </span>
-                              <span className="text-3xl font-black tracking-widest text-ink">
-                                {manualPhoneRequest.code}
-                              </span>
-                              <span className="text-sm text-muted">
-                                Text {manualPhoneRequest.code} to{' '}
-                                {manualPhoneRequest.whatsappNumber ||
-                                  manualPhoneVerificationWhatsappNumber}
+                            <div className="grid gap-3 rounded-lg border-2 border-accent bg-accent/5 p-4">
+                              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-accent">
+                                <MessageSquareQuote className="size-4" />
+                                Step required: send this code to WhatsApp
+                              </div>
+                              <div className="flex items-center justify-center gap-3 rounded-lg bg-white p-4 dark:bg-surface">
+                                <span className="text-4xl font-black tracking-[0.2em] text-ink">
+                                  {manualPhoneRequest.code}
+                                </span>
+                                <button
+                                  className="grid size-10 shrink-0 place-items-center rounded-lg border border-line text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                                  aria-label="Copy code"
+                                  onClick={() => {
+                                    void navigator.clipboard.writeText(manualPhoneRequest.code);
+                                    setManualPhoneCodeCopied(true);
+                                    setTimeout(() => setManualPhoneCodeCopied(false), 1500);
+                                  }}
+                                  type="button"
+                                >
+                                  {manualPhoneCodeCopied ? (
+                                    <Check className="size-4" />
+                                  ) : (
+                                    <Copy className="size-4" />
+                                  )}
+                                </button>
+                              </div>
+                              <p className="text-sm leading-relaxed text-ink">
+                                Open WhatsApp and text{' '}
+                                <span className="font-black">{manualPhoneRequest.code}</span> to{' '}
+                                <span className="font-black">
+                                  {manualPhoneRequest.whatsappNumber ||
+                                    manualPhoneVerificationWhatsappNumber}
+                                </span>
                                 . This code expires in {manualPhoneVerificationExpiryMinutes}{' '}
                                 minutes.
-                              </span>
+                              </p>
+                              <p className="text-xs font-bold text-muted">
+                                An admin can only review your request after you confirm below that
+                                the message was actually sent -- this dialog stays open until then.
+                              </p>
                             </div>
                             <ActionButton
                               className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
@@ -3210,8 +3286,16 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                               pendingLabel="Submitting"
                               type="button"
                             >
+                              <Check className="mr-1.5 inline size-4" />
                               I have sent the WhatsApp message
                             </ActionButton>
+                            <button
+                              className="text-sm font-bold text-muted underline-offset-2 hover:text-danger hover:underline"
+                              onClick={() => setManualPhoneCancelConfirm(true)}
+                              type="button"
+                            >
+                              Cancel verification
+                            </button>
                           </>
                         )}
                       </div>
