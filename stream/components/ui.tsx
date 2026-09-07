@@ -3,7 +3,7 @@ import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
     <div
-      className={`rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgba(18,19,31,0.04)] ${className}`}
+      className={`stream-card rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgba(18,19,31,0.04)] ${className}`}
     >
       {children}
     </div>
@@ -43,8 +43,23 @@ export function TextInput({ className = '', ...props }: InputHTMLAttributes<HTML
   );
 }
 
-export function FieldLabel({ children }: { children: ReactNode }) {
-  return <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">{children}</label>;
+export function FieldLabel({
+  children,
+  className = '',
+  htmlFor,
+}: {
+  children: ReactNode;
+  className?: string;
+  htmlFor?: string;
+}) {
+  return (
+    <label
+      className={`mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted ${className}`}
+      htmlFor={htmlFor}
+    >
+      {children}
+    </label>
+  );
 }
 
 export function ErrorText({ children }: { children: ReactNode }) {

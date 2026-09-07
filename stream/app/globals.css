@@ -13,6 +13,18 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-success: var(--success);
+  --color-auth-frame: var(--auth-frame);
+  --color-auth-hero: var(--auth-hero);
+  --color-auth-hero-deep: var(--auth-hero-deep);
+  --color-auth-panel: var(--auth-panel);
+  --color-auth-card: var(--auth-card);
+  --color-auth-ink: var(--auth-ink);
+  --color-auth-muted: var(--auth-muted);
+  --color-auth-line: var(--auth-line);
+  --color-auth-accent: var(--auth-accent);
+  --color-auth-accent-dark: var(--auth-accent-dark);
+  --color-auth-accent-soft: var(--auth-accent-soft);
+  --shadow-auth-card: var(--auth-shadow-card);
 }
 
 /* Voice Stream is a distinct commercial product (AI data-infrastructure,
@@ -73,6 +85,45 @@
   --warning: #b45309;
   --danger: #b91c1c;
   --success: #15803d;
+}
+
+@layer components {
+  .stream-auth {
+    color-scheme: light;
+    --auth-frame: #dfe6f0;
+    --auth-hero: #06152f;
+    --auth-hero-deep: #031027;
+    --auth-panel: #f7f9fc;
+    --auth-card: #ffffff;
+    --auth-ink: #0b1a37;
+    --auth-muted: #657082;
+    --auth-line: #dde3ec;
+    --auth-accent: #0d63f3;
+    --auth-accent-dark: #0954d4;
+    --auth-accent-soft: #e8f0ff;
+    --auth-shadow-card: 0 10px 32px rgba(8, 20, 44, 0.08);
+    --bg: var(--auth-panel);
+    --surface: var(--auth-card);
+    --surface-muted: #eef3fa;
+    --ink: var(--auth-ink);
+    --muted: var(--auth-muted);
+    --line: var(--auth-line);
+    --accent: var(--auth-accent);
+    --accent-dark: var(--auth-accent-dark);
+    --accent-soft: var(--auth-accent-soft);
+  }
+
+  .stream-auth .stream-card {
+    border-color: var(--auth-line);
+    background: var(--auth-card);
+    box-shadow: var(--auth-shadow-card);
+  }
+
+  .stream-auth-panel {
+    background:
+      radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.8), transparent 34%),
+      var(--auth-panel);
+  }
 }
 
 body {
