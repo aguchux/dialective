@@ -330,6 +330,12 @@ spec:
                 secretKeyRef:
                   name: sms-creds
                   key: termii_sender_id
+            - name: TERMII_CHANNEL
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: termii_channel
+                  optional: true
             - name: AFRICASTALKING_API_KEY
               valueFrom:
                 secretKeyRef:
