@@ -5,7 +5,7 @@ import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 
 export const metadata = {
   title: 'Contact Us',
-  description: 'Get in touch with Dialect Library, or find our office addresses.',
+  description: 'Get in touch with Dialect Library, or find our office address.',
 };
 
 type Office = {
@@ -14,10 +14,6 @@ type Office = {
 };
 
 const OFFICES: Office[] = [
-  {
-    country: 'United Kingdom',
-    lines: ['32 Cradock Road', 'Canterbury, Kent', 'CT1 1YP', 'United Kingdom'],
-  },
   {
     country: 'Nigeria',
     lines: [
@@ -44,14 +40,14 @@ export default function ContactUsPage() {
             <a className="font-bold text-accent hover:underline" href="mailto:hello@dialectlibrary.com">
               hello@dialectlibrary.com
             </a>
-            , or find our office addresses below.
+            , or find our office address below.
           </p>
           <h2 className="text-lg font-black text-[#050505]">
             Dialect Library is a subsidiary of De-Golojan Technologies Ltd (RC 1606658).
           </h2>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2">
+        <section className="grid gap-4 sm:max-w-sm">
           {OFFICES.map((office) => (
             <div
               className="grid gap-2 rounded-lg border border-line bg-surface p-5"
