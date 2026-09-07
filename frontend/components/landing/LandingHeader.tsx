@@ -15,11 +15,14 @@ import {
 } from '@/components/ui/DropdownMenu';
 import { roleHomePath } from '@/lib/role-home';
 
+const COMMUNITY_URL = process.env.NEXT_PUBLIC_COMMUNITY_URL ?? 'https://community.dialectlibrary.com';
+
 const menuLinks = [
   { href: '/about', label: 'About Us' },
   { href: '/stream', label: 'Stream' },
   { href: '/blog', label: 'Blog' },
   { href: '/faq', label: 'FAQs' },
+  { href: COMMUNITY_URL, label: 'Community', external: true },
 ];
 
 export function LandingHeader() {
@@ -85,6 +88,7 @@ export function LandingHeader() {
                   className="whitespace-nowrap font-medium text-[rgba(5,5,5,0.74)] no-underline transition-colors hover:text-[#050505]"
                   href={link.href}
                   key={link.href}
+                  {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 >
                   {link.label}
                 </Link>
@@ -202,6 +206,7 @@ export function LandingHeader() {
                 href={link.href}
                 key={link.href}
                 onClick={() => setMobileMenuOpen(false)}
+                {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
               >
                 {link.label}
               </Link>
