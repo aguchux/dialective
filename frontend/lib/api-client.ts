@@ -60,8 +60,11 @@ async function apiFetch<T>(path: string, init: RequestInit): Promise<T> {
 }
 
 export const apiClient = {
+  // 2FA is opt-in per user, off by default -- returns an AuthResult
+  // directly when the user hasn't enabled email/SMS 2FA, or a PendingOtp
+  // ticket when they have. See auth-options.ts's module doc comment.
   login: (email: string, password: string) =>
-    apiFetch<PendingOtp>('/auth/login', {
+    apiFetch<PendingOtp | AuthResult>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),

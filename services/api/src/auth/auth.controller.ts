@@ -34,6 +34,9 @@ import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UpdateTrainerRatingDto } from './dto/update-trainer-rating.dto';
 import { LockUserDto } from './dto/lock-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateTwoFactorDto } from './dto/update-two-factor.dto';
+import { CloseAccountDto } from './dto/close-account.dto';
 import { ListUserActivityDto } from './dto/list-user-activity.dto';
 import { JwtAuthGuard } from './strategies/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -111,6 +114,47 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 10 * 60 * 1000 } })
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<void> {
     await this.auth.resetPassword(dto.token, dto.newPassword);
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 10 * 60 * 1000 } })
+  async changePassword(
+    @CurrentUser() user: AccessTokenClaims,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<void> {
+    await this.auth.changePassword(
+      user.sub,
+      dto.currentPassword,
+      dto.newPassword,
+      dto.currentRefreshToken,
+    );
+  }
+
+  @Patch('me/two-factor')
+  @UseGuards(JwtAuthGuard)
+  updateTwoFactor(@CurrentUser() user: AccessTokenClaims, @Body() dto: UpdateTwoFactorDto) {
+    return this.auth.updateTwoFactorSettings(user.sub, dto.emailEnabled, dto.smsEnabled);
+  }
+
+  @Post('me/close/otp')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 3, ttl: 10 * 60 * 1000 } })
+  requestAccountCloseOtp(@CurrentUser() user: AccessTokenClaims) {
+    return this.auth.requestAccountCloseOtp(user.sub);
+  }
+
+  @Post('me/close')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 10 * 60 * 1000 } })
+  async closeAccount(
+    @CurrentUser() user: AccessTokenClaims,
+    @Body() dto: CloseAccountDto,
+  ): Promise<void> {
+    await this.auth.closeAccount(user.sub, dto.otpRequestId, dto.code);
   }
 
   @Post('verify-email')

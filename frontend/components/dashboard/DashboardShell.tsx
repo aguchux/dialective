@@ -53,6 +53,7 @@ export type DashboardView =
   | 'testimonials'
   | 'scores'
   | 'profile'
+  | 'security'
   | 'notifications';
 
 export const dashboardViews: { id: DashboardView; label: string; icon: typeof WalletCards }[] = [
@@ -144,6 +145,9 @@ export function DashboardHeader({
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/learn')}>
                 <GraduationCap className="size-4" aria-hidden="true" /> Learning Center
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/dashboard?view=security')}>
+                <ShieldIcon className="size-4" aria-hidden="true" /> Security
               </DropdownMenuItem>
               <DropdownMenuItem danger onSelect={() => signOut({ callbackUrl: '/' })}>
                 <LogOut className="size-4" aria-hidden="true" /> Logout

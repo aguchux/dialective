@@ -11,6 +11,7 @@ import {
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { AuthMaintenanceException } from './auth-maintenance.exception';
 import { hashToken } from './token.util';
@@ -78,6 +79,9 @@ function setup(
   };
   const otp = {
     issueWithTicket: jest.fn().mockResolvedValue({ ticket: 'ticket-1', expiresInSeconds: 600 }),
+    issueForUser: jest
+      .fn()
+      .mockResolvedValue({ otpRequestId: 'otp-request-1', expiresInSeconds: 600 }),
     verifyWithoutConsuming: jest.fn(),
     verify: jest.fn(),
   };
@@ -976,5 +980,241 @@ describe('AuthService.releaseAuditHold', () => {
     await expect(service.releaseAuditHold('admin-1', 'user-1')).resolves.toMatchObject({
       id: 'user-1',
     });
+  });
+});
+
+describe('AuthService.login 2FA gating', () => {
+  it('mints tokens directly when neither 2FA channel is enabled (fixes the login-OTP email spam)', async () => {
+    const { service, prisma, otp } = setup();
+    const passwordHash = await bcrypt.hash('password123', 4);
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      passwordHash,
+      status: 'ACTIVE',
+      role: 'TRAINER',
+      twoFactorEmailEnabled: false,
+      twoFactorSmsEnabled: false,
+      referralCode: 'ref-1',
+    });
+
+    const result = await service.login('a@b.com', 'password123');
+
+    expect(otp.issueWithTicket).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ accessToken: expect.any(String), refreshToken: expect.any(String) });
+    expect(prisma.refreshToken.create).toHaveBeenCalled();
+  });
+
+  it('issues an email OTP ticket when twoFactorEmailEnabled is on', async () => {
+    const { service, prisma, otp } = setup();
+    const passwordHash = await bcrypt.hash('password123', 4);
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      passwordHash,
+      status: 'ACTIVE',
+      twoFactorEmailEnabled: true,
+      twoFactorSmsEnabled: false,
+      phoneVerifiedAt: null,
+      phoneNumber: null,
+    });
+
+    const result = await service.login('a@b.com', 'password123');
+
+    expect(otp.issueWithTicket).toHaveBeenCalledWith('user-1', 'LOGIN', 'a@b.com', 'EMAIL');
+    expect(result).toMatchObject({ otpRequired: true });
+  });
+
+  it('prefers SMS over email when both are enabled and the phone is verified', async () => {
+    const { service, prisma, otp } = setup();
+    const passwordHash = await bcrypt.hash('password123', 4);
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      passwordHash,
+      status: 'ACTIVE',
+      twoFactorEmailEnabled: true,
+      twoFactorSmsEnabled: true,
+      phoneVerifiedAt: new Date(),
+      phoneNumber: '+15551234567',
+    });
+
+    await service.login('a@b.com', 'password123');
+
+    expect(otp.issueWithTicket).toHaveBeenCalledWith('user-1', 'LOGIN', '+15551234567', 'SMS');
+  });
+
+  it('falls back to email when SMS 2FA is on but the phone was never verified', async () => {
+    const { service, prisma, otp } = setup();
+    const passwordHash = await bcrypt.hash('password123', 4);
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      passwordHash,
+      status: 'ACTIVE',
+      twoFactorEmailEnabled: false,
+      twoFactorSmsEnabled: true,
+      phoneVerifiedAt: null,
+      phoneNumber: null,
+    });
+
+    await service.login('a@b.com', 'password123');
+
+    expect(otp.issueWithTicket).toHaveBeenCalledWith('user-1', 'LOGIN', 'a@b.com', 'EMAIL');
+  });
+});
+
+describe('AuthService.changePassword', () => {
+  it('rejects an incorrect current password without touching the DB', async () => {
+    const { service, prisma } = setup();
+    const passwordHash = await bcrypt.hash('correct-password', 4);
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', passwordHash });
+
+    await expect(service.changePassword('user-1', 'wrong-password', 'new-password-123')).rejects.toThrow(
+      UnauthorizedException,
+    );
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('hashes the new password and revokes every other session, keeping the presented one', async () => {
+    const { service, prisma } = setup();
+    const passwordHash = await bcrypt.hash('correct-password', 4);
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', passwordHash });
+
+    await service.changePassword('user-1', 'correct-password', 'new-password-123', 'current-refresh');
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: expect.objectContaining({ passwordHash: expect.any(String) }),
+      }),
+    );
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        userId: 'user-1',
+        revokedAt: null,
+        tokenHash: { not: hashToken('current-refresh') },
+      },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+
+  it('revokes all sessions when no current refresh token is presented', async () => {
+    const { service, prisma } = setup();
+    const passwordHash = await bcrypt.hash('correct-password', 4);
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', passwordHash });
+
+    await service.changePassword('user-1', 'correct-password', 'new-password-123');
+
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+});
+
+describe('AuthService.updateTwoFactorSettings', () => {
+  it('rejects enabling SMS 2FA when the phone is not verified', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', phoneVerifiedAt: null });
+
+    await expect(service.updateTwoFactorSettings('user-1', undefined, true)).rejects.toThrow(
+      UnprocessableEntityException,
+    );
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('enables SMS 2FA when the phone is already verified', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', phoneVerifiedAt: new Date() });
+    prisma.user.update.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      role: 'TRAINER',
+      status: 'ACTIVE',
+      referralCode: 'ref-1',
+      twoFactorEmailEnabled: false,
+      twoFactorSmsEnabled: true,
+    });
+
+    const result = await service.updateTwoFactorSettings('user-1', undefined, true);
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { twoFactorSmsEnabled: true },
+    });
+    expect(result.twoFactorSmsEnabled).toBe(true);
+  });
+
+  it('turning email 2FA on never touches the SMS gate', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', phoneVerifiedAt: null });
+    prisma.user.update.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      role: 'TRAINER',
+      status: 'ACTIVE',
+      referralCode: 'ref-1',
+      twoFactorEmailEnabled: true,
+      twoFactorSmsEnabled: false,
+    });
+
+    await service.updateTwoFactorSettings('user-1', true, undefined);
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { twoFactorEmailEnabled: true },
+    });
+  });
+});
+
+describe('AuthService account closure', () => {
+  it('requestAccountCloseOtp issues an OTP to the user\'s own email', async () => {
+    const { service, prisma, otp } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', email: 'a@b.com' });
+
+    const result = await service.requestAccountCloseOtp('user-1');
+
+    expect(otp.issueForUser).toHaveBeenCalledWith(
+      'user-1',
+      'ACCOUNT_CLOSE',
+      'a@b.com',
+      expect.any(String),
+    );
+    expect(result).toMatchObject({ otpRequestId: 'otp-request-1' });
+  });
+
+  it('closeAccount verifies the OTP, flips status to CLOSED, and revokes every session', async () => {
+    const { service, prisma, otp } = setup();
+    otp.verify.mockResolvedValue({ id: 'otp-row-1', userId: 'user-1' });
+
+    await service.closeAccount('user-1', 'otp-request-1', '123456');
+
+    expect(otp.verify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        otpRequestId: 'otp-request-1',
+        userId: 'user-1',
+        purpose: 'ACCOUNT_CLOSE',
+        code: '123456',
+      }),
+    );
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { status: 'CLOSED' },
+    });
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+
+  it('closeAccount does not touch the user row when OTP verification fails', async () => {
+    const { service, prisma, otp } = setup();
+    otp.verify.mockRejectedValue(new UnauthorizedException('Invalid or expired code'));
+
+    await expect(service.closeAccount('user-1', 'otp-request-1', '000000')).rejects.toThrow(
+      UnauthorizedException,
+    );
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });

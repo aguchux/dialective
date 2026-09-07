@@ -56,6 +56,7 @@ import { MarketView } from '@/components/p2p/MarketView';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationListPanel } from '@/components/notifications/NotificationListPanel';
 import { DeletePayoutAccountDialog } from '@/components/wallet/DeletePayoutAccountDialog';
+import { SecurityView } from '@/components/trainer/SecurityView';
 import {
   Avatar,
   cardClass,
@@ -136,6 +137,7 @@ const allViewIds: DashboardView[] = [
   'campaigns',
   'testimonials',
   'profile',
+  'security',
   'notifications',
 ];
 
@@ -319,6 +321,8 @@ export function TrainerDashboard() {
 
           {activeView === 'profile' ? (
             <ProfileView session={session} update={update} />
+          ) : activeView === 'security' ? (
+            <SecurityView />
           ) : activeView === 'notifications' ? (
             <NotificationListPanel />
           ) : error ? (

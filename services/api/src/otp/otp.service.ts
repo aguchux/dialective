@@ -96,9 +96,9 @@ export class OtpService {
    * an id) -- simpler than minting a fresh row, and equally safe since the
    * old code is overwritten (no longer valid) the moment this runs. Routes
    * to SMS for PHONE_VERIFICATION (destination = user.phoneNumber, set by
-   * the same request that created this row) and email otherwise -- purpose
-   * is a reliable channel discriminant since PHONE_VERIFICATION is the only
-   * SMS-delivered purpose.
+   * the same request that created this row) always, and for LOGIN when the
+   * user has SMS 2FA enabled (matching AuthService.login's issuance choice)
+   * -- email otherwise.
    */
   async resend(idOrTicket: string, byTicket: boolean): Promise<void> {
     const row = byTicket
@@ -118,7 +118,11 @@ export class OtpService {
       data: { codeHash, expiresAt, attempts: 0 },
     });
 
-    if (row.purpose === 'PHONE_VERIFICATION') {
+    const useSms =
+      row.purpose === 'PHONE_VERIFICATION' ||
+      (row.purpose === 'LOGIN' && user.twoFactorSmsEnabled && !!user.phoneVerifiedAt);
+
+    if (useSms) {
       if (!user.phoneNumber)
         throw new UnauthorizedException('This code request is no longer valid');
       await this.sms.sendOtp(user.phoneNumber, code);

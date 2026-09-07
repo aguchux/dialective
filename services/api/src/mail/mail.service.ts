@@ -406,6 +406,11 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
         subject: 'Your Dialect Library Voice Stream login code',
         intro: 'Enter this code to finish signing in to Voice Stream.',
       };
+    case 'ACCOUNT_CLOSE':
+      return {
+        subject: 'Confirm closing your account',
+        intro: 'Enter this code to confirm closing your Dialect Library account.',
+      };
   }
 }
 

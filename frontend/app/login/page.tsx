@@ -81,8 +81,26 @@ export default function LoginPage() {
     setMessage(null);
     setIsLoggingIn(true);
     try {
-      const pending = await apiClient.login(email, password);
-      setTicket(pending.ticket);
+      const result = await apiClient.login(email, password);
+      if ('otpRequired' in result) {
+        setTicket(result.ticket);
+        return;
+      }
+      // 2FA is off for this account -- apiClient.login already returned
+      // tokens directly, so finish the sign-in without a code-entry step.
+      const signInResult = await signIn('credentials', {
+        authResult: JSON.stringify(result),
+        redirect: false,
+      });
+      if (signInResult?.error) {
+        setMessage('Unable to log in.');
+        return;
+      }
+      const freshSession = await getSession();
+      window.location.href = authDestination(
+        freshSession?.user?.role,
+        freshSession?.user?.onboardingComplete,
+      );
     } catch (err) {
       if (err instanceof ApiError && err.status === 503) {
         setMessage('Login just went into scheduled maintenance. Please refresh the page.');

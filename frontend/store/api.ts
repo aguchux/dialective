@@ -32,6 +32,8 @@ export interface PublicUser {
   referralCode: string;
   emailNotificationsEnabled: boolean;
   smsNotificationsEnabled: boolean;
+  twoFactorEmailEnabled: boolean;
+  twoFactorSmsEnabled: boolean;
   marketingNotificationsEnabled: boolean;
   blogNewsNotificationsEnabled: boolean;
   courseNotificationsEnabled: boolean;
@@ -3140,6 +3142,25 @@ export const dialectivaApi = createApi({
         body,
       }),
     }),
+    changePassword: builder.mutation<void, { currentPassword: string; newPassword: string }>({
+      query: (body) => ({ url: '/auth/change-password', method: 'POST', body }),
+    }),
+    updateTwoFactor: builder.mutation<
+      PublicUser,
+      { emailEnabled?: boolean; smsEnabled?: boolean }
+    >({
+      query: (body) => ({ url: '/auth/me/two-factor', method: 'PATCH', body }),
+      invalidatesTags: ['Profile'],
+    }),
+    requestAccountCloseOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      void
+    >({
+      query: () => ({ url: '/auth/me/close/otp', method: 'POST' }),
+    }),
+    closeAccount: builder.mutation<void, { otpRequestId: string; code: string }>({
+      query: (body) => ({ url: '/auth/me/close', method: 'POST', body }),
+    }),
     resetPassword: builder.mutation<void, { token: string; newPassword: string }>({
       query: (body) => ({
         url: '/auth/password-reset/confirm',
@@ -4033,6 +4054,10 @@ export const {
   useRequestMagicLinkMutation,
   useRequestPasswordResetMutation,
   useResetPasswordMutation,
+  useChangePasswordMutation,
+  useUpdateTwoFactorMutation,
+  useRequestAccountCloseOtpMutation,
+  useCloseAccountMutation,
   useVerifyEmailMutation,
   useResendEmailVerificationMutation,
   useGetCountriesQuery,

@@ -44,17 +44,17 @@ async function fetchSessionTimeoutSettings(): Promise<{
 }
 
 /**
- * Both password login and registration now stop at an emailed OTP step
- * (see AuthService.login/register on the API) instead of returning tokens
- * synchronously -- apiClient.login/register return a PendingOtp, not
- * AuthResult. The login/register pages call apiClient.login/register
- * directly (not via signIn) to obtain the ticket and render the code-entry
- * step, then call signIn('otp-verify', {ticket, code}) to finish. This
- * provider is the only one that ever completes a sign-in for the
- * password/OTP path; 'Credentials' below intentionally can no longer
- * succeed synchronously (see its authorize, which now always throws) and is
- * kept only so NextAuth's provider id space/back-compat callers don't 404 --
- * it is not wired into any UI anymore.
+ * Login 2FA (email/SMS OTP after password) is opt-in per user, off by
+ * default (see AuthService.login on the API -- it used to unconditionally
+ * email an OTP on every login, which was spamming the transactional mail
+ * system). apiClient.login now returns either an AuthResult directly (2FA
+ * off -- the common case) or a PendingOtp (2FA on). The login page calls
+ * apiClient.login directly (not via signIn) so it can branch on which shape
+ * came back: an AuthResult is completed here via signIn('credentials', ...)
+ * passing the already-issued tokens through; a PendingOtp renders the
+ * code-entry step and finishes via signIn('otp-verify', {ticket, code}).
+ * Registration still always requires an OTP step (email-ownership proof),
+ * unrelated to this per-user login 2FA preference.
  */
 
 const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
@@ -93,17 +93,30 @@ export const authOptions: NextAuthOptions = {
   },
   providers: [
     CredentialsProvider({
+      // Completes a login the login page already carried out via
+      // apiClient.login (see the module doc comment above) when that call
+      // returned tokens directly (2FA off) rather than a PendingOtp -- the
+      // already-issued AuthResult is passed through as JSON credentials so
+      // this provider never re-checks the password itself, it only hands
+      // the tokens to the jwt() callback the same way otp-verify/magic-link
+      // do.
       name: 'Credentials',
       credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
+        authResult: { label: 'authResult', type: 'text' },
       },
-      async authorize() {
-        // Password login now requires an OTP step (see the module doc
-        // comment above) -- the login page calls apiClient.login directly
-        // to get a ticket, then signIn('otp-verify', ...) to finish. This
-        // provider is never invoked by the UI anymore; it can't succeed.
-        return null;
+      async authorize(credentials) {
+        if (!credentials?.authResult) {
+          return null;
+        }
+        try {
+          const result = JSON.parse(credentials.authResult) as AuthResult;
+          if (!result?.accessToken || !result?.refreshToken || !result?.user) {
+            return null;
+          }
+          return authResultToNextAuthUser(result);
+        } catch {
+          return null;
+        }
       },
     }),
 

@@ -29,6 +29,11 @@ enum UserStatus {
   ACTIVE
   SUSPENDED
   BLOCKED
+  // Self-service close-account. Distinct from BLOCKED/SUSPENDED (both
+  // admin-driven, reversible) -- CLOSED is user-initiated and permanent from
+  // the user's perspective; the account is soft-deleted (all refresh tokens
+  // revoked immediately, login blocked) pending a later purge job.
+  CLOSED
 }
 
 /// Administrator-assigned trainer quality label. The numeric order is kept
@@ -107,6 +112,13 @@ model User {
   flutterwaveCustomerId         String?
   emailNotificationsEnabled     Boolean         @default(true)
   smsNotificationsEnabled       Boolean         @default(true)
+  // Login 2FA channel toggles -- both off by default (see the doc comment on
+  // AuthService.login: every login used to unconditionally email an OTP,
+  // which was spamming the transactional mail system; login is now
+  // password-only unless the user explicitly opts into one or both of these
+  // in Security settings). SMS requires phoneVerifiedAt to already be set.
+  twoFactorEmailEnabled         Boolean         @default(false)
+  twoFactorSmsEnabled           Boolean         @default(false)
   marketingNotificationsEnabled Boolean         @default(false)
   blogNewsNotificationsEnabled  Boolean         @default(false)
   courseNotificationsEnabled    Boolean         @default(false)
@@ -565,6 +577,7 @@ enum OtpPurpose {
   PAYOUT_ACCOUNT_SETUP // confirms a self-typed STABLECOIN_WALLET address before it's saved and locked -- BANK/MOBILE_MONEY/STRIPE_CONNECT don't need this (provider-verified or unverified-by-design), but a trainer-typed wallet address is the one payout-account type nothing else confirms
   SUBSCRIBER_EMAIL_VERIFY // Voice Stream subscriber auth -- shares this enum only for MailService.sendOtpEmail's copy lookup; SubscriberOtpCode is its own table (OtpCode's FK to User can't reference SubscriberUser)
   SUBSCRIBER_LOGIN
+  ACCOUNT_CLOSE
 }
 
 enum ManualPhoneVerificationStatus {

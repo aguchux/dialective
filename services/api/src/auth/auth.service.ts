@@ -27,7 +27,7 @@ import {
 import { isValidPhoneNumber } from 'libphonenumber-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
-import { OtpService } from '../otp/otp.service';
+import { OtpService, IssuedRequestOtp } from '../otp/otp.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { P2PService } from '../p2p/p2p.service';
 import { StorageService } from '../storage/storage.service';
@@ -90,6 +90,8 @@ export interface PublicUser {
   referralCode: string;
   emailNotificationsEnabled: boolean;
   smsNotificationsEnabled: boolean;
+  twoFactorEmailEnabled: boolean;
+  twoFactorSmsEnabled: boolean;
   marketingNotificationsEnabled: boolean;
   blogNewsNotificationsEnabled: boolean;
   courseNotificationsEnabled: boolean;
@@ -160,6 +162,8 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     referralCode: user.referralCode,
     emailNotificationsEnabled: user.emailNotificationsEnabled,
     smsNotificationsEnabled: user.smsNotificationsEnabled,
+    twoFactorEmailEnabled: user.twoFactorEmailEnabled,
+    twoFactorSmsEnabled: user.twoFactorSmsEnabled,
     marketingNotificationsEnabled: user.marketingNotificationsEnabled,
     blogNewsNotificationsEnabled: user.blogNewsNotificationsEnabled,
     courseNotificationsEnabled: user.courseNotificationsEnabled,
@@ -338,15 +342,20 @@ export class AuthService {
   }
 
   /**
-   * 2FA: password check only unlocks an OTP step, never tokens directly.
-   * The ticket returned here is minted (via OtpService.issueWithTicket)
-   * only after bcrypt.compare succeeds and the account is active -- it is
-   * never derived from client-supplied data, so a guessed/replayed ticket
-   * without the emailed code is useless, and a guessed code without a
-   * ticket bound to one still-pending OtpCode row is equally useless. See
-   * verifyOtp for the exchange step.
+   * 2FA is opt-in per user (twoFactorEmailEnabled/twoFactorSmsEnabled, both
+   * off by default -- see the doc comment on those columns in schema.prisma:
+   * this used to be unconditional and was spamming the transactional mail
+   * system). When neither channel is enabled, login mints tokens directly.
+   * When at least one is enabled, password check only unlocks an OTP step,
+   * never tokens directly -- the ticket is minted (via
+   * OtpService.issueWithTicket) only after bcrypt.compare succeeds and the
+   * account is active, so a guessed/replayed ticket without the delivered
+   * code is useless, and a guessed code without a ticket bound to one
+   * still-pending OtpCode row is equally useless. See verifyOtp for the
+   * exchange step. SMS is preferred over email when both are enabled, since
+   * SMS isn't the channel that was spamming.
    */
-  async login(email: string, password: string): Promise<PendingOtp> {
+  async login(email: string, password: string): Promise<PendingOtp | AuthResult> {
     await this.assertNotInAuthMaintenance('login');
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user?.passwordHash) {
@@ -360,10 +369,16 @@ export class AuthService {
 
     this.assertActive(user);
 
+    if (!user.twoFactorEmailEnabled && !user.twoFactorSmsEnabled) {
+      return this.issueAuthResult(user);
+    }
+
+    const useSms = user.twoFactorSmsEnabled && !!user.phoneVerifiedAt && !!user.phoneNumber;
     const { ticket, expiresInSeconds } = await this.otp.issueWithTicket(
       user.id,
       OtpPurpose.LOGIN,
-      user.email,
+      useSms ? user.phoneNumber! : user.email,
+      useSms ? 'SMS' : 'EMAIL',
     );
     return { otpRequired: true, ticket, expiresInSeconds };
   }
@@ -457,6 +472,9 @@ export class AuthService {
    * re-auth is blocked immediately even if the access token hasn't expired.
    */
   private assertActive(user: User): void {
+    if (user.status === UserStatus.CLOSED) {
+      throw new UnauthorizedException('This account has been closed');
+    }
     if (user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException(
         'This account has been ' + (user.status === UserStatus.BLOCKED ? 'blocked' : 'suspended'),
@@ -667,6 +685,119 @@ export class AuthService {
         data: { revokedAt: new Date() },
       }),
     ]);
+  }
+
+  /**
+   * Authenticated change-password (distinct from resetPassword's
+   * token-based flow, which is for a user who's locked out). Requires the
+   * current password so a hijacked-but-unlocked session can't silently lock
+   * the real owner out, and revokes every refresh token except the one
+   * presented here so other devices/sessions are forced to re-authenticate
+   * -- same "changing a credential invalidates other sessions" convention
+   * as resetPassword.
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    currentRefreshToken?: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('This account has no password set');
+    }
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    const keepHash = currentRefreshToken ? hashToken(currentRefreshToken) : undefined;
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { passwordHash } }),
+      this.prisma.refreshToken.updateMany({
+        where: {
+          userId,
+          revokedAt: null,
+          ...(keepHash ? { tokenHash: { not: keepHash } } : {}),
+        },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+  }
+
+  // --- 2FA preferences -------------------------------------------------------
+
+  /**
+   * SMS 2FA can only be turned on once the user has a verified phone number
+   * -- otherwise a login OTP would have nowhere to go. Email 2FA has no such
+   * gate since every account already has a verified email by the time it
+   * can log in with a password.
+   */
+  async updateTwoFactorSettings(
+    userId: string,
+    emailEnabled?: boolean,
+    smsEnabled?: boolean,
+  ): Promise<PublicUser> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (smsEnabled && !user.phoneVerifiedAt) {
+      throw new UnprocessableEntityException(
+        'Verify a phone number before enabling SMS two-factor authentication',
+      );
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(emailEnabled !== undefined ? { twoFactorEmailEnabled: emailEnabled } : {}),
+        ...(smsEnabled !== undefined ? { twoFactorSmsEnabled: smsEnabled } : {}),
+      },
+    });
+    return toPublicUser(updated);
+  }
+
+  // --- Self-service account closure ------------------------------------------
+
+  /**
+   * OTP-gated, same shape as requestUserDeleteOtp/deleteUser's admin
+   * equivalent -- issued to the user's own verified email regardless of
+   * their 2FA channel preference, since closing the account is the one
+   * action that must always be confirmable even if SMS delivery is down.
+   */
+  async requestAccountCloseOtp(userId: string): Promise<IssuedRequestOtp> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const contextHash = adminActionContextHash({ action: 'account-close', userId });
+    return this.otp.issueForUser(userId, OtpPurpose.ACCOUNT_CLOSE, user.email, contextHash);
+  }
+
+  /**
+   * Soft-delete: flips status to CLOSED and revokes every refresh token
+   * immediately (login and refresh are both blocked from this moment on,
+   * even though the row itself and its cascaded data still exist). Actual
+   * data purge is a separate, later admin/cleanup job -- deliberately not
+   * done synchronously here, so a mistaken or coerced closure has a
+   * recovery window. Mirrors deleteUser's OTP-gate shape but the account
+   * being closed is always the caller's own.
+   */
+  async closeAccount(userId: string, otpRequestId: string, code: string): Promise<void> {
+    const contextHash = adminActionContextHash({ action: 'account-close', userId });
+    await this.otp.verify({
+      otpRequestId,
+      userId,
+      purpose: OtpPurpose.ACCOUNT_CLOSE,
+      code,
+      contextHash,
+    });
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { status: UserStatus.CLOSED } }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    this.logger.log(`Account self-closed: user=${userId}`);
   }
 
   // --- Email verification --------------------------------------------------
