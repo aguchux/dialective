@@ -82,10 +82,18 @@ export class SubscriberOrgsService {
     if (membership.role === SubscriberOrgRole.OWNER && role !== SubscriberOrgRole.OWNER) {
       await this.assertNotLastOwner(organizationId, membershipId);
     }
-    const updated = await this.prisma.subscriberMembership.update({
-      where: { id: membershipId },
-      data: { role },
-    });
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.subscriberMembership.update({ where: { id: membershipId }, data: { role } }),
+      // orgRole is baked into the access token's claims -- without this, a
+      // demoted user keeps acting at their old (higher) privilege level for
+      // up to the token's remaining TTL. Same tradeoff as removeMember: this
+      // signs the user out of every org, not just this one, since refresh
+      // tokens aren't org-scoped.
+      this.prisma.subscriberRefreshToken.updateMany({
+        where: { userId: membership.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
     void this.orgActivity.record(organizationId, ActivityEventType.MEMBER_ROLE_CHANGED, actorUserId, {
       targetUserId: updated.userId,
       oldRole: membership.role,
@@ -107,7 +115,21 @@ export class SubscriberOrgsService {
       await this.assertActorIsOwner(organizationId, actorUserId);
       await this.assertNotLastOwner(organizationId, membershipId);
     }
-    await this.prisma.subscriberMembership.delete({ where: { id: membershipId } });
+    await this.prisma.$transaction([
+      this.prisma.subscriberMembership.delete({ where: { id: membershipId } }),
+      // A stateless-JWT access token issued before removal would otherwise
+      // keep authorizing this org's endpoints for up to its own TTL --
+      // revoking every refresh token forces re-login (and re-derivation of
+      // org membership) immediately, same as resetPassword's revocation.
+      // Refresh tokens aren't org-scoped (SubscriberRefreshToken has no
+      // organizationId), so this signs the user out of every org they
+      // belong to, not just this one -- an acceptable cost for immediate
+      // effect, and consistent with Phase 1 having no mid-session org switch.
+      this.prisma.subscriberRefreshToken.updateMany({
+        where: { userId: membership.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
     void this.orgActivity.record(organizationId, ActivityEventType.MEMBER_REMOVED, actorUserId, {
       targetUserId: membership.userId,
     });

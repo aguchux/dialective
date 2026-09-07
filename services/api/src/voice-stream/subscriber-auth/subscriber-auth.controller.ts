@@ -2,7 +2,6 @@ import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs
 import { Throttle } from '@nestjs/throttler';
 import { SubscriberOrgRole } from '@dialectiva/db';
 import { SubscriberAuthService } from './subscriber-auth.service';
-import { RegisterSubscriberDto } from './dto/register-subscriber.dto';
 import { LoginSubscriberDto } from './dto/login-subscriber.dto';
 import { VerifySubscriberOtpDto } from './dto/verify-subscriber-otp.dto';
 import { ResendSubscriberOtpDto } from './dto/resend-subscriber-otp.dto';
@@ -19,19 +18,12 @@ import { SubscriberAccessTokenClaims } from './subscriber-jwt.util';
 
 @Controller('voice-stream/auth')
 export class SubscriberAuthController {
+  // Deliberately no POST register route -- subscriber onboarding is
+  // admin-invite-only (see RegisterPage's doc comment on the stream
+  // frontend, and provisionOrganizationFromLead below). SubscriberAuthService
+  // still exposes register() for a future/internal caller, but nothing
+  // public should be able to self-serve a brand-new organization.
   constructor(private readonly auth: SubscriberAuthService) {}
-
-  @Post('register')
-  @Throttle({ default: { limit: 20, ttl: 60 * 60 * 1000 } })
-  register(@Body() dto: RegisterSubscriberDto) {
-    return this.auth.register(
-      dto.email,
-      dto.password,
-      dto.firstName,
-      dto.lastName,
-      dto.organizationName,
-    );
-  }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)

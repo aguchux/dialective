@@ -62,17 +62,9 @@ async function apiFetch<T>(path: string, init: RequestInit): Promise<T> {
 }
 
 export const apiClient = {
-  register: (
-    firstName: string,
-    lastName: string,
-    email: string,
-    password: string,
-    organizationName: string,
-  ) =>
-    apiFetch<SubscriberPendingOtp>('/voice-stream/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ firstName, lastName, email, password, organizationName }),
-    }),
+  // No register() -- subscriber onboarding is admin-invite-only (see
+  // app/register/page.tsx's doc comment); the backend has no public
+  // POST /voice-stream/auth/register route to call.
 
   login: (email: string, password: string) =>
     apiFetch<SubscriberPendingOtp>('/voice-stream/auth/login', {

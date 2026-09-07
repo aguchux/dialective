@@ -11,7 +11,9 @@ function setup() {
       delete: jest.fn(),
       count: jest.fn(),
     },
+    subscriberRefreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     subscriberOrganization: { findUniqueOrThrow: jest.fn() },
+    $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   };
   const orgActivity = { record: jest.fn().mockResolvedValue(undefined) };
   const service = new SubscriberOrgsService(prisma as never, orgActivity as never);
@@ -88,6 +90,28 @@ describe('SubscriberOrgsService.updateMemberRole', () => {
       targetUserId: 'target-user',
       oldRole: SubscriberOrgRole.DATASET_MANAGER,
       newRole: SubscriberOrgRole.ADMIN,
+    });
+  });
+
+  it("revokes the target user's refresh tokens so a stale access token can't keep acting at the old role", async () => {
+    const { service, prisma } = setup();
+    prisma.subscriberMembership.findUnique.mockResolvedValue({
+      id: 'm-1',
+      organizationId: 'org-1',
+      role: SubscriberOrgRole.DATASET_MANAGER,
+      userId: 'target-user',
+    });
+    prisma.subscriberMembership.update.mockResolvedValue({
+      id: 'm-1',
+      userId: 'target-user',
+      role: SubscriberOrgRole.ADMIN,
+    });
+
+    await service.updateMemberRole('org-1', 'm-1', SubscriberOrgRole.ADMIN, 'actor-1');
+
+    expect(prisma.subscriberRefreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'target-user', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
     });
   });
 
@@ -181,6 +205,23 @@ describe('SubscriberOrgsService.removeMember', () => {
     expect(prisma.subscriberMembership.delete).toHaveBeenCalledWith({ where: { id: 'm-1' } });
     expect(orgActivity.record).toHaveBeenCalledWith('org-1', 'MEMBER_REMOVED', 'actor-1', {
       targetUserId: 'target-user',
+    });
+  });
+
+  it("revokes the removed user's refresh tokens so access doesn't linger past removal", async () => {
+    const { service, prisma } = setup();
+    prisma.subscriberMembership.findUnique.mockResolvedValue({
+      id: 'm-1',
+      organizationId: 'org-1',
+      role: SubscriberOrgRole.DATASET_MANAGER,
+      userId: 'target-user',
+    });
+
+    await service.removeMember('org-1', 'm-1', 'actor-1');
+
+    expect(prisma.subscriberRefreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'target-user', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
     });
   });
 

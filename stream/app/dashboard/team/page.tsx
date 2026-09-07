@@ -59,6 +59,26 @@ export default function TeamPage() {
     }
   }
 
+  async function handleRoleChange(memberId: string, nextRole: SubscriberOrgRole) {
+    setError(null);
+    setSuccess(null);
+    try {
+      await updateRole({ id: memberId, role: nextRole }).unwrap();
+    } catch (err: any) {
+      setError(err?.data?.message ?? 'Unable to change this member’s role.');
+    }
+  }
+
+  async function handleRemove(memberId: string) {
+    setError(null);
+    setSuccess(null);
+    try {
+      await removeMember(memberId).unwrap();
+    } catch (err: any) {
+      setError(err?.data?.message ?? 'Unable to remove this member.');
+    }
+  }
+
   return (
     <div>
       <PageHeading subtitle="Manage who has access to your organization." title="Team" />
@@ -117,10 +137,7 @@ export default function TeamPage() {
                     <select
                       className="min-h-9 rounded-lg border border-line bg-white px-2 text-sm"
                       onChange={(e) =>
-                        void updateRole({
-                          id: member.id,
-                          role: e.target.value as SubscriberOrgRole,
-                        })
+                        void handleRoleChange(member.id, e.target.value as SubscriberOrgRole)
                       }
                       value={member.role}
                     >
@@ -134,10 +151,7 @@ export default function TeamPage() {
                     <span className="text-sm font-bold text-muted">{member.role}</span>
                   )}
                   {canManage && (
-                    <SecondaryButton
-                      onClick={() => void removeMember(member.id)}
-                      type="button"
-                    >
+                    <SecondaryButton onClick={() => void handleRemove(member.id)} type="button">
                       Remove
                     </SecondaryButton>
                   )}
@@ -147,6 +161,12 @@ export default function TeamPage() {
           </div>
         ) : (
           <p className="p-5 text-sm text-muted">No members yet.</p>
+        )}
+        {canManage && (error || success) && (
+          <div className="border-t border-line p-4">
+            {error && <ErrorText>{error}</ErrorText>}
+            {success && <p className="text-sm font-bold text-success">{success}</p>}
+          </div>
         )}
       </Card>
     </div>
