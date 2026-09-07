@@ -3,10 +3,10 @@ import { SecondaryButton } from './ui';
 /** Google/GitHub OAuth is not yet wired up server-side (no registered OAuth app credentials for either provider) -- shown disabled so the login/register shell matches the target design, without offering a dead end. */
 export function SocialAuthButtons() {
   const className =
-    'min-h-[46px] rounded-[7px] border-auth-line bg-auth-card text-[15px] font-medium text-auth-ink disabled:cursor-not-allowed disabled:opacity-100 hover:bg-auth-panel';
+    'w-full min-w-0 min-h-[46px] rounded-[7px] border-auth-line bg-auth-card text-[15px] font-medium text-auth-ink disabled:cursor-not-allowed disabled:opacity-100 hover:bg-auth-panel';
 
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 gap-2">
       <SecondaryButton
         aria-describedby="social-auth-note"
         className={className}

@@ -71,7 +71,7 @@ function LoginForm() {
 
   return (
     <AuthShell>
-      <Card className="border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+      <Card className="w-full min-w-0 border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
         <div className="mb-6 text-center">
           <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-auth-ink sm:text-[32px]">
             Welcome back
@@ -99,7 +99,7 @@ function LoginForm() {
           </p>
         )}
         {step === 'credentials' ? (
-          <form className="grid gap-4" onSubmit={submitCredentials}>
+          <form className="grid min-w-0 gap-4" onSubmit={submitCredentials}>
             <div>
               <FieldLabel
                 className="!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-auth-ink"
@@ -204,7 +204,7 @@ function LoginForm() {
             <SocialAuthButtons />
           </form>
         ) : (
-          <form className="grid gap-4" onSubmit={submitOtp}>
+          <form className="grid min-w-0 gap-4" onSubmit={submitOtp}>
             <div>
               <FieldLabel
                 className="!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-auth-ink"

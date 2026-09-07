@@ -9,8 +9,8 @@ const WAVEFORM = [
 
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
-    <main className="stream-auth min-h-[100svh] bg-auth-frame p-0 lg:h-[100svh] lg:p-2">
-      <div className="grid min-h-[100svh] overflow-hidden bg-auth-hero lg:h-full lg:min-h-0 lg:grid-cols-[1.56fr_1fr] lg:rounded-[22px]">
+    <main className="stream-auth min-h-[100svh] w-full max-w-[100vw] overflow-x-hidden bg-auth-frame p-0 lg:h-[100svh] lg:p-2">
+      <div className="grid min-h-[100svh] w-full min-w-0 max-w-full overflow-hidden bg-auth-hero lg:h-full lg:min-h-0 lg:grid-cols-[1.56fr_1fr] lg:rounded-[22px]">
         <section className="relative hidden min-h-0 overflow-hidden bg-auth-hero-deep px-8 py-8 lg:flex lg:h-full lg:flex-col lg:px-11 lg:py-10">
           <HeroAtmosphere />
           <div className="relative z-10 flex items-start">
@@ -43,8 +43,8 @@ export function AuthShell({ children }: { children: ReactNode }) {
           </div>
         </section>
 
-        <section className="stream-auth-panel flex min-h-[100svh] min-w-0 flex-col overflow-y-auto overscroll-contain px-4 py-8 sm:px-8 sm:py-10 lg:min-h-0 lg:px-10 lg:py-8">
-          <div className="mx-auto flex min-h-full w-full max-w-[468px] flex-col justify-center">
+        <section className="stream-auth-panel flex min-h-[100svh] w-full min-w-0 max-w-full flex-col overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-8 sm:px-8 sm:py-10 lg:min-h-0 lg:px-10 lg:py-8">
+          <div className="mx-auto flex min-h-full w-full min-w-0 max-w-[468px] flex-col justify-center">
             <div className="mb-7 flex justify-center lg:hidden">
               <BrandLogo
                 className="text-auth-ink"
