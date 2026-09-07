@@ -6,6 +6,7 @@ const footerLinks = [
   { href: '/terms', label: 'Terms of Use' },
   { href: '/privacy', label: 'Privacy Policy' },
   { href: '/cookies', label: 'Cookie Policy' },
+  { href: '/contact-us', label: 'Contact Us' },
 ];
 
 export function LandingFooter() {
