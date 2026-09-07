@@ -46,6 +46,9 @@ export default function ContactUsPage() {
             </a>
             , or find our office addresses below.
           </p>
+          <p className="text-sm text-muted">
+            Dialect Library is a subsidiary of De-Golojan Technologies Ltd (RC 1606658).
+          </p>
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2">
