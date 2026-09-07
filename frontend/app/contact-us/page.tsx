@@ -15,6 +15,10 @@ type Office = {
 
 const OFFICES: Office[] = [
   {
+    country: 'United Kingdom',
+    lines: ['12 Devon Road', 'Canterbury, Kent', 'CT1 1RP', 'United Kingdom'],
+  },
+  {
     country: 'United States',
     lines: ['1201 N Orange St. Suite 7665', 'Wilmington, DE 19801-1186'],
   },
@@ -51,7 +55,7 @@ export default function ContactUsPage() {
           </h2>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {OFFICES.map((office) => (
             <div
               className="grid gap-2 rounded-lg border border-line bg-surface p-5"
