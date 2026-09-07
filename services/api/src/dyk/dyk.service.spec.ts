@@ -147,6 +147,39 @@ describe('DykService.saveNotice validation', () => {
     expect(prisma.dykNotice.create).toHaveBeenCalled();
   });
 
+  it('defaults ctaLabel to "Try it Now" when omitted', async () => {
+    const { service, prisma } = setup();
+    await service.saveNotice({
+      content: 'x',
+      imageKey: 'dyk/a.jpg',
+      imageBucket: 'dialectiva-marketing',
+      href: '/dashboard',
+      stopConditions: ['CLICKED'],
+      active: true,
+      sortOrder: 0,
+    });
+    expect(prisma.dykNotice.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ ctaLabel: 'Try it Now' }) }),
+    );
+  });
+
+  it('trims and saves an admin-supplied ctaLabel', async () => {
+    const { service, prisma } = setup();
+    await service.saveNotice({
+      content: 'x',
+      imageKey: 'dyk/a.jpg',
+      imageBucket: 'dialectiva-marketing',
+      href: '/dashboard',
+      ctaLabel: '  Claim your bonus  ',
+      stopConditions: ['CLICKED'],
+      active: true,
+      sortOrder: 0,
+    });
+    expect(prisma.dykNotice.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ ctaLabel: 'Claim your bonus' }) }),
+    );
+  });
+
   it('accepts an approved external HTTPS host', async () => {
     const { service, prisma } = setup();
     await service.saveNotice({

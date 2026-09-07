@@ -51,11 +51,12 @@ export class DykService {
     if (!internal && !external) throw new BadRequestException('Choose an internal route or approved HTTPS channel');
     const content = dto.content.trim();
     if (!content) throw new BadRequestException('Content is required');
+    const ctaLabel = dto.ctaLabel?.trim() || 'Try it Now';
     const wantsCourse = dto.stopConditions.includes('COURSE');
     if (wantsCourse && !await this.prisma.course.findUnique({ where: { id: dto.targetId || '' } })) {
       throw new BadRequestException('Choose an existing course ID');
     }
-    const data = { ...dto, href, content, targetId: wantsCourse ? dto.targetId : null };
+    const data = { ...dto, href, content, ctaLabel, targetId: wantsCourse ? dto.targetId : null };
     return this.present(id
       ? await this.prisma.dykNotice.update({ where: { id }, data })
       : await this.prisma.dykNotice.create({ data }));

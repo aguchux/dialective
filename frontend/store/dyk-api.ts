@@ -2,7 +2,7 @@ import { dialectivaApi } from './api';
 
 export type DykSettings = { enabled: boolean; intervalMinutes: number; maxDisplays: number };
 export const DYK_CONDITIONS = [
-  { key: 'CLICKED', label: 'Clicked Try it Now' },
+  { key: 'CLICKED', label: 'Clicked the action button' },
   { key: 'VISITED', label: 'Visited the link (tracked)' },
   { key: 'PHONE', label: 'Phone verified' },
   { key: 'KYC', label: 'Identity approved' },
@@ -15,7 +15,7 @@ export const DYK_CONDITIONS = [
 ] as const;
 export type DykNotice = {
   id: string; content: string; imageKey: string; imageBucket: string; imageUrl: string;
-  href: string; stopConditions: string[]; targetId?: string | null; active: boolean; sortOrder: number;
+  href: string; ctaLabel: string; stopConditions: string[]; targetId?: string | null; active: boolean; sortOrder: number;
 };
 export type DykDraft = Omit<DykNotice, 'id' | 'imageUrl'>;
 const api = dialectivaApi.enhanceEndpoints({ addTagTypes: ['Dyk'] }).injectEndpoints({

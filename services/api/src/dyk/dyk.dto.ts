@@ -13,6 +13,7 @@ export class DykNoticeDto {
   @IsString() @Matches(/^dyk\/[0-9a-f-]+\.(jpg|png|webp)$/) imageKey!: string;
   @IsString() @MaxLength(100) imageBucket!: string;
   @IsString() @MinLength(1) @MaxLength(500) href!: string;
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(40) ctaLabel?: string;
   // OR logic -- the notice stops for a trainer once any one of these is met.
   @ArrayMinSize(1) @ArrayUnique() @IsIn(DYK_CONDITIONS, { each: true }) stopConditions!: string[];
   @IsOptional() @IsString() @MaxLength(100) targetId?: string;

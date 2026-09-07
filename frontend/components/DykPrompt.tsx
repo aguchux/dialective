@@ -97,7 +97,7 @@ function ActivePrompt() {
             <Dialog.Title className="text-2xl font-black sm:text-4xl">Do you know?</Dialog.Title>
             <Dialog.Description className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-white sm:text-lg">{notice.content}</Dialog.Description>
             <div className="mt-5 flex flex-wrap items-center gap-3">
-              <button disabled={busy} onClick={follow} className="flex min-h-11 items-center gap-2 rounded-md bg-purple-700 px-5 py-2 font-bold text-white disabled:opacity-60">{busy && <Loader2 className="size-4 animate-spin" />}Try it Now</button>
+              <button disabled={busy} onClick={follow} className="flex min-h-11 items-center gap-2 rounded-md bg-purple-700 px-5 py-2 font-bold text-white disabled:opacity-60">{busy && <Loader2 className="size-4 animate-spin" />}{notice.ctaLabel}</button>
               <button onClick={close} className="min-h-11 rounded-md px-3 py-2 font-semibold hover:bg-white/10">Not now</button>
             </div>
             {error && <p role="alert" className="mt-2 text-sm text-red-200">{error}</p>}

@@ -19,6 +19,7 @@ const blank: DykDraft = {
   imageKey: '',
   imageBucket: '',
   href: '/dashboard',
+  ctaLabel: 'Try it Now',
   stopConditions: ['CLICKED'],
   active: true,
   sortOrder: 0,
@@ -226,6 +227,7 @@ function NoticeEditor({ notice, onClose }: { notice: DykNotice | null; onClose: 
           imageKey: notice.imageKey,
           imageBucket: notice.imageBucket,
           href: notice.href,
+          ctaLabel: notice.ctaLabel,
           stopConditions: notice.stopConditions,
           targetId: notice.targetId,
           active: notice.active,
@@ -316,8 +318,12 @@ function NoticeEditor({ notice, onClose }: { notice: DykNotice | null; onClose: 
             <textarea required maxLength={220} rows={3} className={input} value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-sm font-bold">Try it Now destination</span>
+            <span className="text-sm font-bold">Action button destination</span>
             <input required maxLength={500} className={input} value={draft.href} onChange={(e) => setDraft({ ...draft, href: e.target.value })} />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-bold">Action button text</span>
+            <input required maxLength={40} placeholder="Try it Now" className={input} value={draft.ctaLabel} onChange={(e) => setDraft({ ...draft, ctaLabel: e.target.value })} />
           </label>
           <fieldset className="space-y-1.5">
             <legend className="text-sm font-bold">Stop showing when (any one applies)</legend>

@@ -214,6 +214,7 @@ model DykNotice {
   imageKey       String
   imageBucket    String
   href           String
+  ctaLabel       String         @default("Try it Now") // action-button text; admin-editable, was hardcoded on the frontend before this column existed
   // OR logic: the notice stops for a trainer once ANY one of these
   // conditions is met (DykService.adopted checks each in turn). Replaces the
   // old single stopCondition column -- existing rows were backfilled to a
