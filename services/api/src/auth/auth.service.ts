@@ -1881,6 +1881,58 @@ export class AuthService {
     return toPublicUser(updated);
   }
 
+  async requestRevokePhoneOtp(adminId: string, userId: string) {
+    const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
+    const contextHash = adminActionContextHash({ action: 'phone-verification-revoke', userId });
+    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+  }
+
+  /**
+   * Clears a trainer's verified phone number, forcing them to re-verify via
+   * OTP before it counts as verified again -- e.g. an admin suspects the
+   * number was verified fraudulently or no longer belongs to this trainer.
+   * Also turns off twoFactorSmsEnabled in the same update: that flag can
+   * only be turned on while phoneVerifiedAt is set (see
+   * updateTwoFactorSettings), so leaving it on here would strand the
+   * trainer's login behind an SMS 2FA step that can no longer be delivered.
+   */
+  async revokePhoneVerification(
+    adminId: string,
+    userId: string,
+    otpRequestId?: string,
+    code?: string,
+  ): Promise<PublicUser> {
+    if (await this.platformSettings.isAdminPayoutOtpEnabled()) {
+      if (!otpRequestId || !code) {
+        throw new UnprocessableEntityException(
+          'OTP verification is required to revoke this phone verification',
+        );
+      }
+      await this.otp.verify({
+        otpRequestId,
+        userId: adminId,
+        purpose: OtpPurpose.ADMIN_PAYOUT,
+        code,
+        contextHash: adminActionContextHash({ action: 'phone-verification-revoke', userId }),
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.phoneVerifiedAt) {
+      throw new BadRequestException('This account does not have a verified phone number');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { phoneNumber: null, phoneVerifiedAt: null, twoFactorSmsEnabled: false },
+      include: { dialect: true, dialectVariant: true },
+    });
+
+    this.logger.log(`Phone verification revoked: admin=${adminId} user=${userId}`);
+    return toPublicUser(updated);
+  }
+
   async requestUserDeleteOtp(adminId: string, userId: string) {
     if (userId === adminId) throw new BadRequestException('You cannot delete your own account');
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });

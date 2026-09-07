@@ -107,7 +107,8 @@ export function adminActionContextHash(
         recordingId: string;
         tokenAmount: number;
       }
-    | { action: 'audit-hold-release'; userId: string },
+    | { action: 'audit-hold-release'; userId: string }
+    | { action: 'phone-verification-revoke'; userId: string },
 ): string {
   return hashContext(input);
 }

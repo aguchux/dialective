@@ -3545,6 +3545,23 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
     }),
+    requestRevokePhoneOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      string
+    >({
+      query: (id) => ({ url: `/auth/admin/users/${id}/phone/revoke/otp`, method: 'POST' }),
+    }),
+    revokePhoneVerification: builder.mutation<
+      PublicUser,
+      { id: string; otpRequestId?: string; code?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/auth/admin/users/${id}/phone/revoke`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
+    }),
     sendInstantTrainerReport: builder.mutation<{ sent: boolean }, string>({
       query: (id) => ({ url: `/admin/users/${id}/send-report`, method: 'POST' }),
     }),
@@ -4245,6 +4262,8 @@ export const {
   useDeleteUserMutation,
   useRequestAuditHoldReleaseOtpMutation,
   useReleaseAuditHoldMutation,
+  useRequestRevokePhoneOtpMutation,
+  useRevokePhoneVerificationMutation,
   useSendInstantTrainerReportMutation,
   useRequestAdminWalletAdjustmentOtpMutation,
   useCreateAdminWalletAdjustmentMutation,

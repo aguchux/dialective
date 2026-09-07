@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { RecordingAuditDialog } from '@/components/admin/RecordingAuditDialog';
 import { ReleaseAuditHoldDialog } from '@/components/admin/ReleaseAuditHoldDialog';
+import { RevokePhoneVerificationDialog } from '@/components/admin/RevokePhoneVerificationDialog';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable';
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
@@ -87,6 +88,7 @@ export default function AdminUserDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
   const [releaseHoldDialogOpen, setReleaseHoldDialogOpen] = useState(false);
+  const [revokePhoneDialogOpen, setRevokePhoneDialogOpen] = useState(false);
   const [resetDialectDialogOpen, setResetDialectDialogOpen] = useState(false);
 
   const [sendReport, { isLoading: isSendingReport }] = useSendInstantTrainerReportMutation();
@@ -210,7 +212,25 @@ export default function AdminUserDetailPage() {
               />
               <Field label="Email verified" value={user.emailVerified ? 'Yes' : 'No'} />
               <Field label="Phone" value={user.phoneNumber ?? 'Not set'} />
-              <Field label="Phone verified" value={user.phoneVerified ? 'Yes' : 'No'} />
+              <Field
+                label="Phone verified"
+                value={
+                  user.phoneVerified ? (
+                    <span className="flex items-center gap-2">
+                      Yes
+                      <button
+                        className="text-sm font-bold text-danger underline underline-offset-2 hover:text-danger/80"
+                        onClick={() => setRevokePhoneDialogOpen(true)}
+                        type="button"
+                      >
+                        Revoke
+                      </button>
+                    </span>
+                  ) : (
+                    'No'
+                  )
+                }
+              />
               <Field
                 label="KYC (Didit)"
                 value={
@@ -524,6 +544,9 @@ export default function AdminUserDetailPage() {
       )}
       {user && releaseHoldDialogOpen && (
         <ReleaseAuditHoldDialog user={user} onClose={() => setReleaseHoldDialogOpen(false)} />
+      )}
+      {user && revokePhoneDialogOpen && (
+        <RevokePhoneVerificationDialog user={user} onClose={() => setRevokePhoneDialogOpen(false)} />
       )}
       {user && deleteDialogOpen && (
         <DeleteUserDialog

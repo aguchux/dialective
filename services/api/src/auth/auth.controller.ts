@@ -422,4 +422,28 @@ export class AuthController {
   ) {
     return this.auth.releaseAuditHold(admin.sub, id, dto.otpRequestId, dto.code);
   }
+
+  // Admin-initiated revoke of a trainer's verified phone number -- forces
+  // re-verification via OTP. Distinct from the manual-phone-verification
+  // review routes above (those only ever move a request toward
+  // verification); this undoes an existing one, so it follows the
+  // conditionally-OTP-gated lock/audit-hold-release convention instead.
+  @Post('admin/users/:id/phone/revoke/otp')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  requestRevokePhoneOtp(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string) {
+    return this.auth.requestRevokePhoneOtp(admin.sub, id);
+  }
+
+  @Post('admin/users/:id/phone/revoke')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  revokePhoneVerification(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: DeleteUserDto,
+  ) {
+    return this.auth.revokePhoneVerification(admin.sub, id, dto.otpRequestId, dto.code);
+  }
 }

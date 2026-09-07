@@ -1218,3 +1218,84 @@ describe('AuthService account closure', () => {
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });
+
+describe('AuthService.revokePhoneVerification', () => {
+  it('rejects when the account has no verified phone number', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      phoneNumber: null,
+      phoneVerifiedAt: null,
+    });
+
+    await expect(service.revokePhoneVerification('admin-1', 'user-1')).rejects.toThrow(
+      'does not have a verified phone number',
+    );
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('clears phoneNumber/phoneVerifiedAt and turns off twoFactorSmsEnabled', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      phoneNumber: '+15551234567',
+      phoneVerifiedAt: new Date('2026-01-01'),
+      twoFactorSmsEnabled: true,
+    });
+    prisma.user.update.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      role: 'TRAINER',
+      status: 'ACTIVE',
+      referralCode: 'ref-1',
+      phoneNumber: null,
+      phoneVerifiedAt: null,
+      twoFactorSmsEnabled: false,
+    });
+
+    const result = await service.revokePhoneVerification('admin-1', 'user-1');
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { phoneNumber: null, phoneVerifiedAt: null, twoFactorSmsEnabled: false },
+      include: { dialect: true, dialectVariant: true },
+    });
+    expect(result.phoneVerified).toBe(false);
+    expect(result.twoFactorSmsEnabled).toBe(false);
+  });
+
+  it('requires OTP when adminPayoutOtpEnabled is on', async () => {
+    const { service, prisma, platformSettings } = setup();
+    platformSettings.isAdminPayoutOtpEnabled.mockResolvedValue(true);
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      phoneNumber: '+15551234567',
+      phoneVerifiedAt: new Date(),
+    });
+
+    await expect(service.revokePhoneVerification('admin-1', 'user-1')).rejects.toThrow(
+      'OTP verification is required',
+    );
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.requestRevokePhoneOtp', () => {
+  it("issues an OTP to the admin's own email, scoped to the target user", async () => {
+    const { service, prisma, otp } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'admin-1', email: 'admin@b.com' });
+
+    const result = await service.requestRevokePhoneOtp('admin-1', 'user-1');
+
+    expect(otp.issueForUser).toHaveBeenCalledWith(
+      'admin-1',
+      'ADMIN_PAYOUT',
+      'admin@b.com',
+      expect.any(String),
+    );
+    expect(result).toMatchObject({ otpRequestId: 'otp-request-1' });
+  });
+});
