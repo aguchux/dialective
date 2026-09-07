@@ -37,6 +37,10 @@ export interface PublicUser {
   courseNotificationsEnabled: boolean;
   pwaInstalledAt: string | null;
   walletBalance?: string;
+  walletLockedBalance?: string;
+  walletTotalBalance?: string;
+  pendingScoringTokens?: string;
+  pendingScoringCount?: number;
   submissionsCount?: number;
   wordRecordingsCount?: number;
   auditHoldAt: string | null;
@@ -1828,6 +1832,7 @@ export interface ListAllRecordingsParams {
 export interface UnsettledRow {
   id: string;
   kind: RecordingKind;
+  status: 'PENDING' | 'SCORED';
   trainer: { id: string; email: string; firstName: string | null; lastName: string | null } | null;
   tokensSpent: string;
   score: string | null;
@@ -3587,7 +3592,10 @@ export const dialectivaApi = createApi({
       query: (params) => ({ url: '/admin-recordings', params }),
       providesTags: ['AdminRecordings'],
     }),
-    getUnsettled: builder.query<UnsettledPage, { page: number; pageSize: number }>({
+    getUnsettled: builder.query<
+      UnsettledPage,
+      { page: number; pageSize: number; userId?: string }
+    >({
       query: (params) => ({ url: '/admin-settlement/unsettled', params }),
       providesTags: ['AdminSettlement'],
     }),

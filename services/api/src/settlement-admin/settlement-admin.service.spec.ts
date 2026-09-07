@@ -50,6 +50,7 @@ describe('SettlementAdminService', () => {
       prisma.wordRecording.findMany.mockResolvedValue([
         {
           id: 'rec-old',
+          status: 'SCORED',
           tokensSpent: decimal(5),
           score: decimal(80),
           scoredAt: new Date(now - 2 * 60 * 60 * 1000), // 2h ago -- past a 60min delay
@@ -58,6 +59,7 @@ describe('SettlementAdminService', () => {
         },
         {
           id: 'rec-recent',
+          status: 'SCORED',
           tokensSpent: decimal(5),
           score: decimal(80),
           scoredAt: new Date(now - 5 * 60 * 1000), // 5min ago -- inside a 60min delay
@@ -74,6 +76,42 @@ describe('SettlementAdminService', () => {
       expect(old.pendingDelay).toBe(false);
       expect(recent.pendingDelay).toBe(true);
       expect(result.stuckCount).toBe(1);
+    });
+
+    it('scopes the query by userId when provided, for a single trainer\'s pending-scoring view', async () => {
+      prisma.wordRecording.findMany.mockResolvedValue([]);
+
+      await service.listUnsettled({ page: 1, pageSize: 20, userId: 'user-1' });
+
+      expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 'user-1',
+            status: { in: ['PENDING', 'SCORED'] },
+          }),
+        }),
+      );
+    });
+
+    it('includes PENDING rows (not yet scored) for visibility, distinct from SCORED', async () => {
+      prisma.wordRecording.findMany.mockResolvedValue([
+        {
+          id: 'rec-pending',
+          status: 'PENDING',
+          tokensSpent: decimal(5),
+          score: null,
+          scoredAt: null,
+          createdAt: new Date(),
+          user: { id: 'user-1', email: 'a@x.com', firstName: null, lastName: null },
+        },
+      ]);
+
+      const result = await service.listUnsettled({ page: 1, pageSize: 20 });
+
+      expect(result.items[0].status).toBe('PENDING');
+      // A PENDING row has no score yet, so it never counts toward "stuck"
+      // (settleable-but-not-settled) even outside any delay window.
+      expect(result.stuckCount).toBe(0);
     });
   });
 
@@ -222,6 +260,7 @@ describe('SettlementAdminService', () => {
       prisma.wordRecording.findMany.mockResolvedValue([
         {
           id: 'rec-due',
+          status: 'SCORED',
           userId: 'user-1',
           tokensSpent: decimal(5),
           rawScore: null,
@@ -235,6 +274,7 @@ describe('SettlementAdminService', () => {
         },
         {
           id: 'rec-pending',
+          status: 'SCORED',
           userId: 'user-2',
           tokensSpent: decimal(5),
           rawScore: null,
@@ -271,6 +311,25 @@ describe('SettlementAdminService', () => {
       expect(result.settledCount).toBe(1);
       expect(result.skippedDelayCount).toBe(1);
       expect(result.failedCount).toBe(0);
+    });
+
+    it('skips PENDING rows silently rather than counting them as failures', async () => {
+      prisma.wordRecording.findMany.mockResolvedValue([
+        {
+          id: 'rec-still-pending',
+          status: 'PENDING',
+          userId: 'user-1',
+          tokensSpent: decimal(5),
+          scoredAt: null,
+          createdAt: new Date(),
+        },
+      ]);
+
+      const result = await service.settleAll(false);
+
+      expect(result.settledCount).toBe(0);
+      expect(result.failedCount).toBe(0);
+      expect(prisma.wordRecording.findUnique).not.toHaveBeenCalled();
     });
   });
 });

@@ -59,6 +59,9 @@ function setup(
       updateMany: jest.fn(),
     },
     ledgerEntry: { create: jest.fn() },
+    wordRecording: {
+      aggregate: jest.fn().mockResolvedValue({ _sum: { tokensSpent: null }, _count: 0 }),
+    },
     $transaction: undefined as unknown as jest.Mock,
   };
   prisma.$transaction = jest.fn(async (ops: unknown) => {
@@ -234,6 +237,66 @@ describe('AuthService trainer ratings', () => {
       service.updateTrainerRating('admin-1', 'admin-2', 'GOOD' as never),
     ).rejects.toThrow('Only trainers can receive a trainer quality rating');
     expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.getAdminUser', () => {
+  function fakeUser(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'trainer-1',
+      email: 'trainer@example.com',
+      role: 'TRAINER',
+      status: 'ACTIVE',
+      referralCode: 'trainer-code',
+      trainerRating: null,
+      firstName: null,
+      lastName: null,
+      auditHoldAt: null,
+      auditHoldReleasedAt: null,
+      wallet: { balance: new Prisma.Decimal(10), lockedBalance: new Prisma.Decimal(3) },
+      _count: { wordRecordings: 5 },
+      ...overrides,
+    };
+  }
+
+  it('reports wallet total as balance + lockedBalance', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue(fakeUser());
+
+    const result = await service.getAdminUser('trainer-1');
+
+    expect(result.walletBalance).toBe('10');
+    expect(result.walletLockedBalance).toBe('3');
+    expect(result.walletTotalBalance).toBe('13');
+  });
+
+  it('sums PENDING and SCORED, not-yet-settled recordings as pending-scoring tokens', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue(fakeUser());
+    prisma.wordRecording.aggregate.mockResolvedValue({
+      _sum: { tokensSpent: new Prisma.Decimal(7.5) },
+      _count: 2,
+    });
+
+    const result = await service.getAdminUser('trainer-1');
+
+    expect(prisma.wordRecording.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 'trainer-1', status: { in: ['PENDING', 'SCORED'] }, settledAt: null },
+      }),
+    );
+    expect(result.pendingScoringTokens).toBe('7.5');
+    expect(result.pendingScoringCount).toBe(2);
+  });
+
+  it('reports zero pending-scoring tokens when nothing is outstanding', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue(fakeUser());
+
+    const result = await service.getAdminUser('trainer-1');
+
+    expect(result.pendingScoringTokens).toBe('0');
+    expect(result.pendingScoringCount).toBe(0);
   });
 });
 

@@ -20,6 +20,9 @@ interface DataTableProps<T> {
   isLoading?: boolean;
   emptyMessage?: string;
   pageSize?: number;
+  /** Offers a page-size <select> next to the pagination controls, letting the viewer widen/narrow how many rows show per page. Values shown are pageSizeOptions (default [5, 10, 20, 50]); the initial value is `pageSize`. */
+  adjustablePageSize?: boolean;
+  pageSizeOptions?: number[];
   /** Set false when the page already has its own (e.g. server-side) search UI, to avoid a redundant second search box. */
   searchable?: boolean;
   searchPlaceholder?: string;
@@ -45,7 +48,9 @@ export function DataTable<T>({
   rowKey,
   isLoading,
   emptyMessage = 'No results.',
-  pageSize = 10,
+  pageSize: initialPageSize = 10,
+  adjustablePageSize = false,
+  pageSizeOptions = [5, 10, 20, 50],
   searchable = true,
   searchPlaceholder = 'Search...',
 }: DataTableProps<T>) {
@@ -53,6 +58,7 @@ export function DataTable<T>({
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(initialPageSize);
 
   const searchableColumns = useMemo(
     () => columns.filter((c) => c.sortValue && c.searchable !== false),
@@ -188,28 +194,51 @@ export function DataTable<T>({
             ))}
           </div>
 
-          {pageCount > 1 && (
-            <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-3">
+          {(pageCount > 1 || adjustablePageSize) && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
               <p className="text-sm text-muted">
                 Page {clampedPage + 1} of {pageCount} &middot; {sortedRows.length} total
               </p>
-              <div className="flex gap-2">
-                <button
-                  className="inline-flex min-h-8 items-center justify-center rounded-lg border border-line bg-surface px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={clampedPage === 0}
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  type="button"
-                >
-                  Previous
-                </button>
-                <button
-                  className="inline-flex min-h-8 items-center justify-center rounded-lg border border-line bg-surface px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={clampedPage >= pageCount - 1}
-                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-                  type="button"
-                >
-                  Next
-                </button>
+              <div className="flex items-center gap-3">
+                {adjustablePageSize && (
+                  <label className="flex items-center gap-1.5 text-sm text-muted">
+                    Rows per page
+                    <select
+                      className="min-h-8 rounded-lg border border-line bg-white px-2 text-sm text-ink dark:bg-surface-muted"
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setPage(0);
+                      }}
+                      value={pageSize}
+                    >
+                      {pageSizeOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {pageCount > 1 && (
+                  <div className="flex gap-2">
+                    <button
+                      className="inline-flex min-h-8 items-center justify-center rounded-lg border border-line bg-surface px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={clampedPage === 0}
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      type="button"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      className="inline-flex min-h-8 items-center justify-center rounded-lg border border-line bg-surface px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={clampedPage >= pageCount - 1}
+                      onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                      type="button"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

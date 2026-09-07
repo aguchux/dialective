@@ -40,7 +40,7 @@ export class SettlementAdminService {
     const settlementDelayMinutes = await this.settings.getSettlementDelayMinutes();
     const dueBefore = new Date(Date.now() - settlementDelayMinutes * 60_000);
 
-    const rows = await this.fetchUnsettledWordRecordings();
+    const rows = await this.fetchUnsettledWordRecordings(query.userId);
     const merged = rows
       .map((row) => this.toSummary(row, settlementDelayMinutes, dueBefore))
       .sort((a, b) => a.scoredAt.localeCompare(b.scoredAt));
@@ -55,13 +55,25 @@ export class SettlementAdminService {
       pageSize: query.pageSize,
       total,
       totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
-      stuckCount: merged.filter((row) => !row.pendingDelay).length,
+      stuckCount: merged.filter((row) => !row.pendingDelay && row.status === 'SCORED').length,
     };
   }
 
-  private fetchUnsettledWordRecordings() {
+  /**
+   * PENDING rows are included for visibility (they're still "held" tokens
+   * the trainer can't spend) but are never settleable -- there's no score
+   * yet to pay out against, they just sit here until the quality-gate/
+   * scoring pipeline reaches them or settlement-job's SLA timeout expires
+   * them. Only SCORED rows can be settled (see settleWordRecording's own
+   * status check).
+   */
+  private fetchUnsettledWordRecordings(userId?: string) {
     return this.prisma.wordRecording.findMany({
-      where: { status: 'SCORED', settledAt: null, userId: { not: null } },
+      where: {
+        status: { in: ['PENDING', 'SCORED'] },
+        settledAt: null,
+        userId: userId ?? { not: null },
+      },
       orderBy: { scoredAt: 'asc' },
       include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
     });
@@ -70,6 +82,7 @@ export class SettlementAdminService {
   private toSummary(
     row: {
       id: string;
+      status: string;
       tokensSpent: Prisma.Decimal;
       score: Prisma.Decimal | null;
       scoredAt: Date | null;
@@ -84,6 +97,7 @@ export class SettlementAdminService {
     return {
       id: row.id,
       kind: 'word' as const,
+      status: row.status as 'PENDING' | 'SCORED',
       trainer: row.user,
       tokensSpent: row.tokensSpent.toString(),
       score: row.score?.toString() ?? null,
@@ -155,6 +169,9 @@ export class SettlementAdminService {
 
     const rows = await this.fetchUnsettledWordRecordings();
     for (const row of rows) {
+      // PENDING rows have no score yet to pay out against -- they aren't a
+      // failure, just not this job's job (see fetchUnsettledWordRecordings).
+      if (row.status !== 'SCORED') continue;
       if (!force && this.isPendingDelay(row.scoredAt ?? row.createdAt, settlementDelayMinutes)) {
         skippedDelayCount += 1;
         continue;

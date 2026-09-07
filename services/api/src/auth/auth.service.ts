@@ -95,6 +95,10 @@ export interface PublicUser {
   courseNotificationsEnabled: boolean;
   pwaInstalledAt: string | null;
   walletBalance?: string;
+  walletLockedBalance?: string;
+  walletTotalBalance?: string;
+  pendingScoringTokens?: string;
+  pendingScoringCount?: number;
   wordRecordingsCount?: number;
   auditHoldAt: string | null;
   auditHoldReleasedAt: string | null;
@@ -117,11 +121,13 @@ export interface PotentialDuplicateNameMatch {
 type UserWithDialect = User & {
   dialect?: { tag: string; active?: boolean } | null;
   dialectVariant?: { id: string; tag: string; active?: boolean } | null;
-  wallet?: { balance: Prisma.Decimal } | null;
+  wallet?: { balance: Prisma.Decimal; lockedBalance?: Prisma.Decimal } | null;
   _count?: { wordRecordings: number };
+  pendingScoring?: { tokens: Prisma.Decimal; count: number };
 };
 
 function toPublicUser(user: UserWithDialect): PublicUser {
+  const lockedBalance = user.wallet?.lockedBalance;
   return {
     id: user.id,
     firstName: user.firstName,
@@ -159,6 +165,16 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     courseNotificationsEnabled: user.courseNotificationsEnabled,
     pwaInstalledAt: user.pwaInstalledAt?.toISOString() ?? null,
     ...(user.wallet ? { walletBalance: user.wallet.balance.toString() } : {}),
+    ...(lockedBalance !== undefined ? { walletLockedBalance: lockedBalance.toString() } : {}),
+    ...(user.wallet && lockedBalance !== undefined
+      ? { walletTotalBalance: user.wallet.balance.add(lockedBalance).toString() }
+      : {}),
+    ...(user.pendingScoring
+      ? {
+          pendingScoringTokens: user.pendingScoring.tokens.toString(),
+          pendingScoringCount: user.pendingScoring.count,
+        }
+      : {}),
     ...(user._count ? { wordRecordingsCount: user._count.wordRecordings } : {}),
     auditHoldAt: user.auditHoldAt?.toISOString() ?? null,
     auditHoldReleasedAt: user.auditHoldReleasedAt?.toISOString() ?? null,
@@ -1484,17 +1500,37 @@ export class AuthService {
   }
 
   async getAdminUser(id: string): Promise<PublicUser> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      include: {
-        dialect: true,
-        dialectVariant: true,
-        wallet: { select: { balance: true } },
-        _count: { select: { wordRecordings: true } },
-      },
-    });
+    const [user, pendingScoring] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id },
+        include: {
+          dialect: true,
+          dialectVariant: true,
+          wallet: { select: { balance: true, lockedBalance: true } },
+          _count: { select: { wordRecordings: true } },
+        },
+      }),
+      // Held-for-scoring tokens: recordings whose lockedBalance stake hasn't
+      // been released yet (still PENDING with the quality-gate/scoring
+      // pipeline, or SCORED but not yet paid out by settlement-job). Kept as
+      // a separate aggregate rather than trusting Wallet.lockedBalance alone
+      // so a discrepancy between the two is visible instead of silently
+      // trusted.
+      this.prisma.wordRecording.aggregate({
+        where: { userId: id, status: { in: ['PENDING', 'SCORED'] }, settledAt: null },
+        _sum: { tokensSpent: true },
+        _count: true,
+      }),
+    ]);
     if (!user) throw new NotFoundException('User not found');
-    return (await this.withPotentialDuplicateNameMatches([toPublicUser(user)]))[0];
+    const withPending: UserWithDialect = {
+      ...user,
+      pendingScoring: {
+        tokens: pendingScoring._sum.tokensSpent ?? new Prisma.Decimal(0),
+        count: pendingScoring._count,
+      },
+    };
+    return (await this.withPotentialDuplicateNameMatches([toPublicUser(withPending)]))[0];
   }
 
   /**

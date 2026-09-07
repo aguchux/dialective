@@ -8,6 +8,7 @@ import { AdminShell } from '@/components/admin/AdminShell';
 import { RecordingAuditDialog } from '@/components/admin/RecordingAuditDialog';
 import { ReleaseAuditHoldDialog } from '@/components/admin/ReleaseAuditHoldDialog';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable';
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
 import { TrainerStarRating } from '@/components/ui/TrainerStarRating';
 import { activityLabels } from '@/components/trainer/TrainerDashboard';
@@ -23,13 +24,16 @@ import {
   useDeleteUserMutation,
   useGetAdminUserQuery,
   useGetPlatformSettingsQuery,
+  useGetUnsettledQuery,
   useGetUserActivityQuery,
   useLockUserMutation,
   useRequestUserDeleteOtpMutation,
   useRequestUserLockOtpMutation,
   useResetUserDialectMutation,
   useSendInstantTrainerReportMutation,
+  useSettleOneMutation,
   useUpdateTrainerRatingMutation,
+  type UnsettledRow,
   type UserActivityEntry,
 } from '@/store/api';
 
@@ -64,12 +68,19 @@ export default function AdminUserDetailPage() {
   const selfId = session?.user?.id;
 
   const { data: user, isLoading } = useGetAdminUserQuery(userId);
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const [activityBatch, setActivityBatch] = useState(1);
+  const ACTIVITY_BATCH_SIZE = 100;
   const { data: activity, isLoading: isLoadingActivity } = useGetUserActivityQuery({
     userId,
-    page,
-    pageSize,
+    page: activityBatch,
+    pageSize: ACTIVITY_BATCH_SIZE,
+  });
+  const [pendingScoringPage, setPendingScoringPage] = useState(1);
+  const PENDING_SCORING_PAGE_SIZE = 20;
+  const { data: pendingScoring, isLoading: isLoadingPendingScoring } = useGetUnsettledQuery({
+    userId,
+    page: pendingScoringPage,
+    pageSize: PENDING_SCORING_PAGE_SIZE,
   });
 
   const [lockDialogOpen, setLockDialogOpen] = useState(false);
@@ -162,10 +173,38 @@ export default function AdminUserDetailPage() {
                 />
               )}
               <Field
-                label="DL balance"
+                label="DL balance (spendable)"
                 value={
                   <span className="font-mono text-lg text-accent-dark">
                     {formatTokens(user.walletBalance ?? 0)} DL
+                  </span>
+                }
+              />
+              <Field
+                label="Held (pending scoring/settlement)"
+                value={
+                  <span className="font-mono text-lg text-[#8a4b0f]">
+                    {formatTokens(user.walletLockedBalance ?? 0)} DL
+                  </span>
+                }
+              />
+              <Field
+                label="Total (balance + held)"
+                value={
+                  <span className="font-mono text-lg font-black text-ink">
+                    {formatTokens(user.walletTotalBalance ?? user.walletBalance ?? 0)} DL
+                  </span>
+                }
+              />
+              <Field
+                label="Pending scoring tokens"
+                value={
+                  <span className="font-mono">
+                    {formatTokens(user.pendingScoringTokens ?? 0)} DL
+                    <span className="ml-1.5 text-sm font-normal text-muted">
+                      ({user.pendingScoringCount ?? 0} recording
+                      {user.pendingScoringCount === 1 ? '' : 's'})
+                    </span>
                   </span>
                 }
               />
@@ -388,48 +427,86 @@ export default function AdminUserDetailPage() {
               </section>
             )}
 
+            {user.role === 'TRAINER' && (
+              <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+                <div className="grid gap-1">
+                  <h2 className="text-lg font-black">Pending scoring</h2>
+                  <p className="text-sm leading-relaxed text-muted">
+                    Recordings whose stake is still held: awaiting the scoring pipeline (PENDING)
+                    or scored but not yet paid out by the settlement job (SCORED). Settling a SCORED
+                    row here pays it out immediately using the same formula the automated job uses.
+                  </p>
+                </div>
+                <DataTable
+                  adjustablePageSize
+                  columns={pendingScoringColumns}
+                  emptyMessage="Nothing held for this trainer right now."
+                  isLoading={isLoadingPendingScoring}
+                  pageSize={5}
+                  rowKey={(row) => row.id}
+                  rows={pendingScoring?.items ?? []}
+                  searchPlaceholder="Search by score or status..."
+                />
+                {pendingScoring && pendingScoring.totalPages > 1 && (
+                  <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
+                    <p className="text-sm text-muted">
+                      Server page {pendingScoring.page} of {pendingScoring.totalPages} &middot;{' '}
+                      {pendingScoring.total} total
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        className="inline-flex min-h-8 items-center justify-center rounded-lg border border-line bg-surface px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={pendingScoringPage <= 1}
+                        onClick={() => setPendingScoringPage((p) => Math.max(1, p - 1))}
+                        type="button"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        className="inline-flex min-h-8 items-center justify-center rounded-lg border border-line bg-surface px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={pendingScoringPage >= pendingScoring.totalPages}
+                        onClick={() => setPendingScoringPage((p) => p + 1)}
+                        type="button"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
             <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
               <h2 className="text-lg font-black">Token transactions</h2>
-              {isLoadingActivity && <p className="text-muted">Loading...</p>}
-              {!isLoadingActivity && (!activity || activity.items.length === 0) && (
-                <p className="text-sm text-muted">No transactions yet.</p>
-              )}
-              {!isLoadingActivity && activity && activity.items.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-96 text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-line text-xs font-bold uppercase text-muted">
-                        <th className="py-2 pr-3">Date</th>
-                        <th className="py-2 pr-3">Type</th>
-                        <th className="py-2">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activity.items.map((entry) => (
-                        <ActivityRow entry={entry} key={entry.id} />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <DataTable
+                adjustablePageSize
+                columns={activityColumns}
+                emptyMessage="No transactions yet."
+                isLoading={isLoadingActivity}
+                pageSize={5}
+                rowKey={(entry) => entry.id}
+                rows={activity?.items ?? []}
+                searchPlaceholder="Search by type or amount..."
+              />
               {activity && activity.totalPages > 1 && (
                 <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
                   <p className="text-sm text-muted">
-                    Page {activity.page} of {activity.totalPages} &middot; {activity.total} total
+                    Server page {activity.page} of {activity.totalPages} &middot; {activity.total}{' '}
+                    total
                   </p>
                   <div className="flex gap-2">
                     <button
                       className="inline-flex min-h-8 items-center justify-center rounded-lg border border-line bg-surface px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={page <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={activityBatch <= 1}
+                      onClick={() => setActivityBatch((p) => Math.max(1, p - 1))}
                       type="button"
                     >
                       Previous
                     </button>
                     <button
                       className="inline-flex min-h-8 items-center justify-center rounded-lg border border-line bg-surface px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={page >= activity.totalPages}
-                      onClick={() => setPage((p) => p + 1)}
+                      disabled={activityBatch >= activity.totalPages}
+                      onClick={() => setActivityBatch((p) => p + 1)}
                       type="button"
                     >
                       Next
@@ -548,17 +625,130 @@ function TrainerRatingBadge({ rating }: { rating: TrainerRating }) {
   );
 }
 
-function ActivityRow({ entry }: { entry: UserActivityEntry }) {
-  const isCredit = Number(entry.amount) >= 0;
+const activityColumns: DataTableColumn<UserActivityEntry>[] = [
+  {
+    key: 'date',
+    header: 'Date',
+    render: (entry) => (
+      <span className="text-muted">{new Date(entry.createdAt).toLocaleString()}</span>
+    ),
+    sortValue: (entry) => entry.createdAt,
+  },
+  {
+    key: 'type',
+    header: 'Type',
+    render: (entry) => <span className="font-bold">{activityLabels[entry.type]}</span>,
+    sortValue: (entry) => activityLabels[entry.type],
+  },
+  {
+    key: 'amount',
+    header: 'Amount',
+    render: (entry) => {
+      const isCredit = Number(entry.amount) >= 0;
+      return (
+        <span className={`font-bold ${isCredit ? 'text-accent-dark' : 'text-danger'}`}>
+          {isCredit ? '+' : ''}
+          {formatTokens(entry.amount)} DL
+        </span>
+      );
+    },
+    sortValue: (entry) => Number(entry.amount),
+  },
+];
+
+const pendingScoringColumns: DataTableColumn<UnsettledRow>[] = [
+  {
+    key: 'status',
+    header: 'Status',
+    render: (row) => (
+      <span
+        className={`rounded-md px-2 py-1 text-xs font-black ${
+          row.status === 'PENDING'
+            ? 'bg-slate-100 text-slate-700'
+            : row.pendingDelay
+              ? 'bg-amber-50 text-amber-700'
+              : 'bg-red-50 text-danger'
+        }`}
+      >
+        {row.status === 'PENDING' ? 'Awaiting scoring' : row.pendingDelay ? 'Pending delay' : 'Stuck'}
+      </span>
+    ),
+    sortValue: (row) => row.status,
+  },
+  {
+    key: 'tokensSpent',
+    header: 'Tokens held',
+    render: (row) => <span className="font-mono">{formatTokens(row.tokensSpent)} DL</span>,
+    sortValue: (row) => Number(row.tokensSpent),
+  },
+  {
+    key: 'score',
+    header: 'Score',
+    render: (row) => row.score ?? '—',
+    sortValue: (row) => (row.score ? Number(row.score) : -1),
+  },
+  {
+    key: 'scoredAt',
+    header: 'Scored at',
+    render: (row) =>
+      row.status === 'PENDING' ? (
+        <span className="text-muted">Not yet scored</span>
+      ) : (
+        new Date(row.scoredAt).toLocaleString()
+      ),
+    sortValue: (row) => row.scoredAt,
+  },
+  {
+    key: 'actions',
+    header: 'Actions',
+    render: (row) => <SettleAction row={row} />,
+    searchable: false,
+  },
+];
+
+function SettleAction({ row }: { row: UnsettledRow }) {
+  const [settleOne, { isLoading }] = useSettleOneMutation();
+  const [error, setError] = useState('');
+
+  async function handleSettle(force: boolean) {
+    setError('');
+    try {
+      await settleOne({ id: row.id, force }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not settle this recording'));
+    }
+  }
+
+  if (row.status === 'PENDING') {
+    return <span className="text-xs text-muted">Not yet scored</span>;
+  }
+
   return (
-    <tr className="border-b border-line last:border-0">
-      <td className="py-2 pr-3 text-muted">{new Date(entry.createdAt).toLocaleString()}</td>
-      <td className="py-2 pr-3 font-bold">{activityLabels[entry.type]}</td>
-      <td className={`py-2 font-bold ${isCredit ? 'text-accent-dark' : 'text-danger'}`}>
-        {isCredit ? '+' : ''}
-        {formatTokens(entry.amount)} DL
-      </td>
-    </tr>
+    <div className="grid gap-1">
+      <div className="flex flex-wrap gap-1.5">
+        <ActionButton
+          className="min-h-8 rounded-lg border border-line bg-white px-2.5 text-xs font-extrabold disabled:opacity-50"
+          onClick={() => void handleSettle(false)}
+          pending={isLoading}
+          pendingLabel="Settling"
+          type="button"
+        >
+          Settle
+        </ActionButton>
+        {row.pendingDelay && (
+          <ActionButton
+            className="min-h-8 rounded-lg border border-amber-200 bg-amber-50 px-2.5 text-xs font-extrabold text-amber-800 disabled:opacity-50"
+            onClick={() => void handleSettle(true)}
+            pending={isLoading}
+            pendingLabel="Settling"
+            type="button"
+          >
+            Force
+          </ActionButton>
+        )}
+      </div>
+      {error && <p className="text-xs font-bold text-danger">{error}</p>}
+    </div>
   );
 }
 
