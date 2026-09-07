@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import {
   formatCompactLocalCurrency,
@@ -842,6 +843,7 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
           value={formatCompactTokensValue(data.balance)}
           subValue={formatCompactUsd(Number(data.balance) * data.tokenUsdRate)}
           tone="purple"
+          tooltip="Your spendable DL balance -- ready to withdraw or use right now."
         />
         <MetricCard
           icon={Clock3}
@@ -851,12 +853,14 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
           tone="blue"
           compact
           href="/dashboard/held-in-review"
+          tooltip="DL locked while your recent submissions are being scored or settled. It moves to your available balance once review finishes."
         />
         <MetricCard
           icon={Banknote}
           label="Estimated value"
           value={formatCompactUsd(usdValue)}
           tone="green"
+          tooltip="Your available DL converted to US dollars at the current rate."
         />
         <MetricCard
           icon={CircleDollarSign}
@@ -864,6 +868,7 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
           value={`${formatUsd(data.tokenUsdRate)} / DL`}
           tone="amber"
           compact
+          tooltip="The current exchange rate used to convert DL to US dollars. It can change over time."
         />
       </section>
       {data.localCurrency && data.balanceInLocalCurrency && (
@@ -941,6 +946,7 @@ function TokensView({
           value={formatCompactTokensValue(cumulativeTokens)}
           subValue={formatCompactUsd(cumulativeTokens * summary.tokenUsdRate)}
           tone="purple"
+          tooltip="The total DL you've ever earned, including tokens already withdrawn or spent."
         />
         <MetricCard
           icon={CircleDollarSign}
@@ -948,12 +954,14 @@ function TokensView({
           value={formatCompactTokensValue(summary.balance)}
           subValue={formatCompactUsd(Number(summary.balance) * summary.tokenUsdRate)}
           tone="blue"
+          tooltip="Your spendable DL balance -- ready to withdraw or use right now."
         />
         <MetricCard
           icon={Banknote}
           label="Estimated value"
           value={formatCompactUsd(cumulativeTokens * summary.tokenUsdRate)}
           tone="green"
+          tooltip="Your cumulative tokens converted to US dollars at the current rate."
         />
       </section>
       <WithdrawalEligibilityNote
@@ -1084,6 +1092,7 @@ function EarningsView({
           subValue={formatCompactUsd(total * data.tokenUsdRate)}
           tone="purple"
           compact
+          tooltip="All DL you've earned across training, referrals, and other rewards, before any withdrawals."
         />
         <MetricCard
           icon={Mic2}
@@ -1091,6 +1100,7 @@ function EarningsView({
           value={formatCompactTokensValue(data.trainingEarningsTokens)}
           subValue={formatCompactUsd(Number(data.trainingEarningsTokens) * data.tokenUsdRate)}
           tone="green"
+          tooltip="DL earned from recording and translating training tasks."
         />
         <MetricCard
           icon={Users}
@@ -1098,6 +1108,7 @@ function EarningsView({
           value={formatCompactTokensValue(data.referralEarningsTokens)}
           subValue={formatCompactUsd(Number(data.referralEarningsTokens) * data.tokenUsdRate)}
           tone="amber"
+          tooltip="DL earned as bonuses when people you referred join and become active."
         />
         <MetricCard
           icon={ArrowUpRight}
@@ -1105,6 +1116,7 @@ function EarningsView({
           value={formatCompactTokensValue(data.paidOutTokens)}
           subValue={formatCompactUsd(Number(data.paidOutTokens) * data.tokenUsdRate)}
           tone="blue"
+          tooltip="DL you've already withdrawn out of the platform."
         />
       </section>
       <section className="mt-8">
@@ -5005,6 +5017,7 @@ function MetricCard({
   tone,
   compact = false,
   href,
+  tooltip,
 }: {
   icon: typeof WalletCards;
   label: string;
@@ -5013,6 +5026,7 @@ function MetricCard({
   tone: 'purple' | 'green' | 'amber' | 'blue';
   compact?: boolean;
   href?: string;
+  tooltip?: string;
 }) {
   const tones = {
     purple: 'bg-accent-soft text-accent',
@@ -5020,28 +5034,38 @@ function MetricCard({
     amber: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
     blue: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
   };
-  const Wrapper = href ? Link : 'article';
+  // A relative <article> wrapper (not <Link>, even when href is set) so the
+  // InfoTooltip's popover trigger button is never nested inside an <a> --
+  // the value/label area below becomes the link surface instead.
+  const Content = href ? Link : 'div';
   return (
-    <Wrapper
-      className={`${cardClass} flex min-h-32 items-start gap-3 p-4 md:p-5 ${href ? 'transition-colors hover:border-accent hover:bg-surface-muted' : ''}`}
-      href={href as never}
-    >
-      <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${tones[tone]}`}>
-        <Icon className="size-5" aria-hidden="true" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1 text-sm font-bold text-muted">
-          {label}
-          {href && <ArrowRight className="size-3.5 shrink-0" aria-hidden="true" />}
-        </p>
-        <p
-          className={`mt-2 break-words font-black leading-tight ${compact ? 'text-xl' : 'text-2xl'}`}
-        >
-          {value}
-        </p>
-        {subValue && <p className="mt-1 text-xs font-bold text-muted">≈ {subValue}</p>}
-      </div>
-    </Wrapper>
+    <article className={`${cardClass} relative flex min-h-32 items-start gap-3 p-4 md:p-5`}>
+      {tooltip && (
+        <div className="absolute right-3 top-3">
+          <InfoTooltip label={label} text={tooltip} />
+        </div>
+      )}
+      <Content
+        className={`flex min-w-0 flex-1 items-start gap-3 ${href ? 'transition-colors hover:opacity-80' : ''}`}
+        href={href as never}
+      >
+        <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${tones[tone]}`}>
+          <Icon className="size-5" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1 pr-5 text-sm font-bold text-muted">
+            {label}
+            {href && <ArrowRight className="size-3.5 shrink-0" aria-hidden="true" />}
+          </p>
+          <p
+            className={`mt-2 break-words font-black leading-tight ${compact ? 'text-xl' : 'text-2xl'}`}
+          >
+            {value}
+          </p>
+          {subValue && <p className="mt-1 text-xs font-bold text-muted">≈ {subValue}</p>}
+        </div>
+      </Content>
+    </article>
   );
 }
 
