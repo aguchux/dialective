@@ -20,9 +20,12 @@ import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SubscriberAuthService } from '../voice-stream/subscriber-auth/subscriber-auth.service';
+import { MailService } from '../mail/mail.service';
 import { CreateDataAccessLeadDto } from './dto/create-data-access-lead.dto';
 import { UpdateDataAccessLeadContactDto } from './dto/update-data-access-lead-contact.dto';
 import { InviteDataAccessLeadDto } from './dto/invite-data-access-lead.dto';
+import { CreateSupportRequestDto } from './dto/create-support-request.dto';
+import { UpdateSupportRequestResolutionDto } from './dto/update-support-request-resolution.dto';
 
 /**
  * Interest capture for the "Subscribe to voice data" landing-page CTA --
@@ -36,6 +39,7 @@ export class LeadsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly subscriberAuth: SubscriberAuthService,
+    private readonly mail: MailService,
   ) {}
 
   @Post('data-access')
@@ -157,5 +161,92 @@ export class LeadsController {
     });
 
     return { organizationId };
+  }
+
+  /**
+   * General Contact Us submission (/contact-us) -- public, no auth. Distinct
+   * from data-access leads: no interest capture, just a name/email/subject/
+   * message support ticket. Unlike DataAccessLead's notification (defined
+   * but never called), this one actually emails the leads-notification
+   * address so support requests get timely attention.
+   */
+  @Post('support')
+  @HttpCode(HttpStatus.CREATED)
+  async createSupportRequest(@Body() dto: CreateSupportRequestDto) {
+    const request = await this.prisma.supportRequest.create({
+      data: {
+        name: dto.name,
+        email: dto.email,
+        subject: dto.subject,
+        message: dto.message,
+      },
+    });
+
+    await this.mail
+      .sendSupportRequestNotification({
+        id: request.id,
+        name: request.name,
+        email: request.email,
+        subject: request.subject,
+        message: request.message,
+      })
+      .catch(() => undefined);
+
+    return { id: request.id, status: 'received' };
+  }
+
+  @Get('admin/support')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async listSupportRequests(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('pageSize', new DefaultValuePipe(25), ParseIntPipe) pageSize: number,
+  ) {
+    const safePage = Math.max(1, page);
+    const safePageSize = Math.min(100, Math.max(1, pageSize));
+    const skip = (safePage - 1) * safePageSize;
+
+    const [items, total] = await Promise.all([
+      this.prisma.supportRequest.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: safePageSize,
+        include: {
+          resolvedBy: { select: { id: true, email: true, firstName: true, lastName: true } },
+        },
+      }),
+      this.prisma.supportRequest.count(),
+    ]);
+
+    return {
+      items,
+      page: safePage,
+      pageSize: safePageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+    };
+  }
+
+  @Patch('admin/support/:id/resolution')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async updateSupportRequestResolution(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateSupportRequestResolutionDto,
+  ) {
+    const request = await this.prisma.supportRequest.update({
+      where: { id },
+      data: {
+        resolvedAt: dto.resolved ? new Date() : null,
+        resolutionNote: dto.note?.trim() || null,
+        resolvedByUserId: dto.resolved ? req.user.sub : null,
+      },
+      include: {
+        resolvedBy: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+    });
+
+    return request;
   }
 }

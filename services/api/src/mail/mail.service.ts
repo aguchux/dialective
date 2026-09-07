@@ -12,6 +12,14 @@ interface DataAccessLeadNotification {
   countriesInterested: string | null;
 }
 
+interface SupportRequestNotification {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+}
+
 interface ReferralJoinNotification {
   inviterEmail: string;
   inviteeEmail: string;
@@ -173,6 +181,16 @@ export class MailService {
       `New voice data lead: ${lead.name}`,
       dataAccessLeadHtml(lead),
       dataAccessLeadText(lead),
+    );
+  }
+
+  async sendSupportRequestNotification(request: SupportRequestNotification): Promise<void> {
+    const to = await this.settings.getLeadsNotificationAddress();
+    await this.send(
+      to,
+      `New support request: ${request.subject}`,
+      supportRequestHtml(request),
+      supportRequestText(request),
     );
   }
 
@@ -445,6 +463,25 @@ Email: ${lead.email}
 Organization: ${lead.organization ?? '(not provided)'}
 Website: ${lead.website ?? '(not provided)'}
 Countries interested in: ${lead.countriesInterested ?? '(not provided)'}`;
+}
+
+function supportRequestHtml(request: SupportRequestNotification): string {
+  return `<p>New Contact Us support request:</p>
+<ul>
+  <li>Name: ${escapeHtml(request.name)}</li>
+  <li>Email: ${escapeHtml(request.email)}</li>
+  <li>Subject: ${escapeHtml(request.subject)}</li>
+</ul>
+<p>${escapeHtml(request.message).replace(/\n/g, '<br>')}</p>`;
+}
+
+function supportRequestText(request: SupportRequestNotification): string {
+  return `New Contact Us support request:
+Name: ${request.name}
+Email: ${request.email}
+Subject: ${request.subject}
+
+${request.message}`;
 }
 
 function referralJoinHtml(inviteeName: string, inviteeEmail: string, referralsUrl: string): string {

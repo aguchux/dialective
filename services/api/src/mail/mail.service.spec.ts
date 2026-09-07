@@ -104,3 +104,38 @@ describe('MailService.sendOtpEmail PAYOUT_ACCOUNT_SETUP', () => {
     expect(call.text).toContain('111222');
   });
 });
+
+describe('MailService.sendSupportRequestNotification', () => {
+  let settings: any;
+  let service: MailService;
+
+  beforeEach(() => {
+    sendMock.mockClear();
+    process.env.RESEND_API_KEY = 'test-key';
+    settings = {
+      getResendFromAddress: jest.fn().mockResolvedValue('noreply@example.com'),
+      getLeadsNotificationAddress: jest.fn().mockResolvedValue('support@example.com'),
+    };
+    service = new MailService(settings as never);
+  });
+
+  it('emails the leads-notification address with the request details, escaping HTML in the message', async () => {
+    await service.sendSupportRequestNotification({
+      id: 'req-1',
+      name: 'Ada <script>',
+      email: 'ada@example.com',
+      subject: 'Cannot withdraw',
+      message: 'Line one\nLine two',
+    });
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const call = sendMock.mock.calls[0][0];
+    expect(call.to).toBe('support@example.com');
+    expect(call.from).toBe('noreply@example.com');
+    expect(call.subject).toContain('Cannot withdraw');
+    expect(call.html).toContain('ada@example.com');
+    expect(call.html).not.toContain('<script>');
+    expect(call.html).toContain('Line one<br>Line two');
+    expect(call.text).toContain('Line one\nLine two');
+  });
+});

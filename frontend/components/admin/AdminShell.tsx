@@ -66,6 +66,7 @@ const navGroups: NavGroup[] = [
   {
     label: 'Content & Support',
     items: [
+      { href: '/admin/support', label: 'Support Requests', icon: SupportIcon },
       { href: '/admin/testimonials', label: 'Testimonials', icon: TestimonialsIcon },
       { href: '/admin/marketing', label: 'Marketing', icon: MarketingIcon },
       { href: '/admin/blog', label: 'Blog', icon: BlogIcon },
@@ -461,6 +462,24 @@ function DistributorsIcon() {
         d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+function SupportIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M5.5 5.5 9 9m6 6 3.5 3.5m0-13L15 9m-6 6-3.5 3.5" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }

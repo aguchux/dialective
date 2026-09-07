@@ -314,6 +314,44 @@ export interface DataAccessLeadInviteInput {
   planId: string;
 }
 
+export interface SupportRequestInput {
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+}
+
+export interface AdminSupportRequest {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  resolvedByUserId: string | null;
+  resolvedBy: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
+  createdAt: string;
+}
+
+export interface SupportRequestsPage {
+  items: AdminSupportRequest[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface SupportRequestResolutionUpdateInput {
+  resolved: boolean;
+  note?: string;
+}
+
 export interface ReferralSettings {
   id: string;
   fundingBonusRate: string;
@@ -2202,6 +2240,7 @@ export const dialectivaApi = createApi({
     'AdminCommunitySettings',
     'AudioRetentionRules',
     'DataAccessLeads',
+    'SupportRequests',
     'P2P',
     'Profile',
     'Notifications',
@@ -3217,6 +3256,34 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['DataAccessLeads'],
     }),
+    createSupportRequest: builder.mutation<{ id: string; status: string }, SupportRequestInput>({
+      query: (body) => ({
+        url: '/leads/support',
+        method: 'POST',
+        body,
+      }),
+    }),
+    getAdminSupportRequests: builder.query<
+      SupportRequestsPage,
+      { page?: number; pageSize?: number } | void
+    >({
+      query: (params) => ({
+        url: '/leads/admin/support',
+        params: params ?? undefined,
+      }),
+      providesTags: ['SupportRequests'],
+    }),
+    updateAdminSupportRequestResolution: builder.mutation<
+      AdminSupportRequest,
+      { id: string; body: SupportRequestResolutionUpdateInput }
+    >({
+      query: ({ id, body }) => ({
+        url: `/leads/admin/support/${id}/resolution`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['SupportRequests'],
+    }),
     getReferralSettings: builder.query<ReferralSettings, void>({
       query: () => '/admin/referral-settings',
       providesTags: ['ReferralSettings'],
@@ -4215,6 +4282,9 @@ export const {
   useGetAdminDataAccessLeadsQuery,
   useUpdateAdminDataAccessLeadContactMutation,
   useInviteDataAccessLeadMutation,
+  useCreateSupportRequestMutation,
+  useGetAdminSupportRequestsQuery,
+  useUpdateAdminSupportRequestResolutionMutation,
   useGetReferralSettingsQuery,
   useUpdateReferralSettingsMutation,
   useGetReferralsQuery,

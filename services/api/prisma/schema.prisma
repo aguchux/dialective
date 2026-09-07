@@ -189,6 +189,7 @@ model User {
   marketingCampaignRegistration    MarketingCampaignRegistration?
   wordSkips                        WordSkip[]
   dataAccessLeadsContacted         DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
+  supportRequestsResolved          SupportRequest[]                 @relation("SupportRequestResolvedBy")
   p2pOffers                        P2PTokenOffer[]
   p2pBuyerTrades                   P2PTokenTrade[]                  @relation("P2PBuyerTrades")
   p2pSellerTrades                  P2PTokenTrade[]                  @relation("P2PSellerTrades")
@@ -2203,6 +2204,29 @@ model DataAccessLeadInterest {
   @@unique([leadId, countryId])
   @@index([leadId])
   @@map("data_access_lead_interests")
+}
+
+/// One row per Contact Us form submission (/contact-us) -- general support
+/// requests, not the data-buyer intent captured by DataAccessLead above.
+/// MailService.sendSupportRequestNotification actually notifies an admin
+/// address on submit (see PlatformSettingsService.getLeadsNotificationAddress).
+model SupportRequest {
+  id                String    @id @default(uuid())
+  name              String
+  email             String
+  subject           String
+  message           String
+  resolvedAt        DateTime?
+  resolutionNote    String?
+  resolvedByUserId  String?
+  resolvedBy        User?     @relation("SupportRequestResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  createdAt         DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([email])
+  @@index([resolvedAt])
+  @@index([resolvedByUserId])
+  @@map("support_requests")
 }
 
 /// Editor.js-backed editorial content. `excerpt` is derived by BlogService
