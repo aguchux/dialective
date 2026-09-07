@@ -4,7 +4,7 @@ import { FormEvent, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
-import { Eye, EyeOff, KeyRound, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, LockKeyhole, Mail } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { AuthShell } from '@/components/AuthShell';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
@@ -70,9 +70,9 @@ function LoginForm() {
   }
 
   return (
-    <AuthShell eyebrow={<ShieldEyebrow />}>
-      <Card className="border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-8">
-        <div className="mb-7 text-center">
+    <AuthShell>
+      <Card className="border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+        <div className="mb-6 text-center">
           <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-auth-ink sm:text-[32px]">
             Welcome back
           </h1>
@@ -99,7 +99,7 @@ function LoginForm() {
           </p>
         )}
         {step === 'credentials' ? (
-          <form className="grid gap-5" onSubmit={submitCredentials}>
+          <form className="grid gap-4" onSubmit={submitCredentials}>
             <div>
               <FieldLabel
                 className="!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-auth-ink"
@@ -201,7 +201,7 @@ function LoginForm() {
             <SocialAuthButtons />
           </form>
         ) : (
-          <form className="grid gap-5" onSubmit={submitOtp}>
+          <form className="grid gap-4" onSubmit={submitOtp}>
             <div>
               <FieldLabel
                 className="!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-auth-ink"
@@ -259,15 +259,6 @@ function LoginForm() {
         .
       </p>
     </AuthShell>
-  );
-}
-
-function ShieldEyebrow() {
-  return (
-    <>
-      <ShieldCheck aria-hidden="true" className="size-[18px] text-auth-accent" />
-      Secure enterprise access
-    </>
   );
 }
 

@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
-import { ShieldCheck } from 'lucide-react';
 import { leadsApi, LeadsApiError, type DataAccessLeadInterestInput } from '@/lib/leads-api';
 import { AuthShell } from '@/components/AuthShell';
 import { CountryDialectPicker } from '@/components/CountryDialectPicker';
@@ -53,14 +52,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthShell
-      eyebrow={
-        <>
-          <ShieldCheck aria-hidden="true" className="size-3.5 text-accent" />
-          Secure enterprise access
-        </>
-      }
-    >
+    <AuthShell>
       <div className="mb-6 text-center">
         <h1 className="text-2xl font-black text-ink">Request access</h1>
         <p className="mt-1 text-sm text-muted">
@@ -80,11 +72,19 @@ export default function RegisterPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <FieldLabel>First name</FieldLabel>
-                <TextInput onChange={(e) => setFirstName(e.target.value)} required value={firstName} />
+                <TextInput
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                  value={firstName}
+                />
               </div>
               <div>
                 <FieldLabel>Last name</FieldLabel>
-                <TextInput onChange={(e) => setLastName(e.target.value)} required value={lastName} />
+                <TextInput
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                  value={lastName}
+                />
               </div>
             </div>
             <div>
