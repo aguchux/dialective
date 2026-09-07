@@ -191,11 +191,14 @@ function LoginForm() {
               {pending ? 'Signing in...' : 'Sign in'}
             </PrimaryButton>
 
-            <div className="relative my-1 text-center">
-              <div className="absolute inset-x-0 top-1/2 border-t border-auth-line" />
-              <span className="relative bg-auth-card px-3 text-xs font-medium lowercase text-auth-muted">
-                or
-              </span>
+            <div
+              aria-label="Other sign-in options"
+              className="flex items-center gap-3 py-1 text-center"
+              role="separator"
+            >
+              <span aria-hidden="true" className="h-px flex-1 bg-auth-line" />
+              <span className="shrink-0 text-xs font-medium lowercase text-auth-muted">or</span>
+              <span aria-hidden="true" className="h-px flex-1 bg-auth-line" />
             </div>
 
             <SocialAuthButtons />
