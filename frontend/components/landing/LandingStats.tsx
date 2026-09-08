@@ -59,12 +59,12 @@ export function LandingStats({
 
   return (
     <section
-      className="mx-auto grid max-w-[980px] gap-3 py-4 sm:grid-cols-2 lg:grid-cols-5"
+      className="mx-auto flex max-w-[980px] flex-wrap justify-center gap-3 py-4"
       aria-label="Dialect Library platform metrics"
     >
       {stats.map((stat) => (
         <div
-          className="rounded-lg border border-[rgba(5,5,5,0.1)] bg-white/75 p-4 text-center shadow-[0_14px_30px_rgba(12,20,20,0.08)] backdrop-blur-sm"
+          className="min-w-0 flex-[1_1_160px] rounded-lg border border-[rgba(5,5,5,0.1)] bg-white/75 p-4 text-center shadow-[0_14px_30px_rgba(12,20,20,0.08)] backdrop-blur-sm sm:max-w-[190px]"
           key={stat.label}
         >
           <p className="text-2xl font-black leading-none md:text-3xl">{stat.value}</p>
