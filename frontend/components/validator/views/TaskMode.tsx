@@ -108,13 +108,27 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
   const [deckPickerRecording, setDeckPickerRecording] = useState<ValidatorRecordingSummary | null>(null);
   const [reviewedCount, setReviewedCount] = useState(0);
-  // recordingId -> deckId, populated once Add to Deck succeeds for that
-  // recording this session -- Transcribe/Flag are deck-item-scoped (same as
-  // scoring), so the Expanded Player needs to know which deck to write to.
-  // Session-local only: a recording added to a deck in an earlier session
-  // re-prompts Add to Deck here until the pool-browse endpoint can report
-  // deck membership directly.
+  // recordingId -> deckId overrides -- Transcribe/Flag are deck-item-scoped
+  // (same as scoring), so the Expanded Player needs to know which deck to
+  // write to. The pool-browse endpoint reports each recording's own
+  // myDeckId (one of the caller's OWN decks that already contains it, from
+  // an earlier session or this one) directly, so this map is now only a
+  // same-tick bridge: addValidatorDeckItem invalidates the ValidatorRecordings
+  // cache on success, but until that refetch actually lands this fills the
+  // gap so Add to Deck -> Transcribe feels instant rather than waiting on
+  // a round trip. See resolveDeckId below for how the two are combined.
   const [recordingDeckIds, setRecordingDeckIds] = useState<Record<string, string>>({});
+
+  // activeRecording is a snapshot taken at selection time (see
+  // selectRecording), not re-derived from the live query result, so a
+  // myDeckId picked up by a later page's refetch after this recording was
+  // selected won't retroactively update it -- an accepted staleness edge
+  // case, since the override map below already covers the actually
+  // UX-sensitive moment (Add to Deck succeeding for the CURRENTLY active
+  // recording).
+  function resolveDeckId(recording: ValidatorRecordingSummary): string | null {
+    return recordingDeckIds[recording.id] ?? recording.myDeckId ?? null;
+  }
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const setAudioEl = useCallback((el: HTMLAudioElement | null) => {
     audioRef.current = el;
@@ -282,7 +296,7 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
         {activeRecording && isPlayerExpanded && (
           <ExpandedPlayer
             audioRef={audioRef}
-            deckId={recordingDeckIds[activeRecording.id] ?? null}
+            deckId={resolveDeckId(activeRecording)}
             isPlaying={isPlaying}
             onAddToDeck={() => setDeckPickerRecording(activeRecording)}
             onClose={() => setIsPlayerExpanded(false)}

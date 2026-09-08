@@ -1872,6 +1872,8 @@ export interface ValidatorRecordingSummary {
   asrTranscript: string | null;
   dialectTag: string;
   status: 'PENDING' | 'TRANSCRIBED' | 'REJECTED' | 'SCORED' | 'SETTLED' | 'EXPIRED';
+  /** One of the caller's OWN decks that already contains this recording, if any -- null when it isn't in any of them yet. */
+  myDeckId: string | null;
   rawScore: string | null;
   score: string | null;
   compositeScore: string | null;
@@ -4338,7 +4340,15 @@ export const dialectivaApi = createApi({
         method: 'POST',
         body: { recordingId },
       }),
-      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+      // Also invalidates the pool-browse list -- each recording there
+      // carries myDeckId (which of the caller's own decks already
+      // contains it), and adding one needs that to refresh so Task Mode's
+      // Transcribe/Flag stop prompting "Add to Deck" for it.
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+        'ValidatorRecordings',
+      ],
     }),
     removeValidatorDeckItem: builder.mutation<void, { id: string; recordingId: string }>({
       query: ({ id, recordingId }) => ({

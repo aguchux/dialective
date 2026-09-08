@@ -113,7 +113,7 @@ export class ValidatorRecordingsController {
   constructor(private readonly recordings: ValidatorRecordingsService) {}
 
   @Get()
-  listAll(@Query() query: ListValidatorRecordingsDto) {
-    return this.recordings.listAll(query);
+  listAll(@Req() req: AuthenticatedRequest, @Query() query: ListValidatorRecordingsDto) {
+    return this.recordings.listAll(query, req.user.sub);
   }
 }

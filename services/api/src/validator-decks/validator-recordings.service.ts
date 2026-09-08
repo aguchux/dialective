@@ -17,7 +17,7 @@ export class ValidatorRecordingsService {
     private readonly storage: StorageService,
   ) {}
 
-  async listAll(query: ListValidatorRecordingsDto) {
+  async listAll(query: ListValidatorRecordingsDto, callerUserId: string) {
     const skip = (query.page - 1) * query.pageSize;
     const orderBy = { [query.sortBy]: query.sortDir };
     const where = this.buildWhere(query);
@@ -33,7 +33,36 @@ export class ValidatorRecordingsService {
       this.prisma.wordRecording.count({ where }),
     ]);
 
-    const items = await Promise.all(rows.map((row) => this.toSummary(row)));
+    // Deck membership is looked up per page, not per row -- one query for
+    // the whole page's recordingIds against the caller's OWN decks only
+    // (a recording can sit in many validators' decks; the UI only needs to
+    // know whether ITS caller can transcribe/flag/score it, which requires
+    // it being in one of their own). Lets Transcribe/Flag work correctly
+    // for a recording added to a deck in an earlier session, not just this
+    // one -- see TaskMode.tsx's recordingDeckIds doc comment.
+    const recordingIds = rows.map((row) => row.id);
+    const ownedItems =
+      recordingIds.length > 0
+        ? await this.prisma.validatorDeckItem.findMany({
+            where: { recordingId: { in: recordingIds }, deck: { ownerUserId: callerUserId } },
+            select: { recordingId: true, deckId: true },
+            orderBy: { addedAt: 'desc' },
+          })
+        : [];
+    // orderBy addedAt desc + first-write-wins Map population means a
+    // recording added to more than one of the caller's decks reports the
+    // most recently-added one -- an arbitrary but stable choice, since the
+    // UI only needs ONE deckId to route Transcribe/Flag/score writes to.
+    const deckIdByRecordingId = new Map<string, string>();
+    for (const item of ownedItems) {
+      if (!deckIdByRecordingId.has(item.recordingId)) {
+        deckIdByRecordingId.set(item.recordingId, item.deckId);
+      }
+    }
+
+    const items = await Promise.all(
+      rows.map((row) => this.toSummary(row, deckIdByRecordingId.get(row.id) ?? null)),
+    );
     return {
       items,
       page: query.page,
@@ -76,6 +105,7 @@ export class ValidatorRecordingsService {
       word: { text: string } | null;
       sentence: { text: string } | null;
     },
+    myDeckId: string | null,
   ) {
     return {
       id: recording.id,
@@ -88,6 +118,7 @@ export class ValidatorRecordingsService {
       asrTranscript: recording.transcript,
       dialectTag: recording.dialectTag,
       status: recording.status,
+      myDeckId,
       rawScore: recording.rawScore?.toString() ?? null,
       score: recording.score?.toString() ?? null,
       compositeScore: recording.compositeScore?.toString() ?? null,
