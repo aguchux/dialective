@@ -16,7 +16,7 @@ declare module 'next-auth' {
       id: string;
       firstName: string | null;
       lastName: string | null;
-      role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR';
+      role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR' | 'VALIDATOR';
       onboardingComplete: boolean;
       dialectTag: string | null;
       referralCode: string | null;
@@ -33,7 +33,7 @@ declare module 'next-auth/jwt' {
     refreshToken?: string;
     refreshRetryAt?: number;
     authError?: 'RefreshAccessTokenError' | 'RefreshTokenInvalid' | 'SessionExpired';
-    role?: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR';
+    role?: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR' | 'VALIDATOR';
     userId?: string;
     firstName?: string | null;
     lastName?: string | null;

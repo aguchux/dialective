@@ -29,7 +29,7 @@ const selectClass =
 const inputClass =
   'min-h-9 w-full max-w-xs rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink dark:bg-surface-muted';
 
-const roleOptions = ['TRAINER', 'DISTRIBUTOR', 'PARTNER', 'ADMIN'] as const;
+const roleOptions = ['TRAINER', 'DISTRIBUTOR', 'PARTNER', 'VALIDATOR', 'ADMIN'] as const;
 const statusOptions = ['ACTIVE', 'SUSPENDED', 'BLOCKED'] as const;
 
 const statusStyles: Record<string, string> = {

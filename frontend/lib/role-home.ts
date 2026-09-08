@@ -5,6 +5,9 @@ export function roleHomePath(role: string | undefined, onboardingComplete = true
   if (role === 'DISTRIBUTOR') {
     return '/distributor';
   }
+  if (role === 'VALIDATOR') {
+    return '/validator';
+  }
 
   return onboardingComplete ? '/dashboard' : '/onboarding';
 }
@@ -33,9 +36,14 @@ export function postAuthPath(
     return callbackUrl;
   }
 
+  if (role === 'VALIDATOR' && isPathWithin(callbackUrl, '/validator')) {
+    return callbackUrl;
+  }
+
   if (
     role !== 'ADMIN' &&
     role !== 'DISTRIBUTOR' &&
+    role !== 'VALIDATOR' &&
     onboardingComplete &&
     isPathWithin(callbackUrl, '/dashboard')
   ) {

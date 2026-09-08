@@ -1486,7 +1486,17 @@ export class AuthService {
   async updateUserRole(userId: string, role: Role): Promise<PublicUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
-      data: { role },
+      // Role.VALIDATOR requires validatorLevel to be set (see
+      // docs/validators.md) -- default newly-assigned validators to L1 so
+      // this single-endpoint role change never leaves the invariant
+      // violated. Reverting away from VALIDATOR clears the tier again so a
+      // stale level doesn't linger on a non-validator account.
+      data: {
+        role,
+        ...(role === Role.VALIDATOR
+          ? { validatorLevel: 'L1' as const }
+          : { validatorLevel: null }),
+      },
       include: { dialect: true, dialectVariant: true },
     });
     return toPublicUser(user);

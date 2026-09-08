@@ -68,6 +68,7 @@ export default async function proxy(request: NextRequest) {
   const isProtectedPath =
     pathname.startsWith('/admin') ||
     pathname.startsWith('/distributor') ||
+    pathname.startsWith('/validator') ||
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/notifications') ||
     pathname === '/onboarding';
@@ -106,6 +107,10 @@ export default async function proxy(request: NextRequest) {
 
   if (pathname.startsWith('/distributor')) {
     return role === 'DISTRIBUTOR' ? next(request) : redirect(request, homePath);
+  }
+
+  if (pathname.startsWith('/validator')) {
+    return role === 'VALIDATOR' ? next(request) : redirect(request, homePath);
   }
 
   if (pathname === '/onboarding') {

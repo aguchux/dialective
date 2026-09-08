@@ -203,20 +203,23 @@ export function TrainerDashboard() {
     skip:
       status !== 'authenticated' ||
       session?.user.role === 'ADMIN' ||
-      session?.user.role === 'DISTRIBUTOR',
+      session?.user.role === 'DISTRIBUTOR' ||
+      session?.user.role === 'VALIDATOR',
   });
   const { data: me } = useGetMeQuery(undefined, {
     skip:
       status !== 'authenticated' ||
       session?.user.role === 'ADMIN' ||
-      session?.user.role === 'DISTRIBUTOR',
+      session?.user.role === 'DISTRIBUTOR' ||
+      session?.user.role === 'VALIDATOR',
   });
   const dialectName = useDialectName(session?.user.dialectTag);
   const { data: incompleteRequiredCourses } = useGetIncompleteRequiredCoursesQuery(undefined, {
     skip:
       status !== 'authenticated' ||
       session?.user.role === 'ADMIN' ||
-      session?.user.role === 'DISTRIBUTOR',
+      session?.user.role === 'DISTRIBUTOR' ||
+      session?.user.role === 'VALIDATOR',
   });
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
 
@@ -242,6 +245,7 @@ export function TrainerDashboard() {
     if (status !== 'authenticated') return;
     if (session.user.role === 'ADMIN') router.replace('/admin');
     if (session.user.role === 'DISTRIBUTOR') router.replace('/distributor');
+    if (session.user.role === 'VALIDATOR') router.replace('/validator');
     else if (!session.user.onboardingComplete) router.replace('/onboarding');
   }, [router, session, status]);
 
@@ -251,6 +255,7 @@ export function TrainerDashboard() {
       session &&
       (session.user.role === 'ADMIN' ||
         session.user.role === 'DISTRIBUTOR' ||
+        session.user.role === 'VALIDATOR' ||
         !session.user.onboardingComplete))
   ) {
     return <DashboardLoading />;

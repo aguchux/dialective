@@ -13,7 +13,7 @@ export interface PublicUser {
   firstName: string | null;
   lastName: string | null;
   email: string;
-  role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR';
+  role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR' | 'VALIDATOR';
   status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
   trainerRating: TrainerRating | null;
   trainerRatingValue: number | null;
@@ -1388,7 +1388,7 @@ export interface AdminLeaderboardUser {
   firstName: string | null;
   lastName: string | null;
   email: string;
-  role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR';
+  role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR' | 'VALIDATOR';
 }
 
 export interface LeaderboardEarnerRow {

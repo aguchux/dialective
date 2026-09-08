@@ -23,6 +23,16 @@ enum Role {
   ADMIN
   PARTNER
   DISTRIBUTOR
+  VALIDATOR
+}
+
+/// Internal-staff review tier for Role.VALIDATOR accounts only -- null for
+/// every other role. L2 approves L1-submitted validator decks, L3 approves
+/// L2-submitted decks; see docs/validators.md for the full approval chain.
+enum ValidatorLevel {
+  L1
+  L2
+  L3
 }
 
 enum UserStatus {
@@ -80,6 +90,15 @@ model User {
   trainerRatingUpdatedById      String?
   trainerRatingUpdatedBy        User?           @relation("TrainerRatingUpdatedBy", fields: [trainerRatingUpdatedById], references: [id], onDelete: SetNull)
   trainerRatingsUpdated         User[]          @relation("TrainerRatingUpdatedBy")
+  // Meaningful only when role = VALIDATOR; null for every other role.
+  // App-level invariant (enforced in service/DTO, not DB): assigning
+  // Role.VALIDATOR requires validatorLevel to be set, defaulting new
+  // validators to L1. See docs/validators.md.
+  validatorLevel                ValidatorLevel?
+  validatorLevelUpdatedAt       DateTime?
+  validatorLevelUpdatedById     String?
+  validatorLevelUpdatedBy       User?           @relation("ValidatorLevelUpdatedBy", fields: [validatorLevelUpdatedById], references: [id], onDelete: SetNull)
+  validatorLevelsUpdated        User[]          @relation("ValidatorLevelUpdatedBy")
   // Automatic compliance hold, distinct from `status` (admin-driven
   // suspend/block) -- set by WordsService.createRecording the moment a
   // trainer's lifetime WordRecording count crosses a multiple of

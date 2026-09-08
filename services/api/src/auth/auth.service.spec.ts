@@ -244,6 +244,48 @@ describe('AuthService trainer ratings', () => {
   });
 });
 
+describe('AuthService.updateUserRole', () => {
+  it('defaults validatorLevel to L1 when a user is promoted to VALIDATOR', async () => {
+    const { service, prisma } = setup();
+    prisma.user.update.mockResolvedValue({
+      id: 'user-1',
+      email: 'user@example.com',
+      role: 'VALIDATOR',
+      status: 'ACTIVE',
+      validatorLevel: 'L1',
+    });
+
+    await service.updateUserRole('user-1', 'VALIDATOR' as never);
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: expect.objectContaining({ role: 'VALIDATOR', validatorLevel: 'L1' }),
+      }),
+    );
+  });
+
+  it('clears validatorLevel when a user is moved away from VALIDATOR', async () => {
+    const { service, prisma } = setup();
+    prisma.user.update.mockResolvedValue({
+      id: 'user-1',
+      email: 'user@example.com',
+      role: 'TRAINER',
+      status: 'ACTIVE',
+      validatorLevel: null,
+    });
+
+    await service.updateUserRole('user-1', 'TRAINER' as never);
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: expect.objectContaining({ role: 'TRAINER', validatorLevel: null }),
+      }),
+    );
+  });
+});
+
 describe('AuthService.getAdminUser', () => {
   function fakeUser(overrides: Record<string, unknown> = {}) {
     return {
