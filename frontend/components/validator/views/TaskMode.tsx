@@ -1,7 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ListMusic, Loader2, Pause, Play, Plus, Search, X } from 'lucide-react';
+import {
+  ChevronDown,
+  Flag,
+  ListMusic,
+  Loader2,
+  Pause,
+  Play,
+  Plus,
+  Search,
+  X,
+} from 'lucide-react';
 import { cardClass, EmptyPanel, formatDateTime } from '@/components/dashboard/shared';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
@@ -9,13 +19,30 @@ import { normalizeErrorMessage } from '@/store/api';
 import {
   useAddValidatorDeckItemMutation,
   useCreateValidatorDeckMutation,
+  useFlagValidatorDeckItemMutation,
+  useGetValidatorDeckQuery,
   useGetValidatorDecksQuery,
   useGetValidatorRecordingsQuery,
   useScoreValidatorDeckItemMutation,
+  useUpdateValidatorTranscriptMutation,
   type ValidatorDeckSummary,
+  type ValidatorFlagReason,
   type ValidatorItemStatus,
   type ValidatorRecordingSummary,
 } from '@/store/api';
+
+const FLAG_REASONS: { value: ValidatorFlagReason; label: string }[] = [
+  { value: 'UNCLEAR_AUDIO', label: 'Unclear audio' },
+  { value: 'EXCESSIVE_NOISE', label: 'Excessive background noise' },
+  { value: 'CLIPPING_OR_DISTORTION', label: 'Clipping or distortion' },
+  { value: 'WRONG_LANGUAGE_OR_DIALECT', label: 'Wrong language or dialect' },
+  { value: 'MULTIPLE_SPEAKERS', label: 'Multiple speakers' },
+  { value: 'INCORRECT_PROMPT', label: 'Incorrect prompt' },
+  { value: 'INCOMPLETE_RECORDING', label: 'Incomplete recording' },
+  { value: 'DUPLICATE_RECORDING', label: 'Duplicate recording' },
+  { value: 'UNABLE_TO_TRANSCRIBE', label: 'Unable to transcribe confidently' },
+  { value: 'OTHER', label: 'Other' },
+];
 
 /**
  * Task Mode -- the full-screen validation workspace entered from Start Task
@@ -39,6 +66,13 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
   const [deckPickerRecording, setDeckPickerRecording] = useState<ValidatorRecordingSummary | null>(null);
   const [reviewedCount, setReviewedCount] = useState(0);
+  // recordingId -> deckId, populated once Add to Deck succeeds for that
+  // recording this session -- Transcribe/Flag are deck-item-scoped (same as
+  // scoring), so the Expanded Player needs to know which deck to write to.
+  // Session-local only: a recording added to a deck in an earlier session
+  // re-prompts Add to Deck here until the pool-browse endpoint can report
+  // deck membership directly.
+  const [recordingDeckIds, setRecordingDeckIds] = useState<Record<string, string>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const setAudioEl = useCallback((el: HTMLAudioElement | null) => {
     audioRef.current = el;
@@ -143,6 +177,7 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
 
       {activeRecording && isPlayerExpanded && (
         <ExpandedPlayer
+          deckId={recordingDeckIds[activeRecording.id] ?? null}
           isPlaying={isPlaying}
           setAudioEl={setAudioEl}
           onAddToDeck={() => setDeckPickerRecording(activeRecording)}
@@ -154,6 +189,9 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
 
       {deckPickerRecording && (
         <AddToDeckSheet
+          onAdded={(deckId) =>
+            setRecordingDeckIds((prev) => ({ ...prev, [deckPickerRecording.id]: deckId }))
+          }
           onClose={() => setDeckPickerRecording(null)}
           onScored={() => setReviewedCount((c) => c + 1)}
           recording={deckPickerRecording}
@@ -361,6 +399,7 @@ function ExpandedPlayer({
   onClose,
   onAddToDeck,
   setAudioEl,
+  deckId,
 }: {
   recording: ValidatorRecordingSummary;
   isPlaying: boolean;
@@ -368,7 +407,11 @@ function ExpandedPlayer({
   onClose: () => void;
   onAddToDeck: () => void;
   setAudioEl: (el: HTMLAudioElement | null) => void;
+  deckId: string | null;
 }) {
+  const [segment, setSegment] = useState<'playback' | 'transcribe'>('playback');
+  const [isFlagSheetOpen, setIsFlagSheetOpen] = useState(false);
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg text-ink">
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-line px-3">
@@ -380,39 +423,330 @@ function ExpandedPlayer({
         >
           <ChevronDown className="size-5" aria-hidden="true" />
         </button>
-        <span className="text-xs font-bold text-muted">Playback</span>
+        <div
+          className="flex rounded-lg border border-line p-0.5 text-xs font-bold"
+          role="tablist"
+          aria-label="Player mode"
+        >
+          <button
+            aria-selected={segment === 'playback'}
+            className={`min-h-8 rounded-md px-3 ${segment === 'playback' ? 'bg-accent text-white' : 'text-muted'}`}
+            onClick={() => setSegment('playback')}
+            role="tab"
+            type="button"
+          >
+            Playback
+          </button>
+          <button
+            aria-selected={segment === 'transcribe'}
+            className={`min-h-8 rounded-md px-3 ${segment === 'transcribe' ? 'bg-accent text-white' : 'text-muted'}`}
+            onClick={() => setSegment('transcribe')}
+            role="tab"
+            type="button"
+          >
+            Transcribe
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-muted hover:text-ink"
+            onClick={() => setIsFlagSheetOpen(true)}
+            type="button"
+            aria-label="Flag recording"
+          >
+            <Flag className="size-5" aria-hidden="true" />
+          </button>
+          <button
+            className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-muted hover:text-ink"
+            onClick={onAddToDeck}
+            type="button"
+            aria-label="Add to Deck"
+          >
+            <ListMusic className="size-5" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+
+      {/*
+        Exactly one <audio> element, always mounted for the lifetime of the
+        Expanded Player -- switching segments only toggles `controls`/
+        visibility via CSS, never unmounts it, so currentTime/playback state
+        survives a Playback <-> Transcribe switch instead of restarting from
+        0. This is the direct fix for "audio never stops because the user
+        switched segments" from the mobile spec.
+      */}
+      <audio
+        className={segment === 'playback' ? 'mx-auto mt-6 w-full max-w-md' : 'hidden'}
+        controls={segment === 'playback'}
+        onPause={() => isPlaying && onTogglePlay()}
+        onPlay={() => !isPlaying && onTogglePlay()}
+        ref={setAudioEl}
+        src={recording.audioUrl ?? undefined}
+      />
+
+      {segment === 'playback' ? (
+        <PlaybackSegment recording={recording} />
+      ) : (
+        <TranscribeSegment deckId={deckId} onAddToDeck={onAddToDeck} recording={recording} />
+      )}
+
+      {isFlagSheetOpen && (
+        <FlagRecordingSheet
+          deckId={deckId}
+          onAddToDeck={() => {
+            setIsFlagSheetOpen(false);
+            onAddToDeck();
+          }}
+          onClose={() => setIsFlagSheetOpen(false)}
+          recording={recording}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Playback segment metadata -- the actual <audio controls> element lives in
+ * ExpandedPlayer itself (rendered only while this segment is active) so
+ * there is always exactly one real <audio> element mounted, never two
+ * competing instances. Real waveform/loop-region/zoom are deferred to a
+ * later pass -- see the mobile spec's Playback Segment section.
+ */
+function PlaybackSegment({ recording }: { recording: ValidatorRecordingSummary }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wide text-muted">{recording.dialectTag}</p>
+        <p className="mt-2 text-xl font-black leading-snug">{recording.promptText}</p>
+        <p className="mt-1 select-all font-mono text-xs text-muted">{recording.id}</p>
+      </div>
+
+      <p className="max-w-sm text-xs text-muted">
+        Waveform, loop region, and zoom are coming in a later pass -- this build covers browsing,
+        playback, transcription, flagging, and scoring via Add to Deck.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Transcribe segment. Transcript saves are deck-item-scoped (same as
+ * scoring), so this needs a deckId -- when the active recording hasn't
+ * been added to any deck yet this session, show a prompt to Add to Deck
+ * first rather than silently creating one on the validator's behalf.
+ */
+function TranscribeSegment({
+  recording,
+  deckId,
+  onAddToDeck,
+}: {
+  recording: ValidatorRecordingSummary;
+  deckId: string | null;
+  onAddToDeck: () => void;
+}) {
+  if (!deckId) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="max-w-sm text-sm text-muted">
+          Add this recording to a deck to transcribe it.
+        </p>
         <button
-          className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-muted hover:text-ink"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-extrabold text-white hover:bg-accent/90"
           onClick={onAddToDeck}
           type="button"
-          aria-label="Add to Deck"
         >
-          <ListMusic className="size-5" aria-hidden="true" />
+          <Plus className="size-4" aria-hidden="true" />
+          Add to Deck
         </button>
       </div>
+    );
+  }
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-muted">{recording.dialectTag}</p>
-          <p className="mt-2 text-xl font-black leading-snug">{recording.promptText}</p>
-          <p className="mt-1 select-all font-mono text-xs text-muted">{recording.id}</p>
-        </div>
+  return <TranscribeEditor deckId={deckId} recording={recording} />;
+}
 
-        <audio
-          className="w-full max-w-md"
-          controls
-          onPause={() => isPlaying && onTogglePlay()}
-          onPlay={() => !isPlaying && onTogglePlay()}
-          ref={setAudioEl}
-          src={recording.audioUrl ?? undefined}
-        />
+function TranscribeEditor({
+  recording,
+  deckId,
+}: {
+  recording: ValidatorRecordingSummary;
+  deckId: string;
+}) {
+  const { data: deck, isLoading } = useGetValidatorDeckQuery(deckId);
+  const [updateTranscript, { isLoading: isSaving }] = useUpdateValidatorTranscriptMutation();
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
 
-        <p className="max-w-sm text-xs text-muted">
-          Waveform, loop region, and transcription are coming in a later pass -- this build covers
-          browsing, playback, and scoring via Add to Deck.
+  const item = deck?.items.find((i) => i.recordingId === recording.id);
+  // Seed the draft from the saved transcript once, the first time it
+  // loads -- afterward the textarea is the source of truth so a refetch
+  // (e.g. from another mutation invalidating this deck's tag) never
+  // clobbers text the validator is mid-typing.
+  const value = draft ?? item?.validatorTranscript ?? '';
+
+  async function handleSave() {
+    setError(null);
+    try {
+      await updateTranscript({ id: deckId, recordingId: recording.id, transcript: value }).unwrap();
+      setSavedAt(Date.now());
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to save this transcript.'));
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 flex-col gap-3 px-4 py-4">
+        <div className="h-40 animate-pulse rounded-lg bg-surface-muted" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wide text-muted">{recording.dialectTag}</p>
+        <p className="mt-1 font-bold leading-snug">{recording.promptText}</p>
+      </div>
+
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+          {error}
         </p>
+      )}
+
+      <textarea
+        className="min-h-40 flex-1 rounded-lg border border-line bg-surface p-3 text-sm"
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setSavedAt(null);
+        }}
+        placeholder="Type what you hear in the recording…"
+        value={value}
+      />
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-bold text-muted">
+          {isSaving ? 'Saving…' : savedAt ? 'Saved' : item?.validatorTranscriptUpdatedAt ? 'Unsaved changes' : ''}
+        </span>
+        <ActionButton
+          className="min-h-10 rounded-lg bg-accent px-4 text-sm font-extrabold text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={!value.trim()}
+          onClick={() => void handleSave()}
+          pending={isSaving}
+          pendingLabel="Saving"
+          type="button"
+        >
+          Save Transcription
+        </ActionButton>
       </div>
     </div>
+  );
+}
+
+function FlagRecordingSheet({
+  recording,
+  deckId,
+  onClose,
+  onAddToDeck,
+}: {
+  recording: ValidatorRecordingSummary;
+  deckId: string | null;
+  onClose: () => void;
+  onAddToDeck: () => void;
+}) {
+  const [flagItem, { isLoading: isSaving }] = useFlagValidatorDeckItemMutation();
+  const [reason, setReason] = useState<ValidatorFlagReason | null>(null);
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isFlagged, setIsFlagged] = useState(false);
+
+  async function handleSubmit() {
+    if (!deckId || !reason) return;
+    setError(null);
+    try {
+      await flagItem({ id: deckId, recordingId: recording.id, reason, note: note.trim() || undefined }).unwrap();
+      setIsFlagged(true);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to flag this recording.'));
+    }
+  }
+
+  return (
+    <Dialog onOpenChange={(open) => !open && onClose()} open>
+      <DialogContent
+        description={isFlagged ? undefined : recording.promptText}
+        title={isFlagged ? 'Recording flagged' : 'Flag Recording'}
+      >
+        {!deckId ? (
+          <div className="grid gap-3">
+            <p className="text-sm text-muted">Add this recording to a deck to flag it.</p>
+            <button
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-sm font-extrabold text-white hover:bg-accent/90"
+              onClick={onAddToDeck}
+              type="button"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              Add to Deck
+            </button>
+          </div>
+        ) : isFlagged ? (
+          <div className="grid gap-3">
+            <p className="text-sm text-muted">This recording has been flagged for review.</p>
+            <DialogClose className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold text-ink hover:bg-surface-muted">
+              Done
+            </DialogClose>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {error && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+                {error}
+              </p>
+            )}
+            <div className="grid gap-1.5">
+              {FLAG_REASONS.map((option) => (
+                <button
+                  aria-pressed={reason === option.value}
+                  className={`flex min-h-10 items-center rounded-lg border px-3 text-left text-sm font-bold ${
+                    reason === option.value
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-line hover:bg-surface-muted'
+                  }`}
+                  key={option.value}
+                  onClick={() => setReason(option.value)}
+                  type="button"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              className="min-h-20 rounded-lg border border-line bg-surface p-3 text-sm"
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Optional note…"
+              value={note}
+            />
+            <div className="flex gap-2">
+              <DialogClose className="min-h-10 flex-1 rounded-lg border border-line px-3 text-sm font-bold text-ink hover:bg-surface-muted">
+                Cancel
+              </DialogClose>
+              <ActionButton
+                className="min-h-10 flex-1 rounded-lg bg-accent px-3 text-sm font-extrabold text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!reason}
+                onClick={() => void handleSubmit()}
+                pending={isSaving}
+                pendingLabel="Flagging"
+                type="button"
+              >
+                Flag Recording
+              </ActionButton>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -420,10 +754,12 @@ function AddToDeckSheet({
   recording,
   onClose,
   onScored,
+  onAdded,
 }: {
   recording: ValidatorRecordingSummary;
   onClose: () => void;
   onScored: () => void;
+  onAdded: (deckId: string) => void;
 }) {
   const { data: decks, isLoading } = useGetValidatorDecksQuery({ filter: 'mine' });
   const [createDeck, { isLoading: isCreating }] = useCreateValidatorDeckMutation();
@@ -441,6 +777,7 @@ function AddToDeckSheet({
     try {
       await addItem({ id: deck.id, recordingId: recording.id }).unwrap();
       setAddedDeckId(deck.id);
+      onAdded(deck.id);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to add this recording to the deck.'));
     }
@@ -452,6 +789,7 @@ function AddToDeckSheet({
       const deck = await createDeck({ name: newDeckName.trim() }).unwrap();
       await addItem({ id: deck.id, recordingId: recording.id }).unwrap();
       setAddedDeckId(deck.id);
+      onAdded(deck.id);
       setIsCreatingNew(false);
       setNewDeckName('');
     } catch (err) {
