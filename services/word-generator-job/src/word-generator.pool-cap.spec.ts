@@ -75,4 +75,21 @@ describe('WordGeneratorService pool-cap gate', () => {
     expect(result).toEqual([]);
     expect(prisma.sentenceTranslation.groupBy).not.toHaveBeenCalled();
   });
+
+  it('excludes translations of disabled sentences/words from the pool-size count so a disabled backlog never blocks generation', async () => {
+    const { service, prisma } = setup([], []);
+
+    await callFilter(service, ['ig'], 20);
+
+    expect(prisma.sentenceTranslation.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { dialectTag: { in: ['ig'] }, sentence: { isDisabled: false } },
+      }),
+    );
+    expect(prisma.wordTranslation.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { dialectTag: { in: ['ig'] }, word: { isDisabled: false } },
+      }),
+    );
+  });
 });

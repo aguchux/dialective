@@ -882,7 +882,7 @@ export class WordGeneratorService {
     return dialectTags.filter((tag) => (poolSizeByDialect.get(tag) ?? 0) < maxPoolPerDialect);
   }
 
-  /** Combined translated-Sentence + translated-Word count per dialect tag -- the same "how full is this dialect's pool" signal filterDialectsUnderPoolCap and the backfill step's remaining-headroom calculation both need. */
+  /** Combined translated-Sentence + translated-Word count per dialect tag -- the same "how full is this dialect's pool" signal filterDialectsUnderPoolCap and the backfill step's remaining-headroom calculation both need. Excludes translations whose parent Word/Sentence is admin-disabled, since a disabled item is no longer part of the servable pool and shouldn't count against the cap. */
   private async getPoolSizesByDialect(dialectTags: string[]): Promise<Map<string, number>> {
     const poolSizeByDialect = new Map<string, number>();
     if (dialectTags.length === 0) return poolSizeByDialect;
@@ -890,12 +890,12 @@ export class WordGeneratorService {
     const [sentenceTranslationCounts, wordTranslationCounts] = await Promise.all([
       this.prisma.sentenceTranslation.groupBy({
         by: ['dialectTag'],
-        where: { dialectTag: { in: dialectTags } },
+        where: { dialectTag: { in: dialectTags }, sentence: { isDisabled: false } },
         _count: { _all: true },
       }),
       this.prisma.wordTranslation.groupBy({
         by: ['dialectTag'],
-        where: { dialectTag: { in: dialectTags } },
+        where: { dialectTag: { in: dialectTags }, word: { isDisabled: false } },
         _count: { _all: true },
       }),
     ]);
@@ -945,7 +945,7 @@ export class WordGeneratorService {
     let failed = 0;
 
     const words = await this.prisma.word.findMany({
-      where: { translations: { none: { dialectTag } } },
+      where: { isDisabled: false, translations: { none: { dialectTag } } },
       orderBy: { createdAt: 'asc' },
       take: maxItemsThisRun,
       select: { id: true, text: true },
@@ -963,8 +963,8 @@ export class WordGeneratorService {
 
   private async getGeneratedItemsCount(wordsPerItem: number): Promise<number> {
     if (wordsPerItem === 1) {
-      return this.prisma.word.count();
+      return this.prisma.word.count({ where: { isDisabled: false } });
     }
-    return this.prisma.sentence.count();
+    return this.prisma.sentence.count({ where: { isDisabled: false } });
   }
 }

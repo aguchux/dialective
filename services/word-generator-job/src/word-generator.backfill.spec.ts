@@ -54,7 +54,7 @@ describe('WordGeneratorService backfillDialectTranslations', () => {
 
     expect(prisma.word.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { translations: { none: { dialectTag: 'ig' } } },
+        where: { isDisabled: false, translations: { none: { dialectTag: 'ig' } } },
         orderBy: { createdAt: 'asc' },
         take: 5,
       }),
