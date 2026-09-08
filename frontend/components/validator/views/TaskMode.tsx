@@ -183,69 +183,113 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
 
       <TaskModeTopBar onEndTask={endTaskWithConfirm} reviewedCount={reviewedCount} />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <SearchToolbar
-          activeFilterCount={countActiveFilters(filters)}
-          onFilterOpen={() => setIsFilterSheetOpen(true)}
-          onSearchChange={setSearch}
-          onSortOpen={() => setIsSortSheetOpen(true)}
-          search={search}
-          sortLabel={sort.label}
-          totalCount={data?.total}
-        />
-        {countActiveFilters(filters) > 0 && (
-          <ActiveFilterChips filters={filters} onFiltersChange={setFilters} />
-        )}
-
-        <div className={`min-h-0 flex-1 overflow-y-auto px-4 pb-4 ${activeRecording ? 'pb-24' : ''}`}>
-          {isLoading ? (
-            <CatalogueSkeleton />
-          ) : data && data.items.length > 0 ? (
-            <div className="grid gap-3">
-              {data.items.map((recording) => (
-                <RecordingCard
-                  isActive={activeRecording?.id === recording.id}
-                  isPlaying={isPlaying && activeRecording?.id === recording.id}
-                  key={recording.id}
-                  onAddToDeck={() => setDeckPickerRecording(recording)}
-                  onSelect={() => selectRecording(recording)}
-                  recording={recording}
-                />
-              ))}
-              {isFetching && (
-                <div className="flex justify-center py-3">
-                  <Loader2 className="size-5 animate-spin text-muted" aria-hidden="true" />
-                </div>
-              )}
-            </div>
-          ) : (
-            <EmptyPanel icon={Search} title="No recordings match this search" unframed />
+      {/*
+        lg: the desktop layout from the original desktop-first prompt --
+        wide multi-column catalogue alongside a right-side drawer (not a
+        full-screen takeover) when the player is expanded, per the
+        "resize the catalogue instead of covering it" requirement. Below
+        lg, this is the mobile layout: single column, full-screen Expanded
+        Player. One component tree, responsive at the breakpoint, matching
+        the rest of this app's ValidatorHeader/ValidatorMobileNavigation
+        lg: convention rather than a JS media-query hook.
+      */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <SearchToolbar
+            activeFilterCount={countActiveFilters(filters)}
+            onFilterOpen={() => setIsFilterSheetOpen(true)}
+            onSearchChange={setSearch}
+            onSortOpen={() => setIsSortSheetOpen(true)}
+            search={search}
+            sortLabel={sort.label}
+            totalCount={data?.total}
+          />
+          {countActiveFilters(filters) > 0 && (
+            <ActiveFilterChips filters={filters} onFiltersChange={setFilters} />
           )}
 
-          {data && data.totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-center gap-3 text-sm font-bold">
-              <button
-                className="min-h-10 rounded-lg border border-line px-3 disabled:opacity-40"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                type="button"
-              >
-                Previous
-              </button>
-              <span>
-                Page {data.page} of {data.totalPages}
-              </span>
-              <button
-                className="min-h-10 rounded-lg border border-line px-3 disabled:opacity-40"
-                disabled={page >= data.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                type="button"
-              >
-                Next
-              </button>
-            </div>
+          <div
+            className={`min-h-0 flex-1 overflow-y-auto px-4 pb-4 ${activeRecording ? 'pb-24 lg:pb-4' : ''}`}
+          >
+            {isLoading ? (
+              <CatalogueSkeleton />
+            ) : data && data.items.length > 0 ? (
+              <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                {data.items.map((recording) => (
+                  <RecordingCard
+                    isActive={activeRecording?.id === recording.id}
+                    isPlaying={isPlaying && activeRecording?.id === recording.id}
+                    key={recording.id}
+                    onAddToDeck={() => setDeckPickerRecording(recording)}
+                    onSelect={() => selectRecording(recording)}
+                    recording={recording}
+                  />
+                ))}
+                {isFetching && (
+                  <div className="col-span-full flex justify-center py-3">
+                    <Loader2 className="size-5 animate-spin text-muted" aria-hidden="true" />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <EmptyPanel icon={Search} title="No recordings match this search" unframed />
+            )}
+
+            {data && data.totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-center gap-3 text-sm font-bold">
+                <button
+                  className="min-h-10 rounded-lg border border-line px-3 disabled:opacity-40"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  type="button"
+                >
+                  Previous
+                </button>
+                <span>
+                  Page {data.page} of {data.totalPages}
+                </span>
+                <button
+                  className="min-h-10 rounded-lg border border-line px-3 disabled:opacity-40"
+                  disabled={page >= data.totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                  type="button"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/*
+            Desktop's persistent bottom workstation -- always docked while
+            a recording is loaded (no expand/collapse concept at this
+            width, matching the desktop spec's "not a website footer, a
+            persistent application control surface"). Positioned inside
+            the catalogue column (not viewport-fixed) so it never overlaps
+            the drawer.
+          */}
+          {activeRecording && (
+            <DesktopWorkstation
+              audioRef={audioRef}
+              isPlaying={isPlaying}
+              onOpenDrawer={() => setIsPlayerExpanded(true)}
+              onTogglePlay={() => setIsPlaying((p) => !p)}
+              recording={activeRecording}
+            />
           )}
         </div>
+
+        {activeRecording && isPlayerExpanded && (
+          <ExpandedPlayer
+            audioRef={audioRef}
+            deckId={recordingDeckIds[activeRecording.id] ?? null}
+            isPlaying={isPlaying}
+            onAddToDeck={() => setDeckPickerRecording(activeRecording)}
+            onClose={() => setIsPlayerExpanded(false)}
+            onTogglePlay={() => setIsPlaying((p) => !p)}
+            recording={activeRecording}
+          />
+        )}
       </div>
 
       {activeRecording && (
@@ -254,18 +298,6 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
           isExpanded={isPlayerExpanded}
           isPlaying={isPlaying}
           onExpand={() => setIsPlayerExpanded(true)}
-          onTogglePlay={() => setIsPlaying((p) => !p)}
-          recording={activeRecording}
-        />
-      )}
-
-      {activeRecording && isPlayerExpanded && (
-        <ExpandedPlayer
-          audioRef={audioRef}
-          deckId={recordingDeckIds[activeRecording.id] ?? null}
-          isPlaying={isPlaying}
-          onAddToDeck={() => setDeckPickerRecording(activeRecording)}
-          onClose={() => setIsPlayerExpanded(false)}
           onTogglePlay={() => setIsPlaying((p) => !p)}
           recording={activeRecording}
         />
@@ -694,15 +726,18 @@ function MiniPlayer({
     else audio.pause();
   }, [audioRef, isPlaying, recording.id]);
 
-  // Presentational only while the Expanded Player is open -- the shared
-  // <audio> element (owned by TaskMode) keeps playing underneath, but this
-  // bar's own chrome is redundant with the Expanded Player's, so it renders
-  // nothing rather than a second, competing set of controls.
+  // Presentational only while the Expanded Player/drawer is open -- the
+  // shared <audio> element (owned by TaskMode) keeps playing underneath,
+  // but this bar's own chrome is redundant with it, so it renders nothing
+  // rather than a second, competing set of controls. Also hidden at
+  // desktop widths entirely -- DesktopWorkstation is the persistent bottom
+  // bar there (this bar's useEffect above keeps running regardless, since
+  // it's what actually drives audio.play()/pause()).
   if (isExpanded) return null;
 
   return (
     <button
-      className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-center gap-3 border-t border-line bg-surface px-4 shadow-[0_-8px_24px_rgba(0,0,0,0.06)]"
+      className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-center gap-3 border-t border-line bg-surface px-4 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] lg:hidden"
       onClick={onExpand}
       type="button"
     >
@@ -733,6 +768,65 @@ function MiniPlayer({
   );
 }
 
+/**
+ * Desktop's persistent bottom workstation (lg+ only, hidden below that --
+ * see the lg:hidden on MiniPlayer's own bar). Unlike MiniPlayer there is no
+ * expand/collapse state here: it's always docked while a recording is
+ * loaded, matching the desktop spec's "not a website footer, a persistent
+ * application control surface." "Expand" here means open the right-side
+ * drawer (ExpandedPlayer at lg widths), not a full-screen takeover.
+ */
+function DesktopWorkstation({
+  recording,
+  isPlaying,
+  onTogglePlay,
+  onOpenDrawer,
+  audioRef,
+}: {
+  recording: ValidatorRecordingSummary;
+  isPlaying: boolean;
+  onTogglePlay: () => void;
+  onOpenDrawer: () => void;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
+}) {
+  const { currentTime, duration } = useAudioTime(audioRef, recording.id);
+
+  return (
+    <div className="hidden shrink-0 items-center gap-4 border-t border-line bg-surface px-5 py-3 lg:flex">
+      <button
+        className="grid size-11 shrink-0 place-items-center rounded-full bg-accent text-white"
+        onClick={onTogglePlay}
+        type="button"
+        aria-label={isPlaying ? 'Pause' : 'Play'}
+      >
+        {isPlaying ? <Pause className="size-5" aria-hidden="true" /> : <Play className="size-5" aria-hidden="true" />}
+      </button>
+
+      <div className="min-w-0 shrink-0" style={{ width: '220px' }}>
+        <p className="truncate text-sm font-bold">{recording.promptText}</p>
+        <p className="truncate text-xs text-muted">{recording.dialectTag}</p>
+      </div>
+
+      <span className="shrink-0 font-mono text-xs text-muted">{formatSeconds(currentTime)}</span>
+      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted/20">
+        <div
+          className="h-full rounded-full bg-accent"
+          style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+        />
+      </div>
+      <span className="shrink-0 font-mono text-xs text-muted">{formatSeconds(duration)}</span>
+
+      <button
+        className="shrink-0 rounded-lg border border-line px-3 py-2 text-sm font-bold text-ink hover:bg-surface-muted"
+        onClick={onOpenDrawer}
+        type="button"
+      >
+        Open workspace
+      </button>
+    </div>
+  );
+}
+
 function ExpandedPlayer({
   recording,
   isPlaying,
@@ -754,15 +848,22 @@ function ExpandedPlayer({
   const [isFlagSheetOpen, setIsFlagSheetOpen] = useState(false);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-bg text-ink">
+    // Mobile (<lg): full-screen takeover, matches the mobile spec's
+    // Expanded Player exactly. Desktop (lg+): a fixed-width right-side
+    // drawer instead -- the catalogue stays visible and scrollable to its
+    // left (its parent flex row in TaskMode isn't touched by this drawer),
+    // per the desktop spec's "resize the catalogue instead of covering
+    // it" requirement.
+    <div className="fixed inset-0 z-50 flex flex-col bg-bg text-ink lg:static lg:inset-auto lg:z-auto lg:h-full lg:w-95 lg:shrink-0 lg:border-l lg:border-line xl:w-105">
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-line px-3">
         <button
           className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-muted hover:text-ink"
           onClick={onClose}
           type="button"
-          aria-label="Collapse player"
+          aria-label="Close panel"
         >
-          <ChevronDown className="size-5" aria-hidden="true" />
+          <ChevronDown className="size-5 lg:hidden" aria-hidden="true" />
+          <X className="hidden size-5 lg:block" aria-hidden="true" />
         </button>
         <div
           className="flex rounded-lg border border-line p-0.5 text-xs font-bold"
