@@ -1185,8 +1185,8 @@ model ValidatorDeck {
   name            String
   createdByUserId String // provenance, never changes
   createdBy       User                @relation("ValidatorDeckCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  // Current editor -- admin-reassignable in a later phase; equals
-  // createdByUserId until reassignment exists.
+  // Current editor -- admin-reassignable. Equals createdByUserId until a
+  // reassign() call moves it; see reassignedFromUserId below.
   ownerUserId     String
   owner           User                @relation("ValidatorDeckOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
   status          ValidatorDeckStatus @default(DRAFT)
@@ -1194,6 +1194,25 @@ model ValidatorDeck {
   countryCode     String?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
+
+  // Phase 3 (docs/validators.md): the StreamDeck this deck was bridged into
+  // on publish -- null until published. Unique so a ValidatorDeck can only
+  // ever be bridged into one StreamDeck.
+  publishedStreamDeckId String?   @unique
+  publishedAt           DateTime?
+
+  // Phase 3 same-level reassignment penalty (plan's "Confirmed product
+  // decisions" #7). Set together by reassign(): reassignedFromUserId is the
+  // PREVIOUS ownerUserId (the peer the deck was taken away from),
+  // effectiveReassignmentPenaltyPercent freezes the penalty percent actually
+  // used at reassignment time so a later change to PlatformSettings.
+  // validatorReassignmentPenaltyPercent never retroactively alters an
+  // already-decided reassignment's payout math. Both null until a deck is
+  // ever reassigned; once set they are never cleared, so publish() can
+  // always tell whether this specific deck went through a reassignment.
+  reassignedFromUserId                String?
+  reassignedAt                        DateTime?
+  effectiveReassignmentPenaltyPercent Decimal?  @db.Decimal(5, 2)
 
   items     ValidatorDeckItem[]
   auditLogs ValidatorDeckAuditLog[]
@@ -1320,6 +1339,7 @@ enum LedgerEntryType {
   P2P_ESCROW_REFUND
   P2P_ESCROW_RELEASE
   P2P_ESCROW_CREDIT
+  VALIDATION_REWARD // Phase 3 validator payout, minted on ValidatorDeck publish -- see packages/db/src/validator-payouts.ts. reference is "validator-deck:<deckId>:creator" (or ":reassigned-owner") for the base-reward payee and "validator-deck:<deckId>:approver:<actorUserId>" for each approving tier's additive bonus, so a retried/duplicate publish() call never double-credits.
 }
 
 /// The reserve engine is deliberately separate from the legacy Wallet and
@@ -2227,8 +2247,12 @@ model PlatformSettings {
   walletSmsDepositConfirmedEnabled       Boolean   @default(false) // SMS the trainer once a crypto or fiat deposit is confirmed and DL is credited to their wallet
   referralSmsFundingBonusEnabled         Boolean   @default(false) // SMS the referrer when they're credited a funding bonus off a referral's deposit (only fires if ReferralSettings.fundingBonusEnabled is also on)
   referralSmsPayoutBonusEnabled          Boolean   @default(false) // SMS the referrer when they're credited a payout bonus off a referral's training-payout settlement (only fires if ReferralSettings.payoutBonusEnabled is also on)
-  validationRewardPerRecording           Decimal   @default(0) @db.Decimal(20, 8) // flat DL amount credited per VALID ValidatorDeckItem when its containing deck is published (docs/validators.md) -- 0 disables validator payouts entirely; Phase 1 only reads this for the unpaid "expected earning" preview, actual crediting lands in a later phase
+  validationRewardPerRecording           Decimal   @default(0) @db.Decimal(20, 8) // flat DL amount credited per VALID ValidatorDeckItem when its containing deck is published (docs/validators.md) -- 0 disables validator payouts entirely (publish/bridge still happens, just no crediting); see packages/db/src/validator-payouts.ts for the full split
   validatorDeckMaxItems                  Int       @default(2000) // cap on ValidatorDeckItem rows per ValidatorDeck; 0 = uncapped
+  validatorL1ApprovalBonusPercent        Decimal   @default(5) @db.Decimal(5, 2) // additive bonus (% of a deck's base reward) paid to an L1 validator when THEY are the one reviewing/approving another party's deck in an availability-gated fallback scenario (rare -- the normal chain never routes a deck to an L1 approver) -- see validator-payouts.ts
+  validatorL2ApprovalBonusPercent        Decimal   @default(10) @db.Decimal(5, 2) // additive bonus (% of base) paid to the L2 validator who approved a PENDING_L2 deck
+  validatorL3ApprovalBonusPercent        Decimal   @default(15) @db.Decimal(5, 2) // additive bonus (% of base) paid to the L3 validator who approved a PENDING_L3 deck
+  validatorReassignmentPenaltyPercent    Decimal   @default(0) @db.Decimal(5, 2) // global default for reassign()'s admin-settable per-reassignment penalty (0-100); the effective percent actually used is frozen per-deck on ValidatorDeck.effectiveReassignmentPenaltyPercent at reassignment time, so changing this later never alters an already-decided reassignment's payout
   cryptoWithdrawalsEnabled               Boolean   @default(true) // master kill switch -- when false, both wallet/withdrawals/otp and wallet/withdrawals reject new withdrawal requests outright
   nowPaymentsPayoutsEnabled              Boolean   @default(false) // when false, admin/withdrawals/:id/submit-nowpayments is disabled -- admins can still resolve withdrawals manually (outcome=paid) while this is off, which is the safe default until payout credentials/allow-lists are configured
   allowedWithdrawalCurrencies            String    @default("USDT") // CSV of currencies a withdrawal's destinationCurrency may be, validated app-side against NowPaymentsService's supported set (USDT, USDC)

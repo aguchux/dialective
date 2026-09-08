@@ -82,6 +82,20 @@ describe('PlatformSettingsService validator settings', () => {
 
     await expect(service.getValidatorDeckMaxItems()).resolves.toBe(500);
   });
+
+  it('returns the L1/L2/L3 approval bonus percents and reassignment penalty percent as numbers', async () => {
+    const { service } = setup({
+      validatorL1ApprovalBonusPercent: { toNumber: () => 5 },
+      validatorL2ApprovalBonusPercent: { toNumber: () => 10 },
+      validatorL3ApprovalBonusPercent: { toNumber: () => 15 },
+      validatorReassignmentPenaltyPercent: { toNumber: () => 0 },
+    });
+
+    await expect(service.getValidatorL1ApprovalBonusPercent()).resolves.toBe(5);
+    await expect(service.getValidatorL2ApprovalBonusPercent()).resolves.toBe(10);
+    await expect(service.getValidatorL3ApprovalBonusPercent()).resolves.toBe(15);
+    await expect(service.getValidatorReassignmentPenaltyPercent()).resolves.toBe(0);
+  });
 });
 
 describe('PlatformSettingsService.isWeeklyTrainerReportEnabled', () => {
@@ -234,6 +248,10 @@ describe('PlatformSettingsService wordTrainingEnabled / sentenceTrainingEnabled 
       withdrawalFeePercent: { toString: () => '0' },
       withdrawalFeeTokenAmount: { toString: () => '0' },
       validationRewardPerRecording: { toString: () => '0' },
+      validatorL1ApprovalBonusPercent: { toString: () => '5' },
+      validatorL2ApprovalBonusPercent: { toString: () => '10' },
+      validatorL3ApprovalBonusPercent: { toString: () => '15' },
+      validatorReassignmentPenaltyPercent: { toString: () => '0' },
     });
 
     await expect(
@@ -262,6 +280,10 @@ describe('PlatformSettingsService wordTrainingEnabled / sentenceTrainingEnabled 
       withdrawalFeePercent: { toString: () => '0' },
       withdrawalFeeTokenAmount: { toString: () => '0' },
       validationRewardPerRecording: { toString: () => '0' },
+      validatorL1ApprovalBonusPercent: { toString: () => '5' },
+      validatorL2ApprovalBonusPercent: { toString: () => '10' },
+      validatorL3ApprovalBonusPercent: { toString: () => '15' },
+      validatorReassignmentPenaltyPercent: { toString: () => '0' },
     });
 
     await expect(service.update({ wordTrainingEnabled: false })).resolves.toMatchObject({
@@ -330,6 +352,10 @@ describe('PlatformSettingsService session idle/absolute timeout settings', () =>
       withdrawalFeePercent: { toString: () => '0' },
       withdrawalFeeTokenAmount: { toString: () => '0' },
       validationRewardPerRecording: { toString: () => '0' },
+      validatorL1ApprovalBonusPercent: { toString: () => '5' },
+      validatorL2ApprovalBonusPercent: { toString: () => '10' },
+      validatorL3ApprovalBonusPercent: { toString: () => '15' },
+      validatorReassignmentPenaltyPercent: { toString: () => '0' },
     });
 
     await expect(

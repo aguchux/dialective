@@ -167,6 +167,7 @@ export const activityLabels: Record<LedgerEntryType, string> = {
   P2P_ESCROW_REFUND: 'P2P escrow returned',
   P2P_ESCROW_RELEASE: 'P2P escrow released',
   P2P_ESCROW_CREDIT: 'P2P DL purchase',
+  VALIDATION_REWARD: 'Validation reward',
 };
 
 export function TrainerDashboard() {

@@ -1,10 +1,40 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { ValidatorDeckAuditAction, ValidatorDeckStatus, ValidatorLevel } from '@dialectiva/db';
+import { randomBytes } from 'crypto';
+import {
+  buildValidatorPayoutOps,
+  computeValidatorPayoutBreakdown,
+  StreamDeckType,
+  ValidatorDeckAuditAction,
+  ValidatorDeckStatus,
+  ValidatorItemStatus,
+  ValidatorLevel,
+} from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { CreateValidatorDeckDto } from './dto/create-validator-deck.dto';
 import { UpdateValidatorDeckDto } from './dto/update-validator-deck.dto';
 import { ScoreValidatorDeckItemDto } from './dto/score-validator-deck-item.dto';
+
+// Reserved singleton SubscriberOrganization id seeded by the
+// 20260908160000_add_validator_payouts_and_publish migration -- see
+// docs/validators.md "Confirmed product decisions" #5. Every published
+// ValidatorDeck bridges into a StreamDeck owned by this org.
+export const DIALECT_LIBRARY_PLATFORM_ORG_ID = 'dialect-library-platform';
+
+/**
+ * "DLSD-{country}-{dialect}-{subdialect}-{6 chars}" -- identical format to
+ * StreamDecksService.generateDeckKey (voice-stream/stream-decks), duplicated
+ * here rather than imported since that service lives in a sibling module not
+ * exported for cross-module reuse and pulling in its whole module (Stripe
+ * billing dependencies, catalogue service, etc.) just for this one pure
+ * string helper isn't worth the coupling.
+ */
+function generateDeckKey(countryCode?: string | null, dialectTag?: string | null): string {
+  const country = (countryCode ?? 'GEN').toUpperCase();
+  const dialect = (dialectTag ?? 'GEN').toUpperCase();
+  const suffix = randomBytes(4).toString('hex').slice(0, 6).toUpperCase();
+  return `DLSD-${country}-${dialect}-GEN-${suffix}`;
+}
 
 /**
  * Phase 1 (docs/validators.md): DRAFT-only deck lifecycle -- any validator
@@ -14,9 +44,13 @@ import { ScoreValidatorDeckItemDto } from './dto/score-validator-deck-item.dto';
  * *edit* rights are scoped, not *read* rights.
  *
  * Phase 2 adds the full approval-chain state machine (submit/approve/reject)
- * plus the append-only ValidatorDeckAuditLog. Decks can reach APPROVED here
- * -- publish (the StreamDeck bridge + VALIDATION_REWARD payout) is Phase 3
- * and out of scope; nothing in this service writes PUBLISHED/REASSIGNED.
+ * plus the append-only ValidatorDeckAuditLog. Decks can reach APPROVED here.
+ *
+ * Phase 3 adds publish() (the StreamDeck bridge + VALIDATION_REWARD payout,
+ * admin-only), reassign() (admin-only same-tier reassignment with a
+ * frozen-at-reassignment penalty split), and adminCloneFromStreamDeck() (the
+ * "clone a B2B deck back down for revalidation" flow) -- see
+ * packages/db/src/validator-payouts.ts for the payout math itself.
  */
 @Injectable()
 export class ValidatorDecksService {
@@ -418,6 +452,278 @@ export class ValidatorDecksService {
     return this.prisma.validatorDeckAuditLog.findMany({
       where: { deckId },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Phase 3, admin-only. A deck must NOT already be PUBLISHED/ARCHIVED --
+   * any other status (including DRAFT, PENDING_L2/L3/ADMIN, REJECTED, not just APPROVED)
+   * can be reassigned, since reassignment is meant to happen when an admin
+   * decides mid-review that the current owner's work should go to a peer,
+   * not only after a deck has cleared the whole chain. Captures the
+   * PREVIOUS ownerUserId as reassignedFromUserId and freezes the penalty
+   * percent used (explicit penaltyPercent, or the global
+   * validatorReassignmentPenaltyPercent default) onto the deck row so a
+   * later change to the global setting never retroactively alters this
+   * reassignment's eventual publish-time payout split.
+   */
+  async reassign(deckId: string, adminUserId: string, newOwnerUserId: string, penaltyPercent?: number) {
+    const deck = await this.prisma.validatorDeck.findUnique({ where: { id: deckId } });
+    if (!deck) throw new NotFoundException('Validator deck not found');
+    if (deck.status === ValidatorDeckStatus.PUBLISHED || deck.status === ValidatorDeckStatus.ARCHIVED) {
+      throw new BadRequestException('A published or archived deck cannot be reassigned');
+    }
+    if (newOwnerUserId === deck.ownerUserId) {
+      throw new BadRequestException('This deck is already owned by that validator');
+    }
+
+    const newOwner = await this.prisma.user.findUnique({ where: { id: newOwnerUserId } });
+    if (!newOwner || newOwner.role !== 'VALIDATOR') {
+      throw new BadRequestException('newOwnerUserId must be an existing validator');
+    }
+
+    const effectivePenaltyPercent =
+      penaltyPercent ?? (await this.settings.getValidatorReassignmentPenaltyPercent());
+    const previousOwnerUserId = deck.ownerUserId;
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.validatorDeck.update({
+        where: { id: deckId },
+        data: {
+          ownerUserId: newOwnerUserId,
+          reassignedFromUserId: previousOwnerUserId,
+          reassignedAt: new Date(),
+          effectiveReassignmentPenaltyPercent: effectivePenaltyPercent,
+        },
+      });
+      await tx.validatorDeckAuditLog.create({
+        data: {
+          deckId,
+          action: ValidatorDeckAuditAction.REASSIGNED,
+          actorUserId: adminUserId,
+          metadata: {
+            fromUserId: previousOwnerUserId,
+            toUserId: newOwnerUserId,
+            penaltyPercent: effectivePenaltyPercent,
+          },
+        },
+      });
+      return updated;
+    });
+  }
+
+  /**
+   * Phase 3, admin-only. Bridges an APPROVED deck into a new PUBLIC
+   * StreamDeck owned by the reserved "Dialect Library" platform org, mints
+   * the VALIDATION_REWARD payout (skipped entirely when the configured rate
+   * is 0 -- the deck still publishes), and marks the deck PUBLISHED. All in
+   * one $transaction so the StreamDeck/items, the payout crediting, the
+   * ValidatorDeck status flip, and the audit log entry commit atomically.
+   *
+   * Optimistic-concurrency guarded the same way submit/approve/reject are:
+   * updateMany({status: 'APPROVED'}) + count===1 + ConflictException, so a
+   * double-click or a race against another admin can never publish twice.
+   */
+  async publish(deckId: string, adminUserId: string) {
+    const deck = await this.prisma.validatorDeck.findUnique({ where: { id: deckId } });
+    if (!deck) throw new NotFoundException('Validator deck not found');
+    if (deck.status !== ValidatorDeckStatus.APPROVED) {
+      throw new BadRequestException('Only an approved deck can be published');
+    }
+
+    const [validItems, auditLogs, rate, l1Percent, l2Percent, l3Percent] = await Promise.all([
+      this.prisma.validatorDeckItem.findMany({
+        where: { deckId, validationStatus: ValidatorItemStatus.VALID },
+        select: { recordingId: true },
+      }),
+      this.prisma.validatorDeckAuditLog.findMany({
+        where: { deckId },
+        select: { action: true, actorUserId: true, fromStatus: true },
+      }),
+      this.settings.getValidationRewardPerRecording(),
+      this.settings.getValidatorL1ApprovalBonusPercent(),
+      this.settings.getValidatorL2ApprovalBonusPercent(),
+      this.settings.getValidatorL3ApprovalBonusPercent(),
+    ]);
+
+    const breakdown = computeValidatorPayoutBreakdown(
+      {
+        id: deck.id,
+        createdByUserId: deck.createdByUserId,
+        ownerUserId: deck.ownerUserId,
+        reassignedFromUserId: deck.reassignedFromUserId,
+        effectiveReassignmentPenaltyPercent: deck.effectiveReassignmentPenaltyPercent,
+      },
+      validItems.length,
+      auditLogs,
+      {
+        validationRewardPerRecording: rate,
+        validatorL1ApprovalBonusPercent: l1Percent,
+        validatorL2ApprovalBonusPercent: l2Percent,
+        validatorL3ApprovalBonusPercent: l3Percent,
+      },
+    );
+
+    return this.prisma.$transaction(async (tx) => {
+      const payoutOps = await buildValidatorPayoutOps(tx, breakdown);
+
+      const streamDeck = await tx.streamDeck.create({
+        data: {
+          deckKey: generateDeckKey(deck.countryCode, deck.dialectTag),
+          organizationId: DIALECT_LIBRARY_PLATFORM_ORG_ID,
+          name: deck.name,
+          type: StreamDeckType.MANUAL,
+          createdByUserId: adminUserId,
+          visibility: 'PUBLIC',
+        },
+      });
+
+      if (validItems.length > 0) {
+        await tx.streamDeckItem.createMany({
+          data: validItems.map((item) => ({
+            deckId: streamDeck.id,
+            recordingId: item.recordingId,
+            addedByUserId: adminUserId,
+          })),
+        });
+      }
+
+      for (const op of payoutOps) {
+        await op;
+      }
+
+      const result = await tx.validatorDeck.updateMany({
+        where: { id: deckId, status: ValidatorDeckStatus.APPROVED },
+        data: {
+          status: ValidatorDeckStatus.PUBLISHED,
+          publishedStreamDeckId: streamDeck.id,
+          publishedAt: new Date(),
+        },
+      });
+      if (result.count !== 1) {
+        throw new ConflictException('This deck was changed by someone else -- reload and try again');
+      }
+
+      await tx.validatorDeckAuditLog.create({
+        data: {
+          deckId,
+          action: ValidatorDeckAuditAction.PUBLISHED,
+          actorUserId: adminUserId,
+          fromStatus: ValidatorDeckStatus.APPROVED,
+          toStatus: ValidatorDeckStatus.PUBLISHED,
+          metadata: {
+            streamDeckId: streamDeck.id,
+            validCount: validItems.length,
+            rate: breakdown.rate.toString(),
+            base: breakdown.base.toString(),
+            totalPayout: breakdown.totalPayout.toString(),
+            lines: breakdown.lines.map((line) => ({
+              userId: line.userId,
+              role: line.role,
+              amount: line.amount.toString(),
+            })),
+          },
+        },
+      });
+
+      return tx.validatorDeck.findUniqueOrThrow({ where: { id: deckId } });
+    });
+  }
+
+  /**
+   * Phase 3, admin-only. Terminal, one-way archive for a deck that should no
+   * longer be actively worked -- PUBLISHED decks stay PUBLISHED forever (the
+   * StreamDeck bridge is the durable record at that point; archiving would
+   * be meaningless/misleading), so archive() only accepts a deck that is
+   * NOT already PUBLISHED or ARCHIVED. No optimistic-concurrency guard
+   * needed beyond that plain status check -- this is an admin-only terminal
+   * transition with no peer/tier contention to race against.
+   */
+  async archive(deckId: string, adminUserId: string) {
+    const deck = await this.prisma.validatorDeck.findUnique({ where: { id: deckId } });
+    if (!deck) throw new NotFoundException('Validator deck not found');
+    if (deck.status === ValidatorDeckStatus.PUBLISHED || deck.status === ValidatorDeckStatus.ARCHIVED) {
+      throw new BadRequestException('A published or already-archived deck cannot be archived');
+    }
+    const fromStatus = deck.status;
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.validatorDeck.update({
+        where: { id: deckId },
+        data: { status: ValidatorDeckStatus.ARCHIVED },
+      });
+      await tx.validatorDeckAuditLog.create({
+        data: {
+          deckId,
+          action: ValidatorDeckAuditAction.ARCHIVED,
+          actorUserId: adminUserId,
+          fromStatus,
+          toStatus: ValidatorDeckStatus.ARCHIVED,
+        },
+      });
+      return tx.validatorDeck.findUniqueOrThrow({ where: { id: deckId } });
+    });
+  }
+
+  /**
+   * Phase 3, admin-only. "Clone a B2B deck back down for revalidation" (plan
+   * item #4): copies a StreamDeck's items into a brand-new DRAFT
+   * ValidatorDeck owned by targetOwnerUserId. Every copied item starts
+   * UNSCORED so DL's own validators re-review it from scratch -- a prior
+   * StreamDeckItem's presence there says nothing about DL-internal
+   * validation quality. ValidatorDeck has no clonedFromDeckId field (Phase
+   * 1/2 never added one for this cross-model StreamDeck->ValidatorDeck
+   * direction, only within ValidatorDeck-to-ValidatorDeck clone() -- out of
+   * scope to add here per the plan's "use judgment" allowance), so
+   * provenance is recorded in the CLONED audit log's metadata instead.
+   */
+  async adminCloneFromStreamDeck(streamDeckId: string, targetOwnerUserId: string, adminUserId: string) {
+    const streamDeck = await this.prisma.streamDeck.findUnique({
+      where: { id: streamDeckId },
+      include: { items: true },
+    });
+    if (!streamDeck) throw new NotFoundException('Stream Deck not found');
+
+    const targetOwner = await this.prisma.user.findUnique({ where: { id: targetOwnerUserId } });
+    if (!targetOwner || targetOwner.role !== 'VALIDATOR') {
+      throw new BadRequestException('targetOwnerUserId must be an existing validator');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const deck = await tx.validatorDeck.create({
+        data: {
+          name: `${streamDeck.name} (cloned)`,
+          createdByUserId: targetOwnerUserId,
+          ownerUserId: targetOwnerUserId,
+        },
+      });
+
+      if (streamDeck.items.length > 0) {
+        await tx.validatorDeckItem.createMany({
+          data: streamDeck.items.map((item) => ({
+            deckId: deck.id,
+            recordingId: item.recordingId,
+            addedByUserId: adminUserId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      await tx.validatorDeckAuditLog.create({
+        data: {
+          deckId: deck.id,
+          action: ValidatorDeckAuditAction.CLONED,
+          actorUserId: adminUserId,
+          toStatus: ValidatorDeckStatus.DRAFT,
+          metadata: {
+            sourceStreamDeckId: streamDeckId,
+            sourceStreamDeckKey: streamDeck.deckKey,
+            itemCount: streamDeck.items.length,
+          },
+        },
+      });
+
+      return deck;
     });
   }
 

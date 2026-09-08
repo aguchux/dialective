@@ -600,6 +600,28 @@ export class PlatformSettingsService {
     return row.validatorDeckMaxItems;
   }
 
+  /** Additive approval-chain bonus (% of a deck's base reward) -- see packages/db/src/validator-payouts.ts for the full payout split math. */
+  async getValidatorL1ApprovalBonusPercent(): Promise<number> {
+    const row = await this.getRow();
+    return row.validatorL1ApprovalBonusPercent.toNumber();
+  }
+
+  async getValidatorL2ApprovalBonusPercent(): Promise<number> {
+    const row = await this.getRow();
+    return row.validatorL2ApprovalBonusPercent.toNumber();
+  }
+
+  async getValidatorL3ApprovalBonusPercent(): Promise<number> {
+    const row = await this.getRow();
+    return row.validatorL3ApprovalBonusPercent.toNumber();
+  }
+
+  /** Global default for reassign()'s admin-settable per-reassignment penalty; see ValidatorDeck.effectiveReassignmentPenaltyPercent for why the effective value is frozen per-deck instead of always reading this live. */
+  async getValidatorReassignmentPenaltyPercent(): Promise<number> {
+    const row = await this.getRow();
+    return row.validatorReassignmentPenaltyPercent.toNumber();
+  }
+
   async getSettlementDelayMinutes(): Promise<number> {
     const row = await this.getRow();
     return row.settlementDelayMinutes;
@@ -829,6 +851,10 @@ export class PlatformSettingsService {
       referralSmsPayoutBonusEnabled: row.referralSmsPayoutBonusEnabled,
       validationRewardPerRecording: row.validationRewardPerRecording.toString(),
       validatorDeckMaxItems: row.validatorDeckMaxItems,
+      validatorL1ApprovalBonusPercent: row.validatorL1ApprovalBonusPercent.toString(),
+      validatorL2ApprovalBonusPercent: row.validatorL2ApprovalBonusPercent.toString(),
+      validatorL3ApprovalBonusPercent: row.validatorL3ApprovalBonusPercent.toString(),
+      validatorReassignmentPenaltyPercent: row.validatorReassignmentPenaltyPercent.toString(),
       cryptoWithdrawalsEnabled: row.cryptoWithdrawalsEnabled,
       nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
@@ -964,6 +990,10 @@ export class PlatformSettingsService {
     referralSmsPayoutBonusEnabled?: boolean;
     validationRewardPerRecording?: number;
     validatorDeckMaxItems?: number;
+    validatorL1ApprovalBonusPercent?: number;
+    validatorL2ApprovalBonusPercent?: number;
+    validatorL3ApprovalBonusPercent?: number;
+    validatorReassignmentPenaltyPercent?: number;
     cryptoWithdrawalsEnabled?: boolean;
     nowPaymentsPayoutsEnabled?: boolean;
     allowedWithdrawalCurrencies?: string;
@@ -1201,6 +1231,19 @@ export class PlatformSettingsService {
       throw new BadRequestException('validatorDeckMaxItems must be >= 0');
     }
 
+    // Every approval-bonus/reassignment-penalty field is a percent -- 0 is a
+    // valid "no bonus"/"no penalty" value, only out-of-range values are invalid.
+    for (const [key, value] of [
+      ['validatorL1ApprovalBonusPercent', data.validatorL1ApprovalBonusPercent],
+      ['validatorL2ApprovalBonusPercent', data.validatorL2ApprovalBonusPercent],
+      ['validatorL3ApprovalBonusPercent', data.validatorL3ApprovalBonusPercent],
+      ['validatorReassignmentPenaltyPercent', data.validatorReassignmentPenaltyPercent],
+    ] as const) {
+      if (value !== undefined && (value < 0 || value > 100)) {
+        throw new BadRequestException(`${key} must be between 0 and 100`);
+      }
+    }
+
     // No "off" value for either -- unlike auditHoldEveryNSubmissions, a
     // session timeout has no meaningful "disabled" state (0 would mean
     // instant logout, not "never time out"). Both must stay strictly
@@ -1344,6 +1387,10 @@ export class PlatformSettingsService {
       referralSmsPayoutBonusEnabled: row.referralSmsPayoutBonusEnabled,
       validationRewardPerRecording: row.validationRewardPerRecording.toString(),
       validatorDeckMaxItems: row.validatorDeckMaxItems,
+      validatorL1ApprovalBonusPercent: row.validatorL1ApprovalBonusPercent.toString(),
+      validatorL2ApprovalBonusPercent: row.validatorL2ApprovalBonusPercent.toString(),
+      validatorL3ApprovalBonusPercent: row.validatorL3ApprovalBonusPercent.toString(),
+      validatorReassignmentPenaltyPercent: row.validatorReassignmentPenaltyPercent.toString(),
       cryptoWithdrawalsEnabled: row.cryptoWithdrawalsEnabled,
       nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,

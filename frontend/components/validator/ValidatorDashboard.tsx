@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { CircleDollarSign, WalletCards } from 'lucide-react';
+import { WalletCards } from 'lucide-react';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
 import { Avatar, cardClass, EmptyPanel } from '@/components/dashboard/shared';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -16,6 +16,7 @@ import {
 import { StreamDecksView } from '@/components/validator/views/StreamDecksView';
 import { ValidationsView } from '@/components/validator/views/ValidationsView';
 import { AuditView } from '@/components/validator/views/AuditView';
+import { EarningsView } from '@/components/validator/views/EarningsView';
 
 const allViewIds: ValidatorView[] = ['decks', 'tokens', 'earnings', 'validations', 'audit', 'profile'];
 
@@ -100,7 +101,7 @@ function ValidatorViewContent({ activeView }: { activeView: ValidatorView }) {
     return <EmptyPanel icon={WalletCards} title="Your DL token balance will appear here" />;
   }
   if (activeView === 'earnings') {
-    return <EmptyPanel icon={CircleDollarSign} title="Your validation earnings will appear here" />;
+    return <EarningsView />;
   }
   if (activeView === 'validations') {
     return <ValidationsView />;

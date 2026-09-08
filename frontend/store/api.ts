@@ -846,7 +846,8 @@ export type LedgerEntryType =
   | 'P2P_ESCROW_LOCK'
   | 'P2P_ESCROW_REFUND'
   | 'P2P_ESCROW_RELEASE'
-  | 'P2P_ESCROW_CREDIT';
+  | 'P2P_ESCROW_CREDIT'
+  | 'VALIDATION_REWARD';
 
 export type P2POfferType = 'SELL' | 'BUY';
 export type P2POfferStatus =
@@ -1968,6 +1969,16 @@ export interface ValidatorDeckAuditLogEntry {
   reason: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: string;
+}
+
+export interface ReassignValidatorDeckInput {
+  newOwnerUserId: string;
+  penaltyPercent?: number;
+}
+
+export interface CloneFromStreamDeckInput {
+  streamDeckId: string;
+  targetOwnerUserId: string;
 }
 
 export interface AuditRecordingResult {
@@ -4380,6 +4391,37 @@ export const dialectivaApi = createApi({
         'AdminValidatorDecks',
       ],
     }),
+    adminPublishValidatorDeck: builder.mutation<ValidatorDeckSummary, string>({
+      query: (id) => ({ url: `/admin/validator-decks/${id}/publish`, method: 'POST' }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+        'AdminValidatorDecks',
+      ],
+    }),
+    adminReassignValidatorDeck: builder.mutation<
+      ValidatorDeckSummary,
+      { id: string; body: ReassignValidatorDeckInput }
+    >({
+      query: ({ id, body }) => ({ url: `/admin/validator-decks/${id}/reassign`, method: 'POST', body }),
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+        'AdminValidatorDecks',
+      ],
+    }),
+    adminArchiveValidatorDeck: builder.mutation<ValidatorDeckSummary, string>({
+      query: (id) => ({ url: `/admin/validator-decks/${id}/archive`, method: 'POST' }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+        'AdminValidatorDecks',
+      ],
+    }),
+    adminCloneFromStreamDeck: builder.mutation<ValidatorDeckSummary, CloneFromStreamDeckInput>({
+      query: (body) => ({ url: '/admin/validator-decks/from-stream-deck', method: 'POST', body }),
+      invalidatesTags: ['ValidatorDecks', 'AdminValidatorDecks'],
+    }),
   }),
 });
 
@@ -4677,6 +4719,10 @@ export const {
   useGetValidatorDeckAuditLogQuery,
   useGetAdminValidatorDecksQuery,
   useAdminApproveValidatorDeckMutation,
+  useAdminPublishValidatorDeckMutation,
+  useAdminReassignValidatorDeckMutation,
+  useAdminArchiveValidatorDeckMutation,
+  useAdminCloneFromStreamDeckMutation,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };
