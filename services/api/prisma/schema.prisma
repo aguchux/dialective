@@ -101,6 +101,7 @@ model User {
   validatorLevelsUpdated        User[]          @relation("ValidatorLevelUpdatedBy")
   validatorDecksCreated         ValidatorDeck[] @relation("ValidatorDeckCreatedBy")
   validatorDecksOwned           ValidatorDeck[] @relation("ValidatorDeckOwner")
+  validatorDeckAuditActions     ValidatorDeckAuditLog[] @relation("ValidatorDeckAuditActor")
   // Automatic compliance hold, distinct from `status` (admin-driven
   // suspend/block) -- set by WordsService.createRecording the moment a
   // trainer's lifetime WordRecording count crosses a multiple of
@@ -1180,21 +1181,22 @@ enum ValidatorDeckStatus {
 }
 
 model ValidatorDeck {
-  id                String              @id @default(uuid())
-  name              String
-  createdByUserId   String // provenance, never changes
-  createdBy         User                @relation("ValidatorDeckCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  id              String              @id @default(uuid())
+  name            String
+  createdByUserId String // provenance, never changes
+  createdBy       User                @relation("ValidatorDeckCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   // Current editor -- admin-reassignable in a later phase; equals
   // createdByUserId until reassignment exists.
-  ownerUserId       String
-  owner             User                @relation("ValidatorDeckOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  status            ValidatorDeckStatus @default(DRAFT)
-  dialectTag        String? // descriptive only, mirrors StreamDeck's scoping metadata loosely
-  countryCode       String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  ownerUserId     String
+  owner           User                @relation("ValidatorDeckOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  status          ValidatorDeckStatus @default(DRAFT)
+  dialectTag      String? // descriptive only, mirrors StreamDeck's scoping metadata loosely
+  countryCode     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
-  items ValidatorDeckItem[]
+  items     ValidatorDeckItem[]
+  auditLogs ValidatorDeckAuditLog[]
 
   @@index([ownerUserId])
   @@index([createdByUserId])
@@ -1210,15 +1212,15 @@ enum ValidatorItemStatus {
 }
 
 model ValidatorDeckItem {
-  id            String              @id @default(uuid())
+  id            String        @id @default(uuid())
   deckId        String
-  deck          ValidatorDeck       @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  deck          ValidatorDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
   // WordRecording.id, deliberately no FK -- same loose-coupling as
   // StreamDeckItem.recordingId, since recordings are purgeable by
   // audio-retention-job independent of deck membership.
   recordingId   String
   addedByUserId String
-  addedAt       DateTime            @default(now())
+  addedAt       DateTime      @default(now())
 
   validationStatus ValidatorItemStatus @default(UNSCORED)
   validatorScore   Decimal?            @db.Decimal(5, 2)
@@ -1229,6 +1231,49 @@ model ValidatorDeckItem {
   @@index([deckId])
   @@index([recordingId])
   @@map("validator_deck_items")
+}
+
+/// Phase 2 of the Validator Dashboard (docs/validators.md): the approval-
+/// chain state-transition actions this log records. PUBLISHED/REASSIGNED
+/// are reserved for Phase 3 (publish/payout/StreamDeck bridge, reassignment)
+/// -- included here only so the enum doesn't need another migration when
+/// those ship; nothing writes them yet.
+enum ValidatorDeckAuditAction {
+  CREATED
+  ITEM_ADDED
+  ITEM_REMOVED
+  SUBMITTED
+  RESUBMITTED
+  APPROVED
+  REJECTED
+  ADMIN_BYPASS_APPROVED
+  PUBLISHED
+  REASSIGNED
+  CLONED
+  ARCHIVED
+}
+
+/// Append-only audit trail of every ValidatorDeck state transition and
+/// item-membership change -- mirrors ValidationAuditLog's shape (see that
+/// model's doc comment), but actorUserId is FK'd to User (unlike the
+/// FK-less ValidationAuditLog.actorUserId) since internal staff accounts
+/// aren't expected to churn the way SubscriberUser can.
+model ValidatorDeckAuditLog {
+  id          String                   @id @default(uuid())
+  deckId      String
+  deck        ValidatorDeck            @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  action      ValidatorDeckAuditAction
+  actorUserId String
+  actor       User                     @relation("ValidatorDeckAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  fromStatus  ValidatorDeckStatus?
+  toStatus    ValidatorDeckStatus?
+  reason      String?
+  metadata    Json?
+  createdAt   DateTime                 @default(now())
+
+  @@index([deckId, createdAt])
+  @@index([actorUserId])
+  @@map("validator_deck_audit_logs")
 }
 
 /// A trainer may earn one training payout for a given source item. The
@@ -2130,9 +2175,12 @@ model PlatformSettings {
   minScoreRange                          Decimal   @default(10) @db.Decimal(5, 2) // lower bound (%) of every scored payout's bonus -- random synthetic-timeout scores are drawn from this range; real (consensus/exact-match) scores' compositeScore is clamped into this range too once qualityGateEnabled
   maxScoreRange                          Decimal   @default(30) @db.Decimal(5, 2) // upper bound (%) of every scored payout's bonus -- see minScoreRange
   llmGenerationEnabled                   Boolean   @default(false) // master kill switch for word-generator-job; job no-ops when false
+  wordGenerationEnabled                  Boolean   @default(true) // generates standalone English words when the master generation switch is on
+  sentenceGenerationEnabled              Boolean   @default(true) // generates simple conversational English sentences when the master generation switch is on
+  sentenceWordCount                      Int       @default(6) // target number of words for each generated sentence
   llmProviderOrder                       String    @default("openai,deepseek,anthropic") // CSV fallback-try order, must be a permutation of {openai,deepseek,anthropic}, validated app-side
-  llmWordsPerItem                        Int       @default(1) // 1 = single word -> Word table; 2-20 = phrase/sentence -> Sentence table -- validated 1-20 in UpdatePlatformSettingsDto
-  singleWordGenerationEnabled            Boolean   @default(true) // narrower than llmGenerationEnabled: gates ONLY the llmWordsPerItem===1 (single-word -> Word table) branch of word-generator-job's main run(). When false, that branch is skipped entirely regardless of llmWordsPerItem's stored value -- composition/multi-word generation (llmWordsPerItem>=2) and runPhraseTierGeneration are unaffected and keep running on their own settings. Set llmWordsPerItem to 2-20 separately to actually get composition output (short phrases up through full sentences) from the main pass while this is off.
+  llmWordsPerItem                        Int       @default(1) // deprecated compatibility field; use wordGenerationEnabled, sentenceGenerationEnabled, and sentenceWordCount
+  singleWordGenerationEnabled            Boolean   @default(true) // deprecated compatibility field; use wordGenerationEnabled
   llmItemsPerRun                         Int       @default(15) // batch size requested from the LLM per scheduled run
   llmMaxTotalGeneratedItems              Int       @default(5000) // hard global cap on generated source content volume (Word rows when llmWordsPerItem=1, otherwise en-us Sentence rows); word-generator-job stops generating brand-new content once this total is reached
   llmMaxPoolPerDialect                   Int       @default(50) // gate on total content pool size, not just batch size: word-generator-job skips generating new Sentence/Word translations for a dialect once that dialect's combined active-Sentence + translated-Word count reaches this ceiling. Peer reverse-validation needs multiple trainers submitting the *same* sentence/word -- an unbounded pool spread across too few trainers means no single item ever accumulates enough reverse-validations, so the pool per dialect is grown deliberately (raise this setting) as that dialect's active trainer base grows, not automatically every run
@@ -2154,9 +2202,9 @@ model PlatformSettings {
   spellingNormalizationProviderOrder     String    @default("openai,deepseek,anthropic") // CSV fallback-try order for spelling normalization, same permutation rules as llmProviderOrder
   wordTrainingEnabled                    Boolean   @default(true) // admin content gate: when false, WordsService.nextAssignment's ENGLISH_TO_DIALECT fallback never serves a single Word -- only Sentence content (subject to sentenceTrainingEnabled and phraseEscalationEnabled/tier gating) is offered. PlatformSettingsService.update refuses to save both this and sentenceTrainingEnabled as false at once, since that would leave ENGLISH_TO_DIALECT with no source at all. Independent of reverseWordTrainingEnabled, which controls the separate DIALECT_TO_ENGLISH reverse-validation flow and is unaffected by either content gate.
   sentenceTrainingEnabled                Boolean   @default(true) // admin content gate: when false, WordsService.nextAssignment never serves Sentence content regardless of phraseEscalationEnabled/a trainer's phrase tier -- only single Word content is offered. See wordTrainingEnabled's doc comment for the both-false guard and the independence from reverseWordTrainingEnabled.
-  phraseEscalationEnabled                Boolean   @default(false) // master kill switch for Sentence-sourced ENGLISH_TO_DIALECT escalation -- when false, WordsService.nextAssignment never escalates a trainer to sentence content regardless of their lifetime WordRecording count (see phrase-tiers.const.ts, pickSentenceSource); separate from phraseTierGenerationEnabled below, which gates word-generator-job's pool-building pass instead, so the pool can pre-populate before assignment goes live
-  phraseTierGenerationEnabled            Boolean   @default(false) // master kill switch for word-generator-job's per-tier sentence composition pass (runPhraseTierGeneration); job's regular single-word/composition run is unaffected when this is false
-  phraseTierItemsPerTierPerRun           Int       @default(3) // how many new sentences word-generator-job composes PER TIER (see phrase-tiers.const.ts) per scheduled run, same convention as llmItemsPerRun above but scoped per-tier instead of globally
+  phraseEscalationEnabled                Boolean   @default(false) // deprecated compatibility field; sentence assignments now use sentenceTrainingEnabled directly
+  phraseTierGenerationEnabled            Boolean   @default(false) // deprecated compatibility field; sentence generation uses sentenceGenerationEnabled
+  phraseTierItemsPerTierPerRun           Int       @default(3) // deprecated compatibility field
   testimonyEnabled                       Boolean   @default(false) // master switch for prompting trainers to give a testimony (trainer dashboard banner) and for the public homepage carousel; when false neither the banner nor any carousel content appears, and submission is rejected server-side
   testimonyMaxTextLength                 Int       @default(200) // max characters for a TEXT testimony, enforced both client-side (textarea maxLength) and server-side (TestimonialsService.submit)
   testimonyMaxVideoSeconds               Int       @default(30) // hard cap on a VIDEO testimony's recording length, enforced client-side same as WordTrainingDialog's maxRecordingMs pattern, and re-validated server-side against the submitted durationMs
@@ -2309,16 +2357,16 @@ model DataAccessLeadInterest {
 /// MailService.sendSupportRequestNotification actually notifies an admin
 /// address on submit (see PlatformSettingsService.getLeadsNotificationAddress).
 model SupportRequest {
-  id                String    @id @default(uuid())
-  name              String
-  email             String
-  subject           String
-  message           String
-  resolvedAt        DateTime?
-  resolutionNote    String?
-  resolvedByUserId  String?
-  resolvedBy        User?     @relation("SupportRequestResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
-  createdAt         DateTime  @default(now())
+  id               String    @id @default(uuid())
+  name             String
+  email            String
+  subject          String
+  message          String
+  resolvedAt       DateTime?
+  resolutionNote   String?
+  resolvedByUserId String?
+  resolvedBy       User?     @relation("SupportRequestResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now())
 
   @@index([createdAt])
   @@index([email])

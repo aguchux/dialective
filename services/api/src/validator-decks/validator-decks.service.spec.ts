@@ -12,7 +12,9 @@ describe('ValidatorDecksService', () => {
         create: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       validatorDeckItem: {
         create: jest.fn(),
@@ -21,9 +23,18 @@ describe('ValidatorDecksService', () => {
         update: jest.fn(),
         count: jest.fn().mockResolvedValue(0),
       },
+      validatorDeckAuditLog: {
+        create: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue({ id: 'existing-created-log' }),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ role: 'VALIDATOR', validatorLevel: 'L1' }),
+      },
       wordRecording: {
         findUnique: jest.fn().mockResolvedValue({ id: 'rec-1' }),
       },
+      $transaction: jest.fn(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
     };
     settings = {
       getValidationRewardPerRecording: jest.fn().mockResolvedValue(0),

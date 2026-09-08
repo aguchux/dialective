@@ -13,7 +13,6 @@ import {
 import { OpenAiProvider } from './llm/openai.provider';
 import { DeepSeekProvider } from './llm/deepseek.provider';
 import { AnthropicProvider } from './llm/anthropic.provider';
-import { PHRASE_TIERS } from './phrase-tiers.const';
 
 const DEFAULT_PROVIDER_ORDER: LlmProviderKey[] = ['openai', 'deepseek', 'anthropic'];
 
@@ -81,7 +80,7 @@ export class WordGeneratorService {
     }
 
     const providerOrder = this.parseProviderOrder(settings.llmProviderOrder);
-    const wordsPerItem = settings.llmWordsPerItem;
+    const wordsPerItem = 1;
     const itemsPerRun = settings.llmItemsPerRun;
     const maxTotalGeneratedItems = settings.llmMaxTotalGeneratedItems;
     const maxPoolPerDialect = settings.llmMaxPoolPerDialect;
@@ -91,13 +90,9 @@ export class WordGeneratorService {
     const remainingGlobalHeadroom = Math.max(0, maxTotalGeneratedItems - generatedItemsCount);
     if (remainingGlobalHeadroom <= 0) {
       // Still run phrase-tier generation below -- it has its own enable
-      // flag and per-tier item budget (phraseTierGenerationEnabled,
-      // phraseTierItemsPerTierPerRun) and is meant to pre-populate
-      // independently of the main wordsPerItem-driven pass's global cap.
       this.logger.log(
         `Main generation skipped: global cap reached (generated=${generatedItemsCount} maxTotalGeneratedItems=${maxTotalGeneratedItems})`,
       );
-      await this.runPhraseTierGeneration();
       return;
     }
     const effectiveItemsPerRun = Math.min(itemsPerRun, remainingGlobalHeadroom);
@@ -154,17 +149,11 @@ export class WordGeneratorService {
     let translationsSkipped = 0;
     let translationFailures = 0;
 
-    if (wordsPerItem === 1 && !settings.singleWordGenerationEnabled) {
-      // Narrower than llmGenerationEnabled above -- stops ONLY the
-      // single-word branch. Composition (llmWordsPerItem 2-20) and
-      // runPhraseTierGeneration below are unaffected by this flag; set
-      // llmWordsPerItem to 2-20 separately to get composition output
-      // (short phrases up through full sentences) from this pass while
-      // single-word generation stays off.
+    if (!settings.wordGenerationEnabled) {
       this.logger.log(
-        'Single-word generation disabled (singleWordGenerationEnabled=false) and llmWordsPerItem=1; skipping main generation pass',
+        'Word generation disabled (wordGenerationEnabled=false); skipping word branch',
       );
-    } else if (wordsPerItem === 1) {
+    } else {
       const prompt = this.buildWordGenerationPrompt(effectiveItemsPerRun);
       const { items: rawItems, provider: englishProvider } = await this.chain.generateStructured(
         prompt,
@@ -193,62 +182,35 @@ export class WordGeneratorService {
           else translationFailures += 1;
         }
       }
-    } else {
-      const wordSets = await this.selectWordsForComposition(wordsPerItem, effectiveItemsPerRun);
-      if (wordSets.length < effectiveItemsPerRun) {
-        this.logger.warn(
-          `Composition requested ${effectiveItemsPerRun} item(s) but only found enough classified Word rows for ${wordSets.length} -- ` +
-            'run llmWordsPerItem=1 generation (or the backfillClassification script) to grow the classified single-word pool first.',
+    }
+
+    if (settings.sentenceGenerationEnabled) {
+      try {
+        const { items, provider: sentenceProvider } = await this.chain.generate(
+          this.buildSentenceGenerationPrompt(effectiveItemsPerRun, settings.sentenceWordCount),
+          providerOrder,
         );
-      }
-
-      const composed: { text: string; wordSet: { id: string; text: string }[] }[] = [];
-      let filteredCount = 0;
-      for (const wordSet of wordSets) {
-        try {
-          const prompt = this.buildCompositionPrompt(wordSet);
-          const { items } = await this.chain.generate(prompt, providerOrder);
-          const text = items[0]?.trim();
-          if (!text) continue;
-          if (isFlaggedContent(text)) {
-            filteredCount += 1;
-            continue;
+        const accepted = items
+          .map((item) => item.trim())
+          .filter((text) => this.isGeneratedConversationSentence(text, settings.sentenceWordCount));
+        const result = await this.insertGeneratedSentences(accepted);
+        inserted += result.inserted;
+        skippedDuplicate += result.skippedDuplicate;
+        this.logger.log(
+          `Sentence generation complete: provider=${sentenceProvider} generated=${items.length} accepted=${accepted.length} inserted=${result.inserted}`,
+        );
+        for (const sentenceRow of result.insertedRows) {
+          for (const dialectTag of dialectTags) {
+            if ((await this.translateAndLinkSentence(sentenceRow.id, sentenceRow.text, dialectTag, providerOrder)) === 'failed') {
+              translationFailures += 1;
+            }
           }
-          composed.push({ text, wordSet });
-        } catch (err) {
-          this.logger.warn(
-            `Composition failed for word set [${wordSet.map((w) => w.text).join(', ')}]: ${err instanceof Error ? err.message : String(err)}`,
-          );
         }
+      } catch (err) {
+        this.logger.warn(`Sentence generation failed: ${err instanceof Error ? err.message : String(err)}`);
       }
-      this.logger.log(
-        `Generation run starting: composed=${composed.length}/${wordSets.length} filteredOut=${filteredCount}`,
-      );
-
-      const { accepted, filteredCount: lengthFilteredCount } =
-        this.filterAndValidateComposed(composed);
-      filteredCount += lengthFilteredCount;
-
-      const result = await this.insertComposedSentences(accepted);
-      inserted = result.inserted;
-      skippedDuplicate = result.skippedDuplicate;
-
-      // Composed sentences are always English-only -- trainers read/record
-      // the shared Sentence row in their own dialect from their own
-      // fluency (see WordsService.pickSentenceSource). SentenceTranslation
-      // rows are curation/reference only (mirrors WordTranslation), never a
-      // second trainer-facing Sentence row.
-      for (const sentenceRow of result.insertedRows) {
-        for (const dialectTag of dialectTags) {
-          const outcome = await this.translateAndLinkSentence(
-            sentenceRow.id,
-            sentenceRow.text,
-            dialectTag,
-            providerOrder,
-          );
-          if (outcome === 'failed') translationFailures += 1;
-        }
-      }
+    } else {
+      this.logger.log('Sentence generation disabled (sentenceGenerationEnabled=false); skipping sentence branch');
     }
 
     this.logger.log(
@@ -258,80 +220,6 @@ export class WordGeneratorService {
         `backfilled=${backfilled} backfillSkippedDuplicate=${backfillSkippedDuplicate} backfillFailures=${backfillFailures}`,
     );
 
-    await this.runPhraseTierGeneration();
-  }
-
-  /**
-   * Composes AI sentences sized for each PHRASE_TIERS band (see
-   * phrase-tiers.const.ts) into the SAME Sentence table the regular
-   * composition path above uses -- wordCount alone is what
-   * WordsService.pickSentenceSource filters on, so no separate tier-range
-   * columns are needed the way Prompt.phraseWordCountMin/Max used to
-   * require. Runs independently of the regular wordsPerItem-driven
-   * composition/generation above (own enable flag, own per-tier item
-   * budget) so the sentence pool can pre-populate on its own schedule.
-   */
-  private async runPhraseTierGeneration(): Promise<void> {
-    const settings = await this.getSettings();
-    if (!settings.phraseTierGenerationEnabled) {
-      this.logger.log('Phrase-tier generation disabled (phraseTierGenerationEnabled=false); skipping');
-      return;
-    }
-
-    const providerOrder = this.parseProviderOrder(settings.llmProviderOrder);
-    const itemsPerTier = settings.phraseTierItemsPerTierPerRun;
-    const dialectTags = await this.getEnabledDialectTags();
-
-    let totalInserted = 0;
-    let totalSkippedDuplicate = 0;
-    let totalOutOfRange = 0;
-
-    for (const tier of PHRASE_TIERS) {
-      const wordSets = await this.selectWordsForComposition(tier.wordCountMax, itemsPerTier);
-      if (wordSets.length < itemsPerTier) {
-        this.logger.warn(
-          `Phrase-tier generation (threshold=${tier.threshold}) requested ${itemsPerTier} item(s) but only found enough classified Word rows for ${wordSets.length}`,
-        );
-      }
-
-      const composed: { text: string; wordSet: { id: string; text: string }[] }[] = [];
-      for (const wordSet of wordSets) {
-        try {
-          const prompt = this.buildCompositionPrompt(wordSet);
-          const { items } = await this.chain.generate(prompt, providerOrder);
-          const text = items[0]?.trim();
-          if (!text || isFlaggedContent(text)) continue;
-          const wordCount = text.split(/\s+/).length;
-          if (wordCount < tier.wordCountMin || wordCount > tier.wordCountMax) {
-            totalOutOfRange += 1;
-            continue;
-          }
-          composed.push({ text, wordSet });
-        } catch (err) {
-          this.logger.warn(
-            `Phrase-tier composition failed (threshold=${tier.threshold}) for word set [${wordSet.map((w) => w.text).join(', ')}]: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
-
-      const { accepted, filteredCount } = this.filterAndValidateComposed(composed);
-      totalSkippedDuplicate += filteredCount;
-      const result = await this.insertComposedSentences(accepted);
-      totalInserted += result.inserted;
-      totalSkippedDuplicate += result.skippedDuplicate;
-
-      // Phrase-tier sentences are always English-only -- see the identical
-      // comment on the main composition branch above.
-      for (const sentenceRow of result.insertedRows) {
-        for (const dialectTag of dialectTags) {
-          await this.translateAndLinkSentence(sentenceRow.id, sentenceRow.text, dialectTag, providerOrder);
-        }
-      }
-    }
-
-    this.logger.log(
-      `Phrase-tier generation complete: inserted=${totalInserted} skippedDuplicate=${totalSkippedDuplicate} outOfRange=${totalOutOfRange}`,
-    );
   }
 
   /**
@@ -425,6 +313,47 @@ export class WordGeneratorService {
       `For each word, also classify its part of speech as exactly one of: ${PART_OF_SPEECH_VALUES.join(', ')}.`,
       `Respond with ONLY a JSON object of the exact shape {"items": [{"text": "...", "partOfSpeech": "NOUN"}, ...]} containing exactly ${itemsPerRun} items. No other text.`,
     ].join(' ');
+  }
+
+  private buildSentenceGenerationPrompt(itemsPerRun: number, wordCount: number): string {
+    return [
+      `Generate exactly ${itemsPerRun} distinct basic English conversational sentences for beginner adult language learners.`,
+      `Each sentence must contain exactly ${wordCount} simple everyday words, excluding punctuation from the count.`,
+      'Use natural situations people talk about at home, in the market, at work, when asking for help, or describing how they feel.',
+      'Use short, common words with direct meanings that are easy to translate into local dialects. Prefer plain present or simple past tense.',
+      'Do not use technical, academic, abstract, rare, idiomatic, literary, or difficult vocabulary. Do not compose sentences from an existing word bank and do not copy any supplied source words.',
+      'Use one clear statement or question per sentence. No semicolons, lists, explanations, slashes, or quotation marks. Avoid profanity, slurs, sexual content, and violence.',
+      `Examples of the style: "What is your name?", "How much does this cost?", "I am going to the market to buy yam."`,
+      `Respond with ONLY a JSON object of the exact shape {"items": ["..."]} containing exactly ${itemsPerRun} items. No other text.`,
+    ].join(' ');
+  }
+
+  private isGeneratedConversationSentence(text: string, wordCount: number): boolean {
+    if (!text || isFlaggedContent(text)) return false;
+    if (!/^[A-Za-z][A-Za-z' ,.?!-]*[.?!]$/.test(text)) return false;
+    const tokens = text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? [];
+    if (tokens.length !== wordCount || tokens.some((token) => token.length > 15)) return false;
+    return true;
+  }
+
+  private async insertGeneratedSentences(items: string[]): Promise<{
+    inserted: number;
+    skippedDuplicate: number;
+    insertedRows: { id: string; text: string }[];
+  }> {
+    if (items.length === 0) return { inserted: 0, skippedDuplicate: 0, insertedRows: [] };
+    const existing = await this.prisma.sentence.findMany({ select: { text: true } });
+    const existingSet = new Set(existing.map((row) => row.text.trim().toLowerCase()));
+    const unique = [...new Map(items.map((text) => [text.trim().toLowerCase(), text.trim()])).values()];
+    const newItems = unique.filter((text) => !existingSet.has(text.toLowerCase()));
+    const insertedRows: { id: string; text: string }[] = [];
+    for (const text of newItems) {
+      insertedRows.push(await this.prisma.sentence.create({
+        data: { text, wordCount: text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g)?.length ?? 0 },
+        select: { id: true, text: true },
+      }));
+    }
+    return { inserted: insertedRows.length, skippedDuplicate: items.length - insertedRows.length, insertedRows };
   }
 
   /**
@@ -961,10 +890,11 @@ export class WordGeneratorService {
     return { backfilled, skippedDuplicate, failed };
   }
 
-  private async getGeneratedItemsCount(wordsPerItem: number): Promise<number> {
-    if (wordsPerItem === 1) {
-      return this.prisma.word.count({ where: { isDisabled: false } });
-    }
-    return this.prisma.sentence.count({ where: { isDisabled: false } });
+  private async getGeneratedItemsCount(_wordsPerItem?: number): Promise<number> {
+    const [words, sentences] = await Promise.all([
+      this.prisma.word.count({ where: { isDisabled: false } }),
+      this.prisma.sentence.count({ where: { isDisabled: false } }),
+    ]);
+    return words + sentences;
   }
 }

@@ -778,6 +778,9 @@ export class PlatformSettingsService {
       minScoreRange: row.minScoreRange.toString(),
       maxScoreRange: row.maxScoreRange.toString(),
       llmGenerationEnabled: row.llmGenerationEnabled,
+      wordGenerationEnabled: row.wordGenerationEnabled,
+      sentenceGenerationEnabled: row.sentenceGenerationEnabled,
+      sentenceWordCount: row.sentenceWordCount,
       singleWordGenerationEnabled: row.singleWordGenerationEnabled,
       llmProviderOrder: row.llmProviderOrder,
       llmWordsPerItem: row.llmWordsPerItem,
@@ -910,6 +913,9 @@ export class PlatformSettingsService {
     minScoreRange?: number;
     maxScoreRange?: number;
     llmGenerationEnabled?: boolean;
+    wordGenerationEnabled?: boolean;
+    sentenceGenerationEnabled?: boolean;
+    sentenceWordCount?: number;
     singleWordGenerationEnabled?: boolean;
     llmProviderOrder?: string;
     llmWordsPerItem?: number;
@@ -1287,6 +1293,9 @@ export class PlatformSettingsService {
       minScoreRange: row.minScoreRange.toString(),
       maxScoreRange: row.maxScoreRange.toString(),
       llmGenerationEnabled: row.llmGenerationEnabled,
+      wordGenerationEnabled: row.wordGenerationEnabled,
+      sentenceGenerationEnabled: row.sentenceGenerationEnabled,
+      sentenceWordCount: row.sentenceWordCount,
       singleWordGenerationEnabled: row.singleWordGenerationEnabled,
       llmProviderOrder: row.llmProviderOrder,
       llmWordsPerItem: row.llmWordsPerItem,

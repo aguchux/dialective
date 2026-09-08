@@ -237,6 +237,20 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  wordGenerationEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  sentenceGenerationEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(2)
+  @Max(20)
+  sentenceWordCount?: number;
+
+  @IsOptional()
+  @IsBoolean()
   singleWordGenerationEnabled?: boolean;
 
   // 3 comma-separated tokens from {openai,deepseek,anthropic}; exact

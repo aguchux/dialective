@@ -22,7 +22,6 @@ export function TrainingTasksSettingsPanel() {
   const [wordTrainingEnabled, setWordTrainingEnabled] = useState(true);
   const [sentenceTrainingEnabled, setSentenceTrainingEnabled] = useState(true);
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
-  const [phraseEscalationEnabled, setPhraseEscalationEnabled] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +39,6 @@ export function TrainingTasksSettingsPanel() {
     setWordTrainingEnabled(platformSettings.wordTrainingEnabled);
     setSentenceTrainingEnabled(platformSettings.sentenceTrainingEnabled);
     setReverseWordTrainingEnabled(platformSettings.reverseWordTrainingEnabled);
-    setPhraseEscalationEnabled(platformSettings.phraseEscalationEnabled);
   }, [platformSettings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -58,7 +56,6 @@ export function TrainingTasksSettingsPanel() {
         wordTrainingEnabled,
         sentenceTrainingEnabled,
         reverseWordTrainingEnabled,
-        phraseEscalationEnabled,
       }).unwrap();
       setMessage('Training & tasks settings saved.');
     } catch (err) {
@@ -127,7 +124,7 @@ export function TrainingTasksSettingsPanel() {
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   Trainers are shown English sentences from the Sentence bank to translate and
                   record in their dialect (English &rarr; Dialect). Turn this off to stop sentence
-                  assignments entirely, including phrase-recording escalation below.
+                  assignments entirely.
                 </span>
               </span>
             </label>
@@ -161,28 +158,6 @@ export function TrainingTasksSettingsPanel() {
               </p>
             )}
 
-            <label
-              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
-              htmlFor="phrase-escalation"
-            >
-              <input
-                checked={phraseEscalationEnabled}
-                className="mt-0.5 size-5 accent-accent"
-                id="phrase-escalation"
-                onChange={(event) => setPhraseEscalationEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <span>
-                <span className="block font-bold">Phrase recording escalation</span>
-                <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Once a trainer&apos;s lifetime word-training count crosses a milestone, assign
-                  AI-composed multi-word sentences instead of single words. Requires the sentence
-                  pool to be populated first (see Word Generation settings below) and only has an
-                  effect while Sentence training above is on -- when Sentence training is off,
-                  this setting is inert.
-                </span>
-              </span>
-            </label>
           </div>
 
           <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">

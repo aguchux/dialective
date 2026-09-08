@@ -3,13 +3,17 @@
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { ChevronLeft, ClipboardCheck, FileQuestion, Trash2 } from 'lucide-react';
 import { cardClass, EmptyPanel, formatDateTime } from '@/components/dashboard/shared';
 import {
+  normalizeErrorMessage,
   useAddValidatorDeckItemMutation,
+  useGetValidatorDeckAuditLogQuery,
   useGetValidatorDeckQuery,
   useRemoveValidatorDeckItemMutation,
   useScoreValidatorDeckItemMutation,
+  useSubmitValidatorDeckMutation,
   useUpdateValidatorDeckMutation,
   ValidatorItemStatus,
 } from '@/store/api';
@@ -25,6 +29,17 @@ const STATUS_LABELS: Record<string, string> = {
   ARCHIVED: 'Archived',
 };
 
+const STATUS_BADGE_STYLES: Record<string, string> = {
+  DRAFT: 'bg-surface-muted text-muted',
+  PENDING_L2: 'bg-amber-100 text-amber-700',
+  PENDING_L3: 'bg-amber-100 text-amber-700',
+  PENDING_ADMIN: 'bg-amber-100 text-amber-700',
+  APPROVED: 'bg-emerald-100 text-emerald-700',
+  PUBLISHED: 'bg-emerald-100 text-emerald-700',
+  REJECTED: 'bg-red-100 text-red-700',
+  ARCHIVED: 'bg-surface-muted text-muted',
+};
+
 const ITEM_STATUS_STYLES: Record<ValidatorItemStatus, string> = {
   UNSCORED: 'bg-surface-muted text-muted',
   VALID: 'bg-emerald-100 text-emerald-700',
@@ -35,11 +50,27 @@ const ITEM_STATUS_STYLES: Record<ValidatorItemStatus, string> = {
 export default function ValidatorDeckDetailPage() {
   const params = useParams<{ id: string }>();
   const deckId = params.id;
+  const { data: session } = useSession();
   const { data: deck, isLoading } = useGetValidatorDeckQuery(deckId, { skip: !deckId });
   const [addItem, { isLoading: adding }] = useAddValidatorDeckItemMutation();
   const [removeItem] = useRemoveValidatorDeckItemMutation();
+  const [submitDeck, { isLoading: submitting }] = useSubmitValidatorDeckMutation();
   const [renaming, setRenaming] = useState(false);
   const [recordingId, setRecordingId] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const isOwner = deck && session?.user?.id === deck.ownerUserId;
+  const canSubmit = isOwner && (deck?.status === 'DRAFT' || deck?.status === 'REJECTED');
+
+  async function handleSubmit() {
+    if (!deckId) return;
+    setSubmitError(null);
+    try {
+      await submitDeck(deckId).unwrap();
+    } catch (err) {
+      setSubmitError(normalizeErrorMessage(err, 'Unable to submit this deck.'));
+    }
+  }
 
   async function handleAddItem(e: FormEvent) {
     e.preventDefault();
@@ -85,13 +116,30 @@ export default function ValidatorDeckDetailPage() {
                 {deck.name}
               </button>
             )}
-            <p className="mt-1 text-sm font-bold text-muted">{STATUS_LABELS[deck.status] ?? deck.status}</p>
+            <span
+              className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_BADGE_STYLES[deck.status] ?? 'bg-surface-muted text-muted'}`}
+            >
+              {STATUS_LABELS[deck.status] ?? deck.status}
+            </span>
           </div>
           <div className="text-right">
             <p className="text-xs font-bold text-muted">Expected earning</p>
             <p className="text-xl font-black">{deck.expectedEarning} DL</p>
           </div>
         </div>
+        {canSubmit && (
+          <div className="mt-4 border-t border-line pt-4">
+            <button
+              className="min-h-10 rounded-lg bg-accent px-4 font-extrabold text-white disabled:opacity-60"
+              disabled={submitting}
+              onClick={() => void handleSubmit()}
+              type="button"
+            >
+              {submitting ? 'Submitting…' : deck.status === 'REJECTED' ? 'Resubmit for approval' : 'Submit for approval'}
+            </button>
+            {submitError && <p className="mt-2 text-sm font-bold text-danger">{submitError}</p>}
+          </div>
+        )}
       </section>
 
       {deck.status === 'DRAFT' && (
@@ -133,7 +181,41 @@ export default function ValidatorDeckDetailPage() {
           </div>
         )}
       </section>
+
+      <section className="grid gap-2">
+        <h2 className="text-lg font-black">Audit trail</h2>
+        <DeckAuditTrail deckId={deck.id} />
+      </section>
     </div>
+  );
+}
+
+function DeckAuditTrail({ deckId }: { deckId: string }) {
+  const { data: entries, isLoading } = useGetValidatorDeckAuditLogQuery(deckId);
+
+  if (isLoading) {
+    return <div className="h-20 animate-pulse rounded-lg bg-surface-muted" />;
+  }
+  if (!entries || entries.length === 0) {
+    return <EmptyPanel icon={ClipboardCheck} title="No audit history yet" />;
+  }
+
+  return (
+    <ol className={`${cardClass} grid gap-3 p-4`}>
+      {entries.map((entry) => (
+        <li className="grid gap-0.5 border-b border-line pb-3 text-sm last:border-0 last:pb-0" key={entry.id}>
+          <span className="font-black">{entry.action}</span>
+          {entry.fromStatus && entry.toStatus && (
+            <span className="text-xs text-muted">
+              {STATUS_LABELS[entry.fromStatus] ?? entry.fromStatus} &rarr;{' '}
+              {STATUS_LABELS[entry.toStatus] ?? entry.toStatus}
+            </span>
+          )}
+          <span className="text-xs text-muted">{formatDateTime(entry.createdAt)}</span>
+          {entry.reason && <p className="mt-1 text-xs text-muted">&ldquo;{entry.reason}&rdquo;</p>}
+        </li>
+      ))}
+    </ol>
   );
 }
 

@@ -17,6 +17,7 @@ export interface PublicUser {
   status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
   trainerRating: TrainerRating | null;
   trainerRatingValue: number | null;
+  validatorLevel: 'L1' | 'L2' | 'L3' | null;
   emailVerified: boolean;
   phoneNumber: string | null;
   phoneVerified: boolean;
@@ -1511,6 +1512,9 @@ export interface PlatformSettings {
   minScoreRange: string;
   maxScoreRange: string;
   llmGenerationEnabled: boolean;
+  wordGenerationEnabled: boolean;
+  sentenceGenerationEnabled: boolean;
+  sentenceWordCount: number;
   singleWordGenerationEnabled: boolean;
   llmProviderOrder: string;
   llmWordsPerItem: number;
@@ -1634,6 +1638,9 @@ export interface PlatformSettingsInput {
   minScoreRange?: number;
   maxScoreRange?: number;
   llmGenerationEnabled?: boolean;
+  wordGenerationEnabled?: boolean;
+  sentenceGenerationEnabled?: boolean;
+  sentenceWordCount?: number;
   singleWordGenerationEnabled?: boolean;
   llmProviderOrder?: string;
   llmWordsPerItem?: number;
@@ -1935,6 +1942,32 @@ export interface ScoreValidatorDeckItemInput {
   status: ValidatorItemStatus;
   score?: number;
   notes?: string;
+}
+
+export type ValidatorDeckAuditAction =
+  | 'CREATED'
+  | 'ITEM_ADDED'
+  | 'ITEM_REMOVED'
+  | 'SUBMITTED'
+  | 'RESUBMITTED'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'ADMIN_BYPASS_APPROVED'
+  | 'PUBLISHED'
+  | 'REASSIGNED'
+  | 'CLONED'
+  | 'ARCHIVED';
+
+export interface ValidatorDeckAuditLogEntry {
+  id: string;
+  deckId: string;
+  action: ValidatorDeckAuditAction;
+  actorUserId: string;
+  fromStatus: ValidatorDeckSummary['status'] | null;
+  toStatus: ValidatorDeckSummary['status'] | null;
+  reason: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 export interface AuditRecordingResult {
@@ -2352,6 +2385,7 @@ export const dialectivaApi = createApi({
     'AdminSms',
     'ValidatorDecks',
     'ValidatorRecordings',
+    'AdminValidatorDecks',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -3652,6 +3686,14 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
     }),
+    updateValidatorLevel: builder.mutation<PublicUser, { id: string; validatorLevel: 'L1' | 'L2' | 'L3' }>({
+      query: ({ id, validatorLevel }) => ({
+        url: `/auth/admin/users/${id}/validator-level`,
+        method: 'PATCH',
+        body: { validatorLevel },
+      }),
+      invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
+    }),
     getAdminUser: builder.query<PublicUser, string>({
       query: (id) => `/auth/admin/users/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Users', id }],
@@ -4243,7 +4285,10 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/validator/decks', method: 'POST', body }),
       invalidatesTags: ['ValidatorDecks'],
     }),
-    getValidatorDecks: builder.query<ValidatorDeckSummary[], { filter?: 'mine' | 'all' } | void>({
+    getValidatorDecks: builder.query<
+      ValidatorDeckSummary[],
+      { filter?: 'mine' | 'all' | 'pendingMyApproval' } | void
+    >({
       query: (params) => ({ url: '/validator/decks', params: params ?? undefined }),
       providesTags: ['ValidatorDecks'],
     }),
@@ -4287,6 +4332,53 @@ export const dialectivaApi = createApi({
     getValidatorRecordings: builder.query<ValidatorRecordingsPage, ListValidatorRecordingsParams>({
       query: (params) => ({ url: '/validator/recordings', params }),
       providesTags: ['ValidatorRecordings'],
+    }),
+    submitValidatorDeck: builder.mutation<ValidatorDeckSummary, string>({
+      query: (id) => ({ url: `/validator/decks/${id}/submit`, method: 'POST' }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+        'AdminValidatorDecks',
+      ],
+    }),
+    approveValidatorDeck: builder.mutation<ValidatorDeckSummary, string>({
+      query: (id) => ({ url: `/validator/decks/${id}/approve`, method: 'POST' }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+        'AdminValidatorDecks',
+      ],
+    }),
+    rejectValidatorDeck: builder.mutation<ValidatorDeckSummary, { id: string; reason: string }>({
+      query: ({ id, reason }) => ({
+        url: `/validator/decks/${id}/reject`,
+        method: 'POST',
+        body: { reason },
+      }),
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+        'AdminValidatorDecks',
+      ],
+    }),
+    getValidatorDeckAuditLog: builder.query<ValidatorDeckAuditLogEntry[], string>({
+      query: (id) => `/validator/decks/${id}/audit-log`,
+      providesTags: (_result, _error, id) => [{ type: 'ValidatorDecks', id: `${id}-audit` }],
+    }),
+    getAdminValidatorDecks: builder.query<
+      ValidatorDeckSummary[],
+      { status?: ValidatorDeckSummary['status']; ownerUserId?: string } | void
+    >({
+      query: (params) => ({ url: '/admin/validator-decks', params: params ?? undefined }),
+      providesTags: ['AdminValidatorDecks'],
+    }),
+    adminApproveValidatorDeck: builder.mutation<ValidatorDeckSummary, string>({
+      query: (id) => ({ url: `/admin/validator-decks/${id}/approve`, method: 'POST' }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+        'AdminValidatorDecks',
+      ],
     }),
   }),
 });
@@ -4483,6 +4575,7 @@ export const {
   useUpdateUserRoleMutation,
   useUpdateUserStatusMutation,
   useUpdateTrainerRatingMutation,
+  useUpdateValidatorLevelMutation,
   useGetAdminUserQuery,
   useResetUserDialectMutation,
   useGetUserActivityQuery,
@@ -4578,6 +4671,12 @@ export const {
   useRemoveValidatorDeckItemMutation,
   useScoreValidatorDeckItemMutation,
   useGetValidatorRecordingsQuery,
+  useSubmitValidatorDeckMutation,
+  useApproveValidatorDeckMutation,
+  useRejectValidatorDeckMutation,
+  useGetValidatorDeckAuditLogQuery,
+  useGetAdminValidatorDecksQuery,
+  useAdminApproveValidatorDeckMutation,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

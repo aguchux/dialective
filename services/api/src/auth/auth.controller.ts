@@ -32,6 +32,7 @@ import { VerifyManualPhoneVerificationDto } from './dto/verify-manual-phone-veri
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UpdateTrainerRatingDto } from './dto/update-trainer-rating.dto';
+import { UpdateValidatorLevelDto } from './dto/update-validator-level.dto';
 import { LockUserDto } from './dto/lock-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -328,6 +329,22 @@ export class AuthController {
     @Body() dto: UpdateTrainerRatingDto,
   ) {
     return this.auth.updateTrainerRating(admin.sub, id, dto.rating);
+  }
+
+  // Phase 2 of the Validator Dashboard (docs/validators.md): sets/changes a
+  // validator's tier. Also sets role=VALIDATOR per the app-level invariant
+  // (validatorLevel is only meaningful for that role) -- so this endpoint
+  // both promotes/demotes an existing validator and onboards a non-validator
+  // into the role in one call.
+  @Patch('admin/users/:id/validator-level')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  updateValidatorLevel(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: UpdateValidatorLevelDto,
+  ) {
+    return this.auth.updateValidatorLevel(admin.sub, id, dto.validatorLevel);
   }
 
   @Get('admin/users/:id')

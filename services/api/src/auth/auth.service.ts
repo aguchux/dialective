@@ -22,6 +22,7 @@ import {
   TrainerRating,
   User,
   UserStatus,
+  ValidatorLevel,
   WithdrawalStatus,
 } from '@dialectiva/db';
 import { isValidPhoneNumber } from 'libphonenumber-js';
@@ -75,6 +76,7 @@ export interface PublicUser {
   status: UserStatus;
   trainerRating: TrainerRating | null;
   trainerRatingValue: number | null;
+  validatorLevel: ValidatorLevel | null;
   emailVerified: boolean;
   phoneNumber: string | null;
   phoneVerified: boolean;
@@ -139,6 +141,7 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     status: user.status,
     trainerRating: user.trainerRating,
     trainerRatingValue: trainerRatingValue(user.trainerRating),
+    validatorLevel: user.validatorLevel,
     emailVerified: user.emailVerified !== null,
     phoneNumber: user.phoneNumber,
     phoneVerified: user.phoneVerifiedAt !== null,
@@ -1607,6 +1610,33 @@ export class AuthService {
         trainerRating: rating,
         trainerRatingUpdatedAt: new Date(),
         trainerRatingUpdatedById: adminId,
+      },
+      include: { dialect: true, dialectVariant: true },
+    });
+    return toPublicUser(user);
+  }
+
+  /**
+   * Sets/changes a validator's tier -- also sets role=VALIDATOR per the
+   * app-level invariant (validatorLevel is only meaningful for that role,
+   * see docs/validators.md), so this single endpoint both promotes/demotes
+   * an existing validator and onboards any other account into the role.
+   */
+  async updateValidatorLevel(
+    adminId: string,
+    userId: string,
+    validatorLevel: ValidatorLevel,
+  ): Promise<PublicUser> {
+    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!target) throw new NotFoundException('User not found');
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        role: Role.VALIDATOR,
+        validatorLevel,
+        validatorLevelUpdatedAt: new Date(),
+        validatorLevelUpdatedById: adminId,
       },
       include: { dialect: true, dialectVariant: true },
     });

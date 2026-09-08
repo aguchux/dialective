@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { CircleDollarSign, ShieldCheck, WalletCards } from 'lucide-react';
+import { CircleDollarSign, WalletCards } from 'lucide-react';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
 import { Avatar, cardClass, EmptyPanel } from '@/components/dashboard/shared';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -15,6 +15,7 @@ import {
 } from '@/components/validator/ValidatorShell';
 import { StreamDecksView } from '@/components/validator/views/StreamDecksView';
 import { ValidationsView } from '@/components/validator/views/ValidationsView';
+import { AuditView } from '@/components/validator/views/AuditView';
 
 const allViewIds: ValidatorView[] = ['decks', 'tokens', 'earnings', 'validations', 'audit', 'profile'];
 
@@ -105,7 +106,7 @@ function ValidatorViewContent({ activeView }: { activeView: ValidatorView }) {
     return <ValidationsView />;
   }
   if (activeView === 'audit') {
-    return <EmptyPanel icon={ShieldCheck} title="Deck approvals and audit history will appear here" />;
+    return <AuditView />;
   }
   return null;
 }

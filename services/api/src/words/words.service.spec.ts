@@ -784,14 +784,15 @@ describe('WordsService', () => {
     });
   });
 
-  describe('Sentence-tier escalation (pickSentenceSource)', () => {
+  describe('Sentence source (pickSentenceSource)', () => {
     beforeEach(() => {
       settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
-      settings.isPhraseEscalationEnabled.mockResolvedValue(true);
     });
 
-    it('stays on Word-sourced ENGLISH_TO_DIALECT when the trainer is below every tier threshold', async () => {
-      prisma.wordRecording.count.mockResolvedValue(99);
+    it('assigns a Word-sourced ENGLISH_TO_DIALECT when the roll favors words', async () => {
+      settings.isWordTrainingEnabled.mockResolvedValue(true);
+      settings.isSentenceTrainingEnabled.mockResolvedValue(true);
+      jest.spyOn(Math, 'random').mockReturnValue(0.9); // roll >= 1/2 -> word branch
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-1',
         direction: 'ENGLISH_TO_DIALECT',
@@ -804,8 +805,10 @@ describe('WordsService', () => {
       expect(prisma.sentence.count).not.toHaveBeenCalled();
     });
 
-    it('assigns a Sentence-sourced ENGLISH_TO_DIALECT when tiered and a matching sentence exists', async () => {
-      prisma.wordRecording.count.mockResolvedValue(150); // tier 1: 100-199 -> 2-3 words
+    it('assigns a Sentence-sourced ENGLISH_TO_DIALECT when the roll favors sentences', async () => {
+      settings.isWordTrainingEnabled.mockResolvedValue(true);
+      settings.isSentenceTrainingEnabled.mockResolvedValue(true);
+      jest.spyOn(Math, 'random').mockReturnValue(0.1); // roll < 1/2 -> sentence branch
       prisma.sentence.count.mockResolvedValue(1);
       prisma.sentence.findMany.mockResolvedValue([{ id: 'sentence-1', text: 'good morning' }]);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
@@ -827,20 +830,20 @@ describe('WordsService', () => {
       expect(prisma.wordTrainingAssignment.create).toHaveBeenCalledWith({
         data: { sessionId: session.id, sentenceId: 'sentence-1', direction: 'ENGLISH_TO_DIALECT' },
       });
-      expect(prisma.sentence.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { wordCount: { gte: 2, lte: 3 }, id: { notIn: [] }, isDisabled: false },
-        }),
-      );
+      expect(prisma.sentence.count).toHaveBeenCalledWith({
+        where: { id: { notIn: [] }, isDisabled: false },
+      });
     });
 
-    it('never re-serves a sentence the trainer has already attempted, until every sentence in the pool has had a turn', async () => {
-      prisma.wordRecording.count.mockResolvedValue(150); // tier 1: 100-199 -> 2-3 words
+    it('never re-serves a sentence the trainer has already attempted', async () => {
+      settings.isWordTrainingEnabled.mockResolvedValue(true);
+      settings.isSentenceTrainingEnabled.mockResolvedValue(true);
+      jest.spyOn(Math, 'random').mockReturnValue(0.1);
       prisma.wordRecording.findMany.mockResolvedValue([
         { sentenceId: 'sentence-1' },
         { sentenceId: 'sentence-2' },
       ]);
-      prisma.sentence.count.mockResolvedValue(1); // only 1 sentence left unattempted in this tier
+      prisma.sentence.count.mockResolvedValue(1); // only 1 sentence left unattempted
       prisma.sentence.findMany.mockResolvedValue([{ id: 'sentence-3', text: 'good evening' }]);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-sentence-unattempted',
@@ -851,41 +854,19 @@ describe('WordsService', () => {
 
       expect(result.promptText).toBe('good evening');
       expect(prisma.sentence.count).toHaveBeenCalledWith({
-        where: {
-          wordCount: { gte: 2, lte: 3 },
-          id: { notIn: ['sentence-1', 'sentence-2'] },
-          isDisabled: false,
-        },
+        where: { id: { notIn: ['sentence-1', 'sentence-2'] }, isDisabled: false },
       });
       expect(prisma.sentence.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: {
-            wordCount: { gte: 2, lte: 3 },
-            id: { notIn: ['sentence-1', 'sentence-2'] },
-            isDisabled: false,
-          },
+          where: { id: { notIn: ['sentence-1', 'sentence-2'] }, isDisabled: false },
         }),
       );
     });
 
-    it('does not reopen a sentence tier once every sentence in it has been attempted', async () => {
-      prisma.wordRecording.count.mockResolvedValue(150); // tier 1: 100-199 -> 2-3 words
-      prisma.wordRecording.findMany.mockResolvedValue([{ sentenceId: 'sentence-1' }]);
-      // No unattempted sentences left in the tier pool.
-      prisma.sentence.count.mockResolvedValueOnce(0);
-      prisma.wordTrainingAssignment.create.mockResolvedValue({
-        id: 'assignment-word-fallback',
-        direction: 'ENGLISH_TO_DIALECT',
-      });
-
-      const result = await service.nextAssignment(trainer.id, session.id);
-
-      expect(result.promptText).toBe('welcome');
-      expect(prisma.sentence.findMany).not.toHaveBeenCalled();
-    });
-
-    it('falls back to a Word-sourced pick when tiered but the sentence pool is empty', async () => {
-      prisma.wordRecording.count.mockResolvedValue(150);
+    it('falls back to a Word-sourced pick when the sentence pool is empty', async () => {
+      settings.isWordTrainingEnabled.mockResolvedValue(true);
+      settings.isSentenceTrainingEnabled.mockResolvedValue(true);
+      jest.spyOn(Math, 'random').mockReturnValue(0.1);
       prisma.sentence.count.mockResolvedValue(0);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-fallback-1',
@@ -899,8 +880,10 @@ describe('WordsService', () => {
       expect(prisma.sentence.findMany).not.toHaveBeenCalled();
     });
 
-    it('never escalates to sentences when phraseEscalationEnabled is false, regardless of count', async () => {
-      settings.isPhraseEscalationEnabled.mockResolvedValue(false);
+    it('never serves sentences when sentenceTrainingEnabled is false, regardless of roll', async () => {
+      settings.isWordTrainingEnabled.mockResolvedValue(true);
+      settings.isSentenceTrainingEnabled.mockResolvedValue(false);
+      jest.spyOn(Math, 'random').mockReturnValue(0.1);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-off-1',
         direction: 'ENGLISH_TO_DIALECT',
@@ -909,25 +892,24 @@ describe('WordsService', () => {
       const result = await service.nextAssignment(trainer.id, session.id);
 
       expect(result.direction).toBe('ENGLISH_TO_DIALECT');
-      expect(prisma.wordRecording.count).not.toHaveBeenCalled();
       expect(prisma.sentence.count).not.toHaveBeenCalled();
     });
 
-    it('reports phraseTierJustReached true only on the exact call where lifetime count equals the tier threshold', async () => {
+    it('serves any Sentence, unfiltered, when wordTrainingEnabled is off', async () => {
+      settings.isWordTrainingEnabled.mockResolvedValue(false);
+      settings.isSentenceTrainingEnabled.mockResolvedValue(true);
+      jest.spyOn(Math, 'random').mockReturnValue(0.9); // roll would favor words, but words are off
       prisma.sentence.count.mockResolvedValue(1);
       prisma.sentence.findMany.mockResolvedValue([{ id: 'sentence-1', text: 'good morning' }]);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
-        id: 'assignment-sentence-1',
+        id: 'assignment-sentence-only-1',
         direction: 'ENGLISH_TO_DIALECT',
       });
 
-      prisma.wordRecording.count.mockResolvedValue(100);
-      const atThreshold = await service.nextAssignment(trainer.id, session.id);
-      expect(atThreshold.phraseTierJustReached).toBe(true);
+      const result = await service.nextAssignment(trainer.id, session.id);
 
-      prisma.wordRecording.count.mockResolvedValue(101);
-      const pastThreshold = await service.nextAssignment(trainer.id, session.id);
-      expect(pastThreshold.phraseTierJustReached).toBe(false);
+      expect(result.promptText).toBe('good morning');
+      expect(prisma.word.count).not.toHaveBeenCalled();
     });
 
     it('reverse-validation can source from a Sentence-sourced recording, carrying sentenceId not wordId', async () => {

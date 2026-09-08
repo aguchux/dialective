@@ -38,15 +38,14 @@ export function WordGenerationSettingsPanel() {
 
   const [enabled, setEnabled] = useState(false);
   const [order, setOrder] = useState<ProviderKey[]>(DEFAULT_ORDER);
-  const [wordsPerItem, setWordsPerItem] = useState('1');
+  const [wordGenerationEnabled, setWordGenerationEnabled] = useState(true);
+  const [sentenceGenerationEnabled, setSentenceGenerationEnabled] = useState(true);
+  const [sentenceWordCount, setSentenceWordCount] = useState('6');
   const [itemsPerRun, setItemsPerRun] = useState('15');
   const [maxTotalGeneratedItems, setMaxTotalGeneratedItems] = useState('5000');
   const [maxPoolPerDialect, setMaxPoolPerDialect] = useState('50');
   const [backfillItemsPerDialectPerRun, setBackfillItemsPerDialectPerRun] = useState('10');
   const [keyboardLayoutMaxLength, setKeyboardLayoutMaxLength] = useState('1000');
-  const [singleWordGenerationEnabled, setSingleWordGenerationEnabled] = useState(true);
-  const [phraseTierGenerationEnabled, setPhraseTierGenerationEnabled] = useState(false);
-  const [phraseTierItemsPerTierPerRun, setPhraseTierItemsPerTierPerRun] = useState('3');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,15 +53,14 @@ export function WordGenerationSettingsPanel() {
     if (!settings) return;
     setEnabled(settings.llmGenerationEnabled);
     setOrder(parseOrder(settings.llmProviderOrder));
-    setWordsPerItem(String(settings.llmWordsPerItem));
+    setWordGenerationEnabled(settings.wordGenerationEnabled ?? true);
+    setSentenceGenerationEnabled(settings.sentenceGenerationEnabled ?? true);
+    setSentenceWordCount(String(settings.sentenceWordCount ?? 6));
     setItemsPerRun(String(settings.llmItemsPerRun));
     setMaxTotalGeneratedItems(String(settings.llmMaxTotalGeneratedItems));
     setMaxPoolPerDialect(String(settings.llmMaxPoolPerDialect));
     setBackfillItemsPerDialectPerRun(String(settings.llmBackfillItemsPerDialectPerRun));
     setKeyboardLayoutMaxLength(String(settings.keyboardLayoutMaxLength));
-    setSingleWordGenerationEnabled(settings.singleWordGenerationEnabled);
-    setPhraseTierGenerationEnabled(settings.phraseTierGenerationEnabled);
-    setPhraseTierItemsPerTierPerRun(String(settings.phraseTierItemsPerTierPerRun));
   }, [settings]);
 
   function setChoice(position: 0 | 1 | 2, provider: ProviderKey) {
@@ -86,9 +84,10 @@ export function WordGenerationSettingsPanel() {
     try {
       await updateSettings({
         llmGenerationEnabled: enabled,
-        singleWordGenerationEnabled,
+        wordGenerationEnabled,
+        sentenceGenerationEnabled,
         llmProviderOrder: order.join(','),
-        ...(wordsPerItem !== '' ? { llmWordsPerItem: Number(wordsPerItem) } : {}),
+        ...(sentenceWordCount !== '' ? { sentenceWordCount: Number(sentenceWordCount) } : {}),
         ...(itemsPerRun !== '' ? { llmItemsPerRun: Number(itemsPerRun) } : {}),
         ...(maxTotalGeneratedItems !== ''
           ? { llmMaxTotalGeneratedItems: Number(maxTotalGeneratedItems) }
@@ -100,10 +99,6 @@ export function WordGenerationSettingsPanel() {
         ...(keyboardLayoutMaxLength !== ''
           ? { keyboardLayoutMaxLength: Number(keyboardLayoutMaxLength) }
           : {}),
-        phraseTierGenerationEnabled,
-        ...(phraseTierItemsPerTierPerRun !== ''
-          ? { phraseTierItemsPerTierPerRun: Number(phraseTierItemsPerTierPerRun) }
-          : {}),
       }).unwrap();
       setMessage('Word generation settings saved.');
     } catch (err) {
@@ -114,7 +109,7 @@ export function WordGenerationSettingsPanel() {
   return (
     <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
       <div className="grid gap-1">
-        <h2 className="text-2xl leading-snug">Word Generation</h2>
+        <h2 className="text-2xl leading-snug">Word &amp; Sentence Generation</h2>
         <p className="leading-relaxed text-muted">
           Scheduled job that grows the word/prompt bank via an LLM instead of manual seeding.
           Providers are tried in order below -- the first that succeeds is used, the others are only
@@ -138,10 +133,10 @@ export function WordGenerationSettingsPanel() {
                 type="checkbox"
               />
               <span>
-                <span className="block font-bold">Enable word generation</span>
+                <span className="block font-bold">Enable word and sentence generations</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  When on, the scheduled job generates new words/prompts every run. Off by default
-                  so nothing runs until API keys are configured and this is explicitly enabled.
+                  Master switch for the scheduled generation job. Turn this on together with the
+                  word and/or sentence switches below.
                 </span>
               </span>
             </label>
@@ -176,54 +171,21 @@ export function WordGenerationSettingsPanel() {
             </div>
           </div>
 
-          <div className="grid gap-1">
-            <label className="font-bold" htmlFor="llm-words-per-item">
-              Words per item
+          <div className="grid gap-3">
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="word-generation-enabled">
+              <input checked={wordGenerationEnabled} className="mt-0.5 size-5 accent-accent" id="word-generation-enabled" onChange={(event) => setWordGenerationEnabled(event.target.checked)} type="checkbox" />
+              <span><span className="block font-bold">Enable word generation</span><span className="mt-1 block text-sm leading-relaxed text-muted">Generate short, everyday English words for the Word bank.</span></span>
             </label>
-            <p className="text-sm leading-relaxed text-muted">
-              1 = single words (added to the word-training bank, each classified by part of speech).
-              2-20 = phrases or full sentences <strong>composed from existing classified words</strong>{' '}
-              (not freely invented) -- the system picks that many words from the word bank (favoring
-              a noun + verb pair when available) and asks the LLM to build a natural sentence using
-              only those words, then stores it for the dictation and sentence-rebuild exercises.
-              Composition needs a classified word bank to draw from, so run "words per item = 1" (or
-              the classification backfill) first for a dialect before raising this. Higher values
-              (e.g. 10-20) produce full sentences instead of short phrases.
-            </p>
-            <input
-              className={inputClass}
-              id="llm-words-per-item"
-              type="number"
-              step="1"
-              min="1"
-              max="20"
-              value={wordsPerItem}
-              onChange={(e) => setWordsPerItem(e.target.value)}
-            />
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="sentence-generation-enabled">
+              <input checked={sentenceGenerationEnabled} className="mt-0.5 size-5 accent-accent" id="sentence-generation-enabled" onChange={(event) => setSentenceGenerationEnabled(event.target.checked)} type="checkbox" />
+              <span><span className="block font-bold">Enable sentence generation</span><span className="mt-1 block text-sm leading-relaxed text-muted">Generate simple, everyday conversational English statements. Sentences are created independently and never composed from existing Word rows.</span></span>
+            </label>
           </div>
 
-          <div>
-            <label
-              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
-              htmlFor="single-word-generation-enabled"
-            >
-              <input
-                checked={singleWordGenerationEnabled}
-                className="mt-0.5 size-5 accent-accent"
-                id="single-word-generation-enabled"
-                onChange={(event) => setSingleWordGenerationEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <span>
-                <span className="block font-bold">Generate single words</span>
-                <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Narrower than "Enable word generation" above -- stops ONLY the single-word
-                  ("Words per item" = 1) branch specifically, without touching composition (2-20)
-                  or the phrase-tier pool below. Turn this off and set "Words per item" to 2-20 to
-                  make the scheduled job generate phrases or full sentences instead of single words.
-                </span>
-              </span>
-            </label>
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="sentence-word-count">Words per sentence</label>
+            <p className="text-sm leading-relaxed text-muted">Target length for each generated sentence. Keep it short enough to translate and record naturally.</p>
+            <input className={inputClass} id="sentence-word-count" type="number" step="1" min="2" max="20" value={sentenceWordCount} onChange={(e) => setSentenceWordCount(e.target.value)} />
           </div>
 
           <div className="grid gap-1">
@@ -330,48 +292,6 @@ export function WordGenerationSettingsPanel() {
             />
           </div>
 
-          <div>
-            <label
-              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
-              htmlFor="phrase-tier-generation"
-            >
-              <input
-                checked={phraseTierGenerationEnabled}
-                className="mt-0.5 size-5 accent-accent"
-                id="phrase-tier-generation"
-                onChange={(event) => setPhraseTierGenerationEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <span>
-                <span className="block font-bold">Phrase-tier pool generation</span>
-                <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Compose phrases at each escalation tier&apos;s target word-count band (see General
-                  settings&apos; &quot;Phrase recording escalation&quot; toggle), so trainers who
-                  cross a milestone have a pool to draw from. Independent of the word-count/items
-                  settings above.
-                </span>
-              </span>
-            </label>
-          </div>
-
-          <div className="grid gap-1">
-            <label className="font-bold" htmlFor="phrase-tier-items-per-tier-per-run">
-              Phrases composed per tier per run
-            </label>
-            <p className="text-sm leading-relaxed text-muted">
-              How many new phrases to compose for EACH escalation tier every scheduled run.
-            </p>
-            <input
-              className={inputClass}
-              id="phrase-tier-items-per-tier-per-run"
-              type="number"
-              step="1"
-              min="1"
-              max="50"
-              value={phraseTierItemsPerTierPerRun}
-              onChange={(e) => setPhraseTierItemsPerTierPerRun(e.target.value)}
-            />
-          </div>
 
           <div>
             <ActionButton

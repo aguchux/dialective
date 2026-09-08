@@ -9,6 +9,7 @@ import { CreateValidatorDeckDto } from './dto/create-validator-deck.dto';
 import { UpdateValidatorDeckDto } from './dto/update-validator-deck.dto';
 import { AddValidatorDeckItemDto } from './dto/add-validator-deck-item.dto';
 import { ScoreValidatorDeckItemDto } from './dto/score-validator-deck-item.dto';
+import { RejectValidatorDeckDto } from './dto/reject-validator-deck.dto';
 import { ListValidatorRecordingsDto } from './dto/list-validator-recordings.dto';
 
 @Controller('validator/decks')
@@ -23,8 +24,9 @@ export class ValidatorDecksController {
   }
 
   @Get()
-  list(@Req() req: AuthenticatedRequest, @Query('filter') filter?: 'mine' | 'all') {
-    return this.decks.list(filter === 'all' ? 'all' : 'mine', req.user.sub);
+  list(@Req() req: AuthenticatedRequest, @Query('filter') filter?: 'mine' | 'all' | 'pendingMyApproval') {
+    const resolved = filter === 'all' || filter === 'pendingMyApproval' ? filter : 'mine';
+    return this.decks.list(resolved, req.user.sub);
   }
 
   @Get(':id')
@@ -59,6 +61,26 @@ export class ValidatorDecksController {
     @Body() dto: ScoreValidatorDeckItemDto,
   ) {
     return this.decks.scoreItem(id, req.user.sub, req.user.role, recordingId, dto);
+  }
+
+  @Post(':id/submit')
+  submit(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.decks.submit(id, req.user.sub, req.user.role);
+  }
+
+  @Post(':id/approve')
+  approve(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.decks.approve(id, req.user.sub, req.user.role);
+  }
+
+  @Post(':id/reject')
+  reject(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() dto: RejectValidatorDeckDto) {
+    return this.decks.reject(id, req.user.sub, req.user.role, dto.reason);
+  }
+
+  @Get(':id/audit-log')
+  getAuditLog(@Param('id') id: string) {
+    return this.decks.getAuditLog(id);
   }
 }
 

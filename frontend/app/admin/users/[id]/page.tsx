@@ -34,9 +34,12 @@ import {
   useSendInstantTrainerReportMutation,
   useSettleOneMutation,
   useUpdateTrainerRatingMutation,
+  useUpdateValidatorLevelMutation,
   type UnsettledRow,
   type UserActivityEntry,
 } from '@/store/api';
+
+const validatorLevelOptions = ['L1', 'L2', 'L3'] as const;
 
 const inputClass =
   'min-h-9 w-full rounded-lg border border-line bg-white px-3 py-1.5 text-sm text-ink dark:bg-surface-muted';
@@ -93,9 +96,11 @@ export default function AdminUserDetailPage() {
 
   const [sendReport, { isLoading: isSendingReport }] = useSendInstantTrainerReportMutation();
   const [updateTrainerRating, { isLoading: isUpdatingTrainerRating }] = useUpdateTrainerRatingMutation();
+  const [updateValidatorLevel, { isLoading: isUpdatingValidatorLevel }] = useUpdateValidatorLevelMutation();
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [ratingError, setRatingError] = useState<string | null>(null);
+  const [validatorLevelError, setValidatorLevelError] = useState<string | null>(null);
 
   async function handleSendReport() {
     if (!user) return;
@@ -116,6 +121,16 @@ export default function AdminUserDetailPage() {
       await updateTrainerRating({ id: user.id, rating }).unwrap();
     } catch (err) {
       setRatingError(normalizeErrorMessage(err, 'Unable to update this trainer rating.'));
+    }
+  }
+
+  async function handleValidatorLevel(level: 'L1' | 'L2' | 'L3') {
+    if (!user || (user.role === 'VALIDATOR' && level === user.validatorLevel)) return;
+    setValidatorLevelError(null);
+    try {
+      await updateValidatorLevel({ id: user.id, validatorLevel: level }).unwrap();
+    } catch (err) {
+      setValidatorLevelError(normalizeErrorMessage(err, 'Unable to update this validator tier.'));
     }
   }
 
@@ -142,6 +157,9 @@ export default function AdminUserDetailPage() {
           <>
             <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)] md:grid-cols-2 lg:grid-cols-3">
               <Field label="Role" value={user.role} />
+              {user.role === 'VALIDATOR' && (
+                <Field label="Validator tier" value={user.validatorLevel ?? 'Not set'} />
+              )}
               {user.role === 'TRAINER' && (
                 <Field
                   label="Trainer rating"
@@ -315,6 +333,45 @@ export default function AdminUserDetailPage() {
                 as a brand-new account.
               </p>
             </section>
+
+            {user.role === 'VALIDATOR' && (
+              <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+                <div className="grid gap-1">
+                  <h2 className="text-lg font-black">Validator tier</h2>
+                  <p className="text-sm leading-relaxed text-muted">
+                    Sets which approval stage this validator&rsquo;s own submitted decks route to
+                    (L1 &rarr; L2 review, L2 &rarr; L3 review, L3 &rarr; admin review) and which
+                    pending-approval queue they see on their own dashboard.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Validator tier">
+                  {validatorLevelOptions.map((level) => {
+                    const selected = user.validatorLevel === level;
+                    return (
+                      <button
+                        aria-pressed={selected}
+                        className={`inline-flex min-h-10 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-extrabold transition-colors ${
+                          selected
+                            ? 'bg-accent text-white'
+                            : 'border border-line bg-surface text-ink hover:bg-surface-muted'
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                        disabled={isUpdatingValidatorLevel}
+                        key={level}
+                        onClick={() => void handleValidatorLevel(level)}
+                        type="button"
+                      >
+                        {level}
+                      </button>
+                    );
+                  })}
+                </div>
+                {validatorLevelError && (
+                  <p className="text-sm leading-relaxed text-danger" role="alert">
+                    {validatorLevelError}
+                  </p>
+                )}
+              </section>
+            )}
 
             {user.role === 'TRAINER' && (
               <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
