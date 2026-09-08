@@ -14,6 +14,8 @@ import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { CreateValidatorDeckDto } from './dto/create-validator-deck.dto';
 import { UpdateValidatorDeckDto } from './dto/update-validator-deck.dto';
 import { ScoreValidatorDeckItemDto } from './dto/score-validator-deck-item.dto';
+import { UpdateValidatorTranscriptDto } from './dto/update-validator-transcript.dto';
+import { FlagValidatorDeckItemDto } from './dto/flag-validator-deck-item.dto';
 
 // Reserved singleton SubscriberOrganization id seeded by the
 // 20260908160000_add_validator_payouts_and_publish migration -- see
@@ -196,6 +198,69 @@ export class ValidatorDecksService {
         validatorScore: dto.score ?? null,
         validatorNotes: dto.notes ?? null,
         scoredAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Saves the validator's own transcript for this item -- distinct from
+   * WordRecording.transcript (ASR-generated) and .translationText (the
+   * trainer's original submission), neither of which this ever touches.
+   * Same DRAFT-only/owner-or-admin edit gate as scoreItem; callable
+   * independently of scoring so a validator can save transcript progress
+   * before deciding a score.
+   */
+  async updateTranscript(
+    deckId: string,
+    callerUserId: string,
+    callerRole: string,
+    recordingId: string,
+    dto: UpdateValidatorTranscriptDto,
+  ) {
+    const deck = await this.assertEditable(deckId, callerUserId, callerRole);
+    const item = await this.prisma.validatorDeckItem.findUnique({
+      where: { deckId_recordingId: { deckId: deck.id, recordingId } },
+    });
+    if (!item) throw new NotFoundException('This recording is not in the deck');
+
+    return this.prisma.validatorDeckItem.update({
+      where: { id: item.id },
+      data: {
+        validatorTranscript: dto.transcript,
+        validatorTranscriptUpdatedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Flags an item with a reason (Validation Workspace UI spec's flag-reason
+   * list). Independent of validationStatus -- a validator typically flags
+   * and also marks the item REJECTED/INVALID via scoreItem, but each call
+   * is separate so the UI can save a flag without forcing a score decision
+   * in the same request. Same DRAFT-only/owner-or-admin edit gate as
+   * scoreItem/updateTranscript. Re-flagging overwrites the previous
+   * reason/note -- only the latest flag is kept, per flaggedAt semantics.
+   */
+  async flagItem(
+    deckId: string,
+    callerUserId: string,
+    callerRole: string,
+    recordingId: string,
+    dto: FlagValidatorDeckItemDto,
+  ) {
+    const deck = await this.assertEditable(deckId, callerUserId, callerRole);
+    const item = await this.prisma.validatorDeckItem.findUnique({
+      where: { deckId_recordingId: { deckId: deck.id, recordingId } },
+    });
+    if (!item) throw new NotFoundException('This recording is not in the deck');
+
+    return this.prisma.validatorDeckItem.update({
+      where: { id: item.id },
+      data: {
+        flagReason: dto.reason,
+        flagNote: dto.note ?? null,
+        flaggedByUserId: callerUserId,
+        flaggedAt: new Date(),
       },
     });
   }

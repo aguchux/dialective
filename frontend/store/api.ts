@@ -1903,6 +1903,18 @@ export interface ListValidatorRecordingsParams {
 
 export type ValidatorItemStatus = 'UNSCORED' | 'VALID' | 'INVALID' | 'REJECTED';
 
+export type ValidatorFlagReason =
+  | 'UNCLEAR_AUDIO'
+  | 'EXCESSIVE_NOISE'
+  | 'CLIPPING_OR_DISTORTION'
+  | 'WRONG_LANGUAGE_OR_DIALECT'
+  | 'MULTIPLE_SPEAKERS'
+  | 'INCORRECT_PROMPT'
+  | 'INCOMPLETE_RECORDING'
+  | 'DUPLICATE_RECORDING'
+  | 'UNABLE_TO_TRANSCRIBE'
+  | 'OTHER';
+
 export interface ValidatorDeckItem {
   id: string;
   deckId: string;
@@ -1913,6 +1925,12 @@ export interface ValidatorDeckItem {
   validatorScore: string | null;
   validatorNotes: string | null;
   scoredAt: string | null;
+  validatorTranscript: string | null;
+  validatorTranscriptUpdatedAt: string | null;
+  flagReason: ValidatorFlagReason | null;
+  flagNote: string | null;
+  flaggedByUserId: string | null;
+  flaggedAt: string | null;
 }
 
 export interface ValidatorDeckSummary {
@@ -4340,6 +4358,28 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
     }),
+    updateValidatorTranscript: builder.mutation<
+      ValidatorDeckItem,
+      { id: string; recordingId: string; transcript: string }
+    >({
+      query: ({ id, recordingId, transcript }) => ({
+        url: `/validator/decks/${id}/items/${recordingId}/transcript`,
+        method: 'PATCH',
+        body: { transcript },
+      }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+    }),
+    flagValidatorDeckItem: builder.mutation<
+      ValidatorDeckItem,
+      { id: string; recordingId: string; reason: ValidatorFlagReason; note?: string }
+    >({
+      query: ({ id, recordingId, reason, note }) => ({
+        url: `/validator/decks/${id}/items/${recordingId}/flag`,
+        method: 'POST',
+        body: { reason, note },
+      }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+    }),
     getValidatorRecordings: builder.query<ValidatorRecordingsPage, ListValidatorRecordingsParams>({
       query: (params) => ({ url: '/validator/recordings', params }),
       providesTags: ['ValidatorRecordings'],
@@ -4712,6 +4752,8 @@ export const {
   useAddValidatorDeckItemMutation,
   useRemoveValidatorDeckItemMutation,
   useScoreValidatorDeckItemMutation,
+  useUpdateValidatorTranscriptMutation,
+  useFlagValidatorDeckItemMutation,
   useGetValidatorRecordingsQuery,
   useSubmitValidatorDeckMutation,
   useApproveValidatorDeckMutation,

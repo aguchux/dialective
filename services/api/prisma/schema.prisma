@@ -1230,6 +1230,26 @@ enum ValidatorItemStatus {
   REJECTED
 }
 
+/// Reasons a validator can flag a ValidatorDeckItem as unusable -- mirrors
+/// the Validation Workspace UI spec's flag-reason list (docs/validators.md).
+/// Flagging is independent of validationStatus: a validator typically flags
+/// AND marks the item REJECTED/INVALID together, but the reason is tracked
+/// separately since "why" is its own piece of information (e.g. useful for
+/// spotting a bad prompt affecting many recordings) that a bare status
+/// enum can't carry.
+enum ValidatorFlagReason {
+  UNCLEAR_AUDIO
+  EXCESSIVE_NOISE
+  CLIPPING_OR_DISTORTION
+  WRONG_LANGUAGE_OR_DIALECT
+  MULTIPLE_SPEAKERS
+  INCORRECT_PROMPT
+  INCOMPLETE_RECORDING
+  DUPLICATE_RECORDING
+  UNABLE_TO_TRANSCRIBE
+  OTHER
+}
+
 model ValidatorDeckItem {
   id            String        @id @default(uuid())
   deckId        String
@@ -1245,6 +1265,23 @@ model ValidatorDeckItem {
   validatorScore   Decimal?            @db.Decimal(5, 2)
   validatorNotes   String?
   scoredAt         DateTime?
+
+  // The validator's own transcript for this recording -- deliberately
+  // separate from WordRecording.transcript (ASR-generated, vosk/whisper)
+  // and WordRecording.translationText (what the trainer submitted). A
+  // validator reviewing/correcting the spoken content writes here; neither
+  // of the other two fields is ever touched by this flow.
+  validatorTranscript          String?
+  validatorTranscriptUpdatedAt DateTime?
+
+  // Flagging: independent of validationStatus (see ValidatorFlagReason doc
+  // comment). All four null until first flagged; flaggedByUserId is kept
+  // even if a later action clears/changes the flag, so there's always a
+  // record of who last flagged this item.
+  flagReason      ValidatorFlagReason?
+  flagNote        String?
+  flaggedByUserId String?
+  flaggedAt       DateTime?
 
   @@unique([deckId, recordingId])
   @@index([deckId])

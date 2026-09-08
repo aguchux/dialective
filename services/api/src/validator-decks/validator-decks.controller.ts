@@ -9,6 +9,8 @@ import { CreateValidatorDeckDto } from './dto/create-validator-deck.dto';
 import { UpdateValidatorDeckDto } from './dto/update-validator-deck.dto';
 import { AddValidatorDeckItemDto } from './dto/add-validator-deck-item.dto';
 import { ScoreValidatorDeckItemDto } from './dto/score-validator-deck-item.dto';
+import { UpdateValidatorTranscriptDto } from './dto/update-validator-transcript.dto';
+import { FlagValidatorDeckItemDto } from './dto/flag-validator-deck-item.dto';
 import { RejectValidatorDeckDto } from './dto/reject-validator-deck.dto';
 import { ListValidatorRecordingsDto } from './dto/list-validator-recordings.dto';
 
@@ -61,6 +63,26 @@ export class ValidatorDecksController {
     @Body() dto: ScoreValidatorDeckItemDto,
   ) {
     return this.decks.scoreItem(id, req.user.sub, req.user.role, recordingId, dto);
+  }
+
+  @Patch(':id/items/:recordingId/transcript')
+  updateTranscript(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('recordingId') recordingId: string,
+    @Body() dto: UpdateValidatorTranscriptDto,
+  ) {
+    return this.decks.updateTranscript(id, req.user.sub, req.user.role, recordingId, dto);
+  }
+
+  @Post(':id/items/:recordingId/flag')
+  flagItem(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('recordingId') recordingId: string,
+    @Body() dto: FlagValidatorDeckItemDto,
+  ) {
+    return this.decks.flagItem(id, req.user.sub, req.user.role, recordingId, dto);
   }
 
   @Post(':id/submit')

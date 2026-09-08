@@ -83,6 +83,19 @@
   }
 }
 
+/* Now-playing equalizer glyph on an active recording card (Validation
+   Workspace Task Mode) -- respects prefers-reduced-motion via the
+   motion-reduce:animate-none utility applied at each bar's usage site. */
+@keyframes eq {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
 /*
  * Popover-style scale-in (dropdowns, popovers): unlike Dialog's scaleIn
  * above, Radix already applies its own position transform (translate(Xpx,

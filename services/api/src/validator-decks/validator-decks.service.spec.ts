@@ -199,6 +199,115 @@ describe('ValidatorDecksService', () => {
     });
   });
 
+  describe('updateTranscript', () => {
+    it('saves the validator transcript against the deck item, distinct from any WordRecording fields', async () => {
+      prisma.validatorDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        ownerUserId: 'user-1',
+        status: 'DRAFT',
+      });
+      prisma.validatorDeckItem.findUnique.mockResolvedValue({ id: 'item-1' });
+      prisma.validatorDeckItem.update.mockResolvedValue({ id: 'item-1' });
+
+      await service.updateTranscript('deck-1', 'user-1', 'VALIDATOR', 'rec-1', {
+        transcript: 'good morning',
+      });
+
+      expect(prisma.validatorDeckItem.update).toHaveBeenCalledWith({
+        where: { id: 'item-1' },
+        data: expect.objectContaining({ validatorTranscript: 'good morning' }),
+      });
+      expect(prisma.wordRecording.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('refuses to save a transcript for a recording not in the deck', async () => {
+      prisma.validatorDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        ownerUserId: 'user-1',
+        status: 'DRAFT',
+      });
+      prisma.validatorDeckItem.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.updateTranscript('deck-1', 'user-1', 'VALIDATOR', 'rec-missing', {
+          transcript: 'x',
+        }),
+      ).rejects.toThrow('This recording is not in the deck');
+    });
+
+    it('only the deck owner or an admin can save a transcript', async () => {
+      prisma.validatorDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        ownerUserId: 'someone-else',
+        status: 'DRAFT',
+      });
+
+      await expect(
+        service.updateTranscript('deck-1', 'user-1', 'VALIDATOR', 'rec-1', { transcript: 'x' }),
+      ).rejects.toThrow('Only the deck owner or an admin can edit this deck');
+    });
+  });
+
+  describe('flagItem', () => {
+    it('records a flag reason/note against the deck item, stamped with the caller and a timestamp', async () => {
+      prisma.validatorDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        ownerUserId: 'user-1',
+        status: 'DRAFT',
+      });
+      prisma.validatorDeckItem.findUnique.mockResolvedValue({ id: 'item-1' });
+      prisma.validatorDeckItem.update.mockResolvedValue({ id: 'item-1' });
+
+      await service.flagItem('deck-1', 'user-1', 'VALIDATOR', 'rec-1', {
+        reason: 'CLIPPING_OR_DISTORTION' as never,
+        note: 'loud pop at 0:04',
+      });
+
+      expect(prisma.validatorDeckItem.update).toHaveBeenCalledWith({
+        where: { id: 'item-1' },
+        data: {
+          flagReason: 'CLIPPING_OR_DISTORTION',
+          flagNote: 'loud pop at 0:04',
+          flaggedByUserId: 'user-1',
+          flaggedAt: expect.any(Date),
+        },
+      });
+    });
+
+    it('defaults flagNote to null when no note is given', async () => {
+      prisma.validatorDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        ownerUserId: 'user-1',
+        status: 'DRAFT',
+      });
+      prisma.validatorDeckItem.findUnique.mockResolvedValue({ id: 'item-1' });
+      prisma.validatorDeckItem.update.mockResolvedValue({ id: 'item-1' });
+
+      await service.flagItem('deck-1', 'user-1', 'VALIDATOR', 'rec-1', {
+        reason: 'OTHER' as never,
+      });
+
+      expect(prisma.validatorDeckItem.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ flagNote: null }) }),
+      );
+    });
+
+    it('refuses to flag a recording not in the deck', async () => {
+      prisma.validatorDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        ownerUserId: 'user-1',
+        status: 'DRAFT',
+      });
+      prisma.validatorDeckItem.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.flagItem('deck-1', 'user-1', 'VALIDATOR', 'rec-missing', {
+          reason: 'OTHER' as never,
+        }),
+      ).rejects.toThrow('This recording is not in the deck');
+    });
+  });
+
   describe('getWithPreview', () => {
     it('computes expected earning as validated-count times the flat rate', async () => {
       prisma.validatorDeck.findUnique.mockResolvedValue({
