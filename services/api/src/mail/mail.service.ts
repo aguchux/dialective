@@ -171,6 +171,7 @@ export class MailService {
       subject,
       otpHtml(intro, code),
       `${intro} Your code: ${code} (expires in 10 minutes).`,
+      { footer: false },
     );
   }
 
@@ -328,20 +329,46 @@ export class MailService {
     );
   }
 
-  private async send(to: string, subject: string, html: string, text: string): Promise<void> {
+  private async send(
+    to: string,
+    subject: string,
+    html: string,
+    text: string,
+    options?: { footer?: boolean },
+  ): Promise<void> {
+    const includeFooter = options?.footer ?? true;
+    const finalHtml = includeFooter ? html + EMAIL_FOOTER_HTML : html;
+    const finalText = includeFooter ? text + EMAIL_FOOTER_TEXT : text;
+
     if (!this.resend) {
-      this.logger.log(`[STUB] ${subject} for ${to}: ${text}`);
+      this.logger.log(`[STUB] ${subject} for ${to}: ${finalText}`);
       return;
     }
 
     const from = await this.settings.getResendFromAddress();
-    const { error } = await this.resend.emails.send({ from, to, subject, html, text });
+    const { error } = await this.resend.emails.send({
+      from,
+      to,
+      subject,
+      html: finalHtml,
+      text: finalText,
+    });
     if (error) {
       this.logger.error(`Resend send failed for ${to}: ${error.message}`);
       throw new ServiceUnavailableException('Email delivery is temporarily unavailable');
     }
   }
 }
+
+const EMAIL_FOOTER_HTML = `<p style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5;color:#666;font-size:13px;">If you have any questions, please visit our community, chat with our support agent, or send an email to <a href="mailto:hello@dialectlibrary.com">hello@dialectlibrary.com</a> and we will be happy to assist you.</p>
+<p style="color:#666;font-size:13px;">Best Regards,<br/>The Dialect Library Team!</p>`;
+
+const EMAIL_FOOTER_TEXT = `
+
+If you have any questions, please visit our community, chat with our support agent, or send an email to hello@dialectlibrary.com and we will be happy to assist you.
+
+Best Regards,
+The Dialect Library Team!`;
 
 function passwordResetHtml(url: string): string {
   return `<p>Click below to reset your Dialect Library password. This link expires in 1 hour.</p><p><a href="${url}">${url}</a></p>`;
