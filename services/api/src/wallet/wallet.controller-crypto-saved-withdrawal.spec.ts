@@ -94,6 +94,7 @@ function setup(overrides?: { payoutAccount?: Record<string, unknown> | null }) {
     platformSettings as never,
     otp as never,
     {} as never,
+    {} as never,
   );
   return { controller, prisma, otp, platformSettings };
 }

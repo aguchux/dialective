@@ -39,7 +39,7 @@ import { AuthMaintenanceException } from './auth-maintenance.exception';
 import { signAccessToken } from './jwt.util';
 import { phoneVerificationContextHash } from './phone-otp-context.util';
 import { adminActionContextHash } from '../wallet/otp-context.util';
-import { generateOtpCode, hashOtpCode } from '../otp/otp.util';
+import { generateOtpCode, hashOtpCode, resolveOtpDestination } from '../otp/otp.util';
 import { isOnAuditHold } from '../common/audit-hold.util';
 import { trainerRatingValue } from '../common/trainer-rating.util';
 
@@ -1705,8 +1705,9 @@ export class AuthService {
     if (userId === adminId)
       throw new BadRequestException('You cannot suspend or block your own account');
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
+    const { destination, channel } = resolveOtpDestination(admin);
     const contextHash = adminActionContextHash({ action: 'user-lock', userId, status });
-    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
   }
 
   /**
@@ -1824,8 +1825,9 @@ export class AuthService {
 
   async requestAuditHoldReleaseOtp(adminId: string, userId: string) {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
+    const { destination, channel } = resolveOtpDestination(admin);
     const contextHash = adminActionContextHash({ action: 'audit-hold-release', userId });
-    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
   }
 
   /**
@@ -1883,8 +1885,9 @@ export class AuthService {
 
   async requestRevokePhoneOtp(adminId: string, userId: string) {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
+    const { destination, channel } = resolveOtpDestination(admin);
     const contextHash = adminActionContextHash({ action: 'phone-verification-revoke', userId });
-    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
   }
 
   /**
@@ -1936,8 +1939,9 @@ export class AuthService {
   async requestUserDeleteOtp(adminId: string, userId: string) {
     if (userId === adminId) throw new BadRequestException('You cannot delete your own account');
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
+    const { destination, channel } = resolveOtpDestination(admin);
     const contextHash = adminActionContextHash({ action: 'user-delete', userId });
-    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
   }
 
   /**

@@ -1284,9 +1284,14 @@ describe('AuthService.revokePhoneVerification', () => {
 });
 
 describe('AuthService.requestRevokePhoneOtp', () => {
-  it("issues an OTP to the admin's own email, scoped to the target user", async () => {
+  it("issues an OTP to the admin's own email when the admin has no verified phone", async () => {
     const { service, prisma, otp } = setup();
-    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'admin-1', email: 'admin@b.com' });
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: 'admin-1',
+      email: 'admin@b.com',
+      phoneNumber: null,
+      phoneVerifiedAt: null,
+    });
 
     const result = await service.requestRevokePhoneOtp('admin-1', 'user-1');
 
@@ -1295,7 +1300,28 @@ describe('AuthService.requestRevokePhoneOtp', () => {
       'ADMIN_PAYOUT',
       'admin@b.com',
       expect.any(String),
+      'EMAIL',
     );
     expect(result).toMatchObject({ otpRequestId: 'otp-request-1' });
+  });
+
+  it("prefers SMS to the admin's own verified phone number over email", async () => {
+    const { service, prisma, otp } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: 'admin-1',
+      email: 'admin@b.com',
+      phoneNumber: '+15551234567',
+      phoneVerifiedAt: new Date(),
+    });
+
+    await service.requestRevokePhoneOtp('admin-1', 'user-1');
+
+    expect(otp.issueForUser).toHaveBeenCalledWith(
+      'admin-1',
+      'ADMIN_PAYOUT',
+      '+15551234567',
+      expect.any(String),
+      'SMS',
+    );
   });
 });

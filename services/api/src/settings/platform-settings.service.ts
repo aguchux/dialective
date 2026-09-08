@@ -382,6 +382,36 @@ export class PlatformSettingsService {
     return row.adminPayoutOtpEnabled;
   }
 
+  async isWalletSmsWithdrawalPaidEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.walletSmsWithdrawalPaidEnabled;
+  }
+
+  async isWalletSmsWithdrawalRejectedEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.walletSmsWithdrawalRejectedEnabled;
+  }
+
+  async isWalletSmsWithdrawalFailedEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.walletSmsWithdrawalFailedEnabled;
+  }
+
+  async isWalletSmsDepositConfirmedEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.walletSmsDepositConfirmedEnabled;
+  }
+
+  async isReferralSmsFundingBonusEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.referralSmsFundingBonusEnabled;
+  }
+
+  async isReferralSmsPayoutBonusEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.referralSmsPayoutBonusEnabled;
+  }
+
   async isPhoneVerificationRequired(): Promise<boolean> {
     const row = await this.getRow();
     return row.phoneVerificationRequired;
@@ -778,6 +808,12 @@ export class PlatformSettingsService {
       p2pSmsPaymentMarkedEnabled: row.p2pSmsPaymentMarkedEnabled,
       p2pSmsTokensReleasedEnabled: row.p2pSmsTokensReleasedEnabled,
       p2pSmsCancelledEnabled: row.p2pSmsCancelledEnabled,
+      walletSmsWithdrawalPaidEnabled: row.walletSmsWithdrawalPaidEnabled,
+      walletSmsWithdrawalRejectedEnabled: row.walletSmsWithdrawalRejectedEnabled,
+      walletSmsWithdrawalFailedEnabled: row.walletSmsWithdrawalFailedEnabled,
+      walletSmsDepositConfirmedEnabled: row.walletSmsDepositConfirmedEnabled,
+      referralSmsFundingBonusEnabled: row.referralSmsFundingBonusEnabled,
+      referralSmsPayoutBonusEnabled: row.referralSmsPayoutBonusEnabled,
       cryptoWithdrawalsEnabled: row.cryptoWithdrawalsEnabled,
       nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
@@ -902,6 +938,12 @@ export class PlatformSettingsService {
     p2pSmsPaymentMarkedEnabled?: boolean;
     p2pSmsTokensReleasedEnabled?: boolean;
     p2pSmsCancelledEnabled?: boolean;
+    walletSmsWithdrawalPaidEnabled?: boolean;
+    walletSmsWithdrawalRejectedEnabled?: boolean;
+    walletSmsWithdrawalFailedEnabled?: boolean;
+    walletSmsDepositConfirmedEnabled?: boolean;
+    referralSmsFundingBonusEnabled?: boolean;
+    referralSmsPayoutBonusEnabled?: boolean;
     cryptoWithdrawalsEnabled?: boolean;
     nowPaymentsPayoutsEnabled?: boolean;
     allowedWithdrawalCurrencies?: string;
@@ -1260,6 +1302,12 @@ export class PlatformSettingsService {
       p2pSmsPaymentMarkedEnabled: row.p2pSmsPaymentMarkedEnabled,
       p2pSmsTokensReleasedEnabled: row.p2pSmsTokensReleasedEnabled,
       p2pSmsCancelledEnabled: row.p2pSmsCancelledEnabled,
+      walletSmsWithdrawalPaidEnabled: row.walletSmsWithdrawalPaidEnabled,
+      walletSmsWithdrawalRejectedEnabled: row.walletSmsWithdrawalRejectedEnabled,
+      walletSmsWithdrawalFailedEnabled: row.walletSmsWithdrawalFailedEnabled,
+      walletSmsDepositConfirmedEnabled: row.walletSmsDepositConfirmedEnabled,
+      referralSmsFundingBonusEnabled: row.referralSmsFundingBonusEnabled,
+      referralSmsPayoutBonusEnabled: row.referralSmsPayoutBonusEnabled,
       cryptoWithdrawalsEnabled: row.cryptoWithdrawalsEnabled,
       nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,

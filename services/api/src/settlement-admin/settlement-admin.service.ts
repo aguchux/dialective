@@ -3,6 +3,7 @@ import { Prisma, computeTrainingPayout, creditTrainingPayoutOps, mintTrainingPay
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { TokenomicsService } from '../tokenomics/tokenomics.service';
+import { SmsService } from '../sms/sms.service';
 import { ListUnsettledDto } from './dto/list-unsettled.dto';
 
 interface QualityWeights {
@@ -34,7 +35,29 @@ export class SettlementAdminService {
     private readonly prisma: PrismaService,
     private readonly settings: PlatformSettingsService,
     private readonly tokenomics: TokenomicsService,
+    private readonly sms: SmsService,
   ) {}
+
+  /** Best-effort SMS to the referrer credited a payout bonus off this settlement -- mirrors WalletController.notifyReferralFundingBonusesSms, never blocks the settle-row transaction. */
+  private async notifyReferralPayoutBonusSms(referrerUserId: string, amount: string): Promise<void> {
+    try {
+      const enabled = await this.settings.isReferralSmsPayoutBonusEnabled();
+      if (!enabled) return;
+      const user = await this.prisma.user.findUnique({
+        where: { id: referrerUserId },
+        select: { phoneNumber: true, phoneVerifiedAt: true, smsNotificationsEnabled: true },
+      });
+      if (!user?.phoneNumber || !user.phoneVerifiedAt || !user.smsNotificationsEnabled) return;
+      await this.sms.sendTransactional(
+        user.phoneNumber,
+        `Dialect Library: You earned a ${amount} DL referral bonus from your referral's training payout.`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to send referral payout-bonus SMS for user=${referrerUserId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   async listUnsettled(query: ListUnsettledDto) {
     const settlementDelayMinutes = await this.settings.getSettlementDelayMinutes();
@@ -245,7 +268,7 @@ export class SettlementAdminService {
     const payoutScore = ctx.qualityGateEnabled ? compositeScore : recording.score;
     const payout = computeTrainingPayout(recording.tokensSpent, payoutScore, ctx.bonusCapMultiple);
     const sourceKey = trainingPayoutSourceKey(recording.wordId, recording.sentenceId);
-    const { ops } = await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id);
+    const { ops, result } = await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id);
     const mintOps = ctx.mintingPaused
       ? []
       : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
@@ -290,6 +313,9 @@ export class SettlementAdminService {
     }
 
     this.logger.log(`Manually settled wordRecording=${recording.id} payout=${payout.toString()}`);
+    if (result.referrerUserId && Number(result.referralPayoutBonus) > 0) {
+      void this.notifyReferralPayoutBonusSms(result.referrerUserId, result.referralPayoutBonus);
+    }
     return { id: recording.id, payoutTokenAmount: payout.toString() };
   }
 

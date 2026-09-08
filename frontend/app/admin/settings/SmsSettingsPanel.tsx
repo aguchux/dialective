@@ -64,6 +64,13 @@ export function SmsSettingsPanel() {
   const [p2pSmsPaymentMarkedEnabled, setP2pSmsPaymentMarkedEnabled] = useState(false);
   const [p2pSmsTokensReleasedEnabled, setP2pSmsTokensReleasedEnabled] = useState(false);
   const [p2pSmsCancelledEnabled, setP2pSmsCancelledEnabled] = useState(false);
+  const [walletSmsWithdrawalPaidEnabled, setWalletSmsWithdrawalPaidEnabled] = useState(false);
+  const [walletSmsWithdrawalRejectedEnabled, setWalletSmsWithdrawalRejectedEnabled] =
+    useState(false);
+  const [walletSmsWithdrawalFailedEnabled, setWalletSmsWithdrawalFailedEnabled] = useState(false);
+  const [walletSmsDepositConfirmedEnabled, setWalletSmsDepositConfirmedEnabled] = useState(false);
+  const [referralSmsFundingBonusEnabled, setReferralSmsFundingBonusEnabled] = useState(false);
+  const [referralSmsPayoutBonusEnabled, setReferralSmsPayoutBonusEnabled] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +85,12 @@ export function SmsSettingsPanel() {
     setP2pSmsPaymentMarkedEnabled(settings.p2pSmsPaymentMarkedEnabled);
     setP2pSmsTokensReleasedEnabled(settings.p2pSmsTokensReleasedEnabled);
     setP2pSmsCancelledEnabled(settings.p2pSmsCancelledEnabled);
+    setWalletSmsWithdrawalPaidEnabled(settings.walletSmsWithdrawalPaidEnabled);
+    setWalletSmsWithdrawalRejectedEnabled(settings.walletSmsWithdrawalRejectedEnabled);
+    setWalletSmsWithdrawalFailedEnabled(settings.walletSmsWithdrawalFailedEnabled);
+    setWalletSmsDepositConfirmedEnabled(settings.walletSmsDepositConfirmedEnabled);
+    setReferralSmsFundingBonusEnabled(settings.referralSmsFundingBonusEnabled);
+    setReferralSmsPayoutBonusEnabled(settings.referralSmsPayoutBonusEnabled);
   }, [settings]);
 
   function setChoice(position: 0 | 1 | 2, provider: SmsProviderKey) {
@@ -121,6 +134,12 @@ export function SmsSettingsPanel() {
         p2pSmsPaymentMarkedEnabled,
         p2pSmsTokensReleasedEnabled,
         p2pSmsCancelledEnabled,
+        walletSmsWithdrawalPaidEnabled,
+        walletSmsWithdrawalRejectedEnabled,
+        walletSmsWithdrawalFailedEnabled,
+        walletSmsDepositConfirmedEnabled,
+        referralSmsFundingBonusEnabled,
+        referralSmsPayoutBonusEnabled,
       }).unwrap();
       setMessage('SMS provider settings saved.');
     } catch (err) {
@@ -362,6 +381,132 @@ export function SmsSettingsPanel() {
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   SMS the seller when a trade is cancelled, expires, or a dispute resolves in their
                   favor, and SMS the other party when a dispute is raised.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div className="border-t border-line pt-5">
+            <h3 className="text-lg font-black">Financial notifications</h3>
+            <p className="mt-1 text-sm leading-relaxed text-muted">
+              Withdrawal, deposit, and referral-bonus SMS. Each event is independently on/off, and
+              only sends to trainers with a verified phone number who haven&apos;t opted out of SMS
+              notifications.
+            </p>
+          </div>
+
+          <div className="grid gap-2">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3"
+              htmlFor="wallet-sms-withdrawal-paid"
+            >
+              <input
+                checked={walletSmsWithdrawalPaidEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="wallet-sms-withdrawal-paid"
+                onChange={(event) => setWalletSmsWithdrawalPaidEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Withdrawal paid out</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  SMS the trainer once their withdrawal payout actually settles, across every payout
+                  rail and the admin manual &quot;mark paid&quot; override.
+                </span>
+              </span>
+            </label>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3"
+              htmlFor="wallet-sms-withdrawal-rejected"
+            >
+              <input
+                checked={walletSmsWithdrawalRejectedEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="wallet-sms-withdrawal-rejected"
+                onChange={(event) => setWalletSmsWithdrawalRejectedEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Withdrawal rejected</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  SMS the trainer when an admin rejects their withdrawal request and the DL is
+                  returned to their balance.
+                </span>
+              </span>
+            </label>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3"
+              htmlFor="wallet-sms-withdrawal-failed"
+            >
+              <input
+                checked={walletSmsWithdrawalFailedEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="wallet-sms-withdrawal-failed"
+                onChange={(event) => setWalletSmsWithdrawalFailedEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Withdrawal failed</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  SMS the trainer when a payout provider reports the withdrawal failed after
+                  submission.
+                </span>
+              </span>
+            </label>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3"
+              htmlFor="wallet-sms-deposit-confirmed"
+            >
+              <input
+                checked={walletSmsDepositConfirmedEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="wallet-sms-deposit-confirmed"
+                onChange={(event) => setWalletSmsDepositConfirmedEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Deposit confirmed</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  SMS the trainer once a crypto or fiat deposit is confirmed and DL is credited.
+                </span>
+              </span>
+            </label>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3"
+              htmlFor="referral-sms-funding-bonus"
+            >
+              <input
+                checked={referralSmsFundingBonusEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="referral-sms-funding-bonus"
+                onChange={(event) => setReferralSmsFundingBonusEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Referral funding bonus</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  SMS a referrer when they're credited a bonus off a referral's deposit. Only fires
+                  when the referral funding bonus itself is enabled under Referrals.
+                </span>
+              </span>
+            </label>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-3"
+              htmlFor="referral-sms-payout-bonus"
+            >
+              <input
+                checked={referralSmsPayoutBonusEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="referral-sms-payout-bonus"
+                onChange={(event) => setReferralSmsPayoutBonusEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Referral payout bonus</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  SMS a referrer when they're credited a bonus off a referral's training-payout
+                  settlement. Only fires when the referral payout bonus itself is enabled under
+                  Referrals.
                 </span>
               </span>
             </label>

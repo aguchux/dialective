@@ -7,6 +7,7 @@ import {
 } from '@dialectiva/db';
 import { PrismaService } from './prisma/prisma.service';
 import { StorageService } from './storage.service';
+import { SmsNotifierService } from './sms/sms-notifier.service';
 
 /** Uniform random draw in [min, max] -- a payout-fairness randomizer, not a security value, so Math.random() is fine. */
 function randomInRange(min: number, max: number): number {
@@ -86,6 +87,7 @@ export class SettlementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly smsNotifier: SmsNotifierService,
   ) {}
 
   async run(): Promise<void> {
@@ -213,7 +215,7 @@ export class SettlementService {
         const payoutScore = qualityGateEnabled ? compositeScore : recording.score;
         const payout = computeTrainingPayout(recording.tokensSpent, payoutScore, bonusCapMultiple);
         const sourceKey = trainingPayoutSourceKey(recording.wordId, recording.sentenceId);
-        const { ops } = await creditTrainingPayoutOps(
+        const { ops, result } = await creditTrainingPayoutOps(
           this.prisma,
           userId,
           payout,
@@ -268,6 +270,13 @@ export class SettlementService {
           if (existingClaim?.recordingId === recording.id) continue;
           if (!existingClaim) throw err;
           await this.settleDuplicateSourceWithoutReward({ ...recording, userId });
+        }
+
+        if (result.referrerUserId && Number(result.referralPayoutBonus) > 0) {
+          void this.smsNotifier.notifyReferralPayoutBonus(
+            result.referrerUserId,
+            result.referralPayoutBonus,
+          );
         }
 
         settledCount += 1;

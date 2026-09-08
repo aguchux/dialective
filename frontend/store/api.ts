@@ -1551,6 +1551,12 @@ export interface PlatformSettings {
   p2pSmsPaymentMarkedEnabled: boolean;
   p2pSmsTokensReleasedEnabled: boolean;
   p2pSmsCancelledEnabled: boolean;
+  walletSmsWithdrawalPaidEnabled: boolean;
+  walletSmsWithdrawalRejectedEnabled: boolean;
+  walletSmsWithdrawalFailedEnabled: boolean;
+  walletSmsDepositConfirmedEnabled: boolean;
+  referralSmsFundingBonusEnabled: boolean;
+  referralSmsPayoutBonusEnabled: boolean;
   cryptoWithdrawalsEnabled: boolean;
   nowPaymentsPayoutsEnabled: boolean;
   allowedWithdrawalCurrencies: string;
@@ -1668,6 +1674,12 @@ export interface PlatformSettingsInput {
   p2pSmsPaymentMarkedEnabled?: boolean;
   p2pSmsTokensReleasedEnabled?: boolean;
   p2pSmsCancelledEnabled?: boolean;
+  walletSmsWithdrawalPaidEnabled?: boolean;
+  walletSmsWithdrawalRejectedEnabled?: boolean;
+  walletSmsWithdrawalFailedEnabled?: boolean;
+  walletSmsDepositConfirmedEnabled?: boolean;
+  referralSmsFundingBonusEnabled?: boolean;
+  referralSmsPayoutBonusEnabled?: boolean;
   cryptoWithdrawalsEnabled?: boolean;
   nowPaymentsPayoutsEnabled?: boolean;
   allowedWithdrawalCurrencies?: string;

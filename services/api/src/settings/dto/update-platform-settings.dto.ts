@@ -468,6 +468,30 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  walletSmsWithdrawalPaidEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  walletSmsWithdrawalRejectedEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  walletSmsWithdrawalFailedEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  walletSmsDepositConfirmedEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  referralSmsFundingBonusEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  referralSmsPayoutBonusEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   cryptoWithdrawalsEnabled?: boolean;
 
   @IsOptional()

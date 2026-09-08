@@ -69,6 +69,7 @@ describe('WalletController crypto withdrawal eligibility', () => {
       platformSettings as never,
       otp as never,
       {} as never,
+      {} as never,
     );
     return { controller, prisma, otp };
   }
@@ -219,6 +220,7 @@ describe('WalletController NOWPayments IPN', () => {
     const controller = new WalletController(
       prisma as never,
       nowPayments as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -396,6 +398,7 @@ describe('WalletController Flutterwave webhook', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
     return { controller, prisma, tx, flutterwave };
   }
@@ -529,6 +532,7 @@ describe('WalletController Flutterwave webhook', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     const req = {
@@ -619,6 +623,7 @@ describe('WalletController withdrawal payout automation', () => {
       {} as never,
       platformSettings as never,
       otp as never,
+      {} as never,
       {} as never,
     );
     const req = { user: { sub: 'admin-1' } } as never;
@@ -722,6 +727,7 @@ describe('WalletController withdrawal payout automation', () => {
       {} as never,
       platformSettings as never,
       otp as never,
+      {} as never,
       {} as never,
     );
 
@@ -929,6 +935,7 @@ describe('WalletController Flutterwave payout submission', () => {
       platformSettings as never,
       otp as never,
       {} as never,
+      {} as never,
     );
     const req = { user: { sub: 'admin-1' } } as never;
     return { controller, prisma, flutterwave, platformSettings, otp, req };
@@ -1054,6 +1061,7 @@ describe('WalletController earning history', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await expect(
@@ -1087,6 +1095,7 @@ describe('WalletController.getTrainerReport', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
       undefined,
       trainerReport as never,
     );
@@ -1106,6 +1115,7 @@ describe('WalletController.getTrainerReport', () => {
   it('omits from/to entirely when the query is empty, letting buildReport resolve its own lifetime default', async () => {
     const trainerReport = { buildReport: jest.fn().mockResolvedValue({ totals: {}, daily: [] }) };
     const controller = new WalletController(
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -1147,6 +1157,7 @@ describe('WalletController.sendInstantTrainerReport', () => {
       {} as never,
       {} as never,
       mail as never,
+      {} as never,
       undefined,
       trainerReport as never,
     );
@@ -1269,6 +1280,7 @@ describe('WalletController admin leaderboard', () => {
     };
     const controller = new WalletController(
       prisma as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -1415,6 +1427,7 @@ describe('WalletController paginated leaderboard', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
     return { controller, prisma };
   }
@@ -1486,6 +1499,7 @@ describe('WalletController admin training payouts', () => {
       platformSettings as never,
       {} as never,
       mail as never,
+      {} as never,
     );
     return { controller, prisma, mail };
   }
@@ -1551,6 +1565,7 @@ describe('WalletController admin wallet adjustments', () => {
       platformSettings as never,
       otp as never,
       mail as never,
+      {} as never,
     );
     return { controller, prisma, mail };
   }
@@ -1608,6 +1623,7 @@ describe('WalletController.listReferralInvitations', () => {
     };
     const controller = new WalletController(
       prisma as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,

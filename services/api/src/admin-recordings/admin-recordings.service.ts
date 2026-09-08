@@ -8,6 +8,7 @@ import { AdminAuditStatus, OtpPurpose, adjustAdminWallet } from '@dialectiva/db'
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { OtpService } from '../otp/otp.service';
+import { resolveOtpDestination } from '../otp/otp.util';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { adminActionContextHash } from '../wallet/otp-context.util';
 import { ListTrainerRecordingsDto } from './dto/list-trainer-recordings.dto';
@@ -147,13 +148,14 @@ export class AdminRecordingsService {
       throw new UnprocessableEntityException('This recording has no payout to claw back');
     }
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
+    const { destination, channel } = resolveOtpDestination(admin);
     const contextHash = adminActionContextHash({
       action: 'recording-audit-clawback',
       kind: 'word',
       recordingId,
       tokenAmount: -record.payoutTokenAmount.toNumber(),
     });
-    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
   }
 
   async audit(adminId: string, recordingId: string, dto: AuditRecordingDto) {

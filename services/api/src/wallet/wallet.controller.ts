@@ -47,6 +47,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { OtpService } from '../otp/otp.service';
+import { resolveOtpDestination } from '../otp/otp.util';
+import { SmsService } from '../sms/sms.service';
 import { NowPaymentsService } from './nowpayments.service';
 import { FlutterwaveService } from './flutterwave.service';
 import { FlutterwaveV4Service, RecipientCountry } from './flutterwave-v4.service';
@@ -166,6 +168,7 @@ export class WalletController {
     private readonly platformSettings: PlatformSettingsService,
     private readonly otp: OtpService,
     private readonly mail: MailService,
+    private readonly sms: SmsService,
     private readonly tokenomics?: TokenomicsService,
     private readonly trainerReport?: TrainerReportService,
   ) {}
@@ -180,6 +183,61 @@ export class WalletController {
 
   private async getCurrentTokenUsdRate() {
     return this.tokenomics?.getCurrentPublishedValue() ?? this.platformSettings.getTokenUsdRate();
+  }
+
+  /**
+   * Best-effort financial-action SMS -- gated per-event by an admin toggle,
+   * silently skipped for unverified/missing phone numbers or when the user
+   * has opted out of SMS notifications, and never allowed to fail or block
+   * the wallet action that triggered it (always called after the
+   * triggering DB write has already committed). Mirrors P2pService.notify.
+   */
+  private async notifySms(userId: string, enabled: boolean, body: string): Promise<void> {
+    if (!enabled) return;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phoneNumber: true, phoneVerifiedAt: true, smsNotificationsEnabled: true },
+    });
+    if (!user?.phoneNumber || !user.phoneVerifiedAt || !user.smsNotificationsEnabled) return;
+    try {
+      await this.sms.sendTransactional(user.phoneNumber, body);
+    } catch {
+      // Already logged inside SmsFallbackChain -- notification delivery must never fail/block the wallet action itself.
+    }
+  }
+
+  /** Resolves a WithdrawalRequest's owning userId via its Wallet, then applies the same notifySms gating. */
+  private async notifyWithdrawalOwnerSms(
+    walletId: string,
+    enabled: boolean,
+    body: string,
+  ): Promise<void> {
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { id: walletId },
+      select: { userId: true },
+    });
+    if (!wallet) return;
+    await this.notifySms(wallet.userId, enabled, body);
+  }
+
+  /**
+   * Same as notifyWithdrawalOwnerSms, but also swallows a failure to
+   * resolve `enabled` itself (e.g. a settings-lookup hiccup) -- callers
+   * fire this without awaiting it, so nothing it does may ever surface as
+   * an unhandled rejection back into the request/webhook that triggered it.
+   */
+  private async notifyWithdrawalOwnerSmsSafe(
+    walletId: string,
+    resolveEnabled: () => Promise<boolean>,
+    body: string,
+  ): Promise<void> {
+    try {
+      await this.notifyWithdrawalOwnerSms(walletId, await resolveEnabled(), body);
+    } catch (err) {
+      this.logger.error(
+        `Failed to send withdrawal SMS for wallet=${walletId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   private async getReferralSettings() {
@@ -781,7 +839,8 @@ export class WalletController {
   async requestDepositOtp(@Req() req: AuthenticatedRequest, @Body() body: RequestDepositOtpDto) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
     const contextHash = depositContextHash({ usdAmount: body.usdAmount, currency: body.currency });
-    return this.otp.issueForUser(req.user.sub, OtpPurpose.DEPOSIT, user.email, contextHash);
+    const { destination, channel } = resolveOtpDestination(user);
+    return this.otp.issueForUser(req.user.sub, OtpPurpose.DEPOSIT, destination, contextHash, channel);
   }
 
   @Post('wallet/deposits')
@@ -848,7 +907,8 @@ export class WalletController {
     // currency are what economically matter, so this reuses
     // depositContextHash as-is rather than a Flutterwave-specific variant.
     const contextHash = depositContextHash({ usdAmount: body.usdAmount, currency: body.currency });
-    return this.otp.issueForUser(req.user.sub, OtpPurpose.DEPOSIT, user.email, contextHash);
+    const { destination, channel } = resolveOtpDestination(user);
+    return this.otp.issueForUser(req.user.sub, OtpPurpose.DEPOSIT, destination, contextHash, channel);
   }
 
   /**
@@ -1295,7 +1355,47 @@ export class WalletController {
     this.logger.log(
       `NOWPayments IPN status=${paymentStatus} deposit=${deposit.id} credited=${credited}`,
     );
+    if (credited) {
+      void this.notifyDepositConfirmedSms(deposit.wallet.user.id, deposit.tokenAmount.toString());
+      void this.notifyReferralFundingBonusesSms(fundingBonuses.bonuses);
+    }
     return { received: true, credited, status: paymentStatus };
+  }
+
+  /** Best-effort SMS to the depositor once their funding is confirmed and DL credited -- never blocks the webhook response. */
+  private async notifyDepositConfirmedSms(userId: string, tokenAmount: string): Promise<void> {
+    try {
+      await this.notifySms(
+        userId,
+        await this.platformSettings.isWalletSmsDepositConfirmedEnabled(),
+        `Dialect Library: Your deposit of ${tokenAmount} DL has been confirmed and credited to your wallet.`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to send deposit-confirmed SMS for user=${userId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /** Best-effort SMS to each referrer credited a funding bonus off this deposit -- never blocks the webhook response. */
+  private async notifyReferralFundingBonusesSms(
+    bonuses: { userId: string; amount: string }[],
+  ): Promise<void> {
+    if (bonuses.length === 0) return;
+    try {
+      const enabled = await this.platformSettings.isReferralSmsFundingBonusEnabled();
+      await Promise.all(
+        bonuses.map((bonus) =>
+          this.notifySms(
+            bonus.userId,
+            enabled,
+            `Dialect Library: You earned a ${bonus.amount} DL referral bonus from your referral's deposit.`,
+          ),
+        ),
+      );
+    } catch (err) {
+      this.logger.error(`Failed to send referral funding-bonus SMS: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private async completeIpnEvent(eventId: string, processingError: string, depositId?: string) {
@@ -1631,7 +1731,7 @@ export class WalletController {
       deposit.id,
     );
 
-    return this.prisma.$transaction(async (tx) => {
+    const credited = await this.prisma.$transaction(async (tx) => {
       const now = new Date();
       const claimed = await tx.deposit.updateMany({
         where: { id: deposit.id, status: { not: 'confirmed' } },
@@ -1680,6 +1780,12 @@ export class WalletController {
 
       return true;
     });
+
+    if (credited) {
+      void this.notifyDepositConfirmedSms(deposit.wallet.user.id, deposit.tokenAmount.toString());
+      void this.notifyReferralFundingBonusesSms(fundingBonuses.bonuses);
+    }
+    return credited;
   }
 
   /**
@@ -1944,6 +2050,7 @@ export class WalletController {
     @Body() body: RequestWithdrawalOtpDto,
   ) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    const { destination, channel } = resolveOtpDestination(user);
 
     if (body.payoutMethod && body.payoutMethod !== 'CRYPTO') {
       await this.validateFiatWithdrawalRequest(
@@ -1955,7 +2062,13 @@ export class WalletController {
         tokenAmount: body.tokenAmount,
         payoutAccountId: body.payoutAccountId!,
       });
-      return this.otp.issueForUser(req.user.sub, OtpPurpose.WITHDRAWAL, user.email, contextHash);
+      return this.otp.issueForUser(
+        req.user.sub,
+        OtpPurpose.WITHDRAWAL,
+        destination,
+        contextHash,
+        channel,
+      );
     }
 
     const destinationCurrency = body.destinationCurrency ?? 'USDT';
@@ -1973,7 +2086,13 @@ export class WalletController {
       destinationCurrency,
       destinationNetwork,
     });
-    return this.otp.issueForUser(req.user.sub, OtpPurpose.WITHDRAWAL, user.email, contextHash);
+    return this.otp.issueForUser(
+      req.user.sub,
+      OtpPurpose.WITHDRAWAL,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   @Post('wallet/withdrawals')
@@ -2250,6 +2369,7 @@ export class WalletController {
   async requestResolveWithdrawalOtp(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     const withdrawal = await this.prisma.withdrawalRequest.findUniqueOrThrow({ where: { id } });
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    const { destination, channel } = resolveOtpDestination(admin);
     const contextHash = adminActionContextHash({
       action: 'withdrawal',
       id,
@@ -2258,7 +2378,13 @@ export class WalletController {
       destinationAddress: withdrawal.destinationAddress,
       destinationNetwork: withdrawal.destinationNetwork,
     });
-    return this.otp.issueForUser(req.user.sub, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+    return this.otp.issueForUser(
+      req.user.sub,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   /**
@@ -3326,6 +3452,11 @@ export class WalletController {
         where: { id },
         data: { status: WithdrawalStatus.PAID, resolvedAt: new Date(), adminNote: body.adminNote },
       });
+      void this.notifyWithdrawalOwnerSmsSafe(
+        withdrawal.walletId,
+        () => this.platformSettings.isWalletSmsWithdrawalPaidEnabled(),
+        `Dialect Library: Your withdrawal of ${withdrawal.tokenAmount.toString()} DL has been paid out.`,
+      );
     } else {
       await this.prisma.$transaction([
         this.prisma.withdrawalRequest.update({
@@ -3349,6 +3480,11 @@ export class WalletController {
           data: { balance: { increment: withdrawal.tokenAmount } },
         }),
       ]);
+      void this.notifyWithdrawalOwnerSmsSafe(
+        withdrawal.walletId,
+        () => this.platformSettings.isWalletSmsWithdrawalRejectedEnabled(),
+        `Dialect Library: Your withdrawal of ${withdrawal.tokenAmount.toString()} DL was rejected and the DL has been returned to your balance.`,
+      );
     }
 
     this.logger.log(
@@ -3389,6 +3525,46 @@ export class WalletController {
         destinationNetwork: withdrawal.destinationNetwork,
       }),
     });
+  }
+
+  /**
+   * Shared tail call for every payout-status recorder below (NOWPayments,
+   * Flutterwave v3/v4, Stripe) -- each computes a terminal-or-not
+   * WithdrawalStatus independently, but all four should notify the same
+   * way once a payout actually finishes. A no-op for PROCESSING (not yet
+   * terminal). Runs after the recorder's own transaction has already
+   * committed, matching notifySms/notifyWithdrawalOwnerSms's
+   * never-block-the-caller contract.
+   */
+  private async notifyWithdrawalPayoutStatusSms(
+    withdrawalId: string,
+    status: WithdrawalStatus,
+  ): Promise<void> {
+    if (status !== WithdrawalStatus.PAID && status !== WithdrawalStatus.FAILED) return;
+    try {
+      const withdrawal = await this.prisma.withdrawalRequest.findUnique({
+        where: { id: withdrawalId },
+        select: { walletId: true, tokenAmount: true },
+      });
+      if (!withdrawal) return;
+      if (status === WithdrawalStatus.PAID) {
+        await this.notifyWithdrawalOwnerSms(
+          withdrawal.walletId,
+          await this.platformSettings.isWalletSmsWithdrawalPaidEnabled(),
+          `Dialect Library: Your withdrawal of ${withdrawal.tokenAmount.toString()} DL has been paid out.`,
+        );
+      } else {
+        await this.notifyWithdrawalOwnerSms(
+          withdrawal.walletId,
+          await this.platformSettings.isWalletSmsWithdrawalFailedEnabled(),
+          `Dialect Library: Your withdrawal of ${withdrawal.tokenAmount.toString()} DL failed. Our team will follow up.`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `Failed to send withdrawal-status SMS for withdrawal=${withdrawalId} status=${status}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   private mapProviderPayoutStatus(status: string | null | undefined): WithdrawalStatus {
@@ -3439,6 +3615,7 @@ export class WalletController {
         },
       }),
     ]);
+    void this.notifyWithdrawalPayoutStatusSms(withdrawalId, status);
   }
 
   private mapFlutterwaveTransferStatus(status: string | null | undefined): WithdrawalStatus {
@@ -3514,6 +3691,7 @@ export class WalletController {
       }),
       ...reserveDebitOps,
     ]);
+    void this.notifyWithdrawalPayoutStatusSms(withdrawalId, status);
   }
 
   private mapStripeTransferStatus(status: string | null | undefined): WithdrawalStatus {
@@ -3573,6 +3751,7 @@ export class WalletController {
         },
       }),
     ]);
+    void this.notifyWithdrawalPayoutStatusSms(withdrawalId, status);
   }
 
   private async recordFlutterwavePayoutStatus(
@@ -3627,6 +3806,7 @@ export class WalletController {
       }),
       ...reserveDebitOps,
     ]);
+    void this.notifyWithdrawalPayoutStatusSms(withdrawalId, status);
   }
 
   /** Shared by recordFlutterwavePayoutStatus/recordFlutterwaveV4PayoutStatus -- both rails share the same WithdrawalRequest fiat snapshot fields. */
@@ -3984,13 +4164,20 @@ export class WalletController {
     @Body() body: CreateTrainingPayoutDto,
   ) {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    const { destination, channel } = resolveOtpDestination(admin);
     const contextHash = adminActionContextHash({
       action: 'training-payout',
       userId: body.userId,
       tokenAmount: body.tokenAmount,
       reference: body.reference,
     });
-    return this.otp.issueForUser(req.user.sub, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+    return this.otp.issueForUser(
+      req.user.sub,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   @Post('admin/training-payouts')
@@ -4061,13 +4248,20 @@ export class WalletController {
       throw new UnprocessableEntityException('Debit amount must be negative');
     }
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    const { destination, channel } = resolveOtpDestination(admin);
     const contextHash = adminActionContextHash({
       action: 'admin-wallet-adjustment',
       userId: body.userId,
       tokenAmount: body.tokenAmount,
       reference: body.reference,
     });
-    return this.otp.issueForUser(req.user.sub, OtpPurpose.ADMIN_PAYOUT, admin.email, contextHash);
+    return this.otp.issueForUser(
+      req.user.sub,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   @Post('admin/wallet-adjustments')

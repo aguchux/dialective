@@ -1,4 +1,5 @@
 import { createHash, randomInt } from 'crypto';
+import { OtpChannel } from './otp.service';
 
 /**
  * Short, human-typeable codes -- unlike token.util.ts's generateOpaqueToken
@@ -26,4 +27,23 @@ export function hashOtpCode(code: string): string {
  */
 export function hashContext(context: Record<string, string | number>): string {
   return createHash('sha256').update(JSON.stringify(context)).digest('hex');
+}
+
+/**
+ * Every money-moving OTP (WITHDRAWAL, DEPOSIT, ADMIN_PAYOUT) is a mandatory
+ * security step, not an opt-in 2FA preference -- unlike AuthService.login's
+ * twoFactorSmsEnabled gate, there's no per-user toggle to check here. The
+ * only question is deliverability: prefer SMS whenever the user already has
+ * a verified phone number (same as AuthService.login prefers SMS over email
+ * when both channels are available), otherwise fall back to email.
+ */
+export function resolveOtpDestination(user: {
+  email: string;
+  phoneNumber: string | null;
+  phoneVerifiedAt: Date | null;
+}): { destination: string; channel: OtpChannel } {
+  if (user.phoneNumber && user.phoneVerifiedAt) {
+    return { destination: user.phoneNumber, channel: 'SMS' };
+  }
+  return { destination: user.email, channel: 'EMAIL' };
 }

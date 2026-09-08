@@ -3,7 +3,10 @@ jest.mock('@dialectiva/db', () => {
   return {
     ...actual,
     computeTrainingPayout: jest.fn(() => ({ toNumber: () => 1 })),
-    creditTrainingPayoutOps: jest.fn().mockResolvedValue({ ops: [] }),
+    creditTrainingPayoutOps: jest.fn().mockResolvedValue({
+      ops: [],
+      result: { referrerUserId: null, referralPayoutBonus: '0' },
+    }),
     mintTrainingPayoutOps: jest.fn().mockResolvedValue({ ops: [] }),
   };
 });
@@ -53,7 +56,7 @@ describe('SettlementService resolveTimedOutScoring', () => {
 
   it('moves a timed-out word recording to SCORED without crediting payout or settling it', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     const result = await service.resolveTimedOutScoring();
@@ -90,7 +93,7 @@ describe('SettlementService resolveTimedOutScoring', () => {
       minScoreRange: { toNumber: () => 10 },
       maxScoreRange: { toNumber: () => 30 },
     });
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     const result = await service.resolveTimedOutScoring();
@@ -142,7 +145,7 @@ describe('SettlementService refundStuckWordRecordings', () => {
     const prisma = buildPrismaMock();
     const service = new SettlementService(prisma as never, {
       deleteObject: jest.fn().mockResolvedValue(undefined),
-    } as never);
+    } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     const refundedCount = await service.refundStuckWordRecordings();
@@ -163,7 +166,7 @@ describe('SettlementService refundStuckWordRecordings', () => {
     prisma.wordRecording.updateMany.mockResolvedValue({ count: 0 });
     const service = new SettlementService(prisma as never, {
       deleteObject: jest.fn().mockResolvedValue(undefined),
-    } as never);
+    } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     const refundedCount = await service.refundStuckWordRecordings();
@@ -211,7 +214,7 @@ describe('SettlementService settlement state', () => {
 
   it('marks a settled word recording as SETTLED with its payout timestamp', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
 
     // mintingPaused: true -- this test only covers the legacy Wallet credit
     // path, not Tokenomics minting (see the "mints into Tokenomics" tests
@@ -231,7 +234,7 @@ describe('SettlementService settlement state', () => {
 
   it('mints into the Tokenomics ledger alongside the legacy payout when minting is not paused', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
@@ -262,7 +265,7 @@ describe('SettlementService settlement state', () => {
         asrMatchScore: null,
       },
     ]);
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn() } as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn() } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
@@ -274,7 +277,7 @@ describe('SettlementService settlement state', () => {
 
   it('skips minting into the Tokenomics ledger when minting is paused, but still pays the trainer', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
@@ -301,7 +304,7 @@ describe('SettlementService settlement state', () => {
         asrMatchScore: null,
       },
     ]);
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
@@ -354,7 +357,7 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
       ],
     });
     const deleteObject = jest.fn().mockResolvedValue(undefined);
-    const service = new SettlementService(prisma as never, { deleteObject } as never);
+    const service = new SettlementService(prisma as never, { deleteObject } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     const count = await service.refundRejectedWordRecordings();
@@ -395,7 +398,7 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
       ],
     });
     const deleteObject = jest.fn().mockResolvedValue(undefined);
-    const service = new SettlementService(prisma as never, { deleteObject } as never);
+    const service = new SettlementService(prisma as never, { deleteObject } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     const count = await service.refundRejectedWordRecordings();
@@ -418,7 +421,7 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
       ],
     });
     const deleteObject = jest.fn().mockRejectedValue(new Error('Spaces unavailable'));
-    const service = new SettlementService(prisma as never, { deleteObject } as never);
+    const service = new SettlementService(prisma as never, { deleteObject } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     const count = await service.refundRejectedWordRecordings();
@@ -442,7 +445,7 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
     });
     prisma.wordRecording.updateMany.mockResolvedValue({ count: 0 }); // another run already claimed it
     const deleteObject = jest.fn().mockResolvedValue(undefined);
-    const service = new SettlementService(prisma as never, { deleteObject } as never);
+    const service = new SettlementService(prisma as never, { deleteObject } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
 
     // @ts-expect-error -- private method under test
     const count = await service.refundRejectedWordRecordings();

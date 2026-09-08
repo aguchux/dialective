@@ -2083,6 +2083,12 @@ model PlatformSettings {
   p2pSmsPaymentMarkedEnabled             Boolean   @default(false) // SMS the seller when the buyer marks a trade paid (markPaid)
   p2pSmsTokensReleasedEnabled            Boolean   @default(false) // SMS the buyer when the seller releases tokens (release)
   p2pSmsCancelledEnabled                 Boolean   @default(false) // SMS the seller when a trade is cancelled/expired/refunded (cancelTrade, refundTradeToSeller, dispute resolved to seller) and the non-raiser when a dispute is raised (raiseDispute)
+  walletSmsWithdrawalPaidEnabled         Boolean   @default(false) // SMS the trainer once their withdrawal payout actually settles (PAID), across every payout rail (NOWPayments, Flutterwave v3/v4, Stripe) and the admin manual "mark paid" override
+  walletSmsWithdrawalRejectedEnabled     Boolean   @default(false) // SMS the trainer when an admin rejects their withdrawal request (admin/withdrawals/:id/resolve, outcome=reject) -- the locked DL is returned to their spendable balance at the same time
+  walletSmsWithdrawalFailedEnabled       Boolean   @default(false) // SMS the trainer when a payout provider reports the withdrawal failed after submission (distinct from an admin rejecting it before submission)
+  walletSmsDepositConfirmedEnabled       Boolean   @default(false) // SMS the trainer once a crypto or fiat deposit is confirmed and DL is credited to their wallet
+  referralSmsFundingBonusEnabled         Boolean   @default(false) // SMS the referrer when they're credited a funding bonus off a referral's deposit (only fires if ReferralSettings.fundingBonusEnabled is also on)
+  referralSmsPayoutBonusEnabled          Boolean   @default(false) // SMS the referrer when they're credited a payout bonus off a referral's training-payout settlement (only fires if ReferralSettings.payoutBonusEnabled is also on)
   cryptoWithdrawalsEnabled               Boolean   @default(true) // master kill switch -- when false, both wallet/withdrawals/otp and wallet/withdrawals reject new withdrawal requests outright
   nowPaymentsPayoutsEnabled              Boolean   @default(false) // when false, admin/withdrawals/:id/submit-nowpayments is disabled -- admins can still resolve withdrawals manually (outcome=paid) while this is off, which is the safe default until payout credentials/allow-lists are configured
   allowedWithdrawalCurrencies            String    @default("USDT") // CSV of currencies a withdrawal's destinationCurrency may be, validated app-side against NowPaymentsService's supported set (USDT, USDC)

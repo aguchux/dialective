@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { SettingsModule } from '../settings/settings.module';
 import { OtpModule } from '../otp/otp.module';
 import { MailModule } from '../mail/mail.module';
+import { SmsModule } from '../sms/sms.module';
 import { ApiAccessTokensModule } from '../api-access-tokens/api-access-tokens.module';
 import { NowPaymentsService } from './nowpayments.service';
 import { FlutterwaveService } from './flutterwave.service';
@@ -14,7 +15,7 @@ import { TrainerReportService } from './trainer-report.service';
 import { TokenomicsModule } from '../tokenomics/tokenomics.module';
 
 @Module({
-  imports: [SettingsModule, OtpModule, MailModule, TokenomicsModule, ApiAccessTokensModule],
+  imports: [SettingsModule, OtpModule, MailModule, SmsModule, TokenomicsModule, ApiAccessTokensModule],
   controllers: [WalletController, PayoutAccountsController],
   providers: [
     NowPaymentsService,

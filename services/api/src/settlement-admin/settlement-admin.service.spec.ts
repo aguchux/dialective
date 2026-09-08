@@ -1,6 +1,9 @@
 jest.mock('@dialectiva/db', () => ({
   ...jest.requireActual('@dialectiva/db'),
-  creditTrainingPayoutOps: jest.fn().mockResolvedValue({ ops: [] }),
+  creditTrainingPayoutOps: jest.fn().mockResolvedValue({
+    ops: [],
+    result: { referrerUserId: null, referralPayoutBonus: '0' },
+  }),
   mintTrainingPayoutOps: jest.fn().mockResolvedValue({ ops: [] }),
 }));
 
@@ -40,7 +43,9 @@ describe('SettlementAdminService', () => {
       getScoreRange: jest.fn().mockResolvedValue({ min: 0, max: 100 }),
     };
     tokenomics = { isMintingPaused: jest.fn().mockResolvedValue(false) };
-    service = new SettlementAdminService(prisma, settings, tokenomics);
+    prisma.user = { findUnique: jest.fn().mockResolvedValue(null) };
+    const sms = { sendTransactional: jest.fn().mockResolvedValue({ provider: 'termii' }) };
+    service = new SettlementAdminService(prisma, settings, tokenomics, sms as never);
   });
 
   describe('listUnsettled', () => {
