@@ -9,9 +9,12 @@ import {
   Pause,
   Play,
   Plus,
+  Repeat,
   Search,
   SlidersHorizontal,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { cardClass, EmptyPanel, formatDateTime } from '@/components/dashboard/shared';
 import { ActionButton } from '@/components/ui/ActionButton';
@@ -850,6 +853,15 @@ function PlaybackSegment({
   isPlaying: boolean;
   onTogglePlay: () => void;
 }) {
+  const [loopRegion, setLoopRegion] = useState<[number, number] | null>(null);
+  const [isLoopEnabled, setIsLoopEnabled] = useState(false);
+
+  // A fresh recording never inherits the previous one's loop selection.
+  useEffect(() => {
+    setLoopRegion(null);
+    setIsLoopEnabled(false);
+  }, [recording.id]);
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
       <div>
@@ -867,30 +879,45 @@ function PlaybackSegment({
         >
           {isPlaying ? <Pause className="size-5" aria-hidden="true" /> : <Play className="size-5" aria-hidden="true" />}
         </button>
-        <Scrubber audioRef={audioRef} recordingId={recording.id} />
+        <button
+          aria-label="Loop selected region"
+          aria-pressed={isLoopEnabled}
+          className={`grid size-9 shrink-0 place-items-center rounded-lg border ${
+            isLoopEnabled ? 'border-accent bg-accent/10 text-accent' : 'border-line text-muted hover:bg-surface-muted'
+          } disabled:cursor-not-allowed disabled:opacity-40`}
+          disabled={!loopRegion}
+          onClick={() => setIsLoopEnabled((v) => !v)}
+          type="button"
+        >
+          <Repeat className="size-4" aria-hidden="true" />
+        </button>
       </div>
 
+      <Waveform
+        audioRef={audioRef}
+        isLoopEnabled={isLoopEnabled}
+        isPlaying={isPlaying}
+        loopRegion={loopRegion}
+        onLoopRegionChange={setLoopRegion}
+        recording={recording}
+      />
+
       <p className="max-w-sm text-xs text-muted">
-        Waveform, loop region, and zoom are coming in a later pass -- this build covers browsing,
-        playback, transcription, flagging, and scoring via Add to Deck.
+        Tap the waveform to seek, or drag across it to select a region and loop it while you
+        transcribe.
       </p>
     </div>
   );
 }
 
 /**
- * Minimal seek bar + elapsed/total time, driven by the shared <audio>
- * element via a rAF-throttled currentTime poll (no dependency on native
- * <audio controls>, which this build deliberately avoids duplicating --
- * see TaskMode's single-<audio> doc comment).
+ * Polls the shared <audio> element's currentTime/duration via
+ * requestAnimationFrame -- no dependency on native <audio controls>, which
+ * this build deliberately avoids duplicating (see TaskMode's single-<audio>
+ * doc comment). Shared by the Waveform's playhead and the plain fallback
+ * time readout.
  */
-function Scrubber({
-  audioRef,
-  recordingId,
-}: {
-  audioRef: React.RefObject<HTMLAudioElement | null>;
-  recordingId: string;
-}) {
+function useAudioTime(audioRef: React.RefObject<HTMLAudioElement | null>, recordingId: string) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
@@ -913,35 +940,11 @@ function Scrubber({
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
     };
     // recordingId dependency: re-attach when the shared <audio>'s src
-    // changes to a new recording, so the scrubber resets to that
-    // recording's own duration/time instead of showing the previous one's.
+    // changes to a new recording, so time/duration reset to that
+    // recording's own values instead of showing the previous one's.
   }, [audioRef, recordingId]);
 
-  function handleSeek(e: React.ChangeEvent<HTMLInputElement>) {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const value = Number(e.target.value);
-    audio.currentTime = value;
-    setCurrentTime(value);
-  }
-
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
-      <input
-        aria-label="Seek"
-        className="h-1.5 flex-1 accent-accent"
-        max={duration || 0}
-        min={0}
-        onChange={handleSeek}
-        step={0.1}
-        type="range"
-        value={Math.min(currentTime, duration || 0)}
-      />
-      <span className="shrink-0 font-mono text-xs text-muted">
-        {formatSeconds(currentTime)} / {formatSeconds(duration)}
-      </span>
-    </div>
-  );
+  return { currentTime, duration };
 }
 
 function formatSeconds(totalSeconds: number): string {
@@ -949,6 +952,282 @@ function formatSeconds(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = Math.floor(totalSeconds % 60);
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+const ZOOM_LEVELS = [1, 2, 4, 8];
+const WAVEFORM_BAR_COUNT = 200; // peaks resolution, independent of zoom -- zoom stretches bar width, not peak count
+
+/**
+ * Decodes the recording's own audio (fetch + Web Audio API decodeAudioData)
+ * into a fixed-resolution peaks array -- no backend waveform-data endpoint
+ * exists yet, so this computes it client-side. Recordings here are short
+ * (a few seconds of dictated speech), so a full fetch+decode per recording
+ * is cheap; re-decodes whenever the recording changes. Returns null while
+ * decoding/on failure so the caller can render a loading/fallback state.
+ */
+interface WaveformPeaksState {
+  status: 'loading' | 'ready' | 'error';
+  peaks: number[] | null;
+}
+
+/**
+ * Decoding can fail for reasons outside this app's control (a storage
+ * bucket that hasn't been CORS-configured for cross-origin fetch+decode, an
+ * unsupported codec, a purged/expired audio URL) -- surfaced as an explicit
+ * 'error' status rather than silently staying null forever, so the caller
+ * can fall back to a plain seek bar instead of an indefinite spinner.
+ */
+function useWaveformPeaks(audioUrl: string | null, recordingId: string): WaveformPeaksState {
+  const [state, setState] = useState<WaveformPeaksState>({ status: 'loading', peaks: null });
+
+  useEffect(() => {
+    setState({ status: 'loading', peaks: null });
+    if (!audioUrl) {
+      setState({ status: 'error', peaks: null });
+      return;
+    }
+    let cancelled = false;
+    const AudioContextCtor =
+      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) {
+      setState({ status: 'error', peaks: null });
+      return;
+    }
+
+    async function decode() {
+      try {
+        const response = await fetch(audioUrl as string);
+        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioContext = new AudioContextCtor();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        if (cancelled) return;
+        const channelData = audioBuffer.getChannelData(0);
+        const blockSize = Math.max(1, Math.floor(channelData.length / WAVEFORM_BAR_COUNT));
+        const computed: number[] = [];
+        for (let i = 0; i < WAVEFORM_BAR_COUNT; i += 1) {
+          const start = i * blockSize;
+          let sum = 0;
+          for (let j = 0; j < blockSize && start + j < channelData.length; j += 1) {
+            sum += Math.abs(channelData[start + j]);
+          }
+          computed.push(sum / blockSize);
+        }
+        const max = Math.max(...computed, 0.0001);
+        void audioContext.close();
+        if (!cancelled) setState({ status: 'ready', peaks: computed.map((v) => v / max) });
+      } catch {
+        if (!cancelled) setState({ status: 'error', peaks: null });
+      }
+    }
+
+    void decode();
+    return () => {
+      cancelled = true;
+    };
+  }, [audioUrl, recordingId]);
+
+  return state;
+}
+
+/**
+ * Interactive waveform -- tap/click to seek, drag across bars to select a
+ * loop region, zoom in/out (stretches bar width, not peak resolution), and
+ * a Loop toggle that snaps playback back to the region's start once
+ * currentTime passes its end. Region state is owned by PlaybackSegment
+ * (cleared automatically when the active recording changes there).
+ */
+function Waveform({
+  audioRef,
+  recording,
+  isPlaying,
+  loopRegion,
+  onLoopRegionChange,
+  isLoopEnabled,
+}: {
+  audioRef: React.RefObject<HTMLAudioElement | null>;
+  recording: ValidatorRecordingSummary;
+  isPlaying: boolean;
+  loopRegion: [number, number] | null;
+  onLoopRegionChange: (region: [number, number] | null) => void;
+  isLoopEnabled: boolean;
+}) {
+  const { status: peaksStatus, peaks } = useWaveformPeaks(recording.audioUrl, recording.id);
+  const { currentTime, duration } = useAudioTime(audioRef, recording.id);
+  const [zoomIndex, setZoomIndex] = useState(0);
+  const zoom = ZOOM_LEVELS[zoomIndex];
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const dragStartRef = useRef<number | null>(null);
+  const [dragCurrent, setDragCurrent] = useState<number | null>(null);
+
+  // Loop enforcement: while looping is on and playback exits the region's
+  // end, jump back to the region's start rather than continuing past it.
+  useEffect(() => {
+    if (!isLoopEnabled || !loopRegion || !isPlaying) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    const [start, end] = loopRegion;
+    if (currentTime >= end) {
+      audio.currentTime = start;
+    }
+  }, [audioRef, currentTime, isLoopEnabled, loopRegion, isPlaying]);
+
+  function timeAtClientX(clientX: number): number {
+    const el = containerRef.current;
+    if (!el || !duration) return 0;
+    const rect = el.getBoundingClientRect();
+    const scrollLeft = el.scrollLeft;
+    const fraction = (clientX - rect.left + scrollLeft) / (rect.width * zoom);
+    return Math.min(duration, Math.max(0, fraction * duration));
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    dragStartRef.current = timeAtClientX(e.clientX);
+    setDragCurrent(dragStartRef.current);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (dragStartRef.current === null) return;
+    setDragCurrent(timeAtClientX(e.clientX));
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const start = dragStartRef.current;
+    const end = dragCurrent;
+    dragStartRef.current = null;
+    setDragCurrent(null);
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    if (start === null || end === null) return;
+
+    const distance = Math.abs(end - start);
+    if (distance < 0.15) {
+      // A tap, not a drag -- seek there and clear any existing loop region.
+      const audio = audioRef.current;
+      if (audio) audio.currentTime = start;
+      onLoopRegionChange(null);
+      return;
+    }
+    onLoopRegionChange(start < end ? [start, end] : [end, start]);
+  }
+
+  const previewRegion =
+    dragStartRef.current !== null && dragCurrent !== null
+      ? ([Math.min(dragStartRef.current, dragCurrent), Math.max(dragStartRef.current, dragCurrent)] as const)
+      : null;
+  const visibleRegion = previewRegion ?? loopRegion;
+
+  return (
+    <div className="w-full max-w-md">
+      <div
+        className="relative h-24 cursor-pointer touch-none select-none overflow-x-auto rounded-lg bg-surface-muted"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        ref={containerRef}
+        role="slider"
+        aria-label="Waveform seek and loop-region selector"
+        aria-valuemin={0}
+        aria-valuemax={duration}
+        aria-valuenow={currentTime}
+      >
+        {peaksStatus === 'ready' && peaks ? (
+          <div className="relative flex h-full items-center gap-px px-1" style={{ width: `${zoom * 100}%` }}>
+            {peaks.map((peak, i) => {
+              const barTime = (i / peaks.length) * duration;
+              const isPlayed = duration > 0 && barTime <= currentTime;
+              const isInRegion = visibleRegion && barTime >= visibleRegion[0] && barTime <= visibleRegion[1];
+              return (
+                <span
+                  aria-hidden="true"
+                  className={`flex-1 rounded-full ${
+                    isInRegion ? 'bg-accent' : isPlayed ? 'bg-accent/70' : 'bg-muted/40'
+                  }`}
+                  key={i}
+                  style={{ height: `${Math.max(6, peak * 100)}%` }}
+                />
+              );
+            })}
+            {duration > 0 && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 w-px bg-ink"
+                style={{ left: `${(currentTime / duration) * 100}%` }}
+              />
+            )}
+          </div>
+        ) : peaksStatus === 'loading' ? (
+          <div className="flex h-full items-center justify-center gap-2 text-xs font-bold text-muted">
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            Loading waveform…
+          </div>
+        ) : (
+          // Waveform decoding failed (e.g. the audio host isn't
+          // CORS-configured for cross-origin fetch+decode) -- tap-to-seek
+          // and drag-to-loop still work against this plain bar since
+          // neither depends on peaks, only on duration/currentTime.
+          <div className="relative h-full">
+            <div className="absolute inset-y-0 left-0 right-0 m-auto h-1 rounded-full bg-muted/30" aria-hidden="true" />
+            {duration > 0 && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 w-px bg-ink"
+                style={{ left: `${(currentTime / duration) * 100}%` }}
+              />
+            )}
+            {visibleRegion && duration > 0 && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 bg-accent/20"
+                style={{
+                  left: `${(visibleRegion[0] / duration) * 100}%`,
+                  width: `${((visibleRegion[1] - visibleRegion[0]) / duration) * 100}%`,
+                }}
+              />
+            )}
+          </div>
+        )}
+      </div>
+      {peaksStatus === 'error' && (
+        <p className="mt-1 text-xs text-muted">Waveform preview unavailable -- tap or drag above to seek/loop.</p>
+      )}
+
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="font-mono text-xs text-muted">
+          {formatSeconds(currentTime)} / {formatSeconds(duration)}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            aria-label="Zoom out"
+            className="grid size-8 place-items-center rounded-lg border border-line text-muted hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={zoomIndex === 0}
+            onClick={() => setZoomIndex((z) => Math.max(0, z - 1))}
+            type="button"
+          >
+            <ZoomOut className="size-4" aria-hidden="true" />
+          </button>
+          <button
+            aria-label="Zoom in"
+            className="grid size-8 place-items-center rounded-lg border border-line text-muted hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={zoomIndex === ZOOM_LEVELS.length - 1}
+            onClick={() => setZoomIndex((z) => Math.min(ZOOM_LEVELS.length - 1, z + 1))}
+            type="button"
+          >
+            <ZoomIn className="size-4" aria-hidden="true" />
+          </button>
+          {zoomIndex > 0 && (
+            <button
+              className="text-xs font-bold text-muted underline hover:text-ink"
+              onClick={() => setZoomIndex(0)}
+              type="button"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /**
