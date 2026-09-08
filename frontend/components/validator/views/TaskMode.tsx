@@ -10,6 +10,7 @@ import {
   Play,
   Plus,
   Search,
+  SlidersHorizontal,
   X,
 } from 'lucide-react';
 import { cardClass, EmptyPanel, formatDateTime } from '@/components/dashboard/shared';
@@ -28,6 +29,7 @@ import {
   type ValidatorDeckSummary,
   type ValidatorFlagReason,
   type ValidatorItemStatus,
+  type ValidatorRecordingSortField,
   type ValidatorRecordingSummary,
 } from '@/store/api';
 
@@ -44,22 +46,59 @@ const FLAG_REASONS: { value: ValidatorFlagReason; label: string }[] = [
   { value: 'OTHER', label: 'Other' },
 ];
 
+const SORT_OPTIONS: { sortBy: ValidatorRecordingSortField; sortDir: 'asc' | 'desc'; label: string }[] = [
+  { sortBy: 'createdAt', sortDir: 'desc', label: 'Newest' },
+  { sortBy: 'createdAt', sortDir: 'asc', label: 'Oldest' },
+  { sortBy: 'compositeScore', sortDir: 'desc', label: 'Highest score' },
+  { sortBy: 'compositeScore', sortDir: 'asc', label: 'Lowest score' },
+];
+
+const STATUS_OPTIONS: { value: ValidatorRecordingSummary['status']; label: string }[] = [
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'TRANSCRIBED', label: 'Transcribed' },
+  { value: 'REJECTED', label: 'Rejected' },
+  { value: 'SCORED', label: 'Scored' },
+  { value: 'SETTLED', label: 'Settled' },
+  { value: 'EXPIRED', label: 'Expired' },
+];
+
+interface RecordingFilters {
+  dialectTag: string;
+  status: ValidatorRecordingSummary['status'] | null;
+  minScore: number | null;
+  maxScore: number | null;
+}
+
+const EMPTY_FILTERS: RecordingFilters = { dialectTag: '', status: null, minScore: null, maxScore: null };
+
+function countActiveFilters(filters: RecordingFilters): number {
+  let count = 0;
+  if (filters.dialectTag.trim()) count += 1;
+  if (filters.status) count += 1;
+  if (filters.minScore !== null || filters.maxScore !== null) count += 1;
+  return count;
+}
+
 /**
  * Task Mode -- the full-screen validation workspace entered from Start Task
  * (see ValidationsView). Renders as a fixed, viewport-covering overlay so
  * the outer ValidatorHeader/ValidatorMobileNavigation are visually hidden
  * for the duration of a session, per the mobile UI spec's "hide platform
- * nav once a task is active" decision -- this is a thin first slice: browse
- * the recording pool, play audio in a mini-player, add a recording to a
- * deck, and score it there (scoring is deck-scoped by design -- see
- * ValidatorDecksService.scoreItem -- so "score a recording" always routes
- * through "add it to one of your decks" first). Filters, waveform/loop,
- * transcribe, and flag are deliberately deferred to a later pass -- see the
- * Validation Workspace mobile spec's "thin vertical slice" scoping.
+ * nav once a task is active" decision. Browse the recording pool (search,
+ * filter by dialect/status/score, sort), play audio, transcribe, flag, and
+ * add a recording to a deck to score it there (scoring is deck-scoped by
+ * design -- see ValidatorDecksService.scoreItem -- so "score a recording"
+ * always routes through "add it to one of your decks" first). Real
+ * waveform/loop-region/zoom are still deferred to a later pass -- see the
+ * mobile spec's Playback Segment section.
  */
 export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filters, setFilters] = useState<RecordingFilters>(EMPTY_FILTERS);
+  const [sort, setSort] = useState(SORT_OPTIONS[0]);
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+  const [isSortSheetOpen, setIsSortSheetOpen] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const [activeRecording, setActiveRecording] = useState<ValidatorRecordingSummary | null>(null);
@@ -84,10 +123,23 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Any change to what's being asked for resets to page 1 -- otherwise a
+  // validator three pages into "Highest score" who then filters by dialect
+  // could land on an empty page 3 of a much shorter filtered result.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, filters, sort]);
+
   const { data, isLoading, isFetching } = useGetValidatorRecordingsQuery({
     page,
     pageSize,
     search: debouncedSearch || undefined,
+    dialectTag: filters.dialectTag.trim() || undefined,
+    status: filters.status ?? undefined,
+    minScore: filters.minScore ?? undefined,
+    maxScore: filters.maxScore ?? undefined,
+    sortBy: sort.sortBy,
+    sortDir: sort.sortDir,
   });
 
   function selectRecording(recording: ValidatorRecordingSummary) {
@@ -98,19 +150,49 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
   }
 
   function endTaskWithConfirm() {
-    // No unsaved-transcript risk in this slice (transcribe isn't built
-    // yet) -- End Task is a plain, immediate action for now. Revisit once
-    // the Transcribe segment lands, per the mobile spec's "warn before
-    // discarding unsaved changes" requirement.
+    // No unsaved-transcript risk for browsing/filters (transcript drafts
+    // themselves are saved explicitly, not tracked as "dirty" here) -- End
+    // Task is a plain, immediate action.
     onEndTask();
   }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg text-ink" role="dialog" aria-label="Validation task">
+      {/*
+        Exactly one <audio> element for the lifetime of Task Mode (headless
+        -- no native `controls`; MiniPlayer/ExpandedPlayer build their own
+        transport chrome around audioRef/setIsPlaying instead). Owned here
+        rather than by MiniPlayer or ExpandedPlayer so expanding/collapsing
+        the player, or switching the Playback<->Transcribe segment, never
+        remounts <audio> -- currentTime/buffered state survives all of
+        that instead of restarting playback from 0.
+      */}
+      {activeRecording && (
+        <audio
+          className="hidden"
+          onEnded={() => setIsPlaying(false)}
+          onPause={() => isPlaying && setIsPlaying(false)}
+          onPlay={() => !isPlaying && setIsPlaying(true)}
+          ref={setAudioEl}
+          src={activeRecording.audioUrl ?? undefined}
+        />
+      )}
+
       <TaskModeTopBar onEndTask={endTaskWithConfirm} reviewedCount={reviewedCount} />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <SearchToolbar onSearchChange={setSearch} search={search} totalCount={data?.total} />
+        <SearchToolbar
+          activeFilterCount={countActiveFilters(filters)}
+          onFilterOpen={() => setIsFilterSheetOpen(true)}
+          onSearchChange={setSearch}
+          onSortOpen={() => setIsSortSheetOpen(true)}
+          search={search}
+          sortLabel={sort.label}
+          totalCount={data?.total}
+        />
+        {countActiveFilters(filters) > 0 && (
+          <ActiveFilterChips filters={filters} onFiltersChange={setFilters} />
+        )}
 
         <div className={`min-h-0 flex-1 overflow-y-auto px-4 pb-4 ${activeRecording ? 'pb-24' : ''}`}>
           {isLoading ? (
@@ -171,15 +253,14 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
           onExpand={() => setIsPlayerExpanded(true)}
           onTogglePlay={() => setIsPlaying((p) => !p)}
           recording={activeRecording}
-          setAudioEl={setAudioEl}
         />
       )}
 
       {activeRecording && isPlayerExpanded && (
         <ExpandedPlayer
+          audioRef={audioRef}
           deckId={recordingDeckIds[activeRecording.id] ?? null}
           isPlaying={isPlaying}
-          setAudioEl={setAudioEl}
           onAddToDeck={() => setDeckPickerRecording(activeRecording)}
           onClose={() => setIsPlayerExpanded(false)}
           onTogglePlay={() => setIsPlaying((p) => !p)}
@@ -195,6 +276,22 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
           onClose={() => setDeckPickerRecording(null)}
           onScored={() => setReviewedCount((c) => c + 1)}
           recording={deckPickerRecording}
+        />
+      )}
+
+      {isFilterSheetOpen && (
+        <FilterSheet
+          filters={filters}
+          onApply={setFilters}
+          onClose={() => setIsFilterSheetOpen(false)}
+        />
+      )}
+
+      {isSortSheetOpen && (
+        <SortSheet
+          onClose={() => setIsSortSheetOpen(false)}
+          onSelect={setSort}
+          selected={sort}
         />
       )}
     </div>
@@ -221,26 +318,271 @@ function SearchToolbar({
   search,
   onSearchChange,
   totalCount,
+  activeFilterCount,
+  onFilterOpen,
+  sortLabel,
+  onSortOpen,
 }: {
   search: string;
   onSearchChange: (value: string) => void;
   totalCount?: number;
+  activeFilterCount: number;
+  onFilterOpen: () => void;
+  sortLabel: string;
+  onSortOpen: () => void;
 }) {
   return (
     <div className="shrink-0 border-b border-line bg-bg px-4 py-3">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
-        <input
-          className="min-h-11 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm"
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search dialect, prompt, or recording ID…"
-          value={search}
-        />
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <input
+            className="min-h-11 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm"
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search dialect, prompt, or recording ID…"
+            value={search}
+          />
+        </div>
+        <button
+          className={`relative flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-bold ${
+            activeFilterCount > 0 ? 'border-accent text-accent' : 'border-line text-ink hover:bg-surface-muted'
+          }`}
+          onClick={onFilterOpen}
+          type="button"
+        >
+          <SlidersHorizontal className="size-4" aria-hidden="true" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="grid size-4 place-items-center rounded-full bg-accent text-[10px] text-white">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
       </div>
-      {typeof totalCount === 'number' && (
-        <p className="mt-2 text-xs font-bold text-muted">{totalCount} recordings</p>
-      )}
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <button
+          className="flex min-h-8 items-center gap-1 text-xs font-bold text-muted hover:text-ink"
+          onClick={onSortOpen}
+          type="button"
+        >
+          Sort: {sortLabel}
+          <ChevronDown className="size-3.5" aria-hidden="true" />
+        </button>
+        {typeof totalCount === 'number' && (
+          <p className="text-xs font-bold text-muted">{totalCount} recordings</p>
+        )}
+      </div>
     </div>
+  );
+}
+
+function ActiveFilterChips({
+  filters,
+  onFiltersChange,
+}: {
+  filters: RecordingFilters;
+  onFiltersChange: (filters: RecordingFilters) => void;
+}) {
+  const chips: { key: string; label: string; onRemove: () => void }[] = [];
+  if (filters.dialectTag.trim()) {
+    chips.push({
+      key: 'dialect',
+      label: `Dialect: ${filters.dialectTag.trim()}`,
+      onRemove: () => onFiltersChange({ ...filters, dialectTag: '' }),
+    });
+  }
+  if (filters.status) {
+    chips.push({
+      key: 'status',
+      label: STATUS_OPTIONS.find((o) => o.value === filters.status)?.label ?? filters.status,
+      onRemove: () => onFiltersChange({ ...filters, status: null }),
+    });
+  }
+  if (filters.minScore !== null || filters.maxScore !== null) {
+    chips.push({
+      key: 'score',
+      label: `Score: ${filters.minScore ?? 0}–${filters.maxScore ?? 100}`,
+      onRemove: () => onFiltersChange({ ...filters, minScore: null, maxScore: null }),
+    });
+  }
+
+  return (
+    <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-line bg-bg px-4 py-2">
+      {chips.map((chip) => (
+        <button
+          className="flex min-h-7 shrink-0 items-center gap-1 rounded-full bg-accent/10 px-2.5 text-xs font-bold text-accent"
+          key={chip.key}
+          onClick={chip.onRemove}
+          type="button"
+        >
+          {chip.label}
+          <X className="size-3" aria-hidden="true" />
+        </button>
+      ))}
+      <button
+        className="shrink-0 text-xs font-bold text-muted underline hover:text-ink"
+        onClick={() => onFiltersChange(EMPTY_FILTERS)}
+        type="button"
+      >
+        Clear all
+      </button>
+    </div>
+  );
+}
+
+function FilterSheet({
+  filters,
+  onApply,
+  onClose,
+}: {
+  filters: RecordingFilters;
+  onApply: (filters: RecordingFilters) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState(filters);
+
+  function handleApply() {
+    onApply(draft);
+    onClose();
+  }
+
+  function handleClear() {
+    setDraft(EMPTY_FILTERS);
+  }
+
+  return (
+    <Dialog onOpenChange={(open) => !open && onClose()} open>
+      <DialogContent title="Filters">
+        <div className="grid gap-4">
+          <label className="grid gap-1.5">
+            <span className="text-xs font-bold uppercase tracking-wide text-muted">Dialect</span>
+            <input
+              className="min-h-10 rounded-lg border border-line bg-surface px-3 text-sm"
+              onChange={(e) => setDraft((prev) => ({ ...prev, dialectTag: e.target.value }))}
+              placeholder="e.g. ig, yo, ha…"
+              value={draft.dialectTag}
+            />
+          </label>
+
+          <div className="grid gap-1.5">
+            <span className="text-xs font-bold uppercase tracking-wide text-muted">
+              Validation status
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {STATUS_OPTIONS.map((option) => (
+                <button
+                  aria-pressed={draft.status === option.value}
+                  className={`min-h-8 rounded-full border px-3 text-xs font-bold ${
+                    draft.status === option.value
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-line text-ink hover:bg-surface-muted'
+                  }`}
+                  key={option.value}
+                  onClick={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      status: prev.status === option.value ? null : option.value,
+                    }))
+                  }
+                  type="button"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-1.5">
+              <span className="text-xs font-bold uppercase tracking-wide text-muted">Min score</span>
+              <input
+                className="min-h-10 rounded-lg border border-line bg-surface px-3 text-sm"
+                max={100}
+                min={0}
+                onChange={(e) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    minScore: e.target.value === '' ? null : Number(e.target.value),
+                  }))
+                }
+                type="number"
+                value={draft.minScore ?? ''}
+              />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-xs font-bold uppercase tracking-wide text-muted">Max score</span>
+              <input
+                className="min-h-10 rounded-lg border border-line bg-surface px-3 text-sm"
+                max={100}
+                min={0}
+                onChange={(e) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    maxScore: e.target.value === '' ? null : Number(e.target.value),
+                  }))
+                }
+                type="number"
+                value={draft.maxScore ?? ''}
+              />
+            </label>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              className="min-h-10 flex-1 rounded-lg border border-line px-3 text-sm font-bold text-ink hover:bg-surface-muted"
+              onClick={handleClear}
+              type="button"
+            >
+              Clear all
+            </button>
+            <button
+              className="min-h-10 flex-1 rounded-lg bg-accent px-3 text-sm font-extrabold text-white hover:bg-accent/90"
+              onClick={handleApply}
+              type="button"
+            >
+              Show recordings
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SortSheet({
+  selected,
+  onSelect,
+  onClose,
+}: {
+  selected: (typeof SORT_OPTIONS)[number];
+  onSelect: (option: (typeof SORT_OPTIONS)[number]) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog onOpenChange={(open) => !open && onClose()} open>
+      <DialogContent title="Sort">
+        <div className="grid gap-1.5">
+          {SORT_OPTIONS.map((option) => (
+            <button
+              aria-pressed={selected.label === option.label}
+              className={`flex min-h-11 items-center rounded-lg border px-3 text-left text-sm font-bold ${
+                selected.label === option.label
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-line hover:bg-surface-muted'
+              }`}
+              key={option.label}
+              onClick={() => {
+                onSelect(option);
+                onClose();
+              }}
+              type="button"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -333,7 +675,6 @@ function MiniPlayer({
   onTogglePlay,
   onExpand,
   audioRef,
-  setAudioEl,
   isExpanded,
 }: {
   recording: ValidatorRecordingSummary;
@@ -341,7 +682,6 @@ function MiniPlayer({
   onTogglePlay: () => void;
   onExpand: () => void;
   audioRef: React.RefObject<HTMLAudioElement | null>;
-  setAudioEl: (el: HTMLAudioElement | null) => void;
   isExpanded: boolean;
 }) {
   useEffect(() => {
@@ -351,9 +691,11 @@ function MiniPlayer({
     else audio.pause();
   }, [audioRef, isPlaying, recording.id]);
 
-  if (isExpanded) {
-    return <audio ref={setAudioEl} src={recording.audioUrl ?? undefined} />;
-  }
+  // Presentational only while the Expanded Player is open -- the shared
+  // <audio> element (owned by TaskMode) keeps playing underneath, but this
+  // bar's own chrome is redundant with the Expanded Player's, so it renders
+  // nothing rather than a second, competing set of controls.
+  if (isExpanded) return null;
 
   return (
     <button
@@ -361,10 +703,6 @@ function MiniPlayer({
       onClick={onExpand}
       type="button"
     >
-      <audio
-        ref={setAudioEl}
-        src={recording.audioUrl ?? undefined}
-      />
       <span className="min-w-0 flex-1 text-left">
         <span className="block truncate text-sm font-bold">{recording.promptText}</span>
         <span className="block truncate text-xs text-muted">{recording.dialectTag}</span>
@@ -398,7 +736,7 @@ function ExpandedPlayer({
   onTogglePlay,
   onClose,
   onAddToDeck,
-  setAudioEl,
+  audioRef,
   deckId,
 }: {
   recording: ValidatorRecordingSummary;
@@ -406,7 +744,7 @@ function ExpandedPlayer({
   onTogglePlay: () => void;
   onClose: () => void;
   onAddToDeck: () => void;
-  setAudioEl: (el: HTMLAudioElement | null) => void;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
   deckId: string | null;
 }) {
   const [segment, setSegment] = useState<'playback' | 'transcribe'>('playback');
@@ -467,25 +805,13 @@ function ExpandedPlayer({
         </div>
       </div>
 
-      {/*
-        Exactly one <audio> element, always mounted for the lifetime of the
-        Expanded Player -- switching segments only toggles `controls`/
-        visibility via CSS, never unmounts it, so currentTime/playback state
-        survives a Playback <-> Transcribe switch instead of restarting from
-        0. This is the direct fix for "audio never stops because the user
-        switched segments" from the mobile spec.
-      */}
-      <audio
-        className={segment === 'playback' ? 'mx-auto mt-6 w-full max-w-md' : 'hidden'}
-        controls={segment === 'playback'}
-        onPause={() => isPlaying && onTogglePlay()}
-        onPlay={() => !isPlaying && onTogglePlay()}
-        ref={setAudioEl}
-        src={recording.audioUrl ?? undefined}
-      />
-
       {segment === 'playback' ? (
-        <PlaybackSegment recording={recording} />
+        <PlaybackSegment
+          audioRef={audioRef}
+          isPlaying={isPlaying}
+          onTogglePlay={onTogglePlay}
+          recording={recording}
+        />
       ) : (
         <TranscribeSegment deckId={deckId} onAddToDeck={onAddToDeck} recording={recording} />
       )}
@@ -506,19 +832,42 @@ function ExpandedPlayer({
 }
 
 /**
- * Playback segment metadata -- the actual <audio controls> element lives in
- * ExpandedPlayer itself (rendered only while this segment is active) so
- * there is always exactly one real <audio> element mounted, never two
- * competing instances. Real waveform/loop-region/zoom are deferred to a
- * later pass -- see the mobile spec's Playback Segment section.
+ * Playback segment -- transport chrome (play/pause, scrubber, time) built
+ * around the single shared <audio> element (audioRef, owned by TaskMode),
+ * not a second <audio controls> of its own -- see TaskMode's doc comment
+ * on why there is exactly one <audio> element for the whole Task Mode
+ * session. Real waveform/loop-region/zoom are deferred to a later pass --
+ * see the mobile spec's Playback Segment section.
  */
-function PlaybackSegment({ recording }: { recording: ValidatorRecordingSummary }) {
+function PlaybackSegment({
+  recording,
+  audioRef,
+  isPlaying,
+  onTogglePlay,
+}: {
+  recording: ValidatorRecordingSummary;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
+  isPlaying: boolean;
+  onTogglePlay: () => void;
+}) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
       <div>
         <p className="text-xs font-bold uppercase tracking-wide text-muted">{recording.dialectTag}</p>
         <p className="mt-2 text-xl font-black leading-snug">{recording.promptText}</p>
         <p className="mt-1 select-all font-mono text-xs text-muted">{recording.id}</p>
+      </div>
+
+      <div className="flex w-full max-w-md items-center gap-3">
+        <button
+          className="grid size-11 shrink-0 place-items-center rounded-full bg-accent text-white"
+          onClick={onTogglePlay}
+          type="button"
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+        >
+          {isPlaying ? <Pause className="size-5" aria-hidden="true" /> : <Play className="size-5" aria-hidden="true" />}
+        </button>
+        <Scrubber audioRef={audioRef} recordingId={recording.id} />
       </div>
 
       <p className="max-w-sm text-xs text-muted">
@@ -527,6 +876,79 @@ function PlaybackSegment({ recording }: { recording: ValidatorRecordingSummary }
       </p>
     </div>
   );
+}
+
+/**
+ * Minimal seek bar + elapsed/total time, driven by the shared <audio>
+ * element via a rAF-throttled currentTime poll (no dependency on native
+ * <audio controls>, which this build deliberately avoids duplicating --
+ * see TaskMode's single-<audio> doc comment).
+ */
+function Scrubber({
+  audioRef,
+  recordingId,
+}: {
+  audioRef: React.RefObject<HTMLAudioElement | null>;
+  recordingId: string;
+}) {
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    setCurrentTime(audio.currentTime);
+    setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+
+    let frame: number;
+    const tick = () => {
+      setCurrentTime(audio.currentTime);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    const onLoadedMetadata = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+    return () => {
+      cancelAnimationFrame(frame);
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+    };
+    // recordingId dependency: re-attach when the shared <audio>'s src
+    // changes to a new recording, so the scrubber resets to that
+    // recording's own duration/time instead of showing the previous one's.
+  }, [audioRef, recordingId]);
+
+  function handleSeek(e: React.ChangeEvent<HTMLInputElement>) {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const value = Number(e.target.value);
+    audio.currentTime = value;
+    setCurrentTime(value);
+  }
+
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <input
+        aria-label="Seek"
+        className="h-1.5 flex-1 accent-accent"
+        max={duration || 0}
+        min={0}
+        onChange={handleSeek}
+        step={0.1}
+        type="range"
+        value={Math.min(currentTime, duration || 0)}
+      />
+      <span className="shrink-0 font-mono text-xs text-muted">
+        {formatSeconds(currentTime)} / {formatSeconds(duration)}
+      </span>
+    </div>
+  );
+}
+
+function formatSeconds(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return '0:00';
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
 /**
