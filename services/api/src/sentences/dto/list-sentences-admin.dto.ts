@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ListSentencesAdminDto {
@@ -21,7 +21,7 @@ export class ListSentencesAdminDto {
 
   /** Sentences tab omits this (defaults to active-only); Disabled tab passes true. */
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   disabled = false;
 }
