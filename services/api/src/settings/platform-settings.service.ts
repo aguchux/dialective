@@ -590,6 +590,16 @@ export class PlatformSettingsService {
     return row.auditHoldEveryNSubmissions;
   }
 
+  async getValidationRewardPerRecording(): Promise<number> {
+    const row = await this.getRow();
+    return row.validationRewardPerRecording.toNumber();
+  }
+
+  async getValidatorDeckMaxItems(): Promise<number> {
+    const row = await this.getRow();
+    return row.validatorDeckMaxItems;
+  }
+
   async getSettlementDelayMinutes(): Promise<number> {
     const row = await this.getRow();
     return row.settlementDelayMinutes;
@@ -814,6 +824,8 @@ export class PlatformSettingsService {
       walletSmsDepositConfirmedEnabled: row.walletSmsDepositConfirmedEnabled,
       referralSmsFundingBonusEnabled: row.referralSmsFundingBonusEnabled,
       referralSmsPayoutBonusEnabled: row.referralSmsPayoutBonusEnabled,
+      validationRewardPerRecording: row.validationRewardPerRecording.toString(),
+      validatorDeckMaxItems: row.validatorDeckMaxItems,
       cryptoWithdrawalsEnabled: row.cryptoWithdrawalsEnabled,
       nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
@@ -944,6 +956,8 @@ export class PlatformSettingsService {
     walletSmsDepositConfirmedEnabled?: boolean;
     referralSmsFundingBonusEnabled?: boolean;
     referralSmsPayoutBonusEnabled?: boolean;
+    validationRewardPerRecording?: number;
+    validatorDeckMaxItems?: number;
     cryptoWithdrawalsEnabled?: boolean;
     nowPaymentsPayoutsEnabled?: boolean;
     allowedWithdrawalCurrencies?: string;
@@ -1170,6 +1184,17 @@ export class PlatformSettingsService {
       throw new BadRequestException('auditHoldEveryNSubmissions must be >= 0');
     }
 
+    // 0 is the explicit "off" value for both (see schema doc comments).
+    if (
+      data.validationRewardPerRecording !== undefined &&
+      data.validationRewardPerRecording < 0
+    ) {
+      throw new BadRequestException('validationRewardPerRecording must be >= 0');
+    }
+    if (data.validatorDeckMaxItems !== undefined && data.validatorDeckMaxItems < 0) {
+      throw new BadRequestException('validatorDeckMaxItems must be >= 0');
+    }
+
     // No "off" value for either -- unlike auditHoldEveryNSubmissions, a
     // session timeout has no meaningful "disabled" state (0 would mean
     // instant logout, not "never time out"). Both must stay strictly
@@ -1308,6 +1333,8 @@ export class PlatformSettingsService {
       walletSmsDepositConfirmedEnabled: row.walletSmsDepositConfirmedEnabled,
       referralSmsFundingBonusEnabled: row.referralSmsFundingBonusEnabled,
       referralSmsPayoutBonusEnabled: row.referralSmsPayoutBonusEnabled,
+      validationRewardPerRecording: row.validationRewardPerRecording.toString(),
+      validatorDeckMaxItems: row.validatorDeckMaxItems,
       cryptoWithdrawalsEnabled: row.cryptoWithdrawalsEnabled,
       nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,

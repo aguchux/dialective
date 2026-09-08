@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { ClipboardCheck, CircleDollarSign, Layers, ShieldCheck, WalletCards } from 'lucide-react';
+import { CircleDollarSign, ShieldCheck, WalletCards } from 'lucide-react';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
 import { Avatar, cardClass, EmptyPanel } from '@/components/dashboard/shared';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -13,6 +13,8 @@ import {
   ValidatorMobileNavigation,
   ValidatorView,
 } from '@/components/validator/ValidatorShell';
+import { StreamDecksView } from '@/components/validator/views/StreamDecksView';
+import { ValidationsView } from '@/components/validator/views/ValidationsView';
 
 const allViewIds: ValidatorView[] = ['decks', 'tokens', 'earnings', 'validations', 'audit', 'profile'];
 
@@ -91,14 +93,7 @@ export function ValidatorDashboard() {
 
 function ValidatorViewContent({ activeView }: { activeView: ValidatorView }) {
   if (activeView === 'decks') {
-    return (
-      <EmptyPanel
-        icon={Layers}
-        title="Stream Decks are coming soon"
-        actionHref="/validator?view=validations"
-        actionLabel="Go to Validations"
-      />
-    );
+    return <StreamDecksView />;
   }
   if (activeView === 'tokens') {
     return <EmptyPanel icon={WalletCards} title="Your DL token balance will appear here" />;
@@ -107,7 +102,7 @@ function ValidatorViewContent({ activeView }: { activeView: ValidatorView }) {
     return <EmptyPanel icon={CircleDollarSign} title="Your validation earnings will appear here" />;
   }
   if (activeView === 'validations') {
-    return <EmptyPanel icon={ClipboardCheck} title="The recording pool and scoring workspace are coming soon" />;
+    return <ValidationsView />;
   }
   if (activeView === 'audit') {
     return <EmptyPanel icon={ShieldCheck} title="Deck approvals and audit history will appear here" />;

@@ -1856,6 +1856,87 @@ export interface AdminRecordingsPage {
   totalPages: number;
 }
 
+export interface ValidatorRecordingSummary {
+  id: string;
+  direction: 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH' | null;
+  promptText: string;
+  responseText: string | null;
+  asrTranscript: string | null;
+  dialectTag: string;
+  status: 'PENDING' | 'TRANSCRIBED' | 'REJECTED' | 'SCORED' | 'SETTLED' | 'EXPIRED';
+  rawScore: string | null;
+  score: string | null;
+  compositeScore: string | null;
+  audioUrl: string | null;
+  createdAt: string;
+}
+
+export interface ValidatorRecordingsPage {
+  items: ValidatorRecordingSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export type ValidatorRecordingSortField = 'createdAt' | 'score' | 'compositeScore' | 'rawScore';
+
+export interface ListValidatorRecordingsParams {
+  page: number;
+  pageSize: number;
+  sortBy?: ValidatorRecordingSortField;
+  sortDir?: 'asc' | 'desc';
+  search?: string;
+  dialectTag?: string;
+  status?: ValidatorRecordingSummary['status'];
+  minScore?: number;
+  maxScore?: number;
+}
+
+export type ValidatorItemStatus = 'UNSCORED' | 'VALID' | 'INVALID' | 'REJECTED';
+
+export interface ValidatorDeckItem {
+  id: string;
+  deckId: string;
+  recordingId: string;
+  addedByUserId: string;
+  addedAt: string;
+  validationStatus: ValidatorItemStatus;
+  validatorScore: string | null;
+  validatorNotes: string | null;
+  scoredAt: string | null;
+}
+
+export interface ValidatorDeckSummary {
+  id: string;
+  name: string;
+  createdByUserId: string;
+  ownerUserId: string;
+  status: 'DRAFT' | 'PENDING_L2' | 'PENDING_L3' | 'PENDING_ADMIN' | 'APPROVED' | 'PUBLISHED' | 'REJECTED' | 'ARCHIVED';
+  dialectTag: string | null;
+  countryCode: string | null;
+  createdAt: string;
+  updatedAt: string;
+  _count: { items: number };
+}
+
+export interface ValidatorDeckDetail extends Omit<ValidatorDeckSummary, '_count'> {
+  items: ValidatorDeckItem[];
+  expectedEarning: string;
+}
+
+export interface CreateValidatorDeckInput {
+  name: string;
+  dialectTag?: string;
+  countryCode?: string;
+}
+
+export interface ScoreValidatorDeckItemInput {
+  status: ValidatorItemStatus;
+  score?: number;
+  notes?: string;
+}
+
 export interface AuditRecordingResult {
   id: string;
   kind: RecordingKind;
@@ -2269,6 +2350,8 @@ export const dialectivaApi = createApi({
     'Marketing',
     'Faqs',
     'AdminSms',
+    'ValidatorDecks',
+    'ValidatorRecordings',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -4140,6 +4223,55 @@ export const dialectivaApi = createApi({
       query: () => '/courses/study/required/incomplete',
       providesTags: ['RequiredCourses'],
     }),
+    createValidatorDeck: builder.mutation<ValidatorDeckSummary, CreateValidatorDeckInput>({
+      query: (body) => ({ url: '/validator/decks', method: 'POST', body }),
+      invalidatesTags: ['ValidatorDecks'],
+    }),
+    getValidatorDecks: builder.query<ValidatorDeckSummary[], { filter?: 'mine' | 'all' } | void>({
+      query: (params) => ({ url: '/validator/decks', params: params ?? undefined }),
+      providesTags: ['ValidatorDecks'],
+    }),
+    getValidatorDeck: builder.query<ValidatorDeckDetail, string>({
+      query: (id) => `/validator/decks/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'ValidatorDecks', id }],
+    }),
+    updateValidatorDeck: builder.mutation<
+      ValidatorDeckSummary,
+      { id: string; body: Partial<CreateValidatorDeckInput> }
+    >({
+      query: ({ id, body }) => ({ url: `/validator/decks/${id}`, method: 'PATCH', body }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+    }),
+    addValidatorDeckItem: builder.mutation<ValidatorDeckItem, { id: string; recordingId: string }>({
+      query: ({ id, recordingId }) => ({
+        url: `/validator/decks/${id}/items`,
+        method: 'POST',
+        body: { recordingId },
+      }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+    }),
+    removeValidatorDeckItem: builder.mutation<void, { id: string; recordingId: string }>({
+      query: ({ id, recordingId }) => ({
+        url: `/validator/decks/${id}/items/${recordingId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+    }),
+    scoreValidatorDeckItem: builder.mutation<
+      ValidatorDeckItem,
+      { id: string; recordingId: string; body: ScoreValidatorDeckItemInput }
+    >({
+      query: ({ id, recordingId, body }) => ({
+        url: `/validator/decks/${id}/items/${recordingId}/score`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+    }),
+    getValidatorRecordings: builder.query<ValidatorRecordingsPage, ListValidatorRecordingsParams>({
+      query: (params) => ({ url: '/validator/recordings', params }),
+      providesTags: ['ValidatorRecordings'],
+    }),
   }),
 });
 
@@ -4420,6 +4552,14 @@ export const {
   useGetCourseToStudyQuery,
   useSaveCourseProgressMutation,
   useGetIncompleteRequiredCoursesQuery,
+  useCreateValidatorDeckMutation,
+  useGetValidatorDecksQuery,
+  useGetValidatorDeckQuery,
+  useUpdateValidatorDeckMutation,
+  useAddValidatorDeckItemMutation,
+  useRemoveValidatorDeckItemMutation,
+  useScoreValidatorDeckItemMutation,
+  useGetValidatorRecordingsQuery,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

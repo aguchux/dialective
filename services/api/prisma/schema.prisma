@@ -99,6 +99,8 @@ model User {
   validatorLevelUpdatedById     String?
   validatorLevelUpdatedBy       User?           @relation("ValidatorLevelUpdatedBy", fields: [validatorLevelUpdatedById], references: [id], onDelete: SetNull)
   validatorLevelsUpdated        User[]          @relation("ValidatorLevelUpdatedBy")
+  validatorDecksCreated         ValidatorDeck[] @relation("ValidatorDeckCreatedBy")
+  validatorDecksOwned           ValidatorDeck[] @relation("ValidatorDeckOwner")
   // Automatic compliance hold, distinct from `status` (admin-driven
   // suspend/block) -- set by WordsService.createRecording the moment a
   // trainer's lifetime WordRecording count crosses a multiple of
@@ -1160,6 +1162,75 @@ model WordRecording {
   @@map("word_recordings")
 }
 
+/// Phase 1 of the Validator Dashboard (docs/validators.md): a validator-owned
+/// curated collection of WordRecordings, distinct from the subscriber-owned
+/// StreamDeck (voice-stream/stream-decks) -- kept as a fully separate model
+/// so the internal QA pipeline never depends on the B2B product's schema.
+/// This phase is DRAFT-only: no submit/approve/publish state machine yet
+/// (see ValidatorDeckStatus doc comment).
+enum ValidatorDeckStatus {
+  DRAFT // being built by its creator -- the only status Phase 1 writes
+  PENDING_L2 // reserved for Phase 2's approval chain
+  PENDING_L3
+  PENDING_ADMIN
+  APPROVED
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+model ValidatorDeck {
+  id                String              @id @default(uuid())
+  name              String
+  createdByUserId   String // provenance, never changes
+  createdBy         User                @relation("ValidatorDeckCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  // Current editor -- admin-reassignable in a later phase; equals
+  // createdByUserId until reassignment exists.
+  ownerUserId       String
+  owner             User                @relation("ValidatorDeckOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  status            ValidatorDeckStatus @default(DRAFT)
+  dialectTag        String? // descriptive only, mirrors StreamDeck's scoping metadata loosely
+  countryCode       String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  items ValidatorDeckItem[]
+
+  @@index([ownerUserId])
+  @@index([createdByUserId])
+  @@index([status])
+  @@map("validator_decks")
+}
+
+enum ValidatorItemStatus {
+  UNSCORED
+  VALID
+  INVALID
+  REJECTED
+}
+
+model ValidatorDeckItem {
+  id            String              @id @default(uuid())
+  deckId        String
+  deck          ValidatorDeck       @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  // WordRecording.id, deliberately no FK -- same loose-coupling as
+  // StreamDeckItem.recordingId, since recordings are purgeable by
+  // audio-retention-job independent of deck membership.
+  recordingId   String
+  addedByUserId String
+  addedAt       DateTime            @default(now())
+
+  validationStatus ValidatorItemStatus @default(UNSCORED)
+  validatorScore   Decimal?            @db.Decimal(5, 2)
+  validatorNotes   String?
+  scoredAt         DateTime?
+
+  @@unique([deckId, recordingId])
+  @@index([deckId])
+  @@index([recordingId])
+  @@map("validator_deck_items")
+}
+
 /// A trainer may earn one training payout for a given source item. The
 /// sourceKey is `word:<id>` or `sentence:<id>` so the uniqueness rule works
 /// across the nullable WordRecording foreign keys. A trainer can contribute
@@ -2108,6 +2179,8 @@ model PlatformSettings {
   walletSmsDepositConfirmedEnabled       Boolean   @default(false) // SMS the trainer once a crypto or fiat deposit is confirmed and DL is credited to their wallet
   referralSmsFundingBonusEnabled         Boolean   @default(false) // SMS the referrer when they're credited a funding bonus off a referral's deposit (only fires if ReferralSettings.fundingBonusEnabled is also on)
   referralSmsPayoutBonusEnabled          Boolean   @default(false) // SMS the referrer when they're credited a payout bonus off a referral's training-payout settlement (only fires if ReferralSettings.payoutBonusEnabled is also on)
+  validationRewardPerRecording           Decimal   @default(0) @db.Decimal(20, 8) // flat DL amount credited per VALID ValidatorDeckItem when its containing deck is published (docs/validators.md) -- 0 disables validator payouts entirely; Phase 1 only reads this for the unpaid "expected earning" preview, actual crediting lands in a later phase
+  validatorDeckMaxItems                  Int       @default(2000) // cap on ValidatorDeckItem rows per ValidatorDeck; 0 = uncapped
   cryptoWithdrawalsEnabled               Boolean   @default(true) // master kill switch -- when false, both wallet/withdrawals/otp and wallet/withdrawals reject new withdrawal requests outright
   nowPaymentsPayoutsEnabled              Boolean   @default(false) // when false, admin/withdrawals/:id/submit-nowpayments is disabled -- admins can still resolve withdrawals manually (outcome=paid) while this is off, which is the safe default until payout credentials/allow-lists are configured
   allowedWithdrawalCurrencies            String    @default("USDT") // CSV of currencies a withdrawal's destinationCurrency may be, validated app-side against NowPaymentsService's supported set (USDT, USDC)

@@ -68,6 +68,22 @@ describe('PlatformSettingsService.getTawkToWidget', () => {
   });
 });
 
+describe('PlatformSettingsService validator settings', () => {
+  it('returns the flat per-recording validation reward as a number', async () => {
+    const { service } = setup({
+      validationRewardPerRecording: { toNumber: () => 2.5 },
+    });
+
+    await expect(service.getValidationRewardPerRecording()).resolves.toBe(2.5);
+  });
+
+  it('returns the configured max items per validator deck', async () => {
+    const { service } = setup({ validatorDeckMaxItems: 500 });
+
+    await expect(service.getValidatorDeckMaxItems()).resolves.toBe(500);
+  });
+});
+
 describe('PlatformSettingsService.isWeeklyTrainerReportEnabled', () => {
   it('reflects the row value, defaulting true per the schema default', async () => {
     const { service } = setup({ weeklyTrainerReportEnabled: true });
@@ -217,6 +233,7 @@ describe('PlatformSettingsService wordTrainingEnabled / sentenceTrainingEnabled 
       kycMinWithdrawalTokens: { toString: () => '0' },
       withdrawalFeePercent: { toString: () => '0' },
       withdrawalFeeTokenAmount: { toString: () => '0' },
+      validationRewardPerRecording: { toString: () => '0' },
     });
 
     await expect(
@@ -244,6 +261,7 @@ describe('PlatformSettingsService wordTrainingEnabled / sentenceTrainingEnabled 
       kycMinWithdrawalTokens: { toString: () => '0' },
       withdrawalFeePercent: { toString: () => '0' },
       withdrawalFeeTokenAmount: { toString: () => '0' },
+      validationRewardPerRecording: { toString: () => '0' },
     });
 
     await expect(service.update({ wordTrainingEnabled: false })).resolves.toMatchObject({
@@ -311,6 +329,7 @@ describe('PlatformSettingsService session idle/absolute timeout settings', () =>
       kycMinWithdrawalTokens: { toString: () => '0' },
       withdrawalFeePercent: { toString: () => '0' },
       withdrawalFeeTokenAmount: { toString: () => '0' },
+      validationRewardPerRecording: { toString: () => '0' },
     });
 
     await expect(

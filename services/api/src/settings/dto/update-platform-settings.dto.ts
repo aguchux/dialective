@@ -491,6 +491,16 @@ export class UpdatePlatformSettingsDto {
   referralSmsPayoutBonusEnabled?: boolean;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  validationRewardPerRecording?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  validatorDeckMaxItems?: number;
+
+  @IsOptional()
   @IsBoolean()
   cryptoWithdrawalsEnabled?: boolean;
 

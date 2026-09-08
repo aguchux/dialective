@@ -25,6 +25,7 @@ import { KycModule } from './kyc/kyc.module';
 import { DistributorsModule } from './distributors/distributors.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminRecordingsModule } from './admin-recordings/admin-recordings.module';
+import { ValidatorDecksModule } from './validator-decks/validator-decks.module';
 import { DatasetStorageModule } from './dataset-storage/dataset-storage.module';
 import { ApiAccessTokensModule } from './api-access-tokens/api-access-tokens.module';
 import { ChatDialectModule } from './chatdialect/chatdialect.module';
@@ -61,6 +62,7 @@ import { CommunityModule } from './community/community.module';
     DistributorsModule,
     NotificationsModule,
     AdminRecordingsModule,
+    ValidatorDecksModule,
     DatasetStorageModule,
     ApiAccessTokensModule,
     ChatDialectModule,
