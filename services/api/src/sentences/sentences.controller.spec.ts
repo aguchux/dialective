@@ -8,6 +8,7 @@ describe('SentencesController delete', () => {
         findMany: jest.fn().mockResolvedValue([{ id: 'sentence-1' }, { id: 'sentence-2' }]),
         count: jest.fn().mockResolvedValue(0),
         update: jest.fn().mockResolvedValue({ id: 'sentence-1', isDisabled: true }),
+        updateMany: jest.fn().mockResolvedValue({ count: 3 }),
       },
       wordRecording: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -146,6 +147,47 @@ describe('SentencesController delete', () => {
       prisma.sentence.delete.mockRejectedValueOnce(new Error('db down'));
 
       await expect(controller.bulkDeleteSentences({ ids: ['a'] })).rejects.toThrow('db down');
+    });
+  });
+
+  describe('bulk disable', () => {
+    it('disables exactly the given ids when dto.ids is provided', async () => {
+      const { controller, prisma } = setup();
+
+      const result = await controller.bulkSetSentencesDisabled({
+        ids: ['a', 'b', 'c'],
+        setDisabled: true,
+      });
+
+      expect(prisma.sentence.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['a', 'b', 'c'] } },
+        data: { isDisabled: true },
+      });
+      expect(result).toEqual({ updated: 3 });
+    });
+
+    it('re-enables exactly the given ids when setDisabled is false', async () => {
+      const { controller, prisma } = setup();
+      prisma.sentence.updateMany.mockResolvedValueOnce({ count: 2 });
+
+      const result = await controller.bulkSetSentencesDisabled({ ids: ['a', 'b'], setDisabled: false });
+
+      expect(prisma.sentence.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['a', 'b'] } },
+        data: { isDisabled: false },
+      });
+      expect(result).toEqual({ updated: 2 });
+    });
+
+    it('resolves the matching rows from the current filter for Clear-All-style disable when ids is omitted', async () => {
+      const { controller, prisma } = setup();
+
+      await controller.bulkSetSentencesDisabled({ setDisabled: true, search: 'hello' });
+
+      expect(prisma.sentence.updateMany).toHaveBeenCalledWith({
+        where: { isDisabled: false, text: { contains: 'hello', mode: 'insensitive' } },
+        data: { isDisabled: true },
+      });
     });
   });
 });

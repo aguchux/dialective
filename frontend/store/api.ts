@@ -4104,6 +4104,14 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/words/admin', method: 'DELETE', body }),
       invalidatesTags: ['AdminWords'],
     }),
+    bulkSetWordsDisabled: builder.mutation<
+      { updated: number },
+      | { ids: string[]; setDisabled: boolean }
+      | { setDisabled: boolean; search?: string; partOfSpeech?: PartOfSpeech; disabled?: boolean }
+    >({
+      query: (body) => ({ url: '/words/admin', method: 'PATCH', body }),
+      invalidatesTags: ['AdminWords'],
+    }),
     getAdminSentences: builder.query<
       AdminSentencesPage,
       { page: number; pageSize: number; search?: string; disabled?: boolean }
@@ -4134,6 +4142,14 @@ export const dialectivaApi = createApi({
       { ids: string[] } | { search?: string; disabled?: boolean }
     >({
       query: (body) => ({ url: '/sentences/admin', method: 'DELETE', body }),
+      invalidatesTags: ['AdminSentences'],
+    }),
+    bulkSetSentencesDisabled: builder.mutation<
+      { updated: number },
+      | { ids: string[]; setDisabled: boolean }
+      | { setDisabled: boolean; search?: string; disabled?: boolean }
+    >({
+      query: (body) => ({ url: '/sentences/admin', method: 'PATCH', body }),
       invalidatesTags: ['AdminSentences'],
     }),
     getAdminBlogPosts: builder.query<BlogPost[], void>({
@@ -4531,10 +4547,12 @@ export const {
   useDeleteWordMutation,
   useSetWordDisabledMutation,
   useBulkDeleteWordsMutation,
+  useBulkSetWordsDisabledMutation,
   useGetAdminSentencesQuery,
   useDeleteSentenceMutation,
   useSetSentenceDisabledMutation,
   useBulkDeleteSentencesMutation,
+  useBulkSetSentencesDisabledMutation,
   useGetAdminBlogPostsQuery,
   useGetAdminBlogPostQuery,
   useCreateBlogPostMutation,

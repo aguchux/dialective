@@ -8,6 +8,7 @@ describe('WordsController delete', () => {
         findMany: jest.fn().mockResolvedValue([{ id: 'word-1' }, { id: 'word-2' }]),
         count: jest.fn().mockResolvedValue(0),
         update: jest.fn().mockResolvedValue({ id: 'word-1', isDisabled: true }),
+        updateMany: jest.fn().mockResolvedValue({ count: 3 }),
       },
       wordRecording: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -154,6 +155,52 @@ describe('WordsController delete', () => {
       prisma.word.delete.mockRejectedValueOnce(new Error('db down'));
 
       await expect(controller.bulkDeleteWords({ ids: ['a'] })).rejects.toThrow('db down');
+    });
+  });
+
+  describe('bulk disable', () => {
+    it('disables exactly the given ids when dto.ids is provided', async () => {
+      const { controller, prisma } = setup();
+
+      const result = await controller.bulkSetWordsDisabled({ ids: ['a', 'b', 'c'], setDisabled: true });
+
+      expect(prisma.word.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['a', 'b', 'c'] } },
+        data: { isDisabled: true },
+      });
+      expect(result).toEqual({ updated: 3 });
+    });
+
+    it('re-enables exactly the given ids when setDisabled is false', async () => {
+      const { controller, prisma } = setup();
+      prisma.word.updateMany.mockResolvedValueOnce({ count: 2 });
+
+      const result = await controller.bulkSetWordsDisabled({ ids: ['a', 'b'], setDisabled: false });
+
+      expect(prisma.word.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['a', 'b'] } },
+        data: { isDisabled: false },
+      });
+      expect(result).toEqual({ updated: 2 });
+    });
+
+    it('resolves the matching rows from the current filter for Clear-All-style disable when ids is omitted', async () => {
+      const { controller, prisma } = setup();
+
+      await controller.bulkSetWordsDisabled({
+        setDisabled: true,
+        search: 'run',
+        partOfSpeech: 'VERB' as never,
+      });
+
+      expect(prisma.word.updateMany).toHaveBeenCalledWith({
+        where: {
+          isDisabled: false,
+          text: { contains: 'run', mode: 'insensitive' },
+          partOfSpeech: 'VERB',
+        },
+        data: { isDisabled: true },
+      });
     });
   });
 });

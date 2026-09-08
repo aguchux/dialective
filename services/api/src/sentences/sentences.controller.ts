@@ -17,6 +17,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { BulkDeleteSentencesAdminDto } from './dto/bulk-delete-sentences-admin.dto';
+import { BulkSetSentencesDisabledDto } from './dto/bulk-set-sentences-disabled.dto';
 import { ListSentencesAdminDto } from './dto/list-sentences-admin.dto';
 import { SetDisabledDto } from './dto/set-disabled.dto';
 
@@ -121,6 +122,28 @@ export class SentencesController {
       }
     }
     return { deleted, skipped };
+  }
+
+  /**
+   * "Disable selected" / "Enable selected" (dto.ids) or the "Clear All"-style
+   * filtered form (ids omitted) -- a plain updateMany, unlike bulk-delete:
+   * disabling never destroys data or cascades away in-flight trainer work,
+   * so there's no per-row unsettled-activity check to make this skip rows.
+   */
+  @Patch('admin')
+  @HttpCode(200)
+  async bulkSetSentencesDisabled(@Body() dto: BulkSetSentencesDisabledDto) {
+    const where: Prisma.SentenceWhereInput = dto.ids
+      ? { id: { in: dto.ids } }
+      : {
+          isDisabled: dto.disabled ?? false,
+          ...(dto.search ? { text: { contains: dto.search, mode: 'insensitive' as const } } : {}),
+        };
+    const result = await this.prisma.sentence.updateMany({
+      where,
+      data: { isDisabled: dto.setDisabled },
+    });
+    return { updated: result.count };
   }
 
   private async matchingSentenceIds(filter: BulkDeleteSentencesAdminDto): Promise<string[]> {

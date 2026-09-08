@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { BulkDeleteDialog } from '@/components/admin/BulkDeleteDialog';
+import { BulkSetDisabledDialog } from '@/components/admin/BulkSetDisabledDialog';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { resolveDialectName } from '@/lib/dialect-name';
 import {
@@ -12,6 +13,8 @@ import {
   normalizeErrorMessage,
   useBulkDeleteSentencesMutation,
   useBulkDeleteWordsMutation,
+  useBulkSetSentencesDisabledMutation,
+  useBulkSetWordsDisabledMutation,
   useDeleteSentenceMutation,
   useDeleteWordMutation,
   useGetAdminSentencesQuery,
@@ -162,11 +165,14 @@ function WordsTab({ disabled }: { disabled: boolean }) {
   const [deleteWord] = useDeleteWordMutation();
   const [setWordDisabled] = useSetWordDisabledMutation();
   const [bulkDeleteWords] = useBulkDeleteWordsMutation();
+  const [bulkSetWordsDisabled] = useBulkSetWordsDisabledMutation();
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulkDialog, setBulkDialog] = useState<'selected' | 'all' | null>(null);
+  const [bulkDialog, setBulkDialog] = useState<
+    'delete-selected' | 'delete-all' | 'toggle-selected' | 'toggle-all' | null
+  >(null);
   const { data: dialects } = useGetAllDialectsQuery();
 
   useEffect(() => {
@@ -242,18 +248,40 @@ function WordsTab({ disabled }: { disabled: boolean }) {
         </div>
         <div className="ml-auto flex items-center gap-2">
           {selected.size > 0 && (
-            <button
-              className={dangerButtonClass}
-              onClick={() => setBulkDialog('selected')}
-              type="button"
-            >
-              Delete selected ({selected.size})
-            </button>
+            <>
+              <button
+                className={secondaryButtonClass}
+                onClick={() => setBulkDialog('toggle-selected')}
+                type="button"
+              >
+                {disabled ? 'Enable' : 'Disable'} selected ({selected.size})
+              </button>
+              <button
+                className={dangerButtonClass}
+                onClick={() => setBulkDialog('delete-selected')}
+                type="button"
+              >
+                Delete selected ({selected.size})
+              </button>
+            </>
           )}
           {(data?.total ?? 0) > 0 && (
-            <button className={dangerButtonClass} onClick={() => setBulkDialog('all')} type="button">
-              Clear All
-            </button>
+            <>
+              <button
+                className={secondaryButtonClass}
+                onClick={() => setBulkDialog('toggle-all')}
+                type="button"
+              >
+                {disabled ? 'Enable' : 'Disable'} All
+              </button>
+              <button
+                className={dangerButtonClass}
+                onClick={() => setBulkDialog('delete-all')}
+                type="button"
+              >
+                Clear All
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -430,7 +458,7 @@ function WordsTab({ disabled }: { disabled: boolean }) {
         />
       )}
 
-      {bulkDialog === 'selected' && (
+      {bulkDialog === 'delete-selected' && (
         <BulkDeleteDialog
           description={`This permanently deletes ${selected.size} selected word${selected.size === 1 ? '' : 's'} and their settled recordings. Any word still awaiting scoring or settlement, or with an open training assignment, is left alone and reported as skipped.`}
           onClose={() => setBulkDialog(null)}
@@ -442,7 +470,7 @@ function WordsTab({ disabled }: { disabled: boolean }) {
           title="Delete selected words?"
         />
       )}
-      {bulkDialog === 'all' && (
+      {bulkDialog === 'delete-all' && (
         <BulkDeleteDialog
           description={`This permanently deletes all ${data?.total ?? 0} word${data?.total === 1 ? '' : 's'} matching the current search and filter, and their settled recordings. Any word still awaiting scoring or settlement, or with an open training assignment, is left alone and reported as skipped.`}
           onClose={() => setBulkDialog(null)}
@@ -454,6 +482,38 @@ function WordsTab({ disabled }: { disabled: boolean }) {
             }).unwrap()
           }
           title="Clear all words?"
+        />
+      )}
+      {bulkDialog === 'toggle-selected' && (
+        <BulkSetDisabledDialog
+          confirmLabel={disabled ? 'Enable selected' : 'Disable selected'}
+          description={`This ${disabled ? 'enables' : 'disables'} ${selected.size} selected word${selected.size === 1 ? '' : 's'}. ${disabled ? 'They become available for assignment again.' : 'They stop being assigned to trainers, but existing recordings/assignments are untouched.'}`}
+          onClose={() => setBulkDialog(null)}
+          onConfirm={async () => {
+            const result = await bulkSetWordsDisabled({
+              ids: [...selected],
+              setDisabled: !disabled,
+            }).unwrap();
+            setSelected(new Set());
+            return result;
+          }}
+          title={disabled ? 'Enable selected words?' : 'Disable selected words?'}
+        />
+      )}
+      {bulkDialog === 'toggle-all' && (
+        <BulkSetDisabledDialog
+          confirmLabel={disabled ? 'Enable all' : 'Disable all'}
+          description={`This ${disabled ? 'enables' : 'disables'} all ${data?.total ?? 0} word${data?.total === 1 ? '' : 's'} matching the current search and filter. ${disabled ? 'They become available for assignment again.' : 'They stop being assigned to trainers, but existing recordings/assignments are untouched.'}`}
+          onClose={() => setBulkDialog(null)}
+          onConfirm={() =>
+            bulkSetWordsDisabled({
+              setDisabled: !disabled,
+              search: debouncedSearch || undefined,
+              partOfSpeech: partOfSpeech || undefined,
+              disabled,
+            }).unwrap()
+          }
+          title={disabled ? 'Enable all words?' : 'Disable all words?'}
         />
       )}
     </section>
@@ -474,11 +534,14 @@ function SentencesTab({ disabled }: { disabled: boolean }) {
   const [deleteSentence] = useDeleteSentenceMutation();
   const [setSentenceDisabled] = useSetSentenceDisabledMutation();
   const [bulkDeleteSentences] = useBulkDeleteSentencesMutation();
+  const [bulkSetSentencesDisabled] = useBulkSetSentencesDisabledMutation();
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulkDialog, setBulkDialog] = useState<'selected' | 'all' | null>(null);
+  const [bulkDialog, setBulkDialog] = useState<
+    'delete-selected' | 'delete-all' | 'toggle-selected' | 'toggle-all' | null
+  >(null);
   const { data: dialects } = useGetAllDialectsQuery();
 
   useEffect(() => {
@@ -539,18 +602,40 @@ function SentencesTab({ disabled }: { disabled: boolean }) {
         <SearchBox value={search} onChange={setSearch} placeholder="Search sentence text..." />
         <div className="ml-auto flex items-center gap-2">
           {selected.size > 0 && (
-            <button
-              className={dangerButtonClass}
-              onClick={() => setBulkDialog('selected')}
-              type="button"
-            >
-              Delete selected ({selected.size})
-            </button>
+            <>
+              <button
+                className={secondaryButtonClass}
+                onClick={() => setBulkDialog('toggle-selected')}
+                type="button"
+              >
+                {disabled ? 'Enable' : 'Disable'} selected ({selected.size})
+              </button>
+              <button
+                className={dangerButtonClass}
+                onClick={() => setBulkDialog('delete-selected')}
+                type="button"
+              >
+                Delete selected ({selected.size})
+              </button>
+            </>
           )}
           {(data?.total ?? 0) > 0 && (
-            <button className={dangerButtonClass} onClick={() => setBulkDialog('all')} type="button">
-              Clear All
-            </button>
+            <>
+              <button
+                className={secondaryButtonClass}
+                onClick={() => setBulkDialog('toggle-all')}
+                type="button"
+              >
+                {disabled ? 'Enable' : 'Disable'} All
+              </button>
+              <button
+                className={dangerButtonClass}
+                onClick={() => setBulkDialog('delete-all')}
+                type="button"
+              >
+                Clear All
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -722,7 +807,7 @@ function SentencesTab({ disabled }: { disabled: boolean }) {
         />
       )}
 
-      {bulkDialog === 'selected' && (
+      {bulkDialog === 'delete-selected' && (
         <BulkDeleteDialog
           description={`This permanently deletes ${selected.size} selected sentence${selected.size === 1 ? '' : 's'} and their settled recordings. Any sentence still awaiting scoring or settlement, or with an open training assignment, is left alone and reported as skipped.`}
           onClose={() => setBulkDialog(null)}
@@ -734,7 +819,7 @@ function SentencesTab({ disabled }: { disabled: boolean }) {
           title="Delete selected sentences?"
         />
       )}
-      {bulkDialog === 'all' && (
+      {bulkDialog === 'delete-all' && (
         <BulkDeleteDialog
           description={`This permanently deletes all ${data?.total ?? 0} sentence${data?.total === 1 ? '' : 's'} matching the current search, and their settled recordings. Any sentence still awaiting scoring or settlement, or with an open training assignment, is left alone and reported as skipped.`}
           onClose={() => setBulkDialog(null)}
@@ -742,6 +827,37 @@ function SentencesTab({ disabled }: { disabled: boolean }) {
             bulkDeleteSentences({ search: debouncedSearch || undefined, disabled }).unwrap()
           }
           title="Clear all sentences?"
+        />
+      )}
+      {bulkDialog === 'toggle-selected' && (
+        <BulkSetDisabledDialog
+          confirmLabel={disabled ? 'Enable selected' : 'Disable selected'}
+          description={`This ${disabled ? 'enables' : 'disables'} ${selected.size} selected sentence${selected.size === 1 ? '' : 's'}. ${disabled ? 'They become available for assignment again.' : 'They stop being assigned to trainers, but existing recordings/assignments are untouched.'}`}
+          onClose={() => setBulkDialog(null)}
+          onConfirm={async () => {
+            const result = await bulkSetSentencesDisabled({
+              ids: [...selected],
+              setDisabled: !disabled,
+            }).unwrap();
+            setSelected(new Set());
+            return result;
+          }}
+          title={disabled ? 'Enable selected sentences?' : 'Disable selected sentences?'}
+        />
+      )}
+      {bulkDialog === 'toggle-all' && (
+        <BulkSetDisabledDialog
+          confirmLabel={disabled ? 'Enable all' : 'Disable all'}
+          description={`This ${disabled ? 'enables' : 'disables'} all ${data?.total ?? 0} sentence${data?.total === 1 ? '' : 's'} matching the current search. ${disabled ? 'They become available for assignment again.' : 'They stop being assigned to trainers, but existing recordings/assignments are untouched.'}`}
+          onClose={() => setBulkDialog(null)}
+          onConfirm={() =>
+            bulkSetSentencesDisabled({
+              setDisabled: !disabled,
+              search: debouncedSearch || undefined,
+              disabled,
+            }).unwrap()
+          }
+          title={disabled ? 'Enable all sentences?' : 'Disable all sentences?'}
         />
       )}
     </section>

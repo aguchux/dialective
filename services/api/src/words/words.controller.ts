@@ -25,6 +25,7 @@ import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
 import { GetSpellingSuggestionsDto } from './dto/get-spelling-suggestions.dto';
 import { BulkDeleteWordsAdminDto } from './dto/bulk-delete-words-admin.dto';
+import { BulkSetWordsDisabledDto } from './dto/bulk-set-words-disabled.dto';
 import { ListWordsAdminDto } from './dto/list-words-admin.dto';
 import { SetDisabledDto } from './dto/set-disabled.dto';
 import { StartTrainingSessionDto } from './dto/start-training-session.dto';
@@ -186,6 +187,31 @@ export class WordsController {
       }
     }
     return { deleted, skipped };
+  }
+
+  /**
+   * "Disable selected" / "Enable selected" (dto.ids) or the "Clear All"-style
+   * filtered form (ids omitted) -- a plain updateMany, unlike bulk-delete:
+   * disabling never destroys data or cascades away in-flight trainer work,
+   * so there's no per-row unsettled-activity check to make this skip rows.
+   */
+  @Patch('admin')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async bulkSetWordsDisabled(@Body() dto: BulkSetWordsDisabledDto) {
+    const where: Prisma.WordWhereInput = dto.ids
+      ? { id: { in: dto.ids } }
+      : {
+          isDisabled: dto.disabled ?? false,
+          ...(dto.search ? { text: { contains: dto.search, mode: 'insensitive' as const } } : {}),
+          ...(dto.partOfSpeech ? { partOfSpeech: dto.partOfSpeech } : {}),
+        };
+    const result = await this.prisma.word.updateMany({
+      where,
+      data: { isDisabled: dto.setDisabled },
+    });
+    return { updated: result.count };
   }
 
   private async matchingWordIds(filter: BulkDeleteWordsAdminDto): Promise<string[]> {
