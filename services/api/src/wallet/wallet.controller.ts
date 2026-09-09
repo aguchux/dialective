@@ -49,7 +49,7 @@ import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { OtpService } from '../otp/otp.service';
 import { resolveOtpDestination } from '../otp/otp.util';
 import { SmsService } from '../sms/sms.service';
-import { NowPaymentsService } from './nowpayments.service';
+import { NowPaymentsApiError, NowPaymentsService } from './nowpayments.service';
 import { FlutterwaveService } from './flutterwave.service';
 import { FlutterwaveV4Service, RecipientCountry } from './flutterwave-v4.service';
 import { StripeConnectService } from './stripe-connect.service';
@@ -2607,12 +2607,19 @@ export class WalletController {
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      // NowPaymentsApiError carries the real upstream status/body separately
+      // from the generic client-facing message -- persist THAT (truncated,
+      // providerError is unbounded TEXT but a pathological response body
+      // shouldn't bloat the row) so a failed payout is diagnosable straight
+      // from the DB instead of needing to catch it live in pod logs.
+      const detail =
+        err instanceof NowPaymentsApiError ? err.providerDetail.slice(0, 4000) : message;
       await this.prisma.withdrawalRequest.update({
         where: { id },
         data: {
           status: WithdrawalStatus.FAILED,
           provider: 'nowpayments',
-          providerError: message,
+          providerError: detail,
           adminNote: body.adminNote,
         },
       });
@@ -2621,12 +2628,12 @@ export class WalletController {
           eventHash: randomUUID(),
           withdrawalRequestId: id,
           eventType: 'create_failed',
-          payload: { message },
-          processingError: message,
+          payload: { message, detail },
+          processingError: detail,
         },
       });
       this.logger.error(
-        `Withdrawal submit-to-NOWPayments failed: admin=${req.user.sub} withdrawal=${id}: ${message}`,
+        `Withdrawal submit-to-NOWPayments failed: admin=${req.user.sub} withdrawal=${id}: ${detail}`,
       );
       throw err;
     }

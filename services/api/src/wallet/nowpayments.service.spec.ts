@@ -1,5 +1,5 @@
 import { createHmac } from 'crypto';
-import { NowPaymentsService } from './nowpayments.service';
+import { NowPaymentsApiError, NowPaymentsService } from './nowpayments.service';
 
 describe('NowPaymentsService IPN verification', () => {
   const secret = 'test-ipn-secret';
@@ -133,6 +133,40 @@ describe('NowPaymentsService IPN verification', () => {
         },
       ],
     });
+  });
+
+  it('carries the real NOWPayments status/body in providerDetail when createPayout is rejected, distinct from the generic client-facing message', async () => {
+    process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
+    process.env.NOWPAYMENTS_PAYOUT_EMAIL = 'merchant@example.com';
+    process.env.NOWPAYMENTS_PAYOUT_PASSWORD = 'merchant-password';
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'jwt-token' }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: 'Insufficient payout balance' }), { status: 400 }),
+      );
+
+    const promise = service.createPayout({
+      withdrawalId: 'withdrawal-1',
+      address: 'TExampleAddress',
+      currency: 'USDT',
+      amount: 12.3456789,
+    });
+
+    await expect(promise).rejects.toThrow(
+      'The payout provider could not start this withdrawal. Please try again.',
+    );
+    await expect(promise).rejects.toBeInstanceOf(NowPaymentsApiError);
+    try {
+      await promise;
+    } catch (err) {
+      expect((err as NowPaymentsApiError).providerDetail).toContain(
+        'NOWPayments createPayout 400',
+      );
+      expect((err as NowPaymentsApiError).providerDetail).toContain(
+        'Insufficient payout balance',
+      );
+    }
   });
 
   it('retrieves payout status', async () => {

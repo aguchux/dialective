@@ -43,6 +43,25 @@ export interface ProviderBalance {
 }
 
 /**
+ * Carries NOWPayments' real HTTP status + response body alongside the
+ * generic client-facing BadGatewayException message thrown from this
+ * service. The controller's catch block persists providerDetail (not
+ * err.message) into WithdrawalRequest.providerError/NowPaymentsPayoutEvent
+ * so a failed payout is diagnosable straight from the DB -- previously
+ * err.message was always this class's own generic string, and the real
+ * upstream reason only ever reached this.logger.error, which rotates out
+ * with the pod.
+ */
+export class NowPaymentsApiError extends BadGatewayException {
+  readonly providerDetail: string;
+
+  constructor(clientMessage: string, providerDetail: string) {
+    super(clientMessage);
+    this.providerDetail = providerDetail;
+  }
+}
+
+/**
  * Thin wrapper around NOWPayments' hosted-invoice API -- same "one class
  * per external integration" shape as StorageService (Spaces) and
  * AsrRegistryService (models/asr-registry.yaml). Chosen over Coinbase
@@ -116,8 +135,9 @@ export class NowPaymentsService implements PayoutProvider {
     if (!res.ok) {
       const body = await res.text();
       this.logger.error(`NOWPayments createInvoice failed: ${res.status} ${body}`);
-      throw new BadGatewayException(
+      throw new NowPaymentsApiError(
         'The payment provider could not start checkout. Please try again.',
+        `NOWPayments createInvoice ${res.status}: ${body}`,
       );
     }
 
@@ -150,8 +170,9 @@ export class NowPaymentsService implements PayoutProvider {
     const raw = await readNowPaymentsJson(res);
     if (!res.ok) {
       this.logger.error(`NOWPayments createPayout failed: ${res.status} ${JSON.stringify(raw)}`);
-      throw new BadGatewayException(
+      throw new NowPaymentsApiError(
         'The payout provider could not start this withdrawal. Please try again.',
+        `NOWPayments createPayout ${res.status}: ${JSON.stringify(raw)}`,
       );
     }
 
@@ -160,7 +181,10 @@ export class NowPaymentsService implements PayoutProvider {
       this.logger.error(
         `NOWPayments createPayout response did not include payout id: ${JSON.stringify(raw)}`,
       );
-      throw new BadGatewayException('The payout provider returned an invalid payout response.');
+      throw new NowPaymentsApiError(
+        'The payout provider returned an invalid payout response.',
+        `NOWPayments createPayout missing id: ${JSON.stringify(raw)}`,
+      );
     }
 
     return { payoutId: payout.id, status: payout.status, raw };
@@ -180,7 +204,10 @@ export class NowPaymentsService implements PayoutProvider {
     const raw = await readNowPaymentsJson(res);
     if (!res.ok) {
       this.logger.error(`NOWPayments verifyPayout failed: ${res.status} ${JSON.stringify(raw)}`);
-      throw new BadGatewayException('The payout provider could not verify this payout.');
+      throw new NowPaymentsApiError(
+        'The payout provider could not verify this payout.',
+        `NOWPayments verifyPayout ${res.status}: ${JSON.stringify(raw)}`,
+      );
     }
     const payout = extractPayout(raw, payoutId);
     return { payoutId: payout.id ?? payoutId, status: payout.status, raw };
@@ -198,7 +225,10 @@ export class NowPaymentsService implements PayoutProvider {
     const raw = await readNowPaymentsJson(res);
     if (!res.ok) {
       this.logger.error(`NOWPayments getPayoutStatus failed: ${res.status} ${JSON.stringify(raw)}`);
-      throw new BadGatewayException('The payout provider could not return payout status.');
+      throw new NowPaymentsApiError(
+        'The payout provider could not return payout status.',
+        `NOWPayments getPayoutStatus ${res.status}: ${JSON.stringify(raw)}`,
+      );
     }
     const payout = extractPayout(raw, payoutId);
     return { payoutId: payout.id ?? payoutId, status: payout.status, raw };
@@ -218,7 +248,10 @@ export class NowPaymentsService implements PayoutProvider {
     const raw = await readNowPaymentsJson(res);
     if (!res.ok) {
       this.logger.error(`NOWPayments getBalance failed: ${res.status} ${JSON.stringify(raw)}`);
-      throw new BadGatewayException('The payment provider could not return account balances.');
+      throw new NowPaymentsApiError(
+        'The payment provider could not return account balances.',
+        `NOWPayments getBalance ${res.status}: ${JSON.stringify(raw)}`,
+      );
     }
     // Historically shaped as { [currency]: { amount, pendingAmount } } --
     // tolerate either that map shape or an array-of-entries shape so a minor
@@ -256,8 +289,9 @@ export class NowPaymentsService implements PayoutProvider {
     const raw = await readNowPaymentsJson(res);
     if (!res.ok || typeof raw.token !== 'string') {
       this.logger.error(`NOWPayments payout auth failed: ${res.status} ${JSON.stringify(raw)}`);
-      throw new BadGatewayException(
+      throw new NowPaymentsApiError(
         'The payout provider could not authenticate this payout request.',
+        `NOWPayments auth ${res.status}: ${JSON.stringify(raw)}`,
       );
     }
     return raw.token;

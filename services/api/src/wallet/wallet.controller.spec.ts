@@ -747,6 +747,64 @@ describe('WalletController withdrawal payout automation', () => {
     void controller;
   });
 
+  it('persists the real NOWPayments error detail (not the generic client-facing message) when createPayout fails', async () => {
+    const { NowPaymentsApiError } = jest.requireActual('./nowpayments.service');
+    const { controller, prisma } = setup(baseWithdrawal({ status: 'APPROVED' }));
+    const nowPayments = {
+      createPayout: jest
+        .fn()
+        .mockRejectedValue(
+          new NowPaymentsApiError(
+            'The payout provider could not start this withdrawal. Please try again.',
+            'NOWPayments createPayout 400: {"message":"Insufficient payout balance"}',
+          ),
+        ),
+      getPayoutStatus: jest.fn(),
+      verifyPayout: jest.fn(),
+    };
+    const platformSettings = {
+      isNowPaymentsPayoutsEnabled: jest.fn().mockResolvedValue(true),
+      isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false),
+    };
+    const otp = { verify: jest.fn(), issueForUser: jest.fn() };
+    const controllerWithFailingProvider = new WalletController(
+      prisma as never,
+      nowPayments as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      platformSettings as never,
+      otp as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      controllerWithFailingProvider.submitWithdrawalToNowPayments(
+        { user: { sub: 'admin-1' } } as never,
+        'withdrawal-1',
+        {},
+      ),
+    ).rejects.toThrow('The payout provider could not start this withdrawal. Please try again.');
+
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'FAILED',
+          providerError: 'NOWPayments createPayout 400: {"message":"Insufficient payout balance"}',
+        }),
+      }),
+    );
+    expect(prisma.nowPaymentsPayoutEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          processingError: 'NOWPayments createPayout 400: {"message":"Insufficient payout balance"}',
+        }),
+      }),
+    );
+    void controller;
+  });
+
   it('approve requires PENDING status and records approvedByAdminId/approvedAt', async () => {
     const { controller, prisma, req } = setup(baseWithdrawal({ status: 'PENDING' }));
 
