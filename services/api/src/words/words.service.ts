@@ -877,10 +877,13 @@ export class WordsService {
    * instead of pure `random()` sampling, which -- given a large bank and a
    * trainer doing many short sessions -- lets a small subset of words get
    * picked repeatedly by chance while others are never touched. Prefers
-   * words this trainer has never recorded. A source never returns after an
-   * attempt: training is compensated only for the first completed source
-   * contribution, so reopening the pool after exhaustion would create an
-   * avoidable repeat-payout surface.
+   * words this trainer has never recorded. Once every enabled word has been
+   * attempted at least once, the pool CYCLES rather than permanently
+   * exhausting: pickFromCycle re-covers the full enabled bank at random,
+   * excluding only this trainer's single most-recently-assigned word so the
+   * same word can never repeat back-to-back. A trainer must never have
+   * nothing left to record (see NO_WORDS_AVAILABLE in nextAssignment,
+   * reserved for a genuinely empty/all-disabled bank).
    */
   private async pickEnglishToDialectWord(userId: string) {
     const [attempted, banned] = await Promise.all([
@@ -903,13 +906,32 @@ export class WordsService {
     const unattemptedCount = await this.prisma.word.count({
       where: { id: { notIn: excludedIds }, isDisabled: false },
     });
-    if (unattemptedCount <= 0) return null;
-    const where = { id: { notIn: excludedIds }, isDisabled: false };
+    if (unattemptedCount > 0) {
+      const [word] = await this.prisma.word.findMany({
+        where: { id: { notIn: excludedIds }, isDisabled: false },
+        take: 1,
+        skip: Math.floor(Math.random() * unattemptedCount),
+      });
+      return word;
+    }
 
+    // Every enabled word has been attempted (or banned) -- cycle instead of
+    // exhausting. Banned words stay excluded even during a cycle; only the
+    // single most-recently-assigned word is excluded otherwise, so a fresh
+    // cycle can start immediately after finishing the last one.
+    const lastAssigned = await this.prisma.wordTrainingAssignment.findFirst({
+      where: { session: { userId }, wordId: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { wordId: true },
+    });
+    const cycleExcludedIds = [...new Set([...bannedIds, ...(lastAssigned?.wordId ? [lastAssigned.wordId] : [])])];
+    const cycleWhere = { id: { notIn: cycleExcludedIds }, isDisabled: false };
+    const cycleCount = await this.prisma.word.count({ where: cycleWhere });
+    if (cycleCount <= 0) return null;
     const [word] = await this.prisma.word.findMany({
-      where,
+      where: cycleWhere,
       take: 1,
-      skip: Math.floor(Math.random() * unattemptedCount),
+      skip: Math.floor(Math.random() * cycleCount),
     });
     return word;
   }
@@ -922,11 +944,11 @@ export class WordsService {
    * ENGLISH_TO_DIALECT's pattern (see the response's sourceLanguage:
    * 'English' in nextAssignment).
    *
-   * Same anti-repetition posture as pickEnglishToDialectWord: prefers
-   * Sentences this trainer has never attempted (submitted a WordRecording
-   * for) yet, so the same sentence never repeats for a trainer. This keeps
-   * the task source and its payout strictly first-attempt-only, even after
-   * the pool is exhausted.
+   * Same cycling posture as pickEnglishToDialectWord: prefers Sentences this
+   * trainer has never attempted yet; once every enabled sentence has been
+   * attempted, cycles back over the full enabled bank at random, excluding
+   * only this trainer's single most-recently-assigned sentence so the same
+   * one never repeats back-to-back.
    */
   private async pickSentenceSource(
     userId: string,
@@ -941,13 +963,32 @@ export class WordsService {
     const unattemptedCount = await this.prisma.sentence.count({
       where: { id: { notIn: attemptedIds }, isDisabled: false },
     });
-    if (unattemptedCount === 0) return null;
-    const where = { id: { notIn: attemptedIds }, isDisabled: false };
+    if (unattemptedCount > 0) {
+      const [sentence] = await this.prisma.sentence.findMany({
+        where: { id: { notIn: attemptedIds }, isDisabled: false },
+        take: 1,
+        skip: Math.floor(Math.random() * unattemptedCount),
+      });
+      return sentence ? { sentenceId: sentence.id, sentenceText: sentence.text } : null;
+    }
 
+    // Every enabled sentence has been attempted -- cycle instead of
+    // exhausting, same rationale as pickEnglishToDialectWord's cycle branch.
+    const lastAssigned = await this.prisma.wordTrainingAssignment.findFirst({
+      where: { session: { userId }, sentenceId: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { sentenceId: true },
+    });
+    const cycleWhere = {
+      id: { notIn: lastAssigned?.sentenceId ? [lastAssigned.sentenceId] : [] },
+      isDisabled: false,
+    };
+    const cycleCount = await this.prisma.sentence.count({ where: cycleWhere });
+    if (cycleCount <= 0) return null;
     const [sentence] = await this.prisma.sentence.findMany({
-      where,
+      where: cycleWhere,
       take: 1,
-      skip: Math.floor(Math.random() * unattemptedCount),
+      skip: Math.floor(Math.random() * cycleCount),
     });
     return sentence ? { sentenceId: sentence.id, sentenceText: sentence.text } : null;
   }

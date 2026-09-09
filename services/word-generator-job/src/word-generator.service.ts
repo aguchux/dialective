@@ -82,20 +82,38 @@ export class WordGeneratorService {
     const providerOrder = this.parseProviderOrder(settings.llmProviderOrder);
     const wordsPerItem = 1;
     const itemsPerRun = settings.llmItemsPerRun;
-    const maxTotalGeneratedItems = settings.llmMaxTotalGeneratedItems;
+    const maxWordGeneratedItems = settings.llmMaxTotalGeneratedItems;
+    const maxSentenceGeneratedItems = settings.llmMaxSentenceGeneratedItems;
     const maxPoolPerDialect = settings.llmMaxPoolPerDialect;
     const backfillItemsPerDialectPerRun = settings.llmBackfillItemsPerDialectPerRun;
 
-    const generatedItemsCount = await this.getGeneratedItemsCount(wordsPerItem);
-    const remainingGlobalHeadroom = Math.max(0, maxTotalGeneratedItems - generatedItemsCount);
-    if (remainingGlobalHeadroom <= 0) {
-      // Still run phrase-tier generation below -- it has its own enable
+    // Word and sentence generation each have their OWN cap and headroom --
+    // deliberately not a combined total. A prior version of this method
+    // checked one shared cap and `return`ed the whole run once it was
+    // reached, which silently skipped sentence generation entirely whenever
+    // word generation (alone) had used up the shared budget, even with
+    // sentenceGenerationEnabled on. Computing each independently means
+    // neither type can ever block the other.
+    const [generatedWordCount, generatedSentenceCount] = await Promise.all([
+      this.getGeneratedWordCount(),
+      this.getGeneratedSentenceCount(),
+    ]);
+    const remainingWordHeadroom = Math.max(0, maxWordGeneratedItems - generatedWordCount);
+    const remainingSentenceHeadroom = Math.max(0, maxSentenceGeneratedItems - generatedSentenceCount);
+    const wordCapReached = remainingWordHeadroom <= 0;
+    const sentenceCapReached = remainingSentenceHeadroom <= 0;
+    if (wordCapReached) {
       this.logger.log(
-        `Main generation skipped: global cap reached (generated=${generatedItemsCount} maxTotalGeneratedItems=${maxTotalGeneratedItems})`,
+        `Word generation skipped: cap reached (generated=${generatedWordCount} maxWordGeneratedItems=${maxWordGeneratedItems})`,
       );
-      return;
     }
-    const effectiveItemsPerRun = Math.min(itemsPerRun, remainingGlobalHeadroom);
+    if (sentenceCapReached) {
+      this.logger.log(
+        `Sentence generation skipped: cap reached (generated=${generatedSentenceCount} maxSentenceGeneratedItems=${maxSentenceGeneratedItems})`,
+      );
+    }
+    const effectiveItemsPerRun = Math.min(itemsPerRun, remainingWordHeadroom);
+    const effectiveSentenceItemsPerRun = Math.min(itemsPerRun, remainingSentenceHeadroom);
 
     const enabledDialectTags = await this.getEnabledDialectTags();
     const underCapDialectTags = await this.filterDialectsUnderPoolCap(
@@ -104,8 +122,9 @@ export class WordGeneratorService {
     );
     const skippedDialects = enabledDialectTags.filter((tag) => !underCapDialectTags.includes(tag));
     this.logger.log(
-      `Generation run starting: wordsPerItem=${wordsPerItem} itemsPerRun=${itemsPerRun} effectiveItemsPerRun=${effectiveItemsPerRun} ` +
-        `maxTotalGeneratedItems=${maxTotalGeneratedItems} generatedItemsCount=${generatedItemsCount} ` +
+      `Generation run starting: wordsPerItem=${wordsPerItem} itemsPerRun=${itemsPerRun} effectiveItemsPerRun=${effectiveItemsPerRun} effectiveSentenceItemsPerRun=${effectiveSentenceItemsPerRun} ` +
+        `maxWordGeneratedItems=${maxWordGeneratedItems} generatedWordCount=${generatedWordCount} ` +
+        `maxSentenceGeneratedItems=${maxSentenceGeneratedItems} generatedSentenceCount=${generatedSentenceCount} ` +
         `providerOrder=${providerOrder.join('>')} maxPoolPerDialect=${maxPoolPerDialect} ` +
         `backfillItemsPerDialectPerRun=${backfillItemsPerDialectPerRun} ` +
         `translationDialects=${underCapDialectTags.length ? underCapDialectTags.join(',') : 'none'} ` +
@@ -153,6 +172,9 @@ export class WordGeneratorService {
       this.logger.log(
         'Word generation disabled (wordGenerationEnabled=false); skipping word branch',
       );
+    } else if (wordCapReached) {
+      // Logged above (`Word generation skipped: global cap reached`) --
+      // nothing further to log here, just skip the branch.
     } else {
       const prompt = this.buildWordGenerationPrompt(effectiveItemsPerRun);
       const { items: rawItems, provider: englishProvider } = await this.chain.generateStructured(
@@ -184,10 +206,15 @@ export class WordGeneratorService {
       }
     }
 
-    if (settings.sentenceGenerationEnabled) {
+    if (!settings.sentenceGenerationEnabled) {
+      this.logger.log('Sentence generation disabled (sentenceGenerationEnabled=false); skipping sentence branch');
+    } else if (sentenceCapReached) {
+      // Logged above (`Sentence generation skipped: cap reached`) -- nothing
+      // further to log here, just skip the branch.
+    } else {
       try {
         const { items, provider: sentenceProvider } = await this.chain.generate(
-          this.buildSentenceGenerationPrompt(effectiveItemsPerRun, settings.sentenceWordCount),
+          this.buildSentenceGenerationPrompt(effectiveSentenceItemsPerRun, settings.sentenceWordCount),
           providerOrder,
         );
         const accepted = items
@@ -209,8 +236,6 @@ export class WordGeneratorService {
       } catch (err) {
         this.logger.warn(`Sentence generation failed: ${err instanceof Error ? err.message : String(err)}`);
       }
-    } else {
-      this.logger.log('Sentence generation disabled (sentenceGenerationEnabled=false); skipping sentence branch');
     }
 
     this.logger.log(
@@ -890,11 +915,11 @@ export class WordGeneratorService {
     return { backfilled, skippedDuplicate, failed };
   }
 
-  private async getGeneratedItemsCount(_wordsPerItem?: number): Promise<number> {
-    const [words, sentences] = await Promise.all([
-      this.prisma.word.count({ where: { isDisabled: false } }),
-      this.prisma.sentence.count({ where: { isDisabled: false } }),
-    ]);
-    return words + sentences;
+  private async getGeneratedWordCount(): Promise<number> {
+    return this.prisma.word.count({ where: { isDisabled: false } });
+  }
+
+  private async getGeneratedSentenceCount(): Promise<number> {
+    return this.prisma.sentence.count({ where: { isDisabled: false } });
   }
 }

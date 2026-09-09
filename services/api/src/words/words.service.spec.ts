@@ -374,14 +374,40 @@ describe('WordsService', () => {
     );
   });
 
-  it('reports NO_WORDS_AVAILABLE once the trainer has attempted every word', async () => {
+  it('cycles back over the full word bank once the trainer has attempted every word', async () => {
     settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
     prisma.word.count
       .mockResolvedValueOnce(2) // totalWords
-      .mockResolvedValueOnce(0); // unattemptedCount -- trainer has done both
+      .mockResolvedValueOnce(0) // unattemptedCount -- trainer has done both
+      .mockResolvedValueOnce(1); // cycleCount -- full bank minus last-assigned
     prisma.wordRecording.findMany.mockResolvedValue([{ wordId: 'word-1' }, { wordId: 'word-2' }]);
+    prisma.wordTrainingAssignment.findFirst.mockResolvedValue({ wordId: 'word-1' });
+    prisma.word.findMany.mockResolvedValue([{ id: 'word-2', text: 'river' }]);
+    prisma.wordTrainingAssignment.create.mockResolvedValue({
+      id: 'assignment-cycle',
+      direction: 'ENGLISH_TO_DIALECT',
+    });
+
+    await expect(service.nextAssignment(trainer.id, session.id)).resolves.toMatchObject({
+      wordId: 'word-2',
+      promptText: 'river',
+    });
+    expect(prisma.word.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { notIn: ['word-1'] }, isDisabled: false } }),
+    );
+  });
+
+  it('reports NO_WORDS_AVAILABLE only once cycling itself also has nothing to serve', async () => {
+    settings.isReverseWordTrainingEnabled.mockResolvedValue(false);
+    prisma.word.count
+      .mockResolvedValueOnce(1) // totalWords
+      .mockResolvedValueOnce(0) // unattemptedCount
+      .mockResolvedValueOnce(0); // cycleCount -- the single word IS the last-assigned one
+    prisma.wordRecording.findMany.mockResolvedValue([{ wordId: 'word-1' }]);
+    prisma.wordTrainingAssignment.findFirst.mockResolvedValue({ wordId: 'word-1' });
+
     await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow('NO_WORDS_AVAILABLE');
-    expect(prisma.word.findMany).not.toHaveBeenCalled();
+    expect(prisma.wordTrainingAssignment.create).not.toHaveBeenCalled();
   });
 
   describe('word skip tracking', () => {
@@ -436,12 +462,14 @@ describe('WordsService', () => {
       expect(prisma.wordSkip.upsert).not.toHaveBeenCalled();
     });
 
-    it('does not reopen the word pool after every source has been attempted', async () => {
+    it('keeps a banned word excluded even once cycling reopens the rest of the pool', async () => {
       prisma.word.count
         .mockResolvedValueOnce(2) // totalWords
-        .mockResolvedValueOnce(0); // unattemptedCount -- trainer has attempted both
+        .mockResolvedValueOnce(0) // unattemptedCount -- trainer has attempted both
+        .mockResolvedValueOnce(0); // cycleCount -- word-1 is last-assigned, word-2 is banned
       prisma.wordRecording.findMany.mockResolvedValue([{ wordId: 'word-1' }, { wordId: 'word-2' }]);
       prisma.wordSkip.findMany.mockResolvedValue([{ wordId: 'word-2' }]);
+      prisma.wordTrainingAssignment.findFirst.mockResolvedValue({ wordId: 'word-1' });
 
       await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
         'NO_WORDS_AVAILABLE',
@@ -452,7 +480,8 @@ describe('WordsService', () => {
     it('reports NO_WORDS_AVAILABLE once every remaining word is banned', async () => {
       prisma.word.count
         .mockResolvedValueOnce(1) // totalWords
-        .mockResolvedValueOnce(0); // unattemptedCount
+        .mockResolvedValueOnce(0) // unattemptedCount
+        .mockResolvedValueOnce(0); // cycleCount -- the only word is banned
       prisma.wordRecording.findMany.mockResolvedValue([]);
       prisma.wordSkip.findMany.mockResolvedValue([{ wordId: 'word-1' }]);
 

@@ -43,6 +43,7 @@ export function WordGenerationSettingsPanel() {
   const [sentenceWordCount, setSentenceWordCount] = useState('6');
   const [itemsPerRun, setItemsPerRun] = useState('15');
   const [maxTotalGeneratedItems, setMaxTotalGeneratedItems] = useState('5000');
+  const [maxSentenceGeneratedItems, setMaxSentenceGeneratedItems] = useState('5000');
   const [maxPoolPerDialect, setMaxPoolPerDialect] = useState('50');
   const [backfillItemsPerDialectPerRun, setBackfillItemsPerDialectPerRun] = useState('10');
   const [keyboardLayoutMaxLength, setKeyboardLayoutMaxLength] = useState('1000');
@@ -58,6 +59,7 @@ export function WordGenerationSettingsPanel() {
     setSentenceWordCount(String(settings.sentenceWordCount ?? 6));
     setItemsPerRun(String(settings.llmItemsPerRun));
     setMaxTotalGeneratedItems(String(settings.llmMaxTotalGeneratedItems));
+    setMaxSentenceGeneratedItems(String(settings.llmMaxSentenceGeneratedItems ?? 5000));
     setMaxPoolPerDialect(String(settings.llmMaxPoolPerDialect));
     setBackfillItemsPerDialectPerRun(String(settings.llmBackfillItemsPerDialectPerRun));
     setKeyboardLayoutMaxLength(String(settings.keyboardLayoutMaxLength));
@@ -91,6 +93,9 @@ export function WordGenerationSettingsPanel() {
         ...(itemsPerRun !== '' ? { llmItemsPerRun: Number(itemsPerRun) } : {}),
         ...(maxTotalGeneratedItems !== ''
           ? { llmMaxTotalGeneratedItems: Number(maxTotalGeneratedItems) }
+          : {}),
+        ...(maxSentenceGeneratedItems !== ''
+          ? { llmMaxSentenceGeneratedItems: Number(maxSentenceGeneratedItems) }
           : {}),
         ...(maxPoolPerDialect !== '' ? { llmMaxPoolPerDialect: Number(maxPoolPerDialect) } : {}),
         ...(backfillItemsPerDialectPerRun !== ''
@@ -209,11 +214,12 @@ export function WordGenerationSettingsPanel() {
 
           <div className="grid gap-1">
             <label className="font-bold" htmlFor="llm-max-total-generated-items">
-              Max total generated items (global)
+              Max generated words
             </label>
             <p className="text-sm leading-relaxed text-muted">
-              Hard global ceiling for generated source content. When reached, the generator stops
-              creating brand-new English items entirely until you raise this limit.
+              Ceiling for generated Word rows. When reached, word generation stops creating
+              brand-new words until you raise this limit -- independent of the sentence ceiling
+              below, so one running out never blocks the other.
             </p>
             <input
               className={inputClass}
@@ -224,6 +230,26 @@ export function WordGenerationSettingsPanel() {
               max="1000000"
               value={maxTotalGeneratedItems}
               onChange={(e) => setMaxTotalGeneratedItems(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="llm-max-sentence-generated-items">
+              Max generated sentences
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              Ceiling for generated Sentence rows. When reached, sentence generation stops creating
+              brand-new sentences until you raise this limit.
+            </p>
+            <input
+              className={inputClass}
+              id="llm-max-sentence-generated-items"
+              type="number"
+              step="1"
+              min="1"
+              max="1000000"
+              value={maxSentenceGeneratedItems}
+              onChange={(e) => setMaxSentenceGeneratedItems(e.target.value)}
             />
           </div>
 

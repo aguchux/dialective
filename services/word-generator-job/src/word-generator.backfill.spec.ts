@@ -102,7 +102,7 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
       platformSettings: {
         upsert: jest.fn().mockResolvedValue({
           llmGenerationEnabled: true,
-          singleWordGenerationEnabled: true,
+          wordGenerationEnabled: true,
           llmProviderOrder: 'openai,deepseek,anthropic',
           llmWordsPerItem: 1,
           llmItemsPerRun: 15,
@@ -127,6 +127,10 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
         createMany: jest.fn().mockResolvedValue({}),
+      },
+      sentence: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
       },
     };
     const service = new WordGeneratorService(prisma as never);
@@ -164,10 +168,11 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
     expect(prisma.dialect.findMany).not.toHaveBeenCalled();
   });
 
-  it('does not generate new content when the global max total generated items cap is already reached', async () => {
+  it('does not generate new word content when the word cap is already reached', async () => {
     const { service, prisma } = setupRun();
     prisma.platformSettings.upsert.mockResolvedValue({
       llmGenerationEnabled: true,
+      wordGenerationEnabled: true,
       llmProviderOrder: 'openai,deepseek,anthropic',
       llmWordsPerItem: 1,
       llmItemsPerRun: 15,
@@ -179,7 +184,6 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
 
     await service.run();
 
-    expect(prisma.word.findMany).not.toHaveBeenCalled();
     expect((service as any).chain.generateStructured).not.toHaveBeenCalled();
   });
 
@@ -187,7 +191,7 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
     const { service, prisma } = setupRun();
     prisma.platformSettings.upsert.mockResolvedValue({
       llmGenerationEnabled: true,
-      singleWordGenerationEnabled: true,
+      wordGenerationEnabled: true,
       llmProviderOrder: 'openai,deepseek,anthropic',
       llmWordsPerItem: 1,
       llmItemsPerRun: 15,
@@ -203,11 +207,11 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
     expect(promptArg).toContain('exactly 2 distinct items');
   });
 
-  it('skips single-word generation when singleWordGenerationEnabled is false, without touching llmWordsPerItem', async () => {
+  it('skips word generation when wordGenerationEnabled is false', async () => {
     const { service, prisma } = setupRun();
     prisma.platformSettings.upsert.mockResolvedValue({
       llmGenerationEnabled: true,
-      singleWordGenerationEnabled: false,
+      wordGenerationEnabled: false,
       llmProviderOrder: 'openai,deepseek,anthropic',
       llmWordsPerItem: 1,
       llmItemsPerRun: 15,
@@ -221,11 +225,11 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
     expect((service as any).chain.generateStructured).not.toHaveBeenCalled();
   });
 
-  it('still runs single-word generation when singleWordGenerationEnabled is true and llmWordsPerItem is 1', async () => {
+  it('still runs word generation when wordGenerationEnabled is true', async () => {
     const { service, prisma } = setupRun();
     prisma.platformSettings.upsert.mockResolvedValue({
       llmGenerationEnabled: true,
-      singleWordGenerationEnabled: true,
+      wordGenerationEnabled: true,
       llmProviderOrder: 'openai,deepseek,anthropic',
       llmWordsPerItem: 1,
       llmItemsPerRun: 15,
@@ -239,28 +243,28 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
     expect((service as any).chain.generateStructured).toHaveBeenCalled();
   });
 
-  it('runs phrase-tier generation even when the main pass is skipped by the global cap', async () => {
+  it('does not let the word cap block sentence generation, since each has its own independent cap', async () => {
     const { service, prisma } = setupRun();
     prisma.platformSettings.upsert.mockResolvedValue({
       llmGenerationEnabled: true,
-      singleWordGenerationEnabled: true,
+      wordGenerationEnabled: true,
+      sentenceGenerationEnabled: true,
       llmProviderOrder: 'openai,deepseek,anthropic',
       llmWordsPerItem: 1,
       llmItemsPerRun: 15,
       llmMaxTotalGeneratedItems: 100,
+      llmMaxSentenceGeneratedItems: 5000,
       llmMaxPoolPerDialect: 50,
       llmBackfillItemsPerDialectPerRun: 10,
-      phraseTierGenerationEnabled: true,
-      phraseTierItemsPerTierPerRun: 3,
     });
-    prisma.word.count.mockResolvedValue(100);
+    prisma.word.count.mockResolvedValue(100); // word cap reached
+    prisma.sentence.count.mockResolvedValue(0); // sentence cap has full headroom
     prisma.word.findMany.mockResolvedValue([]);
-
-    const runPhraseTierGenerationSpy = jest.spyOn(service as any, 'runPhraseTierGeneration');
+    (service as any).chain.generate = jest.fn().mockResolvedValue({ items: ['hi there'], provider: 'openai' });
 
     await service.run();
 
-    expect(runPhraseTierGenerationSpy).toHaveBeenCalled();
-    expect((service as any).chain.generateStructured).not.toHaveBeenCalled();
+    expect((service as any).chain.generateStructured).not.toHaveBeenCalled(); // word branch skipped
+    expect((service as any).chain.generate).toHaveBeenCalled(); // sentence branch still ran
   });
 });

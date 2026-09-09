@@ -282,6 +282,12 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(1000000)
+  llmMaxSentenceGeneratedItems?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   @Max(5000)
   llmMaxPoolPerDialect?: number;
 

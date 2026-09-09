@@ -69,4 +69,22 @@ describe('LlmFallbackChain', () => {
     expect(openai.generate).not.toHaveBeenCalled();
     expect(deepseek.generate).not.toHaveBeenCalled();
   });
+
+  it('treats a provider call that never resolves as a failure and falls back, instead of hanging the run forever', async () => {
+    jest.useFakeTimers();
+    try {
+      const openai = fakeProvider('openai', () => new Promise<string[]>(() => {})); // never resolves
+      const deepseek = fakeProvider('deepseek', async () => ['ok']);
+      const anthropic = fakeProvider('anthropic', async () => ['unused']);
+      const chain = new LlmFallbackChain({ openai, deepseek, anthropic });
+
+      const resultPromise = chain.generate('prompt', ['openai', 'deepseek', 'anthropic']);
+      await jest.advanceTimersByTimeAsync(60_000);
+      const result = await resultPromise;
+
+      expect(result).toEqual({ items: ['ok'], provider: 'deepseek' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

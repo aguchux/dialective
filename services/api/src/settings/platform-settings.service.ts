@@ -808,6 +808,7 @@ export class PlatformSettingsService {
       llmWordsPerItem: row.llmWordsPerItem,
       llmItemsPerRun: row.llmItemsPerRun,
       llmMaxTotalGeneratedItems: row.llmMaxTotalGeneratedItems,
+      llmMaxSentenceGeneratedItems: row.llmMaxSentenceGeneratedItems,
       llmMaxPoolPerDialect: row.llmMaxPoolPerDialect,
       llmBackfillItemsPerDialectPerRun: row.llmBackfillItemsPerDialectPerRun,
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
@@ -947,6 +948,7 @@ export class PlatformSettingsService {
     llmWordsPerItem?: number;
     llmItemsPerRun?: number;
     llmMaxTotalGeneratedItems?: number;
+    llmMaxSentenceGeneratedItems?: number;
     llmMaxPoolPerDialect?: number;
     llmBackfillItemsPerDialectPerRun?: number;
     keyboardLayoutMaxLength?: number;
@@ -1344,6 +1346,7 @@ export class PlatformSettingsService {
       llmWordsPerItem: row.llmWordsPerItem,
       llmItemsPerRun: row.llmItemsPerRun,
       llmMaxTotalGeneratedItems: row.llmMaxTotalGeneratedItems,
+      llmMaxSentenceGeneratedItems: row.llmMaxSentenceGeneratedItems,
       llmMaxPoolPerDialect: row.llmMaxPoolPerDialect,
       llmBackfillItemsPerDialectPerRun: row.llmBackfillItemsPerDialectPerRun,
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,

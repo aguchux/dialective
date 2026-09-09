@@ -1531,6 +1531,7 @@ export interface PlatformSettings {
   llmWordsPerItem: number;
   llmItemsPerRun: number;
   llmMaxTotalGeneratedItems: number;
+  llmMaxSentenceGeneratedItems: number;
   llmMaxPoolPerDialect: number;
   llmBackfillItemsPerDialectPerRun: number;
   keyboardLayoutMaxLength: number;
@@ -1657,6 +1658,7 @@ export interface PlatformSettingsInput {
   llmWordsPerItem?: number;
   llmItemsPerRun?: number;
   llmMaxTotalGeneratedItems?: number;
+  llmMaxSentenceGeneratedItems?: number;
   llmMaxPoolPerDialect?: number;
   llmBackfillItemsPerDialectPerRun?: number;
   keyboardLayoutMaxLength?: number;
