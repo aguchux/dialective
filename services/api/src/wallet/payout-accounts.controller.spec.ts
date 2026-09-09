@@ -16,6 +16,8 @@ function setup(
     cryptoWithdrawalsEnabled?: boolean;
     allowedCurrencies?: string[];
     allowedNetworks?: string[];
+    phoneNumber?: string | null;
+    phoneVerifiedAt?: Date | null;
   } = {},
 ) {
   const account =
@@ -35,7 +37,12 @@ function setup(
       findFirst: jest.fn().mockResolvedValue(null),
     },
     user: {
-      findUniqueOrThrow: jest.fn().mockResolvedValue({ id: OWNER_ID, email: 'trainer@example.com' }),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({
+        id: OWNER_ID,
+        email: 'trainer@example.com',
+        phoneNumber: overrides.phoneNumber ?? null,
+        phoneVerifiedAt: overrides.phoneVerifiedAt ?? null,
+      }),
     },
   };
   const otp = {
@@ -78,6 +85,24 @@ describe('PayoutAccountsController.requestDeleteOtp', () => {
       OtpPurpose.PAYOUT_ACCOUNT_DELETE,
       'trainer@example.com',
       payoutAccountDeleteContextHash({ payoutAccountId: ACCOUNT_ID }),
+      'EMAIL',
+    );
+  });
+
+  it('prefers SMS to the verified phone number over email', async () => {
+    const { controller, otp } = setup({
+      phoneNumber: '+15551234567',
+      phoneVerifiedAt: new Date(),
+    });
+
+    await controller.requestDeleteOtp(req, ACCOUNT_ID);
+
+    expect(otp.issueForUser).toHaveBeenCalledWith(
+      OWNER_ID,
+      OtpPurpose.PAYOUT_ACCOUNT_DELETE,
+      '+15551234567',
+      payoutAccountDeleteContextHash({ payoutAccountId: ACCOUNT_ID }),
+      'SMS',
     );
   });
 
@@ -156,6 +181,7 @@ describe('PayoutAccountsController.requestStablecoinWalletSetupOtp', () => {
         stablecoinAsset: 'USDT',
         stablecoinNetwork: 'TRC20',
       }),
+      'EMAIL',
     );
   });
 

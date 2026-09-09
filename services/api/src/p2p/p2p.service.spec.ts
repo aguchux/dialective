@@ -87,3 +87,51 @@ describe('P2PService trade-notification SMS', () => {
     await expect(service.markPaid('buyer-1', trade.id)).resolves.toEqual(trade);
   });
 });
+
+describe('P2PService.requestTradeOtp', () => {
+  let prisma: any;
+  let otp: any;
+  let service: P2PService;
+
+  beforeEach(() => {
+    prisma = { user: { findUniqueOrThrow: jest.fn() } };
+    otp = { issueForUser: jest.fn().mockResolvedValue({ otpRequestId: 'otp-1', expiresInSeconds: 600 }) };
+    service = new P2PService(prisma, otp, {} as any, {} as any);
+  });
+
+  it('emails the OTP when the caller has no verified phone', async () => {
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      email: 'a@b.com',
+      phoneNumber: null,
+      phoneVerifiedAt: null,
+    });
+
+    await service.requestTradeOtp('user-1', { action: 'accept-offer', offerId: 'offer-1' } as any);
+
+    expect(otp.issueForUser).toHaveBeenCalledWith(
+      'user-1',
+      'P2P_TRADE',
+      'a@b.com',
+      expect.any(String),
+      'EMAIL',
+    );
+  });
+
+  it('prefers SMS to a verified phone number', async () => {
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      email: 'a@b.com',
+      phoneNumber: '+15551234567',
+      phoneVerifiedAt: new Date(),
+    });
+
+    await service.requestTradeOtp('user-1', { action: 'accept-offer', offerId: 'offer-1' } as any);
+
+    expect(otp.issueForUser).toHaveBeenCalledWith(
+      'user-1',
+      'P2P_TRADE',
+      '+15551234567',
+      expect.any(String),
+      'SMS',
+    );
+  });
+});

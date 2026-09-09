@@ -764,14 +764,15 @@ export class AuthService {
 
   /**
    * OTP-gated, same shape as requestUserDeleteOtp/deleteUser's admin
-   * equivalent -- issued to the user's own verified email regardless of
-   * their 2FA channel preference, since closing the account is the one
-   * action that must always be confirmable even if SMS delivery is down.
+   * equivalent -- prefers SMS when the user has a verified phone number
+   * (resolveOtpDestination), same as withdrawal and every other mandatory
+   * money/account-safety OTP, falling back to email otherwise.
    */
   async requestAccountCloseOtp(userId: string): Promise<IssuedRequestOtp> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const contextHash = adminActionContextHash({ action: 'account-close', userId });
-    return this.otp.issueForUser(userId, OtpPurpose.ACCOUNT_CLOSE, user.email, contextHash);
+    const { destination, channel } = resolveOtpDestination(user);
+    return this.otp.issueForUser(userId, OtpPurpose.ACCOUNT_CLOSE, destination, contextHash, channel);
   }
 
   /**

@@ -717,3 +717,53 @@ describe('DistributorsService.adjustSubDistributorWallet', () => {
     expect(result.amount).toBe('250');
   });
 });
+
+describe('DistributorsService.requestSubDistributorAdjustmentOtp', () => {
+  it('emails the OTP when the caller has no verified phone', async () => {
+    const { service, prisma, otp } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: 'caller-1',
+      email: 'caller@example.com',
+      phoneNumber: null,
+      phoneVerifiedAt: null,
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', promotedById: 'caller-1' });
+
+    await service.requestSubDistributorAdjustmentOtp('caller-1', 'sub-1', {
+      amount: 100,
+      reference: 'bonus',
+    });
+
+    expect(otp.issueForUser).toHaveBeenCalledWith(
+      'caller-1',
+      'SUB_DISTRIBUTOR_ADJUSTMENT',
+      'caller@example.com',
+      expect.any(String),
+      'EMAIL',
+    );
+  });
+
+  it('prefers SMS to a verified phone number', async () => {
+    const { service, prisma, otp } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: 'caller-1',
+      email: 'caller@example.com',
+      phoneNumber: '+15551234567',
+      phoneVerifiedAt: new Date(),
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: 'sub-1', promotedById: 'caller-1' });
+
+    await service.requestSubDistributorAdjustmentOtp('caller-1', 'sub-1', {
+      amount: 100,
+      reference: 'bonus',
+    });
+
+    expect(otp.issueForUser).toHaveBeenCalledWith(
+      'caller-1',
+      'SUB_DISTRIBUTOR_ADJUSTMENT',
+      '+15551234567',
+      expect.any(String),
+      'SMS',
+    );
+  });
+});

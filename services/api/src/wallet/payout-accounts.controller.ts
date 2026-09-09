@@ -26,6 +26,7 @@ import { UserThrottlerGuard } from '../common/guards/user-throttler.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { OtpService } from '../otp/otp.service';
+import { resolveOtpDestination } from '../otp/otp.util';
 import { encryptPayoutField, maskAccountNumber } from '../common/payout-crypto.util';
 import {
   payoutAccountDeleteContextHash,
@@ -280,11 +281,13 @@ export class PayoutAccountsController {
       stablecoinAsset: body.stablecoinAsset,
       stablecoinNetwork: body.stablecoinNetwork,
     });
+    const { destination, channel } = resolveOtpDestination(user);
     return this.otp.issueForUser(
       req.user.sub,
       OtpPurpose.PAYOUT_ACCOUNT_SETUP,
-      user.email,
+      destination,
       contextHash,
+      channel,
     );
   }
 
@@ -345,13 +348,15 @@ export class PayoutAccountsController {
   }
 
   /**
-   * Deletion always requires email OTP confirmation -- same reasoning as
+   * Deletion always requires OTP confirmation -- same reasoning as
    * wallet/withdrawals/otp: removing a saved payout destination is a
    * trainer-initiated, financially consequential action, so this is
    * unconditional (no PlatformSettings toggle), matching the withdrawal-OTP
    * precedent rather than the admin-payout-OTP precedent (which is
    * admin-toggleable, since that gate is about an admin's own power, not a
-   * trainer's account safety).
+   * trainer's account safety). Prefers SMS when the caller has a verified
+   * phone (resolveOtpDestination), same as withdrawal -- being unconditional
+   * is about the gate always firing, not about which channel delivers it.
    */
   @Post(':id/delete/otp')
   @UseGuards(JwtAuthGuard, UserThrottlerGuard)
@@ -360,7 +365,14 @@ export class PayoutAccountsController {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
     await this.requireDeletable(req.user.sub, id);
     const contextHash = payoutAccountDeleteContextHash({ payoutAccountId: id });
-    return this.otp.issueForUser(req.user.sub, OtpPurpose.PAYOUT_ACCOUNT_DELETE, user.email, contextHash);
+    const { destination, channel } = resolveOtpDestination(user);
+    return this.otp.issueForUser(
+      req.user.sub,
+      OtpPurpose.PAYOUT_ACCOUNT_DELETE,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   @Delete(':id')

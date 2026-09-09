@@ -16,6 +16,7 @@ import {
 } from '@dialectiva/db';
 import { randomUUID } from 'crypto';
 import { OtpService } from '../otp/otp.service';
+import { resolveOtpDestination } from '../otp/otp.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { SmsService } from '../sms/sms.service';
@@ -168,7 +169,7 @@ export class P2PService {
   async requestTradeOtp(userId: string, dto: RequestP2pTradeOtpDto) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { email: true },
+      select: { email: true, phoneNumber: true, phoneVerifiedAt: true },
     });
     const contextHash =
       dto.action === 'create-offer'
@@ -180,7 +181,8 @@ export class P2PService {
             fiatCurrency: dto.fiatCurrency!,
           })
         : p2pTradeOtpContextHash({ action: 'accept-offer', offerId: dto.offerId! });
-    return this.otp.issueForUser(userId, OtpPurpose.P2P_TRADE, user.email, contextHash);
+    const { destination, channel } = resolveOtpDestination(user);
+    return this.otp.issueForUser(userId, OtpPurpose.P2P_TRADE, destination, contextHash, channel);
   }
 
   /**

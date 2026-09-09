@@ -1211,9 +1211,14 @@ describe('AuthService.updateTwoFactorSettings', () => {
 });
 
 describe('AuthService account closure', () => {
-  it('requestAccountCloseOtp issues an OTP to the user\'s own email', async () => {
+  it('requestAccountCloseOtp issues an OTP to the user\'s own email when no verified phone exists', async () => {
     const { service, prisma, otp } = setup();
-    prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', email: 'a@b.com' });
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      phoneNumber: null,
+      phoneVerifiedAt: null,
+    });
 
     const result = await service.requestAccountCloseOtp('user-1');
 
@@ -1222,8 +1227,29 @@ describe('AuthService account closure', () => {
       'ACCOUNT_CLOSE',
       'a@b.com',
       expect.any(String),
+      'EMAIL',
     );
     expect(result).toMatchObject({ otpRequestId: 'otp-request-1' });
+  });
+
+  it('requestAccountCloseOtp prefers SMS to a verified phone number', async () => {
+    const { service, prisma, otp } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@b.com',
+      phoneNumber: '+15551234567',
+      phoneVerifiedAt: new Date(),
+    });
+
+    await service.requestAccountCloseOtp('user-1');
+
+    expect(otp.issueForUser).toHaveBeenCalledWith(
+      'user-1',
+      'ACCOUNT_CLOSE',
+      '+15551234567',
+      expect.any(String),
+      'SMS',
+    );
   });
 
   it('closeAccount verifies the OTP, flips status to CLOSED, and revokes every session', async () => {
