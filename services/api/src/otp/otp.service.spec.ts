@@ -19,20 +19,10 @@ function setup() {
   return { service, prisma, mail, sms };
 }
 
-describe('OtpService.issueForUser SMS-failure email fallback', () => {
-  it('delivers via SMS without touching email when SMS succeeds', async () => {
-    const { service, mail, sms } = setup();
-    sms.sendOtp.mockResolvedValue(undefined);
-
-    await service.issueForUser('user-1', 'WITHDRAWAL', '+15551234567', null, 'SMS');
-
-    expect(sms.sendOtp).toHaveBeenCalledWith('+15551234567', expect.any(String));
-    expect(mail.sendOtpEmail).not.toHaveBeenCalled();
-  });
-
-  it('falls back to the user own email when every SMS provider fails', async () => {
+describe('OtpService.issueForUser dual-channel delivery', () => {
+  it('sends both SMS and email in parallel when channel is SMS', async () => {
     const { service, prisma, mail, sms } = setup();
-    sms.sendOtp.mockRejectedValue(new SmsDeliveryException());
+    sms.sendOtp.mockResolvedValue(undefined);
     prisma.user.findUnique.mockResolvedValue({ email: 'trainer@example.com' });
 
     await service.issueForUser('user-1', 'WITHDRAWAL', '+15551234567', null, 'SMS');
@@ -45,14 +35,39 @@ describe('OtpService.issueForUser SMS-failure email fallback', () => {
     );
   });
 
-  it('does not swallow a non-delivery error (e.g. a bug), never falls back for it', async () => {
-    const { service, mail, sms } = setup();
+  it('still succeeds via email when every SMS provider fails', async () => {
+    const { service, prisma, mail, sms } = setup();
+    sms.sendOtp.mockRejectedValue(new SmsDeliveryException());
+    prisma.user.findUnique.mockResolvedValue({ email: 'trainer@example.com' });
+
+    await service.issueForUser('user-1', 'WITHDRAWAL', '+15551234567', null, 'SMS');
+
+    expect(mail.sendOtpEmail).toHaveBeenCalledWith(
+      'trainer@example.com',
+      expect.any(String),
+      'WITHDRAWAL',
+    );
+  });
+
+  it('throws when both SMS and email delivery fail', async () => {
+    const { service, prisma, mail, sms } = setup();
+    sms.sendOtp.mockRejectedValue(new SmsDeliveryException());
+    mail.sendOtpEmail.mockRejectedValue(new Error('smtp down'));
+    prisma.user.findUnique.mockResolvedValue({ email: 'trainer@example.com' });
+
+    await expect(
+      service.issueForUser('user-1', 'WITHDRAWAL', '+15551234567', null, 'SMS'),
+    ).rejects.toBeInstanceOf(SmsDeliveryException);
+  });
+
+  it('does not swallow a non-delivery SMS error (e.g. a bug)', async () => {
+    const { service, prisma, sms } = setup();
     sms.sendOtp.mockRejectedValue(new Error('unexpected'));
+    prisma.user.findUnique.mockResolvedValue({ email: 'trainer@example.com' });
 
     await expect(
       service.issueForUser('user-1', 'WITHDRAWAL', '+15551234567', null, 'SMS'),
     ).rejects.toThrow('unexpected');
-    expect(mail.sendOtpEmail).not.toHaveBeenCalled();
   });
 
   it('never calls SMS at all when channel is EMAIL', async () => {
@@ -70,7 +85,7 @@ describe('OtpService.issueForUser SMS-failure email fallback', () => {
 });
 
 describe('OtpService.resend', () => {
-  it('always uses SMS for PHONE_VERIFICATION, with no email fallback on failure', async () => {
+  it('always uses SMS only for PHONE_VERIFICATION, never email', async () => {
     const { service, prisma, mail, sms } = setup();
     prisma.otpCode.findUnique.mockResolvedValue({
       id: 'otp-1',
@@ -92,7 +107,35 @@ describe('OtpService.resend', () => {
     expect(mail.sendOtpEmail).not.toHaveBeenCalled();
   });
 
-  it('falls back to email for LOGIN when SMS 2FA is on but every SMS provider fails', async () => {
+  it('dual-sends SMS and email for LOGIN when SMS 2FA is on', async () => {
+    const { service, prisma, mail, sms } = setup();
+    prisma.otpCode.findUnique.mockResolvedValue({
+      id: 'otp-1',
+      userId: 'user-1',
+      purpose: 'LOGIN',
+      consumedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: 'user-1',
+      email: 'trainer@example.com',
+      phoneNumber: '+15551234567',
+      phoneVerifiedAt: new Date(),
+      twoFactorSmsEnabled: true,
+    });
+    sms.sendOtp.mockResolvedValue(undefined);
+
+    await service.resend('otp-1', false);
+
+    expect(sms.sendOtp).toHaveBeenCalledWith('+15551234567', expect.any(String));
+    expect(mail.sendOtpEmail).toHaveBeenCalledWith(
+      'trainer@example.com',
+      expect.any(String),
+      'LOGIN',
+    );
+  });
+
+  it('still delivers by email for LOGIN when SMS 2FA is on but every SMS provider fails', async () => {
     const { service, prisma, mail, sms } = setup();
     prisma.otpCode.findUnique.mockResolvedValue({
       id: 'otp-1',
@@ -112,7 +155,6 @@ describe('OtpService.resend', () => {
 
     await service.resend('otp-1', false);
 
-    expect(sms.sendOtp).toHaveBeenCalledWith('+15551234567', expect.any(String));
     expect(mail.sendOtpEmail).toHaveBeenCalledWith(
       'trainer@example.com',
       expect.any(String),

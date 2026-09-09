@@ -32,13 +32,13 @@ export function hashContext(context: Record<string, string | number>): string {
 /**
  * Every money-moving OTP (WITHDRAWAL, DEPOSIT, ADMIN_PAYOUT) is a mandatory
  * security step, not an opt-in 2FA preference -- unlike AuthService.login's
- * twoFactorSmsEnabled gate, there's no per-user toggle to check here. The
- * only question is deliverability: prefer SMS whenever the user already has
- * a verified phone number (same as AuthService.login prefers SMS over email
- * when both channels are available), otherwise fall back to email. If SMS
- * is chosen here but every configured SMS provider then fails,
- * OtpService.deliver retries via the user's own email automatically -- see
- * its doc comment -- so this preference is never a dead end.
+ * twoFactorSmsEnabled gate, there's no per-user toggle to check here. Returns
+ * SMS as the channel whenever the user already has a verified phone number,
+ * otherwise EMAIL (there's no phone to send to). This is not just a
+ * preference: OtpService.deliver sends the code on BOTH SMS and email
+ * whenever channel is SMS -- see its doc comment -- so a thin/failing SMS
+ * provider chain for the user's country never leaves them with zero
+ * delivered codes.
  */
 export function resolveOtpDestination(user: {
   email: string;

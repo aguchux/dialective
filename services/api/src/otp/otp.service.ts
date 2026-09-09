@@ -45,17 +45,19 @@ export class OtpService {
   ) {}
 
   /**
-   * Falls back to the user's own email whenever every configured SMS
-   * provider fails (SmsDeliveryException) -- SMS is only ever PREFERRED for
-   * deliverability, never the sole channel a trainer can be stuck on. Some
-   * countries have thin/no coverage from the configured provider order (see
-   * SmsFallbackChain), and without this fallback a trainer with a verified
-   * phone in one of those countries could never receive ANY OTP for a
-   * mandatory security step (withdrawal, payout account setup, etc.) -- a
-   * dead end with no recovery path. userId is looked up here (rather than
-   * threading an extra parameter through every call site) since every
-   * caller already has the row and this keeps every existing
-   * issueForUser/issueWithTicket/resend call site unchanged.
+   * Sends the code on BOTH channels whenever SMS is in play, rather than
+   * picking one -- a trainer with thin SMS coverage for their country (see
+   * SmsFallbackChain / smsProviderOrder) must never be left with zero
+   * delivered codes just because SMS was preferred. destination/channel
+   * (from resolveOtpDestination) still decides the PRIMARY channel and is
+   * used as the sole channel when there's no phone to dual-send to (e.g.
+   * unverified phone -- channel is EMAIL and destination is the email); once
+   * SMS is the channel, email always goes out too, in parallel, using the
+   * user's own email address looked up here (rather than threading an extra
+   * parameter through every call site, since every caller already has the
+   * row). A failed SMS provider chain no longer needs to be caught specially
+   * -- it simply means only the email side landed, which already happened
+   * unconditionally.
    */
   private async deliver(
     channel: OtpChannel,
@@ -68,19 +70,26 @@ export class OtpService {
       await this.mail.sendOtpEmail(destination, code, purpose);
       return;
     }
-    try {
-      await this.sms.sendOtp(destination, code);
-    } catch (err) {
-      if (!(err instanceof SmsDeliveryException)) throw err;
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { email: true },
-      });
-      if (!user) throw err;
-      this.logger.warn(
-        `SMS delivery failed for user=${userId} purpose=${purpose}; falling back to email`,
-      );
-      await this.mail.sendOtpEmail(user.email, code, purpose);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    const results = await Promise.allSettled([
+      this.sms.sendOtp(destination, code),
+      ...(user ? [this.mail.sendOtpEmail(user.email, code, purpose)] : []),
+    ]);
+    const [smsResult, mailResult] = results;
+    if (smsResult.status === 'rejected' && !(smsResult.reason instanceof SmsDeliveryException)) {
+      throw smsResult.reason;
+    }
+    if (smsResult.status === 'rejected') {
+      this.logger.warn(`SMS delivery failed for user=${userId} purpose=${purpose}`);
+    }
+    if (mailResult?.status === 'rejected') {
+      this.logger.warn(`Email delivery failed for user=${userId} purpose=${purpose}`);
+    }
+    if (smsResult.status === 'rejected' && (!mailResult || mailResult.status === 'rejected')) {
+      throw smsResult.reason;
     }
   }
 
@@ -126,13 +135,14 @@ export class OtpService {
    * an id) -- simpler than minting a fresh row, and equally safe since the
    * old code is overwritten (no longer valid) the moment this runs. Routes
    * to SMS for PHONE_VERIFICATION (destination = user.phoneNumber, set by
-   * the same request that created this row) always -- deliberately no
-   * email fallback here, since the whole point of this purpose is proving
-   * phone ownership, which an emailed code cannot do. LOGIN uses SMS when
-   * the user has SMS 2FA enabled (matching AuthService.login's issuance
-   * choice), falling back to email if every SMS provider fails -- same
+   * the same request that created this row) always -- deliberately no email
+   * dual-send here, since the whole point of this purpose is proving phone
+   * ownership, which an emailed code cannot do. LOGIN dual-sends SMS+email
+   * whenever the user has SMS 2FA enabled (matching AuthService.login's
+   * issuance choice) regardless of whether email 2FA is also on -- same
    * deliverability guarantee as OtpService.deliver, since a mandatory
-   * security step must never have a channel-coverage dead end.
+   * security step must never have a channel-coverage dead end, even one
+   * gated behind an opt-in 2FA preference.
    */
   async resend(idOrTicket: string, byTicket: boolean): Promise<void> {
     const row = byTicket
@@ -161,15 +171,19 @@ export class OtpService {
 
     const useSms = row.purpose === 'LOGIN' && user.twoFactorSmsEnabled && !!user.phoneVerifiedAt;
     if (useSms && user.phoneNumber) {
-      try {
-        await this.sms.sendOtp(user.phoneNumber, code);
-        return;
-      } catch (err) {
-        if (!(err instanceof SmsDeliveryException)) throw err;
-        this.logger.warn(
-          `SMS delivery failed for user=${user.id} purpose=${row.purpose}; falling back to email`,
-        );
+      const results = await Promise.allSettled([
+        this.sms.sendOtp(user.phoneNumber, code),
+        this.mail.sendOtpEmail(user.email, code, row.purpose),
+      ]);
+      const [smsResult, mailResult] = results;
+      if (smsResult.status === 'rejected') {
+        this.logger.warn(`SMS delivery failed for user=${user.id} purpose=${row.purpose}`);
       }
+      if (mailResult.status === 'rejected') {
+        this.logger.warn(`Email delivery failed for user=${user.id} purpose=${row.purpose}`);
+        if (smsResult.status === 'rejected') throw smsResult.reason;
+      }
+      return;
     }
     await this.mail.sendOtpEmail(user.email, code, row.purpose);
   }
