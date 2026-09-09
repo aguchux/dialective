@@ -169,6 +169,28 @@ describe('NowPaymentsService IPN verification', () => {
     }
   });
 
+  it('verifies a payout by putting the payout id in the URL path and the code in the body', async () => {
+    process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
+    process.env.NOWPAYMENTS_PAYOUT_EMAIL = 'merchant@example.com';
+    process.env.NOWPAYMENTS_PAYOUT_PASSWORD = 'merchant-password';
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'jwt-token' }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'payout-1', status: 'finished' }), { status: 200 }),
+      );
+
+    await expect(service.verifyPayout('payout-1', '123456')).resolves.toMatchObject({
+      payoutId: 'payout-1',
+      status: 'finished',
+    });
+
+    expect(fetchSpy.mock.calls[1][0]).toBe('https://api.nowpayments.io/v1/payout/payout-1/verify');
+    expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toEqual({
+      verification_code: '123456',
+    });
+  });
+
   it('retrieves payout status', async () => {
     process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
     process.env.NOWPAYMENTS_PAYOUT_EMAIL = 'merchant@example.com';

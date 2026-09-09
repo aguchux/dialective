@@ -192,15 +192,18 @@ export class NowPaymentsService implements PayoutProvider {
 
   async verifyPayout(payoutId: string, verificationCode: string): Promise<PayoutStatusResult> {
     const token = await this.getPayoutAuthToken();
-    const res = await fetch(`${NOWPAYMENTS_API_BASE}/verify/payout`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
+    const res = await fetch(
+      `${NOWPAYMENTS_API_BASE}/payout/${encodeURIComponent(payoutId)}/verify`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+        },
+        body: JSON.stringify({ verification_code: verificationCode }),
       },
-      body: JSON.stringify({ payout_id: payoutId, verification_code: verificationCode }),
-    });
+    );
     const raw = await readNowPaymentsJson(res);
     if (!res.ok) {
       this.logger.error(`NOWPayments verifyPayout failed: ${res.status} ${JSON.stringify(raw)}`);
