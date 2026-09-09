@@ -148,7 +148,7 @@ export class NowPaymentsService implements PayoutProvider {
   async createPayout(params: CreatePayoutParams): Promise<CreatePayoutResult> {
     const token = await this.getPayoutAuthToken();
     const providerCurrency = NOWPAYMENTS_PAY_CURRENCIES[params.currency];
-    const res = await fetch(`${NOWPAYMENTS_API_BASE}/create/payout`, {
+    const res = await fetch(`${NOWPAYMENTS_API_BASE}/payout`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,

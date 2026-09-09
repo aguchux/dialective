@@ -121,7 +121,7 @@ describe('NowPaymentsService IPN verification', () => {
     ).resolves.toMatchObject({ payoutId: 'payout-1', status: 'waiting' });
 
     expect(fetchSpy.mock.calls[0][0]).toBe('https://api.nowpayments.io/v1/auth');
-    expect(fetchSpy.mock.calls[1][0]).toBe('https://api.nowpayments.io/v1/create/payout');
+    expect(fetchSpy.mock.calls[1][0]).toBe('https://api.nowpayments.io/v1/payout');
     expect(fetchSpy.mock.calls[1][1]?.headers).toMatchObject({ Authorization: 'Bearer jwt-token' });
     expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toEqual({
       withdrawals: [
