@@ -1,8 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { OtpPurpose } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { SmsService } from '../sms/sms.service';
+import { SmsDeliveryException } from '../sms/sms-delivery.exception';
 import { generateOpaqueToken, hashToken } from '../auth/token.util';
 import { generateOtpCode, hashOtpCode } from './otp.util';
 
@@ -35,22 +36,51 @@ export interface IssuedRequestOtp {
  */
 @Injectable()
 export class OtpService {
+  private readonly logger = new Logger(OtpService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly sms: SmsService,
   ) {}
 
+  /**
+   * Falls back to the user's own email whenever every configured SMS
+   * provider fails (SmsDeliveryException) -- SMS is only ever PREFERRED for
+   * deliverability, never the sole channel a trainer can be stuck on. Some
+   * countries have thin/no coverage from the configured provider order (see
+   * SmsFallbackChain), and without this fallback a trainer with a verified
+   * phone in one of those countries could never receive ANY OTP for a
+   * mandatory security step (withdrawal, payout account setup, etc.) -- a
+   * dead end with no recovery path. userId is looked up here (rather than
+   * threading an extra parameter through every call site) since every
+   * caller already has the row and this keeps every existing
+   * issueForUser/issueWithTicket/resend call site unchanged.
+   */
   private async deliver(
     channel: OtpChannel,
     destination: string,
     code: string,
     purpose: OtpPurpose,
+    userId: string,
   ): Promise<void> {
-    if (channel === 'SMS') {
-      await this.sms.sendOtp(destination, code);
-    } else {
+    if (channel !== 'SMS') {
       await this.mail.sendOtpEmail(destination, code, purpose);
+      return;
+    }
+    try {
+      await this.sms.sendOtp(destination, code);
+    } catch (err) {
+      if (!(err instanceof SmsDeliveryException)) throw err;
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+      if (!user) throw err;
+      this.logger.warn(
+        `SMS delivery failed for user=${userId} purpose=${purpose}; falling back to email`,
+      );
+      await this.mail.sendOtpEmail(user.email, code, purpose);
     }
   }
 
@@ -67,7 +97,7 @@ export class OtpService {
     await this.prisma.otpCode.create({
       data: { userId, purpose, codeHash, ticketHash, expiresAt },
     });
-    await this.deliver(channel, destination, code, purpose);
+    await this.deliver(channel, destination, code, purpose, userId);
 
     return { ticket, expiresInSeconds: OTP_TTL_SECONDS };
   }
@@ -85,7 +115,7 @@ export class OtpService {
     const row = await this.prisma.otpCode.create({
       data: { userId, purpose, codeHash, contextHash, expiresAt },
     });
-    await this.deliver(channel, destination, code, purpose);
+    await this.deliver(channel, destination, code, purpose, userId);
 
     return { otpRequestId: row.id, expiresInSeconds: OTP_TTL_SECONDS };
   }
@@ -96,9 +126,13 @@ export class OtpService {
    * an id) -- simpler than minting a fresh row, and equally safe since the
    * old code is overwritten (no longer valid) the moment this runs. Routes
    * to SMS for PHONE_VERIFICATION (destination = user.phoneNumber, set by
-   * the same request that created this row) always, and for LOGIN when the
-   * user has SMS 2FA enabled (matching AuthService.login's issuance choice)
-   * -- email otherwise.
+   * the same request that created this row) always -- deliberately no
+   * email fallback here, since the whole point of this purpose is proving
+   * phone ownership, which an emailed code cannot do. LOGIN uses SMS when
+   * the user has SMS 2FA enabled (matching AuthService.login's issuance
+   * choice), falling back to email if every SMS provider fails -- same
+   * deliverability guarantee as OtpService.deliver, since a mandatory
+   * security step must never have a channel-coverage dead end.
    */
   async resend(idOrTicket: string, byTicket: boolean): Promise<void> {
     const row = byTicket
@@ -118,17 +152,26 @@ export class OtpService {
       data: { codeHash, expiresAt, attempts: 0 },
     });
 
-    const useSms =
-      row.purpose === 'PHONE_VERIFICATION' ||
-      (row.purpose === 'LOGIN' && user.twoFactorSmsEnabled && !!user.phoneVerifiedAt);
-
-    if (useSms) {
+    if (row.purpose === 'PHONE_VERIFICATION') {
       if (!user.phoneNumber)
         throw new UnauthorizedException('This code request is no longer valid');
       await this.sms.sendOtp(user.phoneNumber, code);
-    } else {
-      await this.mail.sendOtpEmail(user.email, code, row.purpose);
+      return;
     }
+
+    const useSms = row.purpose === 'LOGIN' && user.twoFactorSmsEnabled && !!user.phoneVerifiedAt;
+    if (useSms && user.phoneNumber) {
+      try {
+        await this.sms.sendOtp(user.phoneNumber, code);
+        return;
+      } catch (err) {
+        if (!(err instanceof SmsDeliveryException)) throw err;
+        this.logger.warn(
+          `SMS delivery failed for user=${user.id} purpose=${row.purpose}; falling back to email`,
+        );
+      }
+    }
+    await this.mail.sendOtpEmail(user.email, code, row.purpose);
   }
 
   /**

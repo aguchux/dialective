@@ -35,7 +35,10 @@ export function hashContext(context: Record<string, string | number>): string {
  * twoFactorSmsEnabled gate, there's no per-user toggle to check here. The
  * only question is deliverability: prefer SMS whenever the user already has
  * a verified phone number (same as AuthService.login prefers SMS over email
- * when both channels are available), otherwise fall back to email.
+ * when both channels are available), otherwise fall back to email. If SMS
+ * is chosen here but every configured SMS provider then fails,
+ * OtpService.deliver retries via the user's own email automatically -- see
+ * its doc comment -- so this preference is never a dead end.
  */
 export function resolveOtpDestination(user: {
   email: string;
