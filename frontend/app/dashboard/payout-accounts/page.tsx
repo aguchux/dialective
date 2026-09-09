@@ -21,12 +21,45 @@ import {
   useUpdatePayoutAccountMutation,
 } from '@/store/api';
 
-// TRC20 (Tron) is the only network offered -- cheapest gas of any viable
-// chain and the de facto standard for USDT/USDC liquidity in the markets
-// most trainers actually cash out in. See StripeConnectService/
-// FlutterwaveV4Service for the equivalent per-rail country reasoning.
 const STABLECOIN_ASSETS = ['USDT', 'USDC'] as const;
-const TRON_ADDRESS_PATTERN = /^T[1-9A-HJ-NP-Za-km-z]{33}$/;
+const STABLECOIN_NETWORKS = ['TRC20', 'ERC20', 'BEP20', 'SOL', 'POLYGON'] as const;
+type StablecoinNetwork = (typeof STABLECOIN_NETWORKS)[number];
+
+const NETWORK_LABELS: Record<StablecoinNetwork, string> = {
+  TRC20: 'TRC20 (Tron)',
+  ERC20: 'ERC20 (Ethereum)',
+  BEP20: 'BEP20 (BNB Chain)',
+  SOL: 'Solana',
+  POLYGON: 'Polygon',
+};
+
+// Mirrors NOWPayments' own wallet_regex per network (see backend
+// common/crypto-address.util.ts) -- client-side only for immediate
+// feedback, the backend is still authoritative.
+const NETWORK_ADDRESS_PATTERNS: Record<StablecoinNetwork, RegExp> = {
+  TRC20: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
+  ERC20: /^0x[0-9A-Fa-f]{40}$/,
+  BEP20: /^0x[0-9A-Fa-f]{40}$/,
+  POLYGON: /^0x[0-9A-Fa-f]{40}$/,
+  SOL: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+};
+
+// USDC has no NOWPayments listing on Tron for this merchant account -- see
+// backend wallet/stablecoin-networks.ts, the single source of truth this
+// mirrors so the UI never offers a combination the backend will reject.
+const VALID_STABLECOIN_PAIRS: Record<(typeof STABLECOIN_ASSETS)[number], StablecoinNetwork[]> = {
+  USDT: ['TRC20', 'ERC20', 'BEP20', 'SOL', 'POLYGON'],
+  USDC: ['ERC20', 'BEP20', 'SOL', 'POLYGON'],
+};
+
+function parseCsvUpper(value: string | undefined): string[] | null {
+  if (!value) return null;
+  const tokens = value
+    .split(',')
+    .map((v) => v.trim().toUpperCase())
+    .filter(Boolean);
+  return tokens.length > 0 ? tokens : null;
+}
 
 // Flutterwave's fiat rail only covers these markets today -- every other
 // country falls straight through to Stripe as the only real option (Stripe
@@ -250,6 +283,11 @@ export default function PayoutAccountsPage() {
       <AddPayoutAccountDialog
         stripeEnabled={publicSettings?.isStripePayoutsEnabled ?? false}
         cryptoEnabled={publicSettings?.isCryptoWithdrawalsEnabled ?? false}
+        allowedAssets={parseCsvUpper(publicSettings?.allowedWithdrawalCurrencies) ?? STABLECOIN_ASSETS}
+        allowedNetworks={
+          (parseCsvUpper(publicSettings?.allowedWithdrawalNetworks) as StablecoinNetwork[] | null) ??
+          STABLECOIN_NETWORKS
+        }
       />
       {deletingAccount && (
         <DeletePayoutAccountDialog
@@ -282,9 +320,13 @@ type WizardStep = 'country' | 'provider' | 'details' | 'wallet-otp';
 function AddPayoutAccountDialog({
   stripeEnabled,
   cryptoEnabled,
+  allowedAssets,
+  allowedNetworks,
 }: {
   stripeEnabled: boolean;
   cryptoEnabled: boolean;
+  allowedAssets: readonly string[];
+  allowedNetworks: readonly StablecoinNetwork[];
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<WizardStep>('country');
@@ -297,6 +339,7 @@ function AddPayoutAccountDialog({
   const [mobileMoneyNetwork, setMobileMoneyNetwork] = useState(MOBILE_MONEY_NETWORKS[0]);
   const [mobileMoneyNumber, setMobileMoneyNumber] = useState('');
   const [stablecoinAsset, setStablecoinAsset] = useState<(typeof STABLECOIN_ASSETS)[number]>('USDT');
+  const [stablecoinNetwork, setStablecoinNetwork] = useState<StablecoinNetwork>('TRC20');
   const [walletAddress, setWalletAddress] = useState('');
   const [walletOtpRequestId, setWalletOtpRequestId] = useState<string | null>(null);
   const [walletCode, setWalletCode] = useState('');
@@ -314,6 +357,11 @@ function AddPayoutAccountDialog({
   const [requestWalletOtp, { isLoading: isRequestingWalletOtp }] =
     useRequestStablecoinWalletSetupOtpMutation();
 
+  const selectableNetworks = STABLECOIN_NETWORKS.filter(
+    (network) =>
+      allowedNetworks.includes(network) && VALID_STABLECOIN_PAIRS[stablecoinAsset].includes(network),
+  );
+
   function reset() {
     setStep('country');
     setCountryCode('');
@@ -324,10 +372,24 @@ function AddPayoutAccountDialog({
     setAccountNumber('');
     setMobileMoneyNumber('');
     setStablecoinAsset('USDT');
+    setStablecoinNetwork('TRC20');
     setWalletAddress('');
     setWalletOtpRequestId(null);
     setWalletCode('');
     setError(null);
+  }
+
+  function selectStablecoinAsset(asset: (typeof STABLECOIN_ASSETS)[number]) {
+    setStablecoinAsset(asset);
+    const stillValid = VALID_STABLECOIN_PAIRS[asset].includes(stablecoinNetwork) &&
+      allowedNetworks.includes(stablecoinNetwork);
+    if (!stillValid) {
+      const fallback = STABLECOIN_NETWORKS.find(
+        (network) =>
+          allowedNetworks.includes(network) && VALID_STABLECOIN_PAIRS[asset].includes(network),
+      );
+      if (fallback) setStablecoinNetwork(fallback);
+    }
   }
 
   function handleOpenChange(next: boolean) {
@@ -347,21 +409,21 @@ function AddPayoutAccountDialog({
     setStep('details');
   }
 
-  const walletAddressValid = TRON_ADDRESS_PATTERN.test(walletAddress);
+  const walletAddressValid = NETWORK_ADDRESS_PATTERNS[stablecoinNetwork].test(walletAddress);
 
   /** Wallet setup's own two-step submit: request the OTP first, then (on the wallet-otp screen) verify + save. Distinct from handleSubmit below, which never issues its own OTP -- BANK/MOBILE_MONEY/STRIPE_CONNECT have no setup-OTP step. */
   async function handleWalletSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
     if (!walletAddressValid) {
-      setError('Enter a valid TRC20 (Tron) wallet address -- it must start with "T" and be 34 characters long.');
+      setError(`Enter a valid ${NETWORK_LABELS[stablecoinNetwork]} wallet address.`);
       return;
     }
     try {
       if (!walletOtpRequestId) {
         const result = await requestWalletOtp({
           stablecoinAsset,
-          stablecoinNetwork: 'TRC20',
+          stablecoinNetwork,
           walletAddress,
         }).unwrap();
         setWalletOtpRequestId(result.otpRequestId);
@@ -371,7 +433,7 @@ function AddPayoutAccountDialog({
       await createAccount({
         type: 'STABLECOIN_WALLET',
         stablecoinAsset,
-        stablecoinNetwork: 'TRC20',
+        stablecoinNetwork,
         walletAddress,
         otpRequestId: walletOtpRequestId,
         code: walletCode,
@@ -502,7 +564,7 @@ function AddPayoutAccountDialog({
             )}
             {cryptoEnabled && (
               <ProviderCard
-                description="Withdraw to your own USDT or USDC wallet on the TRC20 (Tron) network -- fast, low fees, works from any country."
+                description="Withdraw to your own USDT or USDC wallet -- choose from TRC20, ERC20, BEP20, Solana, or Polygon, works from any country."
                 icon={<Wallet className="size-7" aria-hidden="true" />}
                 onClick={() => goToDetailsStep('CRYPTO_WALLET')}
                 title="USDT / USDC wallet"
@@ -521,7 +583,7 @@ function AddPayoutAccountDialog({
             <fieldset className="grid gap-2">
               <legend className="mb-1 text-sm font-bold">Asset</legend>
               <div className="grid grid-cols-2 gap-2">
-                {STABLECOIN_ASSETS.map((asset) => (
+                {STABLECOIN_ASSETS.filter((asset) => allowedAssets.includes(asset)).map((asset) => (
                   <label
                     className={`flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 text-center font-extrabold ${stablecoinAsset === asset ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
                     key={asset}
@@ -530,7 +592,7 @@ function AddPayoutAccountDialog({
                       className="sr-only"
                       checked={stablecoinAsset === asset}
                       name="stablecoin-asset"
-                      onChange={() => setStablecoinAsset(asset)}
+                      onChange={() => selectStablecoinAsset(asset)}
                       type="radio"
                     />
                     {asset}
@@ -538,13 +600,37 @@ function AddPayoutAccountDialog({
                 ))}
               </div>
             </fieldset>
-            <p className="text-xs text-muted">Network: TRC20 (Tron) -- the only network we support today.</p>
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-bold">Network</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {selectableNetworks.map((network) => (
+                  <label
+                    className={`flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 text-center text-sm font-extrabold ${stablecoinNetwork === network ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
+                    key={network}
+                  >
+                    <input
+                      className="sr-only"
+                      checked={stablecoinNetwork === network}
+                      name="stablecoin-network"
+                      onChange={() => setStablecoinNetwork(network)}
+                      type="radio"
+                    />
+                    {NETWORK_LABELS[network]}
+                  </label>
+                ))}
+              </div>
+              {selectableNetworks.length === 0 && (
+                <p className="text-xs font-bold text-danger">
+                  {stablecoinAsset} has no available network right now. Contact support for help.
+                </p>
+              )}
+            </fieldset>
             <label className="grid gap-1.5 text-sm font-bold">
               Wallet address
               <input
                 className={inputClass}
                 onChange={(event) => setWalletAddress(event.target.value.trim())}
-                placeholder="T..."
+                placeholder={stablecoinNetwork === 'TRC20' ? 'T...' : stablecoinNetwork === 'SOL' ? '' : '0x...'}
                 required
                 type="text"
                 value={walletAddress}
@@ -552,14 +638,13 @@ function AddPayoutAccountDialog({
             </label>
             {walletAddress.length > 0 && !walletAddressValid && (
               <p className="text-xs font-bold text-danger">
-                This doesn&apos;t look like a valid TRC20 address -- it must start with &quot;T&quot;
-                and be 34 characters long.
+                This doesn&apos;t look like a valid {NETWORK_LABELS[stablecoinNetwork]} address.
               </p>
             )}
             <p className="text-xs font-bold text-danger">
-              Double-check this address. Funds sent to a wrong or unsupported-network address cannot
-              be recovered. This address is locked once confirmed -- to change it later you&apos;ll
-              need to delete this wallet and add a new one.
+              Double-check this address and network. Funds sent to a wrong or unsupported-network
+              address cannot be recovered. This address is locked once confirmed -- to change it
+              later you&apos;ll need to delete this wallet and add a new one.
             </p>
             {error && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
@@ -570,7 +655,7 @@ function AddPayoutAccountDialog({
               <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
               <ActionButton
                 className={primaryButtonClass}
-                disabled={!walletAddressValid}
+                disabled={!walletAddressValid || selectableNetworks.length === 0}
                 pending={isRequestingWalletOtp}
                 pendingLabel="Sending code"
                 type="submit"
@@ -584,8 +669,11 @@ function AddPayoutAccountDialog({
         {step === 'wallet-otp' && (
           <form className="grid gap-3" onSubmit={handleWalletSubmit}>
             <p className="text-sm text-muted">
-              Confirming <span className="font-bold text-ink">{stablecoinAsset}</span> to{' '}
-              <span className="font-mono font-bold text-ink">{walletAddress}</span>
+              Confirming{' '}
+              <span className="font-bold text-ink">
+                {stablecoinAsset} ({NETWORK_LABELS[stablecoinNetwork]})
+              </span>{' '}
+              to <span className="font-mono font-bold text-ink">{walletAddress}</span>
             </p>
             <input
               autoFocus

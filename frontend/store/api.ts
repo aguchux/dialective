@@ -1140,6 +1140,8 @@ export interface PublicClientSettings {
   isFlutterwavePayoutsEnabled: boolean;
   isStripePayoutsEnabled: boolean;
   isCryptoWithdrawalsEnabled: boolean;
+  allowedWithdrawalCurrencies: string;
+  allowedWithdrawalNetworks: string;
   testimonyEnabled: boolean;
   testimonyMaxTextLength: number;
   testimonyMaxVideoSeconds: number;
@@ -3007,7 +3009,7 @@ export const dialectivaApi = createApi({
         mobileMoneyNetwork?: string;
         mobileMoneyNumber?: string;
         stablecoinAsset?: 'USDT' | 'USDC';
-        stablecoinNetwork?: 'TRC20';
+        stablecoinNetwork?: 'TRC20' | 'ERC20' | 'BEP20' | 'SOL' | 'POLYGON';
         walletAddress?: string;
         otpRequestId?: string;
         code?: string;
@@ -3019,7 +3021,11 @@ export const dialectivaApi = createApi({
     }),
     requestStablecoinWalletSetupOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
-      { stablecoinAsset: 'USDT' | 'USDC'; stablecoinNetwork: 'TRC20'; walletAddress: string }
+      {
+        stablecoinAsset: 'USDT' | 'USDC';
+        stablecoinNetwork: 'TRC20' | 'ERC20' | 'BEP20' | 'SOL' | 'POLYGON';
+        walletAddress: string;
+      }
     >({
       query: (body) => ({ url: '/payout-accounts/stablecoin-wallet/setup/otp', method: 'POST', body }),
     }),

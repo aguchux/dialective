@@ -117,6 +117,7 @@ describe('NowPaymentsService IPN verification', () => {
         withdrawalId: 'withdrawal-1',
         address: 'TExampleAddress',
         currency: 'USDT',
+        network: 'TRC20',
         amount: 12.3456789,
       }),
     ).resolves.toMatchObject({ payoutId: 'payout-1', status: 'waiting' });
@@ -154,22 +155,43 @@ describe('NowPaymentsService IPN verification', () => {
         withdrawalId: 'withdrawal-1',
         address: 'TExampleAddress',
         currency: 'USDT',
+        network: 'TRC20',
         amount: 3.2,
       }),
-    ).rejects.toThrow(/below the payout provider's current minimum of 10.98424792 USDT/);
+    ).rejects.toThrow(/below the payout provider's current minimum of 10.98424792 USDT on TRC20/);
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('fetches the live per-network payout minimum', async () => {
-    process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
-    const fetchSpy = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify({ min_amount: 0.41491074 }), { status: 200 }));
+  it.each([
+    ['USDT', 'TRC20', 'usdttrc20'],
+    ['USDT', 'ERC20', 'usdterc20'],
+    ['USDT', 'BEP20', 'usdtbsc'],
+    ['USDT', 'SOL', 'usdtsol'],
+    ['USDT', 'POLYGON', 'usdtmatic'],
+    ['USDC', 'ERC20', 'usdc'],
+    ['USDC', 'BEP20', 'usdcbsc'],
+    ['USDC', 'SOL', 'usdcsol'],
+    ['USDC', 'POLYGON', 'usdcmatic'],
+  ] as const)(
+    'fetches the live payout minimum for %s on %s (%s)',
+    async (currency, network, providerCurrency) => {
+      process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(new Response(JSON.stringify({ min_amount: 0.41491074 }), { status: 200 }));
 
-    await expect(service.getPayoutMinAmount('USDT')).resolves.toBeCloseTo(0.41491074);
-    expect(fetchSpy.mock.calls[0][0]).toBe(
-      'https://api.nowpayments.io/v1/payout-withdrawal/min-amount/usdttrc20',
+      await expect(service.getPayoutMinAmount(currency, network)).resolves.toBeCloseTo(0.41491074);
+      expect(fetchSpy.mock.calls[0][0]).toBe(
+        `https://api.nowpayments.io/v1/payout-withdrawal/min-amount/${providerCurrency}`,
+      );
+    },
+  );
+
+  it('rejects USDC on TRC20 -- NOWPayments has no such listing for this account', async () => {
+    process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
+    await expect(service.getPayoutMinAmount('USDC', 'TRC20')).rejects.toThrow(
+      'No NOWPayments currency code for USDC on TRC20',
     );
   });
 
@@ -189,6 +211,7 @@ describe('NowPaymentsService IPN verification', () => {
       withdrawalId: 'withdrawal-1',
       address: 'TExampleAddress',
       currency: 'USDT',
+      network: 'TRC20',
       amount: 12.3456789,
     });
 

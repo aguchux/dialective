@@ -50,6 +50,7 @@ import { OtpService } from '../otp/otp.service';
 import { resolveOtpDestination } from '../otp/otp.util';
 import { SmsService } from '../sms/sms.service';
 import { NowPaymentsApiError, NowPaymentsService } from './nowpayments.service';
+import type { StablecoinNetwork } from './stablecoin-networks';
 import { FlutterwaveService } from './flutterwave.service';
 import { FlutterwaveV4Service, RecipientCountry } from './flutterwave-v4.service';
 import { StripeConnectService } from './stripe-connect.service';
@@ -2558,6 +2559,7 @@ export class WalletController {
         withdrawalId: withdrawal.id,
         address: withdrawal.destinationAddress,
         currency: withdrawal.destinationCurrency as 'USDT' | 'USDC',
+        network: (withdrawal.destinationNetwork ?? 'TRC20') as StablecoinNetwork,
         amount: withdrawal.usdtAmount.toNumber(),
       });
       await this.prisma.$transaction([

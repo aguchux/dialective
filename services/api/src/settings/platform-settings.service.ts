@@ -1510,12 +1510,19 @@ export class PlatformSettingsService {
       isFlutterwaveV4Enabled,
       // Trainer-facing "which payout rail can I use" gates -- unlike the
       // config CSVs (allowedFlutterwaveCurrencies/Countries) which are only
-      // needed by the admin settings UI, these two booleans are the only
-      // pieces of that config a trainer's payout-accounts page actually
-      // needs to decide which "add payout method" options to show.
+      // needed by the admin settings UI, these are the only pieces of that
+      // config a trainer's payout-accounts page actually needs to decide
+      // which "add payout method" options to show. allowedWithdrawalCurrencies/
+      // Networks ARE exposed here (unlike the Flutterwave CSVs) because the
+      // stablecoin wallet setup form needs to offer exactly the
+      // asset/network combinations the backend will actually accept --
+      // showing an option here that the backend then rejects would be a
+      // trainer-facing bug, not just a missing admin-UI nicety.
       isFlutterwavePayoutsEnabled,
       isStripePayoutsEnabled,
       isCryptoWithdrawalsEnabled,
+      allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
+      allowedWithdrawalNetworks: row.allowedWithdrawalNetworks,
       testimonyEnabled: row.testimonyEnabled,
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,

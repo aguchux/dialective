@@ -6,8 +6,12 @@ import {
 } from '@nestjs/common';
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import type { PayoutProvider, ProviderPayoutStatus } from './payout-provider.interface';
+import { getNowPaymentsCurrencyCode, type StablecoinNetwork } from './stablecoin-networks';
 
 const NOWPAYMENTS_API_BASE = 'https://api.nowpayments.io/v1';
+// createInvoice (deposits) is unchanged -- TRC20-only for now, tracked
+// separately (see TokenomicsService.recordConfirmedNowPaymentsDepositTx).
+// Only the payout side below is multi-network.
 const NOWPAYMENTS_PAY_CURRENCIES = {
   USDC: 'usdc',
   USDT: 'usdttrc20',
@@ -29,6 +33,7 @@ export interface CreateInvoiceResult {
 export interface CreatePayoutParams {
   address: string;
   currency: 'USDT' | 'USDC';
+  network: StablecoinNetwork;
   amount: number;
   withdrawalId: string;
 }
@@ -161,8 +166,8 @@ export class NowPaymentsService implements PayoutProvider {
    * real API call that creates a payout row we'd then have to notice
    * failed and clean up.
    */
-  async getPayoutMinAmount(currency: 'USDT' | 'USDC'): Promise<number> {
-    const providerCurrency = NOWPAYMENTS_PAY_CURRENCIES[currency];
+  async getPayoutMinAmount(currency: 'USDT' | 'USDC', network: StablecoinNetwork): Promise<number> {
+    const providerCurrency = getNowPaymentsCurrencyCode(currency, network);
     const res = await fetch(
       `${NOWPAYMENTS_API_BASE}/payout-withdrawal/min-amount/${providerCurrency}`,
       { headers: { 'x-api-key': this.apiKey } },
@@ -186,15 +191,15 @@ export class NowPaymentsService implements PayoutProvider {
   }
 
   async createPayout(params: CreatePayoutParams): Promise<CreatePayoutResult> {
-    const minAmount = await this.getPayoutMinAmount(params.currency);
+    const minAmount = await this.getPayoutMinAmount(params.currency, params.network);
     if (params.amount < minAmount) {
       throw new UnprocessableEntityException(
-        `This withdrawal is below the payout provider's current minimum of ${minAmount} ${params.currency}. Ask the trainer to withdraw a larger amount.`,
+        `This withdrawal is below the payout provider's current minimum of ${minAmount} ${params.currency} on ${params.network}. Ask the trainer to withdraw a larger amount.`,
       );
     }
 
     const token = await this.getPayoutAuthToken();
-    const providerCurrency = NOWPAYMENTS_PAY_CURRENCIES[params.currency];
+    const providerCurrency = getNowPaymentsCurrencyCode(params.currency, params.network);
     const res = await fetch(`${NOWPAYMENTS_API_BASE}/payout`, {
       method: 'POST',
       headers: {

@@ -1,8 +1,7 @@
 import { IsIn } from 'class-validator';
-import { IsTronAddress } from '../../common/tron-address.util';
-
-const STABLECOIN_NETWORKS = ['TRC20'] as const;
-const STABLECOIN_ASSETS = ['USDT', 'USDC'] as const;
+import { IsCryptoAddress } from '../../common/crypto-address.util';
+import { IsValidStablecoinPair } from '../../common/stablecoin-pair.util';
+import { STABLECOIN_ASSETS, STABLECOIN_NETWORKS } from '../stablecoin-networks';
 
 /** Only STABLECOIN_WALLET needs an OTP request before creation -- see PayoutAccountsController.requestStablecoinWalletSetupOtp. */
 export class RequestPayoutAccountSetupOtpDto {
@@ -10,8 +9,9 @@ export class RequestPayoutAccountSetupOtpDto {
   stablecoinAsset!: (typeof STABLECOIN_ASSETS)[number];
 
   @IsIn(STABLECOIN_NETWORKS)
+  @IsValidStablecoinPair('stablecoinAsset')
   stablecoinNetwork!: (typeof STABLECOIN_NETWORKS)[number];
 
-  @IsTronAddress()
+  @IsCryptoAddress('stablecoinNetwork')
   walletAddress!: string;
 }

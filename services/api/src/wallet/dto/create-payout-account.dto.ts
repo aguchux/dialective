@@ -1,5 +1,7 @@
 import { IsIn, IsOptional, IsString, Length, ValidateIf } from 'class-validator';
-import { IsTronAddress } from '../../common/tron-address.util';
+import { IsCryptoAddress } from '../../common/crypto-address.util';
+import { IsValidStablecoinPair } from '../../common/stablecoin-pair.util';
+import { STABLECOIN_ASSETS, STABLECOIN_NETWORKS } from '../stablecoin-networks';
 
 const PAYOUT_ACCOUNT_TYPES = [
   'BANK',
@@ -8,14 +10,6 @@ const PAYOUT_ACCOUNT_TYPES = [
   'STABLECOIN_WALLET',
 ] as const;
 export type CreatePayoutAccountType = (typeof PAYOUT_ACCOUNT_TYPES)[number];
-
-// Only TRC20 is offered today -- cheapest network with the deepest regional
-// liquidity for the markets trainers actually cash out in (see
-// StripeConnectService/FlutterwaveV4Service doc comments for the equivalent
-// per-rail country reasoning). Widening to other networks (BEP20/Polygon)
-// is a later, separate change, not a bigger union here.
-const STABLECOIN_NETWORKS = ['TRC20'] as const;
-const STABLECOIN_ASSETS = ['USDT', 'USDC'] as const;
 
 export class CreatePayoutAccountDto {
   @IsIn(PAYOUT_ACCOUNT_TYPES)
@@ -57,10 +51,11 @@ export class CreatePayoutAccountDto {
 
   @ValidateIf((dto: CreatePayoutAccountDto) => dto.type === 'STABLECOIN_WALLET')
   @IsIn(STABLECOIN_NETWORKS)
+  @IsValidStablecoinPair('stablecoinAsset')
   stablecoinNetwork?: (typeof STABLECOIN_NETWORKS)[number];
 
   @ValidateIf((dto: CreatePayoutAccountDto) => dto.type === 'STABLECOIN_WALLET')
-  @IsTronAddress()
+  @IsCryptoAddress('stablecoinNetwork')
   walletAddress?: string;
 
   // Required only for STABLECOIN_WALLET -- see
