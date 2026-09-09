@@ -1,4 +1,9 @@
-import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Injectable,
+  Logger,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import type { PayoutProvider, ProviderPayoutStatus } from './payout-provider.interface';
 
@@ -145,7 +150,49 @@ export class NowPaymentsService implements PayoutProvider {
     return { invoiceId: json.id, invoiceUrl: json.invoice_url };
   }
 
+  /**
+   * NOWPayments enforces a per-currency-per-network minimum payout amount
+   * that moves with market conditions (confirmed with their support: not a
+   * round or stable number, e.g. USDT-TRC20 sat at 10.98424792 on
+   * 2026-09-09, while USDT-ERC20 was 0.41491074 the same day) -- hardcoding
+   * a threshold would drift out of date. Checking this before createPayout
+   * turns a NOWPayments 400 (BAD_CREATE_WITHDRAWAL_REQUEST, "min amount is
+   * X") into an immediate, specific client-facing rejection instead of a
+   * real API call that creates a payout row we'd then have to notice
+   * failed and clean up.
+   */
+  async getPayoutMinAmount(currency: 'USDT' | 'USDC'): Promise<number> {
+    const providerCurrency = NOWPAYMENTS_PAY_CURRENCIES[currency];
+    const res = await fetch(
+      `${NOWPAYMENTS_API_BASE}/payout-withdrawal/min-amount/${providerCurrency}`,
+      { headers: { 'x-api-key': this.apiKey } },
+    );
+    const raw = await readNowPaymentsJson(res);
+    if (!res.ok) {
+      this.logger.error(`NOWPayments payout min-amount failed: ${res.status} ${JSON.stringify(raw)}`);
+      throw new NowPaymentsApiError(
+        'The payout provider could not report its minimum withdrawal amount.',
+        `NOWPayments payout-withdrawal/min-amount ${res.status}: ${JSON.stringify(raw)}`,
+      );
+    }
+    const minAmount = Number(raw.min_amount ?? raw.minAmount ?? raw.amount);
+    if (!Number.isFinite(minAmount) || minAmount <= 0) {
+      throw new NowPaymentsApiError(
+        'The payout provider returned an invalid minimum withdrawal amount.',
+        `NOWPayments payout-withdrawal/min-amount missing amount: ${JSON.stringify(raw)}`,
+      );
+    }
+    return minAmount;
+  }
+
   async createPayout(params: CreatePayoutParams): Promise<CreatePayoutResult> {
+    const minAmount = await this.getPayoutMinAmount(params.currency);
+    if (params.amount < minAmount) {
+      throw new UnprocessableEntityException(
+        `This withdrawal is below the payout provider's current minimum of ${minAmount} ${params.currency}. Ask the trainer to withdraw a larger amount.`,
+      );
+    }
+
     const token = await this.getPayoutAuthToken();
     const providerCurrency = NOWPAYMENTS_PAY_CURRENCIES[params.currency];
     const res = await fetch(`${NOWPAYMENTS_API_BASE}/payout`, {

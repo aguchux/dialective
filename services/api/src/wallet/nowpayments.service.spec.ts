@@ -103,6 +103,7 @@ describe('NowPaymentsService IPN verification', () => {
     process.env.NOWPAYMENTS_PAYOUT_PASSWORD = 'merchant-password';
     const fetchSpy = jest
       .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ min_amount: 1 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'jwt-token' }), { status: 200 }))
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ id: 'payout-1', status: 'waiting' }), {
@@ -120,10 +121,13 @@ describe('NowPaymentsService IPN verification', () => {
       }),
     ).resolves.toMatchObject({ payoutId: 'payout-1', status: 'waiting' });
 
-    expect(fetchSpy.mock.calls[0][0]).toBe('https://api.nowpayments.io/v1/auth');
-    expect(fetchSpy.mock.calls[1][0]).toBe('https://api.nowpayments.io/v1/payout');
-    expect(fetchSpy.mock.calls[1][1]?.headers).toMatchObject({ Authorization: 'Bearer jwt-token' });
-    expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toEqual({
+    expect(fetchSpy.mock.calls[0][0]).toBe(
+      'https://api.nowpayments.io/v1/payout-withdrawal/min-amount/usdttrc20',
+    );
+    expect(fetchSpy.mock.calls[1][0]).toBe('https://api.nowpayments.io/v1/auth');
+    expect(fetchSpy.mock.calls[2][0]).toBe('https://api.nowpayments.io/v1/payout');
+    expect(fetchSpy.mock.calls[2][1]?.headers).toMatchObject({ Authorization: 'Bearer jwt-token' });
+    expect(JSON.parse(String(fetchSpy.mock.calls[2][1]?.body))).toEqual({
       withdrawals: [
         {
           address: 'TExampleAddress',
@@ -135,12 +139,47 @@ describe('NowPaymentsService IPN verification', () => {
     });
   });
 
+  it('rejects a payout below the provider live minimum without calling auth/create', async () => {
+    process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
+    process.env.NOWPAYMENTS_PAYOUT_EMAIL = 'merchant@example.com';
+    process.env.NOWPAYMENTS_PAYOUT_PASSWORD = 'merchant-password';
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ min_amount: 10.98424792 }), { status: 200 }),
+      );
+
+    await expect(
+      service.createPayout({
+        withdrawalId: 'withdrawal-1',
+        address: 'TExampleAddress',
+        currency: 'USDT',
+        amount: 3.2,
+      }),
+    ).rejects.toThrow(/below the payout provider's current minimum of 10.98424792 USDT/);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches the live per-network payout minimum', async () => {
+    process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ min_amount: 0.41491074 }), { status: 200 }));
+
+    await expect(service.getPayoutMinAmount('USDT')).resolves.toBeCloseTo(0.41491074);
+    expect(fetchSpy.mock.calls[0][0]).toBe(
+      'https://api.nowpayments.io/v1/payout-withdrawal/min-amount/usdttrc20',
+    );
+  });
+
   it('carries the real NOWPayments status/body in providerDetail when createPayout is rejected, distinct from the generic client-facing message', async () => {
     process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
     process.env.NOWPAYMENTS_PAYOUT_EMAIL = 'merchant@example.com';
     process.env.NOWPAYMENTS_PAYOUT_PASSWORD = 'merchant-password';
     jest
       .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ min_amount: 1 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'jwt-token' }), { status: 200 }))
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ message: 'Insufficient payout balance' }), { status: 400 }),
