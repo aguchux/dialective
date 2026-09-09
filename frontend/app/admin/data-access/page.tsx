@@ -11,6 +11,7 @@ import {
   useGetAdminDataAccessLeadsQuery,
   useUpdateAdminDataAccessLeadContactMutation,
   useInviteDataAccessLeadMutation,
+  useDeleteDataAccessLeadMutation,
   useGetSubscriptionPlansQuery,
 } from '@/store/api';
 
@@ -28,10 +29,12 @@ export default function AdminDataAccessLeadsPage() {
   const [page, setPage] = useState(1);
   const [contactLead, setContactLead] = useState<AdminDataAccessLead | null>(null);
   const [inviteLead, setInviteLead] = useState<AdminDataAccessLead | null>(null);
+  const [deleteLead, setDeleteLead] = useState<AdminDataAccessLead | null>(null);
   const pageSize = 25;
   const { data, isLoading } = useGetAdminDataAccessLeadsQuery({ page, pageSize });
   const [updateContact] = useUpdateAdminDataAccessLeadContactMutation();
   const [inviteLeadMutation] = useInviteDataAccessLeadMutation();
+  const [deleteLeadMutation] = useDeleteDataAccessLeadMutation();
 
   const columns: DataTableColumn<AdminDataAccessLead>[] = [
     {
@@ -139,6 +142,15 @@ export default function AdminDataAccessLeadsPage() {
               Approve &amp; invite
             </button>
           )}
+          {!row.invitedOrganization && (
+            <button
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-danger transition-colors hover:bg-[#fde8e8]"
+              onClick={() => setDeleteLead(row)}
+              type="button"
+            >
+              Delete
+            </button>
+          )}
         </div>
       ),
       searchable: false,
@@ -214,8 +226,75 @@ export default function AdminDataAccessLeadsPage() {
             }}
           />
         )}
+
+        {deleteLead && (
+          <DeleteLeadDialog
+            lead={deleteLead}
+            onClose={() => setDeleteLead(null)}
+            onConfirm={async () => {
+              await deleteLeadMutation(deleteLead.id).unwrap();
+              setDeleteLead(null);
+            }}
+          />
+        )}
       </div>
     </AdminShell>
+  );
+}
+
+function DeleteLeadDialog({
+  lead,
+  onClose,
+  onConfirm,
+}: {
+  lead: AdminDataAccessLead;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function handleConfirm() {
+    setError(null);
+    setIsDeleting(true);
+    try {
+      await onConfirm();
+    } catch (mutationError) {
+      setError(normalizeErrorMessage(mutationError, 'Unable to delete this request.'));
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        title="Delete request"
+        description={`Permanently delete the request from ${lead.firstName} ${lead.lastName} (${lead.email})? This cannot be undone.`}
+      >
+        <div className="grid gap-3">
+          {error && (
+            <p className="text-sm text-danger" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60">
+              Cancel
+            </DialogClose>
+            <ActionButton
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-danger bg-danger px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-[#a3242f] disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleConfirm}
+              pending={isDeleting}
+              pendingLabel="Deleting"
+              type="button"
+            >
+              Delete request
+            </ActionButton>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

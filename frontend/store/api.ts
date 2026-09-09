@@ -3485,6 +3485,13 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['DataAccessLeads'],
     }),
+    deleteDataAccessLead: builder.mutation<{ id: string; status: string }, string>({
+      query: (id) => ({
+        url: `/leads/admin/data-access/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['DataAccessLeads'],
+    }),
     createSupportRequest: builder.mutation<{ id: string; status: string }, SupportRequestInput>({
       query: (body) => ({
         url: '/leads/support',
@@ -4729,6 +4736,7 @@ export const {
   useGetAdminDataAccessLeadsQuery,
   useUpdateAdminDataAccessLeadContactMutation,
   useInviteDataAccessLeadMutation,
+  useDeleteDataAccessLeadMutation,
   useCreateSupportRequestMutation,
   useGetAdminSupportRequestsQuery,
   useUpdateAdminSupportRequestResolutionMutation,

@@ -1,10 +1,13 @@
 import {
   Body,
+  ConflictException,
   Controller,
   DefaultValuePipe,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Patch,
@@ -165,6 +168,32 @@ export class LeadsController {
     });
 
     return { organizationId };
+  }
+
+  /**
+   * Deletes a data-access request. Refuses once the lead has an
+   * invitedOrganizationId (an admin already provisioned an org/invite from
+   * it) -- deleting the request there would orphan the relationship without
+   * touching the organization itself, and there's no undo for a lead that
+   * actually led to a real account. Interests cascade automatically
+   * (DataAccessLeadInterest.onDelete: Cascade).
+   */
+  @Delete('admin/data-access/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async deleteDataAccessLead(@Param('id') id: string) {
+    const lead = await this.prisma.dataAccessLead.findUnique({
+      where: { id },
+      select: { id: true, invitedOrganizationId: true },
+    });
+    if (!lead) throw new NotFoundException('Data-access request not found');
+    if (lead.invitedOrganizationId) {
+      throw new ConflictException(
+        'This request already has an organization account and cannot be deleted',
+      );
+    }
+    await this.prisma.dataAccessLead.delete({ where: { id } });
+    return { id, status: 'deleted' };
   }
 
   /**
