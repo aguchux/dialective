@@ -69,6 +69,7 @@ import { AdminWalletAdjustmentDto } from './dto/admin-wallet-adjustment.dto';
 import { ListEarningsDto } from './dto/list-earnings.dto';
 import { ListLeaderboardDto } from './dto/list-leaderboard.dto';
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
+import { GetWithdrawalMinAmountDto } from './dto/get-withdrawal-min-amount.dto';
 import { GetTrainerReportDto } from './dto/get-trainer-report.dto';
 import { TrainerReportService } from './trainer-report.service';
 import { renderTrainerReportPdf } from './trainer-report-pdf.util';
@@ -1854,7 +1855,14 @@ export class WalletController {
     await this.requireKycIfNeeded(user.kycStatus, tokenAmount);
   }
 
-  /** Crypto-specific PENDING withdrawal preconditions. */
+  /**
+   * Crypto-specific PENDING withdrawal preconditions. Checks NOWPayments'
+   * own live per-network minimum here (not just at admin-submit time in
+   * NowPaymentsService.createPayout) so an undersized request is rejected
+   * immediately -- before it ever becomes a PENDING row an admin has to
+   * notice failed later. See NowPaymentsService.getPayoutMinAmount's doc
+   * comment for why this can't be hardcoded.
+   */
   private async validateWithdrawalRequest(
     userId: string,
     tokenAmount: number,
@@ -1877,6 +1885,19 @@ export class WalletController {
     if (!allowedNetworks.includes(destinationNetwork.toUpperCase())) {
       throw new UnprocessableEntityException(
         `${destinationNetwork} is not an allowed withdrawal network`,
+      );
+    }
+
+    const rate = await this.getCurrentTokenUsdRate();
+    const usdtAmount = tokensToUsdt(tokenAmount, rate);
+    const minAmount = await this.nowPayments.getPayoutMinAmount(
+      destinationCurrency.toUpperCase() as 'USDT' | 'USDC',
+      destinationNetwork.toUpperCase() as StablecoinNetwork,
+    );
+    if (usdtAmount < minAmount) {
+      const minTokens = minAmount / rate;
+      throw new UnprocessableEntityException(
+        `This withdrawal is below the payout provider's current minimum for ${destinationCurrency} on ${destinationNetwork} -- withdraw at least ${minTokens.toFixed(4)} DL (≈ ${minAmount} ${destinationCurrency}).`,
       );
     }
   }
@@ -2074,6 +2095,32 @@ export class WalletController {
     return {
       fiatAmount: new Prisma.Decimal(usdAmount).mul(rate).toDecimalPlaces(2),
       fiatUsdExchangeRate: rate,
+    };
+  }
+
+  /**
+   * Lets the withdrawal form gate the amount input live, before the trainer
+   * ever submits -- without this, an undersized request would only be
+   * caught by validateWithdrawalRequest's own check at OTP-request time,
+   * which is still correct but a worse experience (typed amount, hit
+   * submit, got rejected) than disabling the button up front. Converts
+   * NOWPayments' USDT/USDC-denominated minimum back to DL tokens using the
+   * same tokenUsdRate the rest of the withdrawal flow uses, so the number
+   * shown here always matches what validateWithdrawalRequest will actually
+   * enforce.
+   */
+  @Get('wallet/withdrawal-min-amount')
+  @UseGuards(JwtAuthGuard)
+  async getWithdrawalMinAmount(@Query() query: GetWithdrawalMinAmountDto) {
+    const [rate, minAmount] = await Promise.all([
+      this.getCurrentTokenUsdRate(),
+      this.nowPayments.getPayoutMinAmount(query.currency, query.network),
+    ]);
+    return {
+      currency: query.currency,
+      network: query.network,
+      minAmount,
+      minTokens: (minAmount / rate).toString(),
     };
   }
 

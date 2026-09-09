@@ -2958,6 +2958,12 @@ export const dialectivaApi = createApi({
     >({
       query: (id) => ({ url: `/wallet/deposits/flutterwave/${id}/check-status`, method: 'POST' }),
     }),
+    getWithdrawalMinAmount: builder.query<
+      { currency: WithdrawalCurrency; network: WithdrawalNetwork; minAmount: number; minTokens: string },
+      { currency: WithdrawalCurrency; network: WithdrawalNetwork }
+    >({
+      query: (params) => ({ url: '/wallet/withdrawal-min-amount', params }),
+    }),
     requestWithdrawalOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
       {
@@ -4604,6 +4610,7 @@ export const {
   useCreateFlutterwaveDepositMutation,
   useLazyVerifyFlutterwaveDepositQuery,
   useCheckFlutterwaveDepositStatusMutation,
+  useGetWithdrawalMinAmountQuery,
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
   useListAdminWithdrawalsQuery,

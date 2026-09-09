@@ -104,6 +104,7 @@ import {
   useRequestFlutterwaveDepositOtpMutation,
   useCreateFlutterwaveDepositMutation,
   useCheckFlutterwaveDepositStatusMutation,
+  useGetWithdrawalMinAmountQuery,
   useRequestWithdrawalOtpMutation,
   useCreateWithdrawalMutation,
   useListPayoutAccountsQuery,
@@ -4432,6 +4433,20 @@ function WithdrawTokensDialog({
   const minWalletBalanceNumber = Number(minWalletBalanceTokens);
   const exceedsWithdrawableBalance = amountNumber > withdrawableBalanceNumber;
 
+  // Live NOWPayments per-network minimum -- re-fetched whenever the
+  // currency/network selection changes (crypto method only; fiat has no
+  // NOWPayments minimum) so the amount input is gated before submit
+  // instead of only failing server-side after the trainer hits "Review".
+  const { data: providerMinAmount } = useGetWithdrawalMinAmountQuery(
+    { currency: destinationCurrency, network: destinationNetwork },
+    { skip: method !== 'crypto' },
+  );
+  const belowProviderMinimum =
+    method === 'crypto' &&
+    providerMinAmount !== undefined &&
+    amountNumber > 0 &&
+    amountNumber < Number(providerMinAmount.minTokens);
+
   async function startKycVerification() {
     setMessage(null);
     try {
@@ -4484,6 +4499,12 @@ function WithdrawTokensDialog({
         return;
       }
     } else {
+      if (belowProviderMinimum && providerMinAmount) {
+        setMessage(
+          `The payout provider requires at least ${formatTokens(providerMinAmount.minTokens)} DL for ${destinationCurrency} on ${destinationNetwork}.`,
+        );
+        return;
+      }
       if (!addressLooksValid) {
         setMessage(`That doesn't look like a valid ${destinationNetwork} address.`);
         return;
@@ -4851,6 +4872,13 @@ function WithdrawTokensDialog({
                     : `Exceeds your available balance of ${formatTokens(balance)} DL.`}
                 </span>
               )}
+              {belowProviderMinimum && providerMinAmount && (
+                <span className="text-xs font-bold text-danger">
+                  The payout provider requires at least{' '}
+                  {formatTokens(providerMinAmount.minTokens)} DL for {destinationCurrency} on{' '}
+                  {destinationNetwork} (≈ {providerMinAmount.minAmount} {destinationCurrency}).
+                </span>
+              )}
             </label>
             {method === 'crypto' ? (
               <>
@@ -4980,7 +5008,7 @@ function WithdrawTokensDialog({
               disabled={
                 exceedsWithdrawableBalance ||
                 (method === 'crypto'
-                  ? !addressLooksValid || !addressConfirmed
+                  ? !addressLooksValid || !addressConfirmed || belowProviderMinimum
                   : (payoutAccounts?.length ?? 0) === 0 ||
                     (selectedPayoutAccount?.type === 'STRIPE_CONNECT' &&
                       !selectedPayoutAccount.stripePayoutsEnabled))

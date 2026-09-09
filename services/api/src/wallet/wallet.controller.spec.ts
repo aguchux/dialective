@@ -58,11 +58,13 @@ describe('WalletController crypto withdrawal eligibility', () => {
       getKycMinWithdrawalTokens: jest.fn().mockResolvedValue(overrides?.kycMinTokens ?? 50),
       getAllowedWithdrawalCurrencies: jest.fn().mockResolvedValue(['USDT']),
       getAllowedWithdrawalNetworks: jest.fn().mockResolvedValue(['TRC20']),
+      getTokenUsdRate: jest.fn().mockResolvedValue(1),
     };
+    const nowPayments = { getPayoutMinAmount: jest.fn().mockResolvedValue(0) };
     const otp = { issueForUser: jest.fn().mockResolvedValue({ id: 'otp-1' }) };
     const controller = new WalletController(
       prisma as never,
-      {} as never,
+      nowPayments as never,
       {} as never,
       {} as never,
       {} as never,
@@ -71,7 +73,7 @@ describe('WalletController crypto withdrawal eligibility', () => {
       {} as never,
       {} as never,
     );
-    return { controller, prisma, otp };
+    return { controller, prisma, otp, nowPayments };
   }
 
   it('requires the configured settled-task count before issuing a crypto withdrawal OTP', async () => {
@@ -149,6 +151,17 @@ describe('WalletController crypto withdrawal eligibility', () => {
 
     await controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody);
     expect(otp.issueForUser).toHaveBeenCalled();
+  });
+
+  it("rejects a withdrawal below NOWPayments' live per-network minimum", async () => {
+    const { controller, otp, nowPayments } = setup();
+    nowPayments.getPayoutMinAmount.mockResolvedValue(60); // 60 USDT min, request is 50 DL @ rate=1
+
+    await expect(controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody)).rejects.toThrow(
+      /below the payout provider's current minimum for USDT on TRC20 -- withdraw at least 60\.0000 DL/,
+    );
+    expect(nowPayments.getPayoutMinAmount).toHaveBeenCalledWith('USDT', 'TRC20');
+    expect(otp.issueForUser).not.toHaveBeenCalled();
   });
 });
 
