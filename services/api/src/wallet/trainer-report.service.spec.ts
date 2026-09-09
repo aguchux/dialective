@@ -6,10 +6,17 @@ describe('TrainerReportService', () => {
 
   beforeEach(() => {
     prisma = {
-      wallet: { findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1' }) },
+      wallet: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'wallet-1',
+          balance: { toNumber: () => 0 },
+          lockedBalance: { toNumber: () => 0 },
+        }),
+      },
       ledgerEntry: {
         groupBy: jest.fn().mockResolvedValue([]),
         findMany: jest.fn().mockResolvedValue([]),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }),
       },
       wordRecording: { findMany: jest.fn().mockResolvedValue([]) },
       user: {
@@ -83,8 +90,48 @@ describe('TrainerReportService', () => {
       trainingEarningsTokens: '5',
       referralEarningsTokens: '1',
       totalEarningsTokens: '6',
+      totalTokensSinceJoin: '0',
+      availableBalanceTokens: '0',
+      heldBalanceTokens: '0',
+      totalWithdrawnTokens: '0',
     });
     expect(report.daily).toEqual([{ date: '2026-08-01', recordings: 3, earningsTokens: '6' }]);
+  });
+
+  it('surfaces lifetime balance/withdrawal figures independent of the report date range', async () => {
+    prisma.wallet.findUnique.mockResolvedValue({
+      id: 'wallet-1',
+      balance: { toNumber: () => 42 },
+      lockedBalance: { toNumber: () => 8 },
+    });
+    prisma.ledgerEntry.aggregate
+      .mockResolvedValueOnce({ _sum: { amount: 500 } }) // lifetime credits
+      .mockResolvedValueOnce({ _sum: { amount: -120 } }); // withdrawal + reversal net
+
+    const report = await service.buildReport(
+      'user-1',
+      new Date('2026-08-01T00:00:00Z'),
+      new Date('2026-08-01T23:59:59Z'),
+    );
+
+    expect(report.totals.totalTokensSinceJoin).toBe('500');
+    expect(report.totals.availableBalanceTokens).toBe('42');
+    expect(report.totals.heldBalanceTokens).toBe('8');
+    expect(report.totals.totalWithdrawnTokens).toBe('120');
+  });
+
+  it('nets a fully-reversed withdrawal back to zero rather than going negative', async () => {
+    prisma.ledgerEntry.aggregate
+      .mockResolvedValueOnce({ _sum: { amount: 0 } })
+      .mockResolvedValueOnce({ _sum: { amount: 0 } }); // WITHDRAWAL (-100) + WITHDRAWAL_REVERSED (+100)
+
+    const report = await service.buildReport(
+      'user-1',
+      new Date('2026-08-01T00:00:00Z'),
+      new Date('2026-08-01T23:59:59Z'),
+    );
+
+    expect(report.totals.totalWithdrawnTokens).toBe('0');
   });
 
   it('folds COURSE_COMPLETION_REWARD into training earnings, not a separate bucket', async () => {
@@ -120,6 +167,11 @@ describe('TrainerReportService', () => {
 
     expect(prisma.ledgerEntry.groupBy).not.toHaveBeenCalled();
     expect(prisma.ledgerEntry.findMany).not.toHaveBeenCalled();
+    expect(prisma.ledgerEntry.aggregate).not.toHaveBeenCalled();
     expect(report.totals.trainingEarningsTokens).toBe('0');
+    expect(report.totals.availableBalanceTokens).toBe('0');
+    expect(report.totals.heldBalanceTokens).toBe('0');
+    expect(report.totals.totalWithdrawnTokens).toBe('0');
+    expect(report.totals.totalTokensSinceJoin).toBe('0');
   });
 });

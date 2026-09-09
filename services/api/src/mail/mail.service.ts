@@ -329,12 +329,44 @@ export class MailService {
     );
   }
 
+  /**
+   * Self-serve "email me this report" CTA on the trainer's own Reports
+   * screen -- unlike sendWeeklyTrainerReportEmail (an HTML summary with no
+   * attachment), this always carries the actual rendered PDF so the trainer
+   * has a real document to keep/forward, not just a link back to the
+   * dashboard.
+   */
+  async sendTrainerReportPdfEmail(payload: {
+    trainerEmail: string;
+    trainerFirstName: string | null;
+    pdf: Buffer;
+  }): Promise<void> {
+    const reportsUrl = `${frontendUrl()}/dashboard/reports`;
+    const greeting = payload.trainerFirstName ? escapeHtml(payload.trainerFirstName) : 'there';
+    await this.send(
+      payload.trainerEmail,
+      'Your Dialect Library report (PDF)',
+      `<p>Hi ${greeting},</p><p>Your requested Dialect Library account report is attached as a PDF.</p><p>You can also view it live any time at <a href="${reportsUrl}">${reportsUrl}</a>.</p>`,
+      `Hi ${greeting},\n\nYour requested Dialect Library account report is attached as a PDF.\n\nYou can also view it live any time at ${reportsUrl}\n`,
+      {
+        attachment: {
+          filename: 'dialect-library-report.pdf',
+          content: payload.pdf,
+          contentType: 'application/pdf',
+        },
+      },
+    );
+  }
+
   private async send(
     to: string,
     subject: string,
     html: string,
     text: string,
-    options?: { footer?: boolean },
+    options?: {
+      footer?: boolean;
+      attachment?: { filename: string; content: Buffer; contentType: string };
+    },
   ): Promise<void> {
     const includeFooter = options?.footer ?? true;
     const finalHtml = includeFooter ? html + EMAIL_FOOTER_HTML : html;
@@ -352,6 +384,7 @@ export class MailService {
       subject,
       html: finalHtml,
       text: finalText,
+      ...(options?.attachment ? { attachments: [options.attachment] } : {}),
     });
     if (error) {
       this.logger.error(`Resend send failed for ${to}: ${error.message}`);

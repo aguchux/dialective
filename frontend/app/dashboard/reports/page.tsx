@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Download, Printer, RefreshCw } from 'lucide-react';
+import { Download, Mail, Printer, RefreshCw } from 'lucide-react';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
 import { cardClass } from '@/components/dashboard/shared';
 import { DashboardHeader, emailName, MobileNavigation } from '@/components/dashboard/DashboardShell';
 import { TrainerReportChart } from '@/components/reports/TrainerReportChart';
 import { formatCompactTokens } from '@/lib/format';
-import { useGetTrainerReportQuery } from '@/store/api';
+import { normalizeErrorMessage, useEmailTrainerReportMutation, useGetTrainerReportQuery } from '@/store/api';
 
 type Preset = 'week' | 'month' | 'lifetime';
 
@@ -33,6 +33,10 @@ export default function TrainerReportsPage() {
   const [to, setTo] = useState('');
   const reportRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [emailTrainerReport, { isLoading: isEmailing }] = useEmailTrainerReportMutation();
+  const [emailNotice, setEmailNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(
+    null,
+  );
 
   const { data, isLoading, isFetching, isError, refetch } = useGetTrainerReportQuery(
     { from: from || undefined, to: to || undefined },
@@ -89,6 +93,22 @@ export default function TrainerReportsPage() {
     }
   }
 
+  async function handleEmailReport() {
+    setEmailNotice(null);
+    try {
+      await emailTrainerReport({ from: from || undefined, to: to || undefined }).unwrap();
+      setEmailNotice({
+        kind: 'success',
+        message: `Sent to ${session?.user.email ?? 'your email'}. Check your inbox shortly.`,
+      });
+    } catch (err) {
+      setEmailNotice({
+        kind: 'error',
+        message: normalizeErrorMessage(err, 'Unable to email your report right now.'),
+      });
+    }
+  }
+
   if (status === 'loading' || !session) {
     return <div className="dashboard-theme min-h-screen bg-bg" />;
   }
@@ -119,16 +139,29 @@ export default function TrainerReportsPage() {
             <div>
               <h1 className="text-3xl font-black">Your report</h1>
               <p className="mt-1 leading-relaxed text-muted">
-                Recordings, scores, and earnings for the selected date range.
+                Recordings, scores, and account token flow -- your one spot to see where you stand.
               </p>
             </div>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 flex-wrap gap-2">
               <button
                 className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-line bg-white px-3.5 text-sm font-extrabold hover:bg-surface-muted"
                 onClick={() => window.print()}
                 type="button"
               >
                 <Printer className="size-4" aria-hidden="true" /> Print
+              </button>
+              <button
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-line bg-white px-3.5 text-sm font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isEmailing || !data}
+                onClick={() => void handleEmailReport()}
+                type="button"
+              >
+                {isEmailing ? (
+                  <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Mail className="size-4" aria-hidden="true" />
+                )}
+                Email PDF to me
               </button>
               <button
                 className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-accent bg-accent px-3.5 text-sm font-extrabold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
@@ -145,6 +178,19 @@ export default function TrainerReportsPage() {
               </button>
             </div>
           </header>
+
+          {emailNotice && (
+            <p
+              className={`no-print rounded-lg border px-3.5 py-2.5 text-sm font-bold ${
+                emailNotice.kind === 'success'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-red-200 bg-red-50 text-danger'
+              }`}
+              role={emailNotice.kind === 'error' ? 'alert' : 'status'}
+            >
+              {emailNotice.message}
+            </p>
+          )}
 
           <div className="no-print flex flex-wrap items-center gap-3">
             <div className="inline-flex rounded-lg border border-line bg-surface p-1" role="tablist">
@@ -223,22 +269,49 @@ export default function TrainerReportsPage() {
               <h2 className="hidden text-2xl font-black print:block">
                 Dialect Library -- Your report
               </h2>
-              <section className="grid grid-cols-2 gap-3 md:grid-cols-3" aria-label="Report summary">
-                <StatCard label="Recordings" value={String(totals.recordings)} />
-                <StatCard label="Avg. score" value={totals.avgScore ? `${totals.avgScore}%` : '—'} />
-                <StatCard
-                  label="Training earnings"
-                  value={formatCompactTokens(totals.trainingEarningsTokens)}
-                />
-                <StatCard
-                  label="Referral earnings"
-                  value={formatCompactTokens(totals.referralEarningsTokens)}
-                />
-                <StatCard
-                  label="Total earned"
-                  value={formatCompactTokens(totals.totalEarningsTokens)}
-                />
-                <StatCard label="Scored" value={String(totals.scoredRecordings)} />
+
+              <section className="grid gap-2">
+                <h3 className="text-sm font-extrabold uppercase tracking-wide text-muted">
+                  Recordings &amp; earnings (selected range)
+                </h3>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3" aria-label="Recordings and earnings summary">
+                  <StatCard label="Recordings" value={String(totals.recordings)} />
+                  <StatCard label="Scored" value={String(totals.scoredRecordings)} />
+                  <StatCard label="Avg. score" value={totals.avgScore ? `${totals.avgScore}%` : '—'} />
+                  <StatCard
+                    label="Training earnings"
+                    value={formatCompactTokens(totals.trainingEarningsTokens)}
+                  />
+                  <StatCard
+                    label="Referral earnings"
+                    value={formatCompactTokens(totals.referralEarningsTokens)}
+                  />
+                  <StatCard
+                    label="Total earned"
+                    value={formatCompactTokens(totals.totalEarningsTokens)}
+                  />
+                </div>
+              </section>
+
+              <section className="grid gap-2">
+                <h3 className="text-sm font-extrabold uppercase tracking-wide text-muted">
+                  Account balance (lifetime)
+                </h3>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Account balance summary">
+                  <StatCard
+                    label="Tokens since join"
+                    value={formatCompactTokens(totals.totalTokensSinceJoin)}
+                  />
+                  <StatCard
+                    label="Available balance"
+                    value={formatCompactTokens(totals.availableBalanceTokens)}
+                  />
+                  <StatCard label="Held" value={formatCompactTokens(totals.heldBalanceTokens)} />
+                  <StatCard
+                    label="Total withdrawn"
+                    value={formatCompactTokens(totals.totalWithdrawnTokens)}
+                  />
+                </div>
               </section>
 
               <TrainerReportChart daily={data.daily} />

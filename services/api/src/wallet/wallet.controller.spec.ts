@@ -1218,6 +1218,82 @@ describe('WalletController.sendInstantTrainerReport', () => {
   });
 });
 
+describe('WalletController.emailTrainerReport', () => {
+  function setup(overrides: { user?: Record<string, unknown> | null } = {}) {
+    const user =
+      'user' in overrides
+        ? overrides.user
+        : { email: 'trainer@example.com', firstName: 'Ada', lastName: 'Lovelace' };
+    const prisma = { user: { findUniqueOrThrow: jest.fn().mockResolvedValue(user) } };
+    const trainerReport = {
+      buildReport: jest.fn().mockResolvedValue({
+        totals: {
+          recordings: 12,
+          scoredRecordings: 10,
+          avgScore: '84.50',
+          avgCompositeScore: '80.00',
+          trainingEarningsTokens: '3',
+          referralEarningsTokens: '0.5',
+          totalEarningsTokens: '3.5',
+          totalTokensSinceJoin: '900',
+          availableBalanceTokens: '300',
+          heldBalanceTokens: '20',
+          totalWithdrawnTokens: '580',
+        },
+        daily: [],
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-07T00:00:00.000Z',
+      }),
+    };
+    const mail = { sendTrainerReportPdfEmail: jest.fn().mockResolvedValue(undefined) };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      mail as never,
+      {} as never,
+      undefined,
+      trainerReport as never,
+    );
+    return { controller, prisma, trainerReport, mail };
+  }
+
+  it('builds the report for the requesting trainer, renders it to PDF, and emails it to their own address', async () => {
+    const { controller, trainerReport, mail } = setup();
+
+    await expect(
+      controller.emailTrainerReport({ user: { sub: 'trainer-1' } } as never, {} as never),
+    ).resolves.toEqual({ sent: true });
+
+    expect(trainerReport.buildReport).toHaveBeenCalledWith('trainer-1', undefined, undefined);
+    expect(mail.sendTrainerReportPdfEmail).toHaveBeenCalledTimes(1);
+    const call = mail.sendTrainerReportPdfEmail.mock.calls[0][0];
+    expect(call.trainerEmail).toBe('trainer@example.com');
+    expect(call.trainerFirstName).toBe('Ada');
+    expect(Buffer.isBuffer(call.pdf)).toBe(true);
+    expect(call.pdf.length).toBeGreaterThan(100);
+  });
+
+  it('forwards an explicit from/to range as Dates', async () => {
+    const { controller, trainerReport } = setup();
+
+    await controller.emailTrainerReport({ user: { sub: 'trainer-1' } } as never, {
+      from: '2026-08-01T00:00:00Z',
+      to: '2026-08-07T00:00:00Z',
+    } as never);
+
+    expect(trainerReport.buildReport).toHaveBeenCalledWith(
+      'trainer-1',
+      new Date('2026-08-01T00:00:00Z'),
+      new Date('2026-08-07T00:00:00Z'),
+    );
+  });
+});
+
 describe('WalletController admin leaderboard', () => {
   it('ranks earners by task payout ledger totals and contributors by submitted task count', async () => {
     const prisma = {

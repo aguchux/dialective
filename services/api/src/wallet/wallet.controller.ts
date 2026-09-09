@@ -70,6 +70,7 @@ import { ListLeaderboardDto } from './dto/list-leaderboard.dto';
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { GetTrainerReportDto } from './dto/get-trainer-report.dto';
 import { TrainerReportService } from './trainer-report.service';
+import { renderTrainerReportPdf } from './trainer-report-pdf.util';
 import { CreateReferralInviteDto } from './dto/create-referral-invite.dto';
 import { ListReferralInvitationsDto } from './dto/list-referral-invitations.dto';
 import { tokensToUsdt, usdToTokens } from './token-rate.util';
@@ -767,6 +768,39 @@ export class WalletController {
       query.from ? new Date(query.from) : undefined,
       query.to ? new Date(query.to) : undefined,
     );
+  }
+
+  /**
+   * Self-serve "email me this report" CTA on the trainer's own Reports
+   * screen (frontend/app/dashboard/reports/page.tsx) -- always sends to the
+   * caller's own verified account email, same date range as whatever
+   * they're currently viewing. Distinct from the admin-triggered
+   * sendInstantTrainerReport (no PDF attachment, admin-initiated for any
+   * trainer) and the Monday weekly-trainer-report cron.
+   */
+  @Post('wallet/report/email')
+  @UseGuards(JwtAuthGuard, UserThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
+  async emailTrainerReport(@Req() req: AuthenticatedRequest, @Query() query: GetTrainerReportDto) {
+    const [user, report] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({
+        where: { id: req.user.sub },
+        select: { email: true, firstName: true, lastName: true },
+      }),
+      this.trainerReport!.buildReport(
+        req.user.sub,
+        query.from ? new Date(query.from) : undefined,
+        query.to ? new Date(query.to) : undefined,
+      ),
+    ]);
+    const trainerName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email;
+    const pdf = await renderTrainerReportPdf(report, trainerName);
+    await this.mail.sendTrainerReportPdfEmail({
+      trainerEmail: user.email,
+      trainerFirstName: user.firstName,
+      pdf,
+    });
+    return { sent: true };
   }
 
   /**

@@ -59,6 +59,50 @@ describe('MailService.sendWeeklyTrainerReportEmail', () => {
   });
 });
 
+describe('MailService.sendTrainerReportPdfEmail', () => {
+  let settings: any;
+  let service: MailService;
+
+  beforeEach(() => {
+    sendMock.mockClear();
+    process.env.RESEND_API_KEY = 'test-key';
+    settings = { getResendFromAddress: jest.fn().mockResolvedValue('noreply@example.com') };
+    service = new MailService(settings as never);
+  });
+
+  it('sends the PDF as an attachment with an escaped first name', async () => {
+    const pdf = Buffer.from('%PDF-1.4 fake pdf bytes');
+
+    await service.sendTrainerReportPdfEmail({
+      trainerEmail: 'trainer@example.com',
+      trainerFirstName: '<b>Ada</b>',
+      pdf,
+    });
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const call = sendMock.mock.calls[0][0];
+    expect(call.to).toBe('trainer@example.com');
+    expect(call.subject).toContain('PDF');
+    expect(call.html).not.toContain('<b>Ada</b>');
+    expect(call.html).toContain('&lt;b&gt;Ada&lt;/b&gt;');
+    expect(call.attachments).toEqual([
+      { filename: 'dialect-library-report.pdf', content: pdf, contentType: 'application/pdf' },
+    ]);
+  });
+
+  it('falls back to "there" when the trainer has no first name on file', async () => {
+    await service.sendTrainerReportPdfEmail({
+      trainerEmail: 'trainer@example.com',
+      trainerFirstName: null,
+      pdf: Buffer.from('pdf'),
+    });
+
+    const call = sendMock.mock.calls[0][0];
+    expect(call.html).toContain('Hi there');
+    expect(call.text).toContain('Hi there');
+  });
+});
+
 describe('MailService.sendOtpEmail PAYOUT_ACCOUNT_DELETE', () => {
   let settings: any;
   let service: MailService;

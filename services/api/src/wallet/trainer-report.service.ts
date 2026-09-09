@@ -21,6 +21,16 @@ export interface TrainerReport {
     trainingEarningsTokens: string;
     referralEarningsTokens: string;
     totalEarningsTokens: string;
+    // Account-flow figures below are always lifetime (since the trainer
+    // joined), regardless of the report's from/to range -- "available
+    // balance" or "total withdrawn" scoped to an arbitrary date window
+    // wouldn't mean anything a trainer could act on; these answer "where do
+    // I stand right now" alongside the range-scoped recording/earnings
+    // figures above.
+    totalTokensSinceJoin: string;
+    availableBalanceTokens: string;
+    heldBalanceTokens: string;
+    totalWithdrawnTokens: string;
   };
   daily: { date: string; recordings: number; earningsTokens: string }[];
 }
@@ -43,28 +53,55 @@ export class TrainerReportService {
 
     const wallet = await this.prisma.wallet.findUnique({
       where: { userId },
-      select: { id: true },
+      select: { id: true, balance: true, lockedBalance: true },
     });
 
-    const [ledgerTotals, ledgerDaily, wordRecordings] = await Promise.all([
-      wallet
-        ? this.prisma.ledgerEntry.groupBy({
-            by: ['type'],
-            where: { walletId: wallet.id, type: { in: EARNING_ENTRY_TYPES }, createdAt: createdAtRange },
-            _sum: { amount: true },
-          })
-        : Promise.resolve([]),
-      wallet
-        ? this.prisma.ledgerEntry.findMany({
-            where: { walletId: wallet.id, type: { in: EARNING_ENTRY_TYPES }, createdAt: createdAtRange },
-            select: { amount: true, createdAt: true },
-          })
-        : Promise.resolve([]),
-      this.prisma.wordRecording.findMany({
-        where: { userId, createdAt: createdAtRange },
-        select: { score: true, compositeScore: true, createdAt: true },
-      }),
-    ]);
+    const [ledgerTotals, ledgerDaily, wordRecordings, lifetimeEarningsAgg, withdrawnAgg] =
+      await Promise.all([
+        wallet
+          ? this.prisma.ledgerEntry.groupBy({
+              by: ['type'],
+              where: {
+                walletId: wallet.id,
+                type: { in: EARNING_ENTRY_TYPES },
+                createdAt: createdAtRange,
+              },
+              _sum: { amount: true },
+            })
+          : Promise.resolve([]),
+        wallet
+          ? this.prisma.ledgerEntry.findMany({
+              where: { walletId: wallet.id, type: { in: EARNING_ENTRY_TYPES }, createdAt: createdAtRange },
+              select: { amount: true, createdAt: true },
+            })
+          : Promise.resolve([]),
+        this.prisma.wordRecording.findMany({
+          where: { userId, createdAt: createdAtRange },
+          select: { score: true, compositeScore: true, createdAt: true },
+        }),
+        // Lifetime (no date filter) -- "total tokens since join" sums every
+        // credit the wallet has ever received, not just earnings within the
+        // selected report range.
+        wallet
+          ? this.prisma.ledgerEntry.aggregate({
+              where: { walletId: wallet.id, amount: { gt: 0 } },
+              _sum: { amount: true },
+            })
+          : Promise.resolve({ _sum: { amount: null } }),
+        // WITHDRAWAL_REVERSED is a signed reversal of a prior WITHDRAWAL
+        // (see LedgerEntryType's schema doc comment) -- summing both types
+        // together nets a reversed withdrawal back out automatically,
+        // rather than needing a separate subtraction step.
+        wallet
+          ? this.prisma.ledgerEntry.aggregate({
+              where: {
+                walletId: wallet.id,
+                type: { in: [LedgerEntryType.WITHDRAWAL, LedgerEntryType.WITHDRAWAL_REVERSED] },
+              },
+              _sum: { amount: true },
+            })
+          : Promise.resolve({ _sum: { amount: null } }),
+      ]);
 
     const earningsAmount = (types: LedgerEntryType[]) =>
       ledgerTotals
@@ -94,6 +131,11 @@ export class TrainerReportService {
 
     const daily = this.buildDailyBuckets(effectiveFrom, effectiveTo, ledgerDaily, allRecordings);
 
+    // WITHDRAWAL rows are stored negative (a debit); WITHDRAWAL_REVERSED
+    // nets a reversed one back out. Negate the signed sum so "total
+    // withdrawn" reads as a positive figure like every other total here.
+    const totalWithdrawn = -Number(withdrawnAgg._sum.amount ?? 0);
+
     return {
       from: effectiveFrom.toISOString(),
       to: effectiveTo.toISOString(),
@@ -105,6 +147,10 @@ export class TrainerReportService {
         trainingEarningsTokens: trainingEarnings.toString(),
         referralEarningsTokens: referralEarnings.toString(),
         totalEarningsTokens: (trainingEarnings + referralEarnings).toString(),
+        totalTokensSinceJoin: Number(lifetimeEarningsAgg._sum.amount ?? 0).toString(),
+        availableBalanceTokens: (wallet?.balance.toNumber() ?? 0).toString(),
+        heldBalanceTokens: (wallet?.lockedBalance.toNumber() ?? 0).toString(),
+        totalWithdrawnTokens: Math.max(totalWithdrawn, 0).toString(),
       },
       daily,
     };

@@ -1314,6 +1314,10 @@ export interface TrainerReport {
     trainingEarningsTokens: string;
     referralEarningsTokens: string;
     totalEarningsTokens: string;
+    totalTokensSinceJoin: string;
+    availableBalanceTokens: string;
+    heldBalanceTokens: string;
+    totalWithdrawnTokens: string;
   };
   daily: { date: string; recordings: number; earningsTokens: string }[];
 }
@@ -2711,6 +2715,9 @@ export const dialectivaApi = createApi({
     getTrainerReport: builder.query<TrainerReport, { from?: string; to?: string }>({
       query: ({ from, to }) => ({ url: '/wallet/report', params: { from, to } }),
       providesTags: ['Wallet'],
+    }),
+    emailTrainerReport: builder.mutation<{ sent: boolean }, { from?: string; to?: string }>({
+      query: ({ from, to }) => ({ url: '/wallet/report/email', method: 'POST', params: { from, to } }),
     }),
     getEarningHistory: builder.query<
       EarningHistoryPage,
@@ -4554,6 +4561,7 @@ export const {
   useGetAdminCommunityPostsByAuthorQuery,
   useGetAdminCommunityRepliesQuery,
   useGetTrainerReportQuery,
+  useEmailTrainerReportMutation,
   useGetEarningHistoryQuery,
   useGetWalletActivityQuery,
   useGetEarningsChartQuery,
