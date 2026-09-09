@@ -180,7 +180,13 @@ export class NowPaymentsService implements PayoutProvider {
         `NOWPayments payout-withdrawal/min-amount ${res.status}: ${JSON.stringify(raw)}`,
       );
     }
-    const minAmount = Number(raw.min_amount ?? raw.minAmount ?? raw.amount);
+    // Confirmed live 2026-09-09: the real response shape is
+    // {"success":true,"result":0.04593302} -- not min_amount/minAmount/
+    // amount, which is what the tests had been mocking (never verified
+    // against a real response until a BEP20 call surfaced this in
+    // production). Keep the old field names as a fallback in case the
+    // shape differs by currency/network or changes upstream.
+    const minAmount = Number(raw.result ?? raw.min_amount ?? raw.minAmount ?? raw.amount);
     if (!Number.isFinite(minAmount) || minAmount <= 0) {
       throw new NowPaymentsApiError(
         'The payout provider returned an invalid minimum withdrawal amount.',

@@ -103,7 +103,7 @@ describe('NowPaymentsService IPN verification', () => {
     process.env.NOWPAYMENTS_PAYOUT_PASSWORD = 'merchant-password';
     const fetchSpy = jest
       .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({ min_amount: 1 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ result: 1 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'jwt-token' }), { status: 200 }))
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ id: 'payout-1', status: 'waiting' }), {
@@ -147,7 +147,7 @@ describe('NowPaymentsService IPN verification', () => {
     const fetchSpy = jest
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ min_amount: 10.98424792 }), { status: 200 }),
+        new Response(JSON.stringify({ result: 10.98424792 }), { status: 200 }),
       );
 
     await expect(
@@ -179,7 +179,7 @@ describe('NowPaymentsService IPN verification', () => {
       process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
       const fetchSpy = jest
         .spyOn(global, 'fetch')
-        .mockResolvedValue(new Response(JSON.stringify({ min_amount: 0.41491074 }), { status: 200 }));
+        .mockResolvedValue(new Response(JSON.stringify({ result: 0.41491074 }), { status: 200 }));
 
       await expect(service.getPayoutMinAmount(currency, network)).resolves.toBeCloseTo(0.41491074);
       expect(fetchSpy.mock.calls[0][0]).toBe(
@@ -201,7 +201,7 @@ describe('NowPaymentsService IPN verification', () => {
     process.env.NOWPAYMENTS_PAYOUT_PASSWORD = 'merchant-password';
     jest
       .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({ min_amount: 1 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ result: 1 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'jwt-token' }), { status: 200 }))
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ message: 'Insufficient payout balance' }), { status: 400 }),
