@@ -2,9 +2,8 @@
 
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
-import { leadsApi, LeadsApiError, type DataAccessLeadInterestInput } from '@/lib/leads-api';
+import { leadsApi, LeadsApiError } from '@/lib/leads-api';
 import { AuthShell } from '@/components/AuthShell';
-import { CountryDialectPicker } from '@/components/CountryDialectPicker';
 import { Card, ErrorText, FieldLabel, PrimaryButton, TextInput } from '@/components/ui';
 
 /**
@@ -21,7 +20,6 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [organization, setOrganization] = useState('');
   const [website, setWebsite] = useState('');
-  const [interests, setInterests] = useState<DataAccessLeadInterestInput[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -29,10 +27,6 @@ export default function RegisterPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (interests.length === 0) {
-      setError('Select at least one country and dialect you’re interested in.');
-      return;
-    }
     setPending(true);
     try {
       await leadsApi.createDataAccessLead({
@@ -41,7 +35,6 @@ export default function RegisterPage() {
         email,
         organization,
         website,
-        interests,
       });
       setSubmitted(true);
     } catch (err) {
@@ -116,7 +109,6 @@ export default function RegisterPage() {
                 value={website}
               />
             </div>
-            <CountryDialectPicker onChange={setInterests} value={interests} />
             {error && <ErrorText>{error}</ErrorText>}
             <PrimaryButton disabled={pending} type="submit">
               {pending ? 'Submitting request...' : 'Request access'}

@@ -1,4 +1,4 @@
-import { ArrayNotEmpty, IsArray, IsEmail, IsNotEmpty, IsString, IsUrl, MaxLength, ValidateNested } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsEmail, IsNotEmpty, IsOptional, IsString, IsUrl, MaxLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class DataAccessLeadInterestDto {
@@ -41,9 +41,13 @@ export class CreateDataAccessLeadDto {
   @IsUrl({ require_tld: false }, { message: 'website must be a valid URL' })
   website!: string;
 
+  // Optional: the Stream app's Request Access form doesn't collect this at
+  // all (subscriber orgs licensing the dataset don't self-scope by
+  // country/dialect up front -- that's negotiated during admin follow-up).
+  // The trainer site's /data-access page still collects and sends it.
+  @IsOptional()
   @IsArray()
-  @ArrayNotEmpty()
   @ValidateNested({ each: true })
   @Type(() => DataAccessLeadInterestDto)
-  interests!: DataAccessLeadInterestDto[];
+  interests?: DataAccessLeadInterestDto[];
 }

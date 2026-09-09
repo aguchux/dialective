@@ -53,13 +53,17 @@ export class LeadsController {
         email: dto.email,
         organization: dto.organization,
         website: dto.website,
-        interests: {
-          create: dto.interests.map((interest) => ({
-            countryId: interest.countryId,
-            dialectTags: interest.dialectTags,
-            subdialectTags: interest.subdialectTags,
-          })),
-        },
+        ...(dto.interests && dto.interests.length > 0
+          ? {
+              interests: {
+                create: dto.interests.map((interest) => ({
+                  countryId: interest.countryId,
+                  dialectTags: interest.dialectTags,
+                  subdialectTags: interest.subdialectTags,
+                })),
+              },
+            }
+          : {}),
       },
     });
 

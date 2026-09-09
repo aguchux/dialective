@@ -64,7 +64,7 @@ export const leadsApi = {
     email: string;
     organization: string;
     website: string;
-    interests: DataAccessLeadInterestInput[];
+    interests?: DataAccessLeadInterestInput[];
   }) =>
     fetchJson<{ id: string; status: string }>('/leads/data-access', {
       method: 'POST',
