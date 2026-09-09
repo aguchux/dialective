@@ -193,7 +193,7 @@ function LoginForm() {
 
             <div
               aria-label="Other sign-in options"
-              className="flex items-center gap-3 py-1 text-center"
+              className="flex items-center gap-3 text-center"
               role="separator"
             >
               <span aria-hidden="true" className="h-px flex-1 bg-auth-line" />
@@ -265,9 +265,37 @@ function LoginForm() {
   );
 }
 
+function LoginFormSkeleton() {
+  return (
+    <AuthShell>
+      <Card className="w-full min-w-0 border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+        <div className="mb-6 text-center">
+          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-auth-ink sm:text-[32px]">
+            Welcome back
+          </h1>
+          <p className="mt-2 text-[15px] text-auth-muted">Sign in to access Dialect Library Stream</p>
+        </div>
+        <div aria-hidden="true" className="grid min-w-0 animate-pulse gap-4">
+          <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+          <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+          <div className="h-4 w-24 rounded bg-auth-panel" />
+          <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+          <div className="flex items-center gap-3">
+            <span className="h-px flex-1 bg-auth-line" />
+            <span className="shrink-0 text-xs font-medium lowercase text-auth-muted">or</span>
+            <span className="h-px flex-1 bg-auth-line" />
+          </div>
+          <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+          <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+        </div>
+      </Card>
+    </AuthShell>
+  );
+}
+
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<LoginFormSkeleton />}>
       <LoginForm />
     </Suspense>
   );
