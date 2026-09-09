@@ -12,6 +12,7 @@ import { PwaServiceWorker } from '@/components/PwaServiceWorker';
 import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
 import { DykPrompt } from '@/components/DykPrompt';
 import { SessionActivityTracker } from '@/components/SessionActivityTracker';
+import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -35,6 +36,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <AiAssistantWidget />
           <RequireNameDialog />
           {children}
+          <CookieConsentBanner />
         </StoreProvider>
       </ThemeProvider>
     </SessionProvider>
