@@ -1644,6 +1644,49 @@ export class AuthService {
     return toPublicUser(user);
   }
 
+  /** Admin-only: which dialects a validator is currently onboarded to review. */
+  async listValidatorDialectAssignments(userId: string) {
+    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!target) throw new NotFoundException('User not found');
+    const assignments = await this.prisma.validatorDialectAssignment.findMany({
+      where: { userId },
+      include: { dialect: { include: { country: true } } },
+      orderBy: { assignedAt: 'asc' },
+    });
+    return assignments.map((a) => ({
+      dialectId: a.dialectId,
+      dialectName: a.dialect.name,
+      dialectTag: a.dialect.tag,
+      countryId: a.dialect.countryId,
+      countryName: a.dialect.country.name,
+    }));
+  }
+
+  /** Admin-only: grants a validator access to browse/create decks for one more dialect. */
+  async assignValidatorDialect(adminId: string, userId: string, dialectId: string) {
+    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!target) throw new NotFoundException('User not found');
+    if (target.role !== Role.VALIDATOR) {
+      throw new UnprocessableEntityException('Only a VALIDATOR can be onboarded to a dialect');
+    }
+    const dialect = await this.prisma.dialect.findUnique({ where: { id: dialectId } });
+    if (!dialect || !dialect.active) {
+      throw new UnprocessableEntityException('Select an active dialect');
+    }
+    await this.prisma.validatorDialectAssignment.upsert({
+      where: { userId_dialectId: { userId, dialectId } },
+      create: { userId, dialectId, assignedById: adminId },
+      update: {},
+    });
+    return this.listValidatorDialectAssignments(userId);
+  }
+
+  /** Admin-only: revokes a validator's access to one dialect. */
+  async unassignValidatorDialect(userId: string, dialectId: string) {
+    await this.prisma.validatorDialectAssignment.deleteMany({ where: { userId, dialectId } });
+    return this.listValidatorDialectAssignments(userId);
+  }
+
   /**
    * Clears a trainer's training selection without touching their country of
    * origin or historical submissions. Revoking refresh tokens makes the

@@ -45,7 +45,23 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
         findUnique: jest.fn(),
       },
       wordRecording: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'rec-1' }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'rec-1', dialectTag: 'ig', dialectVariantId: null }),
+      },
+      dialect: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'dialect-1',
+          tag: 'ig',
+          countryId: 'country-1',
+          active: true,
+          country: { id: 'country-1', code: 'NG' },
+        }),
+      },
+      dialectVariant: {
+        findUnique: jest.fn(),
+      },
+      validatorDialectAssignment: {
+        findUnique: jest.fn().mockResolvedValue({ userId: 'owner-1', dialectId: 'dialect-1' }),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       $transaction: jest.fn(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
     };
@@ -311,7 +327,11 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
   describe('audit log writes', () => {
     it('writes a CREATED row when create() is called', async () => {
       prisma.validatorDeck.create.mockResolvedValue(baseDeck());
-      await service.create('owner-1', { name: 'Deck' } as never);
+      await service.create('owner-1', 'VALIDATOR', {
+        name: 'Deck',
+        countryId: 'country-1',
+        dialectId: 'dialect-1',
+      });
       expect(prisma.validatorDeckAuditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ action: 'CREATED' }) }),
       );

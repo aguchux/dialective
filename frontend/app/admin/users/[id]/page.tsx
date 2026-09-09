@@ -22,17 +22,22 @@ import {
 } from '@/lib/trainer-rating';
 import {
   normalizeErrorMessage,
+  useAssignValidatorDialectMutation,
   useDeleteUserMutation,
   useGetAdminUserQuery,
+  useGetCountriesQuery,
+  useGetDialectsQuery,
   useGetPlatformSettingsQuery,
   useGetUnsettledQuery,
   useGetUserActivityQuery,
+  useGetValidatorDialectAssignmentsQuery,
   useLockUserMutation,
   useRequestUserDeleteOtpMutation,
   useRequestUserLockOtpMutation,
   useResetUserDialectMutation,
   useSendInstantTrainerReportMutation,
   useSettleOneMutation,
+  useUnassignValidatorDialectMutation,
   useUpdateTrainerRatingMutation,
   useUpdateValidatorLevelMutation,
   type UnsettledRow,
@@ -72,6 +77,10 @@ export default function AdminUserDetailPage() {
   const selfId = session?.user?.id;
 
   const { data: user, isLoading } = useGetAdminUserQuery(userId);
+  const { data: validatorDialects } = useGetValidatorDialectAssignmentsQuery(userId, {
+    skip: user?.role !== 'VALIDATOR',
+  });
+  const { data: dialectCountries } = useGetCountriesQuery(undefined, { skip: user?.role !== 'VALIDATOR' });
   const [activityBatch, setActivityBatch] = useState(1);
   const ACTIVITY_BATCH_SIZE = 100;
   const { data: activity, isLoading: isLoadingActivity } = useGetUserActivityQuery({
@@ -97,10 +106,18 @@ export default function AdminUserDetailPage() {
   const [sendReport, { isLoading: isSendingReport }] = useSendInstantTrainerReportMutation();
   const [updateTrainerRating, { isLoading: isUpdatingTrainerRating }] = useUpdateTrainerRatingMutation();
   const [updateValidatorLevel, { isLoading: isUpdatingValidatorLevel }] = useUpdateValidatorLevelMutation();
+  const [assignValidatorDialect, { isLoading: isAssigningDialect }] = useAssignValidatorDialectMutation();
+  const [unassignValidatorDialect] = useUnassignValidatorDialectMutation();
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [ratingError, setRatingError] = useState<string | null>(null);
   const [validatorLevelError, setValidatorLevelError] = useState<string | null>(null);
+  const [validatorDialectError, setValidatorDialectError] = useState<string | null>(null);
+  const [newDialectCountryId, setNewDialectCountryId] = useState('');
+  const [newDialectId, setNewDialectId] = useState('');
+  const { data: dialectsForNewCountry } = useGetDialectsQuery(newDialectCountryId, {
+    skip: !newDialectCountryId,
+  });
 
   async function handleSendReport() {
     if (!user) return;
@@ -131,6 +148,28 @@ export default function AdminUserDetailPage() {
       await updateValidatorLevel({ id: user.id, validatorLevel: level }).unwrap();
     } catch (err) {
       setValidatorLevelError(normalizeErrorMessage(err, 'Unable to update this validator tier.'));
+    }
+  }
+
+  async function handleAssignDialect() {
+    if (!user || !newDialectId) return;
+    setValidatorDialectError(null);
+    try {
+      await assignValidatorDialect({ id: user.id, dialectId: newDialectId }).unwrap();
+      setNewDialectCountryId('');
+      setNewDialectId('');
+    } catch (err) {
+      setValidatorDialectError(normalizeErrorMessage(err, 'Unable to assign this dialect.'));
+    }
+  }
+
+  async function handleUnassignDialect(dialectId: string) {
+    if (!user) return;
+    setValidatorDialectError(null);
+    try {
+      await unassignValidatorDialect({ id: user.id, dialectId }).unwrap();
+    } catch (err) {
+      setValidatorDialectError(normalizeErrorMessage(err, 'Unable to remove this dialect.'));
     }
   }
 
@@ -368,6 +407,89 @@ export default function AdminUserDetailPage() {
                 {validatorLevelError && (
                   <p className="text-sm leading-relaxed text-danger" role="alert">
                     {validatorLevelError}
+                  </p>
+                )}
+              </section>
+            )}
+
+            {user.role === 'VALIDATOR' && (
+              <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+                <div className="grid gap-1">
+                  <h2 className="text-lg font-black">Onboarded dialects</h2>
+                  <p className="text-sm leading-relaxed text-muted">
+                    Which dialect(s) this validator may browse recordings for and create decks
+                    under. Admin-managed only &mdash; validators cannot change this themselves.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {validatorDialects && validatorDialects.length > 0 ? (
+                    validatorDialects.map((d) => (
+                      <span
+                        className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm font-bold"
+                        key={d.dialectId}
+                      >
+                        {d.dialectName} ({d.countryName})
+                        <button
+                          aria-label={`Remove ${d.dialectName}`}
+                          className="text-muted hover:text-danger"
+                          onClick={() => void handleUnassignDialect(d.dialectId)}
+                          type="button"
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted">No dialects assigned yet.</p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="grid gap-1 text-xs font-bold text-muted">
+                    Country
+                    <select
+                      className={inputClass}
+                      onChange={(e) => {
+                        setNewDialectCountryId(e.target.value);
+                        setNewDialectId('');
+                      }}
+                      value={newDialectCountryId}
+                    >
+                      <option value="">Select country</option>
+                      {dialectCountries?.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-xs font-bold text-muted">
+                    Dialect
+                    <select
+                      className={inputClass}
+                      disabled={!newDialectCountryId}
+                      onChange={(e) => setNewDialectId(e.target.value)}
+                      value={newDialectId}
+                    >
+                      <option value="">Select dialect</option>
+                      {dialectsForNewCountry?.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className="inline-flex min-h-9 items-center justify-center rounded-lg bg-accent px-3.5 py-1.5 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!newDialectId || isAssigningDialect}
+                    onClick={() => void handleAssignDialect()}
+                    type="button"
+                  >
+                    Add
+                  </button>
+                </div>
+                {validatorDialectError && (
+                  <p className="text-sm leading-relaxed text-danger" role="alert">
+                    {validatorDialectError}
                   </p>
                 )}
               </section>

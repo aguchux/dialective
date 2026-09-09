@@ -1973,7 +1973,17 @@ export interface ValidatorDeckDetail extends Omit<ValidatorDeckSummary, '_count'
 
 export interface CreateValidatorDeckInput {
   name: string;
-  dialectTag?: string;
+  countryId: string;
+  dialectId: string;
+  dialectVariantId?: string;
+}
+
+export interface ValidatorDialectAssignment {
+  dialectId: string;
+  dialectName: string;
+  dialectTag: string;
+  countryId: string;
+  countryName: string;
   countryCode?: string;
 }
 
@@ -2435,6 +2445,7 @@ export const dialectivaApi = createApi({
     'ValidatorDecks',
     'ValidatorRecordings',
     'AdminValidatorDecks',
+    'ValidatorDialectAssignments',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -3783,6 +3794,31 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
     }),
+    getValidatorDialectAssignments: builder.query<ValidatorDialectAssignment[], string>({
+      query: (id) => `/auth/admin/users/${id}/validator-dialects`,
+      providesTags: (_result, _error, id) => [{ type: 'ValidatorDialectAssignments', id }],
+    }),
+    assignValidatorDialect: builder.mutation<
+      ValidatorDialectAssignment[],
+      { id: string; dialectId: string }
+    >({
+      query: ({ id, dialectId }) => ({
+        url: `/auth/admin/users/${id}/validator-dialects`,
+        method: 'POST',
+        body: { dialectId },
+      }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDialectAssignments', id }],
+    }),
+    unassignValidatorDialect: builder.mutation<
+      ValidatorDialectAssignment[],
+      { id: string; dialectId: string }
+    >({
+      query: ({ id, dialectId }) => ({
+        url: `/auth/admin/users/${id}/validator-dialects/${dialectId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDialectAssignments', id }],
+    }),
     getAdminUser: builder.query<PublicUser, string>({
       query: (id) => `/auth/admin/users/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Users', id }],
@@ -4374,6 +4410,10 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/validator/decks', method: 'POST', body }),
       invalidatesTags: ['ValidatorDecks'],
     }),
+    getMyValidatorDialects: builder.query<ValidatorDialectAssignment[], void>({
+      query: () => '/validator/decks/my-dialects',
+      providesTags: ['ValidatorDialectAssignments'],
+    }),
     getValidatorDecks: builder.query<
       ValidatorDeckSummary[],
       { filter?: 'mine' | 'all' | 'pendingMyApproval' } | void
@@ -4387,7 +4427,7 @@ export const dialectivaApi = createApi({
     }),
     updateValidatorDeck: builder.mutation<
       ValidatorDeckSummary,
-      { id: string; body: Partial<CreateValidatorDeckInput> }
+      { id: string; body: { name?: string; dialectTag?: string; countryCode?: string } }
     >({
       query: ({ id, body }) => ({ url: `/validator/decks/${id}`, method: 'PATCH', body }),
       invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
@@ -4731,6 +4771,9 @@ export const {
   useUpdateUserStatusMutation,
   useUpdateTrainerRatingMutation,
   useUpdateValidatorLevelMutation,
+  useGetValidatorDialectAssignmentsQuery,
+  useAssignValidatorDialectMutation,
+  useUnassignValidatorDialectMutation,
   useGetAdminUserQuery,
   useResetUserDialectMutation,
   useGetUserActivityQuery,
@@ -4819,6 +4862,7 @@ export const {
   useSaveCourseProgressMutation,
   useGetIncompleteRequiredCoursesQuery,
   useCreateValidatorDeckMutation,
+  useGetMyValidatorDialectsQuery,
   useGetValidatorDecksQuery,
   useGetValidatorDeckQuery,
   useUpdateValidatorDeckMutation,

@@ -22,7 +22,12 @@ export class ValidatorDecksController {
 
   @Post()
   create(@Req() req: AuthenticatedRequest, @Body() dto: CreateValidatorDeckDto) {
-    return this.decks.create(req.user.sub, dto);
+    return this.decks.create(req.user.sub, req.user.role, dto);
+  }
+
+  @Get('my-dialects')
+  myDialects(@Req() req: AuthenticatedRequest) {
+    return this.decks.listMyDialectAssignments(req.user.sub);
   }
 
   @Get()
@@ -114,6 +119,6 @@ export class ValidatorRecordingsController {
 
   @Get()
   listAll(@Req() req: AuthenticatedRequest, @Query() query: ListValidatorRecordingsDto) {
-    return this.recordings.listAll(query, req.user.sub);
+    return this.recordings.listAll(query, req.user.sub, req.user.role);
   }
 }

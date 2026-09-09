@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 export class CreateValidatorDeckDto {
   @IsString()
@@ -6,11 +6,13 @@ export class CreateValidatorDeckDto {
   @MaxLength(120)
   name!: string;
 
-  @IsOptional()
-  @IsString()
-  dialectTag?: string;
+  @IsUUID()
+  countryId!: string;
+
+  @IsUUID()
+  dialectId!: string;
 
   @IsOptional()
-  @IsString()
-  countryCode?: string;
+  @IsUUID()
+  dialectVariantId?: string;
 }

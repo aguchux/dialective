@@ -32,7 +32,23 @@ describe('ValidatorDecksService', () => {
         findUnique: jest.fn().mockResolvedValue({ role: 'VALIDATOR', validatorLevel: 'L1' }),
       },
       wordRecording: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'rec-1' }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'rec-1', dialectTag: 'ig', dialectVariantId: null }),
+      },
+      dialect: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'dialect-1',
+          tag: 'ig',
+          countryId: 'country-1',
+          active: true,
+          country: { id: 'country-1', code: 'NG' },
+        }),
+      },
+      dialectVariant: {
+        findUnique: jest.fn(),
+      },
+      validatorDialectAssignment: {
+        findUnique: jest.fn().mockResolvedValue({ userId: 'user-1', dialectId: 'dialect-1' }),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       $transaction: jest.fn(async (fn: (tx: typeof prisma) => unknown) => fn(prisma)),
     };
@@ -44,18 +60,48 @@ describe('ValidatorDecksService', () => {
   });
 
   describe('create', () => {
-    it('creates a DRAFT deck owned by its creator', async () => {
+    const dto = { name: 'My Deck', countryId: 'country-1', dialectId: 'dialect-1' };
+
+    it('creates a DRAFT deck owned by its creator, deriving dialectTag/countryCode from the resolved dialect', async () => {
       prisma.validatorDeck.create.mockResolvedValue({ id: 'deck-1' });
-      await service.create('user-1', { name: 'My Deck' });
+      await service.create('user-1', 'VALIDATOR', dto);
       expect(prisma.validatorDeck.create).toHaveBeenCalledWith({
         data: {
           name: 'My Deck',
-          dialectTag: undefined,
-          countryCode: undefined,
+          dialectTag: 'ig',
+          countryCode: 'NG',
+          dialectId: 'dialect-1',
+          dialectVariantId: undefined,
           createdByUserId: 'user-1',
           ownerUserId: 'user-1',
         },
       });
+    });
+
+    it('rejects when the dialect does not belong to the given country', async () => {
+      prisma.dialect.findUnique.mockResolvedValue({
+        id: 'dialect-1',
+        tag: 'ig',
+        countryId: 'other-country',
+        active: true,
+        country: { id: 'other-country', code: 'XX' },
+      });
+      await expect(service.create('user-1', 'VALIDATOR', dto)).rejects.toThrow(
+        'Select an active dialect for the given country',
+      );
+    });
+
+    it('rejects when the caller has no assignment for that dialect', async () => {
+      prisma.validatorDialectAssignment.findUnique.mockResolvedValue(null);
+      await expect(service.create('user-1', 'VALIDATOR', dto)).rejects.toThrow(
+        'You are not onboarded to this dialect',
+      );
+    });
+
+    it('lets an admin create a deck without an assignment', async () => {
+      prisma.validatorDialectAssignment.findUnique.mockResolvedValue(null);
+      prisma.validatorDeck.create.mockResolvedValue({ id: 'deck-1' });
+      await expect(service.create('admin-1', 'ADMIN', dto)).resolves.toBeDefined();
     });
   });
 
@@ -169,6 +215,46 @@ describe('ValidatorDecksService', () => {
       await service.addItem('deck-1', 'user-1', 'VALIDATOR', 'rec-1');
       expect(prisma.validatorDeckItem.count).not.toHaveBeenCalled();
       expect(prisma.validatorDeckItem.create).toHaveBeenCalled();
+    });
+
+    describe('deck-level dialect scoping', () => {
+      beforeEach(() => {
+        prisma.validatorDeck.findUnique.mockResolvedValue({
+          id: 'deck-1',
+          ownerUserId: 'user-1',
+          status: 'DRAFT',
+          dialectId: 'dialect-1',
+          dialectVariantId: null,
+        });
+        prisma.validatorDeckItem.findUnique.mockResolvedValue(null);
+        prisma.validatorDeckItem.create.mockResolvedValue({ id: 'item-1' });
+      });
+
+      it('allows a recording matching the deck dialect', async () => {
+        prisma.wordRecording.findUnique.mockResolvedValue({ id: 'rec-1', dialectTag: 'ig', dialectVariantId: null });
+        await expect(service.addItem('deck-1', 'user-1', 'VALIDATOR', 'rec-1')).resolves.toBeDefined();
+      });
+
+      it('rejects a recording from a different dialect', async () => {
+        prisma.wordRecording.findUnique.mockResolvedValue({ id: 'rec-1', dialectTag: 'yo', dialectVariantId: null });
+        await expect(service.addItem('deck-1', 'user-1', 'VALIDATOR', 'rec-1')).rejects.toThrow(
+          "This recording is not in the deck's dialect",
+        );
+      });
+
+      it('rejects a recording from a different sub-dialect when the deck has one set', async () => {
+        prisma.validatorDeck.findUnique.mockResolvedValue({
+          id: 'deck-1',
+          ownerUserId: 'user-1',
+          status: 'DRAFT',
+          dialectId: 'dialect-1',
+          dialectVariantId: 'variant-1',
+        });
+        prisma.wordRecording.findUnique.mockResolvedValue({ id: 'rec-1', dialectTag: 'ig', dialectVariantId: 'variant-2' });
+        await expect(service.addItem('deck-1', 'user-1', 'VALIDATOR', 'rec-1')).rejects.toThrow(
+          "This recording is not in the deck's sub-dialect",
+        );
+      });
     });
   });
 

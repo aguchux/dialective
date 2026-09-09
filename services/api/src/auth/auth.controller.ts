@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -33,6 +34,7 @@ import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UpdateTrainerRatingDto } from './dto/update-trainer-rating.dto';
 import { UpdateValidatorLevelDto } from './dto/update-validator-level.dto';
+import { AssignValidatorDialectDto } from './dto/assign-validator-dialect.dto';
 import { LockUserDto } from './dto/lock-user.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -345,6 +347,34 @@ export class AuthController {
     @Body() dto: UpdateValidatorLevelDto,
   ) {
     return this.auth.updateValidatorLevel(admin.sub, id, dto.validatorLevel);
+  }
+
+  // Admin-managed onboarding: which dialect(s) a validator may browse
+  // recordings for and create decks under -- see ValidatorDialectAssignment
+  // (docs/validators.md). No self-service; validators cannot call these.
+  @Get('admin/users/:id/validator-dialects')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  listValidatorDialects(@Param('id') id: string) {
+    return this.auth.listValidatorDialectAssignments(id);
+  }
+
+  @Post('admin/users/:id/validator-dialects')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  assignValidatorDialect(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+    @Body() dto: AssignValidatorDialectDto,
+  ) {
+    return this.auth.assignValidatorDialect(admin.sub, id, dto.dialectId);
+  }
+
+  @Delete('admin/users/:id/validator-dialects/:dialectId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  unassignValidatorDialect(@Param('id') id: string, @Param('dialectId') dialectId: string) {
+    return this.auth.unassignValidatorDialect(id, dialectId);
   }
 
   @Get('admin/users/:id')

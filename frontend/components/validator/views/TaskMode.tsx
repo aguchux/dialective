@@ -23,6 +23,7 @@ import { normalizeErrorMessage } from '@/store/api';
 import {
   useAddValidatorDeckItemMutation,
   useCreateValidatorDeckMutation,
+  useGetMyValidatorDialectsQuery,
   useFlagValidatorDeckItemMutation,
   useGetValidatorDeckQuery,
   useGetValidatorDecksQuery,
@@ -1578,6 +1579,7 @@ function AddToDeckSheet({
   onAdded: (deckId: string) => void;
 }) {
   const { data: decks, isLoading } = useGetValidatorDecksQuery({ filter: 'mine' });
+  const { data: myDialects } = useGetMyValidatorDialectsQuery();
   const [createDeck, { isLoading: isCreating }] = useCreateValidatorDeckMutation();
   const [addItem] = useAddValidatorDeckItemMutation();
   const [scoreItem] = useScoreValidatorDeckItemMutation();
@@ -1601,8 +1603,17 @@ function AddToDeckSheet({
 
   async function handleCreateAndAdd() {
     setError(null);
+    const dialect = myDialects?.find((d) => d.dialectTag === recording.dialectTag);
+    if (!dialect) {
+      setError('You are not onboarded to this recording\'s dialect.');
+      return;
+    }
     try {
-      const deck = await createDeck({ name: newDeckName.trim() }).unwrap();
+      const deck = await createDeck({
+        name: newDeckName.trim(),
+        countryId: dialect.countryId,
+        dialectId: dialect.dialectId,
+      }).unwrap();
       await addItem({ id: deck.id, recordingId: recording.id }).unwrap();
       setAddedDeckId(deck.id);
       onAdded(deck.id);

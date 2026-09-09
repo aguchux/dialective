@@ -77,31 +77,37 @@ enum ReferralInviteStatus {
 }
 
 model User {
-  dykStates                     DykUserState[]
-  id                            String          @id @default(uuid())
-  firstName                     String?
-  lastName                      String?
-  email                         String          @unique
-  passwordHash                  String? // null for OAuth/magic-link-only accounts
-  role                          Role            @default(TRAINER)
-  status                        UserStatus      @default(ACTIVE)
-  trainerRating                 TrainerRating?
-  trainerRatingUpdatedAt        DateTime?
-  trainerRatingUpdatedById      String?
-  trainerRatingUpdatedBy        User?           @relation("TrainerRatingUpdatedBy", fields: [trainerRatingUpdatedById], references: [id], onDelete: SetNull)
-  trainerRatingsUpdated         User[]          @relation("TrainerRatingUpdatedBy")
+  dykStates                       DykUserState[]
+  id                              String                       @id @default(uuid())
+  firstName                       String?
+  lastName                        String?
+  email                           String                       @unique
+  passwordHash                    String? // null for OAuth/magic-link-only accounts
+  role                            Role                         @default(TRAINER)
+  status                          UserStatus                   @default(ACTIVE)
+  trainerRating                   TrainerRating?
+  trainerRatingUpdatedAt          DateTime?
+  trainerRatingUpdatedById        String?
+  trainerRatingUpdatedBy          User?                        @relation("TrainerRatingUpdatedBy", fields: [trainerRatingUpdatedById], references: [id], onDelete: SetNull)
+  trainerRatingsUpdated           User[]                       @relation("TrainerRatingUpdatedBy")
   // Meaningful only when role = VALIDATOR; null for every other role.
   // App-level invariant (enforced in service/DTO, not DB): assigning
   // Role.VALIDATOR requires validatorLevel to be set, defaulting new
   // validators to L1. See docs/validators.md.
-  validatorLevel                ValidatorLevel?
-  validatorLevelUpdatedAt       DateTime?
-  validatorLevelUpdatedById     String?
-  validatorLevelUpdatedBy       User?           @relation("ValidatorLevelUpdatedBy", fields: [validatorLevelUpdatedById], references: [id], onDelete: SetNull)
-  validatorLevelsUpdated        User[]          @relation("ValidatorLevelUpdatedBy")
-  validatorDecksCreated         ValidatorDeck[] @relation("ValidatorDeckCreatedBy")
-  validatorDecksOwned           ValidatorDeck[] @relation("ValidatorDeckOwner")
-  validatorDeckAuditActions     ValidatorDeckAuditLog[] @relation("ValidatorDeckAuditActor")
+  validatorLevel                  ValidatorLevel?
+  validatorLevelUpdatedAt         DateTime?
+  validatorLevelUpdatedById       String?
+  validatorLevelUpdatedBy         User?                        @relation("ValidatorLevelUpdatedBy", fields: [validatorLevelUpdatedById], references: [id], onDelete: SetNull)
+  validatorLevelsUpdated          User[]                       @relation("ValidatorLevelUpdatedBy")
+  validatorDecksCreated           ValidatorDeck[]              @relation("ValidatorDeckCreatedBy")
+  validatorDecksOwned             ValidatorDeck[]              @relation("ValidatorDeckOwner")
+  validatorDeckAuditActions       ValidatorDeckAuditLog[]      @relation("ValidatorDeckAuditActor")
+  // Admin-managed: which dialect(s) this validator is onboarded to review.
+  // Meaningful only when role = VALIDATOR. A validator may hold several
+  // (unlike the single Dialect a trainer picks via dialectId below) --
+  // gates both recording pool browsing and deck creation.
+  validatorDialectAssignments     ValidatorDialectAssignment[] @relation("ValidatorDialectAssignments")
+  validatorDialectAssignmentsMade ValidatorDialectAssignment[] @relation("ValidatorDialectAssignedBy")
   // Automatic compliance hold, distinct from `status` (admin-driven
   // suspend/block) -- set by WordsService.createRecording the moment a
   // trainer's lifetime WordRecording count crosses a multiple of
@@ -110,57 +116,57 @@ model User {
   // the trainer's recent work and explicitly releases the hold -- see
   // auditHoldReleasedAt/By below. Re-triggers at every next multiple of the
   // threshold regardless of how many holds/releases happened before it.
-  auditHoldAt                   DateTime?
-  auditHoldReleasedAt           DateTime?
-  auditHoldReleasedById         String?
-  auditHoldReleasedBy           User?           @relation("AuditHoldReleasedBy", fields: [auditHoldReleasedById], references: [id], onDelete: SetNull)
-  auditHoldReleases             User[]          @relation("AuditHoldReleasedBy")
-  emailVerified                 DateTime?
-  phoneNumber                   String?         @unique // E.164 international format, e.g. "+2348012345678"
-  phoneVerifiedAt               DateTime?
+  auditHoldAt                     DateTime?
+  auditHoldReleasedAt             DateTime?
+  auditHoldReleasedById           String?
+  auditHoldReleasedBy             User?                        @relation("AuditHoldReleasedBy", fields: [auditHoldReleasedById], references: [id], onDelete: SetNull)
+  auditHoldReleases               User[]                       @relation("AuditHoldReleasedBy")
+  emailVerified                   DateTime?
+  phoneNumber                     String?                      @unique // E.164 international format, e.g. "+2348012345678"
+  phoneVerifiedAt                 DateTime?
   // HMAC of the DIDIT-approved identity document. It is never returned by
   // the API and makes a second approval for the same identity impossible.
-  diditIdentityFingerprint      String?         @unique
+  diditIdentityFingerprint        String?                      @unique
   // Denormalized read-cache of the latest resolved KycVerification (the
   // KycVerification table is the source of truth/history) -- lets
   // wallet.controller.ts's withdrawal gate check identity status without a
   // join on every request.
-  kycStatus                     KycStatus       @default(NOT_STARTED)
-  kycVerifiedAt                 DateTime?
+  kycStatus                       KycStatus                    @default(NOT_STARTED)
+  kycVerifiedAt                   DateTime?
   // Flutterwave v4 Customer id (POST /customers), created lazily on this
   // user's first v4 funding attempt -- see FlutterwaveV4Service.createCustomer.
   // Null for every user until the v4 rail is used at least once; unrelated to
   // v3's stateless per-request customer object.
-  flutterwaveCustomerId         String?
-  emailNotificationsEnabled     Boolean         @default(true)
-  smsNotificationsEnabled       Boolean         @default(true)
+  flutterwaveCustomerId           String?
+  emailNotificationsEnabled       Boolean                      @default(true)
+  smsNotificationsEnabled         Boolean                      @default(true)
   // Login 2FA channel toggles -- both off by default (see the doc comment on
   // AuthService.login: every login used to unconditionally email an OTP,
   // which was spamming the transactional mail system; login is now
   // password-only unless the user explicitly opts into one or both of these
   // in Security settings). SMS requires phoneVerifiedAt to already be set.
-  twoFactorEmailEnabled         Boolean         @default(false)
-  twoFactorSmsEnabled           Boolean         @default(false)
-  marketingNotificationsEnabled Boolean         @default(false)
-  blogNewsNotificationsEnabled  Boolean         @default(false)
-  courseNotificationsEnabled    Boolean         @default(false)
+  twoFactorEmailEnabled           Boolean                      @default(false)
+  twoFactorSmsEnabled             Boolean                      @default(false)
+  marketingNotificationsEnabled   Boolean                      @default(false)
+  blogNewsNotificationsEnabled    Boolean                      @default(false)
+  courseNotificationsEnabled      Boolean                      @default(false)
   // Recorded after the browser confirms the PWA was installed. This is a
   // product-analytics marker only; it never grants access or changes auth.
-  pwaInstalledAt                DateTime?
+  pwaInstalledAt                  DateTime?
   // Country of origin is account identity data. It is distinct from
   // countryId below, which scopes the dialect/content the trainer works on.
-  originCountryId               String?
-  originCountry                 Country?        @relation("UserOriginCountry", fields: [originCountryId], references: [id])
-  countryId                     String?
-  country                       Country?        @relation(fields: [countryId], references: [id])
-  dialectId                     String?
-  dialect                       Dialect?        @relation(fields: [dialectId], references: [id])
-  dialectVariantId              String? // optional sub-dialect (e.g. Izzi under Igbo) -- see DialectVariant. Never set without dialectId; enforced in AuthService.updateProfile, not at the schema level.
-  dialectVariant                DialectVariant? @relation(fields: [dialectVariantId], references: [id])
-  referralCode                  String          @unique // every user is a potential referrer; generated at registration
-  referredById                  String?
-  referredBy                    User?           @relation("Referrals", fields: [referredById], references: [id])
-  referrals                     User[]          @relation("Referrals")
+  originCountryId                 String?
+  originCountry                   Country?                     @relation("UserOriginCountry", fields: [originCountryId], references: [id])
+  countryId                       String?
+  country                         Country?                     @relation(fields: [countryId], references: [id])
+  dialectId                       String?
+  dialect                         Dialect?                     @relation(fields: [dialectId], references: [id])
+  dialectVariantId                String? // optional sub-dialect (e.g. Izzi under Igbo) -- see DialectVariant. Never set without dialectId; enforced in AuthService.updateProfile, not at the schema level.
+  dialectVariant                  DialectVariant?              @relation(fields: [dialectVariantId], references: [id])
+  referralCode                    String                       @unique // every user is a potential referrer; generated at registration
+  referredById                    String?
+  referredBy                      User?                        @relation("Referrals", fields: [referredById], references: [id])
+  referrals                       User[]                       @relation("Referrals")
   // Set only when a DISTRIBUTOR promotes one of their own direct referrals
   // (referredById === promotedById at promotion time) to role=DISTRIBUTOR via
   // DistributorsService.promoteSubDistributor. Distinct from referredById: a
@@ -170,15 +176,15 @@ model User {
   // so promotedById is the actual ownership/authorization key for "may this
   // distributor fund/block/credit/debit that sub-distributor," never
   // referredById alone. Never cleared once set, even if status changes.
-  promotedById                  String?
-  promotedBy                    User?           @relation("SubDistributorPromotions", fields: [promotedById], references: [id])
-  subDistributors               User[]          @relation("SubDistributorPromotions")
+  promotedById                    String?
+  promotedBy                      User?                        @relation("SubDistributorPromotions", fields: [promotedById], references: [id])
+  subDistributors                 User[]                       @relation("SubDistributorPromotions")
   // Global instructions shown to a P2P buyer alongside whichever of this
   // user's payment methods a trade uses (e.g. preferred payment window or
   // reference format) -- one note per user, not per payment method.
-  p2pPaymentInstructions        String?
-  createdAt                     DateTime        @default(now())
-  updatedAt                     DateTime        @updatedAt
+  p2pPaymentInstructions          String?
+  createdAt                       DateTime                     @default(now())
+  updatedAt                       DateTime                     @updatedAt
 
   accounts                         LinkedAccount[]
   refreshTokens                    RefreshToken[]
@@ -490,19 +496,41 @@ model AudioRetentionRule {
 /// already used by WordRecording (en-us, ig, yo, ha) -- this table is the
 /// source of truth for that list going forward, not a parallel/competing enum.
 model Dialect {
-  id                   String           @id @default(uuid())
-  tag                  String           @unique
+  id                   String                       @id @default(uuid())
+  tag                  String                       @unique
   name                 String
   countryId            String
-  active               Boolean          @default(true) // disabled dialects are hidden from onboarding and revoke current trainer selections
-  llmGenerationEnabled Boolean          @default(false) // per-dialect override within an enabled country -- lets admin exclude one dialect without disabling the whole country
+  active               Boolean                      @default(true) // disabled dialects are hidden from onboarding and revoke current trainer selections
+  llmGenerationEnabled Boolean                      @default(false) // per-dialect override within an enabled country -- lets admin exclude one dialect without disabling the whole country
   keyboardLayout       String? // space-separated dialect-specific characters/diacritics for the inline virtual keyboard on the word-training spelling input; admin-edited, optionally AI-drafted via POST /geo/admin/dialects/:id/generate-keyboard-layout
-  country              Country          @relation(fields: [countryId], references: [id])
+  country              Country                      @relation(fields: [countryId], references: [id])
   users                User[]
   variants             DialectVariant[]
+  validatorAssignments ValidatorDialectAssignment[]
+  validatorDecks       ValidatorDeck[]
 
   @@index([countryId])
   @@map("dialects")
+}
+
+/// Admin-managed grant of "this validator may browse recordings for and
+/// create decks under this dialect" -- see docs/validators.md. Scoped at
+/// the Dialect level, not per-DialectVariant: onboarding to a dialect
+/// covers all its subdialects, mirroring how a trainer picks one Dialect
+/// and optionally narrows to a DialectVariant under it.
+model ValidatorDialectAssignment {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation("ValidatorDialectAssignments", fields: [userId], references: [id], onDelete: Cascade)
+  dialectId    String
+  dialect      Dialect  @relation(fields: [dialectId], references: [id], onDelete: Restrict)
+  assignedById String
+  assignedBy   User     @relation("ValidatorDialectAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedAt   DateTime @default(now())
+
+  @@unique([userId, dialectId])
+  @@index([dialectId])
+  @@map("validator_dialect_assignments")
 }
 
 /// Optional sub-dialect tag under a Dialect -- e.g. Izzi/Ezza/Ezeagu under
@@ -526,6 +554,7 @@ model DialectVariant {
 
   users          User[]
   wordRecordings WordRecording[]
+  validatorDecks ValidatorDeck[]
 
   @@unique([dialectId, tag])
   @@index([dialectId])
@@ -1188,19 +1217,27 @@ enum ValidatorDeckStatus {
 }
 
 model ValidatorDeck {
-  id              String              @id @default(uuid())
-  name            String
-  createdByUserId String // provenance, never changes
-  createdBy       User                @relation("ValidatorDeckCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  id               String              @id @default(uuid())
+  name             String
+  createdByUserId  String // provenance, never changes
+  createdBy        User                @relation("ValidatorDeckCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   // Current editor -- admin-reassignable. Equals createdByUserId until a
   // reassign() call moves it; see reassignedFromUserId below.
-  ownerUserId     String
-  owner           User                @relation("ValidatorDeckOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  status          ValidatorDeckStatus @default(DRAFT)
-  dialectTag      String? // descriptive only, mirrors StreamDeck's scoping metadata loosely
-  countryCode     String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  ownerUserId      String
+  owner            User                @relation("ValidatorDeckOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  status           ValidatorDeckStatus @default(DRAFT)
+  dialectTag       String? // descriptive display copy, derived from dialect.tag at creation -- see dialectId below for the enforced FK
+  countryCode      String?
+  // Enforced scoping (added alongside the free-text fields above): once set,
+  // only recordings matching dialect.tag (and dialectVariantId, if set) may
+  // be added as ValidatorDeckItems -- see ValidatorDecksService.addItem.
+  // Nullable only because pre-existing decks predate this constraint.
+  dialectId        String?
+  dialect          Dialect?            @relation(fields: [dialectId], references: [id], onDelete: Restrict)
+  dialectVariantId String?
+  dialectVariant   DialectVariant?     @relation(fields: [dialectVariantId], references: [id], onDelete: Restrict)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   // Phase 3 (docs/validators.md): the StreamDeck this deck was bridged into
   // on publish -- null until published. Unique so a ValidatorDeck can only

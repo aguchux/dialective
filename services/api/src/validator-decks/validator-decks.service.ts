@@ -1,4 +1,11 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import {
   buildValidatorPayoutOps,
@@ -61,13 +68,44 @@ export class ValidatorDecksService {
     private readonly settings: PlatformSettingsService,
   ) {}
 
-  async create(ownerUserId: string, dto: CreateValidatorDeckDto) {
+  async create(ownerUserId: string, callerRole: string, dto: CreateValidatorDeckDto) {
+    const dialect = await this.prisma.dialect.findUnique({
+      where: { id: dto.dialectId },
+      include: { country: true },
+    });
+    if (!dialect || dialect.countryId !== dto.countryId || !dialect.active) {
+      throw new UnprocessableEntityException('Select an active dialect for the given country');
+    }
+
+    if (dto.dialectVariantId) {
+      const variant = await this.prisma.dialectVariant.findUnique({
+        where: { id: dto.dialectVariantId },
+      });
+      if (!variant || variant.dialectId !== dto.dialectId || !variant.active) {
+        throw new UnprocessableEntityException('Select an active sub-dialect for the given dialect');
+      }
+    }
+
+    // Admins may create a deck for any dialect; a validator may only create
+    // one for a dialect they've been onboarded to (see
+    // ValidatorDialectAssignment, admin-managed, docs/validators.md).
+    if (callerRole !== 'ADMIN') {
+      const assignment = await this.prisma.validatorDialectAssignment.findUnique({
+        where: { userId_dialectId: { userId: ownerUserId, dialectId: dto.dialectId } },
+      });
+      if (!assignment) {
+        throw new ForbiddenException('You are not onboarded to this dialect');
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const deck = await tx.validatorDeck.create({
         data: {
           name: dto.name,
-          dialectTag: dto.dialectTag,
-          countryCode: dto.countryCode,
+          dialectTag: dialect.tag,
+          countryCode: dialect.country.code,
+          dialectId: dto.dialectId,
+          dialectVariantId: dto.dialectVariantId,
           createdByUserId: ownerUserId,
           ownerUserId,
         },
@@ -82,6 +120,23 @@ export class ValidatorDecksService {
       });
       return deck;
     });
+  }
+
+  /** Trainer-facing: the caller's own onboarded dialects, for populating the create-deck dropdown. */
+  async listMyDialectAssignments(callerUserId: string) {
+    const assignments = await this.prisma.validatorDialectAssignment.findMany({
+      where: { userId: callerUserId },
+      include: { dialect: { include: { country: true } } },
+      orderBy: { assignedAt: 'asc' },
+    });
+    return assignments.map((a) => ({
+      dialectId: a.dialectId,
+      dialectName: a.dialect.name,
+      dialectTag: a.dialect.tag,
+      countryId: a.dialect.countryId,
+      countryName: a.dialect.country.name,
+      countryCode: a.dialect.country.code,
+    }));
   }
 
   async list(filter: 'mine' | 'all' | 'pendingMyApproval', callerUserId: string) {
@@ -129,6 +184,19 @@ export class ValidatorDecksService {
 
     const recording = await this.prisma.wordRecording.findUnique({ where: { id: recordingId } });
     if (!recording) throw new NotFoundException('Recording not found');
+
+    // Deck-level dialect scoping (nullable only for decks predating this
+    // constraint): once a deck has a dialect/subdialect, only matching
+    // recordings may join it, keeping the deck coherent for publish.
+    if (deck.dialectId) {
+      const deckDialect = await this.prisma.dialect.findUnique({ where: { id: deck.dialectId } });
+      if (!deckDialect || recording.dialectTag !== deckDialect.tag) {
+        throw new UnprocessableEntityException('This recording is not in the deck\'s dialect');
+      }
+      if (deck.dialectVariantId && recording.dialectVariantId !== deck.dialectVariantId) {
+        throw new UnprocessableEntityException('This recording is not in the deck\'s sub-dialect');
+      }
+    }
 
     const existing = await this.prisma.validatorDeckItem.findUnique({
       where: { deckId_recordingId: { deckId: deck.id, recordingId } },

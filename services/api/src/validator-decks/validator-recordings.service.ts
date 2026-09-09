@@ -17,10 +17,27 @@ export class ValidatorRecordingsService {
     private readonly storage: StorageService,
   ) {}
 
-  async listAll(query: ListValidatorRecordingsDto, callerUserId: string) {
+  async listAll(query: ListValidatorRecordingsDto, callerUserId: string, callerRole: string) {
     const skip = (query.page - 1) * query.pageSize;
     const orderBy = { [query.sortBy]: query.sortDir };
-    const where = this.buildWhere(query);
+
+    // Admins see every dialect; a validator only sees recordings for
+    // dialect(s) they've been onboarded to (ValidatorDialectAssignment,
+    // admin-managed -- see docs/validators.md). A validator with zero
+    // assignments gets an empty page, never an error or the full pool.
+    let assignedDialectTags: string[] | null = null;
+    if (callerRole !== 'ADMIN') {
+      const assignments = await this.prisma.validatorDialectAssignment.findMany({
+        where: { userId: callerUserId },
+        select: { dialect: { select: { tag: true } } },
+      });
+      assignedDialectTags = assignments.map((a) => a.dialect.tag);
+      if (assignedDialectTags.length === 0) {
+        return { items: [], page: query.page, pageSize: query.pageSize, total: 0, totalPages: 1 };
+      }
+    }
+
+    const where = this.buildWhere(query, assignedDialectTags);
 
     const [rows, total] = await Promise.all([
       this.prisma.wordRecording.findMany({
@@ -72,10 +89,21 @@ export class ValidatorRecordingsService {
     };
   }
 
-  private buildWhere(query: ListValidatorRecordingsDto) {
+  private buildWhere(query: ListValidatorRecordingsDto, assignedDialectTags: string[] | null) {
     const scoreRange = this.buildScoreRange(query);
+    // A client-supplied dialectTag narrows further within the caller's own
+    // assigned dialects -- it can never widen past them. Admins (null here)
+    // are unrestricted and use the plain exact-match filter as before.
+    const dialectFilter =
+      assignedDialectTags === null
+        ? query.dialectTag
+          ? { dialectTag: query.dialectTag }
+          : {}
+        : query.dialectTag
+          ? { dialectTag: assignedDialectTags.includes(query.dialectTag) ? query.dialectTag : '__none__' }
+          : { dialectTag: { in: assignedDialectTags } };
     return {
-      ...(query.dialectTag ? { dialectTag: query.dialectTag } : {}),
+      ...dialectFilter,
       ...(query.status ? { status: query.status } : {}),
       ...(scoreRange ? { score: scoreRange } : {}),
       ...(query.search

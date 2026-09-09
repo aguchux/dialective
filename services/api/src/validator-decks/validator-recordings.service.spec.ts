@@ -10,6 +10,9 @@ describe('ValidatorRecordingsService', () => {
       validatorDeckItem: {
         findMany: jest.fn().mockResolvedValue([]),
       },
+      validatorDialectAssignment: {
+        findMany: jest.fn().mockResolvedValue([{ dialect: { tag: 'ig' } }]),
+      },
     };
     const storage: any = {
       createPresignedDownloadUrl: jest.fn().mockResolvedValue({ url: 'https://example.com/audio' }),
@@ -32,7 +35,7 @@ describe('ValidatorRecordingsService', () => {
     ]);
     prisma.validatorDeckItem.findMany.mockResolvedValue([]);
 
-    const result = await service.listAll(baseQuery, 'user-1');
+    const result = await service.listAll(baseQuery, 'user-1', 'VALIDATOR');
 
     expect(result.items[0].myDeckId).toBeNull();
   });
@@ -44,7 +47,7 @@ describe('ValidatorRecordingsService', () => {
     ]);
     prisma.validatorDeckItem.findMany.mockResolvedValue([{ recordingId: 'rec-1', deckId: 'deck-1' }]);
 
-    const result = await service.listAll(baseQuery, 'user-1');
+    const result = await service.listAll(baseQuery, 'user-1', 'VALIDATOR');
 
     expect(result.items[0].myDeckId).toBe('deck-1');
   });
@@ -55,7 +58,7 @@ describe('ValidatorRecordingsService', () => {
       { id: 'rec-1', direction: 'ENGLISH_TO_DIALECT', translationText: 'hello', word: { text: 'hello' }, sentence: null },
     ]);
 
-    await service.listAll(baseQuery, 'user-1');
+    await service.listAll(baseQuery, 'user-1', 'VALIDATOR');
 
     expect(prisma.validatorDeckItem.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -76,7 +79,7 @@ describe('ValidatorRecordingsService', () => {
       { recordingId: 'rec-1', deckId: 'deck-older' },
     ]);
 
-    const result = await service.listAll(baseQuery, 'user-1');
+    const result = await service.listAll(baseQuery, 'user-1', 'VALIDATOR');
 
     expect(result.items[0].myDeckId).toBe('deck-newer');
   });
@@ -85,8 +88,56 @@ describe('ValidatorRecordingsService', () => {
     const { service, prisma } = setup();
     prisma.wordRecording.findMany.mockResolvedValue([]);
 
-    await service.listAll(baseQuery, 'user-1');
+    await service.listAll(baseQuery, 'user-1', 'VALIDATOR');
 
     expect(prisma.validatorDeckItem.findMany).not.toHaveBeenCalled();
+  });
+
+  describe('dialect scoping', () => {
+    it('restricts a validator to their assigned dialects', async () => {
+      const { service, prisma } = setup();
+      prisma.validatorDialectAssignment.findMany.mockResolvedValue([
+        { dialect: { tag: 'ig' } },
+        { dialect: { tag: 'yo' } },
+      ]);
+
+      await service.listAll(baseQuery, 'user-1', 'VALIDATOR');
+
+      expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ dialectTag: { in: ['ig', 'yo'] } }) }),
+      );
+    });
+
+    it('narrows a client-supplied dialectTag to the intersection with assignments, never widening past them', async () => {
+      const { service, prisma } = setup();
+      prisma.validatorDialectAssignment.findMany.mockResolvedValue([{ dialect: { tag: 'ig' } }]);
+
+      await service.listAll({ ...baseQuery, dialectTag: 'yo' }, 'user-1', 'VALIDATOR');
+
+      expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ dialectTag: '__none__' }) }),
+      );
+    });
+
+    it('returns an empty page without querying recordings when the validator has zero assignments', async () => {
+      const { service, prisma } = setup();
+      prisma.validatorDialectAssignment.findMany.mockResolvedValue([]);
+
+      const result = await service.listAll(baseQuery, 'user-1', 'VALIDATOR');
+
+      expect(result).toEqual({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 1 });
+      expect(prisma.wordRecording.findMany).not.toHaveBeenCalled();
+    });
+
+    it('bypasses dialect scoping entirely for an admin', async () => {
+      const { service, prisma } = setup();
+
+      await service.listAll(baseQuery, 'admin-1', 'ADMIN');
+
+      expect(prisma.validatorDialectAssignment.findMany).not.toHaveBeenCalled();
+      expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.not.objectContaining({ dialectTag: expect.anything() }) }),
+      );
+    });
   });
 });

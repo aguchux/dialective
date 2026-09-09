@@ -4,7 +4,13 @@ import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { Layers, Plus } from 'lucide-react';
 import { cardClass, EmptyPanel, formatDate } from '@/components/dashboard/shared';
-import { useCreateValidatorDeckMutation, useGetValidatorDecksQuery } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useCreateValidatorDeckMutation,
+  useGetDialectVariantsQuery,
+  useGetMyValidatorDialectsQuery,
+  useGetValidatorDecksQuery,
+} from '@/store/api';
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft',
@@ -89,21 +95,41 @@ export function StreamDecksView() {
   );
 }
 
+const selectClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
+const inputClass =
+  'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-ink dark:bg-surface-muted';
+
 function CreateDeckDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('');
-  const [dialectTag, setDialectTag] = useState('');
-  const [countryCode, setCountryCode] = useState('');
+  const [dialectId, setDialectId] = useState('');
+  const [dialectVariantId, setDialectVariantId] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const { data: myDialects, isLoading: isLoadingDialects } = useGetMyValidatorDialectsQuery();
+  const { data: dialectVariants } = useGetDialectVariantsQuery(dialectId, { skip: !dialectId });
   const [createDeck, { isLoading, error }] = useCreateValidatorDeckMutation();
+
+  const selectedDialect = myDialects?.find((d) => d.dialectId === dialectId);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
-    await createDeck({
-      name: name.trim(),
-      dialectTag: dialectTag.trim() || undefined,
-      countryCode: countryCode.trim() || undefined,
-    }).unwrap();
-    onClose();
+    setFormError(null);
+    if (!name.trim() || !selectedDialect) {
+      setFormError('Enter a name and choose a dialect to continue.');
+      return;
+    }
+    try {
+      await createDeck({
+        name: name.trim(),
+        countryId: selectedDialect.countryId,
+        dialectId: selectedDialect.dialectId,
+        dialectVariantId: dialectVariantId || undefined,
+      }).unwrap();
+      onClose();
+    } catch (err) {
+      setFormError(normalizeErrorMessage(err, 'Unable to create the deck.'));
+    }
   }
 
   return (
@@ -116,29 +142,60 @@ function CreateDeckDialog({ onClose }: { onClose: () => void }) {
         <label className="grid gap-1 text-sm font-bold">
           Name
           <input
-            className="min-h-10 rounded-lg border border-line bg-surface px-3"
+            className={inputClass}
             onChange={(e) => setName(e.target.value)}
             required
             value={name}
           />
         </label>
         <label className="grid gap-1 text-sm font-bold">
-          Dialect (optional)
-          <input
-            className="min-h-10 rounded-lg border border-line bg-surface px-3"
-            onChange={(e) => setDialectTag(e.target.value)}
-            value={dialectTag}
-          />
+          Dialect
+          <select
+            className={selectClass}
+            disabled={isLoadingDialects}
+            onChange={(e) => {
+              setDialectId(e.target.value);
+              setDialectVariantId('');
+            }}
+            required
+            value={dialectId}
+          >
+            <option value="">
+              {isLoadingDialects ? 'Loading…' : 'Select a dialect'}
+            </option>
+            {myDialects?.map((d) => (
+              <option key={d.dialectId} value={d.dialectId}>
+                {d.dialectName} ({d.countryName})
+              </option>
+            ))}
+          </select>
+          {!isLoadingDialects && myDialects?.length === 0 && (
+            <span className="text-xs font-medium text-muted">
+              You are not yet onboarded to any dialect &mdash; ask an admin to assign one.
+            </span>
+          )}
         </label>
         <label className="grid gap-1 text-sm font-bold">
-          Country (optional)
-          <input
-            className="min-h-10 rounded-lg border border-line bg-surface px-3"
-            onChange={(e) => setCountryCode(e.target.value)}
-            value={countryCode}
-          />
+          Sub-dialect (optional)
+          <select
+            className={selectClass}
+            disabled={!dialectId || !dialectVariants?.length}
+            onChange={(e) => setDialectVariantId(e.target.value)}
+            value={dialectVariantId}
+          >
+            <option value="">None</option>
+            {dialectVariants?.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
         </label>
-        {Boolean(error) && <p className="text-sm font-bold text-red-600">Unable to create the deck.</p>}
+        {(formError || Boolean(error)) && (
+          <p className="text-sm font-bold text-red-600">
+            {formError ?? 'Unable to create the deck.'}
+          </p>
+        )}
         <div className="mt-1 flex justify-end gap-2">
           <button
             className="min-h-10 rounded-lg border border-line px-3 font-bold"
