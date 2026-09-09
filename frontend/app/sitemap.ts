@@ -6,7 +6,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dialectlibrary.com'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const routes = ['/', '/about', '/blog', '/testimonials', '/data-access', '/faq'];
-  const legalRoutes = ['/terms', '/privacy', '/cookies'];
+  const legalRoutes = ['/terms', '/privacy', '/cookies', '/refunds'];
   const [posts, courses] = await Promise.all([
     getPublishedBlogPosts().catch(() => []),
     getPublishedCourses().catch(() => []),
