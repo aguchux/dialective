@@ -350,6 +350,12 @@ model SystemUpdate {
   title         String
   message       String
   href          String?
+  // When true, this update also appears in the global dashboard message
+  // banner (GET /notifications/banner) in addition to the per-user
+  // notification inbox it always fans out into -- admin-toggleable per
+  // update (create or edit) rather than a separate banner-only model, so
+  // the existing Updates screen is the single place admins manage both.
+  pushToBanner  Boolean                @default(false)
   authorId      String?
   author        User?                  @relation("SystemUpdateAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   createdAt     DateTime               @default(now())
@@ -357,6 +363,7 @@ model SystemUpdate {
 
   @@unique([sourceType, sourceId])
   @@index([kind, createdAt])
+  @@index([pushToBanner, createdAt])
   @@map("system_updates")
 }
 

@@ -29,6 +29,11 @@ export class NotificationsController {
     return this.notifications.listForUser(user.sub, page ? Number(page) : 1);
   }
 
+  @Get('banner')
+  listBanner() {
+    return this.notifications.listBannerUpdates();
+  }
+
   @Patch(':id/read')
   markRead(@CurrentUser() user: AccessTokenClaims, @Param('id') id: string) {
     return this.notifications.markRead(user.sub, id);

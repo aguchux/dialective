@@ -13,6 +13,7 @@ interface PublishUpdateInput {
   authorId?: string | null;
   sourceType?: SystemUpdateSourceType;
   sourceId?: string | null;
+  pushToBanner?: boolean;
 }
 
 @Injectable()
@@ -27,6 +28,7 @@ export class NotificationsService {
       href: cleanHref(dto.href),
       authorId,
       sourceType: SystemUpdateSourceType.MANUAL,
+      pushToBanner: dto.pushToBanner ?? false,
     });
   }
 
@@ -91,6 +93,7 @@ export class NotificationsService {
           message,
           href: input.href ?? null,
           authorId: input.authorId ?? null,
+          pushToBanner: input.pushToBanner ?? false,
         },
       });
       if (recipients.length) {
@@ -129,7 +132,10 @@ export class NotificationsService {
     }));
   }
 
-  async updateUpdate(id: string, dto: { title?: string; message?: string; href?: string | null }) {
+  async updateUpdate(
+    id: string,
+    dto: { title?: string; message?: string; href?: string | null; pushToBanner?: boolean },
+  ) {
     const existing = await this.prisma.systemUpdate.findUnique({
       where: { id },
       select: { id: true },
@@ -148,6 +154,7 @@ export class NotificationsService {
         ...(title !== undefined ? { title } : {}),
         ...(message !== undefined ? { message } : {}),
         ...(dto.href !== undefined ? { href: cleanHref(dto.href ?? undefined) } : {}),
+        ...(dto.pushToBanner !== undefined ? { pushToBanner: dto.pushToBanner } : {}),
       },
     });
   }
@@ -185,6 +192,17 @@ export class NotificationsService {
       totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
       unreadCount,
     };
+  }
+
+  // Full history of banner-pushed updates, newest first -- the frontend
+  // slider steps back/forward through all of them, not just the latest.
+  async listBannerUpdates() {
+    const updates = await this.prisma.systemUpdate.findMany({
+      where: { pushToBanner: true },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, kind: true, title: true, message: true, href: true, createdAt: true },
+    });
+    return { items: updates };
   }
 
   async markRead(userId: string, id: string) {

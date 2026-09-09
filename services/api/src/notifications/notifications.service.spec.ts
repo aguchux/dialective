@@ -8,7 +8,7 @@ function setup() {
       findUnique: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
-    },
+    } as any,
     userNotification: {
       groupBy: jest.fn().mockResolvedValue([]),
     },
@@ -106,6 +106,53 @@ describe('NotificationsService.updateUpdate', () => {
 
     await expect(service.updateUpdate('missing', { title: 'x' })).rejects.toThrow(
       NotFoundException,
+    );
+  });
+
+  it('sets pushToBanner when provided', async () => {
+    const { service, prisma } = setup();
+    prisma.systemUpdate.findUnique.mockResolvedValue({ id: 'u1' });
+    prisma.systemUpdate.update.mockResolvedValue({ id: 'u1' });
+
+    await service.updateUpdate('u1', { pushToBanner: true });
+
+    expect(prisma.systemUpdate.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { pushToBanner: true },
+    });
+  });
+
+  it('leaves pushToBanner untouched when omitted', async () => {
+    const { service, prisma } = setup();
+    prisma.systemUpdate.findUnique.mockResolvedValue({ id: 'u1' });
+    prisma.systemUpdate.update.mockResolvedValue({ id: 'u1' });
+
+    await service.updateUpdate('u1', { title: 'x' });
+
+    expect(prisma.systemUpdate.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { title: 'x' },
+    });
+  });
+});
+
+describe('NotificationsService.listBannerUpdates', () => {
+  it('returns only pushToBanner updates, newest first', async () => {
+    const { service, prisma } = setup();
+    prisma.systemUpdate.findMany.mockResolvedValue([
+      { id: 'u2', kind: 'MESSAGE', title: 'Newer', message: 'm2', href: null, createdAt: new Date('2026-02-01') },
+      { id: 'u1', kind: 'MESSAGE', title: 'Older', message: 'm1', href: null, createdAt: new Date('2026-01-01') },
+    ]);
+
+    const result = await service.listBannerUpdates();
+
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0].id).toBe('u2');
+    expect(prisma.systemUpdate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { pushToBanner: true },
+        orderBy: { createdAt: 'desc' },
+      }),
     );
   });
 });

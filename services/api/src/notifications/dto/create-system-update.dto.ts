@@ -1,5 +1,5 @@
 import { SystemUpdateKind } from '@dialectiva/db';
-import { IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class CreateSystemUpdateDto {
   @IsEnum(SystemUpdateKind)
@@ -20,4 +20,8 @@ export class CreateSystemUpdateDto {
   @Matches(/^(\/|https?:\/\/)/, { message: 'href must be an internal path or http(s) URL' })
   @MaxLength(500)
   href?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  pushToBanner?: boolean;
 }

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateSystemUpdateDto {
   @IsOptional()
@@ -19,4 +19,10 @@ export class UpdateSystemUpdateDto {
   @Matches(/^(\/|https?:\/\/)?$/, { message: 'href must be an internal path or http(s) URL' })
   @MaxLength(500)
   href?: string;
+
+  // Lets an admin promote an existing update to the banner, or retract it,
+  // after it was already sent -- omit the field entirely to leave unchanged.
+  @IsOptional()
+  @IsBoolean()
+  pushToBanner?: boolean;
 }

@@ -13,6 +13,7 @@ import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
 import { DykPrompt } from '@/components/DykPrompt';
 import { SessionActivityTracker } from '@/components/SessionActivityTracker';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
+import { GlobalMessageBanner } from '@/components/GlobalMessageBanner';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -35,6 +36,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <TawkToWidget />
           <AiAssistantWidget />
           <RequireNameDialog />
+          <GlobalMessageBanner />
           {children}
           <CookieConsentBanner />
         </StoreProvider>

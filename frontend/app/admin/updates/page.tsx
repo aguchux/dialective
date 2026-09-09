@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Pencil, Plus, Send, Trash2 } from 'lucide-react';
+import { Megaphone, Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
@@ -101,6 +101,19 @@ export default function AdminUpdatesPage() {
       ),
     },
     {
+      key: 'pushToBanner',
+      header: 'Banner',
+      sortValue: (u) => (u.pushToBanner ? 1 : 0),
+      render: (u) =>
+        u.pushToBanner ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-black uppercase text-accent-dark">
+            <Megaphone className="size-3" aria-hidden="true" /> On banner
+          </span>
+        ) : (
+          <span className="text-sm text-muted">—</span>
+        ),
+    },
+    {
       key: 'read',
       header: 'Read',
       sortValue: (u) => (u._count.notifications === 0 ? 0 : u.readCount / u._count.notifications),
@@ -198,6 +211,7 @@ function AddUpdateDialog({ onClose }: { onClose: () => void }) {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [href, setHref] = useState('');
+  const [pushToBanner, setPushToBanner] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -211,13 +225,15 @@ function AddUpdateDialog({ onClose }: { onClose: () => void }) {
         title: title.trim(),
         message: message.trim(),
         ...(href.trim() ? { href: href.trim() } : {}),
+        pushToBanner,
       }).unwrap();
       setNotice(
-        `Update sent to ${result.recipients.toLocaleString()} recipient${result.recipients === 1 ? '' : 's'}.`,
+        `Update sent to ${result.recipients.toLocaleString()} recipient${result.recipients === 1 ? '' : 's'}${pushToBanner ? ' and pushed to the global banner' : ''}.`,
       );
       setTitle('');
       setMessage('');
       setHref('');
+      setPushToBanner(false);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to send this update.'));
     }
@@ -288,6 +304,23 @@ function AddUpdateDialog({ onClose }: { onClose: () => void }) {
               value={href}
             />
           </div>
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5">
+            <input
+              checked={pushToBanner}
+              className="mt-0.5 size-4 accent-accent"
+              onChange={(event) => setPushToBanner(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              <span className="flex items-center gap-1.5 font-bold text-ink">
+                <Megaphone className="size-4 text-accent" aria-hidden="true" />
+                Also push to global banner
+              </span>
+              <span className="text-sm text-muted">
+                Shows full-width at the top of every dashboard until dismissed or removed.
+              </span>
+            </span>
+          </label>
           {notice && (
             <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-bold text-emerald-700">
               {notice}
@@ -323,6 +356,7 @@ function EditUpdateDialog({ update, onClose }: { update: AdminSystemUpdate; onCl
   const [title, setTitle] = useState(update.title);
   const [message, setMessage] = useState(update.message);
   const [href, setHref] = useState(update.href ?? '');
+  const [pushToBanner, setPushToBanner] = useState(update.pushToBanner);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(event: FormEvent) {
@@ -334,6 +368,7 @@ function EditUpdateDialog({ update, onClose }: { update: AdminSystemUpdate; onCl
         title: title.trim(),
         message: message.trim(),
         href: href.trim(),
+        pushToBanner,
       }).unwrap();
       onClose();
     } catch (err) {
@@ -389,6 +424,24 @@ function EditUpdateDialog({ update, onClose }: { update: AdminSystemUpdate; onCl
               value={href}
             />
           </div>
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5">
+            <input
+              checked={pushToBanner}
+              className="mt-0.5 size-4 accent-accent"
+              onChange={(event) => setPushToBanner(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              <span className="flex items-center gap-1.5 font-bold text-ink">
+                <Megaphone className="size-4 text-accent" aria-hidden="true" />
+                Also push to global banner
+              </span>
+              <span className="text-sm text-muted">
+                Shows full-width at the top of every dashboard until dismissed or removed. Untick to
+                retract it from the banner.
+              </span>
+            </span>
+          </label>
           {error && (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-bold text-danger">
               {error}

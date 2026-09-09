@@ -100,10 +100,20 @@ export interface AdminSystemUpdate {
   title: string;
   message: string;
   href: string | null;
+  pushToBanner: boolean;
   createdAt: string;
   author: { email: string; firstName: string | null; lastName: string | null } | null;
   _count: { notifications: number };
   readCount: number;
+}
+
+export interface BannerUpdate {
+  id: string;
+  kind: SystemUpdateKind;
+  title: string;
+  message: string;
+  href: string | null;
+  createdAt: string;
 }
 
 export interface AdminSmsContact {
@@ -3263,6 +3273,10 @@ export const dialectivaApi = createApi({
       query: (params) => ({ url: '/notifications', params: params ?? undefined }),
       providesTags: ['Notifications'],
     }),
+    getBannerUpdates: builder.query<{ items: BannerUpdate[] }, void>({
+      query: () => '/notifications/banner',
+      providesTags: ['Notifications'],
+    }),
     markNotificationRead: builder.mutation<{ id: string; read: true }, string>({
       query: (id) => ({ url: `/notifications/${id}/read`, method: 'PATCH' }),
       invalidatesTags: ['Notifications'],
@@ -3277,14 +3291,20 @@ export const dialectivaApi = createApi({
     }),
     createSystemUpdate: builder.mutation<
       { updateId: string; recipients: number; duplicate: boolean },
-      { kind: SystemUpdateKind; title: string; message: string; href?: string }
+      {
+        kind: SystemUpdateKind;
+        title: string;
+        message: string;
+        href?: string;
+        pushToBanner?: boolean;
+      }
     >({
       query: (body) => ({ url: '/notifications/admin/updates', method: 'POST', body }),
       invalidatesTags: ['Notifications'],
     }),
     updateSystemUpdate: builder.mutation<
       AdminSystemUpdate,
-      { id: string; title?: string; message?: string; href?: string }
+      { id: string; title?: string; message?: string; href?: string; pushToBanner?: boolean }
     >({
       query: ({ id, ...body }) => ({
         url: `/notifications/admin/updates/${id}`,
@@ -4611,6 +4631,7 @@ export const {
   useUpdateProfileMutation,
   useRecordPwaInstallationMutation,
   useGetNotificationsQuery,
+  useGetBannerUpdatesQuery,
   useMarkNotificationReadMutation,
   useMarkAllNotificationsReadMutation,
   useGetAdminSystemUpdatesQuery,
