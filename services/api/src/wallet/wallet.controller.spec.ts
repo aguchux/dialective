@@ -621,6 +621,9 @@ describe('WalletController withdrawal payout automation', () => {
       verifyPayout: jest
         .fn()
         .mockResolvedValue({ payoutId: 'payout-1', status: 'processing', raw: {} }),
+      cancelPayout: jest
+        .fn()
+        .mockResolvedValue({ payoutId: 'payout-1', status: 'cancelled', raw: {} }),
     };
     const platformSettings = {
       isNowPaymentsPayoutsEnabled: jest.fn().mockResolvedValue(true),
@@ -913,6 +916,123 @@ describe('WalletController withdrawal payout automation', () => {
     const [[call]] = otp.verify.mock.calls;
     expect(typeof call.contextHash).toBe('string');
     expect(call.contextHash.length).toBeGreaterThan(0);
+  });
+
+  it('cancel-nowpayments only accepts a PROCESSING withdrawal with a providerPayoutId', async () => {
+    const { controller } = setup(baseWithdrawal({ status: 'APPROVED', providerPayoutId: 'payout-1' }));
+
+    await expect(controller.cancelNowPaymentsWithdrawal('withdrawal-1')).rejects.toThrow(
+      'Only a withdrawal that is PROCESSING with the payment provider can be cancelled',
+    );
+  });
+
+  it('cancel-nowpayments moves a genuinely-cancelled PROCESSING payout to FAILED', async () => {
+    const { controller, nowPayments, prisma } = setup(
+      baseWithdrawal({ status: 'PROCESSING', providerPayoutId: 'payout-1' }),
+    );
+    prisma.withdrawalRequest.findUniqueOrThrow.mockResolvedValue(
+      baseWithdrawal({ status: 'FAILED', providerPayoutId: 'payout-1' }),
+    );
+
+    const result = await controller.cancelNowPaymentsWithdrawal('withdrawal-1');
+
+    expect(nowPayments.cancelPayout).toHaveBeenCalledWith('payout-1');
+    expect(result).toEqual({ withdrawalId: 'withdrawal-1', status: 'FAILED' });
+  });
+
+  it('cancel-nowpayments falls back to a status refresh when the provider says the payout is already terminal', async () => {
+    const { NowPaymentsApiError } = jest.requireActual('./nowpayments.service');
+    const { controller, nowPayments, prisma } = setup(
+      baseWithdrawal({ status: 'PROCESSING', providerPayoutId: 'payout-1' }),
+    );
+    nowPayments.cancelPayout.mockRejectedValue(
+      new NowPaymentsApiError(
+        'The payout provider could not cancel this withdrawal.',
+        'NOWPayments cancelPayout 404: {"error":"No payouts found by id, try another."}',
+      ),
+    );
+    nowPayments.getPayoutStatus.mockResolvedValue({
+      payoutId: 'payout-1',
+      status: 'rejected',
+      raw: {},
+    });
+    prisma.withdrawalRequest.findUniqueOrThrow.mockResolvedValue(
+      baseWithdrawal({ status: 'FAILED', providerPayoutId: 'payout-1' }),
+    );
+
+    const result = await controller.cancelNowPaymentsWithdrawal('withdrawal-1');
+
+    expect(nowPayments.getPayoutStatus).toHaveBeenCalledWith('payout-1');
+    expect(result).toEqual({ withdrawalId: 'withdrawal-1', status: 'FAILED' });
+  });
+
+  it('cancel-nowpayments re-throws a genuine provider error (not the already-terminal case)', async () => {
+    const { NowPaymentsApiError } = jest.requireActual('./nowpayments.service');
+    const { controller, nowPayments } = setup(
+      baseWithdrawal({ status: 'PROCESSING', providerPayoutId: 'payout-1' }),
+    );
+    nowPayments.cancelPayout.mockRejectedValue(
+      new NowPaymentsApiError('boom', 'NOWPayments cancelPayout 500: server error'),
+    );
+
+    await expect(controller.cancelNowPaymentsWithdrawal('withdrawal-1')).rejects.toThrow('boom');
+  });
+
+  it('bulk-resolve rejects bulk approve while admin payout OTP is required', async () => {
+    const { controller, req, platformSettings } = setup(baseWithdrawal({ status: 'PENDING' }));
+    platformSettings.isAdminPayoutOtpEnabled.mockResolvedValue(true);
+
+    await expect(
+      controller.bulkResolveWithdrawals(req, { ids: ['withdrawal-1'], action: 'approve' } as never),
+    ).rejects.toThrow('Bulk approve is unavailable while admin payout OTP is required');
+  });
+
+  it('bulk-resolve approves every id when admin payout OTP is off', async () => {
+    const { controller, req, prisma } = setup(baseWithdrawal({ status: 'PENDING' }));
+
+    const result = await controller.bulkResolveWithdrawals(req, {
+      ids: ['withdrawal-1', 'withdrawal-2'],
+      action: 'approve',
+    } as never);
+
+    expect(result.results).toEqual([
+      { id: 'withdrawal-1', ok: true },
+      { id: 'withdrawal-2', ok: true },
+    ]);
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('bulk-resolve rejects every id and refunds each via the ledger', async () => {
+    const { controller, req, prisma } = setup(baseWithdrawal({ status: 'PENDING' }));
+
+    const result = await controller.bulkResolveWithdrawals(req, {
+      ids: ['withdrawal-1', 'withdrawal-2'],
+      action: 'reject',
+    } as never);
+
+    expect(result.results).toEqual([
+      { id: 'withdrawal-1', ok: true },
+      { id: 'withdrawal-2', ok: true },
+    ]);
+    expect(prisma.ledgerEntry.create).toHaveBeenCalledTimes(2);
+    expect(prisma.wallet.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('bulk-resolve reports a per-id failure without aborting the rest of the batch', async () => {
+    const { controller, req, prisma } = setup(baseWithdrawal({ status: 'PAID' }));
+    // PAID is not in resolvableStatuses -- resolveWithdrawal throws for every id here,
+    // proving a failure is captured per-row rather than thrown out of the whole call.
+    prisma.withdrawalRequest.findUnique.mockResolvedValue(baseWithdrawal({ status: 'PAID' }));
+
+    const result = await controller.bulkResolveWithdrawals(req, {
+      ids: ['withdrawal-1', 'withdrawal-2'],
+      action: 'reject',
+    } as never);
+
+    expect(result.results).toEqual([
+      { id: 'withdrawal-1', ok: false, error: expect.stringContaining('already resolved') },
+      { id: 'withdrawal-2', ok: false, error: expect.stringContaining('already resolved') },
+    ]);
   });
 });
 
@@ -1857,6 +1977,76 @@ describe('WalletController.listReferralInvitations', () => {
     expect(result.page).toBe(20);
     expect(prisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ take: 20 * 5 }),
+    );
+  });
+});
+
+describe('WalletController.listWithdrawalsForAdmin', () => {
+  function setup() {
+    const prisma: any = {
+      withdrawalRequest: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'withdrawal-1' }]),
+        count: jest.fn().mockResolvedValue(1),
+      },
+    };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { controller, prisma };
+  }
+
+  it('paginates with the default page size and returns the {items,total,page,pageSize,totalPages} shape', async () => {
+    const { controller, prisma } = setup();
+    prisma.withdrawalRequest.count.mockResolvedValue(12);
+
+    const result = await controller.listWithdrawalsForAdmin({ page: 2, pageSize: 5 } as never);
+
+    expect(prisma.withdrawalRequest.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 5, take: 5 }),
+    );
+    expect(result).toMatchObject({ total: 12, page: 2, pageSize: 5, totalPages: 3 });
+  });
+
+  it('filters by status when provided', async () => {
+    const { controller, prisma } = setup();
+
+    await controller.listWithdrawalsForAdmin({ status: 'PENDING', page: 1, pageSize: 5 } as never);
+
+    expect(prisma.withdrawalRequest.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ status: 'PENDING' }) }),
+    );
+  });
+
+  it('searches trainer email and destination address, case-insensitive', async () => {
+    const { controller, prisma } = setup();
+
+    await controller.listWithdrawalsForAdmin({
+      search: 'hayleyesusgetu109@gmail.com',
+      page: 1,
+      pageSize: 5,
+    } as never);
+
+    expect(prisma.withdrawalRequest.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            {
+              wallet: {
+                user: { email: { contains: 'hayleyesusgetu109@gmail.com', mode: 'insensitive' } },
+              },
+            },
+            { destinationAddress: { contains: 'hayleyesusgetu109@gmail.com', mode: 'insensitive' } },
+          ],
+        }),
+      }),
     );
   });
 });

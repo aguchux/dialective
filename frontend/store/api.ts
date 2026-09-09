@@ -2994,8 +2994,14 @@ export const dialectivaApi = createApi({
       invalidatesTags: ['Wallet'],
     }),
     listAdminWithdrawals: builder.query<
-      AdminWithdrawalRequest[],
-      { status?: WithdrawalStatus } | void
+      {
+        items: AdminWithdrawalRequest[];
+        total: number;
+        page: number;
+        pageSize: number;
+        totalPages: number;
+      },
+      { status?: WithdrawalStatus; page?: number; pageSize?: number; search?: string } | void
     >({
       query: (params) => ({ url: '/admin/withdrawals', params: params ?? undefined }),
       providesTags: ['Wallet'],
@@ -3219,6 +3225,17 @@ export const dialectivaApi = createApi({
       string
     >({
       query: (id) => ({ url: `/admin/withdrawals/${id}/refresh-nowpayments`, method: 'POST' }),
+      invalidatesTags: ['Wallet'],
+    }),
+    cancelNowPaymentsWithdrawal: builder.mutation<{ withdrawalId: string; status: string }, string>({
+      query: (id) => ({ url: `/admin/withdrawals/${id}/cancel-nowpayments`, method: 'POST' }),
+      invalidatesTags: ['Wallet'],
+    }),
+    bulkResolveWithdrawals: builder.mutation<
+      { results: { id: string; ok: boolean; error?: string }[] },
+      { ids: string[]; action: 'approve' | 'reject'; adminNote?: string }
+    >({
+      query: (body) => ({ url: '/admin/withdrawals/bulk-resolve', method: 'POST', body }),
       invalidatesTags: ['Wallet'],
     }),
     submitWithdrawalToFlutterwave: builder.mutation<
@@ -4646,6 +4663,8 @@ export const {
   useSubmitWithdrawalToNowPaymentsMutation,
   useVerifyWithdrawalPayoutMutation,
   useRefreshWithdrawalStatusMutation,
+  useCancelNowPaymentsWithdrawalMutation,
+  useBulkResolveWithdrawalsMutation,
   useSubmitWithdrawalToFlutterwaveMutation,
   useRefreshWithdrawalStatusFlutterwaveMutation,
   useListBanksQuery,

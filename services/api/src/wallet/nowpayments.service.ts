@@ -290,6 +290,40 @@ export class NowPaymentsService implements PayoutProvider {
   }
 
   /**
+   * Confirmed live 2026-09-09: POST /payout/:id/cancel is a real,
+   * route-specific endpoint (a garbage id returns a distinct 500
+   * INTERNAL_ERROR, not the generic 404 "Endpoint not found" every
+   * unmatched route returns) -- only cancellable while the payout hasn't
+   * already reached a terminal state on NOWPayments' side (an
+   * already-REJECTED/FINISHED payout 404s with "No payouts found by id,
+   * try another", which is NOWPayments' own not-cancellable signal, not a
+   * wrong-endpoint signal). Callers should treat that specific 404 as
+   * "nothing to cancel -- refresh status instead" rather than a hard
+   * failure; see WalletController.cancelNowPaymentsWithdrawal.
+   */
+  async cancelPayout(payoutId: string): Promise<PayoutStatusResult> {
+    const token = await this.getPayoutAuthToken();
+    const res = await fetch(`${NOWPAYMENTS_API_BASE}/payout/${encodeURIComponent(payoutId)}/cancel`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+      },
+    });
+    const raw = await readNowPaymentsJson(res);
+    if (!res.ok) {
+      this.logger.error(`NOWPayments cancelPayout failed: ${res.status} ${JSON.stringify(raw)}`);
+      throw new NowPaymentsApiError(
+        'The payout provider could not cancel this withdrawal.',
+        `NOWPayments cancelPayout ${res.status}: ${JSON.stringify(raw)}`,
+      );
+    }
+    const payout = extractPayout(raw, payoutId);
+    return { payoutId: payout.id ?? payoutId, status: payout.status, raw };
+  }
+
+  /**
    * GET /v1/balance -- this merchant account's balance per currency, used by
    * reserve-balance-poll.ts as the live source for TokenomicsService's
    * reserve total (see schema.prisma's ReserveBalanceSnapshot). Same simple

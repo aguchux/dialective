@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { ActionButton } from '@/components/ui/ActionButton';
@@ -8,6 +8,8 @@ import {
   AdminWithdrawalRequest,
   normalizeErrorMessage,
   useApproveWithdrawalMutation,
+  useBulkResolveWithdrawalsMutation,
+  useCancelNowPaymentsWithdrawalMutation,
   useGetPlatformSettingsQuery,
   useListAdminWithdrawalsQuery,
   useRefreshWithdrawalStatusMutation,
@@ -30,6 +32,8 @@ const STATUS_TABS: { label: string; value: WithdrawalStatus | 'ALL' }[] = [
   { label: 'All', value: 'ALL' },
 ];
 
+const PAGE_SIZE = 5;
+
 const statusTone: Record<WithdrawalStatus, string> = {
   PENDING: 'bg-surface text-muted',
   APPROVED: 'bg-blue-50 text-blue-700',
@@ -41,10 +45,82 @@ const statusTone: Record<WithdrawalStatus, string> = {
 
 export default function AdminWithdrawalsPage() {
   const [tab, setTab] = useState<WithdrawalStatus | 'ALL'>('PENDING');
-  const { data: withdrawals = [], isLoading } = useListAdminWithdrawalsQuery(
-    tab === 'ALL' ? undefined : { status: tab },
-  );
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Debounce the search box so every keystroke doesn't refetch.
+  useEffect(() => {
+    const timeout = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
+
+  // Any filter change resets to page 1 and clears the selection -- a
+  // selected row's checkbox state shouldn't silently carry across an
+  // unrelated view (different tab/search/page could easily hide that row).
+  useEffect(() => {
+    setPage(1);
+    setSelected(new Set());
+  }, [tab, search]);
+
+  const { data, isLoading, isFetching } = useListAdminWithdrawalsQuery({
+    ...(tab === 'ALL' ? {} : { status: tab }),
+    page,
+    pageSize: PAGE_SIZE,
+    ...(search ? { search } : {}),
+  });
   const { data: platformSettings } = useGetPlatformSettingsQuery();
+  const [bulkResolve, { isLoading: bulkResolving }] = useBulkResolveWithdrawalsMutation();
+
+  const withdrawals = data?.items ?? [];
+  const totalPages = data?.totalPages ?? 1;
+  const total = data?.total ?? 0;
+  const selectableIds = withdrawals
+    .filter((w) => w.status === 'PENDING' || w.status === 'FAILED')
+    .map((w) => w.id);
+  const allSelectableChecked =
+    selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+
+  function toggleRow(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllOnPage() {
+    setSelected((prev) => {
+      if (allSelectableChecked) {
+        const next = new Set(prev);
+        selectableIds.forEach((id) => next.delete(id));
+        return next;
+      }
+      return new Set([...prev, ...selectableIds]);
+    });
+  }
+
+  const [bulkError, setBulkError] = useState('');
+
+  async function runBulk(action: 'approve' | 'reject') {
+    setBulkError('');
+    try {
+      const result = await bulkResolve({ ids: [...selected], action }).unwrap();
+      const failures = result.results.filter((r) => !r.ok);
+      if (failures.length > 0) {
+        setBulkError(
+          `${result.results.length - failures.length}/${result.results.length} succeeded. Failed: ${failures
+            .map((f) => f.error)
+            .join('; ')}`,
+        );
+      }
+      setSelected(new Set());
+    } catch (err) {
+      setBulkError(normalizeErrorMessage(err, 'Could not complete this bulk action'));
+    }
+  }
 
   return (
     <AdminShell>
@@ -69,23 +145,80 @@ export default function AdminWithdrawalsPage() {
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {STATUS_TABS.map((option) => (
-            <button
-              className={`min-h-9 rounded-lg border px-3 text-sm font-extrabold ${tab === option.value ? 'border-accent bg-accent text-white' : 'border-line bg-white text-ink'}`}
-              key={option.value}
-              onClick={() => setTab(option.value)}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {STATUS_TABS.map((option) => (
+              <button
+                className={`min-h-9 rounded-lg border px-3 text-sm font-extrabold ${tab === option.value ? 'border-accent bg-accent text-white' : 'border-line bg-white text-ink'}`}
+                key={option.value}
+                onClick={() => setTab(option.value)}
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <input
+            className="min-h-9 w-64 rounded-lg border border-line bg-white px-3 text-sm outline-none focus:border-accent"
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search trainer email or address…"
+            type="search"
+            value={searchInput}
+          />
+        </div>
+
+        {selected.size > 0 && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-3">
+            <p className="text-sm font-bold text-accent">{selected.size} selected</p>
+            <ActionButton
+              className="min-h-9 rounded-lg border border-line bg-white px-3 text-sm font-extrabold text-ink disabled:opacity-60"
+              onClick={() => runBulk('approve')}
+              pending={bulkResolving}
+              pendingLabel="Approving"
+              disabled={platformSettings?.adminPayoutOtpEnabled ?? false}
+              title={
+                platformSettings?.adminPayoutOtpEnabled
+                  ? 'Bulk approve is unavailable while admin payout OTP is required'
+                  : undefined
+              }
               type="button"
             >
-              {option.label}
+              Approve selected
+            </ActionButton>
+            <ActionButton
+              className="min-h-9 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-extrabold text-danger disabled:opacity-60"
+              onClick={() => runBulk('reject')}
+              pending={bulkResolving}
+              pendingLabel="Rejecting"
+              type="button"
+            >
+              Reject &amp; refund selected
+            </ActionButton>
+            <button
+              className="text-sm font-bold text-muted underline"
+              onClick={() => setSelected(new Set())}
+              type="button"
+            >
+              Clear selection
             </button>
-          ))}
-        </div>
+          </div>
+        )}
+        {bulkError && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">{bulkError}</p>
+        )}
 
         <div className="overflow-x-auto rounded-lg border border-line bg-white">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-surface text-muted">
               <tr>
+                <th className="px-4 py-3">
+                  <input
+                    aria-label="Select all on this page"
+                    checked={allSelectableChecked}
+                    onChange={toggleAllOnPage}
+                    type="checkbox"
+                  />
+                </th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Trainer</th>
                 <th className="px-4 py-3">Amount</th>
@@ -98,27 +231,60 @@ export default function AdminWithdrawalsPage() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td className="px-4 py-5" colSpan={7}>
+                  <td className="px-4 py-5" colSpan={8}>
                     Loading withdrawals...
                   </td>
                 </tr>
               )}
               {!isLoading && withdrawals.length === 0 && (
                 <tr>
-                  <td className="px-4 py-5" colSpan={7}>
+                  <td className="px-4 py-5" colSpan={8}>
                     No withdrawals in this view.
                   </td>
                 </tr>
               )}
               {withdrawals.map((withdrawal) => (
                 <WithdrawalRow
+                  isSelectable={withdrawal.status === 'PENDING' || withdrawal.status === 'FAILED'}
+                  isSelected={selected.has(withdrawal.id)}
                   key={withdrawal.id}
-                  withdrawal={withdrawal}
+                  onToggleSelect={() => toggleRow(withdrawal.id)}
                   otpRequired={platformSettings?.adminPayoutOtpEnabled ?? false}
+                  withdrawal={withdrawal}
                 />
               ))}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted">
+            {total === 0
+              ? 'No results'
+              : `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, total)} of ${total}`}
+            {isFetching && ' · Updating…'}
+          </p>
+          <div className="flex gap-2">
+            <button
+              className="min-h-9 rounded-lg border border-line bg-white px-3 text-sm font-bold disabled:opacity-40"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              type="button"
+            >
+              Previous
+            </button>
+            <span className="flex items-center px-2 text-sm font-bold text-muted">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              className="min-h-9 rounded-lg border border-line bg-white px-3 text-sm font-bold disabled:opacity-40"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              type="button"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </AdminShell>
@@ -156,9 +322,15 @@ function CopyableValue({ value }: { value: string }) {
 function WithdrawalRow({
   withdrawal,
   otpRequired,
+  isSelectable,
+  isSelected,
+  onToggleSelect,
 }: {
   withdrawal: AdminWithdrawalRequest;
   otpRequired: boolean;
+  isSelectable: boolean;
+  isSelected: boolean;
+  onToggleSelect: () => void;
 }) {
   const isCrypto = !withdrawal.payoutMethod || withdrawal.payoutMethod === 'CRYPTO';
   const [refreshNowPayments, { isLoading: refreshingNowPayments }] =
@@ -183,6 +355,16 @@ function WithdrawalRow({
 
   return (
     <tr className="border-t border-line align-top">
+      <td className="px-4 py-3">
+        {isSelectable && (
+          <input
+            aria-label={`Select withdrawal for ${withdrawal.wallet.user.email}`}
+            checked={isSelected}
+            onChange={onToggleSelect}
+            type="checkbox"
+          />
+        )}
+      </td>
       <td className="px-4 py-3">
         <span
           className={`rounded-md px-2 py-1 text-xs font-black ${statusTone[withdrawal.status]}`}
@@ -309,11 +491,16 @@ function WithdrawalActions({
     withdrawal.providerPayoutId &&
     (!withdrawal.payoutMethod || withdrawal.payoutMethod === 'CRYPTO')
   ) {
-    // Flutterwave has no confirmed equivalent to NOWPayments' 2FA payout
-    // verification step -- fiat PROCESSING withdrawals rely on the webhook
-    // and the "Refresh status" link already rendered in the destination
-    // column instead.
-    return <WithdrawalVerifyDialog withdrawal={withdrawal} />;
+    // Flutterwave has no confirmed cancel-transfer or 2FA-verification
+    // equivalent -- fiat PROCESSING withdrawals rely on the webhook and the
+    // "Refresh status" link already rendered in the Provider column
+    // instead. Cancel is NOWPayments-only, confirmed against their live API.
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        <WithdrawalVerifyDialog withdrawal={withdrawal} />
+        <WithdrawalCancelDialog withdrawal={withdrawal} />
+      </div>
+    );
   }
   if (withdrawal.status === 'FAILED') {
     return (
@@ -608,6 +795,59 @@ function WithdrawalVerifyDialog({ withdrawal }: { withdrawal: AdminWithdrawalReq
             </ActionButton>
           </div>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function WithdrawalCancelDialog({ withdrawal }: { withdrawal: AdminWithdrawalRequest }) {
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState('');
+  const [cancel, { isLoading }] = useCancelNowPaymentsWithdrawalMutation();
+
+  async function handleConfirm() {
+    setError('');
+    try {
+      await cancel(withdrawal.id).unwrap();
+      setOpen(false);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not cancel this payout'));
+    }
+  }
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger asChild>
+        <button
+          className="min-h-8 rounded-lg border border-red-200 bg-red-50 px-2.5 text-xs font-extrabold text-danger"
+          type="button"
+        >
+          Cancel payout
+        </button>
+      </DialogTrigger>
+      <DialogContent
+        title="Cancel this payout?"
+        description="Cancels the payout at NOWPayments (or reconciles it if it already finished there) and moves this withdrawal to Failed, so you can then re-approve it or reject and refund the trainer."
+      >
+        <div className="grid gap-3">
+          {error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">{error}</p>
+          )}
+          <div className="flex justify-end gap-2">
+            <DialogClose className="inline-flex min-h-9 items-center rounded-lg border border-line bg-white px-3 text-sm font-bold">
+              Never mind
+            </DialogClose>
+            <ActionButton
+              className="inline-flex min-h-10 items-center rounded-lg bg-danger px-3.5 font-bold text-white disabled:opacity-60"
+              onClick={handleConfirm}
+              pending={isLoading}
+              pendingLabel="Cancelling"
+              type="button"
+            >
+              Cancel payout
+            </ActionButton>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

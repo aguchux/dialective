@@ -70,6 +70,8 @@ import { ListEarningsDto } from './dto/list-earnings.dto';
 import { ListLeaderboardDto } from './dto/list-leaderboard.dto';
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { GetWithdrawalMinAmountDto } from './dto/get-withdrawal-min-amount.dto';
+import { ListWithdrawalsAdminDto } from './dto/list-withdrawals-admin.dto';
+import { BulkResolveWithdrawalsDto } from './dto/bulk-resolve-withdrawals.dto';
 import { GetTrainerReportDto } from './dto/get-trainer-report.dto';
 import { TrainerReportService } from './trainer-report.service';
 import { renderTrainerReportPdf } from './trainer-report-pdf.util';
@@ -2389,51 +2391,72 @@ export class WalletController {
   @Get('admin/withdrawals')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  async listWithdrawalsForAdmin(@Query('status') status?: WithdrawalStatus) {
+  async listWithdrawalsForAdmin(@Query() query: ListWithdrawalsAdminDto) {
+    const { status, page, pageSize, search } = query;
     // Explicit select rather than a bare findMany -- the destination*
     // EncryptedJson columns must never reach the client, even to an admin;
     // decryption only ever happens server-side at submit-flutterwave's call
     // site.
-    return this.prisma.withdrawalRequest.findMany({
-      where: status ? { status } : undefined,
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-        walletId: true,
-        wallet: { include: { user: { select: { email: true } } } },
-        tokenAmount: true,
-        usdtAmount: true,
-        destinationAddress: true,
-        destinationCurrency: true,
-        destinationNetwork: true,
-        status: true,
-        approvedByAdminId: true,
-        approvedAt: true,
-        provider: true,
-        providerPayoutId: true,
-        providerStatus: true,
-        providerCurrency: true,
-        providerNetwork: true,
-        providerAddress: true,
-        providerError: true,
-        submittedToProviderAt: true,
-        providerSettledAt: true,
-        adminNote: true,
-        createdAt: true,
-        resolvedAt: true,
-        payoutMethod: true,
-        payoutAccountId: true,
-        destinationBankCode: true,
-        destinationBankName: true,
-        destinationAccountNumberMasked: true,
-        destinationAccountName: true,
-        destinationMobileNetwork: true,
-        destinationMobileNumberMasked: true,
-        destinationCountry: true,
-        fiatAmount: true,
-        fiatUsdExchangeRate: true,
-      },
-    });
+    const select = {
+      id: true,
+      walletId: true,
+      wallet: { include: { user: { select: { email: true } } } },
+      tokenAmount: true,
+      usdtAmount: true,
+      destinationAddress: true,
+      destinationCurrency: true,
+      destinationNetwork: true,
+      status: true,
+      approvedByAdminId: true,
+      approvedAt: true,
+      provider: true,
+      providerPayoutId: true,
+      providerStatus: true,
+      providerCurrency: true,
+      providerNetwork: true,
+      providerAddress: true,
+      providerError: true,
+      submittedToProviderAt: true,
+      providerSettledAt: true,
+      adminNote: true,
+      createdAt: true,
+      resolvedAt: true,
+      payoutMethod: true,
+      payoutAccountId: true,
+      destinationBankCode: true,
+      destinationBankName: true,
+      destinationAccountNumberMasked: true,
+      destinationAccountName: true,
+      destinationMobileNetwork: true,
+      destinationMobileNumberMasked: true,
+      destinationCountry: true,
+      fiatAmount: true,
+      fiatUsdExchangeRate: true,
+    } satisfies Prisma.WithdrawalRequestSelect;
+
+    const where: Prisma.WithdrawalRequestWhereInput = {
+      ...(status ? { status } : {}),
+      ...(search
+        ? {
+            OR: [
+              { wallet: { user: { email: { contains: search, mode: 'insensitive' } } } },
+              { destinationAddress: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.withdrawalRequest.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select,
+      }),
+      this.prisma.withdrawalRequest.count({ where }),
+    ]);
+    return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
   }
 
   /**
@@ -2467,6 +2490,53 @@ export class WalletController {
       contextHash,
       channel,
     );
+  }
+
+  /**
+   * Bulk approve/reject for the admin table's checkbox multi-select.
+   * Reject has no OTP gate (see resolveWithdrawal), so it always works.
+   * Approve, when adminPayoutOtpEnabled is on, requires an OTP bound via
+   * context hash to ONE specific withdrawal's exact amount/address/etc --
+   * that can't be satisfied by a single shared code across a batch of
+   * different withdrawals, so bulk approve is refused outright while that
+   * setting is on (an admin still has the per-row Approve action for
+   * that). Each id is processed independently through the exact same
+   * approveWithdrawal/resolveWithdrawal methods a single-row action uses
+   * (not a duplicated code path), so every existing guard/side-effect
+   * (status checks, ledger refund, SMS notify, auto-submit-after-approval)
+   * applies identically -- one id failing (e.g. already resolved) does not
+   * roll back or block the others, it's just reported in that id's result.
+   */
+  @Post('admin/withdrawals/bulk-resolve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async bulkResolveWithdrawals(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: BulkResolveWithdrawalsDto,
+  ) {
+    if (body.action === 'approve' && (await this.platformSettings.isAdminPayoutOtpEnabled())) {
+      throw new UnprocessableEntityException(
+        'Bulk approve is unavailable while admin payout OTP is required -- approve each withdrawal individually, or disable admin payout OTP in settings',
+      );
+    }
+
+    const results: { id: string; ok: boolean; error?: string }[] = [];
+    for (const id of body.ids) {
+      try {
+        if (body.action === 'approve') {
+          await this.approveWithdrawal(req, id, { adminNote: body.adminNote } as never);
+        } else {
+          await this.resolveWithdrawal(req, id, {
+            outcome: 'rejected',
+            adminNote: body.adminNote,
+          } as never);
+        }
+        results.push({ id, ok: true });
+      } catch (err) {
+        results.push({ id, ok: false, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    return { results };
   }
 
   /**
@@ -2750,6 +2820,69 @@ export class WalletController {
       status: this.mapProviderPayoutStatus(result.status),
       providerPayoutId: result.payoutId,
     };
+  }
+
+  /**
+   * For a payout stuck at PROCESSING that's genuinely still in flight at
+   * NOWPayments (as opposed to one that's already REJECTED/FINISHED there
+   * but our DB hasn't caught up -- see the extractPayout fix and use
+   * refresh-nowpayments for that case instead). Cancelling moves this
+   * withdrawal to FAILED (never PROCESSING's original terminal states
+   * directly) so an admin can then either re-approve (retries submission)
+   * or reject (refunds the trainer via the existing resolve/rejected
+   * path) -- same as any other FAILED row, no new admin workflow needed.
+   * NOWPayments' cancel endpoint 404s with a specific "No payouts found by
+   * id" message when the payout already reached a terminal state there
+   * (nothing left to cancel) -- that's not a real failure, so this falls
+   * back to a status refresh instead of surfacing an error.
+   */
+  @Post('admin/withdrawals/:id/cancel-nowpayments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async cancelNowPaymentsWithdrawal(@Param('id') id: string) {
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({ where: { id } });
+    if (!withdrawal) {
+      throw new NotFoundException('Withdrawal request not found');
+    }
+    if (withdrawal.status !== WithdrawalStatus.PROCESSING || !withdrawal.providerPayoutId) {
+      throw new UnprocessableEntityException(
+        'Only a withdrawal that is PROCESSING with the payment provider can be cancelled',
+      );
+    }
+
+    try {
+      const result = await this.nowPayments.cancelPayout(withdrawal.providerPayoutId);
+      await this.recordNowPaymentsPayoutStatus(
+        id,
+        result.payoutId,
+        'cancel',
+        result.status ?? 'cancelled',
+        result.raw,
+      );
+    } catch (err) {
+      const alreadyTerminal =
+        err instanceof NowPaymentsApiError && err.providerDetail.includes('No payouts found by id');
+      if (!alreadyTerminal) {
+        throw err;
+      }
+      const result = await this.nowPayments.getPayoutStatus(withdrawal.providerPayoutId);
+      await this.recordNowPaymentsPayoutStatus(id, result.payoutId, 'cancel', result.status, result.raw);
+    }
+
+    const refreshed = await this.prisma.withdrawalRequest.findUniqueOrThrow({ where: { id } });
+    if (refreshed.status === WithdrawalStatus.PROCESSING) {
+      // NOWPayments accepted the cancel request but hasn't settled the
+      // payout to a terminal status yet -- force FAILED here rather than
+      // leave the admin stuck with a Cancel button that appeared to do
+      // nothing; the next refresh/reconciliation pass will reconcile the
+      // real provider status onto this row same as any other transition.
+      await this.prisma.withdrawalRequest.update({
+        where: { id },
+        data: { status: WithdrawalStatus.FAILED, providerError: 'Cancelled by admin' },
+      });
+    }
+
+    return { withdrawalId: id, status: WithdrawalStatus.FAILED };
   }
 
   @Post('admin/withdrawals/:id/submit-flutterwave')
