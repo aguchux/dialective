@@ -271,6 +271,36 @@ describe('NowPaymentsService IPN verification', () => {
 
     expect(fetchSpy.mock.calls[1][0]).toBe('https://api.nowpayments.io/v1/payout/payout-1');
   });
+
+  it('reads status from withdrawals[0], not the batch-level object that has an id but no status', async () => {
+    process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
+    process.env.NOWPAYMENTS_PAYOUT_EMAIL = 'merchant@example.com';
+    process.env.NOWPAYMENTS_PAYOUT_PASSWORD = 'merchant-password';
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'jwt-token' }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: '5006549876',
+            createdAt: '2026-09-09T13:21:18.439Z',
+            withdrawals: [
+              {
+                batch_withdrawal_id: '5006549876',
+                status: 'REJECTED',
+                address: 'TExampleAddress',
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+
+    await expect(service.getPayoutStatus('5006549876')).resolves.toMatchObject({
+      payoutId: '5006549876',
+      status: 'REJECTED',
+    });
+  });
 });
 
 describe('NowPaymentsService.getBalance', () => {

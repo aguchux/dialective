@@ -397,13 +397,22 @@ function extractPayout(
   raw: Record<string, unknown>,
   fallbackId?: string,
 ): { id: string | null; status: string | null } {
+  // GET /v1/payout/:id's real response nests the actual per-withdrawal
+  // status inside withdrawals[0] (e.g. {id, createdAt, withdrawals:
+  // [{batch_withdrawal_id, status: 'REJECTED', ...}]}) -- the top-level
+  // object also has its own `id` (the batch id) but NO status field, so
+  // withdrawals[0] must be checked BEFORE the bare top-level `raw`, or a
+  // real rejected/failed payout is silently read back as status: null and
+  // never reconciled (confirmed live 2026-09-09: four payouts NOWPayments
+  // had already marked REJECTED stayed stuck at PROCESSING in our DB
+  // because this order picked raw's id with no status instead).
   const candidates = [
-    raw,
-    raw.payout as Record<string, unknown> | undefined,
-    raw.result as Record<string, unknown> | undefined,
     Array.isArray(raw.withdrawals)
       ? (raw.withdrawals[0] as Record<string, unknown> | undefined)
       : undefined,
+    raw.payout as Record<string, unknown> | undefined,
+    raw.result as Record<string, unknown> | undefined,
+    raw,
   ].filter(Boolean) as Record<string, unknown>[];
 
   for (const candidate of candidates) {
