@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
+import { SettingsSearch, SettingsSearchMatch } from './SettingsSearch';
 import { GeneralSettingsPanel } from './GeneralSettingsPanel';
 import { NotificationSettingsPanel } from './NotificationSettingsPanel';
 import { ReferralBonusSettingsPanel } from './ReferralBonusSettingsPanel';
@@ -56,8 +57,51 @@ const groups = [
 
 type GroupKey = (typeof groups)[number]['key'];
 
+const panelComponents: Record<GroupKey, () => JSX.Element> = {
+  general: GeneralSettingsPanel,
+  landingPage: LandingPageSettingsPanel,
+  maintenance: MaintenanceSettingsPanel,
+  referrals: ReferralBonusSettingsPanel,
+  distributors: DistributorSettingsPanel,
+  trainingTasks: TrainingTasksSettingsPanel,
+  notifications: NotificationSettingsPanel,
+  liveChat: LiveChatSettingsPanel,
+  pwa: PwaSettingsPanel,
+  dyk: DykSettingsPanel,
+  community: CommunitySettingsPanel,
+  wordGeneration: WordGenerationSettingsPanel,
+  qualityGate: QualityGateSettingsPanel,
+  testimonials: TestimonySettingsPanel,
+  speechExpression: SpeechExpressionSettingsPanel,
+  spellingNormalization: SpellingNormalizationSettingsPanel,
+  p2pMarket: P2PMarketSettingsPanel,
+  sms: SmsSettingsPanel,
+  withdrawals: WithdrawalSettingsPanel,
+  flutterwave: FlutterwaveSettingsPanel,
+  kyc: KycSettingsPanel,
+  datasetStorage: DatasetStorageSettingsPanel,
+  apiAccessTokens: ApiAccessTokensSettingsPanel,
+  stripeSubscriptions: StripeSubscriptionsSettingsPanel,
+};
+
+const HIGHLIGHT_CLASS = 'settings-search-highlight';
+
 export default function AdminSettingsPage() {
   const [active, setActive] = useState<GroupKey>('general');
+  const [matchedPanels, setMatchedPanels] = useState<Set<string> | null>(null);
+  const panelsContainerRef = useRef<HTMLDivElement>(null);
+
+  function handleNavigate(match: SettingsSearchMatch) {
+    setActive(match.panelKey as GroupKey);
+    // The target panel is currently `hidden` (or was just made visible this
+    // tick) -- wait a frame so it actually paints before scrolling/measuring
+    // its position, otherwise scrollIntoView runs against stale layout.
+    requestAnimationFrame(() => {
+      match.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      match.element.classList.add(HIGHLIGHT_CLASS);
+      setTimeout(() => match.element.classList.remove(HIGHLIGHT_CLASS), 1500);
+    });
+  }
 
   return (
     <AdminShell>
@@ -71,51 +115,50 @@ export default function AdminSettingsPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-          <nav
-            className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-1"
-            aria-label="Settings groups"
-          >
-            {groups.map((group) => (
-              <button
-                key={group.key}
-                type="button"
-                onClick={() => setActive(group.key)}
-                className={`shrink-0 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition-colors ${
-                  active === group.key
-                    ? 'bg-accent text-white'
-                    : 'bg-white text-ink hover:bg-surface-muted'
-                }`}
-              >
-                {group.label}
-              </button>
-            ))}
-          </nav>
+          <div className="grid gap-3">
+            <SettingsSearch
+              containerRef={panelsContainerRef}
+              onMatchedPanelsChange={setMatchedPanels}
+              onNavigate={handleNavigate}
+            />
+            <nav
+              className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-1"
+              aria-label="Settings groups"
+            >
+              {groups.map((group) => {
+                const dimmed = matchedPanels !== null && !matchedPanels.has(group.key);
+                return (
+                  <button
+                    key={group.key}
+                    type="button"
+                    onClick={() => setActive(group.key)}
+                    className={`shrink-0 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition-colors ${
+                      active === group.key
+                        ? 'bg-accent text-white'
+                        : 'bg-white text-ink hover:bg-surface-muted'
+                    } ${dimmed ? 'opacity-50' : ''}`}
+                  >
+                    {group.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
-          <div>
-            {active === 'general' && <GeneralSettingsPanel />}
-            {active === 'landingPage' && <LandingPageSettingsPanel />}
-            {active === 'maintenance' && <MaintenanceSettingsPanel />}
-            {active === 'referrals' && <ReferralBonusSettingsPanel />}
-            {active === 'distributors' && <DistributorSettingsPanel />}
-            {active === 'trainingTasks' && <TrainingTasksSettingsPanel />}
-            {active === 'notifications' && <NotificationSettingsPanel />}
-            {active === 'liveChat' && <LiveChatSettingsPanel />}
-            {active === 'pwa' && <PwaSettingsPanel />}
-            {active === 'dyk' && <DykSettingsPanel />}
-            {active === 'community' && <CommunitySettingsPanel />}
-            {active === 'wordGeneration' && <WordGenerationSettingsPanel />}
-            {active === 'qualityGate' && <QualityGateSettingsPanel />}
-            {active === 'testimonials' && <TestimonySettingsPanel />}
-            {active === 'speechExpression' && <SpeechExpressionSettingsPanel />}
-            {active === 'spellingNormalization' && <SpellingNormalizationSettingsPanel />}
-            {active === 'p2pMarket' && <P2PMarketSettingsPanel />}
-            {active === 'sms' && <SmsSettingsPanel />}
-            {active === 'withdrawals' && <WithdrawalSettingsPanel />}
-            {active === 'flutterwave' && <FlutterwaveSettingsPanel />}
-            {active === 'kyc' && <KycSettingsPanel />}
-            {active === 'datasetStorage' && <DatasetStorageSettingsPanel />}
-            {active === 'apiAccessTokens' && <ApiAccessTokensSettingsPanel />}
-            {active === 'stripeSubscriptions' && <StripeSubscriptionsSettingsPanel />}
+          <div ref={panelsContainerRef}>
+            {groups.map((group) => {
+              const PanelComponent = panelComponents[group.key];
+              return (
+                <div
+                  data-panel-label={group.label}
+                  data-settings-panel={group.key}
+                  hidden={active !== group.key}
+                  key={group.key}
+                >
+                  <PanelComponent />
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

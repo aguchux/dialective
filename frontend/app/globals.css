@@ -507,3 +507,19 @@ input:disabled,
     font-size: 27px;
   }
 }
+
+/* Momentary highlight applied to a settings field/heading jumped to from
+   SettingsSearch -- fades back to transparent so it reads as a pulse, not a
+   permanent style change. */
+.settings-search-highlight {
+  border-radius: 0.375rem;
+  outline: 2px solid var(--color-accent, #7c3aed);
+  outline-offset: 4px;
+  transition: outline-color 1.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-search-highlight {
+    transition: none;
+  }
+}
