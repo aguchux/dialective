@@ -38,6 +38,19 @@ _MODEL_CACHE_DIR = "/models"
 _registry = load_registry()
 _pipeline_cache: dict[str, "pipeline"] = {}
 
+# Maps Whisper's d_model (encoder/decoder hidden size) to the matching
+# openai/whisper-<size> checkpoint. Fine-tuning changes weights, not
+# architecture, so a fine-tune's d_model always matches exactly one of
+# these -- used to recover alignment_heads (see below) from the base model
+# when a fine-tuned checkpoint's own generation_config.json omits it.
+_WHISPER_SIZE_BY_D_MODEL = {
+    384: "openai/whisper-tiny",
+    512: "openai/whisper-base",
+    768: "openai/whisper-small",
+    1024: "openai/whisper-medium",
+    1280: "openai/whisper-large-v3",
+}
+
 
 def get_pipeline(dialect_tag: str, db_conn):
     """
@@ -77,6 +90,25 @@ def get_pipeline(dialect_tag: str, db_conn):
                 gen_config.no_timestamps_token_id = (
                     asr_pipeline.tokenizer.convert_tokens_to_ids("<|notimestamps|>")
                 )
+            # Same incomplete-generation_config.json gap as above:
+            # return_timestamps="word" also needs alignment_heads (which
+            # cross-attention heads' weights double as token-to-audio
+            # alignment, used to derive word boundaries) -- a value that's
+            # tied to the model's architecture, not its fine-tune, so it's
+            # safe to borrow from the equivalently-sized base openai/whisper
+            # checkpoint the fine-tune started from (matched by d_model,
+            # since fine-tuning never changes hidden size/layer count). See
+            # https://github.com/huggingface/transformers/issues/28187 and
+            # https://gist.github.com/hollance/42e32852f24243b748ae6bc1f985b13a.
+            if getattr(gen_config, "alignment_heads", None) is None:
+                base_checkpoint = _WHISPER_SIZE_BY_D_MODEL.get(
+                    asr_pipeline.model.config.d_model
+                )
+                if base_checkpoint is not None:
+                    from transformers import GenerationConfig
+
+                    base_gen_config = GenerationConfig.from_pretrained(base_checkpoint)
+                    gen_config.alignment_heads = base_gen_config.alignment_heads
             _pipeline_cache[dialect_tag] = asr_pipeline
         except Exception as exc:
             # A gated/private HF repo with a missing-or-unauthorized token
@@ -152,6 +184,37 @@ def word_detail_from_chunks(chunks: list) -> list:
     ]
 
 
+def transcribe(asr_pipeline, wav_path: str) -> dict:
+    """
+    Runs the pipeline with return_timestamps="word" (set at pipeline-build
+    time in get_pipeline) for per-word confidence detail, falling back to a
+    plain transcript if that raises -- some fine-tuned checkpoints (verified
+    directly against mbazaNLP/Whisper-Small-Kinyarwanda) crash inside
+    transformers' DTW-based _extract_token_timestamps with a tensor shape
+    mismatch, even after backfilling alignment_heads from the equivalently-
+    sized base Whisper checkpoint (see get_pipeline): the base model's
+    alignment heads don't necessarily still align well after fine-tuning.
+    Confirmed this is a per-checkpoint limitation, not audio-specific --
+    the same checkpoint transcribes correctly via plain text on the exact
+    clip that crashes with word timestamps requested. Result stays the same
+    shape either way ({"text": ..., "chunks": [...]}); "chunks" is simply
+    absent (word_detail_from_chunks already treats missing/empty as no
+    detail, the same "measured but never scored" posture as elsewhere).
+    """
+    try:
+        return asr_pipeline(wav_path)
+    except RuntimeError as exc:
+        if "expanded size of the tensor" not in str(exc):
+            raise
+        logger.warning(
+            "Word-level timestamp extraction failed for this checkpoint "
+            "(tensor shape mismatch in Whisper's DTW alignment); retrying "
+            "without timestamps. error=%s",
+            exc,
+        )
+        return asr_pipeline(wav_path, return_timestamps=False)
+
+
 RESULT_TTL_S = 24 * 60 * 60
 
 
@@ -225,7 +288,7 @@ def handle_word_recording_job(s3, db_conn, job: dict) -> None:
             )
             return
 
-        result = asr(wav_path)
+        result = transcribe(asr, wav_path)
         text = result.get("text", "").strip()
         word_detail = word_detail_from_chunks(result.get("chunks", []))
         update_word_recording_result(
@@ -283,7 +346,7 @@ def make_handler(s3, redis_client: redis.Redis, db_conn):
                 write_submission_row(db_conn, submission_id, "unsupported_dialect")
                 return
 
-            result = asr(wav_path)
+            result = transcribe(asr, wav_path)
             text = result.get("text", "").strip()
             word_detail = word_detail_from_chunks(result.get("chunks", []))
             write_result(
