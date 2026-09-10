@@ -47,7 +47,7 @@ export function LandingStats({
         return { ...stat, value: totalRecordings.toLocaleString() };
       }
       if (stat.label === 'Trainers' && totalTrainers !== null) {
-        return { ...stat, value: String(totalTrainers) };
+        return { ...stat, value: totalTrainers.toLocaleString() };
       }
       if (stat.label === 'Payout' && totalPayoutUsd !== null) {
         return { ...stat, value: formatCompactUsd(totalPayoutUsd) };
