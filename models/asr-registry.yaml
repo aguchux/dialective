@@ -34,3 +34,8 @@ nae:
   engine: whisper
   stream: asr-jobs-whisper
   checkpoint: NCAIR1/NigerianAccentedEnglish
+
+rw:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: mbazaNLP/Whisper-Small-Kinyarwanda
