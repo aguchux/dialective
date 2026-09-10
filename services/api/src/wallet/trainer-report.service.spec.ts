@@ -120,6 +120,37 @@ describe('TrainerReportService', () => {
     expect(report.totals.totalWithdrawnTokens).toBe('120');
   });
 
+  it('scopes "tokens since join" to genuine earning types, not every positive ledger entry', async () => {
+    // Regression test: this aggregate used to filter on amount > 0, which
+    // also matched TASK_REFUND/WITHDRAWAL_REVERSED -- refunds/reversals of
+    // the trainer's own prior debit, not new earnings -- inflating the
+    // total well past what the trainer actually earned.
+    await service.buildReport(
+      'user-1',
+      new Date('2026-08-01T00:00:00Z'),
+      new Date('2026-08-01T23:59:59Z'),
+    );
+
+    expect(prisma.ledgerEntry.aggregate).toHaveBeenNthCalledWith(1, {
+      where: {
+        walletId: 'wallet-1',
+        type: {
+          in: [
+            'TRAINING_PAYOUT',
+            'COURSE_COMPLETION_REWARD',
+            'REFERRAL_COMMISSION',
+            'REFERRAL_FUNDING_BONUS',
+            'REFERRAL_PAYOUT_BONUS',
+            'STARTUP_BONUS',
+            'TESTIMONY_APPROVED_REWARD',
+            'VALIDATION_REWARD',
+          ],
+        },
+      },
+      _sum: { amount: true },
+    });
+  });
+
   it('nets a fully-reversed withdrawal back to zero rather than going negative', async () => {
     prisma.ledgerEntry.aggregate
       .mockResolvedValueOnce({ _sum: { amount: 0 } })

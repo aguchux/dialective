@@ -10,6 +10,24 @@ const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.REFERRAL_PAYOUT_BONUS,
 ];
 
+// "Tokens since join" (lifetime) is genuine new value credited to the
+// trainer -- every one-time/recurring reward type, not just the two
+// (training/referral) this report breaks out its own totals for. Deliberately
+// excludes TASK_REFUND, WITHDRAWAL_REVERSED, PHONE_VERIFICATION_FEE_REFUND,
+// and P2P_ESCROW_* -- those are refunds/reversals of the trainer's own prior
+// debit, not new earnings, and summing them in here double-counted tokens
+// the trainer never actually lost (e.g. a locked-then-refunded task payment
+// inflated this total by the refund on top of the original balance it
+// restored). Also excludes DEPOSIT/ADMIN_FUNDING/ADMIN_ADJUSTMENT/
+// DISTRIBUTOR_* -- those are balance top-ups from an external actor, not
+// something the trainer earned through the platform.
+const LIFETIME_CREDIT_ENTRY_TYPES: LedgerEntryType[] = [
+  ...EARNING_ENTRY_TYPES,
+  LedgerEntryType.STARTUP_BONUS,
+  LedgerEntryType.TESTIMONY_APPROVED_REWARD,
+  LedgerEntryType.VALIDATION_REWARD,
+];
+
 export interface TrainerReport {
   from: string;
   to: string;
@@ -80,11 +98,15 @@ export class TrainerReportService {
           select: { score: true, compositeScore: true, createdAt: true },
         }),
         // Lifetime (no date filter) -- "total tokens since join" sums every
-        // credit the wallet has ever received, not just earnings within the
-        // selected report range.
+        // genuine earning the wallet has ever received, not just earnings
+        // within the selected report range. Scoped to
+        // LIFETIME_CREDIT_ENTRY_TYPES rather than amount > 0 -- the latter
+        // also matched TASK_REFUND/WITHDRAWAL_REVERSED/etc, which return the
+        // trainer's own prior debit rather than crediting new value, and
+        // inflated this total well past what the trainer actually earned.
         wallet
           ? this.prisma.ledgerEntry.aggregate({
-              where: { walletId: wallet.id, amount: { gt: 0 } },
+              where: { walletId: wallet.id, type: { in: LIFETIME_CREDIT_ENTRY_TYPES } },
               _sum: { amount: true },
             })
           : Promise.resolve({ _sum: { amount: null } }),
