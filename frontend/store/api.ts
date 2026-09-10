@@ -1612,6 +1612,7 @@ export interface PlatformSettings {
   landingShowTrainers: boolean;
   landingShowPoolVolume: boolean;
   landingShowPayout: boolean;
+  streamSelfServeSignupEnabled: boolean;
   updatedAt: string;
   createdAt: string;
 }
@@ -1739,6 +1740,7 @@ export interface PlatformSettingsInput {
   landingShowTrainers?: boolean;
   landingShowPoolVolume?: boolean;
   landingShowPayout?: boolean;
+  streamSelfServeSignupEnabled?: boolean;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';
