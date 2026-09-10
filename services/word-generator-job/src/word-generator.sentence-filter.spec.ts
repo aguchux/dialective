@@ -19,10 +19,15 @@ describe('WordGeneratorService.isGeneratedConversationSentence', () => {
     expect(callFilter(service, 'What is your name?', 4)).toBe(true);
   });
 
-  it('accepts a sentence with fewer words than the configured ceiling', () => {
+  it('accepts a sentence with fewer words than the configured ceiling (down to 2)', () => {
     const service = setup();
     expect(callFilter(service, 'I am hungry.', 4)).toBe(true);
-    expect(callFilter(service, 'Stop.', 4)).toBe(true);
+    expect(callFilter(service, 'Go home.', 4)).toBe(true);
+  });
+
+  it('rejects a single-word sentence -- word generation already covers that case', () => {
+    const service = setup();
+    expect(callFilter(service, 'Stop.', 4)).toBe(false);
   });
 
   it('rejects a sentence with more words than the configured ceiling', () => {

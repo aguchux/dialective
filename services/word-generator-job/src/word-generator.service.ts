@@ -343,7 +343,7 @@ export class WordGeneratorService {
   private buildSentenceGenerationPrompt(itemsPerRun: number, wordCount: number): string {
     return [
       `Generate exactly ${itemsPerRun} distinct basic English conversational sentences for beginner adult language learners.`,
-      `Each sentence must contain at most ${wordCount} simple everyday words (any count from 1 up to ${wordCount} is fine), excluding punctuation from the count.`,
+      `Each sentence must contain at most ${wordCount} simple everyday words (any count from 2 up to ${wordCount} is fine), excluding punctuation from the count.`,
       'Use natural situations people talk about at home, in the market, at work, when asking for help, or describing how they feel.',
       'Use short, common words with direct meanings that are easy to translate into local dialects. Prefer plain present or simple past tense.',
       'Do not use technical, academic, abstract, rare, idiomatic, literary, or difficult vocabulary. Do not compose sentences from an existing word bank and do not copy any supplied source words.',
@@ -358,14 +358,15 @@ export class WordGeneratorService {
    * hitting a precise word count, so requiring an exact match (the original
    * behavior) rejected the vast majority of otherwise-usable candidates
    * every run (observed: ~0-1 accepted out of 5 generated, for days, with
-   * sentenceWordCount=4). Any sentence from 1 up to wordCount tokens is
-   * accepted.
+   * sentenceWordCount=4). Any sentence from 2 up to wordCount tokens is
+   * accepted -- the floor is 2, not 1, since a single word is what word
+   * generation already covers; this branch is specifically for sentences.
    */
   private isGeneratedConversationSentence(text: string, wordCount: number): boolean {
     if (!text || isFlaggedContent(text)) return false;
     if (!/^[A-Za-z][A-Za-z' ,.?!-]*[.?!]$/.test(text)) return false;
     const tokens = text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? [];
-    if (tokens.length < 1 || tokens.length > wordCount || tokens.some((token) => token.length > 15)) {
+    if (tokens.length < 2 || tokens.length > wordCount || tokens.some((token) => token.length > 15)) {
       return false;
     }
     return true;
