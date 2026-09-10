@@ -97,12 +97,16 @@ export default function OnboardingPage() {
       setError('Choose your country of origin, training country, and dialect to continue.');
       return;
     }
+    if (!dialectVariantId) {
+      setError('Choose a subdialect to continue.');
+      return;
+    }
     try {
       const profile = await updateProfile({
         originCountryId,
         countryId: trainingCountryId,
         dialectId,
-        ...(dialectVariantId ? { dialectVariantId } : {}),
+        dialectVariantId,
         ...(needsName ? { firstName: firstName.trim(), lastName: lastName.trim() } : {}),
         ...(needsGender && gender ? { gender } : {}),
       }).unwrap();
@@ -294,17 +298,23 @@ export default function OnboardingPage() {
             ))}
           </select>
 
-          {dialectVariants && dialectVariants.length > 0 && (
+          {dialectId && (
             <>
-              <label htmlFor="onboarding-dialect-variant">Specific variety (optional)</label>
+              <label htmlFor="onboarding-dialect-variant">Subdialect</label>
               <select
                 className={selectClass}
                 id="onboarding-dialect-variant"
                 value={dialectVariantId}
                 onChange={(e) => setDialectVariantId(e.target.value)}
+                disabled={!dialectVariants || dialectVariants.length === 0}
+                required
               >
-                <option value="">Not sure / general</option>
-                {dialectVariants.map((variant) => (
+                <option value="">
+                  {!dialectVariants || dialectVariants.length === 0
+                    ? 'Loading...'
+                    : 'Select a subdialect'}
+                </option>
+                {dialectVariants?.map((variant) => (
                   <option key={variant.id} value={variant.id}>
                     {variant.name}
                   </option>

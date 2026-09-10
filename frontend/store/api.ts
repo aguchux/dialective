@@ -194,7 +194,7 @@ export interface DialectVariant {
 
 export interface AdminDialectVariant extends DialectVariant {
   active: boolean;
-  _count: { users: number; wordRecordings: number; submissions: number };
+  _count: { users: number; wordRecordings: number };
 }
 
 export interface DialectVariantInput {

@@ -1,7 +1,12 @@
 import { WordsService } from './words.service';
 
 describe('WordsService', () => {
-  const trainer = { id: 'trainer-1', dialect: { tag: 'ig', name: 'Igbo', keyboardLayout: null } };
+  const trainer = {
+    id: 'trainer-1',
+    dialect: { tag: 'ig', name: 'Igbo', keyboardLayout: null },
+    dialectVariantId: 'variant-1',
+    dialectVariant: { id: 'variant-1', active: true },
+  };
   const session = {
     id: 'session-1',
     userId: trainer.id,
@@ -134,6 +139,16 @@ describe('WordsService', () => {
         .mockResolvedValueOnce(trainer);
       const result = await service.startSession(trainer.id);
       expect(result.sessionId).toBe(session.id);
+    });
+
+    it('blocks the session when the trainer has a dialect but no subdialect selected', async () => {
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ auditHoldAt: null, auditHoldReleasedAt: null })
+        .mockResolvedValueOnce({ ...trainer, dialectVariantId: null, dialectVariant: null });
+      await expect(service.startSession(trainer.id)).rejects.toThrow(
+        'Complete dialect onboarding before training',
+      );
+      expect(prisma.trainingSession.create).not.toHaveBeenCalled();
     });
   });
 

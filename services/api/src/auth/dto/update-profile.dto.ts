@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsOptional, IsUUID, Length, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsUUID, Length } from 'class-validator';
 import { Gender } from '@dialectiva/db';
 
 export class UpdateProfileDto {
@@ -14,11 +14,15 @@ export class UpdateProfileDto {
   @IsUUID()
   dialectId?: string;
 
-  // Optional sub-dialect (see DialectVariant). '' explicitly clears the
-  // current selection -- ValidateIf skips the UUID check for that case so
-  // an empty string is a valid "clear" signal, not a validation error.
+  // Subdialect (see DialectVariant). Optional at the DTO level since this
+  // same endpoint also handles unrelated profile fields (name, gender,
+  // notification prefs) -- AuthService.updateProfile enforces that a
+  // dialectVariantId is REQUIRED whenever dialectId is being set/changed,
+  // the same "app-level invariant, not DB constraint" convention already
+  // used for country/dialect. No longer clearable via '' -- every dialect
+  // has at least a "Basic <Name>" variant seeded, so there is no valid
+  // "dialect with no subdialect" state to clear into.
   @IsOptional()
-  @ValidateIf((_object, value) => value !== '')
   @IsUUID()
   dialectVariantId?: string;
 

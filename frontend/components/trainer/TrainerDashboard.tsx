@@ -2805,12 +2805,16 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       setDialectError('Choose your country of origin, training country, and dialect.');
       return;
     }
+    if (!dialectVariantId) {
+      setDialectError('Choose a subdialect.');
+      return;
+    }
     try {
       const profile = await updateDialectProfile({
         originCountryId,
         countryId,
         dialectId,
-        dialectVariantId: dialectVariantId || '',
+        dialectVariantId,
       }).unwrap();
       await update({
         dialectTag: profile.dialectTag,
@@ -3559,16 +3563,22 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               ))}
             </select>
           </label>
-          {dialectVariants && dialectVariants.length > 0 && (
+          {dialectId && (
             <label className="grid gap-1.5 text-sm font-bold">
-              Specific variety <span className="font-normal text-muted">(optional)</span>
+              Subdialect
               <select
-                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent"
+                className="min-h-11 rounded-lg border border-line bg-surface px-3 text-ink outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!dialectVariants || dialectVariants.length === 0}
                 onChange={(event) => setDialectVariantId(event.target.value)}
+                required
                 value={dialectVariantId}
               >
-                <option value="">Not sure / general</option>
-                {dialectVariants.map((variant) => (
+                <option value="">
+                  {!dialectVariants || dialectVariants.length === 0
+                    ? 'Loading...'
+                    : 'Select a subdialect'}
+                </option>
+                {dialectVariants?.map((variant) => (
                   <option key={variant.id} value={variant.id}>
                     {variant.name}
                   </option>

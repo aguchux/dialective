@@ -322,11 +322,12 @@ function EditKeyboardLayoutDialog({
 }
 
 /**
- * Sub-dialects under one dialect (e.g. Izzi/Ezza/Ezeagu under Igbo) --
- * shares the parent dialect's entire prompt/word/keyboard/ASR setup, so
- * this dialog only manages the tag/name label and shows how much tagged
- * activity each variant has (users onboarded under it, recordings,
- * submissions), not a separate content pool.
+ * Sub-dialects under one dialect (e.g. Izzi/Ezza/Ezeagu under Igbo, plus a
+ * seeded "Basic <Name>" variant every dialect always has) -- shares the
+ * parent dialect's entire prompt/word/keyboard/ASR setup, so this dialog
+ * only manages the tag/name label and shows how much tagged activity each
+ * variant has (users onboarded under it, recordings), not a separate
+ * content pool.
  */
 function DialectVariantsDialog({
   dialect,
@@ -472,9 +473,7 @@ function DialectVariantsDialog({
                           &middot; {variant._count.users} user
                           {variant._count.users === 1 ? '' : 's'}{' '}
                           &middot; {variant._count.wordRecordings} word recording
-                          {variant._count.wordRecordings === 1 ? '' : 's'} &middot;{' '}
-                          {variant._count.submissions} submission
-                          {variant._count.submissions === 1 ? '' : 's'}
+                          {variant._count.wordRecordings === 1 ? '' : 's'}
                         </p>
                       </div>
                       <div className="flex gap-2">
@@ -501,18 +500,12 @@ function DialectVariantsDialog({
                         </ActionButton>
                         <ActionButton
                           className={dangerButtonClass}
-                          disabled={
-                            variant._count.users > 0 ||
-                            variant._count.wordRecordings > 0 ||
-                            variant._count.submissions > 0
-                          }
+                          disabled={variant._count.users > 0 || variant._count.wordRecordings > 0}
                           onClick={() => handleDelete(variant.id)}
                           pending={deletingId === variant.id}
                           pendingLabel="Removing"
                           title={
-                            variant._count.users > 0 ||
-                            variant._count.wordRecordings > 0 ||
-                            variant._count.submissions > 0
+                            variant._count.users > 0 || variant._count.wordRecordings > 0
                               ? 'This variant still has tagged activity'
                               : undefined
                           }

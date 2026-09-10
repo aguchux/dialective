@@ -164,6 +164,7 @@ function toPublicUser(user: UserWithDialect): PublicUser {
         user.countryId !== null &&
         user.dialectId !== null &&
         user.dialect?.active !== false &&
+        user.dialectVariantId !== null &&
         user.dialectVariant?.active !== false &&
         !!user.firstName &&
         !!user.lastName),
@@ -940,15 +941,21 @@ export class AuthService {
       if (!dialect || dialect.countryId !== countryId || !dialect.active) {
         throw new UnprocessableEntityException('Select an active dialect for the given country');
       }
+      // A subdialect is mandatory whenever a dialect is being set -- every
+      // dialect has at least one "Basic <Name>" DialectVariant seeded (see
+      // seed.ts), so there is no longer a valid "dialect with no
+      // subdialect" state, and changing dialectId without providing a new
+      // dialectVariantId (the old one can never be valid for a different
+      // dialect) is rejected rather than silently clearing it.
+      if (!dialectVariantId) {
+        throw new UnprocessableEntityException('Select a subdialect for the given dialect');
+      }
     }
 
-    // Optional: a null/undefined value leaves the current variant
-    // untouched unless dialectId is also changing (see below), an empty
-    // string or explicit null clears it, and any other value must belong
-    // to the dialect being set (or, if dialectId isn't changing, the
-    // trainer's existing dialect) -- self-reported sub-dialect, no
-    // verification, but it must at least point at a real variant of the
-    // right dialect.
+    // A non-empty dialectVariantId must belong to the dialect being set (or,
+    // if dialectId isn't changing, the trainer's existing dialect) --
+    // self-reported sub-dialect, no verification, but it must at least
+    // point at a real, active variant of the right dialect.
     if (dialectVariantId) {
       const effectiveDialectId =
         dialectId ??
@@ -968,14 +975,7 @@ export class AuthService {
       data: {
         ...(originCountryId ? { originCountryId } : {}),
         ...(countryId && dialectId ? { countryId, dialectId } : {}),
-        // Changing dialectId without an explicit variant clears the old
-        // one -- a variant of the previous dialect can never be valid for
-        // a different one.
-        ...(dialectVariantId !== undefined
-          ? { dialectVariantId: dialectVariantId || null }
-          : dialectId
-            ? { dialectVariantId: null }
-            : {}),
+        ...(dialectVariantId ? { dialectVariantId } : {}),
         ...(firstName !== undefined ? { firstName: firstName.trim() } : {}),
         ...(lastName !== undefined ? { lastName: lastName.trim() } : {}),
         ...(gender !== undefined ? { gender } : {}),

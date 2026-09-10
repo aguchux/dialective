@@ -63,6 +63,9 @@ function setup(
     wordRecording: {
       aggregate: jest.fn().mockResolvedValue({ _sum: { tokensSpent: null }, _count: 0 }),
     },
+    dialect: { findUnique: jest.fn() },
+    dialectVariant: { findUnique: jest.fn() },
+    country: { findUnique: jest.fn() },
     $transaction: undefined as unknown as jest.Mock,
   };
   prisma.$transaction = jest.fn(async (ops: unknown) => {
@@ -1442,6 +1445,94 @@ describe('AuthService.updateProfile gender', () => {
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.not.objectContaining({ gender: expect.anything() }),
+      }),
+    );
+  });
+});
+
+describe('AuthService.updateProfile subdialect requirement', () => {
+  it('rejects setting a dialect without a dialectVariantId -- every dialect has at least a Basic variant seeded', async () => {
+    const { service, prisma } = setup();
+    prisma.dialect.findUnique.mockResolvedValue({
+      id: 'dialect-1',
+      countryId: 'country-1',
+      active: true,
+    });
+
+    await expect(
+      service.updateProfile('user-1', {
+        countryId: 'country-1',
+        dialectId: 'dialect-1',
+      }),
+    ).rejects.toThrow('Select a subdialect for the given dialect');
+
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a dialectVariantId that does not belong to the dialect being set', async () => {
+    const { service, prisma } = setup();
+    prisma.dialect.findUnique.mockResolvedValue({
+      id: 'dialect-1',
+      countryId: 'country-1',
+      active: true,
+    });
+    prisma.dialectVariant.findUnique.mockResolvedValue({
+      id: 'variant-1',
+      dialectId: 'some-other-dialect',
+      active: true,
+    });
+
+    await expect(
+      service.updateProfile('user-1', {
+        countryId: 'country-1',
+        dialectId: 'dialect-1',
+        dialectVariantId: 'variant-1',
+      }),
+    ).rejects.toThrow('Select an active sub-dialect for the given dialect');
+
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts a dialect + a matching dialectVariantId together', async () => {
+    const { service, prisma } = setup();
+    prisma.dialect.findUnique.mockResolvedValue({
+      id: 'dialect-1',
+      countryId: 'country-1',
+      active: true,
+    });
+    prisma.dialectVariant.findUnique.mockResolvedValue({
+      id: 'variant-1',
+      dialectId: 'dialect-1',
+      active: true,
+    });
+    prisma.user.update.mockResolvedValue({
+      id: 'user-1',
+      firstName: 'A',
+      lastName: 'B',
+      gender: null,
+      role: 'TRAINER',
+      originCountryId: null,
+      countryId: 'country-1',
+      dialectId: 'dialect-1',
+      dialectVariantId: 'variant-1',
+      dialect: { id: 'dialect-1', active: true },
+      dialectVariant: { id: 'variant-1', active: true },
+      referralCode: 'ref-1',
+    });
+
+    await service.updateProfile('user-1', {
+      countryId: 'country-1',
+      dialectId: 'dialect-1',
+      dialectVariantId: 'variant-1',
+    });
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          countryId: 'country-1',
+          dialectId: 'dialect-1',
+          dialectVariantId: 'variant-1',
+        }),
       }),
     );
   });

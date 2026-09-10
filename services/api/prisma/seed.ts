@@ -103,10 +103,14 @@ const SEED_SENTENCES: string[] = [
   'A pot of tea helps to pass the evening.',
 ];
 
-// Sub-dialect seed data (see DialectVariant in schema.prisma) -- keyed by
-// parent dialect tag, not country, since a variant belongs to a dialect.
+// Real sub-dialect seed data (see DialectVariant in schema.prisma) -- keyed
+// by parent dialect tag, not country, since a variant belongs to a dialect.
 // Only Igbo has entries today; any dialect can gain its own list here later
-// without a schema change.
+// without a schema change. Every dialect (not just ones listed here) also
+// gets a synthetic "Basic <Name>" variant -- see the dialectId loop below --
+// so a dialect with no real sub-dialects still offers exactly one selectable
+// subdialect, keeping "every trainer must pick a subdialect" uniform across
+// all 200+ dialects instead of only the handful with real variants.
 const DIALECT_VARIANTS_BY_TAG: Record<string, { tag: string; name: string }[]> = {
   ig: [
     { tag: 'izzi', name: 'Izzi' },
@@ -167,22 +171,34 @@ async function main() {
       ),
     );
 
-    // First real DialectVariant data (see the dialect-variants plan's
-    // Phase 2) -- Izzi/Ezza/Ezeagu are mutually-intelligible Igbo
-    // sub-dialects that share ig's entire word/keyboard/ASR setup; these
-    // rows only exist so trainers can optionally self-identify their
-    // specific variety, and so admin can see tagged activity per variant.
-    const igbo = dialectRows.find((d) => d.tag === 'ig');
-    if (igbo) {
-      await Promise.all(
-        DIALECT_VARIANTS_BY_TAG.ig.map((variant) =>
-          prisma.dialectVariant.upsert({
-            where: { dialectId_tag: { dialectId: igbo.id, tag: variant.tag } },
-            create: { dialectId: igbo.id, tag: variant.tag, name: variant.name },
-            update: { name: variant.name },
-          }),
-        ),
-      );
+    // Every dialect gets a "Basic <Name>" DialectVariant first -- the
+    // required subdialect selection for dialects with no real sub-dialects
+    // configured, and also offered alongside the real ones (e.g. "Basic
+    // Igbo" next to Izzi/Ezza/Ezeagu) so a trainer who doesn't identify with
+    // any specific sub-dialect can still pick something. tag 'basic' is
+    // unique per-dialect (not globally), so every dialect reuses it safely.
+    // Izzi/Ezza/Ezeagu remain mutually-intelligible Igbo sub-dialects that
+    // share ig's entire word/keyboard/ASR setup; these rows only exist so
+    // trainers can self-identify their specific variety, and so admin can
+    // see tagged activity per variant.
+    let variantsSeeded = 0;
+    for (const dialect of dialectRows) {
+      await prisma.dialectVariant.upsert({
+        where: { dialectId_tag: { dialectId: dialect.id, tag: 'basic' } },
+        create: { dialectId: dialect.id, tag: 'basic', name: `Basic ${dialect.name}` },
+        update: { name: `Basic ${dialect.name}` },
+      });
+      variantsSeeded += 1;
+
+      const realVariants = DIALECT_VARIANTS_BY_TAG[dialect.tag] ?? [];
+      for (const variant of realVariants) {
+        await prisma.dialectVariant.upsert({
+          where: { dialectId_tag: { dialectId: dialect.id, tag: variant.tag } },
+          create: { dialectId: dialect.id, tag: variant.tag, name: variant.name },
+          update: { name: variant.name },
+        });
+        variantsSeeded += 1;
+      }
     }
 
     let sentencesSeeded = 0;
@@ -197,7 +213,7 @@ async function main() {
     }
 
     console.log(
-      `Seeded ${COUNTRIES.length} countries, ${dialects.length} dialects, added ${wordResult.count} new words, and added ${sentencesSeeded} new sentences.`,
+      `Seeded ${COUNTRIES.length} countries, ${dialects.length} dialects, ${variantsSeeded} dialect variants, added ${wordResult.count} new words, and added ${sentencesSeeded} new sentences.`,
     );
   } finally {
     await prisma.$disconnect();

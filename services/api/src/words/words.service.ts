@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
@@ -16,6 +17,7 @@ import { parseProviderOrder } from '../llm/llm-provider.interface';
 import { CoursesService } from '../courses/courses.service';
 import { AsrRegistryService } from '../asr-registry/asr-registry.service';
 import { MailService } from '../mail/mail.service';
+import { SmsService } from '../sms/sms.service';
 import { AUDIT_HOLD_MESSAGE, isOnAuditHold } from '../common/audit-hold.util';
 import { CHECKLIST_VERSION, QRAC_CHECKLIST, nextQracVersion } from './qrac.util';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
@@ -48,6 +50,7 @@ export class WordsService {
     private readonly courses: CoursesService,
     private readonly asrRegistry: AsrRegistryService,
     private readonly mail: MailService,
+    @Optional() private readonly sms?: SmsService,
   ) {}
 
   async startSession(userId: string) {
@@ -815,7 +818,7 @@ export class WordsService {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: { auditHoldAt: new Date() },
-      select: { email: true },
+      select: { email: true, phoneNumber: true, phoneVerifiedAt: true, smsNotificationsEnabled: true },
     });
 
     try {
@@ -832,6 +835,19 @@ export class WordsService {
         `Failed to send audit-hold-started email for user=${userId}: ${(err as Error).message}`,
       );
     }
+
+    if (this.sms && user.phoneNumber && user.phoneVerifiedAt && user.smsNotificationsEnabled) {
+      try {
+        await this.sms.sendTransactional(
+          user.phoneNumber,
+          `Dialect Library: your account is on hold for a routine review after ${count} submissions. Training is paused until review is complete.`,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Failed to send audit-hold-started SMS for user=${userId}: ${(err as Error).message}`,
+        );
+      }
+    }
   }
 
   private async getTrainer(userId: string) {
@@ -843,6 +859,7 @@ export class WordsService {
     if (
       !trainer.dialect ||
       trainer.dialect.active === false ||
+      !trainer.dialectVariantId ||
       trainer.dialectVariant?.active === false
     )
       throw new UnprocessableEntityException('Complete dialect onboarding before training');
