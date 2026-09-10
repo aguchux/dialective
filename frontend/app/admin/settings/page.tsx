@@ -106,44 +106,46 @@ export default function AdminSettingsPage() {
   return (
     <AdminShell>
       <div className="grid gap-6">
-        <div className="grid gap-2">
-          <h1 className="text-3xl font-black">Settings</h1>
-          <p className="leading-relaxed text-muted">
-            Platform configuration that previously required a redeploy to change. Anything left
-            blank falls back to its deployment default.
-          </p>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-          <div className="grid gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="grid gap-2">
+            <h1 className="text-3xl font-black">Settings</h1>
+            <p className="leading-relaxed text-muted">
+              Platform configuration that previously required a redeploy to change. Anything left
+              blank falls back to its deployment default.
+            </p>
+          </div>
+          <div className="w-full sm:w-72">
             <SettingsSearch
               containerRef={panelsContainerRef}
               onMatchedPanelsChange={setMatchedPanels}
               onNavigate={handleNavigate}
             />
-            <nav
-              className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-1"
-              aria-label="Settings groups"
-            >
-              {groups.map((group) => {
-                const dimmed = matchedPanels !== null && !matchedPanels.has(group.key);
-                return (
-                  <button
-                    key={group.key}
-                    type="button"
-                    onClick={() => setActive(group.key)}
-                    className={`shrink-0 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition-colors ${
-                      active === group.key
-                        ? 'bg-accent text-white'
-                        : 'bg-white text-ink hover:bg-surface-muted'
-                    } ${dimmed ? 'opacity-50' : ''}`}
-                  >
-                    {group.label}
-                  </button>
-                );
-              })}
-            </nav>
           </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+          <nav
+            className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-1"
+            aria-label="Settings groups"
+          >
+            {groups.map((group) => {
+              const dimmed = matchedPanels !== null && !matchedPanels.has(group.key);
+              return (
+                <button
+                  key={group.key}
+                  type="button"
+                  onClick={() => setActive(group.key)}
+                  className={`shrink-0 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition-colors ${
+                    active === group.key
+                      ? 'bg-accent text-white'
+                      : 'bg-white text-ink hover:bg-surface-muted'
+                  } ${dimmed ? 'opacity-50' : ''}`}
+                >
+                  {group.label}
+                </button>
+              );
+            })}
+          </nav>
 
           <div ref={panelsContainerRef}>
             {groups.map((group) => {
