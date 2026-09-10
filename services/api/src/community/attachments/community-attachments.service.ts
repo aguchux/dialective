@@ -12,6 +12,8 @@ const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   'audio/mpeg': 'mp3',
   'audio/wav': 'wav',
   'audio/webm': 'webm',
+  'audio/mp4': 'm4a',
+  'audio/x-m4a': 'm4a',
   'application/pdf': 'pdf',
 };
 

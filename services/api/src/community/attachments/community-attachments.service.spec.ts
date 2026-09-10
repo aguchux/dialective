@@ -30,4 +30,20 @@ describe('CommunityAttachmentsService', () => {
     expect(storage.createPresignedUploadUrl).toHaveBeenCalled();
     expect(result.uploadUrl).toBe('https://upload');
   });
+
+  // Regression test: iOS Safari's file/voice-memo picker produces
+  // audio/mp4 (AAC in an M4A container), never audio/webm -- this used to
+  // 400 before ever reaching this service (rejected by the DTO's @IsIn),
+  // and even here would have looked up an undefined extension.
+  it.each(['audio/mp4', 'audio/x-m4a'])(
+    'accepts iOS-produced content type %s and builds a .m4a key',
+    async (contentType) => {
+      const { service, storage } = setup(true);
+
+      await service.createUploadUrl('user-1', { contentType } as never);
+
+      const [, key] = storage.createPresignedUploadUrl.mock.calls[0];
+      expect(key).toMatch(/\.m4a$/);
+    },
+  );
 });

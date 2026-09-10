@@ -180,7 +180,10 @@ const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 const ACCEPT_BY_KIND: Record<'image' | 'audio' | 'document', { accept: string; label: string; icon: typeof ImageIcon }> = {
   image: { accept: 'image/jpeg,image/png,image/webp', label: 'Image', icon: ImageIcon },
-  audio: { accept: 'audio/mpeg,audio/wav,audio/webm', label: 'Audio', icon: Mic2 },
+  // audio/mp4 and audio/x-m4a cover iOS Safari's file/voice-memo picker,
+  // which never produces audio/webm -- without these, every iOS audio
+  // attachment was silently excluded by the OS picker or rejected server-side.
+  audio: { accept: 'audio/mpeg,audio/wav,audio/webm,audio/mp4,audio/x-m4a', label: 'Audio', icon: Mic2 },
   document: { accept: 'application/pdf', label: 'Document', icon: FileText },
 };
 

@@ -9,6 +9,8 @@ const ATTACHMENT_TYPE_BY_CONTENT_TYPE: Record<string, CommunityAttachmentType> =
   'audio/mpeg': CommunityAttachmentType.AUDIO,
   'audio/wav': CommunityAttachmentType.AUDIO,
   'audio/webm': CommunityAttachmentType.AUDIO,
+  'audio/mp4': CommunityAttachmentType.AUDIO,
+  'audio/x-m4a': CommunityAttachmentType.AUDIO,
   'application/pdf': CommunityAttachmentType.DOCUMENT,
 };
 

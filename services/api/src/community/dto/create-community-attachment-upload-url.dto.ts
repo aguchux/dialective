@@ -7,6 +7,11 @@ export const ALLOWED_COMMUNITY_ATTACHMENT_CONTENT_TYPES = [
   'audio/mpeg',
   'audio/wav',
   'audio/webm',
+  // iOS Safari's file/voice-memo picker produces audio/mp4 (AAC in an M4A
+  // container), sometimes reported as audio/x-m4a -- without these, every
+  // iOS audio attachment 400s here before a presigned URL is ever issued.
+  'audio/mp4',
+  'audio/x-m4a',
   'application/pdf',
 ] as const;
 export type AllowedCommunityAttachmentContentType =

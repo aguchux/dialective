@@ -153,6 +153,8 @@ export type CommunityAttachmentContentType =
   | 'audio/mpeg'
   | 'audio/wav'
   | 'audio/webm'
+  | 'audio/mp4'
+  | 'audio/x-m4a'
   | 'application/pdf';
 
 /** Sent alongside a post/reply's create/update body once the bytes are uploaded via createAttachmentUploadUrl. */
