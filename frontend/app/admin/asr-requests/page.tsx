@@ -7,6 +7,7 @@ import {
   AsrTranscriptionRequestAdminRow,
   useGetAdminAsrTranscriptionRequestsQuery,
   useSetAsrTranscriptionRequestStatusMutation,
+  useSetDialectAsrGateBypassMutation,
 } from '@/store/api';
 
 function trainerName(row: AsrTranscriptionRequestAdminRow): string {
@@ -38,7 +39,9 @@ const STATUS_CLASS: Record<AsrTranscriptionRequestAdminRow['status'], string> = 
 export default function AdminAsrTranscriptionRequestsPage() {
   const { data: requests, isLoading } = useGetAdminAsrTranscriptionRequestsQuery();
   const [setStatus, { isLoading: isUpdating }] = useSetAsrTranscriptionRequestStatusMutation();
+  const [setGateBypass, { isLoading: isTogglingBypass }] = useSetDialectAsrGateBypassMutation();
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [togglingDialectId, setTogglingDialectId] = useState<string | null>(null);
 
   async function handleSetStatus(
     row: AsrTranscriptionRequestAdminRow,
@@ -49,6 +52,18 @@ export default function AdminAsrTranscriptionRequestsPage() {
       await setStatus({ id: row.id, status }).unwrap();
     } finally {
       setUpdatingId(null);
+    }
+  }
+
+  async function handleToggleGateBypass(row: AsrTranscriptionRequestAdminRow) {
+    setTogglingDialectId(row.dialect.id);
+    try {
+      await setGateBypass({
+        dialectId: row.dialect.id,
+        bypassed: !row.dialect.asrGateBypassed,
+      }).unwrap();
+    } finally {
+      setTogglingDialectId(null);
     }
   }
 
@@ -69,9 +84,16 @@ export default function AdminAsrTranscriptionRequestsPage() {
       header: 'Dialect',
       sortValue: (r) => r.dialect.name,
       render: (r) => (
-        <span className="text-sm font-bold text-ink">
-          {r.dialect.name} <span className="text-muted">({r.dialect.tag})</span>
-        </span>
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-bold text-ink">
+            {r.dialect.name} <span className="text-muted">({r.dialect.tag})</span>
+          </span>
+          {r.dialect.asrGateBypassed && (
+            <span className="inline-flex w-fit items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-extrabold text-violet-800 dark:bg-violet-950 dark:text-violet-200">
+              Gate bypassed
+            </span>
+          )}
+        </div>
       ),
     },
     {
@@ -119,6 +141,14 @@ export default function AdminAsrTranscriptionRequestsPage() {
               Mark fulfilled
             </button>
           )}
+          <button
+            className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:opacity-50"
+            disabled={isTogglingBypass && togglingDialectId === r.dialect.id}
+            onClick={() => void handleToggleGateBypass(r)}
+            type="button"
+          >
+            {r.dialect.asrGateBypassed ? 'Re-enable gate' : 'Bypass gate'}
+          </button>
         </div>
       ),
     },
@@ -133,8 +163,9 @@ export default function AdminAsrTranscriptionRequestsPage() {
             Trainers whose dialect has no ASR transcription support yet (no
             models/asr-registry.yaml entry) are shown a "Send request" prompt instead of being
             stuck. Acknowledging or marking a request fulfilled here is for tracking only -- it
-            does not enable transcription. A dialect only becomes usable once it has a real
-            registry entry and checkpoint.
+            does not enable transcription. If no checkpoint is coming soon, use "Bypass gate" to
+            let that dialect record again as before, unscored/untranscribed, without waiting on a
+            real registry entry.
           </p>
         </div>
 

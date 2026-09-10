@@ -511,6 +511,7 @@ model Dialect {
   countryId            String
   active               Boolean                      @default(true) // disabled dialects are hidden from onboarding and revoke current trainer selections
   llmGenerationEnabled Boolean                      @default(false) // per-dialect override within an enabled country -- lets admin exclude one dialect without disabling the whole country
+  asrGateBypassed      Boolean                      @default(false) // admin override: allow word training even though models/asr-registry.yaml has no entry for this dialect (e.g. no checkpoint exists yet) -- recordings are accepted unscored/untranscribed, same as pre-ASR-gate behavior. Set from the "ASR Request" admin page, independent of AsrTranscriptionRequest tracking.
   keyboardLayout       String? // space-separated dialect-specific characters/diacritics for the inline virtual keyboard on the word-training spelling input; admin-edited, optionally AI-drafted via POST /geo/admin/dialects/:id/generate-keyboard-layout
   country              Country                      @relation(fields: [countryId], references: [id])
   users                User[]

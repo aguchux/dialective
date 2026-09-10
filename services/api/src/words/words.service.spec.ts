@@ -1184,6 +1184,11 @@ describe('WordsService', () => {
   });
 
   describe('ASR-availability gate in nextAssignment', () => {
+    afterEach(() => {
+      asrRegistry.resolve.mockReset();
+      asrRegistry.resolve.mockReturnValue({ engine: 'vosk', stream: 'asr-jobs-vosk' });
+    });
+
     it('blocks with asrUnavailable when the trainer dialect has no asr-registry.yaml entry', async () => {
       asrRegistry.resolve.mockReturnValueOnce(undefined);
 
@@ -1193,6 +1198,22 @@ describe('WordsService', () => {
     });
 
     it('does not block when the trainer dialect has a registered ASR entry', async () => {
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-1',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+
+      await expect(service.nextAssignment(trainer.id, session.id)).resolves.toBeDefined();
+    });
+
+    it('does not block when the dialect has no ASR entry but asrGateBypassed is set (admin override)', async () => {
+      asrRegistry.resolve.mockReturnValueOnce(undefined);
+      prisma.user.findUnique
+        .mockResolvedValueOnce(trainer) // assertNotOnAuditHold
+        .mockResolvedValueOnce({
+          ...trainer,
+          dialect: { ...trainer.dialect, asrGateBypassed: true },
+        }); // getTrainer
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-1',
         direction: 'ENGLISH_TO_DIALECT',

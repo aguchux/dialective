@@ -162,7 +162,7 @@ export class WordsService {
     }
 
     const trainer = await this.getTrainer(userId);
-    this.assertAsrAvailable(trainer.dialect!.tag);
+    this.assertAsrAvailable(trainer.dialect!);
 
     const [taskTokenCost, wallet] = await Promise.all([
       this.settings.getTaskTokenCost(),
@@ -876,13 +876,21 @@ export class WordsService {
    * trainer is prompted (frontend) to send an AsrTranscriptionRequest
    * instead. Structured ForbiddenException, same convention as the
    * qracRequired/requiredCourses gates above.
+   *
+   * Dialect.asrGateBypassed is an admin escape hatch (set from the "ASR
+   * Request" admin page) for when no checkpoint exists yet and isn't
+   * coming soon -- recordings are accepted unscored/untranscribed, same as
+   * this gate never having existed. Independent of AsrTranscriptionRequest
+   * tracking: bypassing does not create/resolve a request, and acknowledging
+   * a request does not bypass the gate.
    */
-  private assertAsrAvailable(dialectTag: string): void {
-    if (!this.asrRegistry.resolve(dialectTag)) {
+  private assertAsrAvailable(dialect: { tag: string; asrGateBypassed: boolean }): void {
+    if (dialect.asrGateBypassed) return;
+    if (!this.asrRegistry.resolve(dialect.tag)) {
       throw new ForbiddenException({
         message: 'Transcription is not yet available for your dialect.',
         asrUnavailable: true,
-        dialectTag,
+        dialectTag: dialect.tag,
       });
     }
   }

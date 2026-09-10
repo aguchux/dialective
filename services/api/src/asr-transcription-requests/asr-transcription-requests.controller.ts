@@ -7,6 +7,7 @@ import { AsrTranscriptionRequestsService } from './asr-transcription-requests.se
 import { CreateAsrTranscriptionRequestDto } from './dto/create-asr-transcription-request.dto';
 import { ListAsrTranscriptionRequestsAdminDto } from './dto/list-asr-transcription-requests-admin.dto';
 import { SetAsrTranscriptionRequestStatusDto } from './dto/set-asr-transcription-request-status.dto';
+import { SetDialectAsrGateBypassDto } from './dto/set-dialect-asr-gate-bypass.dto';
 
 @Controller('asr-transcription-requests')
 @UseGuards(JwtAuthGuard)
@@ -39,5 +40,15 @@ export class AsrTranscriptionRequestsController {
     @Body() body: SetAsrTranscriptionRequestStatusDto,
   ) {
     return this.requests.setStatus(id, req.user.sub, body.status);
+  }
+
+  @Patch('admin/dialects/:dialectId/gate-bypass')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  setDialectGateBypass(
+    @Param('dialectId') dialectId: string,
+    @Body() body: SetDialectAsrGateBypassDto,
+  ) {
+    return this.requests.setDialectGateBypass(dialectId, body.bypassed);
   }
 }
