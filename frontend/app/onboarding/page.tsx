@@ -11,6 +11,7 @@ import {
   useGetCountriesQuery,
   useGetDialectsQuery,
   useGetDialectVariantsQuery,
+  useGetKycStatusQuery,
   useGetPublicClientSettingsQuery,
   useUpdateProfileMutation,
 } from '@/store/api';
@@ -43,6 +44,7 @@ export default function OnboardingPage() {
   });
   const { data: dialectVariants } = useGetDialectVariantsQuery(dialectId, { skip: !dialectId });
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
+  const { data: kycStatusData } = useGetKycStatusQuery();
   const [updateProfile, { isLoading: isSubmitting }] = useUpdateProfileMutation();
   const [createKycSession, { isLoading: isStartingKyc }] = useCreateKycSessionMutation();
 
@@ -119,7 +121,10 @@ export default function OnboardingPage() {
         lastName: profile.lastName,
         gender: profile.gender,
       });
-      if (publicSettings?.isKycRequiredOnboarding) {
+      const kycStatus = kycStatusData?.kycStatus ?? 'NOT_STARTED';
+      const kycAlreadyHandled =
+        kycStatus === 'APPROVED' || kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW';
+      if (publicSettings?.isKycRequiredOnboarding && !kycAlreadyHandled) {
         setStage('kyc');
       } else {
         window.location.href = '/dashboard';
