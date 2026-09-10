@@ -28,7 +28,6 @@ describe('WordsService', () => {
     isQracEnabled: jest.fn().mockResolvedValue(false),
     isQracRequiredAtSessionStart: jest.fn().mockResolvedValue(false),
     getQracIntervalMinutes: jest.fn().mockResolvedValue(30),
-    isAsrGateGloballyBypassed: jest.fn().mockResolvedValue(false),
   };
   const storage = { createPresignedDownloadUrl: jest.fn(), createPresignedUploadUrl: jest.fn() };
   const streams = { publish: jest.fn() };
@@ -1184,32 +1183,22 @@ describe('WordsService', () => {
     });
   });
 
-  describe('ASR-availability gate in nextAssignment', () => {
+  describe('ASR availability in nextAssignment', () => {
     afterEach(() => {
       asrRegistry.resolve.mockReset();
       asrRegistry.resolve.mockReturnValue({ engine: 'vosk', stream: 'asr-jobs-vosk' });
     });
 
-    it('blocks with asrUnavailable when the trainer dialect has no asr-registry.yaml entry', async () => {
+    // Regression test: WordRecording.score (SCORED status, payout
+    // eligibility) comes entirely from typed-transcript exact-match + peer
+    // reverse-validation, never from ASR -- asrMatchScore is a purely
+    // auxiliary, non-gating annotation (see createRecording's asr_stream
+    // publish, which is simply omitted for an unregistered dialect). A
+    // dialect with no ASR entry must train/score exactly like one that has
+    // one; this used to be blocked by an ASR-availability gate that turned
+    // out to have no real dependency to protect.
+    it('never blocks a dialect for missing ASR support -- ASR is an optional annotation, not a scoring dependency', async () => {
       asrRegistry.resolve.mockReturnValueOnce(undefined);
-
-      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toMatchObject({
-        response: { asrUnavailable: true, dialectTag: 'ig' },
-      });
-    });
-
-    it('does not block when the trainer dialect has a registered ASR entry', async () => {
-      prisma.wordTrainingAssignment.create.mockResolvedValue({
-        id: 'assignment-1',
-        direction: 'ENGLISH_TO_DIALECT',
-      });
-
-      await expect(service.nextAssignment(trainer.id, session.id)).resolves.toBeDefined();
-    });
-
-    it('does not block any dialect when asrGateGloballyBypassed is set (admin override)', async () => {
-      asrRegistry.resolve.mockReturnValueOnce(undefined);
-      settings.isAsrGateGloballyBypassed.mockResolvedValueOnce(true);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-1',
         direction: 'ENGLISH_TO_DIALECT',

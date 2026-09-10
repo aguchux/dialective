@@ -199,8 +199,6 @@ model User {
   otpCodes                         OtpCode[]
   manualPhoneVerificationRequests  ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationUser")
   manualPhoneVerificationsReviewed ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationAdmin")
-  asrTranscriptionRequests         AsrTranscriptionRequest[] @relation("AsrTranscriptionRequestUser")
-  asrTranscriptionRequestsAcknowledged AsrTranscriptionRequest[] @relation("AsrTranscriptionRequestAdmin")
   wallet                           Wallet?
   trainingPayoutClaims             TrainingPayoutClaim[]
   blogPosts                        BlogPost[]
@@ -517,42 +515,9 @@ model Dialect {
   variants             DialectVariant[]
   validatorAssignments ValidatorDialectAssignment[]
   validatorDecks       ValidatorDeck[]
-  asrTranscriptionRequests AsrTranscriptionRequest[]
 
   @@index([countryId])
   @@map("dialects")
-}
-
-enum AsrTranscriptionRequestStatus {
-  PENDING
-  ACKNOWLEDGED
-  FULFILLED
-}
-
-/// A trainer's request to have ASR transcription enabled for their dialect
-/// (models/asr-registry.yaml has no entry for it, so WordsService/
-/// DomainConversationsService block that dialect's training tasks -- see
-/// AsrRegistryService.resolve). One open request per (user, dialect):
-/// marking a request ACKNOWLEDGED/FULFILLED here is TRACKING ONLY, it does
-/// NOT unlock the dialect -- that still requires a real asr-registry.yaml
-/// entry + a real checkpoint, the same manual process used for Kinyarwanda.
-model AsrTranscriptionRequest {
-  id                String                         @id @default(uuid())
-  userId            String
-  user              User                           @relation("AsrTranscriptionRequestUser", fields: [userId], references: [id], onDelete: Cascade)
-  dialectId         String
-  dialect           Dialect                        @relation(fields: [dialectId], references: [id], onDelete: Cascade)
-  status            AsrTranscriptionRequestStatus  @default(PENDING)
-  acknowledgedByAdminId String?
-  acknowledgedByAdmin   User?                      @relation("AsrTranscriptionRequestAdmin", fields: [acknowledgedByAdminId], references: [id], onDelete: SetNull)
-  acknowledgedAt    DateTime?
-  createdAt         DateTime                       @default(now())
-  updatedAt         DateTime                       @updatedAt
-
-  @@unique([userId, dialectId])
-  @@index([status, createdAt])
-  @@index([dialectId, status])
-  @@map("asr_transcription_requests")
 }
 
 /// Admin-managed grant of "this validator may browse recordings for and
@@ -2488,7 +2453,6 @@ model PlatformSettings {
   spellingNormalizationProviderOrder     String    @default("openai,deepseek,anthropic") // CSV fallback-try order for spelling normalization, same permutation rules as llmProviderOrder
   wordTrainingEnabled                    Boolean   @default(true) // admin content gate: when false, WordsService.nextAssignment's ENGLISH_TO_DIALECT fallback never serves a single Word -- only Sentence content (subject to sentenceTrainingEnabled and phraseEscalationEnabled/tier gating) is offered. PlatformSettingsService.update refuses to save both this and sentenceTrainingEnabled as false at once, since that would leave ENGLISH_TO_DIALECT with no source at all. Independent of reverseWordTrainingEnabled, which controls the separate DIALECT_TO_ENGLISH reverse-validation flow and is unaffected by either content gate.
   sentenceTrainingEnabled                Boolean   @default(true) // admin content gate: when false, WordsService.nextAssignment never serves Sentence content regardless of phraseEscalationEnabled/a trainer's phrase tier -- only single Word content is offered. See wordTrainingEnabled's doc comment for the both-false guard and the independence from reverseWordTrainingEnabled.
-  asrGateGloballyBypassed                    Boolean  @default(false) // admin escape hatch: when true, WordsService.assertAsrAvailable never blocks ANY dialect for missing ASR support, regardless of models/asr-registry.yaml -- lets every dialect record unscored/untranscribed while checkpoints are still being sourced/trained. Independent of AsrTranscriptionRequest tracking. Toggled from /admin/asr-requests, not the general settings panel.
   domainConversationTaskEnabled              Boolean  @default(false) // admin content gate: whether trainers see the "Domain Conversation" task card at all. Independent of domainConversationGenerationEnabled below (the prompt pool can be building up before the task is exposed to trainers)
   domainConversationMinDurationSeconds       Int?     // overrides DOMAIN_CONVERSATION_MIN_DURATION_SECONDS when set; recording Submit/Stop stays disabled below this elapsed time
   domainConversationMaxDurationSeconds       Int?     // overrides DOMAIN_CONVERSATION_MAX_DURATION_SECONDS when set; recording force-stops at this elapsed time, mirroring wordTrainingRecordingMaxTimeoutSeconds's auto-stop-at-ceiling behavior

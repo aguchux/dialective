@@ -162,7 +162,6 @@ export class WordsService {
     }
 
     const trainer = await this.getTrainer(userId);
-    await this.assertAsrAvailable(trainer.dialect!.tag);
 
     const [taskTokenCost, wallet] = await Promise.all([
       this.settings.getTaskTokenCost(),
@@ -866,36 +865,6 @@ export class WordsService {
     )
       throw new UnprocessableEntityException('Complete dialect onboarding before training');
     return trainer;
-  }
-
-  /**
-   * models/asr-registry.yaml is the single source of truth for which
-   * dialects have a working ASR checkpoint (see AsrRegistryService). A
-   * dialect with no entry can't be scored, so training tasks are blocked
-   * entirely rather than silently accepting unscoreable recordings -- the
-   * trainer is prompted (frontend) to send an AsrTranscriptionRequest
-   * instead. Structured ForbiddenException, same convention as the
-   * qracRequired/requiredCourses gates above.
-   *
-   * PlatformSettings.asrGateGloballyBypassed is an admin escape hatch (set
-   * from the "ASR Request" admin page) for when checkpoints aren't ready
-   * for one or more dialects and aren't coming soon -- while set, EVERY
-   * dialect skips this gate and records unscored/untranscribed, same as
-   * this gate never having existed. Deliberately global, not per-dialect --
-   * the plan was one switch to unblock everyone at once, not a toggle per
-   * dialect. Independent of AsrTranscriptionRequest tracking: bypassing
-   * does not create/resolve a request, and acknowledging a request does
-   * not bypass the gate.
-   */
-  private async assertAsrAvailable(dialectTag: string): Promise<void> {
-    if (await this.settings.isAsrGateGloballyBypassed()) return;
-    if (!this.asrRegistry.resolve(dialectTag)) {
-      throw new ForbiddenException({
-        message: 'Transcription is not yet available for your dialect.',
-        asrUnavailable: true,
-        dialectTag,
-      });
-    }
   }
 
   private async getOwnedSession(userId: string, sessionId: string) {

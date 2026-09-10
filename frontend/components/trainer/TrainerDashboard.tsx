@@ -129,8 +129,6 @@ import {
   useGetMarketingMaterialsQuery,
   useCreateCampaignShareMutation,
   useGetMyMarketingSharesQuery,
-  useLazyGetMyAsrTranscriptionRequestQuery,
-  useCreateAsrTranscriptionRequestMutation,
 } from '@/store/api';
 import type { Session } from 'next-auth';
 
@@ -202,7 +200,6 @@ export function TrainerDashboard() {
   const [midSessionRequiredCourses, setMidSessionRequiredCourses] = useState<
     { id: string; slug: string; title: string }[] | null
   >(null);
-  const [asrUnavailableDialectTag, setAsrUnavailableDialectTag] = useState<string | null>(null);
   const [testimonyOpen, setTestimonyOpen] = useState(false);
   const requestedView = searchParams.get('view');
   const displayName = [session?.user.firstName, session?.user.lastName].filter(Boolean).join(' ');
@@ -383,7 +380,6 @@ export function TrainerDashboard() {
             setRequiredCoursesOpen(true);
           }}
           onInsufficientBalance={() => setLowBalanceOpen(true)}
-          onAsrUnavailable={(dialectTag) => setAsrUnavailableDialectTag(dialectTag)}
         />
         <DomainConversationDialog
           onOpenChange={setDomainConversationOpen}
@@ -408,12 +404,6 @@ export function TrainerDashboard() {
             if (!open) setMidSessionRequiredCourses(null);
           }}
           open={requiredCoursesOpen}
-        />
-        <AsrUnavailableDialog
-          dialectTag={asrUnavailableDialectTag}
-          onOpenChange={(open) => {
-            if (!open) setAsrUnavailableDialectTag(null);
-          }}
         />
         {publicSettings?.testimonyEnabled && (
           <TestimonyDialog
@@ -483,76 +473,6 @@ function RequiredCoursesDialog({
               <ArrowRight className="size-4 shrink-0 text-accent" aria-hidden="true" />
             </Link>
           ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * Shown when WordsService.nextAssignment/startSession 403s with
- * asrUnavailable=true -- the trainer's dialect has no
- * models/asr-registry.yaml entry (AsrRegistryService.resolve returns
- * undefined), so recordings can't be transcribed/scored and training tasks
- * are blocked entirely. Lets the trainer send an AsrTranscriptionRequest
- * (idempotent per user+dialect) and shows the pending state on repeat
- * visits -- sending a request does NOT unlock anything by itself, an admin
- * still has to add a real registry entry + checkpoint.
- */
-function AsrUnavailableDialog({
-  dialectTag,
-  onOpenChange,
-}: {
-  dialectTag: string | null;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const dialectName = useDialectName(dialectTag ?? undefined);
-  const [loadRequest, { data: request, isFetching }] = useLazyGetMyAsrTranscriptionRequestQuery();
-  const [createRequest, { isLoading: isSending }] = useCreateAsrTranscriptionRequestMutation();
-
-  useEffect(() => {
-    if (dialectTag) void loadRequest(dialectTag);
-  }, [dialectTag, loadRequest]);
-
-  async function handleSendRequest() {
-    if (!dialectTag) return;
-    await createRequest({ dialectTag }).unwrap();
-    void loadRequest(dialectTag);
-  }
-
-  return (
-    <Dialog onOpenChange={onOpenChange} open={!!dialectTag}>
-      <DialogContent
-        title="Transcription isn't set up for your dialect yet"
-        description={`Voice transcription for ${dialectName || 'your dialect'} hasn't been enabled yet, so new training tasks are paused for now.`}
-      >
-        <div className="grid gap-4">
-          {isFetching ? (
-            <p className="text-sm text-muted">Checking request status…</p>
-          ) : request ? (
-            <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-muted px-4 py-3">
-              <Clock3 className="size-4 shrink-0 text-accent" aria-hidden="true" />
-              <p className="text-sm font-bold text-ink">
-                Request sent — waiting for approval. We'll notify you once transcription is
-                enabled for your dialect.
-              </p>
-            </div>
-          ) : (
-            <p className="text-sm leading-relaxed text-muted">
-              Send a request to let our team know demand exists for this dialect. Once
-              transcription support is added, you'll be able to start training tasks again.
-            </p>
-          )}
-          <div className="flex justify-end gap-2">
-            <ActionButton
-              disabled={!!request}
-              pending={isSending}
-              onClick={handleSendRequest}
-              type="button"
-            >
-              {request ? 'Request sent' : 'Send request'}
-            </ActionButton>
-          </div>
         </div>
       </DialogContent>
     </Dialog>

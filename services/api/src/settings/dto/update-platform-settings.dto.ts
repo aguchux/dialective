@@ -119,10 +119,6 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
-  asrGateGloballyBypassed?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
   domainConversationTaskEnabled?: boolean;
 
   @IsOptional()

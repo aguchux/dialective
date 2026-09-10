@@ -38,7 +38,6 @@ import { VoiceStreamModule } from './voice-stream/voice-stream.module';
 import { FaqsModule } from './faqs/faqs.module';
 import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.module';
 import { CommunityModule } from './community/community.module';
-import { AsrTranscriptionRequestsModule } from './asr-transcription-requests/asr-transcription-requests.module';
 
 @Module({
   imports: [
@@ -77,7 +76,6 @@ import { AsrTranscriptionRequestsModule } from './asr-transcription-requests/asr
     FaqsModule,
     TrainerProfilesModule,
     CommunityModule,
-    AsrTranscriptionRequestsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: AppThrottlerGuard }],
