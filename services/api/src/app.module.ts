@@ -8,6 +8,7 @@ import { RedisStreamsModule } from './redis-streams/redis-streams.module';
 import { RabbitMqModule } from './rabbitmq/rabbitmq.module';
 import { AsrRegistryModule } from './asr-registry/asr-registry.module';
 import { WordsModule } from './words/words.module';
+import { DomainConversationsModule } from './domain-conversations/domain-conversations.module';
 import { SentencesModule } from './sentences/sentences.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
 import { MarketingModule } from './marketing/marketing.module';
@@ -47,6 +48,7 @@ import { CommunityModule } from './community/community.module';
     RabbitMqModule,
     AsrRegistryModule,
     WordsModule,
+    DomainConversationsModule,
     SentencesModule,
     TestimonialsModule,
     MarketingModule,

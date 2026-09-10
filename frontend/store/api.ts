@@ -1125,6 +1125,7 @@ export interface PublicClientSettings {
   referralInviteExpirySeconds: number;
   wordTrainingRecordingTimeoutSeconds: number;
   wordTrainingRecordingMaxTimeoutSeconds: number;
+  domainConversationTaskEnabled: boolean;
   sessionIdleTimeoutMinutes: number;
   sessionMaxHours: number;
   phoneVerificationRequired: boolean;
@@ -1517,6 +1518,18 @@ export interface PlatformSettings {
   reverseWordTrainingEnabled: boolean;
   wordTrainingEnabled: boolean;
   sentenceTrainingEnabled: boolean;
+  domainConversationTaskEnabled: boolean;
+  domainConversationMinDurationSeconds: number;
+  domainConversationMaxDurationSeconds: number;
+  domainConversationTaskTokenCost: string | null;
+  domainConversationGenerationEnabled: boolean;
+  domainConversationPromptsPerRun: number;
+  domainConversationMaxPromptPoolSize: number;
+  domainConversationProviderOrder: string;
+  domainConversationQualityWeightNoise: string;
+  domainConversationQualityWeightQuality: string;
+  domainConversationQualityWeightLiveness: string;
+  domainConversationMinQualityScoreForPayout: string;
   adminPayoutOtpEnabled: boolean;
   sessionIdleTimeoutMinutes: number;
   sessionMaxHours: number;
@@ -1645,6 +1658,18 @@ export interface PlatformSettingsInput {
   reverseWordTrainingEnabled?: boolean;
   wordTrainingEnabled?: boolean;
   sentenceTrainingEnabled?: boolean;
+  domainConversationTaskEnabled?: boolean;
+  domainConversationMinDurationSeconds?: number;
+  domainConversationMaxDurationSeconds?: number;
+  domainConversationTaskTokenCost?: number;
+  domainConversationGenerationEnabled?: boolean;
+  domainConversationPromptsPerRun?: number;
+  domainConversationMaxPromptPoolSize?: number;
+  domainConversationProviderOrder?: string;
+  domainConversationQualityWeightNoise?: number;
+  domainConversationQualityWeightQuality?: number;
+  domainConversationQualityWeightLiveness?: number;
+  domainConversationMinQualityScoreForPayout?: number;
   adminPayoutOtpEnabled?: boolean;
   sessionIdleTimeoutMinutes?: number;
   sessionMaxHours?: number;
@@ -1813,6 +1838,72 @@ export interface TrainerSubmissionSummary {
 
 export interface SubmissionsPage {
   items: TrainerSubmissionSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface DomainConversationPrompt {
+  assignmentId: string;
+  promptId: string;
+  domain: string;
+  promptText: string;
+  dialectTag: string;
+  minDurationSeconds: number;
+  maxDurationSeconds: number;
+}
+
+export interface DomainConversationRecordingUpload {
+  uploadUrl: string;
+  key: string;
+  bucket: string;
+  expiresInSeconds: number;
+}
+
+export interface DomainConversationSubmissionSummary {
+  id: string;
+  prompt: { domain: string; text: string };
+  dialectTag: string;
+  status: 'PENDING' | 'REJECTED' | 'SCORED' | 'SETTLED' | 'EXPIRED';
+  tokensSpent: string;
+  noiseScore: string | null;
+  qualityScore: string | null;
+  livenessScore: string | null;
+  compositeScore: string | null;
+  payoutTokenAmount: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+  scoredAt: string | null;
+  settledAt: string | null;
+}
+
+export interface DomainConversationSubmissionsPage {
+  items: DomainConversationSubmissionSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export type DomainPromptGenderVariant = 'NEUTRAL' | 'MALE' | 'FEMALE';
+
+export interface AdminDomainPrompt {
+  id: string;
+  scenarioKey: string;
+  domain: string;
+  genderVariant: DomainPromptGenderVariant;
+  text: string;
+  isDisabled: boolean;
+  lastServedAt: string | null;
+  timesServed: number;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminDomainPromptsPage {
+  items: AdminDomainPrompt[];
   page: number;
   pageSize: number;
   total: number;
@@ -2430,6 +2521,8 @@ export const dialectivaApi = createApi({
     'Courses',
     'RequiredCourses',
     'Submissions',
+    'DomainConversationSubmissions',
+    'DomainPrompts',
     'AdminWords',
     'AdminSentences',
     'AdminRecordings',
@@ -2932,6 +3025,85 @@ export const dialectivaApi = createApi({
     >({
       query: (body) => ({ url: '/words/recordings', method: 'POST', body }),
       invalidatesTags: ['Submissions', 'Wallet'],
+    }),
+    getNextDomainConversationPrompt: builder.query<DomainConversationPrompt, string>({
+      query: (sessionId) => `/domain-conversations/sessions/${sessionId}/next`,
+    }),
+    createDomainConversationRecordingUpload: builder.mutation<
+      DomainConversationRecordingUpload,
+      { assignmentId: string; contentType: string }
+    >({
+      query: (body) => ({ url: '/domain-conversations/recordings/upload-url', method: 'POST', body }),
+    }),
+    submitDomainConversationRecording: builder.mutation<
+      { recordingId: string; status: string },
+      {
+        assignmentId: string;
+        bucket: string;
+        audioKey: string;
+        durationMs: number;
+        noiseRating: RecordingNoiseRating;
+      }
+    >({
+      query: (body) => ({ url: '/domain-conversations/recordings', method: 'POST', body }),
+      invalidatesTags: ['DomainConversationSubmissions', 'Wallet'],
+    }),
+    getMyDomainConversationRecordings: builder.query<
+      DomainConversationSubmissionsPage,
+      { page: number; pageSize: number; status?: DomainConversationSubmissionSummary['status'][] }
+    >({
+      query: ({ page, pageSize, status }) => ({
+        url: '/domain-conversations/mine',
+        params: { page, pageSize, status: status?.join(',') },
+      }),
+      providesTags: ['DomainConversationSubmissions'],
+    }),
+    getAdminDomainPrompts: builder.query<
+      AdminDomainPromptsPage,
+      {
+        page: number;
+        pageSize: number;
+        search?: string;
+        domain?: string;
+        genderVariant?: DomainPromptGenderVariant;
+        disabled?: boolean;
+      }
+    >({
+      query: (params) => ({ url: '/domain-conversations/admin/prompts', params }),
+      providesTags: ['DomainPrompts'],
+    }),
+    getAdminDomainPromptDomains: builder.query<string[], void>({
+      query: () => '/domain-conversations/admin/prompts/domains',
+      providesTags: ['DomainPrompts'],
+    }),
+    createDomainPromptAdmin: builder.mutation<
+      AdminDomainPrompt[],
+      { domain: string; scenarioKey: string; neutralText: string; maleText: string; femaleText: string }
+    >({
+      query: (body) => ({ url: '/domain-conversations/admin/prompts', method: 'POST', body }),
+      invalidatesTags: ['DomainPrompts'],
+    }),
+    updateDomainPromptAdmin: builder.mutation<
+      AdminDomainPrompt,
+      { id: string; domain?: string; text?: string }
+    >({
+      query: ({ id, ...body }) => ({ url: `/domain-conversations/admin/prompts/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['DomainPrompts'],
+    }),
+    setDomainPromptDisabledAdmin: builder.mutation<
+      { id: string; isDisabled: boolean },
+      { id: string; disabled: boolean }
+    >({
+      query: ({ id, disabled }) => ({
+        url: `/domain-conversations/admin/prompts/${id}/disable`,
+        method: 'PATCH',
+        body: { disabled },
+      }),
+      invalidatesTags: ['DomainPrompts'],
+    }),
+    deleteDomainPromptAdmin: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/domain-conversations/admin/prompts/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['DomainPrompts'],
     }),
     requestDepositOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
@@ -4689,6 +4861,16 @@ export const {
   useDeleteMarketingHeadlineMutation,
   useCreateWordRecordingUploadMutation,
   useSubmitWordRecordingMutation,
+  useLazyGetNextDomainConversationPromptQuery,
+  useCreateDomainConversationRecordingUploadMutation,
+  useSubmitDomainConversationRecordingMutation,
+  useGetMyDomainConversationRecordingsQuery,
+  useGetAdminDomainPromptsQuery,
+  useGetAdminDomainPromptDomainsQuery,
+  useCreateDomainPromptAdminMutation,
+  useUpdateDomainPromptAdminMutation,
+  useSetDomainPromptDisabledAdminMutation,
+  useDeleteDomainPromptAdminMutation,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
   useRequestFlutterwaveDepositOtpMutation,

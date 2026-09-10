@@ -69,6 +69,38 @@ export function computeWordRecordingCompositeScore(
   return Math.max(scoreRange.min, Math.min(scoreRange.max, blended));
 }
 
+export interface DomainConversationQualityWeights {
+  noise: number;
+  quality: number;
+  liveness: number;
+}
+
+/**
+ * Blends quality-gate-worker's three quality signals for a
+ * DomainConversationRecording -- no consensus/exact-match/asrMatch
+ * component exists for this record kind (no fixed expected text to compare
+ * a free-form conversational clip against), unlike
+ * computeWordRecordingCompositeScore's five-way blend. Missing noise/
+ * quality/liveness scores (gate disabled when the row was created, or the
+ * async worker hasn't written them yet) fall back to a neutral 100, same
+ * absence-never-penalizes posture as the WordRecording version.
+ */
+export function computeDomainConversationCompositeScore(
+  noiseScore: Prisma.Decimal | null,
+  qualityScore: Prisma.Decimal | null,
+  livenessScore: Prisma.Decimal | null,
+  weights: DomainConversationQualityWeights,
+): number {
+  const weightSum = weights.noise + weights.quality + weights.liveness;
+  if (weightSum <= 0) return 100;
+  return (
+    ((noiseScore?.toNumber() ?? 100) * weights.noise +
+      (qualityScore?.toNumber() ?? 100) * weights.quality +
+      (livenessScore?.toNumber() ?? 100) * weights.liveness) /
+    weightSum
+  );
+}
+
 /**
  * Reads scored-but-unsettled WordRecording rows from Postgres, computes
  * each payout via the shared no-loss formula (computeTrainingPayout in
@@ -123,14 +155,35 @@ export class SettlementService {
     const stuckRefundCount = await this.refundStuckWordRecordings();
     const timeoutResult = await this.resolveTimedOutScoring();
 
-    const settledCount = wordRecordingResult.settledCount;
-    const eligibleCount = wordRecordingResult.eligibleCount;
-    const totalPayout = wordRecordingResult.totalPayout;
+    const domainConversationQualityWeights = await this.getDomainConversationQualityWeights();
+    const domainConversationMinQualityScoreForPayout =
+      await this.getDomainConversationMinQualityScoreForPayout();
+    const domainConversationResult = await this.settleDomainConversationRecordings(
+      domainConversationQualityWeights,
+      domainConversationMinQualityScoreForPayout,
+      settlementDelayMinutes,
+      mintingPaused,
+    );
+    const rejectedDomainConversationRefundCount =
+      await this.refundRejectedDomainConversationRecordings();
+    const stuckDomainConversationRefundCount = await this.refundStuckDomainConversationRecordings();
 
-    if (rejectedWordRecordingRefundCount > 0 || stuckRefundCount > 0 || timeoutResult.refundedCount > 0) {
+    const settledCount = wordRecordingResult.settledCount + domainConversationResult.settledCount;
+    const eligibleCount = wordRecordingResult.eligibleCount + domainConversationResult.eligibleCount;
+    const totalPayout = wordRecordingResult.totalPayout + domainConversationResult.totalPayout;
+
+    if (
+      rejectedWordRecordingRefundCount > 0 ||
+      stuckRefundCount > 0 ||
+      timeoutResult.refundedCount > 0 ||
+      rejectedDomainConversationRefundCount > 0 ||
+      stuckDomainConversationRefundCount > 0
+    ) {
       this.logger.log(
         `Refunded locked tokens: rejectedWordRecordings=${rejectedWordRecordingRefundCount} ` +
-          `stuckWordRecordings=${stuckRefundCount} scoringTimeout=${timeoutResult.refundedCount}`,
+          `stuckWordRecordings=${stuckRefundCount} scoringTimeout=${timeoutResult.refundedCount} ` +
+          `rejectedDomainConversationRecordings=${rejectedDomainConversationRefundCount} ` +
+          `stuckDomainConversationRecordings=${stuckDomainConversationRefundCount}`,
       );
     }
     if (timeoutResult.scoredCount > 0) {
@@ -766,4 +819,245 @@ export class SettlementService {
     return Number.isFinite(cap) && cap >= 0 ? cap : 1.0;
   }
 
+  // --- Domain Conversation settlement --------------------------------------
+  // Simpler than WordRecording's: no consensus/exact-match ground truth to
+  // scale a bonus off (see DomainConversationRecording's schema doc
+  // comment), so a SCORED row pays out FLAT tokensSpent once compositeScore
+  // clears domainConversationMinQualityScoreForPayout, else refunds -- no
+  // computeTrainingPayout, no TrainingPayoutClaim dedup (there is no
+  // "source" concept here to dedup repeat attempts against).
+
+  /**
+   * Reads SCORED-but-unsettled DomainConversationRecording rows, computes
+   * compositeScore from quality-gate-worker's noise/quality/liveness
+   * signals, and either settles (flat payout) or refunds depending on
+   * whether it clears the admin-configured quality floor. Mirrors
+   * settleWordRecordings' sequential-not-transactional posture -- one bad
+   * row logs-and-continues.
+   */
+  private async settleDomainConversationRecordings(
+    qualityWeights: DomainConversationQualityWeights,
+    minQualityScoreForPayout: number,
+    settlementDelayMinutes: number,
+    mintingPaused: boolean,
+  ) {
+    const recordings = await this.prisma.domainConversationRecording.findMany({
+      where: {
+        status: 'SCORED',
+        settledAt: null,
+        userId: { not: null },
+        ...(settlementDelayMinutes > 0
+          ? { scoredAt: { lte: new Date(Date.now() - settlementDelayMinutes * 60_000) } }
+          : {}),
+      },
+      select: {
+        id: true,
+        userId: true,
+        tokensSpent: true,
+        noiseScore: true,
+        qualityScore: true,
+        livenessScore: true,
+      },
+    });
+
+    let settledCount = 0;
+    let totalPayout = 0;
+
+    for (const recording of recordings) {
+      if (recording.userId === null) continue;
+      const userId = recording.userId;
+
+      try {
+        const compositeScore = computeDomainConversationCompositeScore(
+          recording.noiseScore,
+          recording.qualityScore,
+          recording.livenessScore,
+          qualityWeights,
+        );
+
+        if (compositeScore < minQualityScoreForPayout) {
+          const claim = await this.prisma.domainConversationRecording.updateMany({
+            where: { id: recording.id, settledAt: null },
+            data: { compositeScore, refundedAt: new Date() },
+          });
+          if (claim.count === 0) continue;
+          if (await this.wasLocked(recording.id)) {
+            await this.refundTokens(userId, recording.tokensSpent, recording.id);
+          }
+          continue;
+        }
+
+        const payout = recording.tokensSpent;
+        const { ops, result } = await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id);
+        const mintOps = mintingPaused
+          ? []
+          : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
+        const lockOps = (await this.wasLocked(recording.id))
+          ? [
+              this.prisma.wallet.updateMany({
+                where: { userId },
+                data: { lockedBalance: { decrement: recording.tokensSpent } },
+              }),
+            ]
+          : [];
+
+        await this.prisma.$transaction([
+          ...lockOps,
+          ...ops,
+          ...mintOps,
+          this.prisma.domainConversationRecording.update({
+            where: { id: recording.id },
+            data: {
+              status: 'SETTLED',
+              compositeScore,
+              payoutTokenAmount: payout,
+              settledAt: new Date(),
+            },
+          }),
+        ]);
+
+        if (result.referrerUserId && Number(result.referralPayoutBonus) > 0) {
+          void this.smsNotifier.notifyReferralPayoutBonus(
+            result.referrerUserId,
+            result.referralPayoutBonus,
+          );
+        }
+
+        settledCount += 1;
+        totalPayout += payout.toNumber();
+      } catch (err) {
+        this.logger.error(
+          `Failed to settle domainConversationRecording=${recording.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    return { settledCount, eligibleCount: recordings.length, totalPayout };
+  }
+
+  /** Mirrors refundRejectedWordRecordings -- REJECTED rows (quality-gate prefilter hard-reject) never reach SCORED, so the sweep above never sees them. */
+  private async refundRejectedDomainConversationRecordings(): Promise<number> {
+    const recordings = await this.prisma.domainConversationRecording.findMany({
+      where: { status: 'REJECTED', refundedAt: null },
+      select: { id: true, userId: true, tokensSpent: true, audioBucket: true, audioKey: true },
+    });
+
+    let refundedCount = 0;
+    for (const recording of recordings) {
+      if (recording.userId === null) continue;
+      try {
+        const claim = await this.prisma.domainConversationRecording.updateMany({
+          where: { id: recording.id, refundedAt: null },
+          data: { refundedAt: new Date() },
+        });
+        if (claim.count === 0) continue;
+
+        if (await this.wasLocked(recording.id)) {
+          await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
+        }
+        await this.deleteDomainConversationAudioIfPresent(
+          recording.id,
+          recording.audioBucket,
+          recording.audioKey,
+        );
+        refundedCount += 1;
+      } catch (err) {
+        this.logger.error(
+          `Failed to refund rejected domainConversationRecording=${recording.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    return refundedCount;
+  }
+
+  private async deleteDomainConversationAudioIfPresent(
+    id: string,
+    bucket: string | null,
+    key: string | null,
+  ): Promise<void> {
+    if (!bucket || !key) return;
+    try {
+      await this.storage.deleteObject(bucket, key);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to delete audio for rejected domainConversationRecording=${id} bucket=${bucket} key=${key}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return;
+    }
+    await this.prisma.domainConversationRecording.update({
+      where: { id },
+      data: { audioBucket: null, audioKey: null, audioDeletedAt: new Date() },
+    });
+  }
+
+  /**
+   * A DomainConversationRecording still PENDING (quality-gate-worker never
+   * ran, or never wrote scores) past wordStuckTimeoutMinutes needs its lock
+   * released the same way an ENGLISH_TO_DIALECT WordRecording does via
+   * refundStuckWordRecordings -- reuses the same admin-configured timeout
+   * setting rather than introducing a separate one, since both represent
+   * "this task's automated scoring pipeline never completed."
+   */
+  private async refundStuckDomainConversationRecordings(): Promise<number> {
+    const timeoutMinutes = await this.getWordStuckTimeoutMinutes();
+    const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000);
+
+    const recordings = await this.prisma.domainConversationRecording.findMany({
+      where: {
+        status: 'PENDING',
+        refundedAt: null,
+        userId: { not: null },
+        createdAt: { lt: cutoff },
+      },
+      select: { id: true, userId: true, tokensSpent: true },
+    });
+
+    let refundedCount = 0;
+    for (const recording of recordings) {
+      if (recording.userId === null) continue;
+      try {
+        const claim = await this.prisma.domainConversationRecording.updateMany({
+          where: { id: recording.id, refundedAt: null },
+          data: { status: 'EXPIRED', refundedAt: new Date() },
+        });
+        if (claim.count === 0) continue;
+
+        if (await this.wasLocked(recording.id)) {
+          await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
+        }
+        refundedCount += 1;
+      } catch (err) {
+        this.logger.error(
+          `Failed to refund stuck domainConversationRecording=${recording.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    return refundedCount;
+  }
+
+  /** Mirrors PlatformSettingsService.getDomainConversationQualityWeights's DB-override/env-fallback logic -- duplicated read, not duplicated business logic. */
+  private async getDomainConversationQualityWeights(): Promise<DomainConversationQualityWeights> {
+    const row = await this.prisma.platformSettings.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    });
+    return {
+      noise: row.domainConversationQualityWeightNoise.toNumber(),
+      quality: row.domainConversationQualityWeightQuality.toNumber(),
+      liveness: row.domainConversationQualityWeightLiveness.toNumber(),
+    };
+  }
+
+  /** Mirrors PlatformSettingsService.getDomainConversationMinQualityScoreForPayout. */
+  private async getDomainConversationMinQualityScoreForPayout(): Promise<number> {
+    const row = await this.prisma.platformSettings.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    });
+    return row.domainConversationMinQualityScoreForPayout.toNumber();
+  }
 }

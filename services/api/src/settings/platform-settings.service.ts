@@ -1221,6 +1221,70 @@ export class PlatformSettingsService {
       }
     }
 
+    if (data.domainConversationProviderOrder) {
+      const tokens = data.domainConversationProviderOrder.split(',');
+      const isValidPermutation =
+        tokens.length === LLM_PROVIDER_KEYS.length &&
+        LLM_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
+        new Set(tokens).size === LLM_PROVIDER_KEYS.length;
+      if (!isValidPermutation) {
+        throw new BadRequestException(
+          'domainConversationProviderOrder must list openai, deepseek, and anthropic exactly once each',
+        );
+      }
+    }
+
+    if (
+      data.domainConversationMinDurationSeconds !== undefined ||
+      data.domainConversationMaxDurationSeconds !== undefined
+    ) {
+      const existing = await this.getRow();
+      const min =
+        data.domainConversationMinDurationSeconds ??
+        existing.domainConversationMinDurationSeconds ??
+        this.parsePositiveInt(
+          process.env.DOMAIN_CONVERSATION_MIN_DURATION_SECONDS,
+          15,
+          'DOMAIN_CONVERSATION_MIN_DURATION_SECONDS',
+        );
+      const max =
+        data.domainConversationMaxDurationSeconds ??
+        existing.domainConversationMaxDurationSeconds ??
+        this.parsePositiveInt(
+          process.env.DOMAIN_CONVERSATION_MAX_DURATION_SECONDS,
+          60,
+          'DOMAIN_CONVERSATION_MAX_DURATION_SECONDS',
+        );
+      if (min >= max) {
+        throw new BadRequestException(
+          'domainConversationMinDurationSeconds must be less than domainConversationMaxDurationSeconds',
+        );
+      }
+    }
+
+    const anyDomainConversationWeightProvided =
+      data.domainConversationQualityWeightNoise !== undefined ||
+      data.domainConversationQualityWeightQuality !== undefined ||
+      data.domainConversationQualityWeightLiveness !== undefined;
+    if (anyDomainConversationWeightProvided) {
+      const existing = await this.getRow();
+      const noise =
+        data.domainConversationQualityWeightNoise ??
+        existing.domainConversationQualityWeightNoise.toNumber();
+      const quality =
+        data.domainConversationQualityWeightQuality ??
+        existing.domainConversationQualityWeightQuality.toNumber();
+      const liveness =
+        data.domainConversationQualityWeightLiveness ??
+        existing.domainConversationQualityWeightLiveness.toNumber();
+      const sum = noise + quality + liveness;
+      if (Math.abs(sum - 100) > 0.01) {
+        throw new BadRequestException(
+          'domainConversationQualityWeightNoise/Quality/Liveness must sum to 100',
+        );
+      }
+    }
+
     if (data.smsTransactionalProviderOrder) {
       const tokens = data.smsTransactionalProviderOrder.split(',');
       const isValidPermutation =
@@ -1636,6 +1700,7 @@ export class PlatformSettingsService {
       referralInviteExpirySeconds,
       wordTrainingRecordingTimeoutSeconds,
       wordTrainingRecordingMaxTimeoutSeconds,
+      domainConversationTaskEnabled: row.domainConversationTaskEnabled,
       sessionIdleTimeoutMinutes: row.sessionIdleTimeoutMinutes,
       sessionMaxHours: row.sessionMaxHours,
       phoneVerificationRequired,

@@ -1,0 +1,186 @@
+jest.mock('@dialectiva/db', () => {
+  const actual = jest.requireActual('@dialectiva/db');
+  return {
+    ...actual,
+    computeTrainingPayout: jest.fn(() => ({ toNumber: () => 1 })),
+    creditTrainingPayoutOps: jest.fn().mockResolvedValue({
+      ops: [],
+      result: { referrerUserId: null, referralPayoutBonus: '0' },
+    }),
+    mintTrainingPayoutOps: jest.fn().mockResolvedValue({ ops: [] }),
+  };
+});
+
+import { computeDomainConversationCompositeScore, SettlementService } from './settlement.service';
+
+describe('computeDomainConversationCompositeScore', () => {
+  it('blends noise/quality/liveness by their configured weights', () => {
+    const score = computeDomainConversationCompositeScore(
+      { toNumber: () => 80 } as never,
+      { toNumber: () => 60 } as never,
+      { toNumber: () => 100 } as never,
+      { noise: 40, quality: 30, liveness: 30 },
+    );
+    // (80*40 + 60*30 + 100*30) / 100 = (3200 + 1800 + 3000) / 100 = 80
+    expect(score).toBeCloseTo(80);
+  });
+
+  it('falls back to a neutral 100 for missing scores', () => {
+    const score = computeDomainConversationCompositeScore(null, null, null, {
+      noise: 40,
+      quality: 30,
+      liveness: 30,
+    });
+    expect(score).toBe(100);
+  });
+
+  it('returns 100 when all weights are zero', () => {
+    const score = computeDomainConversationCompositeScore(
+      { toNumber: () => 10 } as never,
+      { toNumber: () => 10 } as never,
+      { toNumber: () => 10 } as never,
+      { noise: 0, quality: 0, liveness: 0 },
+    );
+    expect(score).toBe(100);
+  });
+});
+
+describe('SettlementService.settleDomainConversationRecordings', () => {
+  function buildPrismaMock(overrides: Record<string, unknown> = {}) {
+    return {
+      domainConversationRecording: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'dc-rec-1',
+            userId: 'user-1',
+            tokensSpent: { toNumber: () => 3 },
+            noiseScore: { toNumber: () => 90 },
+            qualityScore: { toNumber: () => 90 },
+            livenessScore: { toNumber: () => 90 },
+          },
+        ]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      ledgerEntry: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      wallet: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
+        create: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
+      },
+      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+      ...overrides,
+    };
+  }
+
+  function buildService(prisma: unknown) {
+    return new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+  }
+
+  it('settles a SCORED row that clears the quality floor, paying out flat tokensSpent', async () => {
+    const prisma = buildPrismaMock();
+    const service = buildService(prisma);
+
+    // @ts-expect-error -- private method under test
+    const result = await service.settleDomainConversationRecordings(
+      { noise: 40, quality: 30, liveness: 30 },
+      50,
+      0,
+      false,
+    );
+
+    expect(result.settledCount).toBe(1);
+    expect(result.totalPayout).toBe(3);
+    expect(prisma.domainConversationRecording.update).toHaveBeenCalledWith({
+      where: { id: 'dc-rec-1' },
+      data: expect.objectContaining({
+        status: 'SETTLED',
+        payoutTokenAmount: expect.anything(),
+        settledAt: expect.any(Date),
+      }),
+    });
+  });
+
+  it('refunds instead of settling when compositeScore falls below the quality floor', async () => {
+    const prisma = buildPrismaMock({
+      domainConversationRecording: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'dc-rec-2',
+            userId: 'user-1',
+            tokensSpent: { toNumber: () => 3 },
+            noiseScore: { toNumber: () => 10 },
+            qualityScore: { toNumber: () => 10 },
+            livenessScore: { toNumber: () => 10 },
+          },
+        ]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    });
+    const service = buildService(prisma);
+
+    // @ts-expect-error -- private method under test
+    const result = await service.settleDomainConversationRecordings(
+      { noise: 40, quality: 30, liveness: 30 },
+      50,
+      0,
+      false,
+    );
+
+    expect(result.settledCount).toBe(0);
+    expect(prisma.domainConversationRecording.updateMany).toHaveBeenCalledWith({
+      where: { id: 'dc-rec-2', settledAt: null },
+      data: expect.objectContaining({ refundedAt: expect.any(Date) }),
+    });
+    // No wasLocked ledger entry exists in this mock, so no wallet refund fires.
+    expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('SettlementService.refundRejectedDomainConversationRecordings', () => {
+  it('refunds locked tokens and deletes audio for a REJECTED row', async () => {
+    const prisma = {
+      domainConversationRecording: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'dc-rec-3',
+            userId: 'user-1',
+            tokensSpent: { toNumber: () => 3 },
+            audioBucket: 'bucket-1',
+            audioKey: 'key-1',
+          },
+        ]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      ledgerEntry: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'lock-1' }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      wallet: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
+      },
+      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+    };
+    const storage = { deleteObject: jest.fn().mockResolvedValue(undefined) };
+    const service = new SettlementService(prisma as never, storage as never, {
+      notifyReferralPayoutBonus: jest.fn(),
+    } as never);
+
+    // @ts-expect-error -- private method under test
+    const refundedCount = await service.refundRejectedDomainConversationRecordings();
+
+    expect(refundedCount).toBe(1);
+    expect(storage.deleteObject).toHaveBeenCalledWith('bucket-1', 'key-1');
+    expect(prisma.wallet.updateMany).toHaveBeenCalled();
+  });
+});

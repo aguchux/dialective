@@ -119,6 +119,76 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  domainConversationTaskEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(300)
+  domainConversationMinDurationSeconds?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(600)
+  domainConversationMaxDurationSeconds?: number;
+
+  @IsOptional()
+  @IsPositive()
+  domainConversationTaskTokenCost?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  domainConversationGenerationEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  domainConversationPromptsPerRun?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1000000)
+  domainConversationMaxPromptPoolSize?: number;
+
+  // 3 comma-separated tokens from {openai,deepseek,anthropic}; exact
+  // permutation validated in PlatformSettingsService.update (mirrors
+  // llmProviderOrder's pattern).
+  @IsOptional()
+  @IsString()
+  @Matches(/^(openai|deepseek|anthropic),(openai|deepseek|anthropic),(openai|deepseek|anthropic)$/)
+  domainConversationProviderOrder?: string;
+
+  // These three must sum to 100 -- validated in PlatformSettingsService.update
+  // (mirrors qualityWeightConsensus/Noise/Quality/Liveness's pattern).
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  domainConversationQualityWeightNoise?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  domainConversationQualityWeightQuality?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  domainConversationQualityWeightLiveness?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  domainConversationMinQualityScoreForPayout?: number;
+
+  @IsOptional()
+  @IsBoolean()
   adminPayoutOtpEnabled?: boolean;
 
   @IsOptional()

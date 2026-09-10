@@ -3,9 +3,7 @@
 import * as RadixDialog from '@radix-ui/react-dialog';
 import * as RadixPopover from '@radix-ui/react-popover';
 import {
-  ArrowLeft,
   ArrowRight,
-  BookOpenCheck,
   Check,
   Clock3,
   Keyboard,
@@ -93,7 +91,7 @@ function hasInsufficientBalance(err: unknown): boolean {
   return data?.insufficientBalance === true;
 }
 
-type FlowStep = 'select' | 'terms' | 'loading' | 'training' | 'unavailable';
+type FlowStep = 'terms' | 'loading' | 'training' | 'unavailable';
 type RecorderState =
   'ready' | 'recording' | 'recorded' | 'playing' | 'paused' | 'submitting' | 'submitted';
 
@@ -123,7 +121,7 @@ export function WordTrainingDialog({
   const portalContainer = usePortalContainer();
   const { status: authStatus, update: updateAuthSession } = useAuthSession();
   const lastHeartbeatAtRef = useRef(0);
-  const [step, setStep] = useState<FlowStep>('select');
+  const [step, setStep] = useState<FlowStep>('terms');
   const [accepted, setAccepted] = useState(false);
   const [session, setSession] = useState<WordTrainingSession | null>(null);
   const [assignment, setAssignment] = useState<WordTrainingAssignment | null>(null);
@@ -231,7 +229,7 @@ export function WordTrainingDialog({
     if (open) return;
     releaseMicrophone();
     clearRecording();
-    setStep('select');
+    setStep('terms');
     setAccepted(false);
     setAssignment(null);
     setResponseText('');
@@ -656,16 +654,6 @@ export function WordTrainingDialog({
             <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
               <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4 md:px-6">
                 <div className="flex min-w-0 items-center gap-3">
-                  {step === 'terms' ? (
-                    <button
-                      aria-label="Back to task selection"
-                      className="grid size-10 place-items-center rounded-lg hover:bg-surface-muted"
-                      onClick={() => setStep('select')}
-                      type="button"
-                    >
-                      <ArrowLeft className="size-5" aria-hidden="true" />
-                    </button>
-                  ) : null}
                   <div className="min-w-0">
                     <RadixDialog.Title className="truncate text-lg font-black">
                       Word training
@@ -690,31 +678,6 @@ export function WordTrainingDialog({
             </header>
 
             <main className="mx-auto grid min-h-[calc(100dvh-4rem)] w-full max-w-5xl content-center px-4 py-8 md:px-6">
-              {step === 'select' && (
-                <section className="mx-auto grid w-full max-w-xl gap-6">
-                  <div>
-                    <p className="text-sm font-extrabold text-accent">Select task</p>
-                    <h2 className="mt-1 text-3xl font-black">Choose your training task</h2>
-                  </div>
-                  <button
-                    className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-lg border-2 border-accent bg-surface p-5 text-left shadow-[0_12px_32px_rgba(88,28,135,0.10)]"
-                    onClick={() => setStep('terms')}
-                    type="button"
-                  >
-                    <span className="grid size-12 place-items-center rounded-lg bg-accent-soft text-accent">
-                      <BookOpenCheck className="size-6" aria-hidden="true" />
-                    </span>
-                    <span>
-                      <span className="block text-lg font-black">Word training</span>
-                      <span className="mt-1 block text-sm leading-relaxed text-muted">
-                        Translation, pronunciation, and reverse validation.
-                      </span>
-                    </span>
-                    <ArrowRight className="size-5 text-accent" aria-hidden="true" />
-                  </button>
-                </section>
-              )}
-
               {step === 'terms' && (
                 <section className="mx-auto grid w-full max-w-2xl gap-6 rounded-lg border border-line bg-surface p-5 md:p-7">
                   <div>

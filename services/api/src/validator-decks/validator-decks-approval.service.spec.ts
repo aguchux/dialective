@@ -342,7 +342,7 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
       prisma.validatorDeckItem.findUnique.mockResolvedValue(null);
       prisma.validatorDeckItem.create.mockResolvedValue({ id: 'item-1' });
 
-      await service.addItem('deck-1', 'owner-1', 'VALIDATOR', 'rec-1');
+      await service.addItem('deck-1', 'owner-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1');
       expect(prisma.validatorDeckAuditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ action: 'ITEM_ADDED' }) }),
       );
@@ -352,7 +352,7 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
       prisma.validatorDeck.findUnique.mockResolvedValue(baseDeck({ status: 'DRAFT' }));
       prisma.validatorDeckItem.findUnique.mockResolvedValue({ id: 'item-1' });
 
-      await service.removeItem('deck-1', 'owner-1', 'VALIDATOR', 'rec-1');
+      await service.removeItem('deck-1', 'owner-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1');
       expect(prisma.validatorDeckAuditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ action: 'ITEM_REMOVED' }) }),
       );

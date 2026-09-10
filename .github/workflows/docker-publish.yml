@@ -10,6 +10,7 @@ on:
       - "services/settlement-job/**"
       - "services/audio-retention-job/**"
       - "services/word-generator-job/**"
+      - "services/domain-conversation-prompt-job/**"
       - "services/fx-rate-job/**"
       - "services/vosk-worker/**"
       - "services/whisper-worker/**"
@@ -58,6 +59,9 @@ jobs:
           - service: word-generator-job
             context: .
             image: word-generator-job
+          - service: domain-conversation-prompt-job
+            context: .
+            image: domain-conversation-prompt-job
           - service: fx-rate-job
             context: .
             image: fx-rate-job

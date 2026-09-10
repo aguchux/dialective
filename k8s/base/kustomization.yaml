@@ -35,6 +35,7 @@ resources:
   - isvc-scorer-hpa.yaml
   - settlement-cronjob.yaml
   - word-generator-cronjob.yaml
+  - domain-conversation-prompt-cronjob.yaml
   - fx-rate-cronjob.yaml
   - withdrawal-reconcile-cronjob.yaml
   - audio-retention-cronjob.yaml

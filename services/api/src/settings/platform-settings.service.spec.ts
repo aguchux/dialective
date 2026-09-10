@@ -252,6 +252,11 @@ describe('PlatformSettingsService wordTrainingEnabled / sentenceTrainingEnabled 
       validatorL2ApprovalBonusPercent: { toString: () => '10' },
       validatorL3ApprovalBonusPercent: { toString: () => '15' },
       validatorReassignmentPenaltyPercent: { toString: () => '0' },
+      domainConversationQualityWeightNoise: { toString: () => '40' },
+      domainConversationQualityWeightQuality: { toString: () => '30' },
+      domainConversationQualityWeightLiveness: { toString: () => '30' },
+      domainConversationMinQualityScoreForPayout: { toString: () => '50' },
+      domainConversationTaskTokenCost: null,
     });
 
     await expect(
@@ -284,6 +289,11 @@ describe('PlatformSettingsService wordTrainingEnabled / sentenceTrainingEnabled 
       validatorL2ApprovalBonusPercent: { toString: () => '10' },
       validatorL3ApprovalBonusPercent: { toString: () => '15' },
       validatorReassignmentPenaltyPercent: { toString: () => '0' },
+      domainConversationQualityWeightNoise: { toString: () => '40' },
+      domainConversationQualityWeightQuality: { toString: () => '30' },
+      domainConversationQualityWeightLiveness: { toString: () => '30' },
+      domainConversationMinQualityScoreForPayout: { toString: () => '50' },
+      domainConversationTaskTokenCost: null,
     });
 
     await expect(service.update({ wordTrainingEnabled: false })).resolves.toMatchObject({
@@ -315,6 +325,20 @@ describe('PlatformSettingsService session idle/absolute timeout settings', () =>
     const result = await service.getPublicClientSettings();
     expect(result.sessionIdleTimeoutMinutes).toBe(45);
     expect(result.sessionMaxHours).toBe(8);
+  });
+
+  it('getPublicClientSettings surfaces domainConversationTaskEnabled so the trainer dashboard can show/hide the task card', async () => {
+    const { service } = setup({
+      domainConversationTaskEnabled: true,
+      manualPhoneVerificationFeeTokens: { toNumber: () => 0 },
+      supportChatMode: 'TAWK',
+      kycMinWithdrawalTokens: { toNumber: () => 0 },
+      testimonyTextRewardTokens: { toString: () => '0' },
+      testimonyVideoRewardTokens: { toString: () => '0' },
+    });
+
+    const result = await service.getPublicClientSettings();
+    expect(result.domainConversationTaskEnabled).toBe(true);
   });
 
   it('update rejects sessionIdleTimeoutMinutes below 1', async () => {
@@ -356,10 +380,82 @@ describe('PlatformSettingsService session idle/absolute timeout settings', () =>
       validatorL2ApprovalBonusPercent: { toString: () => '10' },
       validatorL3ApprovalBonusPercent: { toString: () => '15' },
       validatorReassignmentPenaltyPercent: { toString: () => '0' },
+      domainConversationQualityWeightNoise: { toString: () => '40' },
+      domainConversationQualityWeightQuality: { toString: () => '30' },
+      domainConversationQualityWeightLiveness: { toString: () => '30' },
+      domainConversationMinQualityScoreForPayout: { toString: () => '50' },
+      domainConversationTaskTokenCost: null,
     });
 
     await expect(
       service.update({ sessionIdleTimeoutMinutes: 15, sessionMaxHours: 8 }),
     ).resolves.toMatchObject({ sessionIdleTimeoutMinutes: 15, sessionMaxHours: 8 });
+  });
+});
+
+describe('PlatformSettingsService Domain Conversation settings', () => {
+  it('getDomainConversationMinDurationSeconds/MaxDurationSeconds reflect the row, falling back to defaults when null', async () => {
+    const { service } = setup({
+      domainConversationMinDurationSeconds: null,
+      domainConversationMaxDurationSeconds: null,
+    });
+    await expect(service.getDomainConversationMinDurationSeconds()).resolves.toBe(15);
+    await expect(service.getDomainConversationMaxDurationSeconds()).resolves.toBe(60);
+  });
+
+  it('getDomainConversationMinDurationSeconds/MaxDurationSeconds reflect an admin override', async () => {
+    const { service } = setup({
+      domainConversationMinDurationSeconds: 20,
+      domainConversationMaxDurationSeconds: 90,
+    });
+    await expect(service.getDomainConversationMinDurationSeconds()).resolves.toBe(20);
+    await expect(service.getDomainConversationMaxDurationSeconds()).resolves.toBe(90);
+  });
+
+  it('getDomainConversationQualityWeights returns the three weights as numbers', async () => {
+    const { service } = setup({
+      domainConversationQualityWeightNoise: { toNumber: () => 40 },
+      domainConversationQualityWeightQuality: { toNumber: () => 30 },
+      domainConversationQualityWeightLiveness: { toNumber: () => 30 },
+    });
+    await expect(service.getDomainConversationQualityWeights()).resolves.toEqual({
+      noise: 40,
+      quality: 30,
+      liveness: 30,
+    });
+  });
+
+  it('update rejects domainConversationMinDurationSeconds >= domainConversationMaxDurationSeconds', async () => {
+    const { service } = setup({
+      domainConversationMinDurationSeconds: 15,
+      domainConversationMaxDurationSeconds: 60,
+    });
+    await expect(
+      service.update({ domainConversationMinDurationSeconds: 60, domainConversationMaxDurationSeconds: 60 }),
+    ).rejects.toThrow(
+      'domainConversationMinDurationSeconds must be less than domainConversationMaxDurationSeconds',
+    );
+  });
+
+  it('update rejects a domainConversationQualityWeight* trio that does not sum to 100', async () => {
+    const { service } = setup({});
+    await expect(
+      service.update({
+        domainConversationQualityWeightNoise: 40,
+        domainConversationQualityWeightQuality: 40,
+        domainConversationQualityWeightLiveness: 40,
+      }),
+    ).rejects.toThrow(
+      'domainConversationQualityWeightNoise/Quality/Liveness must sum to 100',
+    );
+  });
+
+  it('update rejects an invalid domainConversationProviderOrder', async () => {
+    const { service } = setup({});
+    await expect(
+      service.update({ domainConversationProviderOrder: 'openai,openai,anthropic' }),
+    ).rejects.toThrow(
+      'domainConversationProviderOrder must list openai, deepseek, and anthropic exactly once each',
+    );
   });
 });

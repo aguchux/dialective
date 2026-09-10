@@ -26,6 +26,7 @@ import {
   Headphones,
   Megaphone,
   MessageSquareQuote,
+  MessagesSquare,
   Mic2,
   Plus,
   Play,
@@ -52,6 +53,8 @@ import {
 } from '@/lib/format';
 import { resolveDialectName, useDialectName } from '@/lib/dialect-name';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
+import { TaskPickerDialog } from '@/components/trainer/TaskPickerDialog';
+import { DomainConversationDialog } from '@/components/trainer/DomainConversationDialog';
 import { TestimonyDialog } from '@/components/trainer/TestimonyDialog';
 import { MarketView } from '@/components/p2p/MarketView';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -189,7 +192,9 @@ export function TrainerDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [trainingOpen, setTrainingOpen] = useState(false);
+  const [domainConversationOpen, setDomainConversationOpen] = useState(false);
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
   const [requiredCoursesOpen, setRequiredCoursesOpen] = useState(false);
   const [midSessionRequiredCourses, setMidSessionRequiredCourses] = useState<
@@ -239,7 +244,7 @@ export function TrainerDashboard() {
       setLowBalanceOpen(true);
       return;
     }
-    setTrainingOpen(true);
+    setTaskPickerOpen(true);
   }
 
 
@@ -342,6 +347,7 @@ export function TrainerDashboard() {
               activeView={activeView}
               data={data}
               dialectTag={session.user.dialectTag}
+              domainConversationEnabled={!!publicSettings?.domainConversationTaskEnabled}
               email={session.user.email ?? ''}
               refreshing={isFetching}
               onStartTask={handleStartTask}
@@ -351,11 +357,33 @@ export function TrainerDashboard() {
         </main>
 
         <MobileNavigation activeView={activeView} />
+        <TaskPickerDialog
+          domainConversationEnabled={!!publicSettings?.domainConversationTaskEnabled}
+          onOpenChange={setTaskPickerOpen}
+          onSelectDomainConversation={() => {
+            setTaskPickerOpen(false);
+            setDomainConversationOpen(true);
+          }}
+          onSelectWordTraining={() => {
+            setTaskPickerOpen(false);
+            setTrainingOpen(true);
+          }}
+          open={taskPickerOpen}
+        />
         <WordTrainingDialog
           onOpenChange={setTrainingOpen}
           open={trainingOpen}
           recordingTimeoutSeconds={data?.recordingRoundTimeoutSeconds}
           recordingMaxTimeoutSeconds={data?.recordingRoundMaxTimeoutSeconds}
+          onRequiredCourses={(courses) => {
+            setMidSessionRequiredCourses(courses);
+            setRequiredCoursesOpen(true);
+          }}
+          onInsufficientBalance={() => setLowBalanceOpen(true)}
+        />
+        <DomainConversationDialog
+          onOpenChange={setDomainConversationOpen}
+          open={domainConversationOpen}
           onRequiredCourses={(courses) => {
             setMidSessionRequiredCourses(courses);
             setRequiredCoursesOpen(true);
@@ -725,6 +753,7 @@ function DashboardViewContent({
   activeView,
   data,
   dialectTag,
+  domainConversationEnabled,
   email,
   refreshing,
   onStartTask,
@@ -733,6 +762,7 @@ function DashboardViewContent({
   activeView: DashboardView;
   data: TrainerDashboardSummary;
   dialectTag: string | null;
+  domainConversationEnabled: boolean;
   email: string;
   refreshing: boolean;
   onStartTask: () => void;
@@ -740,7 +770,13 @@ function DashboardViewContent({
 }) {
   if (activeView === 'earnings') return <EarningsView data={data} refreshing={refreshing} />;
   if (activeView === 'training')
-    return <TrainingView dialectTag={dialectTag} onStartTask={onStartTask} />;
+    return (
+      <TrainingView
+        dialectTag={dialectTag}
+        domainConversationEnabled={domainConversationEnabled}
+        onStartTask={onStartTask}
+      />
+    );
   if (activeView === 'market') return <MarketView />;
   if (activeView === 'referrals') return <MarketingView data={data} email={email} />;
   if (activeView === 'campaigns') return <CampaignsView referralCode={data.referrals.code} />;
@@ -1330,9 +1366,11 @@ type TrainingTab = 'training' | 'tasks';
 
 function TrainingView({
   dialectTag,
+  domainConversationEnabled,
   onStartTask,
 }: {
   dialectTag: string | null;
+  domainConversationEnabled: boolean;
   onStartTask: () => void;
 }) {
   const [tab, setTab] = useState<TrainingTab>('tasks');
@@ -1410,6 +1448,40 @@ function TrainingView({
               </button>
             </div>
           </article>
+          {domainConversationEnabled && (
+            <article className={`${cardClass} grid min-h-64 content-between gap-6 p-5 md:p-6`}>
+              <div>
+                <div className="mb-5 flex items-start justify-between gap-3">
+                  <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent">
+                    <MessagesSquare className="size-5" aria-hidden="true" />
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    <span className="size-1.5 rounded-full bg-emerald-500" /> Available
+                  </span>
+                </div>
+                <h3 className="text-xl font-black">Domain Conversation</h3>
+                <p className="mt-2 leading-relaxed text-muted">
+                  Record yourself conversing in an everyday scenario -- market, office, school, and
+                  more.
+                </p>
+              </div>
+              <div>
+                <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
+                  <span className="rounded-md bg-surface-muted px-2 py-1">Free-form voice</span>
+                  <span className="rounded-md bg-surface-muted px-2 py-1">
+                    {dialectName ?? 'Your dialect'}
+                  </span>
+                </div>
+                <button
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto"
+                  onClick={onStartTask}
+                  type="button"
+                >
+                  Start task <ArrowRight className="size-4" aria-hidden="true" />
+                </button>
+              </div>
+            </article>
+          )}
         </div>
       ) : (
         <MyTasksView />

@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { Role } from '@dialectiva/db';
+import { Role, ValidatorRecordKind } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -48,7 +48,13 @@ export class ValidatorDecksController {
 
   @Post(':id/items')
   addItem(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() dto: AddValidatorDeckItemDto) {
-    return this.decks.addItem(id, req.user.sub, req.user.role, dto.recordingId);
+    return this.decks.addItem(
+      id,
+      req.user.sub,
+      req.user.role,
+      dto.recordKind ?? ValidatorRecordKind.WORD_RECORDING,
+      dto.recordingId,
+    );
   }
 
   @Delete(':id/items/:recordingId')
@@ -56,8 +62,15 @@ export class ValidatorDecksController {
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
     @Param('recordingId') recordingId: string,
+    @Query('recordKind') recordKind?: ValidatorRecordKind,
   ) {
-    return this.decks.removeItem(id, req.user.sub, req.user.role, recordingId);
+    return this.decks.removeItem(
+      id,
+      req.user.sub,
+      req.user.role,
+      recordKind ?? ValidatorRecordKind.WORD_RECORDING,
+      recordingId,
+    );
   }
 
   @Post(':id/items/:recordingId/score')
@@ -66,8 +79,16 @@ export class ValidatorDecksController {
     @Param('id') id: string,
     @Param('recordingId') recordingId: string,
     @Body() dto: ScoreValidatorDeckItemDto,
+    @Query('recordKind') recordKind?: ValidatorRecordKind,
   ) {
-    return this.decks.scoreItem(id, req.user.sub, req.user.role, recordingId, dto);
+    return this.decks.scoreItem(
+      id,
+      req.user.sub,
+      req.user.role,
+      recordKind ?? ValidatorRecordKind.WORD_RECORDING,
+      recordingId,
+      dto,
+    );
   }
 
   @Patch(':id/items/:recordingId/transcript')
@@ -76,8 +97,16 @@ export class ValidatorDecksController {
     @Param('id') id: string,
     @Param('recordingId') recordingId: string,
     @Body() dto: UpdateValidatorTranscriptDto,
+    @Query('recordKind') recordKind?: ValidatorRecordKind,
   ) {
-    return this.decks.updateTranscript(id, req.user.sub, req.user.role, recordingId, dto);
+    return this.decks.updateTranscript(
+      id,
+      req.user.sub,
+      req.user.role,
+      recordKind ?? ValidatorRecordKind.WORD_RECORDING,
+      recordingId,
+      dto,
+    );
   }
 
   @Post(':id/items/:recordingId/flag')
@@ -86,8 +115,16 @@ export class ValidatorDecksController {
     @Param('id') id: string,
     @Param('recordingId') recordingId: string,
     @Body() dto: FlagValidatorDeckItemDto,
+    @Query('recordKind') recordKind?: ValidatorRecordKind,
   ) {
-    return this.decks.flagItem(id, req.user.sub, req.user.role, recordingId, dto);
+    return this.decks.flagItem(
+      id,
+      req.user.sub,
+      req.user.role,
+      recordKind ?? ValidatorRecordKind.WORD_RECORDING,
+      recordingId,
+      dto,
+    );
   }
 
   @Post(':id/submit')

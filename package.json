@@ -8,7 +8,8 @@
     "services/isvc-scorer",
     "services/fx-rate-job",
     "services/settlement-job",
-    "services/word-generator-job"
+    "services/word-generator-job",
+    "services/domain-conversation-prompt-job"
   ],
   "scripts": {
     "format": "npm run format:node && npm run format:python",

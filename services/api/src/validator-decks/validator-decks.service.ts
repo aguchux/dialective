@@ -15,6 +15,7 @@ import {
   ValidatorDeckStatus,
   ValidatorItemStatus,
   ValidatorLevel,
+  ValidatorRecordKind,
 } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
@@ -179,15 +180,31 @@ export class ValidatorDecksService {
     });
   }
 
-  async addItem(deckId: string, callerUserId: string, callerRole: string, recordingId: string) {
+  /** Looks up a recording by (recordKind, id) against whichever table recordKind points at -- see ValidatorDeckItem.recordKind's doc comment. */
+  private async findRecordingByKind(recordKind: ValidatorRecordKind, recordingId: string) {
+    return recordKind === ValidatorRecordKind.WORD_RECORDING
+      ? this.prisma.wordRecording.findUnique({ where: { id: recordingId } })
+      : this.prisma.domainConversationRecording.findUnique({ where: { id: recordingId } });
+  }
+
+  async addItem(
+    deckId: string,
+    callerUserId: string,
+    callerRole: string,
+    recordKind: ValidatorRecordKind,
+    recordingId: string,
+  ) {
     const deck = await this.assertEditable(deckId, callerUserId, callerRole);
 
-    const recording = await this.prisma.wordRecording.findUnique({ where: { id: recordingId } });
+    const recording = await this.findRecordingByKind(recordKind, recordingId);
     if (!recording) throw new NotFoundException('Recording not found');
 
     // Deck-level dialect scoping (nullable only for decks predating this
     // constraint): once a deck has a dialect/subdialect, only matching
-    // recordings may join it, keeping the deck coherent for publish.
+    // recordings may join it, keeping the deck coherent for publish. Both
+    // WordRecording and DomainConversationRecording carry dialectTag/
+    // dialectVariantId with identical semantics, so this check applies
+    // verbatim regardless of recordKind.
     if (deck.dialectId) {
       const deckDialect = await this.prisma.dialect.findUnique({ where: { id: deck.dialectId } });
       if (!deckDialect || recording.dialectTag !== deckDialect.tag) {
@@ -199,7 +216,7 @@ export class ValidatorDecksService {
     }
 
     const existing = await this.prisma.validatorDeckItem.findUnique({
-      where: { deckId_recordingId: { deckId: deck.id, recordingId } },
+      where: { deckId_recordKind_recordingId: { deckId: deck.id, recordKind, recordingId } },
     });
     if (existing) throw new ConflictException('This recording is already in the deck');
 
@@ -213,24 +230,30 @@ export class ValidatorDecksService {
 
     return this.prisma.$transaction(async (tx) => {
       const item = await tx.validatorDeckItem.create({
-        data: { deckId: deck.id, recordingId, addedByUserId: callerUserId },
+        data: { deckId: deck.id, recordKind, recordingId, addedByUserId: callerUserId },
       });
       await tx.validatorDeckAuditLog.create({
         data: {
           deckId: deck.id,
           action: ValidatorDeckAuditAction.ITEM_ADDED,
           actorUserId: callerUserId,
-          metadata: { recordingId },
+          metadata: { recordKind, recordingId },
         },
       });
       return item;
     });
   }
 
-  async removeItem(deckId: string, callerUserId: string, callerRole: string, recordingId: string) {
+  async removeItem(
+    deckId: string,
+    callerUserId: string,
+    callerRole: string,
+    recordKind: ValidatorRecordKind,
+    recordingId: string,
+  ) {
     const deck = await this.assertEditable(deckId, callerUserId, callerRole);
     const item = await this.prisma.validatorDeckItem.findUnique({
-      where: { deckId_recordingId: { deckId: deck.id, recordingId } },
+      where: { deckId_recordKind_recordingId: { deckId: deck.id, recordKind, recordingId } },
     });
     if (!item) throw new NotFoundException('This recording is not in the deck');
     await this.prisma.$transaction(async (tx) => {
@@ -240,7 +263,7 @@ export class ValidatorDecksService {
           deckId: deck.id,
           action: ValidatorDeckAuditAction.ITEM_REMOVED,
           actorUserId: callerUserId,
-          metadata: { recordingId },
+          metadata: { recordKind, recordingId },
         },
       });
     });
@@ -250,12 +273,13 @@ export class ValidatorDecksService {
     deckId: string,
     callerUserId: string,
     callerRole: string,
+    recordKind: ValidatorRecordKind,
     recordingId: string,
     dto: ScoreValidatorDeckItemDto,
   ) {
     const deck = await this.assertEditable(deckId, callerUserId, callerRole);
     const item = await this.prisma.validatorDeckItem.findUnique({
-      where: { deckId_recordingId: { deckId: deck.id, recordingId } },
+      where: { deckId_recordKind_recordingId: { deckId: deck.id, recordKind, recordingId } },
     });
     if (!item) throw new NotFoundException('This recording is not in the deck');
 
@@ -282,12 +306,13 @@ export class ValidatorDecksService {
     deckId: string,
     callerUserId: string,
     callerRole: string,
+    recordKind: ValidatorRecordKind,
     recordingId: string,
     dto: UpdateValidatorTranscriptDto,
   ) {
     const deck = await this.assertEditable(deckId, callerUserId, callerRole);
     const item = await this.prisma.validatorDeckItem.findUnique({
-      where: { deckId_recordingId: { deckId: deck.id, recordingId } },
+      where: { deckId_recordKind_recordingId: { deckId: deck.id, recordKind, recordingId } },
     });
     if (!item) throw new NotFoundException('This recording is not in the deck');
 
@@ -313,12 +338,13 @@ export class ValidatorDecksService {
     deckId: string,
     callerUserId: string,
     callerRole: string,
+    recordKind: ValidatorRecordKind,
     recordingId: string,
     dto: FlagValidatorDeckItemDto,
   ) {
     const deck = await this.assertEditable(deckId, callerUserId, callerRole);
     const item = await this.prisma.validatorDeckItem.findUnique({
-      where: { deckId_recordingId: { deckId: deck.id, recordingId } },
+      where: { deckId_recordKind_recordingId: { deckId: deck.id, recordKind, recordingId } },
     });
     if (!item) throw new NotFoundException('This recording is not in the deck');
 
