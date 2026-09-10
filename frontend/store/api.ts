@@ -1854,6 +1854,21 @@ export interface DomainConversationPrompt {
   maxDurationSeconds: number;
 }
 
+export interface AsrTranscriptionRequest {
+  id: string;
+  userId: string;
+  dialectId: string;
+  status: 'PENDING' | 'ACKNOWLEDGED' | 'FULFILLED';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AsrTranscriptionRequestAdminRow extends AsrTranscriptionRequest {
+  user: { id: string; email: string; firstName: string | null; lastName: string | null };
+  dialect: { id: string; tag: string; name: string };
+  acknowledgedByAdmin: { id: string; email: string } | null;
+}
+
 export interface DomainConversationRecordingUpload {
   uploadUrl: string;
   key: string;
@@ -2439,6 +2454,8 @@ export interface ApiErrorShape {
   requiredCourses?: IncompleteRequiredCourse[];
   qracRequired?: boolean;
   qracChecklist?: string[];
+  asrUnavailable?: boolean;
+  dialectTag?: string;
 }
 
 function normalizeErrorMessage(error: unknown, fallback: string): string {
@@ -2522,6 +2539,7 @@ export const dialectivaApi = createApi({
     'RequiredCourses',
     'Submissions',
     'DomainConversationSubmissions',
+    'AsrTranscriptionRequests',
     'DomainPrompts',
     'AdminWords',
     'AdminSentences',
@@ -3028,6 +3046,32 @@ export const dialectivaApi = createApi({
     }),
     getNextDomainConversationPrompt: builder.query<DomainConversationPrompt, string>({
       query: (sessionId) => `/domain-conversations/sessions/${sessionId}/next`,
+    }),
+    getMyAsrTranscriptionRequest: builder.query<AsrTranscriptionRequest | null, string>({
+      query: (dialectTag) => ({ url: '/asr-transcription-requests/mine', params: { dialectTag } }),
+      providesTags: ['AsrTranscriptionRequests'],
+    }),
+    createAsrTranscriptionRequest: builder.mutation<AsrTranscriptionRequest, { dialectTag: string }>({
+      query: (body) => ({ url: '/asr-transcription-requests', method: 'POST', body }),
+      invalidatesTags: ['AsrTranscriptionRequests'],
+    }),
+    getAdminAsrTranscriptionRequests: builder.query<
+      AsrTranscriptionRequestAdminRow[],
+      { status?: AsrTranscriptionRequest['status'] } | void
+    >({
+      query: (params) => ({ url: '/asr-transcription-requests/admin', params: params ?? undefined }),
+      providesTags: ['AsrTranscriptionRequests'],
+    }),
+    setAsrTranscriptionRequestStatus: builder.mutation<
+      AsrTranscriptionRequest,
+      { id: string; status: AsrTranscriptionRequest['status'] }
+    >({
+      query: ({ id, status }) => ({
+        url: `/asr-transcription-requests/admin/${id}/status`,
+        method: 'PATCH',
+        body: { status },
+      }),
+      invalidatesTags: ['AsrTranscriptionRequests'],
     }),
     createDomainConversationRecordingUpload: builder.mutation<
       DomainConversationRecordingUpload,
@@ -4871,6 +4915,11 @@ export const {
   useUpdateDomainPromptAdminMutation,
   useSetDomainPromptDisabledAdminMutation,
   useDeleteDomainPromptAdminMutation,
+  useGetMyAsrTranscriptionRequestQuery,
+  useLazyGetMyAsrTranscriptionRequestQuery,
+  useCreateAsrTranscriptionRequestMutation,
+  useGetAdminAsrTranscriptionRequestsQuery,
+  useSetAsrTranscriptionRequestStatusMutation,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
   useRequestFlutterwaveDepositOtpMutation,

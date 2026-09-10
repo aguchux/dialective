@@ -33,7 +33,9 @@ describe('WordsService', () => {
   const streams = { publish: jest.fn() };
   const llm = { normalize: jest.fn() };
   const courses = { getIncompleteRequiredCourses: jest.fn().mockResolvedValue([]) };
-  const asrRegistry = { resolve: jest.fn().mockReturnValue(undefined) };
+  const asrRegistry = {
+    resolve: jest.fn().mockReturnValue({ engine: 'vosk', stream: 'asr-jobs-vosk' }),
+  };
   const mail = { sendAuditHoldStartedEmail: jest.fn().mockResolvedValue(undefined) };
   let prisma: any;
   let service: WordsService;
@@ -1178,6 +1180,25 @@ describe('WordsService', () => {
           data: expect.objectContaining({ validationScore: null, status: 'PENDING' }),
         }),
       );
+    });
+  });
+
+  describe('ASR-availability gate in nextAssignment', () => {
+    it('blocks with asrUnavailable when the trainer dialect has no asr-registry.yaml entry', async () => {
+      asrRegistry.resolve.mockReturnValueOnce(undefined);
+
+      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toMatchObject({
+        response: { asrUnavailable: true, dialectTag: 'ig' },
+      });
+    });
+
+    it('does not block when the trainer dialect has a registered ASR entry', async () => {
+      prisma.wordTrainingAssignment.create.mockResolvedValue({
+        id: 'assignment-1',
+        direction: 'ENGLISH_TO_DIALECT',
+      });
+
+      await expect(service.nextAssignment(trainer.id, session.id)).resolves.toBeDefined();
     });
   });
 

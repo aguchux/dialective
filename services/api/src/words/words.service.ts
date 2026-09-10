@@ -162,6 +162,8 @@ export class WordsService {
     }
 
     const trainer = await this.getTrainer(userId);
+    this.assertAsrAvailable(trainer.dialect!.tag);
+
     const [taskTokenCost, wallet] = await Promise.all([
       this.settings.getTaskTokenCost(),
       this.prisma.wallet.upsert({
@@ -864,6 +866,25 @@ export class WordsService {
     )
       throw new UnprocessableEntityException('Complete dialect onboarding before training');
     return trainer;
+  }
+
+  /**
+   * models/asr-registry.yaml is the single source of truth for which
+   * dialects have a working ASR checkpoint (see AsrRegistryService). A
+   * dialect with no entry can't be scored, so training tasks are blocked
+   * entirely rather than silently accepting unscoreable recordings -- the
+   * trainer is prompted (frontend) to send an AsrTranscriptionRequest
+   * instead. Structured ForbiddenException, same convention as the
+   * qracRequired/requiredCourses gates above.
+   */
+  private assertAsrAvailable(dialectTag: string): void {
+    if (!this.asrRegistry.resolve(dialectTag)) {
+      throw new ForbiddenException({
+        message: 'Transcription is not yet available for your dialect.',
+        asrUnavailable: true,
+        dialectTag,
+      });
+    }
   }
 
   private async getOwnedSession(userId: string, sessionId: string) {

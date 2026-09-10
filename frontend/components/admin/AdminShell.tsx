@@ -52,6 +52,7 @@ const navGroups: NavGroup[] = [
       { href: '/admin/geo', label: 'Coverage', icon: GeoIcon },
       { href: '/admin/words', label: 'Words', icon: WordsIcon },
       { href: '/admin/domain-prompts', label: 'Domain Prompts', icon: WordsIcon },
+      { href: '/admin/asr-requests', label: 'Transcription Requests', icon: WordsIcon },
       { href: '/admin/recordings', label: 'Recordings', icon: RecordingsIcon },
       { href: '/admin/validator-decks', label: 'Validator Decks', icon: SettlementIcon },
       { href: '/admin/settlement', label: 'Unsettled Tasks', icon: SettlementIcon },

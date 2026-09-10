@@ -199,6 +199,8 @@ model User {
   otpCodes                         OtpCode[]
   manualPhoneVerificationRequests  ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationUser")
   manualPhoneVerificationsReviewed ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationAdmin")
+  asrTranscriptionRequests         AsrTranscriptionRequest[] @relation("AsrTranscriptionRequestUser")
+  asrTranscriptionRequestsAcknowledged AsrTranscriptionRequest[] @relation("AsrTranscriptionRequestAdmin")
   wallet                           Wallet?
   trainingPayoutClaims             TrainingPayoutClaim[]
   blogPosts                        BlogPost[]
@@ -515,9 +517,42 @@ model Dialect {
   variants             DialectVariant[]
   validatorAssignments ValidatorDialectAssignment[]
   validatorDecks       ValidatorDeck[]
+  asrTranscriptionRequests AsrTranscriptionRequest[]
 
   @@index([countryId])
   @@map("dialects")
+}
+
+enum AsrTranscriptionRequestStatus {
+  PENDING
+  ACKNOWLEDGED
+  FULFILLED
+}
+
+/// A trainer's request to have ASR transcription enabled for their dialect
+/// (models/asr-registry.yaml has no entry for it, so WordsService/
+/// DomainConversationsService block that dialect's training tasks -- see
+/// AsrRegistryService.resolve). One open request per (user, dialect):
+/// marking a request ACKNOWLEDGED/FULFILLED here is TRACKING ONLY, it does
+/// NOT unlock the dialect -- that still requires a real asr-registry.yaml
+/// entry + a real checkpoint, the same manual process used for Kinyarwanda.
+model AsrTranscriptionRequest {
+  id                String                         @id @default(uuid())
+  userId            String
+  user              User                           @relation("AsrTranscriptionRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  dialectId         String
+  dialect           Dialect                        @relation(fields: [dialectId], references: [id], onDelete: Cascade)
+  status            AsrTranscriptionRequestStatus  @default(PENDING)
+  acknowledgedByAdminId String?
+  acknowledgedByAdmin   User?                      @relation("AsrTranscriptionRequestAdmin", fields: [acknowledgedByAdminId], references: [id], onDelete: SetNull)
+  acknowledgedAt    DateTime?
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+
+  @@unique([userId, dialectId])
+  @@index([status, createdAt])
+  @@index([dialectId, status])
+  @@map("asr_transcription_requests")
 }
 
 /// Admin-managed grant of "this validator may browse recordings for and

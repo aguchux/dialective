@@ -91,6 +91,14 @@ function hasInsufficientBalance(err: unknown): boolean {
   return data?.insufficientBalance === true;
 }
 
+// Thrown by WordsService.nextAssignment when the trainer's dialect has no
+// models/asr-registry.yaml entry (see AsrRegistryService.resolve) --
+// distinct from NO_WORDS_AVAILABLE, which means the pool is just empty.
+function extractAsrUnavailable(err: unknown): string | null {
+  const data = (err as { data?: ApiErrorShape } | undefined)?.data;
+  return data?.asrUnavailable ? (data.dialectTag ?? '') : null;
+}
+
 type FlowStep = 'terms' | 'loading' | 'training' | 'unavailable';
 type RecorderState =
   'ready' | 'recording' | 'recorded' | 'playing' | 'paused' | 'submitting' | 'submitted';
@@ -102,6 +110,7 @@ export function WordTrainingDialog({
   recordingMaxTimeoutSeconds,
   onRequiredCourses,
   onInsufficientBalance,
+  onAsrUnavailable,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -117,6 +126,7 @@ export function WordTrainingDialog({
    */
   onRequiredCourses?: (courses: { id: string; slug: string; title: string }[]) => void;
   onInsufficientBalance?: () => void;
+  onAsrUnavailable?: (dialectTag: string) => void;
 }) {
   const portalContainer = usePortalContainer();
   const { status: authStatus, update: updateAuthSession } = useAuthSession();
@@ -377,6 +387,12 @@ export function WordTrainingDialog({
         onInsufficientBalance();
         return;
       }
+      const asrDialectTag = extractAsrUnavailable(err);
+      if (asrDialectTag !== null && onAsrUnavailable) {
+        onOpenChange(false);
+        onAsrUnavailable(asrDialectTag);
+        return;
+      }
       setError(normalizeErrorMessage(err, 'Unable to start a training session.'));
       setStep('terms');
     }
@@ -428,6 +444,14 @@ export function WordTrainingDialog({
         setSession(null);
         onOpenChange(false);
         onInsufficientBalance();
+        return;
+      }
+      const asrDialectTag = extractAsrUnavailable(err);
+      if (asrDialectTag !== null && onAsrUnavailable) {
+        void endSession(session.sessionId);
+        setSession(null);
+        onOpenChange(false);
+        onAsrUnavailable(asrDialectTag);
         return;
       }
       setError(normalizeErrorMessage(err, 'Unable to load the next word.'));
