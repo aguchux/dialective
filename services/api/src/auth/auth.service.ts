@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -12,6 +13,7 @@ import { randomBytes, randomUUID } from 'crypto';
 import {
   AuthProvider,
   creditStartupBonus,
+  Gender,
   LedgerEntryType,
   ManualPhoneVerificationStatus,
   mintStartupBonusOps,
@@ -35,6 +37,7 @@ import { StorageService } from '../storage/storage.service';
 import { TokenomicsService } from '../tokenomics/tokenomics.service';
 import { MarketingService } from '../marketing/marketing.service';
 import { createSmslive247Otp, verifySmslive247Otp } from '../sms/smslive247-native-otp';
+import { SmsService } from '../sms/sms.service';
 import { generateOpaqueToken, hashToken } from './token.util';
 import { AuthMaintenanceException } from './auth-maintenance.exception';
 import { signAccessToken } from './jwt.util';
@@ -71,6 +74,7 @@ export interface PublicUser {
   id: string;
   firstName: string | null;
   lastName: string | null;
+  gender: Gender | null;
   email: string;
   role: Role;
   status: UserStatus;
@@ -136,6 +140,7 @@ function toPublicUser(user: UserWithDialect): PublicUser {
     id: user.id,
     firstName: user.firstName,
     lastName: user.lastName,
+    gender: user.gender,
     email: user.email,
     role: user.role,
     status: user.status,
@@ -210,6 +215,7 @@ export class AuthService {
     private readonly storage: StorageService,
     private readonly tokenomics: TokenomicsService,
     private readonly marketing: MarketingService,
+    @Optional() private readonly sms?: SmsService,
   ) {}
 
   /**
@@ -891,6 +897,7 @@ export class AuthService {
       dialectVariantId?: string | null;
       firstName?: string;
       lastName?: string;
+      gender?: Gender;
       emailNotificationsEnabled?: boolean;
       smsNotificationsEnabled?: boolean;
       marketingNotificationsEnabled?: boolean;
@@ -905,6 +912,7 @@ export class AuthService {
       dialectVariantId,
       firstName,
       lastName,
+      gender,
       emailNotificationsEnabled,
       smsNotificationsEnabled,
       marketingNotificationsEnabled,
@@ -970,6 +978,7 @@ export class AuthService {
             : {}),
         ...(firstName !== undefined ? { firstName: firstName.trim() } : {}),
         ...(lastName !== undefined ? { lastName: lastName.trim() } : {}),
+        ...(gender !== undefined ? { gender } : {}),
         ...(emailNotificationsEnabled !== undefined ? { emailNotificationsEnabled } : {}),
         ...(smsNotificationsEnabled !== undefined ? { smsNotificationsEnabled } : {}),
         ...(marketingNotificationsEnabled !== undefined ? { marketingNotificationsEnabled } : {}),
@@ -1962,6 +1971,19 @@ export class AuthService {
       this.logger.error(
         `Failed to send audit-hold-released email for user=${userId}: ${(err as Error).message}`,
       );
+    }
+
+    if (this.sms && user.phoneNumber && user.phoneVerifiedAt && user.smsNotificationsEnabled) {
+      try {
+        await this.sms.sendTransactional(
+          user.phoneNumber,
+          'Dialect Library: your account audit hold has been released. You can resume training.',
+        );
+      } catch (err) {
+        this.logger.error(
+          `Failed to send audit-hold-released SMS for user=${userId}: ${(err as Error).message}`,
+        );
+      }
     }
 
     return toPublicUser(updated);

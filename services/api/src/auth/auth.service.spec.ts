@@ -1393,3 +1393,56 @@ describe('AuthService.requestRevokePhoneOtp', () => {
     );
   });
 });
+
+describe('AuthService.updateProfile gender', () => {
+  it('persists gender when provided', async () => {
+    const { service, prisma } = setup();
+    prisma.user.update.mockResolvedValue({
+      id: 'user-1',
+      firstName: 'A',
+      lastName: 'B',
+      gender: 'FEMALE',
+      role: 'TRAINER',
+      originCountryId: null,
+      countryId: null,
+      dialectId: null,
+      dialect: null,
+      dialectVariant: null,
+      referralCode: 'ref-1',
+    });
+
+    await service.updateProfile('user-1', { gender: 'FEMALE' as never });
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: expect.objectContaining({ gender: 'FEMALE' }),
+      }),
+    );
+  });
+
+  it('leaves gender untouched when not provided', async () => {
+    const { service, prisma } = setup();
+    prisma.user.update.mockResolvedValue({
+      id: 'user-1',
+      firstName: 'A',
+      lastName: 'B',
+      gender: null,
+      role: 'TRAINER',
+      originCountryId: null,
+      countryId: null,
+      dialectId: null,
+      dialect: null,
+      dialectVariant: null,
+      referralCode: 'ref-1',
+    });
+
+    await service.updateProfile('user-1', { firstName: 'A' });
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ gender: expect.anything() }),
+      }),
+    );
+  });
+});

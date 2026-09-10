@@ -4,6 +4,7 @@ export interface PublicUser {
   id: string;
   firstName: string | null;
   lastName: string | null;
+  gender: 'MALE' | 'FEMALE' | null;
   email: string;
   role: 'TRAINER' | 'ADMIN' | 'PARTNER';
   status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';

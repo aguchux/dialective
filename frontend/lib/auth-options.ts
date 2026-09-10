@@ -160,6 +160,7 @@ export const authOptions: NextAuthOptions = {
         token.userId = apiResult.user.id;
         token.firstName = apiResult.user.firstName;
         token.lastName = apiResult.user.lastName;
+        token.gender = apiResult.user.gender;
         token.onboardingComplete = apiResult.user.onboardingComplete;
         token.dialectTag = apiResult.user.dialectTag;
         token.referralCode = apiResult.user.referralCode;
@@ -184,6 +185,7 @@ export const authOptions: NextAuthOptions = {
         if (session.countryId !== undefined) token.countryId = session.countryId;
         if (session.firstName !== undefined) token.firstName = session.firstName;
         if (session.lastName !== undefined) token.lastName = session.lastName;
+        if (session.gender !== undefined) token.gender = session.gender;
         if (typeof session.lastActiveAt === 'number') token.lastActiveAt = session.lastActiveAt;
       }
 
@@ -258,6 +260,7 @@ export const authOptions: NextAuthOptions = {
       session.user.role = token.role as 'TRAINER' | 'ADMIN' | 'PARTNER';
       session.user.firstName = token.firstName ?? null;
       session.user.lastName = token.lastName ?? null;
+      session.user.gender = token.gender ?? null;
       session.user.onboardingComplete = token.onboardingComplete ?? false;
       session.user.dialectTag = token.dialectTag ?? null;
       session.user.referralCode = token.referralCode ?? null;

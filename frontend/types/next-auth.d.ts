@@ -16,6 +16,7 @@ declare module 'next-auth' {
       id: string;
       firstName: string | null;
       lastName: string | null;
+      gender: 'MALE' | 'FEMALE' | null;
       role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR' | 'VALIDATOR';
       onboardingComplete: boolean;
       dialectTag: string | null;
@@ -37,6 +38,7 @@ declare module 'next-auth/jwt' {
     userId?: string;
     firstName?: string | null;
     lastName?: string | null;
+    gender?: 'MALE' | 'FEMALE' | null;
     onboardingComplete?: boolean;
     dialectTag?: string | null;
     referralCode?: string | null;

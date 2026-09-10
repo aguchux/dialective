@@ -28,6 +28,7 @@ export default function OnboardingPage() {
   const { data: session, status, update } = useSession();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [gender, setGender] = useState<'MALE' | 'FEMALE' | ''>('');
   const [originCountryId, setOriginCountryId] = useState('');
   const [trainingCountryId, setTrainingCountryId] = useState('');
   const [dialectId, setDialectId] = useState('');
@@ -60,6 +61,10 @@ export default function OnboardingPage() {
   // reaches the dashboard. If a name is already on file (password
   // registration collects it up front), skip re-asking.
   const needsName = !session?.user?.firstName || !session?.user?.lastName;
+  // Same "collect once" pattern for gender -- already-onboarded trainers
+  // missing this get caught later by GenderGateDialog on the dashboard
+  // itself, so this only needs to gate first-time onboarding here.
+  const needsGender = !session?.user?.gender;
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -84,6 +89,10 @@ export default function OnboardingPage() {
       setError('Enter your first and last name to continue.');
       return;
     }
+    if (needsGender && !gender) {
+      setError('Select your gender to continue.');
+      return;
+    }
     if (!originCountryId || !trainingCountryId || !dialectId) {
       setError('Choose your country of origin, training country, and dialect to continue.');
       return;
@@ -95,6 +104,7 @@ export default function OnboardingPage() {
         dialectId,
         ...(dialectVariantId ? { dialectVariantId } : {}),
         ...(needsName ? { firstName: firstName.trim(), lastName: lastName.trim() } : {}),
+        ...(needsGender && gender ? { gender } : {}),
       }).unwrap();
       await update({
         onboardingComplete: profile.onboardingComplete,
@@ -103,6 +113,7 @@ export default function OnboardingPage() {
         countryId: profile.countryId,
         firstName: profile.firstName,
         lastName: profile.lastName,
+        gender: profile.gender,
       });
       if (publicSettings?.isKycRequiredOnboarding) {
         setStage('kyc');
@@ -198,6 +209,23 @@ export default function OnboardingPage() {
                 required
                 value={lastName}
               />
+            </>
+          )}
+
+          {needsGender && (
+            <>
+              <label htmlFor="onboarding-gender">Gender</label>
+              <select
+                className={selectClass}
+                id="onboarding-gender"
+                onChange={(e) => setGender(e.target.value as 'MALE' | 'FEMALE' | '')}
+                required
+                value={gender}
+              >
+                <option value="">Select your gender</option>
+                <option value="MALE">Male</option>
+                <option value="FEMALE">Female</option>
+              </select>
             </>
           )}
 

@@ -26,6 +26,11 @@ enum Role {
   VALIDATOR
 }
 
+enum Gender {
+  MALE
+  FEMALE
+}
+
 /// Internal-staff review tier for Role.VALIDATOR accounts only -- null for
 /// every other role. L2 approves L1-submitted validator decks, L3 approves
 /// L2-submitted decks; see docs/validators.md for the full approval chain.
@@ -81,6 +86,7 @@ model User {
   id                              String                       @id @default(uuid())
   firstName                       String?
   lastName                        String?
+  gender                          Gender?
   email                           String                       @unique
   passwordHash                    String? // null for OAuth/magic-link-only accounts
   role                            Role                         @default(TRAINER)

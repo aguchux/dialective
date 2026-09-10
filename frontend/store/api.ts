@@ -12,6 +12,7 @@ export interface PublicUser {
   id: string;
   firstName: string | null;
   lastName: string | null;
+  gender: 'MALE' | 'FEMALE' | null;
   email: string;
   role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR' | 'VALIDATOR';
   status: 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
@@ -3303,6 +3304,7 @@ export const dialectivaApi = createApi({
         dialectVariantId?: string;
         firstName?: string;
         lastName?: string;
+        gender?: 'MALE' | 'FEMALE';
         emailNotificationsEnabled?: boolean;
         smsNotificationsEnabled?: boolean;
         marketingNotificationsEnabled?: boolean;

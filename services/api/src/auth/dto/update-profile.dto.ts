@@ -1,4 +1,5 @@
-import { IsBoolean, IsOptional, IsUUID, Length, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsUUID, Length, ValidateIf } from 'class-validator';
+import { Gender } from '@dialectiva/db';
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -28,6 +29,10 @@ export class UpdateProfileDto {
   @IsOptional()
   @Length(1, 80)
   lastName?: string;
+
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
 
   @IsOptional()
   @IsBoolean()
