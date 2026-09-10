@@ -34,7 +34,6 @@ export function GeneralSettingsPanel() {
   const [noFailOnTrainEnabled, setNoFailOnTrainEnabled] = useState(false);
   const [minScoreRange, setMinScoreRange] = useState('');
   const [maxScoreRange, setMaxScoreRange] = useState('');
-  const [streamSelfServeSignupEnabled, setStreamSelfServeSignupEnabled] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +60,6 @@ export function GeneralSettingsPanel() {
     setNoFailOnTrainEnabled(settings.noFailOnTrainEnabled);
     setMinScoreRange(settings.minScoreRange);
     setMaxScoreRange(settings.maxScoreRange);
-    setStreamSelfServeSignupEnabled(settings.streamSelfServeSignupEnabled);
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -107,7 +105,6 @@ export function GeneralSettingsPanel() {
         noFailOnTrainEnabled,
         ...(minScoreRange !== '' ? { minScoreRange: Number(minScoreRange) } : {}),
         ...(maxScoreRange !== '' ? { maxScoreRange: Number(maxScoreRange) } : {}),
-        streamSelfServeSignupEnabled,
       }).unwrap();
       setMessage('General settings saved.');
     } catch (err) {
@@ -464,30 +461,6 @@ export function GeneralSettingsPanel() {
                   without SMS verification, and withdrawals and P2P trading fall back to an emailed
                   one-time code instead -- withdrawals already require this email code regardless of
                   this setting.
-                </span>
-              </span>
-            </label>
-          </div>
-
-          <div>
-            <label
-              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
-              htmlFor="stream-self-serve-signup"
-            >
-              <input
-                checked={streamSelfServeSignupEnabled}
-                className="mt-0.5 size-5 accent-accent"
-                id="stream-self-serve-signup"
-                onChange={(event) => setStreamSelfServeSignupEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              <span>
-                <span className="block font-bold">Allow Voice Stream self-serve signup</span>
-                <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  When on, the Voice Stream /register page lets anyone create an account directly
-                  (email/password, then verify by emailed code) instead of requiring an admin
-                  invite first. When off (default), Stream stays admin-invite-only and /register
-                  only collects a &quot;Request access&quot; lead for admin follow-up.
                 </span>
               </span>
             </label>

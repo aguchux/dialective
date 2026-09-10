@@ -27,9 +27,11 @@ import { StripeSubscriptionsSettingsPanel } from './StripeSubscriptionsSettingsP
 import { PwaSettingsPanel } from './PwaSettingsPanel';
 import { DykSettingsPanel } from './DykSettingsPanel';
 import { CommunitySettingsPanel } from './CommunitySettingsPanel';
+import { StreamSettingsPanel } from './StreamSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
+  { key: 'stream', label: 'Stream Settings' },
   { key: 'landingPage', label: 'Landing Page' },
   { key: 'maintenance', label: 'Site Maintenance' },
   { key: 'referrals', label: 'Referral Bonuses' },
@@ -59,6 +61,7 @@ type GroupKey = (typeof groups)[number]['key'];
 
 const panelComponents: Record<GroupKey, () => JSX.Element> = {
   general: GeneralSettingsPanel,
+  stream: StreamSettingsPanel,
   landingPage: LandingPageSettingsPanel,
   maintenance: MaintenanceSettingsPanel,
   referrals: ReferralBonusSettingsPanel,
