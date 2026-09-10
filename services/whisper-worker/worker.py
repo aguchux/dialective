@@ -53,7 +53,7 @@ def get_pipeline(dialect_tag: str, db_conn):
     if dialect_tag not in _pipeline_cache:
         checkpoint = resolve_checkpoint(dialect_tag, _registry)
         try:
-            _pipeline_cache[dialect_tag] = pipeline(
+            asr_pipeline = pipeline(
                 task="automatic-speech-recognition",
                 model=checkpoint,
                 device=_DEVICE,
@@ -61,6 +61,23 @@ def get_pipeline(dialect_tag: str, db_conn):
                 return_timestamps="word",
                 token=get_hf_token(db_conn),
             )
+            # Some fine-tuned checkpoints (e.g. mbazaNLP/Whisper-Small-
+            # Kinyarwanda) ship no generation_config.json at all, so
+            # transformers falls back to a bare default GenerationConfig
+            # missing Whisper-specific fields -- return_timestamps="word"
+            # above then fails deep in generate() with "the generation
+            # config is not properly set" (no_timestamps_token_id unset).
+            # The <|notimestamps|> special token is fixed by Whisper's
+            # tokenizer vocabulary regardless of fine-tune, so backfilling
+            # it from the checkpoint's own tokenizer is safe and avoids
+            # hardcoding the token id. See
+            # https://github.com/huggingface/transformers/issues/21878.
+            gen_config = asr_pipeline.model.generation_config
+            if getattr(gen_config, "no_timestamps_token_id", None) is None:
+                gen_config.no_timestamps_token_id = (
+                    asr_pipeline.tokenizer.convert_tokens_to_ids("<|notimestamps|>")
+                )
+            _pipeline_cache[dialect_tag] = asr_pipeline
         except Exception as exc:
             # A gated/private HF repo with a missing-or-unauthorized token
             # raises deep inside transformers/huggingface_hub (GatedRepoError
