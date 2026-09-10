@@ -2426,8 +2426,9 @@ model DataAccessLead {
   createdAt         DateTime  @default(now())
 
   interests             DataAccessLeadInterest[]
-  invitedOrganizationId String?                  @unique // set once an admin approves the lead and provisions a SubscriberOrganization + invite from it
+  invitedOrganizationId String?                  @unique // set once an admin approves the lead and provisions a SubscriberOrganization + invite from it, OR once the lead signs up directly (see signedUpDirectly) -- either way it means this lead maps to a real SubscriberOrganization
   invitedOrganization   SubscriberOrganization?  @relation(fields: [invitedOrganizationId], references: [id], onDelete: SetNull)
+  signedUpDirectly      Boolean                  @default(false) // true when this row was created by SubscriberAuthService.register() (self-serve signup, no admin invite involved) rather than by an admin inviting the lead -- lets the admin UI show "Signed up" instead of "Invited" and hide the (inapplicable) Resend invite action
 
   @@index([createdAt])
   @@index([email])

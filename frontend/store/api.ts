@@ -304,6 +304,7 @@ export interface AdminDataAccessLead {
   } | null;
   invitedOrganizationId: string | null;
   invitedOrganization: { id: string; name: string } | null;
+  signedUpDirectly: boolean;
   createdAt: string;
 }
 

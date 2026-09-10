@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
+import { Eye, EyeOff } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { leadsApi, LeadsApiError } from '@/lib/leads-api';
 import { AuthShell } from '@/components/AuthShell';
@@ -56,7 +57,9 @@ function SignupForm() {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [organizationName, setOrganizationName] = useState('');
+  const [website, setWebsite] = useState('');
   const [ticket, setTicket] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +76,7 @@ function SignupForm() {
         firstName,
         lastName,
         organizationName,
+        website: website || undefined,
       });
       setTicket(result.ticket);
       setStep('otp');
@@ -152,15 +156,39 @@ function SignupForm() {
               />
             </div>
             <div>
-              <FieldLabel>Password</FieldLabel>
+              <FieldLabel>Website</FieldLabel>
               <TextInput
-                minLength={8}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
-                required
-                type="password"
-                value={password}
+                onChange={(e) => setWebsite(e.target.value)}
+                placeholder="https://acme.com"
+                type="url"
+                value={website}
               />
+            </div>
+            <div>
+              <FieldLabel>Password</FieldLabel>
+              <div className="relative">
+                <TextInput
+                  className="pr-11"
+                  minLength={8}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  required
+                  type={passwordVisible ? 'text' : 'password'}
+                  value={password}
+                />
+                <button
+                  aria-label={passwordVisible ? 'Hide password' : 'Show password'}
+                  className="absolute right-0 top-0 grid h-10 w-11 place-items-center text-muted transition-colors hover:text-ink"
+                  onClick={() => setPasswordVisible((visible) => !visible)}
+                  type="button"
+                >
+                  {passwordVisible ? (
+                    <EyeOff aria-hidden="true" className="size-[18px]" />
+                  ) : (
+                    <Eye aria-hidden="true" className="size-[18px]" />
+                  )}
+                </button>
+              </div>
             </div>
             {error && <ErrorText>{error}</ErrorText>}
             <PrimaryButton disabled={pending} type="submit">

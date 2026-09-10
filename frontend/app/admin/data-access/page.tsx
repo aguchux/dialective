@@ -117,39 +117,51 @@ export default function AdminDataAccessLeadsPage() {
       key: 'invite',
       header: 'Organization',
       sortValue: (row) => row.invitedOrganization?.name ?? '',
-      render: (row) =>
-        row.invitedOrganization ? (
-          <div className="grid gap-1">
-            <span className="inline-flex w-fit rounded-full bg-accent-soft px-2 py-1 text-xs font-bold text-accent-dark">
-              Invited: {row.invitedOrganization.name}
-            </span>
-            <button
-              className="inline-flex w-fit items-center text-xs font-bold text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={isResendingInvite}
-              onClick={async () => {
-                setResendInviteError(null);
-                try {
-                  await resendInviteMutation(row.id).unwrap();
-                } catch (mutationError) {
-                  setResendInviteError({
-                    id: row.id,
-                    message: normalizeErrorMessage(mutationError, 'Unable to resend the invite.'),
-                  });
-                }
-              }}
-              type="button"
-            >
-              Resend invite
-            </button>
-            {resendInviteError?.id === row.id && (
-              <span className="text-xs text-danger" role="alert">
-                {resendInviteError.message}
+      render: (row) => {
+        if (row.signedUpDirectly && row.invitedOrganization) {
+          return (
+            <div className="grid gap-1">
+              <span className="inline-flex w-fit rounded-full bg-[#e6f4ea] px-2 py-1 text-xs font-bold text-[#1e7e34]">
+                Signed up: {row.invitedOrganization.name}
               </span>
-            )}
-          </div>
-        ) : (
-          <span className="text-xs text-muted">Not invited</span>
-        ),
+              <span className="text-xs text-muted">No invite needed</span>
+            </div>
+          );
+        }
+        if (row.invitedOrganization) {
+          return (
+            <div className="grid gap-1">
+              <span className="inline-flex w-fit rounded-full bg-accent-soft px-2 py-1 text-xs font-bold text-accent-dark">
+                Invited: {row.invitedOrganization.name}
+              </span>
+              <button
+                className="inline-flex w-fit items-center text-xs font-bold text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isResendingInvite}
+                onClick={async () => {
+                  setResendInviteError(null);
+                  try {
+                    await resendInviteMutation(row.id).unwrap();
+                  } catch (mutationError) {
+                    setResendInviteError({
+                      id: row.id,
+                      message: normalizeErrorMessage(mutationError, 'Unable to resend the invite.'),
+                    });
+                  }
+                }}
+                type="button"
+              >
+                Resend invite
+              </button>
+              {resendInviteError?.id === row.id && (
+                <span className="text-xs text-danger" role="alert">
+                  {resendInviteError.message}
+                </span>
+              )}
+            </div>
+          );
+        }
+        return <span className="text-xs text-muted">Not invited</span>;
+      },
       searchable: false,
     },
     {

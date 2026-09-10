@@ -49,6 +49,9 @@ function setup() {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
     },
+    dataAccessLead: {
+      create: jest.fn(),
+    },
     subscriberPasswordResetToken: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -95,6 +98,7 @@ describe('SubscriberAuthService', () => {
         lastName: 'B',
       });
       prisma.subscriberMembership.create.mockResolvedValue({});
+      prisma.dataAccessLead.create.mockResolvedValue({});
 
       const result = await service.register('a@b.com', 'password123', 'A', 'B', 'Acme');
 
@@ -114,6 +118,43 @@ describe('SubscriberAuthService', () => {
       );
       expect(result).toEqual(
         expect.objectContaining({ otpRequired: true, ticket: expect.any(String) }),
+      );
+    });
+
+    it('also creates a DataAccessLead row flagged signedUpDirectly, so admins can see self-signups', async () => {
+      const { prisma, service } = setup();
+      prisma.subscriberUser.findUnique.mockResolvedValue(null);
+      prisma.subscriberOrganization.create.mockResolvedValue({ id: 'org-1', name: 'Acme' });
+      prisma.subscriberUser.create.mockResolvedValue({
+        id: 'user-1',
+        email: 'a@b.com',
+        firstName: 'A',
+        lastName: 'B',
+      });
+      prisma.subscriberMembership.create.mockResolvedValue({});
+      prisma.dataAccessLead.create.mockResolvedValue({});
+
+      await service.register(
+        'a@b.com',
+        'password123',
+        'A',
+        'B',
+        'Acme',
+        'https://acme.com',
+      );
+
+      expect(prisma.dataAccessLead.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            firstName: 'A',
+            lastName: 'B',
+            email: 'a@b.com',
+            organization: 'Acme',
+            website: 'https://acme.com',
+            invitedOrganizationId: 'org-1',
+            signedUpDirectly: true,
+          }),
+        }),
       );
     });
   });

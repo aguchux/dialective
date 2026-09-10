@@ -72,6 +72,7 @@ export const apiClient = {
     firstName: string;
     lastName: string;
     organizationName: string;
+    website?: string;
   }) =>
     apiFetch<SubscriberPendingOtp>('/voice-stream/auth/register', {
       method: 'POST',

@@ -86,6 +86,7 @@ export class SubscriberAuthService {
     firstName: string,
     lastName: string,
     organizationName: string,
+    website?: string,
   ): Promise<SubscriberPendingOtp> {
     const existing = await this.prisma.subscriberUser.findUnique({ where: { email } });
     if (existing) {
@@ -107,6 +108,23 @@ export class SubscriberAuthService {
           organizationId: org.id,
           role: SubscriberOrgRole.OWNER,
           acceptedAt: new Date(),
+        },
+      });
+      // Surfaces self-serve signups in the admin Stream Requests list
+      // alongside admin-invited leads -- signedUpDirectly:true tells the
+      // admin UI this row already has a real account (show "Signed up", hide
+      // Approve/Resend invite/Delete) rather than "Invited, awaiting
+      // acceptance".
+      await tx.dataAccessLead.create({
+        data: {
+          firstName,
+          lastName,
+          name: `${firstName} ${lastName}`,
+          email,
+          organization: organizationName,
+          website: website ?? null,
+          invitedOrganizationId: org.id,
+          signedUpDirectly: true,
         },
       });
       return { user: createdUser, organizationId: org.id };

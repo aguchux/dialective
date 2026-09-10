@@ -55,6 +55,7 @@ export class SubscriberAuthController {
       dto.firstName,
       dto.lastName,
       dto.organizationName,
+      dto.website,
     );
   }
 
