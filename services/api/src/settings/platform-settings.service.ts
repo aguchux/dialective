@@ -730,6 +730,86 @@ export class PlatformSettingsService {
     );
   }
 
+  async isDomainConversationTaskEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.domainConversationTaskEnabled;
+  }
+
+  async getDomainConversationMinDurationSeconds(): Promise<number> {
+    const row = await this.getRow();
+    if (row.domainConversationMinDurationSeconds !== null) {
+      return row.domainConversationMinDurationSeconds;
+    }
+    return this.parsePositiveInt(
+      process.env.DOMAIN_CONVERSATION_MIN_DURATION_SECONDS,
+      15,
+      'DOMAIN_CONVERSATION_MIN_DURATION_SECONDS',
+    );
+  }
+
+  async getDomainConversationMaxDurationSeconds(): Promise<number> {
+    const row = await this.getRow();
+    if (row.domainConversationMaxDurationSeconds !== null) {
+      return row.domainConversationMaxDurationSeconds;
+    }
+    return this.parsePositiveInt(
+      process.env.DOMAIN_CONVERSATION_MAX_DURATION_SECONDS,
+      60,
+      'DOMAIN_CONVERSATION_MAX_DURATION_SECONDS',
+    );
+  }
+
+  async getDomainConversationTaskTokenCost(): Promise<number> {
+    const row = await this.getRow();
+    if (row.domainConversationTaskTokenCost) {
+      return row.domainConversationTaskTokenCost.toNumber();
+    }
+    const raw = process.env.DOMAIN_CONVERSATION_TASK_TOKEN_COST ?? '3.0';
+    const cost = Number(raw);
+    if (!Number.isFinite(cost) || cost <= 0) {
+      throw new Error(`Invalid DOMAIN_CONVERSATION_TASK_TOKEN_COST: ${raw}`);
+    }
+    return cost;
+  }
+
+  async isDomainConversationGenerationEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.domainConversationGenerationEnabled;
+  }
+
+  async getDomainConversationPromptsPerRun(): Promise<number> {
+    const row = await this.getRow();
+    return row.domainConversationPromptsPerRun;
+  }
+
+  async getDomainConversationMaxPromptPoolSize(): Promise<number> {
+    const row = await this.getRow();
+    return row.domainConversationMaxPromptPoolSize;
+  }
+
+  async getDomainConversationProviderOrder(): Promise<string> {
+    const row = await this.getRow();
+    return row.domainConversationProviderOrder;
+  }
+
+  async getDomainConversationQualityWeights(): Promise<{
+    noise: number;
+    quality: number;
+    liveness: number;
+  }> {
+    const row = await this.getRow();
+    return {
+      noise: row.domainConversationQualityWeightNoise.toNumber(),
+      quality: row.domainConversationQualityWeightQuality.toNumber(),
+      liveness: row.domainConversationQualityWeightLiveness.toNumber(),
+    };
+  }
+
+  async getDomainConversationMinQualityScoreForPayout(): Promise<number> {
+    const row = await this.getRow();
+    return row.domainConversationMinQualityScoreForPayout.toNumber();
+  }
+
   async getForAdmin() {
     const row = await this.getRow();
     const referralCookiePersistSeconds =
@@ -760,6 +840,20 @@ export class PlatformSettingsService {
         180,
         'WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS',
       );
+    const domainConversationMinDurationSeconds =
+      row.domainConversationMinDurationSeconds ??
+      this.parsePositiveInt(
+        process.env.DOMAIN_CONVERSATION_MIN_DURATION_SECONDS,
+        15,
+        'DOMAIN_CONVERSATION_MIN_DURATION_SECONDS',
+      );
+    const domainConversationMaxDurationSeconds =
+      row.domainConversationMaxDurationSeconds ??
+      this.parsePositiveInt(
+        process.env.DOMAIN_CONVERSATION_MAX_DURATION_SECONDS,
+        60,
+        'DOMAIN_CONVERSATION_MAX_DURATION_SECONDS',
+      );
     return {
       tokenUsdRate: row.tokenUsdRate?.toString() ?? null,
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
@@ -776,6 +870,20 @@ export class PlatformSettingsService {
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       wordTrainingEnabled: row.wordTrainingEnabled,
       sentenceTrainingEnabled: row.sentenceTrainingEnabled,
+      domainConversationTaskEnabled: row.domainConversationTaskEnabled,
+      domainConversationMinDurationSeconds,
+      domainConversationMaxDurationSeconds,
+      domainConversationTaskTokenCost: row.domainConversationTaskTokenCost?.toString() ?? null,
+      domainConversationGenerationEnabled: row.domainConversationGenerationEnabled,
+      domainConversationPromptsPerRun: row.domainConversationPromptsPerRun,
+      domainConversationMaxPromptPoolSize: row.domainConversationMaxPromptPoolSize,
+      domainConversationProviderOrder: row.domainConversationProviderOrder,
+      domainConversationQualityWeightNoise: row.domainConversationQualityWeightNoise.toString(),
+      domainConversationQualityWeightQuality: row.domainConversationQualityWeightQuality.toString(),
+      domainConversationQualityWeightLiveness:
+        row.domainConversationQualityWeightLiveness.toString(),
+      domainConversationMinQualityScoreForPayout:
+        row.domainConversationMinQualityScoreForPayout.toString(),
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       sessionIdleTimeoutMinutes: row.sessionIdleTimeoutMinutes,
       sessionMaxHours: row.sessionMaxHours,
@@ -917,6 +1025,18 @@ export class PlatformSettingsService {
     reverseWordTrainingEnabled?: boolean;
     wordTrainingEnabled?: boolean;
     sentenceTrainingEnabled?: boolean;
+    domainConversationTaskEnabled?: boolean;
+    domainConversationMinDurationSeconds?: number;
+    domainConversationMaxDurationSeconds?: number;
+    domainConversationTaskTokenCost?: number | null;
+    domainConversationGenerationEnabled?: boolean;
+    domainConversationPromptsPerRun?: number;
+    domainConversationMaxPromptPoolSize?: number;
+    domainConversationProviderOrder?: string;
+    domainConversationQualityWeightNoise?: number;
+    domainConversationQualityWeightQuality?: number;
+    domainConversationQualityWeightLiveness?: number;
+    domainConversationMinQualityScoreForPayout?: number;
     adminPayoutOtpEnabled?: boolean;
     sessionIdleTimeoutMinutes?: number;
     sessionMaxHours?: number;
@@ -1303,6 +1423,20 @@ export class PlatformSettingsService {
         180,
         'WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS',
       );
+    const domainConversationMinDurationSeconds =
+      row.domainConversationMinDurationSeconds ??
+      this.parsePositiveInt(
+        process.env.DOMAIN_CONVERSATION_MIN_DURATION_SECONDS,
+        15,
+        'DOMAIN_CONVERSATION_MIN_DURATION_SECONDS',
+      );
+    const domainConversationMaxDurationSeconds =
+      row.domainConversationMaxDurationSeconds ??
+      this.parsePositiveInt(
+        process.env.DOMAIN_CONVERSATION_MAX_DURATION_SECONDS,
+        60,
+        'DOMAIN_CONVERSATION_MAX_DURATION_SECONDS',
+      );
     return {
       tokenUsdRate: row.tokenUsdRate?.toString() ?? null,
       minWithdrawalTokens: row.minWithdrawalTokens?.toString() ?? null,
@@ -1319,6 +1453,20 @@ export class PlatformSettingsService {
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       wordTrainingEnabled: row.wordTrainingEnabled,
       sentenceTrainingEnabled: row.sentenceTrainingEnabled,
+      domainConversationTaskEnabled: row.domainConversationTaskEnabled,
+      domainConversationMinDurationSeconds,
+      domainConversationMaxDurationSeconds,
+      domainConversationTaskTokenCost: row.domainConversationTaskTokenCost?.toString() ?? null,
+      domainConversationGenerationEnabled: row.domainConversationGenerationEnabled,
+      domainConversationPromptsPerRun: row.domainConversationPromptsPerRun,
+      domainConversationMaxPromptPoolSize: row.domainConversationMaxPromptPoolSize,
+      domainConversationProviderOrder: row.domainConversationProviderOrder,
+      domainConversationQualityWeightNoise: row.domainConversationQualityWeightNoise.toString(),
+      domainConversationQualityWeightQuality: row.domainConversationQualityWeightQuality.toString(),
+      domainConversationQualityWeightLiveness:
+        row.domainConversationQualityWeightLiveness.toString(),
+      domainConversationMinQualityScoreForPayout:
+        row.domainConversationMinQualityScoreForPayout.toString(),
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       sessionIdleTimeoutMinutes: row.sessionIdleTimeoutMinutes,
       sessionMaxHours: row.sessionMaxHours,

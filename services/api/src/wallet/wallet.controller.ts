@@ -68,6 +68,13 @@ import { CreateTrainingPayoutDto } from './dto/create-training-payout.dto';
 import { AdminWalletAdjustmentDto } from './dto/admin-wallet-adjustment.dto';
 import { ListEarningsDto } from './dto/list-earnings.dto';
 import { ListLeaderboardDto } from './dto/list-leaderboard.dto';
+
+function maskWithdrawalReviewPhone(phoneNumber: string | null): string | null {
+  if (!phoneNumber) return null;
+  const digits = phoneNumber.replace(/\D/g, '');
+  if (digits.length < 4) return '****';
+  return `${'*'.repeat(Math.max(4, digits.length - 4))}${digits.slice(-4)}`;
+}
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { GetWithdrawalMinAmountDto } from './dto/get-withdrawal-min-amount.dto';
 import { ListWithdrawalsAdminDto } from './dto/list-withdrawals-admin.dto';
@@ -2400,7 +2407,25 @@ export class WalletController {
     const select = {
       id: true,
       walletId: true,
-      wallet: { include: { user: { select: { email: true } } } },
+      wallet: {
+        select: {
+          user: {
+            select: {
+              email: true,
+              firstName: true,
+              lastName: true,
+              phoneNumber: true,
+              phoneVerifiedAt: true,
+              kycStatus: true,
+              _count: {
+                select: {
+                  wordRecordings: { where: { status: SubmissionStatus.SETTLED } },
+                },
+              },
+            },
+          },
+        },
+      },
       tokenAmount: true,
       usdtAmount: true,
       destinationAddress: true,
@@ -2446,7 +2471,7 @@ export class WalletController {
         : {}),
     };
 
-    const [items, total] = await Promise.all([
+    const [rawItems, total] = await Promise.all([
       this.prisma.withdrawalRequest.findMany({
         where,
         orderBy: { createdAt: 'desc' },
@@ -2456,6 +2481,26 @@ export class WalletController {
       }),
       this.prisma.withdrawalRequest.count({ where }),
     ]);
+    const items = rawItems.map((item) => {
+      // Keep the mapping defensive for older test fixtures and any legacy
+      // rows returned during a rolling deployment.
+      const user = item.wallet?.user;
+      return {
+        ...item,
+        wallet: {
+          ...item.wallet,
+          user: {
+            email: user?.email ?? '',
+            firstName: user?.firstName ?? null,
+            lastName: user?.lastName ?? null,
+            phoneNumberMasked: maskWithdrawalReviewPhone(user?.phoneNumber ?? null),
+            phoneVerified: user?.phoneVerifiedAt != null,
+            kycStatus: user?.kycStatus ?? 'NOT_STARTED',
+            settledTaskCount: user?._count.wordRecordings ?? 0,
+          },
+        },
+      };
+    });
     return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
   }
 

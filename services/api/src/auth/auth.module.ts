@@ -9,6 +9,7 @@ import { StorageModule } from '../storage/storage.module';
 import { TokenomicsModule } from '../tokenomics/tokenomics.module';
 import { MarketingModule } from '../marketing/marketing.module';
 import { RegisterRateLimitGuard } from '../common/guards/register-rate-limit.guard';
+import { SmsModule } from '../sms/sms.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { RegisterRateLimitGuard } from '../common/guards/register-rate-limit.gua
     StorageModule,
     TokenomicsModule,
     MarketingModule,
+    SmsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, RegisterRateLimitGuard],

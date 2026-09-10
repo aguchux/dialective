@@ -642,7 +642,17 @@ export type WithdrawalStatus =
 export interface AdminWithdrawalRequest {
   id: string;
   walletId: string;
-  wallet: { user: { email: string } };
+  wallet: {
+    user: {
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+      phoneNumberMasked: string | null;
+      phoneVerified: boolean;
+      kycStatus: KycStatus;
+      settledTaskCount: number;
+    };
+  };
   tokenAmount: string;
   usdtAmount: string;
   destinationAddress: string;

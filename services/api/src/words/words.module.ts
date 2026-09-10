@@ -7,6 +7,7 @@ import { LlmModule } from '../llm/llm.module';
 import { CoursesModule } from '../courses/courses.module';
 import { AsrRegistryModule } from '../asr-registry/asr-registry.module';
 import { MailModule } from '../mail/mail.module';
+import { SmsModule } from '../sms/sms.module';
 import { WordsService } from './words.service';
 import { SubmissionRateLimitGuard } from '../common/guards/submission-rate-limit.guard';
 
@@ -19,6 +20,7 @@ import { SubmissionRateLimitGuard } from '../common/guards/submission-rate-limit
     CoursesModule,
     AsrRegistryModule,
     MailModule,
+    SmsModule,
   ],
   controllers: [WordsController],
   providers: [WordsService, SubmissionRateLimitGuard],

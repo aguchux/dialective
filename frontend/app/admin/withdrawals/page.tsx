@@ -379,7 +379,30 @@ function WithdrawalRow({
         )}
         {error && <p className="mt-1 text-xs font-bold text-danger">{error}</p>}
       </td>
-      <td className="px-4 py-3">{withdrawal.wallet.user.email}</td>
+      <td className="px-4 py-3">
+        <p className="font-medium text-ink">
+          {withdrawal.wallet.user.firstName || withdrawal.wallet.user.lastName
+            ? `${withdrawal.wallet.user.firstName ?? ''} ${withdrawal.wallet.user.lastName ?? ''}`.trim()
+            : withdrawal.wallet.user.email}
+        </p>
+        <p className="text-xs text-muted">{withdrawal.wallet.user.email}</p>
+        <div className="mt-2 flex max-w-64 flex-wrap gap-1.5 text-xs font-bold">
+          <span
+            className={`rounded-full px-2 py-1 ${withdrawal.wallet.user.phoneVerified ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-danger'}`}
+          >
+            Mobile: {withdrawal.wallet.user.phoneVerified ? 'Verified' : 'Unverified'}
+            {withdrawal.wallet.user.phoneNumberMasked && ` ${withdrawal.wallet.user.phoneNumberMasked}`}
+          </span>
+          <span
+            className={`rounded-full px-2 py-1 ${withdrawal.wallet.user.kycStatus === 'APPROVED' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
+          >
+            KYC: {withdrawal.wallet.user.kycStatus.replace('_', ' ')}
+          </span>
+          <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">
+            Tasks: {withdrawal.wallet.user.settledTaskCount}
+          </span>
+        </div>
+      </td>
       <td className="px-4 py-3">
         {withdrawal.tokenAmount} DL
         {isCrypto ? (
