@@ -2686,6 +2686,7 @@ export class WalletController {
             status: this.mapProviderPayoutStatus(payout.status),
             provider: 'nowpayments',
             providerPayoutId: payout.payoutId,
+            providerBatchId: payout.batchId,
             providerStatus: payout.status ?? 'created',
             providerCurrency: withdrawal.destinationCurrency,
             providerNetwork: withdrawal.destinationNetwork,
@@ -2774,8 +2775,13 @@ export class WalletController {
       throw new UnprocessableEntityException('Withdrawal has not been submitted to NOWPayments');
     }
 
+    // /payout/{id}/verify is batch-scoped, not withdrawal-scoped --
+    // providerBatchId is only populated for payouts created after this fix
+    // (2026-09-10); fall back to providerPayoutId for older rows, which
+    // will still 404 against NOWPayments but at least surfaces their real
+    // "batch withdrawal not found" error instead of silently no-opping.
     const result = await this.nowPayments.verifyPayout(
-      withdrawal.providerPayoutId,
+      withdrawal.providerBatchId ?? withdrawal.providerPayoutId,
       body.verificationCode,
     );
     await this.recordNowPaymentsPayoutStatus(

@@ -40,6 +40,7 @@ export interface CreatePayoutParams {
 
 export interface CreatePayoutResult {
   payoutId: string;
+  batchId: string | null;
   status: string | null;
   raw: Record<string, unknown>;
 }
@@ -245,13 +246,22 @@ export class NowPaymentsService implements PayoutProvider {
       );
     }
 
-    return { payoutId: payout.id, status: payout.status, raw };
+    // POST /payout's response is batch-shaped: the top-level `id` is the
+    // batch_withdrawal_id, while extractPayout above deliberately reads
+    // withdrawals[0].id (the individual withdrawal id) for payoutId/status
+    // tracking. /payout/{id}/verify needs the BATCH id, not the withdrawal
+    // id -- confirmed with NOWPayments support 2026-09-10 after
+    // /payout/{withdrawalId}/verify returned 404 "batch withdrawal not
+    // found" on a real stuck payout. Keep both ids around.
+    const batchId = typeof raw.id === 'string' || typeof raw.id === 'number' ? String(raw.id) : null;
+
+    return { payoutId: payout.id, batchId, status: payout.status, raw };
   }
 
-  async verifyPayout(payoutId: string, verificationCode: string): Promise<PayoutStatusResult> {
+  async verifyPayout(batchId: string, verificationCode: string): Promise<PayoutStatusResult> {
     const token = await this.getPayoutAuthToken();
     const res = await fetch(
-      `${NOWPAYMENTS_API_BASE}/payout/${encodeURIComponent(payoutId)}/verify`,
+      `${NOWPAYMENTS_API_BASE}/payout/${encodeURIComponent(batchId)}/verify`,
       {
         method: 'POST',
         headers: {
@@ -270,8 +280,8 @@ export class NowPaymentsService implements PayoutProvider {
         `NOWPayments verifyPayout ${res.status}: ${JSON.stringify(raw)}`,
       );
     }
-    const payout = extractPayout(raw, payoutId);
-    return { payoutId: payout.id ?? payoutId, status: payout.status, raw };
+    const payout = extractPayout(raw);
+    return { payoutId: payout.id ?? batchId, status: payout.status, raw };
   }
 
   async getPayoutStatus(payoutId: string): Promise<PayoutStatusResult> {

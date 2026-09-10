@@ -106,10 +106,16 @@ describe('NowPaymentsService IPN verification', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ result: 1 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'jwt-token' }), { status: 200 }))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: 'payout-1', status: 'waiting' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
+        new Response(
+          JSON.stringify({
+            id: 'batch-1',
+            withdrawals: [{ id: 'payout-1', batch_withdrawal_id: 'batch-1', status: 'waiting' }],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
       );
 
     await expect(
@@ -120,7 +126,7 @@ describe('NowPaymentsService IPN verification', () => {
         network: 'TRC20',
         amount: 12.3456789,
       }),
-    ).resolves.toMatchObject({ payoutId: 'payout-1', status: 'waiting' });
+    ).resolves.toMatchObject({ payoutId: 'payout-1', batchId: 'batch-1', status: 'waiting' });
 
     expect(fetchSpy.mock.calls[0][0]).toBe(
       'https://api.nowpayments.io/v1/payout-withdrawal/min-amount/usdttrc20',
@@ -231,7 +237,10 @@ describe('NowPaymentsService IPN verification', () => {
     }
   });
 
-  it('verifies a payout by putting the payout id in the URL path and the code in the body', async () => {
+  it('verifies a payout by putting the BATCH id (not the withdrawal id) in the URL path, and the code in the body', async () => {
+    // NOWPayments' /payout/{id}/verify is scoped to the batch id, confirmed
+    // with their support 2026-09-10 after passing the withdrawal id 404'd
+    // with "batch withdrawal not found" -- this test pins that regression.
     process.env.NOWPAYMENTS_API_KEY = 'test-api-key';
     process.env.NOWPAYMENTS_PAYOUT_EMAIL = 'merchant@example.com';
     process.env.NOWPAYMENTS_PAYOUT_PASSWORD = 'merchant-password';
@@ -239,15 +248,21 @@ describe('NowPaymentsService IPN verification', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'jwt-token' }), { status: 200 }))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: 'payout-1', status: 'finished' }), { status: 200 }),
+        new Response(
+          JSON.stringify({
+            id: 'batch-1',
+            withdrawals: [{ id: 'payout-1', batch_withdrawal_id: 'batch-1', status: 'finished' }],
+          }),
+          { status: 200 },
+        ),
       );
 
-    await expect(service.verifyPayout('payout-1', '123456')).resolves.toMatchObject({
+    await expect(service.verifyPayout('batch-1', '123456')).resolves.toMatchObject({
       payoutId: 'payout-1',
       status: 'finished',
     });
 
-    expect(fetchSpy.mock.calls[1][0]).toBe('https://api.nowpayments.io/v1/payout/payout-1/verify');
+    expect(fetchSpy.mock.calls[1][0]).toBe('https://api.nowpayments.io/v1/payout/batch-1/verify');
     expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toEqual({
       verification_code: '123456',
     });

@@ -614,7 +614,7 @@ describe('WalletController withdrawal payout automation', () => {
     const nowPayments = {
       createPayout: jest
         .fn()
-        .mockResolvedValue({ payoutId: 'payout-1', status: 'processing', raw: {} }),
+        .mockResolvedValue({ payoutId: 'payout-1', batchId: 'batch-1', status: 'processing', raw: {} }),
       getPayoutStatus: jest
         .fn()
         .mockResolvedValue({ payoutId: 'payout-1', status: 'processing', raw: {} }),
@@ -721,6 +721,43 @@ describe('WalletController withdrawal payout automation', () => {
     expect(result).toEqual(
       expect.objectContaining({ withdrawalId: 'withdrawal-1', providerPayoutId: 'payout-1' }),
     );
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ providerPayoutId: 'payout-1', providerBatchId: 'batch-1' }),
+      }),
+    );
+  });
+
+  it('verifies with the BATCH id, not the withdrawal id -- NOWPayments /payout/{id}/verify 404s on the withdrawal id', async () => {
+    const { controller, nowPayments } = setup(
+      baseWithdrawal({
+        status: 'PROCESSING',
+        providerPayoutId: 'payout-1',
+        providerBatchId: 'batch-1',
+      }),
+    );
+
+    await controller.verifyNowPaymentsWithdrawalPayout(
+      { user: { sub: 'admin-1' } } as never,
+      'withdrawal-1',
+      { verificationCode: '123456' },
+    );
+
+    expect(nowPayments.verifyPayout).toHaveBeenCalledWith('batch-1', '123456');
+  });
+
+  it('falls back to the withdrawal id for verify when providerBatchId was never backfilled (pre-fix rows)', async () => {
+    const { controller, nowPayments } = setup(
+      baseWithdrawal({ status: 'PROCESSING', providerPayoutId: 'payout-1', providerBatchId: null }),
+    );
+
+    await controller.verifyNowPaymentsWithdrawalPayout(
+      { user: { sub: 'admin-1' } } as never,
+      'withdrawal-1',
+      { verificationCode: '123456' },
+    );
+
+    expect(nowPayments.verifyPayout).toHaveBeenCalledWith('payout-1', '123456');
   });
 
   it('marks a withdrawal FAILED (not APPROVED) when createPayout throws, without refunding automatically', async () => {
