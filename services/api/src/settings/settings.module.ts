@@ -1,6 +1,10 @@
 import { Global, Module } from '@nestjs/common';
 import { PlatformSettingsService } from './platform-settings.service';
-import { PublicSettingsController, SettingsController } from './settings.controller';
+import {
+  PublicSettingsController,
+  SettingsController,
+  StreamPublicSettingsController,
+} from './settings.controller';
 
 // @Global so PlatformSettingsService is available for DI anywhere without
 // every feature module importing SettingsModule -- needed because
@@ -9,7 +13,7 @@ import { PublicSettingsController, SettingsController } from './settings.control
 // maintenance on every authenticated request.
 @Global()
 @Module({
-  controllers: [SettingsController, PublicSettingsController],
+  controllers: [SettingsController, PublicSettingsController, StreamPublicSettingsController],
   providers: [PlatformSettingsService],
   exports: [PlatformSettingsService],
 })

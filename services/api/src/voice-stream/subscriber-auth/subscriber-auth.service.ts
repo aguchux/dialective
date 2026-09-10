@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -464,6 +465,41 @@ export class SubscriberAuthService {
     });
 
     return this.issueAuthResult(user);
+  }
+
+  /**
+   * Resends a still-pending invite (e.g. the original email never arrived or
+   * was missed): rotates the token/expiry so the old link stops working and
+   * emails the new one. Refuses once the invite has been accepted -- there's
+   * nothing to resend, and provisionOrganizationFromLead's own
+   * already-a-member check is the path for re-inviting someone whose
+   * membership was since removed.
+   */
+  async resendInvite(inviteId: string): Promise<void> {
+    const invite = await this.prisma.subscriberInvite.findUnique({ where: { id: inviteId } });
+    if (!invite) {
+      throw new NotFoundException('Invite not found');
+    }
+    if (invite.acceptedAt) {
+      throw new ConflictException('This invite has already been accepted');
+    }
+
+    const { token, hash } = generateOpaqueToken();
+    const [, organization] = await this.prisma.$transaction([
+      this.prisma.subscriberInvite.update({
+        where: { id: invite.id },
+        data: { tokenHash: hash, expiresAt: new Date(Date.now() + INVITE_TTL_MS) },
+      }),
+      this.prisma.subscriberOrganization.findUniqueOrThrow({
+        where: { id: invite.organizationId },
+      }),
+    ]);
+
+    await this.mail.sendSubscriberInviteEmail({
+      inviteeEmail: invite.email,
+      organizationName: organization.name,
+      token,
+    });
   }
 
   // --- Password reset -----------------------------------------------------

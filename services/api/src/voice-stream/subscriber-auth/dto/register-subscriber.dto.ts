@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsStrongPassword } from '../../../common/password-strength.util';
 
 export class RegisterSubscriberDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
@@ -19,12 +20,12 @@ export class RegisterSubscriberDto {
   email!: string;
 
   @IsString()
-  @MinLength(8)
+  @IsStrongPassword()
   password!: string;
 
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MinLength(1)
-  @MaxLength(120)
+  @MaxLength(200)
   organizationName!: string;
 }

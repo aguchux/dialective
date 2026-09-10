@@ -1,6 +1,11 @@
 process.env.STREAM_JWT_ACCESS_SECRET = process.env.STREAM_JWT_ACCESS_SECRET ?? 'test-stream-secret';
 
-import { ConflictException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { SubscriberOrgRole } from '@dialectiva/db';
 import { SubscriberAuthService } from './subscriber-auth.service';
 import { hashToken } from '../../auth/token.util';
@@ -516,6 +521,57 @@ describe('SubscriberAuthService', () => {
         expect.objectContaining({ data: { acceptedAt: expect.any(Date) } }),
       );
       expect(result.accessToken).toEqual(expect.any(String));
+    });
+  });
+
+  describe('resendInvite', () => {
+    it('rejects an unknown invite id', async () => {
+      const { prisma, service } = setup();
+      prisma.subscriberInvite.findUnique.mockResolvedValue(null);
+
+      await expect(service.resendInvite('missing-invite')).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects an already-accepted invite', async () => {
+      const { prisma, service } = setup();
+      prisma.subscriberInvite.findUnique.mockResolvedValue({
+        id: 'invite-1',
+        email: 'new@b.com',
+        organizationId: 'org-1',
+        acceptedAt: new Date(),
+      });
+
+      await expect(service.resendInvite('invite-1')).rejects.toThrow(ConflictException);
+    });
+
+    it('rotates the token/expiry and re-sends the invite email', async () => {
+      const { prisma, mail, service } = setup();
+      prisma.subscriberInvite.findUnique.mockResolvedValue({
+        id: 'invite-1',
+        email: 'new@b.com',
+        organizationId: 'org-1',
+        acceptedAt: null,
+      });
+      prisma.subscriberInvite.update.mockResolvedValue({});
+      prisma.subscriberOrganization.findUniqueOrThrow.mockResolvedValue({
+        id: 'org-1',
+        name: 'Acme',
+      });
+
+      await service.resendInvite('invite-1');
+
+      expect(prisma.subscriberInvite.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'invite-1' },
+          data: expect.objectContaining({
+            tokenHash: expect.any(String),
+            expiresAt: expect.any(Date),
+          }),
+        }),
+      );
+      expect(mail.sendSubscriberInviteEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ inviteeEmail: 'new@b.com', organizationName: 'Acme' }),
+      );
     });
   });
 

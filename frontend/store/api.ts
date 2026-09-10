@@ -3492,6 +3492,12 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['DataAccessLeads'],
     }),
+    resendDataAccessLeadInvite: builder.mutation<void, string>({
+      query: (id) => ({
+        url: `/leads/admin/data-access/${id}/resend-invite`,
+        method: 'POST',
+      }),
+    }),
     createSupportRequest: builder.mutation<{ id: string; status: string }, SupportRequestInput>({
       query: (body) => ({
         url: '/leads/support',
@@ -4737,6 +4743,7 @@ export const {
   useUpdateAdminDataAccessLeadContactMutation,
   useInviteDataAccessLeadMutation,
   useDeleteDataAccessLeadMutation,
+  useResendDataAccessLeadInviteMutation,
   useCreateSupportRequestMutation,
   useGetAdminSupportRequestsQuery,
   useUpdateAdminSupportRequestResolutionMutation,

@@ -1,6 +1,16 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { SubscriberOrgRole } from '@dialectiva/db';
+import { RegisterRateLimitGuard } from '../../common/guards/register-rate-limit.guard';
+import { PlatformSettingsService } from '../../settings/platform-settings.service';
 import { SubscriberAuthService } from './subscriber-auth.service';
 import { LoginSubscriberDto } from './dto/login-subscriber.dto';
 import { VerifySubscriberOtpDto } from './dto/verify-subscriber-otp.dto';
@@ -8,6 +18,7 @@ import { ResendSubscriberOtpDto } from './dto/resend-subscriber-otp.dto';
 import { SubscriberRefreshDto } from './dto/subscriber-refresh.dto';
 import { InviteSubscriberMemberDto } from './dto/invite-subscriber-member.dto';
 import { AcceptSubscriberInviteDto } from './dto/accept-subscriber-invite.dto';
+import { RegisterSubscriberDto } from './dto/register-subscriber.dto';
 import { RequestSubscriberPasswordResetDto } from './dto/request-subscriber-password-reset.dto';
 import { ResetSubscriberPasswordDto } from './dto/reset-subscriber-password.dto';
 import { SubscriberAuthGuard } from './subscriber-auth.guard';
@@ -18,12 +29,34 @@ import { SubscriberAccessTokenClaims } from './subscriber-jwt.util';
 
 @Controller('voice-stream/auth')
 export class SubscriberAuthController {
-  // Deliberately no POST register route -- subscriber onboarding is
-  // admin-invite-only (see RegisterPage's doc comment on the stream
-  // frontend, and provisionOrganizationFromLead below). SubscriberAuthService
-  // still exposes register() for a future/internal caller, but nothing
-  // public should be able to self-serve a brand-new organization.
-  constructor(private readonly auth: SubscriberAuthService) {}
+  constructor(
+    private readonly auth: SubscriberAuthService,
+    private readonly settings: PlatformSettingsService,
+  ) {}
+
+  /**
+   * Public only while PlatformSettings.streamSelfServeSignupEnabled is on
+   * (default: off, admin-invite-only via provisionOrganizationFromLead /
+   * acceptInvite below). Reuses RegisterRateLimitGuard/registerRateLimitPerHour
+   * -- the same admin-tunable per-IP signup rate limit as the trainer
+   * platform's POST /auth/register, rather than a second, Stream-only knob.
+   */
+  @Post('register')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RegisterRateLimitGuard)
+  @Throttle({ default: { limit: 30, ttl: 60 * 60 * 1000 } })
+  async register(@Body() dto: RegisterSubscriberDto) {
+    if (!(await this.settings.isStreamSelfServeSignupEnabled())) {
+      throw new ForbiddenException('Self-serve signup is currently disabled');
+    }
+    return this.auth.register(
+      dto.email,
+      dto.password,
+      dto.firstName,
+      dto.lastName,
+      dto.organizationName,
+    );
+  }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)

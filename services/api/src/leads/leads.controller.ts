@@ -171,6 +171,38 @@ export class LeadsController {
   }
 
   /**
+   * Resends this lead's pending Voice Stream invite -- for when the original
+   * invite email never arrived or was missed. Looks up the most recent
+   * unaccepted SubscriberInvite for the org this lead was already invited
+   * into (provisionOrganizationFromLead above) and rotates/re-sends it via
+   * SubscriberAuthService.resendInvite; 404s if the lead was never invited,
+   * or if every invite on that org has already been accepted.
+   */
+  @Post('admin/data-access/:id/resend-invite')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async resendDataAccessLeadInvite(@Param('id') id: string): Promise<void> {
+    const lead = await this.prisma.dataAccessLead.findUnique({
+      where: { id },
+      select: { invitedOrganizationId: true },
+    });
+    if (!lead || !lead.invitedOrganizationId) {
+      throw new NotFoundException('This request has not been invited yet');
+    }
+
+    const invite = await this.prisma.subscriberInvite.findFirst({
+      where: { organizationId: lead.invitedOrganizationId, acceptedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!invite) {
+      throw new NotFoundException('No pending invite found for this request');
+    }
+
+    await this.subscriberAuth.resendInvite(invite.id);
+  }
+
+  /**
    * Deletes a data-access request. Refuses once the lead has an
    * invitedOrganizationId (an admin already provisioned an org/invite from
    * it) -- deleting the request there would orphan the relationship without

@@ -62,9 +62,26 @@ async function apiFetch<T>(path: string, init: RequestInit): Promise<T> {
 }
 
 export const apiClient = {
-  // No register() -- subscriber onboarding is admin-invite-only (see
-  // app/register/page.tsx's doc comment); the backend has no public
-  // POST /voice-stream/auth/register route to call.
+  // register() only succeeds while the backend has
+  // PlatformSettings.streamSelfServeSignupEnabled on -- see
+  // app/register/page.tsx, which checks getPublicSettings() first and shows
+  // the lead-capture "Request access" form instead when it's off.
+  register: (params: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    organizationName: string;
+  }) =>
+    apiFetch<SubscriberPendingOtp>('/voice-stream/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  getPublicSettings: () =>
+    apiFetch<{ selfServeSignupEnabled: boolean }>('/voice-stream/settings/public', {
+      method: 'GET',
+    }),
 
   login: (email: string, password: string) =>
     apiFetch<SubscriberPendingOtp>('/voice-stream/auth/login', {

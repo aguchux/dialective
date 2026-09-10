@@ -671,4 +671,8 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsBoolean()
   landingShowPayout?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  streamSelfServeSignupEnabled?: boolean;
 }

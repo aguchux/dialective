@@ -45,3 +45,13 @@ export class PublicSettingsController {
     return this.settings.getPublicClientSettings();
   }
 }
+
+@Controller('voice-stream/settings')
+export class StreamPublicSettingsController {
+  constructor(private readonly settings: PlatformSettingsService) {}
+
+  @Get('public')
+  getStreamPublicSettings() {
+    return this.settings.getStreamPublicClientSettings();
+  }
+}

@@ -2369,6 +2369,7 @@ model PlatformSettings {
   landingShowTrainers                    Boolean   @default(true)
   landingShowPoolVolume                  Boolean   @default(true)
   landingShowPayout                      Boolean   @default(true)
+  streamSelfServeSignupEnabled           Boolean   @default(false) // when true, POST /voice-stream/auth/register is open to the public and the Stream /register page shows a real signup form instead of the lead-capture "Request access" form; when false (default), Stream onboarding stays admin-invite-only
   updatedAt                              DateTime  @updatedAt
   createdAt                              DateTime  @default(now())
 

@@ -895,6 +895,7 @@ export class PlatformSettingsService {
       landingShowTrainers: row.landingShowTrainers,
       landingShowPoolVolume: row.landingShowPoolVolume,
       landingShowPayout: row.landingShowPayout,
+      streamSelfServeSignupEnabled: row.streamSelfServeSignupEnabled,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -1029,6 +1030,7 @@ export class PlatformSettingsService {
     landingShowTrainers?: boolean;
     landingShowPoolVolume?: boolean;
     landingShowPayout?: boolean;
+    streamSelfServeSignupEnabled?: boolean;
   }) {
     if (data.authMaintenanceEnabled) {
       // Turning it on (or extending it) always needs a concrete end time --
@@ -1433,9 +1435,15 @@ export class PlatformSettingsService {
       landingShowTrainers: row.landingShowTrainers,
       landingShowPoolVolume: row.landingShowPoolVolume,
       landingShowPayout: row.landingShowPayout,
+      streamSelfServeSignupEnabled: row.streamSelfServeSignupEnabled,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
+  }
+
+  async isStreamSelfServeSignupEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.streamSelfServeSignupEnabled;
   }
 
   async getPublicClientSettings() {
@@ -1529,6 +1537,18 @@ export class PlatformSettingsService {
       testimonyLandingLimit: row.testimonyLandingLimit,
       testimonyTextRewardTokens: row.testimonyTextRewardTokens.toString(),
       testimonyVideoRewardTokens: row.testimonyVideoRewardTokens.toString(),
+    };
+  }
+
+  /**
+   * Small, Stream-specific public settings surface -- separate from
+   * getPublicClientSettings() (the trainer-platform landing/login/signup
+   * bundle) rather than folding this in, since Stream's public frontend has
+   * no reason to fetch or depend on that much larger, trainer-facing shape.
+   */
+  async getStreamPublicClientSettings() {
+    return {
+      selfServeSignupEnabled: await this.isStreamSelfServeSignupEnabled(),
     };
   }
 }
