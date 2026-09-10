@@ -730,6 +730,11 @@ export class PlatformSettingsService {
     );
   }
 
+  async isAsrGateGloballyBypassed(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.asrGateGloballyBypassed;
+  }
+
   async isDomainConversationTaskEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.domainConversationTaskEnabled;
@@ -870,6 +875,7 @@ export class PlatformSettingsService {
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       wordTrainingEnabled: row.wordTrainingEnabled,
       sentenceTrainingEnabled: row.sentenceTrainingEnabled,
+      asrGateGloballyBypassed: row.asrGateGloballyBypassed,
       domainConversationTaskEnabled: row.domainConversationTaskEnabled,
       domainConversationMinDurationSeconds,
       domainConversationMaxDurationSeconds,
@@ -1025,6 +1031,7 @@ export class PlatformSettingsService {
     reverseWordTrainingEnabled?: boolean;
     wordTrainingEnabled?: boolean;
     sentenceTrainingEnabled?: boolean;
+    asrGateGloballyBypassed?: boolean;
     domainConversationTaskEnabled?: boolean;
     domainConversationMinDurationSeconds?: number;
     domainConversationMaxDurationSeconds?: number;
@@ -1517,6 +1524,7 @@ export class PlatformSettingsService {
       reverseWordTrainingEnabled: row.reverseWordTrainingEnabled,
       wordTrainingEnabled: row.wordTrainingEnabled,
       sentenceTrainingEnabled: row.sentenceTrainingEnabled,
+      asrGateGloballyBypassed: row.asrGateGloballyBypassed,
       domainConversationTaskEnabled: row.domainConversationTaskEnabled,
       domainConversationMinDurationSeconds,
       domainConversationMaxDurationSeconds,

@@ -6,8 +6,9 @@ import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import {
   AsrTranscriptionRequestAdminRow,
   useGetAdminAsrTranscriptionRequestsQuery,
+  useGetAsrGateBypassStatusQuery,
+  useSetAsrGateBypassMutation,
   useSetAsrTranscriptionRequestStatusMutation,
-  useSetDialectAsrGateBypassMutation,
 } from '@/store/api';
 
 function trainerName(row: AsrTranscriptionRequestAdminRow): string {
@@ -31,17 +32,24 @@ const STATUS_CLASS: Record<AsrTranscriptionRequestAdminRow['status'], string> = 
  * dialect with no models/asr-registry.yaml entry (see
  * WordsService.assertAsrAvailable / AsrRegistryService.resolve). Marking a
  * request Acknowledged/Fulfilled here is TRACKING ONLY -- it does not touch
- * the registry and does not unlock the dialect. A dialect only becomes
+ * the registry and does not unlock any dialect. A dialect only becomes
  * usable once it has a real registry entry + checkpoint (same manual
  * process used for Kinyarwanda) -- this page just tells admins which
  * dialects have real trainer demand waiting.
+ *
+ * The gate bypass below is a single GLOBAL switch (PlatformSettings.
+ * asrGateGloballyBypassed), not a per-dialect one -- while on, no dialect
+ * is blocked for missing ASR, regardless of the registry. Use it when
+ * checkpoints aren't ready for one or more dialects and aren't coming soon,
+ * to unblock every affected trainer at once.
  */
 export default function AdminAsrTranscriptionRequestsPage() {
   const { data: requests, isLoading } = useGetAdminAsrTranscriptionRequestsQuery();
+  const { data: gateBypassStatus, isLoading: isLoadingBypassStatus } =
+    useGetAsrGateBypassStatusQuery();
   const [setStatus, { isLoading: isUpdating }] = useSetAsrTranscriptionRequestStatusMutation();
-  const [setGateBypass, { isLoading: isTogglingBypass }] = useSetDialectAsrGateBypassMutation();
+  const [setGateBypass, { isLoading: isTogglingBypass }] = useSetAsrGateBypassMutation();
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [togglingDialectId, setTogglingDialectId] = useState<string | null>(null);
 
   async function handleSetStatus(
     row: AsrTranscriptionRequestAdminRow,
@@ -55,16 +63,8 @@ export default function AdminAsrTranscriptionRequestsPage() {
     }
   }
 
-  async function handleToggleGateBypass(row: AsrTranscriptionRequestAdminRow) {
-    setTogglingDialectId(row.dialect.id);
-    try {
-      await setGateBypass({
-        dialectId: row.dialect.id,
-        bypassed: !row.dialect.asrGateBypassed,
-      }).unwrap();
-    } finally {
-      setTogglingDialectId(null);
-    }
+  async function handleToggleGateBypass() {
+    await setGateBypass({ bypassed: !gateBypassStatus?.bypassed }).unwrap();
   }
 
   const columns: DataTableColumn<AsrTranscriptionRequestAdminRow>[] = [
@@ -84,16 +84,9 @@ export default function AdminAsrTranscriptionRequestsPage() {
       header: 'Dialect',
       sortValue: (r) => r.dialect.name,
       render: (r) => (
-        <div className="flex flex-col gap-1">
-          <span className="text-sm font-bold text-ink">
-            {r.dialect.name} <span className="text-muted">({r.dialect.tag})</span>
-          </span>
-          {r.dialect.asrGateBypassed && (
-            <span className="inline-flex w-fit items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-extrabold text-violet-800 dark:bg-violet-950 dark:text-violet-200">
-              Gate bypassed
-            </span>
-          )}
-        </div>
+        <span className="text-sm font-bold text-ink">
+          {r.dialect.name} <span className="text-muted">({r.dialect.tag})</span>
+        </span>
       ),
     },
     {
@@ -141,18 +134,12 @@ export default function AdminAsrTranscriptionRequestsPage() {
               Mark fulfilled
             </button>
           )}
-          <button
-            className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:opacity-50"
-            disabled={isTogglingBypass && togglingDialectId === r.dialect.id}
-            onClick={() => void handleToggleGateBypass(r)}
-            type="button"
-          >
-            {r.dialect.asrGateBypassed ? 'Re-enable gate' : 'Bypass gate'}
-          </button>
         </div>
       ),
     },
   ];
+
+  const bypassed = gateBypassStatus?.bypassed ?? false;
 
   return (
     <AdminShell>
@@ -162,11 +149,40 @@ export default function AdminAsrTranscriptionRequestsPage() {
           <p className="leading-relaxed text-muted">
             Trainers whose dialect has no ASR transcription support yet (no
             models/asr-registry.yaml entry) are shown a "Send request" prompt instead of being
-            stuck. Acknowledging or marking a request fulfilled here is for tracking only -- it
-            does not enable transcription. If no checkpoint is coming soon, use "Bypass gate" to
-            let that dialect record again as before, unscored/untranscribed, without waiting on a
-            real registry entry.
+            stuck. Acknowledging or marking a request fulfilled below is for tracking only -- it
+            does not enable transcription.
           </p>
+        </div>
+
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${
+            bypassed
+              ? 'border-violet-300 bg-violet-50 dark:border-violet-800 dark:bg-violet-950'
+              : 'border-line bg-surface'
+          }`}
+        >
+          <div className="min-w-0">
+            <p className="font-extrabold text-ink">
+              ASR gate: {bypassed ? 'Bypassed for every dialect' : 'Active'}
+            </p>
+            <p className="text-sm text-muted">
+              A single global switch. When bypassed, every dialect with no ASR checkpoint can
+              record again (unscored/untranscribed) instead of staying blocked -- use this while
+              checkpoints are still being sourced or trained.
+            </p>
+          </div>
+          <button
+            className={`inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-extrabold transition-colors disabled:opacity-50 ${
+              bypassed
+                ? 'border border-line bg-surface text-ink hover:bg-surface-muted'
+                : 'bg-accent text-white hover:bg-accent-dark'
+            }`}
+            disabled={isLoadingBypassStatus || isTogglingBypass}
+            onClick={() => void handleToggleGateBypass()}
+            type="button"
+          >
+            {bypassed ? 'Re-enable gate for all dialects' : 'Bypass gate for all dialects'}
+          </button>
         </div>
 
         <DataTable

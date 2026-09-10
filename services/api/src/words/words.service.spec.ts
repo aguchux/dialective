@@ -28,6 +28,7 @@ describe('WordsService', () => {
     isQracEnabled: jest.fn().mockResolvedValue(false),
     isQracRequiredAtSessionStart: jest.fn().mockResolvedValue(false),
     getQracIntervalMinutes: jest.fn().mockResolvedValue(30),
+    isAsrGateGloballyBypassed: jest.fn().mockResolvedValue(false),
   };
   const storage = { createPresignedDownloadUrl: jest.fn(), createPresignedUploadUrl: jest.fn() };
   const streams = { publish: jest.fn() };
@@ -1206,14 +1207,9 @@ describe('WordsService', () => {
       await expect(service.nextAssignment(trainer.id, session.id)).resolves.toBeDefined();
     });
 
-    it('does not block when the dialect has no ASR entry but asrGateBypassed is set (admin override)', async () => {
+    it('does not block any dialect when asrGateGloballyBypassed is set (admin override)', async () => {
       asrRegistry.resolve.mockReturnValueOnce(undefined);
-      prisma.user.findUnique
-        .mockResolvedValueOnce(trainer) // assertNotOnAuditHold
-        .mockResolvedValueOnce({
-          ...trainer,
-          dialect: { ...trainer.dialect, asrGateBypassed: true },
-        }); // getTrainer
+      settings.isAsrGateGloballyBypassed.mockResolvedValueOnce(true);
       prisma.wordTrainingAssignment.create.mockResolvedValue({
         id: 'assignment-1',
         direction: 'ENGLISH_TO_DIALECT',

@@ -1865,7 +1865,7 @@ export interface AsrTranscriptionRequest {
 
 export interface AsrTranscriptionRequestAdminRow extends AsrTranscriptionRequest {
   user: { id: string; email: string; firstName: string | null; lastName: string | null };
-  dialect: { id: string; tag: string; name: string; asrGateBypassed: boolean };
+  dialect: { id: string; tag: string; name: string };
   acknowledgedByAdmin: { id: string; email: string } | null;
 }
 
@@ -3073,14 +3073,15 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['AsrTranscriptionRequests'],
     }),
-    setDialectAsrGateBypass: builder.mutation<
-      { id: string; asrGateBypassed: boolean },
-      { dialectId: string; bypassed: boolean }
-    >({
-      query: ({ dialectId, bypassed }) => ({
-        url: `/asr-transcription-requests/admin/dialects/${dialectId}/gate-bypass`,
+    getAsrGateBypassStatus: builder.query<{ bypassed: boolean }, void>({
+      query: () => '/asr-transcription-requests/admin/gate-bypass',
+      providesTags: ['AsrTranscriptionRequests'],
+    }),
+    setAsrGateBypass: builder.mutation<{ bypassed: boolean }, { bypassed: boolean }>({
+      query: (body) => ({
+        url: '/asr-transcription-requests/admin/gate-bypass',
         method: 'PATCH',
-        body: { bypassed },
+        body,
       }),
       invalidatesTags: ['AsrTranscriptionRequests'],
     }),
@@ -4931,7 +4932,8 @@ export const {
   useCreateAsrTranscriptionRequestMutation,
   useGetAdminAsrTranscriptionRequestsQuery,
   useSetAsrTranscriptionRequestStatusMutation,
-  useSetDialectAsrGateBypassMutation,
+  useGetAsrGateBypassStatusQuery,
+  useSetAsrGateBypassMutation,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
   useRequestFlutterwaveDepositOtpMutation,

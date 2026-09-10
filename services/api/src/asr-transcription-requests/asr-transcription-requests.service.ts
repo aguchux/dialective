@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AsrTranscriptionRequestStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { ListAsrTranscriptionRequestsAdminDto } from './dto/list-asr-transcription-requests-admin.dto';
 
 /**
@@ -17,7 +18,10 @@ import { ListAsrTranscriptionRequestsAdminDto } from './dto/list-asr-transcripti
  */
 @Injectable()
 export class AsrTranscriptionRequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: PlatformSettingsService,
+  ) {}
 
   async createOrGetMine(userId: string, dialectTag: string) {
     const dialect = await this.prisma.dialect.findUnique({ where: { tag: dialectTag } });
@@ -47,7 +51,7 @@ export class AsrTranscriptionRequestsService {
       where: query.status ? { status: query.status } : undefined,
       include: {
         user: { select: { id: true, email: true, firstName: true, lastName: true } },
-        dialect: { select: { id: true, tag: true, name: true, asrGateBypassed: true } },
+        dialect: { select: { id: true, tag: true, name: true } },
         acknowledgedByAdmin: { select: { id: true, email: true } },
       },
       orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
@@ -69,21 +73,19 @@ export class AsrTranscriptionRequestsService {
   }
 
   /**
-   * Admin escape hatch for a dialect with no models/asr-registry.yaml
-   * checkpoint that isn't coming soon: bypassing lets trainers record as
-   * before the ASR gate existed (unscored/untranscribed), without waiting
-   * on a real registry entry. See WordsService.assertAsrAvailable.
-   * Independent of request status -- toggling this does not touch any
-   * AsrTranscriptionRequest rows.
+   * Admin escape hatch, global across every dialect: when set, no dialect
+   * is blocked for missing ASR support, regardless of
+   * models/asr-registry.yaml -- lets everyone record unscored/untranscribed
+   * while checkpoints are still being sourced/trained. See
+   * WordsService.assertAsrAvailable. Independent of request status --
+   * toggling this does not touch any AsrTranscriptionRequest rows.
    */
-  async setDialectGateBypass(dialectId: string, bypassed: boolean) {
-    try {
-      return await this.prisma.dialect.update({
-        where: { id: dialectId },
-        data: { asrGateBypassed: bypassed },
-      });
-    } catch {
-      throw new NotFoundException('Dialect not found');
-    }
+  async getGateBypassStatus(): Promise<{ bypassed: boolean }> {
+    return { bypassed: await this.settings.isAsrGateGloballyBypassed() };
+  }
+
+  async setGateBypass(bypassed: boolean): Promise<{ bypassed: boolean }> {
+    await this.settings.update({ asrGateGloballyBypassed: bypassed });
+    return { bypassed };
   }
 }

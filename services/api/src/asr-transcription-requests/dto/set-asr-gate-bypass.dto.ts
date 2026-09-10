@@ -1,6 +1,6 @@
 import { IsBoolean } from 'class-validator';
 
-export class SetDialectAsrGateBypassDto {
+export class SetAsrGateBypassDto {
   @IsBoolean()
   bypassed!: boolean;
 }

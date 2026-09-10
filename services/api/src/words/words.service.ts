@@ -162,7 +162,7 @@ export class WordsService {
     }
 
     const trainer = await this.getTrainer(userId);
-    this.assertAsrAvailable(trainer.dialect!);
+    await this.assertAsrAvailable(trainer.dialect!.tag);
 
     const [taskTokenCost, wallet] = await Promise.all([
       this.settings.getTaskTokenCost(),
@@ -877,20 +877,23 @@ export class WordsService {
    * instead. Structured ForbiddenException, same convention as the
    * qracRequired/requiredCourses gates above.
    *
-   * Dialect.asrGateBypassed is an admin escape hatch (set from the "ASR
-   * Request" admin page) for when no checkpoint exists yet and isn't
-   * coming soon -- recordings are accepted unscored/untranscribed, same as
-   * this gate never having existed. Independent of AsrTranscriptionRequest
-   * tracking: bypassing does not create/resolve a request, and acknowledging
-   * a request does not bypass the gate.
+   * PlatformSettings.asrGateGloballyBypassed is an admin escape hatch (set
+   * from the "ASR Request" admin page) for when checkpoints aren't ready
+   * for one or more dialects and aren't coming soon -- while set, EVERY
+   * dialect skips this gate and records unscored/untranscribed, same as
+   * this gate never having existed. Deliberately global, not per-dialect --
+   * the plan was one switch to unblock everyone at once, not a toggle per
+   * dialect. Independent of AsrTranscriptionRequest tracking: bypassing
+   * does not create/resolve a request, and acknowledging a request does
+   * not bypass the gate.
    */
-  private assertAsrAvailable(dialect: { tag: string; asrGateBypassed: boolean }): void {
-    if (dialect.asrGateBypassed) return;
-    if (!this.asrRegistry.resolve(dialect.tag)) {
+  private async assertAsrAvailable(dialectTag: string): Promise<void> {
+    if (await this.settings.isAsrGateGloballyBypassed()) return;
+    if (!this.asrRegistry.resolve(dialectTag)) {
       throw new ForbiddenException({
         message: 'Transcription is not yet available for your dialect.',
         asrUnavailable: true,
-        dialectTag: dialect.tag,
+        dialectTag,
       });
     }
   }
