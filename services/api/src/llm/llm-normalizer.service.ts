@@ -31,4 +31,14 @@ export class LlmNormalizerService {
     const { text } = await this.chain.normalize(prompt, order);
     return text;
   }
+
+  async describeImage(
+    imageBase64: string,
+    mimeType: string,
+    prompt: string,
+    order: LlmProviderKey[],
+  ): Promise<string> {
+    const { text } = await this.chain.describeImage(imageBase64, mimeType, prompt, order);
+    return text;
+  }
 }

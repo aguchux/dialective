@@ -178,6 +178,14 @@ export class KycController {
     return this.kyc.adminGet(id);
   }
 
+  /** Decrypts and returns the raw decision payload -- see kyc.service.ts's adminGetDecision doc comment. Every call is logged server-side. */
+  @Get('admin/kyc/:id/decision')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  adminGetDecision(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.kyc.adminGetDecision(id, req.user.sub);
+  }
+
   @Post('admin/kyc/:id/refresh')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

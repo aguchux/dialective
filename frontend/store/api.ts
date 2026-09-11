@@ -3308,6 +3308,25 @@ export const dialectivaApi = createApi({
       query: (id) => `/admin/kyc/${id}`,
       providesTags: ['Kyc'],
     }),
+    getKycDecision: builder.query<
+      {
+        raw: {
+          botFindings?: {
+            plausibilityScore: number | null;
+            flags: string[];
+            summary: string | null;
+            extractedFields: {
+              fullName: string | null;
+              dateOfBirth: string | null;
+              documentNumber: string | null;
+            } | null;
+          } | null;
+        } | null;
+      },
+      string
+    >({
+      query: (id) => `/admin/kyc/${id}/decision`,
+    }),
     refreshKycVerification: builder.mutation<KycVerification, string>({
       query: (id) => ({ url: `/admin/kyc/${id}/refresh`, method: 'POST' }),
       invalidatesTags: ['Kyc'],
@@ -4929,6 +4948,7 @@ export const {
   useCancelKycVerificationMutation,
   useApproveKycVerificationMutation,
   useDeclineKycVerificationMutation,
+  useLazyGetKycDecisionQuery,
   useGetTokenomicsStatusQuery,
   useGetValuationHistoryQuery,
   useRecalculateValuationMutation,

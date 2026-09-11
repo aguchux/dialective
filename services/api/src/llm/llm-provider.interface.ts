@@ -14,6 +14,15 @@ export const ALL_PROVIDER_KEYS: LlmProviderKey[] = ['openai', 'deepseek', 'anthr
 export interface LlmProvider {
   readonly key: LlmProviderKey;
   normalize(prompt: string): Promise<string>;
+  /**
+   * Optional multimodal capability -- only implemented by providers whose
+   * chat model actually accepts image input (OpenAI's gpt-4o-mini,
+   * Anthropic's Claude). deepseek-chat is text-only and omits this method
+   * entirely; LlmFallbackChain.describeImage filters it out of any
+   * describeImage() provider order rather than calling it and getting a
+   * confusing runtime failure.
+   */
+  describeImage?(imageBase64: string, mimeType: string, prompt: string): Promise<string>;
 }
 
 const DEFAULT_PROVIDER_ORDER: LlmProviderKey[] = ['openai', 'deepseek', 'anthropic'];

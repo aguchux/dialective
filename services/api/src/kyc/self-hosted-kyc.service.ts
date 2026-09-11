@@ -14,6 +14,7 @@ import { StorageService } from '../storage/storage.service';
 import { LlmNormalizerService } from '../llm/llm-normalizer.service';
 import { LlmProviderKey } from '../llm/llm-provider.interface';
 import { DiditDecision } from './didit.service';
+import { FaceMatchService } from './face-match.service';
 import { signKycHandoffToken, verifyKycHandoffToken } from './self-hosted-kyc-handoff.util';
 import {
   BotFindings,
@@ -22,6 +23,14 @@ import {
 } from './self-hosted-kyc-decision';
 
 const EVIDENCE_BUCKET = process.env.SPACES_KYC_EVIDENCE_BUCKET ?? 'dialectiva-kyc-evidence';
+
+// The DLKYC app (dlkyc/components/VerificationFlow.tsx) always captures via
+// canvas.toBlob(..., 'image/jpeg', 0.9) -- CreateKycEvidenceUploadUrlDto
+// accepts png/webp too for future flexibility (e.g. a raw file-upload
+// fallback), but KycCaptureEvidence doesn't persist which content type was
+// actually used, so face-match/OCR both assume this until a real
+// non-JPEG capture path exists and that gap gets closed properly.
+const CAPTURED_IMAGE_CONTENT_TYPE = 'image/jpeg';
 
 const CHALLENGES = [
   'Turn your head to the left',
@@ -46,6 +55,7 @@ export class SelfHostedKycService {
     private readonly storage: StorageService,
     private readonly settings: PlatformSettingsService,
     private readonly llm: LlmNormalizerService,
+    private readonly faceMatch: FaceMatchService,
   ) {}
 
   /** Called by kyc.service.ts's createVerificationSession for the "self" provider branch. */
@@ -192,16 +202,21 @@ export class SelfHostedKycService {
     const evidence = await this.prisma.kycCaptureEvidence.findMany({
       where: { kycVerificationId: verification.id },
     });
-    const hasDocument = evidence.some((e) => e.kind === KycEvidenceKind.DOCUMENT_FRONT);
+    const documentFront = evidence.find((e) => e.kind === KycEvidenceKind.DOCUMENT_FRONT);
     const selfieFrames = evidence.filter((e) => e.kind === KycEvidenceKind.SELFIE_FRAME);
-    if (!hasDocument || selfieFrames.length < 2) {
+    if (!documentFront || selfieFrames.length < 2) {
       throw new BadRequestException('Document and selfie capture must be completed first');
     }
 
-    const { faceMatchScore, livenessScore } = await this.runDeterministicChecks();
+    const { faceMatchScore, livenessScore } = await this.runDeterministicChecks(
+      documentFront,
+      selfieFrames,
+    );
 
     const botEnabled = await this.settings.isSelfHostedKycBotEnabled();
-    const botFindings = botEnabled ? await this.runBotChecks(verification.documentType) : null;
+    const botFindings = botEnabled
+      ? await this.runBotChecks(verification.documentType, documentFront)
+      : null;
 
     const autoApproveEnabled = await this.settings.isSelfHostedKycAutoApproveEnabled();
     const result = evaluateSelfHostedKyc({
@@ -215,31 +230,88 @@ export class SelfHostedKycService {
   }
 
   /**
-   * PLACEHOLDER: no self-hosted face-descriptor/liveness model is wired in
-   * yet (see this service's tracking follow-up -- adding one means new
-   * native build dependencies, e.g. @vladmandic/face-api + canvas, in the
-   * services/api Docker image, deliberately deferred out of this first
-   * build). Always returns mid-range "uncertain" scores, which
-   * self-hosted-kyc-decision.ts's thresholds route to REVIEW regardless of
-   * autoApproveEnabled -- i.e. auto-approval can never fire until this is
-   * replaced with a real model. Safe default, not a silent gap.
+   * Runs FaceMatchService against the stored document-portrait image and
+   * selfie frames. Any failure here (no face detected in the document, no
+   * face detected in enough selfie frames, a model/decode error) is treated
+   * as a 0 score rather than thrown -- self-hosted-kyc-decision.ts's
+   * FACE_MATCH_DECLINE_BELOW/LIVENESS_DECLINE_BELOW thresholds then
+   * correctly decline an unusable submission instead of the whole
+   * evaluate() call 500ing on a bad photo.
    */
-  private async runDeterministicChecks(): Promise<{
-    faceMatchScore: number;
-    livenessScore: number;
-  }> {
-    return { faceMatchScore: 60, livenessScore: 60 };
+  private async runDeterministicChecks(
+    documentFront: { bucket: string; key: string },
+    selfieFrames: { bucket: string; key: string }[],
+  ): Promise<{ faceMatchScore: number; livenessScore: number }> {
+    try {
+      const [documentBuffer, selfieBuffers] = await Promise.all([
+        this.downloadEvidence(documentFront),
+        Promise.all(selfieFrames.map((frame) => this.downloadEvidence(frame))),
+      ]);
+
+      const documentFace = await this.faceMatch.detectSingleFace(documentBuffer);
+      const { livenessScore, bestFrameIndex } = await this.faceMatch.scoreLiveness(selfieBuffers);
+
+      if (!documentFace) {
+        this.logger.warn(`DLKYC evaluate: no face detected in document portrait`);
+        return { faceMatchScore: 0, livenessScore };
+      }
+      const bestSelfieFace = await this.faceMatch.detectSingleFace(selfieBuffers[bestFrameIndex]);
+      if (!bestSelfieFace) {
+        this.logger.warn(`DLKYC evaluate: no face detected in any selfie frame`);
+        return { faceMatchScore: 0, livenessScore };
+      }
+
+      const faceMatchScore = await this.faceMatch.compareDescriptors(
+        documentFace.descriptor,
+        bestSelfieFace.descriptor,
+      );
+      return { faceMatchScore, livenessScore };
+    } catch (err) {
+      this.logger.error(`DLKYC face-match evaluation failed: ${String(err)}`);
+      return { faceMatchScore: 0, livenessScore: 0 };
+    }
   }
 
-  private async runBotChecks(documentType: string | null): Promise<BotFindings> {
+  private async downloadEvidence(evidence: { bucket: string; key: string }): Promise<Buffer> {
+    const { body } = await this.storage.getObject(evidence.bucket, evidence.key);
+    const chunks: Buffer[] = [];
+    for await (const chunk of body) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
+  private async runBotChecks(
+    documentType: string | null,
+    documentFront: { bucket: string; key: string },
+  ): Promise<BotFindings> {
     const order = (await this.settings.getSelfHostedKycBotProviderOrder()) as LlmProviderKey[];
+
+    let extractedFields: BotFindings['extractedFields'] = null;
+    try {
+      const documentBuffer = await this.downloadEvidence(documentFront);
+      const text = await this.llm.describeImage(
+        documentBuffer.toString('base64'),
+        CAPTURED_IMAGE_CONTENT_TYPE,
+        buildOcrPrompt(documentType),
+        order,
+      );
+      extractedFields = parseOcrResponse(text);
+    } catch (err) {
+      // OCR is reviewer-facing only (see BotFindings.extractedFields doc
+      // comment) -- a failure here must never abort the rest of
+      // evaluate(), just leave the fields null for the admin to read off
+      // the stored image themselves.
+      this.logger.warn(`DLKYC document OCR failed, leaving fields blank: ${String(err)}`);
+    }
+
     const prompt = buildBotPrompt(documentType);
     try {
       const text = await this.llm.normalize(prompt, order);
-      return parseBotResponse(text);
+      return { ...parseBotResponse(text), extractedFields };
     } catch (err) {
       this.logger.warn(`DLKYC bot check failed, treating as no findings: ${String(err)}`);
-      return { plausibilityScore: null, flags: [], summary: null };
+      return { plausibilityScore: null, flags: [], summary: null, extractedFields };
     }
   }
 
@@ -287,7 +359,7 @@ function buildBotPrompt(documentType: string | null): string {
   ].join(' ');
 }
 
-function parseBotResponse(text: string): BotFindings {
+function parseBotResponse(text: string): Omit<BotFindings, 'extractedFields'> {
   try {
     const parsed = JSON.parse(text) as {
       plausibilityScore?: unknown;
@@ -303,5 +375,34 @@ function parseBotResponse(text: string): BotFindings {
     return { plausibilityScore, flags, summary };
   } catch {
     return { plausibilityScore: null, flags: [], summary: null };
+  }
+}
+
+function buildOcrPrompt(documentType: string | null): string {
+  return [
+    'You are reading an identity document image to assist a human reviewer.',
+    'You are NOT authorized to approve, reject, or verify the document --',
+    'only to transcribe what is printed on it as accurately as possible.',
+    `Declared document type: ${documentType ?? 'unknown'}.`,
+    'Respond with strict JSON only, no prose, matching this shape:',
+    '{"fullName": <string or null>, "dateOfBirth": <string or null, as printed>, "documentNumber": <string or null>}',
+    'Use null for any field you cannot read confidently -- never guess or invent a value.',
+  ].join(' ');
+}
+
+function parseOcrResponse(text: string): BotFindings['extractedFields'] {
+  try {
+    const parsed = JSON.parse(text) as {
+      fullName?: unknown;
+      dateOfBirth?: unknown;
+      documentNumber?: unknown;
+    };
+    return {
+      fullName: typeof parsed.fullName === 'string' ? parsed.fullName : null,
+      dateOfBirth: typeof parsed.dateOfBirth === 'string' ? parsed.dateOfBirth : null,
+      documentNumber: typeof parsed.documentNumber === 'string' ? parsed.documentNumber : null,
+    };
+  } catch {
+    return null;
   }
 }

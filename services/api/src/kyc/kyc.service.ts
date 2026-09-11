@@ -6,6 +6,7 @@ import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { DiditDecision, DiditService } from './didit.service';
 import { SelfHostedKycService } from './self-hosted-kyc.service';
 import {
+  decryptKycField,
   encryptKycField,
   fingerprintKycDocument,
   maskDocumentNumber,
@@ -455,6 +456,32 @@ export class KycService {
     });
     if (!verification) throw new NotFoundException('Verification not found');
     return toPublicVerification(verification);
+  }
+
+  /**
+   * Decrypts and returns the raw decision payload -- the one place
+   * decisionEncryptedJson is ever read back, gated to admins only
+   * (RolesGuard on the controller route) and logged on every access, since
+   * this is the only surface that can expose a trainer's raw document
+   * number/name/DOB or self-hosted-kyc.service.ts's LLM-assisted OCR read.
+   * For a self-hosted verification, `raw.botFindings` is the reviewer-
+   * facing signal this exists for; for Didit, `raw` is its full decision
+   * object as already stored today.
+   */
+  async adminGetDecision(id: string, adminId: string) {
+    const verification = await this.prisma.kycVerification.findUnique({ where: { id } });
+    if (!verification) throw new NotFoundException('Verification not found');
+    if (!verification.decisionEncryptedJson) {
+      return { raw: null };
+    }
+    this.logger.log(`Admin ${adminId} viewed decrypted decision for KycVerification ${id}`);
+    const encrypted = verification.decisionEncryptedJson as unknown as {
+      encryptedValue: string;
+      iv: string;
+      authTag: string;
+    };
+    const raw = JSON.parse(decryptKycField(encrypted));
+    return { raw };
   }
 }
 

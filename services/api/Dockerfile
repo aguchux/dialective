@@ -1,5 +1,18 @@
-FROM node:20-alpine AS dependencies
+
+# node:20-alpine (musl libc) was dropped in favor of node:20-bookworm-slim
+# (glibc) when the DLKYC face-match/liveness feature added canvas and
+# @tensorflow/tfjs-node -- neither publishes musl/Alpine prebuilds (only
+# linux-x64/linux-arm64 glibc), and source-compiling them on Alpine is
+# known to be unreliable. build-essential + the cairo/pango/jpeg/gif dev
+# headers below are canvas's documented Linux build requirements; the
+# runtime stage installs only the matching non-dev shared libraries canvas's
+# compiled .node addon dlopen()s at require() time.
+FROM node:20-bookworm-slim AS dependencies
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential python3 pkg-config \
+      libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
+    && rm -rf /var/lib/apt/lists/*
 # Build context must be repo root: models/asr-registry.yaml must resolve,
 # and api depends on the @dialectiva/db workspace package (packages/db),
 # whose generated Prisma client api itself produces during the build below.
@@ -39,9 +52,12 @@ CMD ["npm", "run", "prisma:release"]
 FROM dependencies AS production-dependencies
 RUN npm prune --omit=dev --workspace=@dialectiva/db --workspace=@dialectiva/api && npm cache clean --force
 
-FROM node:20-alpine AS runtime
+FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libjpeg62-turbo libgif7 librsvg2-2 \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/packages/db/package.json ./packages/db/package.json
 COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=production-dependencies /app/node_modules ./node_modules

@@ -33,4 +33,39 @@ export class LlmFallbackChain {
 
     throw new Error(`All LLM providers failed -- ${failures.join('; ')}`);
   }
+
+  /**
+   * Like normalize(), but for providers whose describeImage() capability is
+   * actually implemented (OpenAI, Anthropic) -- a provider without it
+   * (DeepSeek) is silently skipped from `order` rather than attempted and
+   * failed, since "this provider doesn't support images" isn't a
+   * transient/retryable failure the way a network error is.
+   */
+  async describeImage(
+    imageBase64: string,
+    mimeType: string,
+    prompt: string,
+    order: LlmProviderKey[],
+  ): Promise<{ text: string; provider: LlmProviderKey }> {
+    const failures: string[] = [];
+    const imageCapableOrder = order.filter((key) => typeof this.providersByKey[key].describeImage === 'function');
+
+    if (imageCapableOrder.length === 0) {
+      throw new Error('No image-capable LLM provider is configured in this order');
+    }
+
+    for (const key of imageCapableOrder) {
+      const provider = this.providersByKey[key];
+      try {
+        const text = await provider.describeImage!(imageBase64, mimeType, prompt);
+        return { text, provider: key };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Provider "${key}" describeImage failed: ${message}`);
+        failures.push(`${key}: ${message}`);
+      }
+    }
+
+    throw new Error(`All image-capable LLM providers failed -- ${failures.join('; ')}`);
+  }
 }

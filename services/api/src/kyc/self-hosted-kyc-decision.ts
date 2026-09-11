@@ -14,6 +14,18 @@ export interface BotFindings {
   plausibilityScore: number | null;
   flags: string[];
   summary: string | null;
+  /**
+   * LLM-assisted OCR read of the document image -- reviewer-facing ONLY,
+   * per DLKYC_PLAN.md section 8.4 ("An LLM must not... declare a document
+   * genuine" / "approve or reject a user"). Never treated as ground truth
+   * by evaluateSelfHostedKyc; extraction failure/absence just means these
+   * fields are null, not a decline reason.
+   */
+  extractedFields: {
+    fullName: string | null;
+    dateOfBirth: string | null;
+    documentNumber: string | null;
+  } | null;
 }
 
 export interface KycEvaluationInput {

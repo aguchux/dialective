@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent } from '@/components/ui/Dialog';
@@ -12,6 +12,7 @@ import {
   useCancelKycVerificationMutation,
   useDeclineKycVerificationMutation,
   useGetKycVerificationQuery,
+  useLazyGetKycDecisionQuery,
   useListKycVerificationsQuery,
   useRefreshKycVerificationMutation,
 } from '@/store/api';
@@ -196,9 +197,19 @@ function DetailDialog({
   const [cancel, { isLoading: cancelling }] = useCancelKycVerificationMutation();
   const [approve, { isLoading: approving }] = useApproveKycVerificationMutation();
   const [decline, { isLoading: declining }] = useDeclineKycVerificationMutation();
+  const [fetchDecision, { data: decisionData, isFetching: loadingDecision }] =
+    useLazyGetKycDecisionQuery();
   const [error, setError] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState('');
   const [showDeclineForm, setShowDeclineForm] = useState(false);
+  const [decisionRevealed, setDecisionRevealed] = useState(false);
+
+  useEffect(() => {
+    setDecisionRevealed(false);
+    setError(null);
+    setShowDeclineForm(false);
+    setDeclineReason('');
+  }, [id]);
 
   async function refreshRow() {
     if (!id) return;
@@ -242,6 +253,17 @@ function DetailDialog({
     }
   }
 
+  async function revealDecision() {
+    if (!id) return;
+    setError(null);
+    try {
+      await fetchDecision(id).unwrap();
+      setDecisionRevealed(true);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to load the decision payload.'));
+    }
+  }
+
   return (
     <Dialog open={id !== null} onOpenChange={onOpenChange}>
       <DialogContent
@@ -275,6 +297,25 @@ function DetailDialog({
                 Decline reason: {row.declineReason}
               </p>
             )}
+            <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3">
+              {!decisionRevealed ? (
+                <ActionButton
+                  className="min-h-9 w-fit rounded-lg border border-line px-3 font-bold hover:bg-white disabled:opacity-60"
+                  onClick={() => void revealDecision()}
+                  pending={loadingDecision}
+                  pendingLabel="Decrypting"
+                  type="button"
+                >
+                  View decrypted decision
+                </ActionButton>
+              ) : (
+                <BotFindingsPanel botFindings={decisionData?.raw?.botFindings ?? null} />
+              )}
+              <p className="text-xs text-muted">
+                Viewing this is logged. LLM-assisted findings are a reviewer aid only -- never
+                treat them as verified fact.
+              </p>
+            </div>
             {error && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">
                 {error}
@@ -353,6 +394,55 @@ function DetailDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function BotFindingsPanel({
+  botFindings,
+}: {
+  botFindings: {
+    plausibilityScore: number | null;
+    flags: string[];
+    summary: string | null;
+    extractedFields: { fullName: string | null; dateOfBirth: string | null; documentNumber: string | null } | null;
+  } | null;
+}) {
+  if (!botFindings) {
+    return <p className="text-sm text-muted">No AI-assisted findings were recorded for this verification.</p>;
+  }
+  const { plausibilityScore, flags, summary, extractedFields } = botFindings;
+  return (
+    <div className="grid gap-2 text-sm">
+      {summary && <p className="italic text-ink">&ldquo;{summary}&rdquo;</p>}
+      {plausibilityScore !== null && (
+        <p>
+          <span className="font-bold">Plausibility score:</span> {plausibilityScore}/100
+        </p>
+      )}
+      {flags.length > 0 && (
+        <div>
+          <p className="font-bold text-danger">Flags for review:</p>
+          <ul className="list-disc pl-5">
+            {flags.map((flag, index) => (
+              <li key={index}>{flag}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {extractedFields && (
+        <div>
+          <p className="font-bold">OCR read (unverified):</p>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+            <dt className="text-muted">Full name</dt>
+            <dd>{extractedFields.fullName ?? '--'}</dd>
+            <dt className="text-muted">Date of birth</dt>
+            <dd>{extractedFields.dateOfBirth ?? '--'}</dd>
+            <dt className="text-muted">Document number</dt>
+            <dd>{extractedFields.documentNumber ?? '--'}</dd>
+          </dl>
+        </div>
+      )}
+    </div>
   );
 }
 

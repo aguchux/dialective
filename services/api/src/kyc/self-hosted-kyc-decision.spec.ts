@@ -40,7 +40,12 @@ describe('evaluateSelfHostedKyc', () => {
       base({
         faceMatchScore: 95,
         livenessScore: 95,
-        botFindings: { plausibilityScore: 40, flags: ['name mismatch'], summary: 'concern' },
+        botFindings: {
+          plausibilityScore: 40,
+          flags: ['name mismatch'],
+          summary: 'concern',
+          extractedFields: null,
+        },
       }),
     );
     expect(result.band).toBe('REVIEW');
@@ -56,7 +61,12 @@ describe('evaluateSelfHostedKyc', () => {
       base({
         faceMatchScore: 60,
         livenessScore: 60,
-        botFindings: { plausibilityScore: 100, flags: [], summary: 'looks fine' },
+        botFindings: {
+          plausibilityScore: 100,
+          flags: [],
+          summary: 'looks fine',
+          extractedFields: null,
+        },
       }),
     );
     expect(result.band).toBe('REVIEW');
