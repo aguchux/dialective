@@ -1,23 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { AdminShell } from '@/components/admin/AdminShell';
-import { ActionButton } from '@/components/ui/ActionButton';
-import { Dialog, DialogContent } from '@/components/ui/Dialog';
-import {
-  KycStatus,
-  KycVerification,
-  normalizeErrorMessage,
-  useApproveKycVerificationMutation,
-  useCancelKycVerificationMutation,
-  useDeclineKycVerificationMutation,
-  useGetKycVerificationQuery,
-  useLazyGetKycDecisionQuery,
-  useLazyGetKycEvidenceImageQuery,
-  useListKycEvidenceQuery,
-  useListKycVerificationsQuery,
-  useRefreshKycVerificationMutation,
-} from '@/store/api';
+import { KycStatus, KycVerification, useListKycVerificationsQuery } from '@/store/api';
+import { ProviderBadge, StatusBadge, formatDateTime } from './kyc-shared';
 
 const statuses: ('ALL' | KycStatus)[] = [
   'IN_PROGRESS',
@@ -33,7 +20,6 @@ const statuses: ('ALL' | KycStatus)[] = [
 export default function AdminKycPage() {
   const [status, setStatus] = useState<'ALL' | KycStatus>('IN_REVIEW');
   const [page, setPage] = useState(1);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data, isLoading, isFetching } = useListKycVerificationsQuery({
     page,
     pageSize: 20,
@@ -100,9 +86,7 @@ export default function AdminKycPage() {
                     </td>
                   </tr>
                 ) : (
-                  rows.map((row) => (
-                    <VerificationRow key={row.id} row={row} onSelect={setSelectedId} />
-                  ))
+                  rows.map((row) => <VerificationRow key={row.id} row={row} />)
                 )}
               </tbody>
             </table>
@@ -132,33 +116,24 @@ export default function AdminKycPage() {
             </div>
           </div>
         </section>
-
-        <DetailDialog id={selectedId} onOpenChange={(open) => !open && setSelectedId(null)} />
       </div>
     </AdminShell>
   );
 }
 
-function VerificationRow({
-  row,
-  onSelect,
-}: {
-  row: KycVerification;
-  onSelect: (id: string) => void;
-}) {
+function VerificationRow({ row }: { row: KycVerification }) {
   const name = useMemo(
     () => [row.user.firstName, row.user.lastName].filter(Boolean).join(' ') || row.user.email,
     [row.user.email, row.user.firstName, row.user.lastName],
   );
 
   return (
-    <tr
-      className="cursor-pointer border-t border-line hover:bg-surface-muted"
-      onClick={() => onSelect(row.id)}
-    >
+    <tr className="border-t border-line hover:bg-surface-muted">
       <td className="px-4 py-3">
-        <div className="font-black">{name}</div>
-        <div className="text-muted">{row.user.email}</div>
+        <Link className="no-underline" href={`/admin/kyc/${row.id}`}>
+          <div className="font-black text-ink">{name}</div>
+          <div className="text-muted">{row.user.email}</div>
+        </Link>
       </td>
       <td className="px-4 py-3">
         <ProviderBadge provider={row.provider} />
@@ -172,407 +147,14 @@ function VerificationRow({
       <td className="px-4 py-3">{row.faceMatchScore ?? '--'}</td>
       <td className="px-4 py-3">{formatDateTime(row.createdAt)}</td>
       <td className="px-4 py-3">
-        <button
-          className="min-h-9 rounded-lg border border-line px-3 font-bold hover:bg-white"
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelect(row.id);
-          }}
-          type="button"
+        <Link
+          className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line px-3 font-bold text-ink no-underline hover:bg-white"
+          href={`/admin/kyc/${row.id}`}
         >
           View
-        </button>
+        </Link>
       </td>
     </tr>
   );
 }
 
-function DetailDialog({
-  id,
-  onOpenChange,
-}: {
-  id: string | null;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const { data: row } = useGetKycVerificationQuery(id ?? '', { skip: !id });
-  const [refresh, { isLoading: refreshing }] = useRefreshKycVerificationMutation();
-  const [cancel, { isLoading: cancelling }] = useCancelKycVerificationMutation();
-  const [approve, { isLoading: approving }] = useApproveKycVerificationMutation();
-  const [decline, { isLoading: declining }] = useDeclineKycVerificationMutation();
-  const [fetchDecision, { data: decisionData, isFetching: loadingDecision }] =
-    useLazyGetKycDecisionQuery();
-  const [error, setError] = useState<string | null>(null);
-  const [declineReason, setDeclineReason] = useState('');
-  const [showDeclineForm, setShowDeclineForm] = useState(false);
-  const [decisionRevealed, setDecisionRevealed] = useState(false);
-
-  useEffect(() => {
-    setDecisionRevealed(false);
-    setError(null);
-    setShowDeclineForm(false);
-    setDeclineReason('');
-  }, [id]);
-
-  async function refreshRow() {
-    if (!id) return;
-    setError(null);
-    try {
-      await refresh(id).unwrap();
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to refresh this verification.'));
-    }
-  }
-
-  async function cancelRow() {
-    if (!id) return;
-    setError(null);
-    try {
-      await cancel(id).unwrap();
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to cancel this verification.'));
-    }
-  }
-
-  async function approveRow() {
-    if (!id) return;
-    setError(null);
-    try {
-      await approve(id).unwrap();
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to approve this verification.'));
-    }
-  }
-
-  async function declineRow() {
-    if (!id || !declineReason.trim()) return;
-    setError(null);
-    try {
-      await decline({ id, reason: declineReason.trim() }).unwrap();
-      setShowDeclineForm(false);
-      setDeclineReason('');
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to decline this verification.'));
-    }
-  }
-
-  async function revealDecision() {
-    if (!id) return;
-    setError(null);
-    try {
-      await fetchDecision(id).unwrap();
-      setDecisionRevealed(true);
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to load the decision payload.'));
-    }
-  }
-
-  return (
-    <Dialog open={id !== null} onOpenChange={onOpenChange}>
-      <DialogContent
-        title="Verification detail"
-        description="Only the masked/summary fields Didit returned -- the full decision payload is encrypted at rest and never shown here."
-      >
-        {row && (
-          <div className="grid gap-4">
-            <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm">
-              <div className="font-black">
-                {[row.user.firstName, row.user.lastName].filter(Boolean).join(' ') ||
-                  row.user.email}
-              </div>
-              <div className="text-muted">{row.user.email}</div>
-            </div>
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <DetailField label="Status" value={<StatusBadge status={row.status} />} />
-              <DetailField label="Provider" value={<ProviderBadge provider={row.provider} />} />
-              <DetailField label="Document type" value={row.documentType ?? '--'} />
-              <DetailField label="Document number" value={row.documentNumberMasked ?? '--'} />
-              <DetailField label="Face match score" value={row.faceMatchScore ?? '--'} />
-              <DetailField label="Liveness score" value={row.livenessScore ?? '--'} />
-              <DetailField label="Submitted" value={formatDateTime(row.createdAt)} />
-              <DetailField
-                label="Webhook received"
-                value={row.webhookReceivedAt ? formatDateTime(row.webhookReceivedAt) : 'Not yet'}
-              />
-            </dl>
-            {row.provider === 'self' && <EvidencePanel verificationId={row.id} />}
-            {row.declineReason && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">
-                Decline reason: {row.declineReason}
-              </p>
-            )}
-            <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3">
-              {!decisionRevealed ? (
-                <ActionButton
-                  className="min-h-9 w-fit rounded-lg border border-line px-3 font-bold hover:bg-white disabled:opacity-60"
-                  onClick={() => void revealDecision()}
-                  pending={loadingDecision}
-                  pendingLabel="Decrypting"
-                  type="button"
-                >
-                  View decrypted decision
-                </ActionButton>
-              ) : (
-                <BotFindingsPanel botFindings={decisionData?.raw?.botFindings ?? null} />
-              )}
-              <p className="text-xs text-muted">
-                Viewing this is logged. LLM-assisted findings are a reviewer aid only -- never
-                treat them as verified fact.
-              </p>
-            </div>
-            {error && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">
-                {error}
-              </p>
-            )}
-            {(row.status === 'IN_PROGRESS' || row.status === 'IN_REVIEW') && (
-              <div className="flex flex-wrap gap-2">
-                {row.provider === 'didit' && (
-                  <ActionButton
-                    className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:opacity-60"
-                    onClick={() => void refreshRow()}
-                    pending={refreshing}
-                    pendingLabel="Refreshing"
-                    type="button"
-                  >
-                    Refresh from Didit
-                  </ActionButton>
-                )}
-                <ActionButton
-                  className="min-h-11 rounded-lg border border-danger px-5 font-extrabold text-danger hover:bg-red-50 disabled:opacity-60"
-                  onClick={() => void cancelRow()}
-                  pending={cancelling}
-                  pendingLabel="Cancelling"
-                  type="button"
-                >
-                  Cancel verification
-                </ActionButton>
-                {row.provider === 'self' && (
-                  <>
-                    <ActionButton
-                      className="min-h-11 rounded-lg border border-accent bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:opacity-60"
-                      onClick={() => void approveRow()}
-                      pending={approving}
-                      pendingLabel="Approving"
-                      type="button"
-                    >
-                      Approve
-                    </ActionButton>
-                    <ActionButton
-                      className="min-h-11 rounded-lg border border-danger px-5 font-extrabold text-danger hover:bg-red-50 disabled:opacity-60"
-                      onClick={() => setShowDeclineForm((current) => !current)}
-                      type="button"
-                    >
-                      Decline
-                    </ActionButton>
-                  </>
-                )}
-              </div>
-            )}
-            {showDeclineForm && (
-              <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3">
-                <label className="text-sm font-bold" htmlFor="kyc-decline-reason">
-                  Reason for declining (shown to the trainer)
-                </label>
-                <textarea
-                  className="min-h-20 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
-                  id="kyc-decline-reason"
-                  onChange={(event) => setDeclineReason(event.target.value)}
-                  value={declineReason}
-                />
-                <div>
-                  <ActionButton
-                    className="min-h-10 rounded-lg border border-danger bg-danger px-4 font-extrabold text-white disabled:opacity-60"
-                    disabled={!declineReason.trim()}
-                    onClick={() => void declineRow()}
-                    pending={declining}
-                    pendingLabel="Declining"
-                    type="button"
-                  >
-                    Confirm decline
-                  </ActionButton>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function EvidencePanel({ verificationId }: { verificationId: string }) {
-  const { data: evidence, isLoading } = useListKycEvidenceQuery(verificationId);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  if (isLoading) return null;
-  if (!evidence || evidence.length === 0) return null;
-
-  const kindLabel: Record<string, string> = {
-    DOCUMENT_FRONT: 'Document (front)',
-    DOCUMENT_BACK: 'Document (back)',
-    SELFIE_FRAME: 'Selfie frame',
-  };
-
-  return (
-    <div className="grid gap-2">
-      <p className="text-xs font-bold uppercase text-muted">Captured evidence</p>
-      <div className="flex flex-wrap gap-2">
-        {evidence.map((item) => (
-          <button
-            className="min-h-9 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
-            key={item.id}
-            onClick={() => setSelectedId(item.id)}
-            type="button"
-          >
-            {kindLabel[item.kind] ?? item.kind}
-          </button>
-        ))}
-      </div>
-      <EvidenceImageDialog
-        onOpenChange={(open) => !open && setSelectedId(null)}
-        verificationId={verificationId}
-        evidenceId={selectedId}
-      />
-    </div>
-  );
-}
-
-function EvidenceImageDialog({
-  verificationId,
-  evidenceId,
-  onOpenChange,
-}: {
-  verificationId: string;
-  evidenceId: string | null;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const [fetchImage, { data: imageUrl, isFetching }] = useLazyGetKycEvidenceImageQuery();
-  const previousUrlRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!evidenceId) return;
-    void fetchImage({ verificationId, evidenceId });
-  }, [evidenceId, fetchImage, verificationId]);
-
-  useEffect(() => {
-    // Revoke the previous object URL once a new one lands (or the dialog
-    // closes) -- these are never auto-released by the browser and would
-    // otherwise leak on every image viewed in an admin session.
-    if (previousUrlRef.current && previousUrlRef.current !== imageUrl) {
-      URL.revokeObjectURL(previousUrlRef.current);
-    }
-    previousUrlRef.current = imageUrl ?? null;
-    return () => {
-      if (previousUrlRef.current) URL.revokeObjectURL(previousUrlRef.current);
-    };
-  }, [imageUrl]);
-
-  return (
-    <Dialog open={evidenceId !== null} onOpenChange={onOpenChange}>
-      <DialogContent
-        title="Evidence image"
-        description="Grayscale, watermarked copy for review -- the original color image is never shown here."
-      >
-        {isFetching && <p className="text-muted">Loading...</p>}
-        {imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- this is a blob: object URL, not an optimizable remote asset
-          <img alt="Redacted KYC evidence" className="w-full rounded-lg border border-line" src={imageUrl} />
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function BotFindingsPanel({
-  botFindings,
-}: {
-  botFindings: {
-    plausibilityScore: number | null;
-    flags: string[];
-    summary: string | null;
-    extractedFields: { fullName: string | null; dateOfBirth: string | null; documentNumber: string | null } | null;
-  } | null;
-}) {
-  if (!botFindings) {
-    return <p className="text-sm text-muted">No AI-assisted findings were recorded for this verification.</p>;
-  }
-  const { plausibilityScore, flags, summary, extractedFields } = botFindings;
-  return (
-    <div className="grid gap-2 text-sm">
-      {summary && <p className="italic text-ink">&ldquo;{summary}&rdquo;</p>}
-      {plausibilityScore !== null && (
-        <p>
-          <span className="font-bold">Plausibility score:</span> {plausibilityScore}/100
-        </p>
-      )}
-      {flags.length > 0 && (
-        <div>
-          <p className="font-bold text-danger">Flags for review:</p>
-          <ul className="list-disc pl-5">
-            {flags.map((flag, index) => (
-              <li key={index}>{flag}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {extractedFields && (
-        <div>
-          <p className="font-bold">OCR read (unverified):</p>
-          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-            <dt className="text-muted">Full name</dt>
-            <dd>{extractedFields.fullName ?? '--'}</dd>
-            <dt className="text-muted">Date of birth</dt>
-            <dd>{extractedFields.dateOfBirth ?? '--'}</dd>
-            <dt className="text-muted">Document number</dt>
-            <dd>{extractedFields.documentNumber ?? '--'}</dd>
-          </dl>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DetailField({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-bold uppercase text-muted">{label}</dt>
-      <dd className="font-bold">{value}</dd>
-    </div>
-  );
-}
-
-function ProviderBadge({ provider }: { provider: string }) {
-  const isSelf = provider === 'self';
-  return (
-    <span
-      className={`rounded-full px-2.5 py-1 text-xs font-black ${
-        isSelf ? 'bg-violet-50 text-violet-700' : 'bg-sky-50 text-sky-700'
-      }`}
-    >
-      {isSelf ? 'DLKYC' : 'Didit'}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: KycStatus }) {
-  const styles: Record<KycStatus, string> = {
-    NOT_STARTED: 'bg-slate-100 text-slate-700',
-    IN_PROGRESS: 'bg-amber-50 text-amber-700',
-    IN_REVIEW: 'bg-amber-50 text-amber-700',
-    APPROVED: 'bg-emerald-50 text-emerald-700',
-    DECLINED: 'bg-red-50 text-red-700',
-    ABANDONED: 'bg-slate-100 text-slate-700',
-    EXPIRED: 'bg-slate-100 text-slate-700',
-  };
-  return (
-    <span className={`rounded-full px-2.5 py-1 text-xs font-black ${styles[status]}`}>
-      {status.replace(/_/g, ' ').toLowerCase()}
-    </span>
-  );
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(value),
-  );
-}
