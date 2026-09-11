@@ -57,7 +57,7 @@ export function CommunityShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-bg text-ink">
       <CommunitySidebar pathname={pathname} spaces={spaces ?? []} unreadCount={unreadCount} />
-      <div className="flex min-h-screen min-w-0 flex-col lg:pl-[240px]">
+      <div className="flex min-h-screen min-w-0 flex-col lg:pl-[288px]">
         <CommunityTopbar
           initials={initials}
           pathname={pathname}
@@ -184,7 +184,7 @@ function CommunitySidebar({
   const visibleSpaces = spaces.filter((space) => !space.isArchived).slice(0, 8);
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 hidden w-[224px] min-w-0 max-w-[224px] flex-col overflow-x-hidden border-r border-line bg-surface lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-20 hidden w-[288px] min-w-0 max-w-[288px] flex-col border-r border-line bg-surface lg:flex">
       <div className="border-b border-line px-5 py-4">
         <BrandLogo textClassName="text-base" size={32} />
       </div>
@@ -237,7 +237,7 @@ function CommunitySidebar({
                 >
                   <Hash aria-hidden="true" className="size-4" />
                 </span>
-                <span className="min-w-0 truncate">{space.name}</span>
+                <span className="min-w-0 whitespace-nowrap">{space.name}</span>
               </Link>
             );
           })}
@@ -312,7 +312,7 @@ function SidebarNavLink({
       href={href}
     >
       <Icon aria-hidden="true" className="size-5 shrink-0" />
-      <span className="min-w-0 truncate">{label}</span>
+      <span className="min-w-0 whitespace-nowrap">{label}</span>
       {unreadCount > 0 && (
         <span className="ml-auto grid size-5 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-black text-white">
           {unreadCount > 9 ? '9+' : unreadCount}
