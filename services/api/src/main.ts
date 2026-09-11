@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
@@ -45,6 +46,20 @@ async function bootstrap() {
   // personalized, permission-gated, or time-sensitive enough that this
   // kind of conditional caching does more harm than it saves.
   app.getHttpAdapter().getInstance().set('etag', false);
+
+  // Same rationale as disabling etag above, but closes a wider gap: etag
+  // only defeats the browser's own conditional-GET revalidation, not a
+  // service worker's Cache API or opaque fetch caching, or an intermediary
+  // proxy/CDN. A rogue or stale service worker registered on a client
+  // domain (e.g. an ad network's push-notification worker registered at
+  // scope "/") can otherwise serve a cached response for an
+  // authenticated/personalized route indefinitely. Every response from
+  // this API is personalized, permission-gated, or time-sensitive enough
+  // that no layer should ever cache it.
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
 
   app.use(helmet());
 
