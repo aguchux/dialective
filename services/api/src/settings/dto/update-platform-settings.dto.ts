@@ -682,6 +682,36 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  selfHostedKycEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^(didit|self)$/)
+  activeKycProvider?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  selfHostedKycAutoApproveEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  selfHostedKycBotEnabled?: boolean;
+
+  // 3 comma-separated tokens from {openai,deepseek,anthropic}; exact
+  // permutation validated in PlatformSettingsService.update, same shape as
+  // llmProviderOrder.
+  @IsOptional()
+  @IsString()
+  @Matches(/^(openai|deepseek|anthropic),(openai|deepseek|anthropic),(openai|deepseek|anthropic)$/)
+  selfHostedKycBotProviderOrder?: string;
+
+  // CSV admin allow-list of document types; validated in PlatformSettingsService.update.
+  @IsOptional()
+  @IsString()
+  selfHostedKycDocumentTypes?: string;
+
+  @IsOptional()
+  @IsBoolean()
   authMaintenanceEnabled?: boolean;
 
   // ISO 8601 timestamp, or null to clear it (e.g. when switching maintenance
