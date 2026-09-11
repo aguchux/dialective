@@ -1,5 +1,20 @@
-FROM node:20-alpine AS dependencies
+
+# node:20-alpine (musl libc) was dropped for the dependencies/build stages
+# when DLKYC's face-match/liveness feature added canvas and
+# @tensorflow/tfjs-node to services/api -- this service's `npm ci` at repo
+# root still installs @dialectiva/api's full dependency tree (its
+# prisma:generate script, invoked below, genuinely needs @dialectiva/api's
+# deps present), and neither canvas nor tfjs-node publish musl/Alpine
+# prebuilds. The final runtime stage below stays on node:20-alpine as
+# before -- npm prune (production-dependencies stage) strips
+# @dialectiva/api's deps back out before that image is assembled, so
+# canvas/tfjs-node never actually need to run there.
+FROM node:20-bookworm-slim AS dependencies
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential python3 pkg-config \
+      libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
+    && rm -rf /var/lib/apt/lists/*
 # Build context must be repo root: audio-retention-job depends on the
 # @dialectiva/db workspace package (packages/db), whose generated Prisma
 # client is produced from services/api's schema during the build below.
