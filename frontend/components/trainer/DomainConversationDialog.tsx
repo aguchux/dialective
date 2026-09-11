@@ -526,6 +526,13 @@ export function DomainConversationDialog({
   // once a take is actually being recorded.
   const micButtonBackground =
     recorderState === 'ready' ? noiseColor(ambientNoiseRating) : undefined;
+  // The small dot+label next to the timer mirrors whichever noise signal is
+  // actually live right now: ambientNoiseRating before recording starts
+  // (same source as the mic button background), noiseRating once a take is
+  // underway/finished -- so it never just sits on the 'QUIET' default while
+  // ambient monitoring is clearly seeing something noisier.
+  const displayedNoiseRating = recorderState === 'ready' ? ambientNoiseRating : noiseRating;
+  const displayedNoiseColor = noiseColor(displayedNoiseRating);
   const remainingUntilUnlockSeconds = Math.max(0, Math.ceil((minDurationMs - elapsedMs) / 1000));
   const stopDisabledByMinGate = recorderState === 'recording' && elapsedMs < minDurationMs;
 
@@ -728,12 +735,28 @@ export function DomainConversationDialog({
                         </span>
                         <span className="inline-flex items-center gap-2">
                           <span
-                            className="size-2.5 rounded-full"
-                            style={{ backgroundColor: ringColor }}
+                            className="size-2.5 rounded-full transition-colors duration-150"
+                            style={{ backgroundColor: displayedNoiseColor }}
                           />
-                          {noiseLabel(noiseRating)}
+                          {noiseLabel(displayedNoiseRating)}
                         </span>
                       </div>
+
+                      {recorderState === 'ready' && (
+                        <button
+                          className="mx-auto inline-flex min-h-9 items-center justify-center gap-1.5 text-sm font-extrabold text-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={isLoadingNext}
+                          onClick={() => void nextPrompt()}
+                          type="button"
+                        >
+                          {isLoadingNext ? (
+                            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <ArrowRight className="size-4" aria-hidden="true" />
+                          )}
+                          Skip this prompt
+                        </button>
+                      )}
 
                       {stopDisabledByMinGate && (
                         <p className="text-center text-sm font-bold text-muted">
