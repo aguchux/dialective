@@ -810,6 +810,11 @@ export class PlatformSettingsService {
     return row.domainConversationMinQualityScoreForPayout.toNumber();
   }
 
+  async getDomainConversationMaxCyclesPerTrainer(): Promise<number> {
+    const row = await this.getRow();
+    return row.domainConversationMaxCyclesPerTrainer;
+  }
+
   async getForAdmin() {
     const row = await this.getRow();
     const referralCookiePersistSeconds =
@@ -884,6 +889,7 @@ export class PlatformSettingsService {
         row.domainConversationQualityWeightLiveness.toString(),
       domainConversationMinQualityScoreForPayout:
         row.domainConversationMinQualityScoreForPayout.toString(),
+      domainConversationMaxCyclesPerTrainer: row.domainConversationMaxCyclesPerTrainer,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       sessionIdleTimeoutMinutes: row.sessionIdleTimeoutMinutes,
       sessionMaxHours: row.sessionMaxHours,
@@ -1037,6 +1043,7 @@ export class PlatformSettingsService {
     domainConversationQualityWeightQuality?: number;
     domainConversationQualityWeightLiveness?: number;
     domainConversationMinQualityScoreForPayout?: number;
+    domainConversationMaxCyclesPerTrainer?: number;
     adminPayoutOtpEnabled?: boolean;
     sessionIdleTimeoutMinutes?: number;
     sessionMaxHours?: number;
@@ -1219,6 +1226,10 @@ export class PlatformSettingsService {
           'smsProviderOrder must list termii, twilio, and africastalking exactly once each',
         );
       }
+    }
+
+    if (data.domainConversationMaxCyclesPerTrainer !== undefined && data.domainConversationMaxCyclesPerTrainer < 0) {
+      throw new BadRequestException('domainConversationMaxCyclesPerTrainer must be >= 0 (0 disables the cap)');
     }
 
     if (data.domainConversationProviderOrder) {
@@ -1531,6 +1542,7 @@ export class PlatformSettingsService {
         row.domainConversationQualityWeightLiveness.toString(),
       domainConversationMinQualityScoreForPayout:
         row.domainConversationMinQualityScoreForPayout.toString(),
+      domainConversationMaxCyclesPerTrainer: row.domainConversationMaxCyclesPerTrainer,
       adminPayoutOtpEnabled: row.adminPayoutOtpEnabled,
       sessionIdleTimeoutMinutes: row.sessionIdleTimeoutMinutes,
       sessionMaxHours: row.sessionMaxHours,

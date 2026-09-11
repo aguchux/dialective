@@ -55,6 +55,7 @@ export function DomainConversationSettingsPanel() {
   const [weightQuality, setWeightQuality] = useState('30');
   const [weightLiveness, setWeightLiveness] = useState('30');
   const [minQualityScoreForPayout, setMinQualityScoreForPayout] = useState('50');
+  const [maxCyclesPerTrainer, setMaxCyclesPerTrainer] = useState('2');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,6 +73,7 @@ export function DomainConversationSettingsPanel() {
     setWeightQuality(settings.domainConversationQualityWeightQuality);
     setWeightLiveness(settings.domainConversationQualityWeightLiveness);
     setMinQualityScoreForPayout(settings.domainConversationMinQualityScoreForPayout);
+    setMaxCyclesPerTrainer(String(settings.domainConversationMaxCyclesPerTrainer));
   }, [settings]);
 
   function setChoice(position: 0 | 1 | 2, provider: ProviderKey) {
@@ -122,6 +124,7 @@ export function DomainConversationSettingsPanel() {
         domainConversationQualityWeightQuality: Number(weightQuality),
         domainConversationQualityWeightLiveness: Number(weightLiveness),
         domainConversationMinQualityScoreForPayout: Number(minQualityScoreForPayout),
+        domainConversationMaxCyclesPerTrainer: Number(maxCyclesPerTrainer),
       }).unwrap();
       setMessage('Domain Conversation settings saved.');
     } catch (err) {
@@ -210,6 +213,25 @@ export function DomainConversationSettingsPanel() {
                 Minimum must be less than maximum.
               </p>
             )}
+          </div>
+
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="domain-conversation-max-cycles">
+              Max pool cycles per trainer
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              How many times a trainer may cycle through the current prompt pool before they're
+              blocked until new scenarios are added. Set to 0 to disable the cap.
+            </p>
+            <input
+              className={`${inputClass} max-w-40`}
+              id="domain-conversation-max-cycles"
+              min="0"
+              onChange={(e) => setMaxCyclesPerTrainer(e.target.value)}
+              step="1"
+              type="number"
+              value={maxCyclesPerTrainer}
+            />
           </div>
 
           <div className="grid gap-1">

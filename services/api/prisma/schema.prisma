@@ -2465,6 +2465,7 @@ model PlatformSettings {
   domainConversationQualityWeightQuality     Decimal  @default(30) @db.Decimal(5, 2)
   domainConversationQualityWeightLiveness    Decimal  @default(30) @db.Decimal(5, 2)
   domainConversationMinQualityScoreForPayout Decimal  @default(50) @db.Decimal(5, 2) // compositeScore floor a SCORED DomainConversationRecording must clear for settlement-job to pay it out instead of refunding
+  domainConversationMaxCyclesPerTrainer      Int      @default(2) // caps how many times a single trainer may cycle through the current prompt pool before nextPrompt blocks with POOL_EXHAUSTED_FOR_TRAINER; compared against that trainer's own consumed-assignment count vs. the live pool size (per gender-variant pool, matching how prompts are actually served). 0 disables the cap (unlimited cycling). A trainer who hits the cap unblocks automatically once new prompts raise the pool size above count/maxCycles -- no manual reset needed
   phraseEscalationEnabled                Boolean   @default(false) // deprecated compatibility field; sentence assignments now use sentenceTrainingEnabled directly
   phraseTierGenerationEnabled            Boolean   @default(false) // deprecated compatibility field; sentence generation uses sentenceGenerationEnabled
   phraseTierItemsPerTierPerRun           Int       @default(3) // deprecated compatibility field

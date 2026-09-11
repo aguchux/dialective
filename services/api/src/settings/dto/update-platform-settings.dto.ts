@@ -188,6 +188,11 @@ export class UpdatePlatformSettingsDto {
   domainConversationMinQualityScoreForPayout?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  domainConversationMaxCyclesPerTrainer?: number;
+
+  @IsOptional()
   @IsBoolean()
   adminPayoutOtpEnabled?: boolean;
 

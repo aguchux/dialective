@@ -54,7 +54,7 @@ describe('DomainConversationsService', () => {
         findFirst: jest.fn().mockResolvedValue(prompt),
         update: jest.fn().mockResolvedValue(prompt),
         findMany: jest.fn().mockResolvedValue([]),
-        count: jest.fn().mockResolvedValue(0),
+        count: jest.fn().mockResolvedValue(45),
         groupBy: jest.fn().mockResolvedValue([]),
         create: jest.fn(),
         createMany: jest.fn(),
@@ -66,6 +66,7 @@ describe('DomainConversationsService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn().mockResolvedValue(assignment),
         findFirst: jest.fn().mockResolvedValue(null),
+        count: jest.fn().mockResolvedValue(0),
       },
       domainConversationRecording: {
         create: jest.fn().mockResolvedValue({ id: 'recording-1' }),
@@ -89,6 +90,7 @@ describe('DomainConversationsService', () => {
       isQracEnabled: jest.fn().mockResolvedValue(false),
       isQracRequiredAtSessionStart: jest.fn().mockResolvedValue(false),
       getQracIntervalMinutes: jest.fn().mockResolvedValue(30),
+      getDomainConversationMaxCyclesPerTrainer: jest.fn().mockResolvedValue(2),
     };
     streams = { publish: jest.fn() };
     courses = { getIncompleteRequiredCourses: jest.fn().mockResolvedValue([]) };
@@ -167,6 +169,39 @@ describe('DomainConversationsService', () => {
       prisma.wallet.upsert.mockResolvedValue({ id: 'wallet-1', balance: { lt: () => true } });
       await expect(service.nextPrompt(trainer.id, session.id)).rejects.toThrow('Insufficient balance');
       expect(prisma.domainPrompt.findFirst).not.toHaveBeenCalled();
+    });
+
+    // Regression: Prisma sorts nulls LAST by default on 'asc', unlike raw
+    // Postgres (nulls-first for ASC) -- without an explicit nulls:'first'
+    // override here, never-served prompts sort behind already-served ones
+    // and the LRU rotation collapses onto whichever rows were served first.
+    it('orders the pick query with never-served prompts (null lastServedAt) first', async () => {
+      await service.nextPrompt(trainer.id, session.id);
+      expect(prisma.domainPrompt.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ lastServedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
+        }),
+      );
+    });
+
+    it('blocks with poolExhausted once a trainer has consumed maxCycles full passes through the pool', async () => {
+      // pool size 45, maxCycles 2 -> blocked at 90 consumed assignments
+      prisma.domainConversationAssignment.count.mockResolvedValue(90);
+      await expect(service.nextPrompt(trainer.id, session.id)).rejects.toMatchObject({
+        response: expect.objectContaining({ poolExhausted: true }),
+      });
+      expect(prisma.domainPrompt.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('does not block a trainer under the maxCycles threshold', async () => {
+      prisma.domainConversationAssignment.count.mockResolvedValue(89);
+      await expect(service.nextPrompt(trainer.id, session.id)).resolves.toBeDefined();
+    });
+
+    it('never blocks on pool exhaustion when maxCycles is 0 (cap disabled)', async () => {
+      settings.getDomainConversationMaxCyclesPerTrainer.mockResolvedValue(0);
+      prisma.domainConversationAssignment.count.mockResolvedValue(999_999);
+      await expect(service.nextPrompt(trainer.id, session.id)).resolves.toBeDefined();
     });
   });
 

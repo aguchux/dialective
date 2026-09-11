@@ -1530,6 +1530,7 @@ export interface PlatformSettings {
   domainConversationQualityWeightQuality: string;
   domainConversationQualityWeightLiveness: string;
   domainConversationMinQualityScoreForPayout: string;
+  domainConversationMaxCyclesPerTrainer: number;
   adminPayoutOtpEnabled: boolean;
   sessionIdleTimeoutMinutes: number;
   sessionMaxHours: number;
@@ -1670,6 +1671,7 @@ export interface PlatformSettingsInput {
   domainConversationQualityWeightQuality?: number;
   domainConversationQualityWeightLiveness?: number;
   domainConversationMinQualityScoreForPayout?: number;
+  domainConversationMaxCyclesPerTrainer?: number;
   adminPayoutOtpEnabled?: boolean;
   sessionIdleTimeoutMinutes?: number;
   sessionMaxHours?: number;
@@ -2439,6 +2441,7 @@ export interface ApiErrorShape {
   requiredCourses?: IncompleteRequiredCourse[];
   qracRequired?: boolean;
   qracChecklist?: string[];
+  poolExhausted?: boolean;
 }
 
 function normalizeErrorMessage(error: unknown, fallback: string): string {

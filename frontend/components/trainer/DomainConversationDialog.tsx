@@ -42,6 +42,11 @@ function isNoPromptsAvailable(err: unknown): boolean {
   return text === 'NO_DOMAIN_PROMPTS_AVAILABLE';
 }
 
+function isPoolExhausted(err: unknown): boolean {
+  const data = (err as { data?: ApiErrorShape } | undefined)?.data;
+  return data?.poolExhausted === true;
+}
+
 function extractRequiredCourses(
   err: unknown,
 ): { id: string; slug: string; title: string }[] | null {
@@ -93,6 +98,7 @@ export function DomainConversationDialog({
   const { status: authStatus, update: updateAuthSession } = useAuthSession();
   const lastHeartbeatAtRef = useRef(0);
   const [step, setStep] = useState<FlowStep>('terms');
+  const [unavailableReason, setUnavailableReason] = useState<'none' | 'poolExhausted'>('none');
   const [accepted, setAccepted] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<DomainConversationPrompt | null>(null);
@@ -261,6 +267,7 @@ export function DomainConversationDialog({
   async function beginSession() {
     if (!accepted) return;
     setError(null);
+    setUnavailableReason('none');
     setStep('loading');
     try {
       const created = await startSession({ acceptedVoiceTerms: true }).unwrap();
@@ -276,7 +283,8 @@ export function DomainConversationDialog({
         }
         void endSession(created.sessionId);
         setSessionId(null);
-        if (isNoPromptsAvailable(err)) {
+        if (isNoPromptsAvailable(err) || isPoolExhausted(err)) {
+          setUnavailableReason(isPoolExhausted(err) ? 'poolExhausted' : 'none');
           setStep('unavailable');
           return;
         }
@@ -308,7 +316,8 @@ export function DomainConversationDialog({
       setPrompt(await loadNext(sessionId, false).unwrap());
       setStep('training');
     } catch (err) {
-      if (isNoPromptsAvailable(err)) {
+      if (isNoPromptsAvailable(err) || isPoolExhausted(err)) {
+        setUnavailableReason(isPoolExhausted(err) ? 'poolExhausted' : 'none');
         setStep('unavailable');
         return;
       }
@@ -804,9 +813,15 @@ export function DomainConversationDialog({
                   <span className="mx-auto grid size-14 place-items-center rounded-full bg-accent-soft text-accent">
                     <Clock3 className="size-7" aria-hidden="true" />
                   </span>
-                  <h2 className="text-2xl font-black">No prompts available right now</h2>
+                  <h2 className="text-2xl font-black">
+                    {unavailableReason === 'poolExhausted'
+                      ? "You've completed all available conversations"
+                      : 'No prompts available right now'}
+                  </h2>
                   <p className="leading-relaxed text-muted">
-                    The domain conversation task is temporarily unavailable. Check back later.
+                    {unavailableReason === 'poolExhausted'
+                      ? "You've gone through this prompt pool the maximum number of times. Check back once new conversation scenarios are added."
+                      : 'The domain conversation task is temporarily unavailable. Check back later.'}
                   </p>
                   <button
                     className="mx-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted"

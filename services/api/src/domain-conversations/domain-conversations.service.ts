@@ -112,6 +112,8 @@ export class DomainConversationsService {
       });
     }
 
+    await this.assertPoolNotExhaustedForTrainer(userId);
+
     const prompt = await this.pickDomainPrompt(trainer.gender);
     if (!prompt) {
       throw new NotFoundException('NO_DOMAIN_PROMPTS_AVAILABLE');
@@ -296,6 +298,41 @@ export class DomainConversationsService {
   }
 
   /**
+   * Blocks a trainer once they've consumed domainConversationMaxCyclesPerTrainer
+   * full passes through the live prompt pool (e.g. maxCycles=2 on a 45-row
+   * pool blocks at 90 consumed assignments), so a trainer isn't served the
+   * same handful of prompts indefinitely once they've genuinely exhausted
+   * variety -- they wait until domain-conversation-prompt-job grows the pool.
+   * Deliberately counts ALL of the trainer's consumed assignments (not
+   * distinct promptIds) against the CURRENT pool size: pool size changes
+   * over time as prompts are added/disabled, so re-deriving the threshold
+   * from live pool size on every call is simpler and self-corrects (a
+   * blocked trainer unblocks automatically the next time the pool grows)
+   * rather than trying to track "which of the current prompts has this
+   * trainer already seen" with no per-trainer-serving history kept today.
+   */
+  private async assertPoolNotExhaustedForTrainer(userId: string): Promise<void> {
+    const maxCycles = await this.settings.getDomainConversationMaxCyclesPerTrainer();
+    if (maxCycles <= 0) return;
+
+    const [poolSize, consumedCount] = await Promise.all([
+      this.prisma.domainPrompt.count({ where: { isDisabled: false } }),
+      this.prisma.domainConversationAssignment.count({
+        where: { session: { userId }, consumedAt: { not: null } },
+      }),
+    ]);
+    if (poolSize === 0) return; // NO_DOMAIN_PROMPTS_AVAILABLE is raised by the pick step instead
+
+    if (consumedCount >= poolSize * maxCycles) {
+      throw new UnprocessableEntityException({
+        message:
+          'You have completed this prompt pool the maximum number of times -- check back once new scenarios are added',
+        poolExhausted: true,
+      });
+    }
+  }
+
+  /**
    * Least-recently-used pick across the gender-appropriate pool, falling
    * back to NEUTRAL when the trainer has no gender set or that variant's
    * pool is empty for every scenario. Deliberately NOT per-trainer
@@ -327,7 +364,12 @@ export class DomainConversationsService {
   private async pickFromVariant(genderVariant: DomainPromptGenderVariant) {
     const candidate = await this.prisma.domainPrompt.findFirst({
       where: { genderVariant, isDisabled: false },
-      orderBy: [{ lastServedAt: 'asc' }, { createdAt: 'asc' }],
+      // Prisma sorts nulls LAST by default on 'asc', even though Postgres
+      // itself defaults to nulls-first for ASC -- without this explicit
+      // override, never-served rows (lastServedAt: null) sort behind
+      // already-served ones and never get picked, so the LRU rotation
+      // collapses onto whichever handful of rows were served first.
+      orderBy: [{ lastServedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
     });
     if (!candidate) return null;
 
