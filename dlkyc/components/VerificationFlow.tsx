@@ -241,7 +241,7 @@ function DocumentStep({
           ))}
         </select>
       </label>
-      <CameraCapture guideLabel="Position the document inside the frame" onCapture={onCapture} />
+      <CameraCapture guideLabel="Position the document inside the frame" onCapture={onCapture} rectGuide />
       {error && <p className="text-sm font-bold text-danger">{error}</p>}
     </div>
   );
@@ -356,9 +356,22 @@ const RESULT_PRESENTATION: Record<
   },
 };
 
+function CornerBrackets() {
+  const cornerClass = 'absolute size-8 border-accent';
+  return (
+    <>
+      <span className={`${cornerClass} left-0 top-0 rounded-tl-xl border-l-4 border-t-4`} />
+      <span className={`${cornerClass} right-0 top-0 rounded-tr-xl border-r-4 border-t-4`} />
+      <span className={`${cornerClass} bottom-0 left-0 rounded-bl-xl border-b-4 border-l-4`} />
+      <span className={`${cornerClass} bottom-0 right-0 rounded-br-xl border-b-4 border-r-4`} />
+    </>
+  );
+}
+
 function CameraCapture({
   guideLabel,
   oval = false,
+  rectGuide = false,
   facingMode = 'environment',
   onCapture,
   onCaptureBurst,
@@ -367,6 +380,7 @@ function CameraCapture({
 }: {
   guideLabel: string;
   oval?: boolean;
+  rectGuide?: boolean;
   facingMode?: 'environment' | 'user';
   onCapture?: (blob: Blob) => void;
   onCaptureBurst?: (frames: Blob[]) => void;
@@ -450,7 +464,9 @@ function CameraCapture({
 
   return (
     <div className="grid gap-3">
-      <div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-line bg-black">
+      <div
+        className={`relative overflow-hidden rounded-lg border border-line bg-black ${oval ? 'aspect-[3/4]' : 'aspect-[4/3]'}`}
+      >
         <video
           autoPlay
           className="size-full object-cover"
@@ -458,9 +474,17 @@ function CameraCapture({
           playsInline
           ref={videoRef}
         />
+        {rectGuide && (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
+            <div className="relative aspect-[1.586/1] w-full max-w-md">
+              <div className="absolute inset-0 rounded-xl border-4 border-dashed border-white/80" />
+              <CornerBrackets />
+            </div>
+          </div>
+        )}
         {oval && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center">
-            <div className="aspect-[3/4] h-3/4 rounded-full border-4 border-white/70" />
+            <div className="aspect-[3/4] h-[92%] rounded-full border-4 border-white/70" />
           </div>
         )}
         {!ready && (
