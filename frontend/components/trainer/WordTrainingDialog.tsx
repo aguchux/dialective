@@ -129,6 +129,12 @@ export function WordTrainingDialog({
   const [recorderState, setRecorderState] = useState<RecorderState>('ready');
   const [elapsedMs, setElapsedMs] = useState(0);
   const [noiseRating, setNoiseRating] = useState<RecordingNoiseRating>('QUIET');
+  // Ambient (pre-recording) room-noise readout -- shown on the mic button's
+  // own background while recorderState is 'ready', distinct from noiseRating
+  // (which drives the ring during/after an actual recording). Uses more
+  // sensitive thresholds (see classifyAmbientNoise) since its only job is to
+  // warn the trainer about their environment before they commit to a take.
+  const [ambientNoiseRating, setAmbientNoiseRating] = useState<RecordingNoiseRating>('QUIET');
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [score, setScore] = useState<number | null>(null);
@@ -193,6 +199,19 @@ export function WordTrainingDialog({
   const lastNoiseRenderRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sourceAudioRef = useRef<HTMLAudioElement | null>(null);
+  // true while streamRef holds an ambient-monitoring-only stream (opened
+  // before the trainer clicks record); false once an actual recording is
+  // underway. monitorSignal's read loop checks this each frame to decide
+  // whether to update ambientNoiseRating (button background) or noiseRating
+  // (ring) -- see startRecording, which flips this off and reuses the same
+  // stream instead of requesting the mic a second time.
+  const isAmbientModeRef = useRef(false);
+  // Mirrors the `open` prop for startAmbientMonitoring's async permission
+  // check below -- the callback has no dependency array access to a fresh
+  // `open` value, and closing the dialog while getUserMedia is pending must
+  // not leave an un-released stream behind.
+  const openRef = useRef(open);
+  openRef.current = open;
 
   const releaseMicrophone = useCallback(() => {
     if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
@@ -203,6 +222,33 @@ export function WordTrainingDialog({
     streamRef.current = null;
     void audioContextRef.current?.close();
     audioContextRef.current = null;
+    isAmbientModeRef.current = false;
+  }, []);
+
+  const startAmbientMonitoring = useCallback(async () => {
+    if (streamRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      // The dialog may have closed while this permission prompt was
+      // pending -- releaseMicrophone() already ran with nothing to
+      // release, so without this check the stream below would open and
+      // never get torn down.
+      if (!openRef.current || streamRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      streamRef.current = stream;
+      isAmbientModeRef.current = true;
+      setAmbientNoiseRating('QUIET');
+      monitorSignal(stream);
+    } catch {
+      // Permission denied/unavailable -- silently skip ambient monitoring;
+      // the trainer still sees the normal mic-permission error when they
+      // actually try to record (startRecording's own getUserMedia call).
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const clearRecording = useCallback(() => {
@@ -261,6 +307,18 @@ export function WordTrainingDialog({
     notifyFullScreenOverlay(open);
     return () => notifyFullScreenOverlay(false);
   }, [open]);
+
+  // Opens the mic as soon as the ready screen shows (assignment loaded,
+  // nothing clicked yet) so the button background can live-monitor ambient
+  // room noise before the trainer commits to a take -- see
+  // startAmbientMonitoring. Only ever runs while recorderState is 'ready';
+  // startRecording reuses this same stream rather than requesting the mic a
+  // second time.
+  useEffect(() => {
+    if (step === 'training' && assignment && recorderState === 'ready') {
+      void startAmbientMonitoring();
+    }
+  }, [step, assignment, recorderState, startAmbientMonitoring]);
 
   // SessionActivityTracker's idle-timeout heartbeat only fires on
   // mousemove/keydown/touchstart/scroll -- none of which a trainer produces
@@ -444,12 +502,20 @@ export function WordTrainingDialog({
   async function startRecording() {
     if (!assignment) return;
     setError(null);
-    clearRecording();
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
+      // Reuse the stream ambient monitoring already opened (see
+      // startAmbientMonitoring) instead of requesting the mic a second
+      // time -- avoids a duplicate permission prompt and a brief gap where
+      // two streams would be open at once. Falls back to requesting fresh
+      // if ambient monitoring never got permission (e.g. it was denied,
+      // then granted on this explicit user-initiated attempt).
+      const stream =
+        streamRef.current ??
+        (await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        }));
       streamRef.current = stream;
+      isAmbientModeRef.current = false;
       const mimeType = preferredMimeType();
       const recorder = mimeType
         ? new MediaRecorder(stream, { mimeType })
@@ -477,7 +543,9 @@ export function WordTrainingDialog({
         releaseMicrophone();
       };
 
-      monitorSignal(stream);
+      // Only (re)start the analyser loop if ambient monitoring wasn't
+      // already running one on this same stream.
+      if (!animationFrameRef.current) monitorSignal(stream);
       startedAtRef.current = Date.now();
       setRecorderState('recording');
       recorder.start(250);
@@ -512,12 +580,22 @@ export function WordTrainingDialog({
         sum += normalized * normalized;
       }
       const rms = Math.sqrt(sum / samples.length);
-      noiseTotalRef.current += rms;
-      noiseSamplesRef.current += 1;
       const now = performance.now();
-      if (now - lastNoiseRenderRef.current >= 160) {
-        setNoiseRating(classifyNoise(rms));
-        lastNoiseRenderRef.current = now;
+      if (isAmbientModeRef.current) {
+        // Pre-recording: no averaging/accumulation (nothing is being
+        // scored yet), just a live per-frame readout on the button
+        // background at the more sensitive ambient thresholds.
+        if (now - lastNoiseRenderRef.current >= 160) {
+          setAmbientNoiseRating(classifyAmbientNoise(rms));
+          lastNoiseRenderRef.current = now;
+        }
+      } else {
+        noiseTotalRef.current += rms;
+        noiseSamplesRef.current += 1;
+        if (now - lastNoiseRenderRef.current >= 160) {
+          setNoiseRating(classifyNoise(rms));
+          lastNoiseRenderRef.current = now;
+        }
       }
       animationFrameRef.current = requestAnimationFrame(read);
     };
@@ -622,6 +700,12 @@ export function WordTrainingDialog({
 
   const progress = Math.min(1, elapsedMs / maxRecordingMs);
   const ringColor = noiseColor(noiseRating);
+  // Button background lives entirely in the 'ready' state (ambient
+  // monitoring before any click); every other state keeps the normal solid
+  // accent-purple, with the ring (ringColor above) carrying noise feedback
+  // once a take is actually being recorded.
+  const micButtonBackground =
+    recorderState === 'ready' ? noiseColor(ambientNoiseRating) : undefined;
 
   async function handleQracSigned() {
     setQracOpen(false);
@@ -981,13 +1065,14 @@ export function WordTrainingDialog({
                         </svg>
                         <button
                           aria-label={recorderButtonLabel(recorderState)}
-                          className="relative z-[1] grid size-36 place-items-center rounded-full bg-accent text-white shadow-[0_14px_40px_rgba(126,34,206,0.3)] transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 md:size-40"
+                          className={`relative z-[1] grid size-36 place-items-center rounded-full text-white shadow-[0_14px_40px_rgba(126,34,206,0.3)] transition-[transform,background-color] duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 md:size-40 ${micButtonBackground ? '' : 'bg-accent'}`}
                           disabled={recorderState === 'submitting' || recorderState === 'submitted'}
                           onClick={() => {
                             if (recorderState === 'ready') void startRecording();
                             else if (recorderState === 'recording') stopRecording();
                             else togglePlayback();
                           }}
+                          style={micButtonBackground ? { backgroundColor: micButtonBackground } : undefined}
                           type="button"
                         >
                           {recorderState === 'recording' ? (
@@ -1172,6 +1257,17 @@ function preferredMimeType(): string | undefined {
 function classifyNoise(rms: number): RecordingNoiseRating {
   if (rms >= 0.22) return 'NOISY';
   if (rms >= 0.09) return 'FAIR';
+  return 'QUIET';
+}
+
+// Roughly half of classifyNoise's thresholds -- ambient monitoring's only
+// job is to warn about room noise before the trainer commits to a take, so
+// it should flag amber/red sooner than the during-recording classifier
+// (which is tuned against echoCancellation/noiseSuppression already active
+// on a committed take).
+function classifyAmbientNoise(rms: number): RecordingNoiseRating {
+  if (rms >= 0.11) return 'NOISY';
+  if (rms >= 0.045) return 'FAIR';
   return 'QUIET';
 }
 
