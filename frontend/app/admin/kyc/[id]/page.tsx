@@ -17,6 +17,7 @@ import {
   useLazyGetKycEvidenceImageQuery,
   useListKycEvidenceQuery,
   useRefreshKycVerificationMutation,
+  useRevokeKycVerificationMutation,
 } from '@/store/api';
 
 export default function AdminKycDetailPage() {
@@ -28,11 +29,14 @@ export default function AdminKycDetailPage() {
   const [cancel, { isLoading: cancelling }] = useCancelKycVerificationMutation();
   const [approve, { isLoading: approving }] = useApproveKycVerificationMutation();
   const [decline, { isLoading: declining }] = useDeclineKycVerificationMutation();
+  const [revoke, { isLoading: revoking }] = useRevokeKycVerificationMutation();
   const [fetchDecision, { data: decisionData, isFetching: loadingDecision }] =
     useLazyGetKycDecisionQuery();
   const [error, setError] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState('');
   const [showDeclineForm, setShowDeclineForm] = useState(false);
+  const [revokeReason, setRevokeReason] = useState('');
+  const [showRevokeForm, setShowRevokeForm] = useState(false);
   const [decisionRevealed, setDecisionRevealed] = useState(false);
 
   useEffect(() => {
@@ -40,6 +44,8 @@ export default function AdminKycDetailPage() {
     setError(null);
     setShowDeclineForm(false);
     setDeclineReason('');
+    setShowRevokeForm(false);
+    setRevokeReason('');
   }, [id]);
 
   async function refreshRow() {
@@ -79,6 +85,18 @@ export default function AdminKycDetailPage() {
       setDeclineReason('');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to decline this verification.'));
+    }
+  }
+
+  async function revokeRow() {
+    if (!revokeReason.trim()) return;
+    setError(null);
+    try {
+      await revoke({ id, reason: revokeReason.trim() }).unwrap();
+      setShowRevokeForm(false);
+      setRevokeReason('');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to revoke this verification.'));
     }
   }
 
@@ -213,6 +231,16 @@ export default function AdminKycDetailPage() {
                     </>
                   )}
                 </div>
+              ) : row.status === 'APPROVED' ? (
+                <div className="flex flex-wrap gap-2">
+                  <ActionButton
+                    className="min-h-11 rounded-lg border border-danger px-5 font-extrabold text-danger hover:bg-red-50 disabled:opacity-60"
+                    onClick={() => setShowRevokeForm((current) => !current)}
+                    type="button"
+                  >
+                    Revoke approval
+                  </ActionButton>
+                </div>
               ) : (
                 <p className="text-sm text-muted">
                   This verification is {row.status.replace(/_/g, ' ').toLowerCase()} -- no further
@@ -240,6 +268,32 @@ export default function AdminKycDetailPage() {
                       type="button"
                     >
                       Confirm decline
+                    </ActionButton>
+                  </div>
+                </div>
+              )}
+              {showRevokeForm && (
+                <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3">
+                  <label className="text-sm font-bold" htmlFor="kyc-revoke-reason">
+                    Reason for revoking (shown to the trainer; also re-blocks withdrawals/onboarding
+                    immediately)
+                  </label>
+                  <textarea
+                    className="min-h-20 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                    id="kyc-revoke-reason"
+                    onChange={(event) => setRevokeReason(event.target.value)}
+                    value={revokeReason}
+                  />
+                  <div>
+                    <ActionButton
+                      className="min-h-10 rounded-lg border border-danger bg-danger px-4 font-extrabold text-white disabled:opacity-60"
+                      disabled={!revokeReason.trim()}
+                      onClick={() => void revokeRow()}
+                      pending={revoking}
+                      pendingLabel="Revoking"
+                      type="button"
+                    >
+                      Confirm revoke
                     </ActionButton>
                   </div>
                 </div>

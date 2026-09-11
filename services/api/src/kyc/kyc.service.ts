@@ -235,6 +235,43 @@ export class KycService {
     return this.prisma.kycVerification.findUniqueOrThrow({ where: { id } });
   }
 
+  /**
+   * Reverses a previously-APPROVED verification (either provider) back to
+   * DECLINED -- e.g. fraud or a duplicate identity discovered after the
+   * fact. Unlike adminApproveSelfHosted/adminDeclineSelfHosted, this is not
+   * restricted to provider="self": a Didit-approved user can turn out to be
+   * fraudulent just as easily, and Didit's own dashboard has no path to
+   * tell this platform to revoke. Reuses applyDecision so User.kycStatus/
+   * kycVerifiedAt update identically to every other decision path, and
+   * immediately re-blocks the withdrawal/onboarding gates (both check only
+   * kycStatus === APPROVED). Also clears diditIdentityFingerprint so the
+   * user isn't permanently locked out of ever re-verifying under the
+   * duplicate-identity check in applyDecision.
+   */
+  async adminRevokeVerification(id: string, reason: string) {
+    const verification = await this.prisma.kycVerification.findUnique({ where: { id } });
+    if (!verification) throw new NotFoundException('Verification not found');
+    if (verification.status !== KycStatus.APPROVED) {
+      throw new BadRequestException('Only an APPROVED verification can be revoked');
+    }
+    await this.applyDecision(verification.id, verification.userId, KycStatus.DECLINED, {
+      status: 'Declined',
+      idVerifications: [],
+      faceMatchScore: verification.faceMatchScore?.toNumber() ?? null,
+      faceMatchStatus: null,
+      livenessScore: verification.livenessScore?.toNumber() ?? null,
+      livenessStatus: null,
+      declineReason: reason,
+      raw: { provider: verification.provider, adminOverride: 'revoke', reason },
+    });
+    await this.prisma.user.update({
+      where: { id: verification.userId },
+      data: { diditIdentityFingerprint: null },
+    });
+    this.logger.warn(`Admin revoked previously-approved KycVerification ${id}: ${reason}`);
+    return this.prisma.kycVerification.findUniqueOrThrow({ where: { id } });
+  }
+
   private async getReviewableSelfHostedVerification(id: string) {
     const verification = await this.prisma.kycVerification.findUnique({ where: { id } });
     if (!verification) throw new NotFoundException('Verification not found');

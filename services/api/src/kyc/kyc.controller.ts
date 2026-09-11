@@ -250,4 +250,12 @@ export class KycController {
   adminDecline(@Param('id') id: string, @Body() body: AdminDeclineKycDto) {
     return this.kyc.adminDeclineSelfHosted(id, body.reason);
   }
+
+  /** Reverses a previously-APPROVED verification (either provider) back to DECLINED -- see kyc.service.ts's adminRevokeVerification doc comment. */
+  @Post('admin/kyc/:id/revoke')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  adminRevoke(@Param('id') id: string, @Body() body: AdminDeclineKycDto) {
+    return this.kyc.adminRevokeVerification(id, body.reason);
+  }
 }

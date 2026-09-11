@@ -3361,6 +3361,10 @@ export const dialectivaApi = createApi({
       query: ({ id, reason }) => ({ url: `/admin/kyc/${id}/decline`, method: 'POST', body: { reason } }),
       invalidatesTags: ['Kyc'],
     }),
+    revokeKycVerification: builder.mutation<KycVerification, { id: string; reason: string }>({
+      query: ({ id, reason }) => ({ url: `/admin/kyc/${id}/revoke`, method: 'POST', body: { reason } }),
+      invalidatesTags: ['Kyc'],
+    }),
     getTokenomicsStatus: builder.query<TokenomicsStatus, void>({
       query: () => ({ url: '/tokenomics/status' }),
       providesTags: ['Tokenomics'],
@@ -4966,6 +4970,7 @@ export const {
   useCancelKycVerificationMutation,
   useApproveKycVerificationMutation,
   useDeclineKycVerificationMutation,
+  useRevokeKycVerificationMutation,
   useLazyGetKycDecisionQuery,
   useListKycEvidenceQuery,
   useLazyGetKycEvidenceImageQuery,
