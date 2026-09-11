@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
@@ -15,11 +16,22 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@dialectiva/db';
 import { KycService } from './kyc.service';
-import { AdminListKycDto } from './dto/admin-list-kyc.dto';
+import { SelfHostedKycService } from './self-hosted-kyc.service';
+import { AdminDeclineKycDto, AdminListKycDto } from './dto/admin-list-kyc.dto';
+import {
+  CreateKycEvidenceUploadUrlDto,
+  ResumeSelfHostedKycDto,
+  SubmitKycDocumentDto,
+  SubmitKycSelfieDto,
+} from './dto/self-hosted-kyc.dto';
+import { verifyKycHandoffToken } from './self-hosted-kyc-handoff.util';
 
 @Controller()
 export class KycController {
-  constructor(private readonly kyc: KycService) {}
+  constructor(
+    private readonly kyc: KycService,
+    private readonly selfHosted: SelfHostedKycService,
+  ) {}
 
   @Post('kyc/session')
   @UseGuards(JwtAuthGuard)
@@ -70,6 +82,84 @@ export class KycController {
     return this.kyc.handleWebhook(body, rawBody, headers);
   }
 
+  /**
+   * The DLKYC app (kyc.dialectlibrary.com) is a separate origin with no
+   * access to the platform's normal session/cookies, so it authenticates
+   * every call with the short-lived handoff token instead of JwtAuthGuard
+   * -- see self-hosted-kyc-handoff.util.ts's doc comment. Each request
+   * carries the token in its body (not a header) purely so the DTO shapes
+   * stay symmetric with the rest of this controller's POST routes; there is
+   * no CSRF concern since the token itself is the credential and is never
+   * stored in a cookie.
+   */
+  @Post('kyc/self/resume')
+  resumeSelfHosted(@Body() body: ResumeSelfHostedKycDto) {
+    return this.selfHosted.resumeSession(body.token);
+  }
+
+  @Get('kyc/self/challenge')
+  getSelfHostedChallenge() {
+    return this.selfHosted.getChallenge();
+  }
+
+  @Post('kyc/self/verifications/:verificationId/document-upload-url')
+  createSelfHostedDocumentUploadUrl(
+    @Param('verificationId') verificationId: string,
+    @Body() body: CreateKycEvidenceUploadUrlDto & ResumeSelfHostedKycDto,
+  ) {
+    const claims = this.verifyHandoffOwnership(body.token, verificationId);
+    return this.selfHosted.createEvidenceUploadUrl(verificationId, claims.sub, body.contentType);
+  }
+
+  @Post('kyc/self/verifications/:verificationId/document')
+  submitSelfHostedDocument(
+    @Param('verificationId') verificationId: string,
+    @Body() body: SubmitKycDocumentDto & ResumeSelfHostedKycDto,
+  ) {
+    const claims = this.verifyHandoffOwnership(body.token, verificationId);
+    return this.selfHosted.submitDocument(verificationId, claims.sub, body);
+  }
+
+  @Post('kyc/self/verifications/:verificationId/selfie-upload-url')
+  createSelfHostedSelfieUploadUrl(
+    @Param('verificationId') verificationId: string,
+    @Body() body: CreateKycEvidenceUploadUrlDto & ResumeSelfHostedKycDto,
+  ) {
+    const claims = this.verifyHandoffOwnership(body.token, verificationId);
+    return this.selfHosted.createEvidenceUploadUrl(verificationId, claims.sub, body.contentType);
+  }
+
+  @Post('kyc/self/verifications/:verificationId/selfie')
+  submitSelfHostedSelfie(
+    @Param('verificationId') verificationId: string,
+    @Body() body: SubmitKycSelfieDto & ResumeSelfHostedKycDto,
+  ) {
+    const claims = this.verifyHandoffOwnership(body.token, verificationId);
+    return this.selfHosted.submitSelfie(verificationId, claims.sub, body);
+  }
+
+  @Post('kyc/self/verifications/:verificationId/submit')
+  submitSelfHosted(
+    @Param('verificationId') verificationId: string,
+    @Body() body: ResumeSelfHostedKycDto,
+  ) {
+    const claims = this.verifyHandoffOwnership(body.token, verificationId);
+    return this.kyc.submitSelfHostedVerification(verificationId, claims.sub);
+  }
+
+  private verifyHandoffOwnership(token: string, verificationId: string) {
+    let claims;
+    try {
+      claims = verifyKycHandoffToken(token);
+    } catch {
+      throw new UnauthorizedException('This verification link has expired. Please start again.');
+    }
+    if (claims.verificationId !== verificationId) {
+      throw new UnauthorizedException('Token does not match this verification session');
+    }
+    return claims;
+  }
+
   @Get('admin/kyc')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -100,5 +190,20 @@ export class KycController {
   @Roles(Role.ADMIN)
   adminCancel(@Param('id') id: string) {
     return this.kyc.adminCancel(id);
+  }
+
+  /** DLKYC-only -- see kyc.service.ts's adminApproveSelfHosted doc comment for why Didit rows are rejected here. */
+  @Post('admin/kyc/:id/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  adminApprove(@Param('id') id: string) {
+    return this.kyc.adminApproveSelfHosted(id);
+  }
+
+  @Post('admin/kyc/:id/decline')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  adminDecline(@Param('id') id: string, @Body() body: AdminDeclineKycDto) {
+    return this.kyc.adminDeclineSelfHosted(id, body.reason);
   }
 }

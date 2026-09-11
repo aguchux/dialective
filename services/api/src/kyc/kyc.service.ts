@@ -4,6 +4,7 @@ import { KycStatus, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { DiditDecision, DiditService } from './didit.service';
+import { SelfHostedKycService } from './self-hosted-kyc.service';
 import {
   encryptKycField,
   fingerprintKycDocument,
@@ -44,8 +45,13 @@ export class KycService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly didit: DiditService,
+    private readonly selfHosted: SelfHostedKycService,
     private readonly settings: PlatformSettingsService,
   ) {}
+
+  async getActiveProvider(): Promise<'didit' | 'self'> {
+    return this.settings.getActiveKycProvider();
+  }
 
   /**
    * Abandons any KycVerification (and its User.kycStatus) that has sat in a
@@ -107,6 +113,19 @@ export class KycService {
     if (user.kycStatus === KycStatus.APPROVED) {
       throw new BadRequestException('You are already verified');
     }
+
+    const provider = await this.getActiveProvider();
+    if (provider === 'self') {
+      const { sessionId, kycAppUrl } = await this.selfHosted.createSession(userId, callbackUrl);
+      await this.prisma.user.update({ where: { id: userId }, data: { kycStatus: KycStatus.IN_PROGRESS } });
+      // SelfHostedKycService.createSession already inserted the
+      // KycVerification row (it needs the row's id before the handoff token
+      // can be signed) -- unlike the Didit branch below, no upsert needed
+      // here since providerSessionId is a freshly generated uuid, never a
+      // replay of an existing session.
+      return { sessionId, url: kycAppUrl, provider: 'self' as const };
+    }
+
     const session = await this.didit.createSession(userId, callbackUrl);
     // Didit can hand back an already-known session_id for the same
     // vendor_data (e.g. the user re-opens the verification dialog while
@@ -136,7 +155,7 @@ export class KycService {
       where: { id: userId },
       data: { kycStatus: KycStatus.IN_PROGRESS },
     });
-    return session;
+    return { ...session, provider: 'didit' as const };
   }
 
   /**
@@ -173,6 +192,60 @@ export class KycService {
     }
     await this.abandon(verification.id, userId, 'Cancelled by user to retry verification.');
     return { cancelled: true };
+  }
+
+  /**
+   * DLKYC (self-hosted) has no external reviewer -- unlike Didit, where the
+   * admin queue is oversight-only because Didit's own reviewers make the
+   * approve/decline call, a self-hosted IN_REVIEW row has no other path to
+   * a terminal decision. Restricted to provider="self" rows: a Didit row
+   * always resolves via its webhook or the existing refresh/cancel actions,
+   * never via a manual override here. Reuses applyDecision so
+   * User.kycStatus/kycVerifiedAt/the duplicate-identity-fingerprint check
+   * all apply identically to a manual admin decision.
+   */
+  async adminApproveSelfHosted(id: string) {
+    const verification = await this.getReviewableSelfHostedVerification(id);
+    await this.applyDecision(verification.id, verification.userId, KycStatus.APPROVED, {
+      status: 'Approved',
+      idVerifications: [],
+      faceMatchScore: verification.faceMatchScore?.toNumber() ?? null,
+      faceMatchStatus: null,
+      livenessScore: verification.livenessScore?.toNumber() ?? null,
+      livenessStatus: null,
+      declineReason: null,
+      raw: { provider: 'self', adminOverride: 'approve' },
+    });
+    return this.prisma.kycVerification.findUniqueOrThrow({ where: { id } });
+  }
+
+  async adminDeclineSelfHosted(id: string, reason: string) {
+    const verification = await this.getReviewableSelfHostedVerification(id);
+    await this.applyDecision(verification.id, verification.userId, KycStatus.DECLINED, {
+      status: 'Declined',
+      idVerifications: [],
+      faceMatchScore: verification.faceMatchScore?.toNumber() ?? null,
+      faceMatchStatus: null,
+      livenessScore: verification.livenessScore?.toNumber() ?? null,
+      livenessStatus: null,
+      declineReason: reason,
+      raw: { provider: 'self', adminOverride: 'decline', reason },
+    });
+    return this.prisma.kycVerification.findUniqueOrThrow({ where: { id } });
+  }
+
+  private async getReviewableSelfHostedVerification(id: string) {
+    const verification = await this.prisma.kycVerification.findUnique({ where: { id } });
+    if (!verification) throw new NotFoundException('Verification not found');
+    if (verification.provider !== 'self') {
+      throw new BadRequestException(
+        'Only self-hosted (DLKYC) verifications can be manually approved or declined here.',
+      );
+    }
+    if (TERMINAL_STATUSES.includes(verification.status)) {
+      throw new BadRequestException('This verification is already resolved');
+    }
+    return verification;
   }
 
   /** Admin counterpart of cancelMyVerification, for the KYC oversight queue. */
@@ -247,10 +320,36 @@ export class KycService {
     return { received: true, matched: true };
   }
 
+  /**
+   * Called by kyc.controller.ts's POST /kyc/self/submit once a trainer has
+   * completed document + selfie capture in the DLKYC app. Runs
+   * SelfHostedKycService.evaluate() then feeds its DiditDecision-shaped
+   * result through the exact same applyDecision path Didit's webhook uses,
+   * so User.kycStatus/kycVerifiedAt updates identically regardless of
+   * provider.
+   */
+  async submitSelfHostedVerification(verificationId: string, userId: string) {
+    const verification = await this.prisma.kycVerification.findUnique({
+      where: { id: verificationId },
+    });
+    if (!verification || verification.userId !== userId || verification.provider !== 'self') {
+      throw new NotFoundException('Verification not found');
+    }
+    const decision = await this.selfHosted.evaluate(verificationId, userId);
+    const status = mapSelfHostedStatus(decision.status);
+    await this.applyDecision(verification.id, userId, status, decision);
+    return this.getMyStatus(userId);
+  }
+
   /** Fallback poll used only by the admin "Refresh from Didit" action -- see didit.service.ts's getDecision doc comment. */
   async refreshFromProvider(id: string) {
     const verification = await this.prisma.kycVerification.findUnique({ where: { id } });
     if (!verification) throw new NotFoundException('Verification not found');
+    if (verification.provider !== 'didit') {
+      throw new BadRequestException(
+        'This verification was not created via Didit and has no remote decision to refresh.',
+      );
+    }
     const decision = await this.didit.getDecision(verification.providerSessionId);
     const status = mapDiditStatus(decision.status);
     await this.applyDecision(verification.id, verification.userId, status, decision);
@@ -362,6 +461,11 @@ export class KycService {
 function mapDiditStatus(status: string | undefined): KycStatus {
   if (!status) return KycStatus.IN_PROGRESS;
   return DIDIT_STATUS_MAP[status] ?? KycStatus.IN_PROGRESS;
+}
+
+/** self-hosted-kyc.service.ts's toDiditDecision emits the same "Approved"/"In Review"/"Declined" vocabulary Didit uses, so this reuses DIDIT_STATUS_MAP rather than a second lookup table. */
+function mapSelfHostedStatus(status: string | undefined): KycStatus {
+  return mapDiditStatus(status);
 }
 
 /** Parses the inline `decision` object a status.updated webhook carries -- same shape as DiditService.getDecision's fallback-poll response, so both paths converge on one DiditDecision shape before reaching applyDecision. */

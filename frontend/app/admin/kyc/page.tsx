@@ -8,7 +8,9 @@ import {
   KycStatus,
   KycVerification,
   normalizeErrorMessage,
+  useApproveKycVerificationMutation,
   useCancelKycVerificationMutation,
+  useDeclineKycVerificationMutation,
   useGetKycVerificationQuery,
   useListKycVerificationsQuery,
   useRefreshKycVerificationMutation,
@@ -43,8 +45,9 @@ export default function AdminKycPage() {
           <div>
             <h1 className="text-3xl font-black">Identity verification</h1>
             <p className="mt-2 max-w-4xl text-muted">
-              Review Didit ID-scan and selfie verifications. Approve/decline decisions are made by
-              Didit -- use this queue for oversight and stuck sessions, not manual approval.
+              Review ID-scan and selfie verifications from both providers -- Didit (hosted,
+              decisions made by Didit) and DLKYC (self-hosted; AI-assisted findings, if enabled,
+              are shown as a reviewer aid only, never an approval).
             </p>
           </div>
           <label className="grid gap-1 text-sm font-bold">
@@ -72,6 +75,7 @@ export default function AdminKycPage() {
               <thead className="bg-surface-muted text-xs uppercase text-muted">
                 <tr>
                   <th className="px-4 py-3">Trainer</th>
+                  <th className="px-4 py-3">Provider</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Document</th>
                   <th className="px-4 py-3">Face match</th>
@@ -82,13 +86,13 @@ export default function AdminKycPage() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td className="px-4 py-10 text-center text-muted" colSpan={6}>
+                    <td className="px-4 py-10 text-center text-muted" colSpan={7}>
                       Loading verifications...
                     </td>
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-10 text-center font-bold text-muted" colSpan={6}>
+                    <td className="px-4 py-10 text-center font-bold text-muted" colSpan={7}>
                       No verifications in this status.
                     </td>
                   </tr>
@@ -154,6 +158,9 @@ function VerificationRow({
         <div className="text-muted">{row.user.email}</div>
       </td>
       <td className="px-4 py-3">
+        <ProviderBadge provider={row.provider} />
+      </td>
+      <td className="px-4 py-3">
         <StatusBadge status={row.status} />
       </td>
       <td className="px-4 py-3">
@@ -187,7 +194,11 @@ function DetailDialog({
   const { data: row } = useGetKycVerificationQuery(id ?? '', { skip: !id });
   const [refresh, { isLoading: refreshing }] = useRefreshKycVerificationMutation();
   const [cancel, { isLoading: cancelling }] = useCancelKycVerificationMutation();
+  const [approve, { isLoading: approving }] = useApproveKycVerificationMutation();
+  const [decline, { isLoading: declining }] = useDeclineKycVerificationMutation();
   const [error, setError] = useState<string | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const [showDeclineForm, setShowDeclineForm] = useState(false);
 
   async function refreshRow() {
     if (!id) return;
@@ -209,6 +220,28 @@ function DetailDialog({
     }
   }
 
+  async function approveRow() {
+    if (!id) return;
+    setError(null);
+    try {
+      await approve(id).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to approve this verification.'));
+    }
+  }
+
+  async function declineRow() {
+    if (!id || !declineReason.trim()) return;
+    setError(null);
+    try {
+      await decline({ id, reason: declineReason.trim() }).unwrap();
+      setShowDeclineForm(false);
+      setDeclineReason('');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to decline this verification.'));
+    }
+  }
+
   return (
     <Dialog open={id !== null} onOpenChange={onOpenChange}>
       <DialogContent
@@ -226,7 +259,7 @@ function DetailDialog({
             </div>
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <DetailField label="Status" value={<StatusBadge status={row.status} />} />
-              <DetailField label="Provider" value={row.provider} />
+              <DetailField label="Provider" value={<ProviderBadge provider={row.provider} />} />
               <DetailField label="Document type" value={row.documentType ?? '--'} />
               <DetailField label="Document number" value={row.documentNumberMasked ?? '--'} />
               <DetailField label="Face match score" value={row.faceMatchScore ?? '--'} />
@@ -249,15 +282,17 @@ function DetailDialog({
             )}
             {(row.status === 'IN_PROGRESS' || row.status === 'IN_REVIEW') && (
               <div className="flex flex-wrap gap-2">
-                <ActionButton
-                  className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:opacity-60"
-                  onClick={() => void refreshRow()}
-                  pending={refreshing}
-                  pendingLabel="Refreshing"
-                  type="button"
-                >
-                  Refresh from Didit
-                </ActionButton>
+                {row.provider === 'didit' && (
+                  <ActionButton
+                    className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted disabled:opacity-60"
+                    onClick={() => void refreshRow()}
+                    pending={refreshing}
+                    pendingLabel="Refreshing"
+                    type="button"
+                  >
+                    Refresh from Didit
+                  </ActionButton>
+                )}
                 <ActionButton
                   className="min-h-11 rounded-lg border border-danger px-5 font-extrabold text-danger hover:bg-red-50 disabled:opacity-60"
                   onClick={() => void cancelRow()}
@@ -267,6 +302,51 @@ function DetailDialog({
                 >
                   Cancel verification
                 </ActionButton>
+                {row.provider === 'self' && (
+                  <>
+                    <ActionButton
+                      className="min-h-11 rounded-lg border border-accent bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:opacity-60"
+                      onClick={() => void approveRow()}
+                      pending={approving}
+                      pendingLabel="Approving"
+                      type="button"
+                    >
+                      Approve
+                    </ActionButton>
+                    <ActionButton
+                      className="min-h-11 rounded-lg border border-danger px-5 font-extrabold text-danger hover:bg-red-50 disabled:opacity-60"
+                      onClick={() => setShowDeclineForm((current) => !current)}
+                      type="button"
+                    >
+                      Decline
+                    </ActionButton>
+                  </>
+                )}
+              </div>
+            )}
+            {showDeclineForm && (
+              <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3">
+                <label className="text-sm font-bold" htmlFor="kyc-decline-reason">
+                  Reason for declining (shown to the trainer)
+                </label>
+                <textarea
+                  className="min-h-20 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                  id="kyc-decline-reason"
+                  onChange={(event) => setDeclineReason(event.target.value)}
+                  value={declineReason}
+                />
+                <div>
+                  <ActionButton
+                    className="min-h-10 rounded-lg border border-danger bg-danger px-4 font-extrabold text-white disabled:opacity-60"
+                    disabled={!declineReason.trim()}
+                    onClick={() => void declineRow()}
+                    pending={declining}
+                    pendingLabel="Declining"
+                    type="button"
+                  >
+                    Confirm decline
+                  </ActionButton>
+                </div>
               </div>
             )}
           </div>
@@ -282,6 +362,19 @@ function DetailField({ label, value }: { label: string; value: React.ReactNode }
       <dt className="text-xs font-bold uppercase text-muted">{label}</dt>
       <dd className="font-bold">{value}</dd>
     </div>
+  );
+}
+
+function ProviderBadge({ provider }: { provider: string }) {
+  const isSelf = provider === 'self';
+  return (
+    <span
+      className={`rounded-full px-2.5 py-1 text-xs font-black ${
+        isSelf ? 'bg-violet-50 text-violet-700' : 'bg-sky-50 text-sky-700'
+      }`}
+    >
+      {isSelf ? 'DLKYC' : 'Didit'}
+    </span>
   );
 }
 

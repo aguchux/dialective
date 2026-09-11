@@ -12,13 +12,19 @@ function setup(settingsOverrides: { enabled?: boolean; minutes?: number } = {}) 
     },
   };
   const didit = {};
+  const selfHosted = {};
   const settings = {
     getKycAutoCancelStaleSettings: jest.fn().mockResolvedValue({
       enabled: settingsOverrides.enabled ?? true,
       minutes: settingsOverrides.minutes ?? 60,
     }),
   };
-  const service = new KycService(prisma as never, didit as never, settings as never);
+  const service = new KycService(
+    prisma as never,
+    didit as never,
+    selfHosted as never,
+    settings as never,
+  );
   return { service, prisma, settings };
 }
 

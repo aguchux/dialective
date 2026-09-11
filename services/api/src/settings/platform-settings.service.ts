@@ -557,6 +557,44 @@ export class PlatformSettingsService {
     return { enabled: row.kycAutoCancelStaleEnabled, minutes: row.kycAutoCancelStaleMinutes };
   }
 
+  /** Falls back to "didit" whenever selfHostedKycEnabled is off, regardless of the stored activeKycProvider value -- see the field's schema.prisma doc comment. */
+  async getActiveKycProvider(): Promise<'didit' | 'self'> {
+    const row = await this.getRow();
+    if (!row.selfHostedKycEnabled) return 'didit';
+    return row.activeKycProvider === 'self' ? 'self' : 'didit';
+  }
+
+  async isSelfHostedKycEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.selfHostedKycEnabled;
+  }
+
+  async isSelfHostedKycAutoApproveEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.selfHostedKycAutoApproveEnabled;
+  }
+
+  async isSelfHostedKycBotEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.selfHostedKycBotEnabled;
+  }
+
+  async getSelfHostedKycBotProviderOrder(): Promise<string[]> {
+    const row = await this.getRow();
+    return row.selfHostedKycBotProviderOrder
+      .split(',')
+      .map((v) => v.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  async getSelfHostedKycDocumentTypes(): Promise<string[]> {
+    const row = await this.getRow();
+    return row.selfHostedKycDocumentTypes
+      .split(',')
+      .map((v) => v.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
   async getWithdrawalFeeSettings(): Promise<{
     mode: string;
     tokenAmount: number;
@@ -989,6 +1027,12 @@ export class PlatformSettingsService {
       isKycRequiredOnboarding: row.isKycRequiredOnboarding,
       kycAutoCancelStaleEnabled: row.kycAutoCancelStaleEnabled,
       kycAutoCancelStaleMinutes: row.kycAutoCancelStaleMinutes,
+      selfHostedKycEnabled: row.selfHostedKycEnabled,
+      activeKycProvider: row.activeKycProvider,
+      selfHostedKycAutoApproveEnabled: row.selfHostedKycAutoApproveEnabled,
+      selfHostedKycBotEnabled: row.selfHostedKycBotEnabled,
+      selfHostedKycBotProviderOrder: row.selfHostedKycBotProviderOrder,
+      selfHostedKycDocumentTypes: row.selfHostedKycDocumentTypes,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,
@@ -1143,6 +1187,12 @@ export class PlatformSettingsService {
     isKycRequiredOnboarding?: boolean;
     kycAutoCancelStaleEnabled?: boolean;
     kycAutoCancelStaleMinutes?: number;
+    selfHostedKycEnabled?: boolean;
+    activeKycProvider?: string;
+    selfHostedKycAutoApproveEnabled?: boolean;
+    selfHostedKycBotEnabled?: boolean;
+    selfHostedKycBotProviderOrder?: string;
+    selfHostedKycDocumentTypes?: string;
     authMaintenanceEnabled?: boolean;
     authMaintenanceUntil?: Date | null;
     authMaintenanceMessage?: string | null;
@@ -1200,6 +1250,23 @@ export class PlatformSettingsService {
 
     if (data.supportChatMode && !['NONE', 'TAWK', 'AI'].includes(data.supportChatMode)) {
       throw new BadRequestException('supportChatMode must be NONE, TAWK, or AI');
+    }
+
+    if (data.activeKycProvider && !['didit', 'self'].includes(data.activeKycProvider)) {
+      throw new BadRequestException('activeKycProvider must be didit or self');
+    }
+
+    if (data.selfHostedKycBotProviderOrder) {
+      const tokens = data.selfHostedKycBotProviderOrder.split(',');
+      const isValidPermutation =
+        tokens.length === LLM_PROVIDER_KEYS.length &&
+        LLM_PROVIDER_KEYS.every((key) => tokens.includes(key)) &&
+        new Set(tokens).size === LLM_PROVIDER_KEYS.length;
+      if (!isValidPermutation) {
+        throw new BadRequestException(
+          'selfHostedKycBotProviderOrder must list openai, deepseek, and anthropic exactly once each',
+        );
+      }
     }
 
     if (data.spellingNormalizationProviderOrder) {
@@ -1639,6 +1706,12 @@ export class PlatformSettingsService {
       isKycRequiredOnboarding: row.isKycRequiredOnboarding,
       kycAutoCancelStaleEnabled: row.kycAutoCancelStaleEnabled,
       kycAutoCancelStaleMinutes: row.kycAutoCancelStaleMinutes,
+      selfHostedKycEnabled: row.selfHostedKycEnabled,
+      activeKycProvider: row.activeKycProvider,
+      selfHostedKycAutoApproveEnabled: row.selfHostedKycAutoApproveEnabled,
+      selfHostedKycBotEnabled: row.selfHostedKycBotEnabled,
+      selfHostedKycBotProviderOrder: row.selfHostedKycBotProviderOrder,
+      selfHostedKycDocumentTypes: row.selfHostedKycDocumentTypes,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,
@@ -1685,6 +1758,7 @@ export class PlatformSettingsService {
       isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens,
       isKycRequiredOnboarding,
+      activeKycProvider,
       isFlutterwaveV4Enabled,
       isFlutterwavePayoutsEnabled,
       isStripePayoutsEnabled,
@@ -1702,6 +1776,7 @@ export class PlatformSettingsService {
       this.isKycRequiredForWithdrawals(),
       this.getKycMinWithdrawalTokens(),
       this.isKycRequiredOnboarding(),
+      this.getActiveKycProvider(),
       this.isFlutterwaveV4Enabled(),
       this.isFlutterwavePayoutsEnabled(),
       this.isStripePayoutsEnabled(),
@@ -1740,6 +1815,7 @@ export class PlatformSettingsService {
       isKycRequiredForWithdrawals,
       kycMinWithdrawalTokens: kycMinWithdrawalTokens.toString(),
       isKycRequiredOnboarding,
+      activeKycProvider,
       isFlutterwaveV4Enabled,
       // Trainer-facing "which payout rail can I use" gates -- unlike the
       // config CSVs (allowedFlutterwaveCurrencies/Countries) which are only

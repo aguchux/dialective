@@ -22,6 +22,11 @@ export function KycSettingsPanel() {
   const [requiredOnboarding, setRequiredOnboarding] = useState(false);
   const [autoCancelStaleEnabled, setAutoCancelStaleEnabled] = useState(false);
   const [autoCancelStaleMinutes, setAutoCancelStaleMinutes] = useState('60');
+  const [selfHostedEnabled, setSelfHostedEnabled] = useState(false);
+  const [activeKycProvider, setActiveKycProvider] = useState<'didit' | 'self'>('didit');
+  const [selfHostedAutoApprove, setSelfHostedAutoApprove] = useState(false);
+  const [selfHostedBotEnabled, setSelfHostedBotEnabled] = useState(false);
+  const [selfHostedDocumentTypes, setSelfHostedDocumentTypes] = useState('passport,national_id');
   const [manualPhoneVerificationEnabled, setManualPhoneVerificationEnabled] = useState(true);
   const [manualPhoneVerificationFeeTokens, setManualPhoneVerificationFeeTokens] = useState('1');
   const [manualPhoneVerificationWhatsappNumber, setManualPhoneVerificationWhatsappNumber] =
@@ -38,6 +43,11 @@ export function KycSettingsPanel() {
     setRequiredOnboarding(settings.isKycRequiredOnboarding);
     setAutoCancelStaleEnabled(settings.kycAutoCancelStaleEnabled);
     setAutoCancelStaleMinutes(String(settings.kycAutoCancelStaleMinutes));
+    setSelfHostedEnabled(settings.selfHostedKycEnabled);
+    setActiveKycProvider(settings.activeKycProvider === 'self' ? 'self' : 'didit');
+    setSelfHostedAutoApprove(settings.selfHostedKycAutoApproveEnabled);
+    setSelfHostedBotEnabled(settings.selfHostedKycBotEnabled);
+    setSelfHostedDocumentTypes(settings.selfHostedKycDocumentTypes);
     setManualPhoneVerificationEnabled(settings.manualPhoneVerificationEnabled);
     setManualPhoneVerificationFeeTokens(settings.manualPhoneVerificationFeeTokens);
     setManualPhoneVerificationWhatsappNumber(settings.manualPhoneVerificationWhatsappNumber);
@@ -67,6 +77,11 @@ export function KycSettingsPanel() {
         isKycRequiredOnboarding: requiredOnboarding,
         kycAutoCancelStaleEnabled: autoCancelStaleEnabled,
         kycAutoCancelStaleMinutes: staleMinutes,
+        selfHostedKycEnabled: selfHostedEnabled,
+        activeKycProvider,
+        selfHostedKycAutoApproveEnabled: selfHostedAutoApprove,
+        selfHostedKycBotEnabled: selfHostedBotEnabled,
+        selfHostedKycDocumentTypes: selfHostedDocumentTypes,
         manualPhoneVerificationEnabled,
         manualPhoneVerificationFeeTokens: Number(manualPhoneVerificationFeeTokens) || 0,
         manualPhoneVerificationWhatsappNumber,
@@ -81,12 +96,12 @@ export function KycSettingsPanel() {
   return (
     <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
       <div className="grid gap-1">
-        <h2 className="text-2xl leading-snug">Identity Verification (Didit)</h2>
+        <h2 className="text-2xl leading-snug">Identity Verification</h2>
         <p className="leading-relaxed text-muted">
-          Controls for AI KYC verification -- ID scan, selfie, and face-match via Didit. When
-          required, a trainer must reach APPROVED status before a withdrawal at or above the
-          threshold below is allowed. Verification results are decided by Didit; admins only get an
-          oversight queue.
+          Controls for KYC verification -- ID scan, selfie, and face-match. Two providers are
+          available: Didit (hosted) and DLKYC (our own self-hosted app at kyc.dialectlibrary.com).
+          Only one is active at a time, set below. When required, a trainer must reach APPROVED
+          status before a withdrawal at or above the threshold below is allowed.
         </p>
       </div>
 
@@ -187,6 +202,96 @@ export function KycSettingsPanel() {
                 onChange={(event) => setAutoCancelStaleMinutes(event.target.value)}
                 type="number"
                 value={autoCancelStaleMinutes}
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4">
+            <label
+              className="flex cursor-pointer items-start gap-3"
+              htmlFor="dlkyc-self-hosted-enabled"
+            >
+              <input
+                checked={selfHostedEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="dlkyc-self-hosted-enabled"
+                onChange={(event) => setSelfHostedEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Enable DLKYC (self-hosted, kyc.dialectlibrary.com)</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Our own identity-verification app, alongside Didit -- not a replacement. When off,
+                  the active provider below is forced back to Didit regardless of its stored value.
+                </span>
+              </span>
+            </label>
+
+            <label className="grid max-w-xs gap-1 text-sm font-bold" htmlFor="dlkyc-active-provider">
+              Active provider
+              <select
+                className={inputClass}
+                disabled={!selfHostedEnabled}
+                id="dlkyc-active-provider"
+                onChange={(event) =>
+                  setActiveKycProvider(event.target.value === 'self' ? 'self' : 'didit')
+                }
+                value={activeKycProvider}
+              >
+                <option value="didit">Didit</option>
+                <option value="self">DLKYC (self-hosted)</option>
+              </select>
+              <span className="font-normal text-muted">
+                Every trainer&apos;s &quot;Verify identity&quot; goes to whichever provider is
+                active here -- no per-trainer split.
+              </span>
+            </label>
+
+            <label className="flex cursor-pointer items-start gap-3" htmlFor="dlkyc-auto-approve">
+              <input
+                checked={selfHostedAutoApprove}
+                className="mt-0.5 size-5 accent-accent"
+                id="dlkyc-auto-approve"
+                onChange={(event) => setSelfHostedAutoApprove(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Allow DLKYC to auto-approve clear passes</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Off by default -- every DLKYC session lands in the review queue regardless of
+                  score until thresholds are calibrated. Even when on, a clear fail always
+                  auto-declines and an uncertain result always goes to review; this only affects
+                  whether a clear pass can skip the queue.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex cursor-pointer items-start gap-3" htmlFor="dlkyc-bot-enabled">
+              <input
+                checked={selfHostedBotEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="dlkyc-bot-enabled"
+                onChange={(event) => setSelfHostedBotEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Enable AI-assisted review (bot)</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  An LLM reviews each submission for inconsistencies and surfaces flags to the
+                  reviewer -- it never approves or declines on its own. A flag always forces manual
+                  review, even if auto-approve is on.
+                </span>
+              </span>
+            </label>
+
+            <label className="grid gap-1 text-sm font-bold" htmlFor="dlkyc-document-types">
+              Accepted document types (comma-separated)
+              <input
+                className={inputClass}
+                id="dlkyc-document-types"
+                onChange={(event) => setSelfHostedDocumentTypes(event.target.value)}
+                placeholder="passport,national_id"
+                value={selfHostedDocumentTypes}
               />
             </label>
           </div>

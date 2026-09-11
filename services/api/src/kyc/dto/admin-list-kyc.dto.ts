@@ -1,6 +1,12 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { KycStatus } from '@dialectiva/db';
+
+export class AdminDeclineKycDto {
+  @IsString()
+  @MaxLength(500)
+  reason!: string;
+}
 
 export class AdminListKycDto {
   @IsOptional()

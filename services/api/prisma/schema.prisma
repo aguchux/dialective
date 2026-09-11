@@ -744,10 +744,38 @@ model KycVerification {
   webhookReceivedAt     DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+  captureEvidence       KycCaptureEvidence[]
 
   @@index([userId, status])
   @@index([status, createdAt])
   @@map("kyc_verifications")
+}
+
+enum KycEvidenceKind {
+  DOCUMENT_FRONT
+  DOCUMENT_BACK
+  SELFIE_FRAME
+}
+
+/// One row per uploaded DLKYC capture image (self-hosted provider only --
+/// Didit sessions never create these, evidence lives on Didit's side).
+/// Deliberately its own table rather than columns on KycVerification: a
+/// selfie challenge produces 2-3 frames, not one, and evidence has its own
+/// retention/deletion lifecycle distinct from the lightweight decision row
+/// (see DLKYC_PLAN.md section 13.3's separation rule). Never public-read --
+/// bucket/key resolve only via StorageService's presigned download, for
+/// admin review.
+model KycCaptureEvidence {
+  id                String           @id @default(uuid())
+  kycVerificationId String
+  kycVerification   KycVerification  @relation(fields: [kycVerificationId], references: [id], onDelete: Cascade)
+  kind              KycEvidenceKind
+  bucket            String
+  key               String
+  capturedAt        DateTime         @default(now())
+
+  @@index([kycVerificationId])
+  @@map("kyc_capture_evidence")
 }
 
 enum SubmissionStatus {
@@ -2510,6 +2538,12 @@ model PlatformSettings {
   isKycRequiredOnboarding                Boolean   @default(false) // when true, the frontend prompts a trainer to verify right after onboarding completes. Purely a UX prompt -- "do this later" has no separate enforcement of its own; the trainer simply remains subject to whatever isKycRequiredForWithdrawals/kycMinWithdrawalTokens already gate at withdrawal time
   kycAutoCancelStaleEnabled              Boolean   @default(false) // master kill switch -- when true, a scheduled job flips any KycVerification/User stuck in NOT_STARTED/IN_PROGRESS/IN_REVIEW for longer than kycAutoCancelStaleMinutes to ABANDONED, freeing the trainer to start a fresh Didit session; off by default so no existing in-flight verification is affected until an admin opts in
   kycAutoCancelStaleMinutes              Int       @default(60) // how long a KycVerification may sit in a non-terminal status before the auto-cancel job abandons it, once kycAutoCancelStaleEnabled is on
+  selfHostedKycEnabled                    Boolean   @default(false) // master kill switch -- when false, activeKycProvider is forced to "didit" regardless of its stored value, and DLKYC's own session/capture endpoints reject new sessions
+  activeKycProvider                       String    @default("didit") // "didit" or "self" -- which provider POST /kyc/session sends a trainer to; single active value (no per-trainer split) by design, see docs plan
+  selfHostedKycAutoApproveEnabled         Boolean   @default(false) // master kill switch -- when false, every DLKYC self-hosted evaluate() result lands in IN_REVIEW regardless of score, however favorable; safe default until thresholds are calibrated against real data
+  selfHostedKycBotEnabled                 Boolean   @default(false) // gates the LLM-assisted document/selfie review layer in DlkycEvaluationService -- off means evaluate() uses only the deterministic face/liveness layer; the bot NEVER sets APPROVED itself either way, see DLKYC_PLAN.md section 11.3
+  selfHostedKycBotProviderOrder           String    @default("openai,anthropic,deepseek") // CSV consumed by parseProviderOrder (llm-provider.interface.ts), same pattern as domainConversationProviderOrder
+  selfHostedKycDocumentTypes              String    @default("passport,national_id") // CSV admin allow-list DLKYC's document-capture step offers -- static short list per plan scope, not a versioned template registry
   isFlutterwaveFundingEnabled            Boolean   @default(false) // master kill switch -- when false, wallet/deposits/flutterwave rejects new funding requests outright; off by default until Flutterwave credentials/allow-lists are configured
   isFlutterwavePayoutsEnabled            Boolean   @default(false) // when false, admin/withdrawals/:id/submit-flutterwave is disabled -- admins can still resolve fiat withdrawals manually (outcome=paid) while this is off
   allowedFlutterwaveCurrencies           String    @default("NGN,GHS,KES,UGX,ZAR,TZS") // CSV of currencies a fiat withdrawal/deposit's currency may be, validated app-side

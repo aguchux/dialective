@@ -1,0 +1,46 @@
+@import 'tailwindcss';
+
+/* Same design tokens as the trainer dashboard's .dashboard-theme palette
+   (frontend/app/globals.css) -- DLKYC is a separate app, but a trainer
+   redirected here should never notice a different visual language. Applied
+   at :root directly (no .dashboard-theme scoping needed) since this whole
+   app IS the dashboard-theme surface, and forced light-only for v1 to match
+   frontend/app/providers.tsx's current forcedTheme="light" on the trainer
+   dashboard. */
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-dark: var(--accent-dark);
+  --color-accent-soft: var(--accent-soft);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+}
+
+:root {
+  color-scheme: light;
+  --bg: #f7f5fa;
+  --surface: #ffffff;
+  --surface-muted: #f0eaf7;
+  --ink: #1f1929;
+  --muted: #675d75;
+  --line: #ded4ea;
+  --accent: #6a18a8;
+  --accent-dark: #4f1080;
+  --accent-soft: #e8dcf5;
+  --warning: #8a4b0f;
+  --danger: #a12a2a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}

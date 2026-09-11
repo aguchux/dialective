@@ -18,8 +18,14 @@ function setup() {
     $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
   };
   const didit = { createSession: jest.fn() };
-  const settings = {};
-  const service = new KycService(prisma as never, didit as never, settings as never);
+  const selfHosted = {};
+  const settings = { getActiveKycProvider: jest.fn().mockResolvedValue('didit') };
+  const service = new KycService(
+    prisma as never,
+    didit as never,
+    selfHosted as never,
+    settings as never,
+  );
   return { service, prisma, didit };
 }
 

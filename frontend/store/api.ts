@@ -1153,6 +1153,7 @@ export interface PublicClientSettings {
   isKycRequiredForWithdrawals: boolean;
   kycMinWithdrawalTokens: string;
   isKycRequiredOnboarding: boolean;
+  activeKycProvider: string;
   isFlutterwaveV4Enabled: boolean;
   isFlutterwavePayoutsEnabled: boolean;
   isStripePayoutsEnabled: boolean;
@@ -1628,6 +1629,12 @@ export interface PlatformSettings {
   isKycRequiredOnboarding: boolean;
   kycAutoCancelStaleEnabled: boolean;
   kycAutoCancelStaleMinutes: number;
+  selfHostedKycEnabled: boolean;
+  activeKycProvider: string;
+  selfHostedKycAutoApproveEnabled: boolean;
+  selfHostedKycBotEnabled: boolean;
+  selfHostedKycBotProviderOrder: string;
+  selfHostedKycDocumentTypes: string;
   authMaintenanceEnabled: boolean;
   authMaintenanceUntil: string | null;
   authMaintenanceMessage: string | null;
@@ -1769,6 +1776,12 @@ export interface PlatformSettingsInput {
   isKycRequiredOnboarding?: boolean;
   kycAutoCancelStaleEnabled?: boolean;
   kycAutoCancelStaleMinutes?: number;
+  selfHostedKycEnabled?: boolean;
+  activeKycProvider?: string;
+  selfHostedKycAutoApproveEnabled?: boolean;
+  selfHostedKycBotEnabled?: boolean;
+  selfHostedKycBotProviderOrder?: string;
+  selfHostedKycDocumentTypes?: string;
   authMaintenanceEnabled?: boolean;
   authMaintenanceUntil?: string | null;
   authMaintenanceMessage?: string | null;
@@ -3269,7 +3282,10 @@ export const dialectivaApi = createApi({
       query: ({ id, ...body }) => ({ url: `/payout-accounts/${id}`, method: 'DELETE', body }),
       invalidatesTags: ['PayoutAccounts'],
     }),
-    createKycSession: builder.mutation<{ sessionId: string; url: string }, void>({
+    createKycSession: builder.mutation<
+      { sessionId: string; url: string; provider: 'didit' | 'self' },
+      void
+    >({
       query: () => ({ url: '/kyc/session', method: 'POST' }),
       invalidatesTags: ['Kyc', 'Profile'],
     }),
@@ -3298,6 +3314,14 @@ export const dialectivaApi = createApi({
     }),
     cancelKycVerification: builder.mutation<KycVerification, string>({
       query: (id) => ({ url: `/admin/kyc/${id}/cancel`, method: 'POST' }),
+      invalidatesTags: ['Kyc'],
+    }),
+    approveKycVerification: builder.mutation<KycVerification, string>({
+      query: (id) => ({ url: `/admin/kyc/${id}/approve`, method: 'POST' }),
+      invalidatesTags: ['Kyc'],
+    }),
+    declineKycVerification: builder.mutation<KycVerification, { id: string; reason: string }>({
+      query: ({ id, reason }) => ({ url: `/admin/kyc/${id}/decline`, method: 'POST', body: { reason } }),
       invalidatesTags: ['Kyc'],
     }),
     getTokenomicsStatus: builder.query<TokenomicsStatus, void>({
@@ -4903,6 +4927,8 @@ export const {
   useGetKycVerificationQuery,
   useRefreshKycVerificationMutation,
   useCancelKycVerificationMutation,
+  useApproveKycVerificationMutation,
+  useDeclineKycVerificationMutation,
   useGetTokenomicsStatusQuery,
   useGetValuationHistoryQuery,
   useRecalculateValuationMutation,
