@@ -8,6 +8,11 @@ export type CommunityRole = 'MEMBER' | 'MODERATOR' | 'STAFF';
 export type CommunityUserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CommunityPostStatus = 'DRAFT' | 'PUBLISHED' | 'HIDDEN' | 'DELETED';
 
+export interface CommunityPublicAdSettings {
+  adsterra: { enabled: boolean; siteId: string | null };
+  monetag: { enabled: boolean; zoneId: string | null };
+}
+
 export interface CommunityProfile {
   id: string;
   userId: string;
@@ -226,6 +231,10 @@ export const communityApi = createApi({
   baseQuery: baseQueryWithMaintenanceSignal,
   tagTypes: ['Profile', 'Spaces', 'Posts', 'Post', 'Replies', 'Bookmarks', 'Notifications', 'Tags'],
   endpoints: (builder) => ({
+    getPublicAdSettings: builder.query<CommunityPublicAdSettings, void>({
+      query: () => '/settings/public',
+    }),
+
     getMyProfile: builder.query<CommunityProfile, void>({
       query: () => '/me/profile',
       providesTags: ['Profile'],
@@ -425,6 +434,7 @@ export const communityApi = createApi({
 });
 
 export const {
+  useGetPublicAdSettingsQuery,
   useGetMyProfileQuery,
   useUpdateMyProfileMutation,
   useGetUserProfileQuery,

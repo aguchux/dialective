@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class UpdateCommunitySettingsDto {
   @IsOptional()
@@ -26,4 +26,22 @@ export class UpdateCommunitySettingsDto {
   @IsOptional()
   @IsBoolean()
   requireApprovalForNewMembers?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  adsterraEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  adsterraSiteId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  monetagEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  monetagZoneId?: string | null;
 }

@@ -3810,6 +3810,10 @@ model CommunitySettings {
   reactionsEnabled             Boolean  @default(true)
   newMemberPostingDelayMinutes Int      @default(0) // a member cannot post until this many minutes after their CommunityProfile was created; 0 = no delay
   requireApprovalForNewMembers Boolean  @default(false) // a simplified block-with-message posture for this pass, not a full moderation queue -- see CommunityPostsService.create
+  adsterraEnabled              Boolean  @default(false) // master switch for the Adsterra site-wide popunder/social-bar script; requires adsterraSiteId to actually load, same withholding pattern as PlatformSettings.tawkToEnabled
+  adsterraSiteId               String? // Adsterra "site ID" from their dashboard -- the value their embed script URL is templated with, not a raw script paste (keeps the admin UI from being an arbitrary-script-injection surface)
+  monetagEnabled               Boolean  @default(false) // master switch for the Monetag site-wide push/social-bar script; requires monetagZoneId to actually load
+  monetagZoneId                String? // Monetag "zone ID" from their dashboard, same role as adsterraSiteId
   updatedAt                    DateTime @updatedAt
   createdAt                    DateTime @default(now())
 

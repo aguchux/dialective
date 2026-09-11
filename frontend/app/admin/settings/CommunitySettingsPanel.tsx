@@ -23,6 +23,10 @@ export function CommunitySettingsPanel() {
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [newMemberPostingDelayMinutes, setNewMemberPostingDelayMinutes] = useState('0');
   const [requireApprovalForNewMembers, setRequireApprovalForNewMembers] = useState(false);
+  const [adsterraEnabled, setAdsterraEnabled] = useState(false);
+  const [adsterraSiteId, setAdsterraSiteId] = useState('');
+  const [monetagEnabled, setMonetagEnabled] = useState(false);
+  const [monetagZoneId, setMonetagZoneId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +38,10 @@ export function CommunitySettingsPanel() {
     setReactionsEnabled(settings.reactionsEnabled);
     setNewMemberPostingDelayMinutes(String(settings.newMemberPostingDelayMinutes));
     setRequireApprovalForNewMembers(settings.requireApprovalForNewMembers);
+    setAdsterraEnabled(settings.adsterraEnabled);
+    setAdsterraSiteId(settings.adsterraSiteId ?? '');
+    setMonetagEnabled(settings.monetagEnabled);
+    setMonetagZoneId(settings.monetagZoneId ?? '');
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -45,6 +53,14 @@ export function CommunitySettingsPanel() {
       setError('New-member posting delay must be a whole number between 0 and 10,080 minutes (7 days).');
       return;
     }
+    if (adsterraEnabled && !adsterraSiteId.trim()) {
+      setError('Enter an Adsterra site ID before enabling it.');
+      return;
+    }
+    if (monetagEnabled && !monetagZoneId.trim()) {
+      setError('Enter a Monetag zone ID before enabling it.');
+      return;
+    }
     try {
       await updateSettings({
         postingEnabled,
@@ -53,6 +69,10 @@ export function CommunitySettingsPanel() {
         reactionsEnabled,
         newMemberPostingDelayMinutes: delayMinutes,
         requireApprovalForNewMembers,
+        adsterraEnabled,
+        adsterraSiteId: adsterraSiteId.trim() || null,
+        monetagEnabled,
+        monetagZoneId: monetagZoneId.trim() || null,
       }).unwrap();
       setMessage('Community settings saved.');
     } catch (err) {
@@ -195,6 +215,71 @@ export function CommunitySettingsPanel() {
               was created. 0 means no delay.
             </span>
           </label>
+
+          <div className="grid gap-3 border-t border-line pt-4">
+            <div>
+              <h3 className="font-bold">Ad networks</h3>
+              <p className="mt-1 text-sm leading-relaxed text-muted">
+                Site-wide popunder/social-bar scripts, monetizing community.dialectlibrary.com.
+                Each network only loads once it's enabled AND its ID is set below -- a
+                half-configured toggle never ships a broken embed.
+              </p>
+            </div>
+
+            <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-4">
+              <label
+                className="flex cursor-pointer items-start gap-3"
+                htmlFor="community-adsterra-enabled"
+              >
+                <input
+                  checked={adsterraEnabled}
+                  className="mt-0.5 size-5 accent-accent"
+                  id="community-adsterra-enabled"
+                  onChange={(event) => setAdsterraEnabled(event.target.checked)}
+                  type="checkbox"
+                />
+                <span className="block font-bold">Adsterra enabled</span>
+              </label>
+              <label className="grid gap-1 text-sm font-bold" htmlFor="community-adsterra-site-id">
+                Site ID
+                <input
+                  className={inputClass}
+                  id="community-adsterra-site-id"
+                  onChange={(event) => setAdsterraSiteId(event.target.value)}
+                  placeholder="e.g. 1234567"
+                  type="text"
+                  value={adsterraSiteId}
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-4">
+              <label
+                className="flex cursor-pointer items-start gap-3"
+                htmlFor="community-monetag-enabled"
+              >
+                <input
+                  checked={monetagEnabled}
+                  className="mt-0.5 size-5 accent-accent"
+                  id="community-monetag-enabled"
+                  onChange={(event) => setMonetagEnabled(event.target.checked)}
+                  type="checkbox"
+                />
+                <span className="block font-bold">Monetag enabled</span>
+              </label>
+              <label className="grid gap-1 text-sm font-bold" htmlFor="community-monetag-zone-id">
+                Zone ID
+                <input
+                  className={inputClass}
+                  id="community-monetag-zone-id"
+                  onChange={(event) => setMonetagZoneId(event.target.value)}
+                  placeholder="e.g. 9876543"
+                  type="text"
+                  value={monetagZoneId}
+                />
+              </label>
+            </div>
+          </div>
 
           {message && <p className="font-bold text-emerald-700 dark:text-emerald-400">{message}</p>}
           {error && (

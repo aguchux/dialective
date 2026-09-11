@@ -1063,6 +1063,10 @@ export interface CommunitySettingsAdmin {
   reactionsEnabled: boolean;
   newMemberPostingDelayMinutes: number;
   requireApprovalForNewMembers: boolean;
+  adsterraEnabled: boolean;
+  adsterraSiteId: string | null;
+  monetagEnabled: boolean;
+  monetagZoneId: string | null;
 }
 
 export interface AdminCommunityContentPage<T> {

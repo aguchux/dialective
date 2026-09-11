@@ -22,3 +22,18 @@ export class CommunitySettingsController {
     return this.settings.update(dto);
   }
 }
+
+/**
+ * Small, unauthenticated public bundle for the Community app's own ad
+ * network injector -- same posture as StreamPublicSettingsController in
+ * settings.controller.ts (an app-specific slice, not the full admin shape).
+ */
+@Controller('community/settings')
+export class CommunityPublicSettingsController {
+  constructor(private readonly settings: CommunitySettingsService) {}
+
+  @Get('public')
+  getPublicSettings() {
+    return this.settings.getPublicAdSettings();
+  }
+}

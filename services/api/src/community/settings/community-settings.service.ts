@@ -68,6 +68,30 @@ export class CommunitySettingsService {
       reactionsEnabled: row.reactionsEnabled,
       newMemberPostingDelayMinutes: row.newMemberPostingDelayMinutes,
       requireApprovalForNewMembers: row.requireApprovalForNewMembers,
+      adsterraEnabled: row.adsterraEnabled,
+      adsterraSiteId: row.adsterraSiteId,
+      monetagEnabled: row.monetagEnabled,
+      monetagZoneId: row.monetagZoneId,
+    };
+  }
+
+  /**
+   * Public, unauthenticated bundle for the Community app's own ad-script
+   * injector. Each network only reports enabled=true once its ID is also
+   * set -- an admin flipping the toggle on before saving the ID must never
+   * ship a half-configured/empty embed, same posture as
+   * PlatformSettingsService.getTawkToWidget.
+   */
+  async getPublicAdSettings(): Promise<{
+    adsterra: { enabled: boolean; siteId: string | null };
+    monetag: { enabled: boolean; zoneId: string | null };
+  }> {
+    const row = await this.getRow();
+    const adsterraEnabled = row.adsterraEnabled && Boolean(row.adsterraSiteId);
+    const monetagEnabled = row.monetagEnabled && Boolean(row.monetagZoneId);
+    return {
+      adsterra: { enabled: adsterraEnabled, siteId: adsterraEnabled ? row.adsterraSiteId : null },
+      monetag: { enabled: monetagEnabled, zoneId: monetagEnabled ? row.monetagZoneId : null },
     };
   }
 
@@ -78,6 +102,10 @@ export class CommunitySettingsService {
     reactionsEnabled?: boolean;
     newMemberPostingDelayMinutes?: number;
     requireApprovalForNewMembers?: boolean;
+    adsterraEnabled?: boolean;
+    adsterraSiteId?: string | null;
+    monetagEnabled?: boolean;
+    monetagZoneId?: string | null;
   }) {
     const row = await this.prisma.communitySettings.upsert({
       where: { id: 'default' },

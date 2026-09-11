@@ -10,6 +10,10 @@ describe('CommunitySettingsService', () => {
       reactionsEnabled: true,
       newMemberPostingDelayMinutes: 0,
       requireApprovalForNewMembers: false,
+      adsterraEnabled: false,
+      adsterraSiteId: null,
+      monetagEnabled: false,
+      monetagZoneId: null,
       ...rowOverrides,
     };
     const prisma = {
@@ -58,6 +62,42 @@ describe('CommunitySettingsService', () => {
       reactionsEnabled: row.reactionsEnabled,
       newMemberPostingDelayMinutes: row.newMemberPostingDelayMinutes,
       requireApprovalForNewMembers: row.requireApprovalForNewMembers,
+      adsterraEnabled: row.adsterraEnabled,
+      adsterraSiteId: row.adsterraSiteId,
+      monetagEnabled: row.monetagEnabled,
+      monetagZoneId: row.monetagZoneId,
+    });
+  });
+
+  describe('getPublicAdSettings', () => {
+    it('withholds a network as disabled when the toggle is on but the ID is unset', async () => {
+      const { service } = setup({ adsterraEnabled: true, adsterraSiteId: null });
+
+      expect(await service.getPublicAdSettings()).toMatchObject({
+        adsterra: { enabled: false, siteId: null },
+      });
+    });
+
+    it('withholds a network as disabled when the ID is set but the toggle is off', async () => {
+      const { service } = setup({ monetagEnabled: false, monetagZoneId: 'zone-1' });
+
+      expect(await service.getPublicAdSettings()).toMatchObject({
+        monetag: { enabled: false, zoneId: null },
+      });
+    });
+
+    it('reports a fully-configured network as enabled with its ID', async () => {
+      const { service } = setup({
+        adsterraEnabled: true,
+        adsterraSiteId: 'site-1',
+        monetagEnabled: true,
+        monetagZoneId: 'zone-1',
+      });
+
+      expect(await service.getPublicAdSettings()).toEqual({
+        adsterra: { enabled: true, siteId: 'site-1' },
+        monetag: { enabled: true, zoneId: 'zone-1' },
+      });
     });
   });
 
@@ -71,6 +111,10 @@ describe('CommunitySettingsService', () => {
       reactionsEnabled: true,
       newMemberPostingDelayMinutes: 0,
       requireApprovalForNewMembers: false,
+      adsterraEnabled: false,
+      adsterraSiteId: null,
+      monetagEnabled: false,
+      monetagZoneId: null,
     });
 
     const result = await service.update({ postingEnabled: false });
