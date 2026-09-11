@@ -4,13 +4,28 @@ import { Reflector } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { SubmissionRateLimitGuard } from './submission-rate-limit.guard';
 import { RegisterRateLimitGuard } from './register-rate-limit.guard';
+import { UserThrottlerGuard } from './user-throttler.guard';
 
 // Routes that already carry one of these via their own @UseGuards() run
 // their own (possibly admin-gated) throttling and must not also be counted
 // against this blanket app-wide guard -- otherwise the two stack, and an
 // admin turning a dedicated limit OFF (e.g. submissionRateLimitEnabled)
 // still leaves the request throttled by this fixed, ungated one underneath.
-const DEDICATED_THROTTLER_GUARDS = [SubmissionRateLimitGuard, RegisterRateLimitGuard];
+// UserThrottlerGuard specifically must be exempted too: it's the intended
+// definitive per-user limit for wallet/withdrawal/payout-account/community
+// routes (each with its own @Throttle() override), keyed by user id rather
+// than IP. Without this exemption, this blanket 60/min-PER-IP guard still
+// ran underneath it uncounted -- on a shared/NAT/carrier-grade IP (common on
+// mobile data in low-connectivity regions), other trainers' unrelated
+// traffic on the same IP could exhaust the shared bucket and produce a 429
+// on withdrawal even though that trainer was nowhere near their own
+// per-user withdrawal limit. Reported as trainers seeing "too many
+// requests" blocking withdrawal.
+const DEDICATED_THROTTLER_GUARDS = [
+  SubmissionRateLimitGuard,
+  RegisterRateLimitGuard,
+  UserThrottlerGuard,
+];
 
 /**
  * The APP_GUARD-registered ThrottlerGuard (app.module.ts) -- a blanket

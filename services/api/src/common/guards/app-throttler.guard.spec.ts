@@ -2,6 +2,7 @@ import { ExecutionContext } from '@nestjs/common';
 import { AppThrottlerGuard } from './app-throttler.guard';
 import { SubmissionRateLimitGuard } from './submission-rate-limit.guard';
 import { RegisterRateLimitGuard } from './register-rate-limit.guard';
+import { UserThrottlerGuard } from './user-throttler.guard';
 
 function contextWith(handlerGuards: unknown[], classGuards: unknown[] = []): ExecutionContext {
   const handler = () => undefined;
@@ -30,6 +31,14 @@ describe('AppThrottlerGuard', () => {
 
   it('skips routes already guarded by RegisterRateLimitGuard, at the class level', async () => {
     await expect(shouldSkip(contextWith([], [RegisterRateLimitGuard]))).resolves.toBe(true);
+  });
+
+  it('skips routes already guarded by UserThrottlerGuard (wallet/withdrawal/community routes) -- otherwise this blanket per-IP guard stacks underneath their per-user limit and can 429 a legitimate trainer sharing a NAT/carrier IP', async () => {
+    await expect(shouldSkip(contextWith([UserThrottlerGuard]))).resolves.toBe(true);
+  });
+
+  it('skips routes guarded by UserThrottlerGuard at the class level', async () => {
+    await expect(shouldSkip(contextWith([], [UserThrottlerGuard]))).resolves.toBe(true);
   });
 
   it('does not skip routes with no dedicated throttler guard', async () => {
