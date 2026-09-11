@@ -118,7 +118,12 @@ describe('SettlementService refundStuckWordRecordings', () => {
   function buildPrismaMock() {
     return {
       platformSettings: {
-        upsert: jest.fn().mockResolvedValue({ wordStuckTimeoutMinutes: 60 }),
+        upsert: jest.fn().mockResolvedValue({
+          wordStuckTimeoutMinutes: 60,
+          noFailOnTrainEnabled: false,
+          minScoreRange: { toNumber: () => 10 },
+          maxScoreRange: { toNumber: () => 30 },
+        }),
       },
       wordRecording: {
         findMany: jest
@@ -127,6 +132,7 @@ describe('SettlementService refundStuckWordRecordings', () => {
             { id: 'rec-1', userId: 'user-1', tokensSpent: { toNumber: () => 1 } },
           ]),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
       },
       ledgerEntry: {
         findFirst: jest.fn().mockResolvedValue({ id: 'lock-1' }), // wasLocked -> true
@@ -172,6 +178,39 @@ describe('SettlementService refundStuckWordRecordings', () => {
     const refundedCount = await service.refundStuckWordRecordings();
 
     expect(refundedCount).toBe(0);
+    expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
+  });
+
+  // Regression: a thin-pool dialect (too few trainers to ever find a peer
+  // reverse-validator) had noFailOnTrainEnabled silently do nothing for its
+  // ENGLISH_TO_DIALECT submissions, because this sweep always claimed the
+  // row and bare-refunded it before resolveTimedOutScoring -- the sweep
+  // that actually respects noFailOnTrainEnabled -- ever got a turn.
+  it('scores with a synthetic score instead of refunding when noFailOnTrainEnabled is on', async () => {
+    const prisma = buildPrismaMock();
+    prisma.platformSettings.upsert.mockResolvedValue({
+      wordStuckTimeoutMinutes: 60,
+      noFailOnTrainEnabled: true,
+      minScoreRange: { toNumber: () => 10 },
+      maxScoreRange: { toNumber: () => 30 },
+    });
+    const service = new SettlementService(prisma as never, {
+      deleteObject: jest.fn().mockResolvedValue(undefined),
+    } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+
+    // @ts-expect-error -- private method under test
+    const resolvedCount = await service.refundStuckWordRecordings();
+
+    expect(resolvedCount).toBe(1);
+    expect(prisma.wordRecording.updateMany).toHaveBeenCalledWith({
+      where: { id: 'rec-1', refundedAt: null },
+      data: { status: 'EXPIRED', refundedAt: expect.any(Date) },
+    });
+    expect(prisma.wordRecording.update).toHaveBeenCalledWith({
+      where: { id: 'rec-1' },
+      data: expect.objectContaining({ status: 'SCORED', scoredAt: expect.any(Date) }),
+    });
+    // No refund/lock-release -- the trainer keeps the payout path instead.
     expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
   });
 });

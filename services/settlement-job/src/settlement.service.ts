@@ -441,9 +441,24 @@ export class SettlementService {
    * resolveTimedOutScoring filter on refundedAt: null -- leaving it
    * stuck at PENDING forever. See the 2026-09 migration that backfills
    * every row this bug already left stranded.)
+   *
+   * When noFailOnTrainEnabled is on, a timed-out row gets the same
+   * synthetic-score-and-pay treatment resolveTimedOutScoring already gives
+   * every other direction, instead of a bare refund -- otherwise a
+   * thin-pool dialect with too few trainers to ever find a peer reverse-
+   * validator would have noFailOnTrainEnabled silently do nothing for its
+   * ENGLISH_TO_DIALECT submissions specifically, since this sweep runs
+   * before resolveTimedOutScoring and claims the row first (see the 2026-09
+   * incident: 109 Kinyarwanda submissions refunded in 2 days despite
+   * noFailOnTrainEnabled being on, because only this bare-refund path ever
+   * got to them).
    */
   private async refundStuckWordRecordings(): Promise<number> {
-    const timeoutMinutes = await this.getWordStuckTimeoutMinutes();
+    const [timeoutMinutes, noFailEnabled, scoreRange] = await Promise.all([
+      this.getWordStuckTimeoutMinutes(),
+      this.isNoFailOnTrainEnabled(),
+      this.getScoreRange(),
+    ]);
     const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000);
 
     const recordings = await this.prisma.wordRecording.findMany({
@@ -472,15 +487,23 @@ export class SettlementService {
         });
         if (claim.count === 0) continue;
 
-        // Legacy (pre-locking) rows spent balance directly and never locked
-        // anything -- nothing to refund, just mark them resolved.
-        if (await this.wasLocked(recording.id)) {
-          await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
+        if (noFailEnabled) {
+          // Legacy (pre-locking) rows spent balance directly and never
+          // locked anything -- the lock-release half of a plain refund has
+          // nothing to do for them, but the synthetic score still applies
+          // the same way it does for every other timed-out direction.
+          await this.scoreWithSyntheticScore(recording.id, scoreRange);
+        } else {
+          // Legacy (pre-locking) rows spent balance directly and never locked
+          // anything -- nothing to refund, just mark them resolved.
+          if (await this.wasLocked(recording.id)) {
+            await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
+          }
         }
         refundedCount += 1;
       } catch (err) {
         this.logger.error(
-          `Failed to refund stuck wordRecording=${recording.id}: ${err instanceof Error ? err.message : String(err)}`,
+          `Failed to resolve stuck wordRecording=${recording.id}: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
