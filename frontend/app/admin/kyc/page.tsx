@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent } from '@/components/ui/Dialog';
@@ -13,6 +13,8 @@ import {
   useDeclineKycVerificationMutation,
   useGetKycVerificationQuery,
   useLazyGetKycDecisionQuery,
+  useLazyGetKycEvidenceImageQuery,
+  useListKycEvidenceQuery,
   useListKycVerificationsQuery,
   useRefreshKycVerificationMutation,
 } from '@/store/api';
@@ -292,6 +294,7 @@ function DetailDialog({
                 value={row.webhookReceivedAt ? formatDateTime(row.webhookReceivedAt) : 'Not yet'}
               />
             </dl>
+            {row.provider === 'self' && <EvidencePanel verificationId={row.id} />}
             {row.declineReason && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">
                 Decline reason: {row.declineReason}
@@ -391,6 +394,89 @@ function DetailDialog({
               </div>
             )}
           </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EvidencePanel({ verificationId }: { verificationId: string }) {
+  const { data: evidence, isLoading } = useListKycEvidenceQuery(verificationId);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  if (isLoading) return null;
+  if (!evidence || evidence.length === 0) return null;
+
+  const kindLabel: Record<string, string> = {
+    DOCUMENT_FRONT: 'Document (front)',
+    DOCUMENT_BACK: 'Document (back)',
+    SELFIE_FRAME: 'Selfie frame',
+  };
+
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs font-bold uppercase text-muted">Captured evidence</p>
+      <div className="flex flex-wrap gap-2">
+        {evidence.map((item) => (
+          <button
+            className="min-h-9 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+            key={item.id}
+            onClick={() => setSelectedId(item.id)}
+            type="button"
+          >
+            {kindLabel[item.kind] ?? item.kind}
+          </button>
+        ))}
+      </div>
+      <EvidenceImageDialog
+        onOpenChange={(open) => !open && setSelectedId(null)}
+        verificationId={verificationId}
+        evidenceId={selectedId}
+      />
+    </div>
+  );
+}
+
+function EvidenceImageDialog({
+  verificationId,
+  evidenceId,
+  onOpenChange,
+}: {
+  verificationId: string;
+  evidenceId: string | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [fetchImage, { data: imageUrl, isFetching }] = useLazyGetKycEvidenceImageQuery();
+  const previousUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!evidenceId) return;
+    void fetchImage({ verificationId, evidenceId });
+  }, [evidenceId, fetchImage, verificationId]);
+
+  useEffect(() => {
+    // Revoke the previous object URL once a new one lands (or the dialog
+    // closes) -- these are never auto-released by the browser and would
+    // otherwise leak on every image viewed in an admin session.
+    if (previousUrlRef.current && previousUrlRef.current !== imageUrl) {
+      URL.revokeObjectURL(previousUrlRef.current);
+    }
+    previousUrlRef.current = imageUrl ?? null;
+    return () => {
+      if (previousUrlRef.current) URL.revokeObjectURL(previousUrlRef.current);
+    };
+  }, [imageUrl]);
+
+  return (
+    <Dialog open={evidenceId !== null} onOpenChange={onOpenChange}>
+      <DialogContent
+        title="Evidence image"
+        description="Grayscale, watermarked copy for review -- the original color image is never shown here."
+      >
+        {isFetching && <p className="text-muted">Loading...</p>}
+        {imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- this is a blob: object URL, not an optimizable remote asset
+          <img alt="Redacted KYC evidence" className="w-full rounded-lg border border-line" src={imageUrl} />
         )}
       </DialogContent>
     </Dialog>

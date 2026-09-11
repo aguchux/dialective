@@ -3308,6 +3308,24 @@ export const dialectivaApi = createApi({
       query: (id) => `/admin/kyc/${id}`,
       providesTags: ['Kyc'],
     }),
+    listKycEvidence: builder.query<
+      { id: string; kind: 'DOCUMENT_FRONT' | 'DOCUMENT_BACK' | 'SELFIE_FRAME'; capturedAt: string }[],
+      string
+    >({
+      query: (id) => `/admin/kyc/${id}/evidence`,
+    }),
+    getKycEvidenceImage: builder.query<string, { verificationId: string; evidenceId: string }>({
+      query: ({ verificationId, evidenceId }) => ({
+        url: `/admin/kyc/${verificationId}/evidence/${evidenceId}`,
+        responseHandler: (response: Response) => response.blob(),
+      }),
+      // The blob is only useful as an object URL; this transforms RTK
+      // Query's cached response (which would otherwise be the raw Blob) into
+      // a URL string components can drop straight into an <img src>.
+      // Consumers must revoke it (URL.revokeObjectURL) on unmount/change to
+      // avoid leaking blob URLs.
+      transformResponse: (blob: Blob) => URL.createObjectURL(blob),
+    }),
     getKycDecision: builder.query<
       {
         raw: {
@@ -4949,6 +4967,8 @@ export const {
   useApproveKycVerificationMutation,
   useDeclineKycVerificationMutation,
   useLazyGetKycDecisionQuery,
+  useListKycEvidenceQuery,
+  useLazyGetKycEvidenceImageQuery,
   useGetTokenomicsStatusQuery,
   useGetValuationHistoryQuery,
   useRecalculateValuationMutation,

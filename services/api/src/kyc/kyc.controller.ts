@@ -6,10 +6,11 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { KycStatus } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -17,6 +18,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@dialectiva/db';
 import { KycService } from './kyc.service';
 import { SelfHostedKycService } from './self-hosted-kyc.service';
+import { KycEvidenceRedactionService } from './kyc-evidence-redaction.service';
+import { StorageService } from '../storage/storage.service';
 import { AdminDeclineKycDto, AdminListKycDto } from './dto/admin-list-kyc.dto';
 import {
   CreateKycEvidenceUploadUrlDto,
@@ -31,6 +34,8 @@ export class KycController {
   constructor(
     private readonly kyc: KycService,
     private readonly selfHosted: SelfHostedKycService,
+    private readonly redaction: KycEvidenceRedactionService,
+    private readonly storage: StorageService,
   ) {}
 
   @Post('kyc/session')
@@ -184,6 +189,37 @@ export class KycController {
   @Roles(Role.ADMIN)
   adminGetDecision(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.kyc.adminGetDecision(id, req.user.sub);
+  }
+
+  /** Metadata only (id/kind/capturedAt) -- never bucket/key, see kyc.service.ts's adminListEvidence doc comment. Used by the admin detail dialog to render one "View" button per captured image. */
+  @Get('admin/kyc/:id/evidence')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  adminListEvidence(@Param('id') id: string) {
+    return this.kyc.adminListEvidence(id);
+  }
+
+  /**
+   * Serves a grayscale, DLKYC-watermarked copy of one captured evidence
+   * image -- the raw color original is NEVER served to an admin, only used
+   * internally by SelfHostedKycService's face-match/OCR pipeline. See
+   * kyc-evidence-redaction.service.ts's class doc comment for the
+   * data-protection rationale.
+   */
+  @Get('admin/kyc/:id/evidence/:evidenceId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async adminGetEvidenceImage(
+    @Param('id') id: string,
+    @Param('evidenceId') evidenceId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const evidence = await this.kyc.adminGetEvidenceRow(id, evidenceId);
+    const raw = await this.storage.getObjectBuffer(evidence.bucket, evidence.key);
+    const redacted = await this.redaction.toReviewCopy(raw);
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(redacted);
   }
 
   @Post('admin/kyc/:id/refresh')

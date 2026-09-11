@@ -273,12 +273,7 @@ export class SelfHostedKycService {
   }
 
   private async downloadEvidence(evidence: { bucket: string; key: string }): Promise<Buffer> {
-    const { body } = await this.storage.getObject(evidence.bucket, evidence.key);
-    const chunks: Buffer[] = [];
-    for await (const chunk of body) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    return Buffer.concat(chunks);
+    return this.storage.getObjectBuffer(evidence.bucket, evidence.key);
   }
 
   private async runBotChecks(

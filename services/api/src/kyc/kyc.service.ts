@@ -483,6 +483,31 @@ export class KycService {
     const raw = JSON.parse(decryptKycField(encrypted));
     return { raw };
   }
+
+  /** Lists captured evidence for a self-hosted verification (id/kind/capturedAt only -- never the bucket/key, since those are only ever resolved server-side by adminGetEvidenceRow for the redacted-copy endpoint). Didit verifications have no KycCaptureEvidence rows -- evidence lives on Didit's side. */
+  async adminListEvidence(verificationId: string) {
+    const verification = await this.prisma.kycVerification.findUnique({
+      where: { id: verificationId },
+    });
+    if (!verification) throw new NotFoundException('Verification not found');
+    const evidence = await this.prisma.kycCaptureEvidence.findMany({
+      where: { kycVerificationId: verificationId },
+      orderBy: { capturedAt: 'asc' },
+      select: { id: true, kind: true, capturedAt: true },
+    });
+    return evidence;
+  }
+
+  /** Resolves one evidence row's bucket/key, scoped to the given verification so an evidence id from one trainer's verification can't be used to fetch another's. Used only by the redacted-copy endpoint -- raw bucket/key never leave this method. */
+  async adminGetEvidenceRow(verificationId: string, evidenceId: string) {
+    const evidence = await this.prisma.kycCaptureEvidence.findUnique({
+      where: { id: evidenceId },
+    });
+    if (!evidence || evidence.kycVerificationId !== verificationId) {
+      throw new NotFoundException('Evidence not found');
+    }
+    return evidence;
+  }
 }
 
 function mapDiditStatus(status: string | undefined): KycStatus {

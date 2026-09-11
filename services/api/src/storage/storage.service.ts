@@ -100,6 +100,16 @@ export class StorageService {
     };
   }
 
+  /** Convenience wrapper around getObject for callers that need the full object in memory at once (e.g. DLKYC's face-match/OCR/redaction pipeline) rather than streaming/proxying it. Never use this for large files -- buffers the entire object. */
+  async getObjectBuffer(bucket: string, key: string): Promise<Buffer> {
+    const { body } = await this.getObject(bucket, key);
+    const chunks: Buffer[] = [];
+    for await (const chunk of body) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
   /**
    * Permanently deletes a Spaces object -- used by audio-retention-job's
    * scheduled purge and by admin account deletion. Never call this for a
