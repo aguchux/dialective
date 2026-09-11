@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.dialectlibrary.com';
+// services/api mounts every route (except /health) under this prefix --
+// see API_PREFIX in services/api/src/main.ts.
+const API_BASE = `${process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.dialectlibrary.com'}/api/v1`;
 
 export class KycApiError extends Error {}
 
