@@ -35,6 +35,10 @@ export interface KycEvaluationInput {
   livenessScore: number;
   botFindings: BotFindings | null;
   autoApproveEnabled: boolean;
+  /** Admin-configurable auto-approve floor for faceMatchScore, 0-100. Defaults to FACE_MATCH_APPROVE_AT_OR_ABOVE_DEFAULT. */
+  minFaceMatchScore?: number;
+  /** Admin-configurable auto-approve floor for livenessScore, 0-100. Defaults to LIVENESS_APPROVE_AT_OR_ABOVE_DEFAULT. */
+  minLivenessScore?: number;
 }
 
 export interface KycEvaluationResult {
@@ -45,15 +49,26 @@ export interface KycEvaluationResult {
 }
 
 // Provisional thresholds -- deliberately conservative (biased toward REVIEW,
-// never toward auto-APPROVE) until a real evaluation dataset exists.
+// never toward auto-APPROVE) until a real evaluation dataset exists. The
+// decline floors are fixed (a submission this bad is never worth auto-
+// approving regardless of admin settings); the approve floors are the
+// admin-configurable ones, exposed via PlatformSettings
+// selfHostedKycMinFaceMatchScore/selfHostedKycMinLivenessScore.
 const FACE_MATCH_DECLINE_BELOW = 40;
-const FACE_MATCH_APPROVE_AT_OR_ABOVE = 85;
+export const FACE_MATCH_APPROVE_AT_OR_ABOVE_DEFAULT = 85;
 const LIVENESS_DECLINE_BELOW = 40;
-const LIVENESS_APPROVE_AT_OR_ABOVE = 80;
+export const LIVENESS_APPROVE_AT_OR_ABOVE_DEFAULT = 80;
 const BOT_FLAG_FORCES_REVIEW = true;
 
 export function evaluateSelfHostedKyc(input: KycEvaluationInput): KycEvaluationResult {
-  const { faceMatchScore, livenessScore, botFindings, autoApproveEnabled } = input;
+  const {
+    faceMatchScore,
+    livenessScore,
+    botFindings,
+    autoApproveEnabled,
+    minFaceMatchScore = FACE_MATCH_APPROVE_AT_OR_ABOVE_DEFAULT,
+    minLivenessScore = LIVENESS_APPROVE_AT_OR_ABOVE_DEFAULT,
+  } = input;
 
   // Clear fail: either signal is decisively bad -- decline outright,
   // regardless of autoApproveEnabled (declining is never an "approval",
@@ -78,9 +93,7 @@ export function evaluateSelfHostedKyc(input: KycEvaluationInput): KycEvaluationR
   const botRaisedFlag = BOT_FLAG_FORCES_REVIEW && !!botFindings && botFindings.flags.length > 0;
 
   const clearPass =
-    faceMatchScore >= FACE_MATCH_APPROVE_AT_OR_ABOVE &&
-    livenessScore >= LIVENESS_APPROVE_AT_OR_ABOVE &&
-    !botRaisedFlag;
+    faceMatchScore >= minFaceMatchScore && livenessScore >= minLivenessScore && !botRaisedFlag;
 
   if (clearPass && autoApproveEnabled) {
     return { band: 'APPROVE', faceMatchScore, livenessScore, declineReason: null };

@@ -711,6 +711,18 @@ export class UpdatePlatformSettingsDto {
   selfHostedKycDocumentTypes?: string;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  selfHostedKycMinFaceMatchScore?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  selfHostedKycMinLivenessScore?: number;
+
+  @IsOptional()
   @IsBoolean()
   authMaintenanceEnabled?: boolean;
 

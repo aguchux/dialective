@@ -595,6 +595,17 @@ export class PlatformSettingsService {
       .filter(Boolean);
   }
 
+  async getSelfHostedKycApproveThresholds(): Promise<{
+    minFaceMatchScore: number;
+    minLivenessScore: number;
+  }> {
+    const row = await this.getRow();
+    return {
+      minFaceMatchScore: row.selfHostedKycMinFaceMatchScore,
+      minLivenessScore: row.selfHostedKycMinLivenessScore,
+    };
+  }
+
   async getWithdrawalFeeSettings(): Promise<{
     mode: string;
     tokenAmount: number;
@@ -1033,6 +1044,8 @@ export class PlatformSettingsService {
       selfHostedKycBotEnabled: row.selfHostedKycBotEnabled,
       selfHostedKycBotProviderOrder: row.selfHostedKycBotProviderOrder,
       selfHostedKycDocumentTypes: row.selfHostedKycDocumentTypes,
+      selfHostedKycMinFaceMatchScore: row.selfHostedKycMinFaceMatchScore,
+      selfHostedKycMinLivenessScore: row.selfHostedKycMinLivenessScore,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,
@@ -1193,6 +1206,8 @@ export class PlatformSettingsService {
     selfHostedKycBotEnabled?: boolean;
     selfHostedKycBotProviderOrder?: string;
     selfHostedKycDocumentTypes?: string;
+    selfHostedKycMinFaceMatchScore?: number;
+    selfHostedKycMinLivenessScore?: number;
     authMaintenanceEnabled?: boolean;
     authMaintenanceUntil?: Date | null;
     authMaintenanceMessage?: string | null;
@@ -1254,6 +1269,19 @@ export class PlatformSettingsService {
 
     if (data.activeKycProvider && !['didit', 'self'].includes(data.activeKycProvider)) {
       throw new BadRequestException('activeKycProvider must be didit or self');
+    }
+
+    if (
+      data.selfHostedKycMinFaceMatchScore !== undefined &&
+      (data.selfHostedKycMinFaceMatchScore < 0 || data.selfHostedKycMinFaceMatchScore > 100)
+    ) {
+      throw new BadRequestException('selfHostedKycMinFaceMatchScore must be between 0 and 100');
+    }
+    if (
+      data.selfHostedKycMinLivenessScore !== undefined &&
+      (data.selfHostedKycMinLivenessScore < 0 || data.selfHostedKycMinLivenessScore > 100)
+    ) {
+      throw new BadRequestException('selfHostedKycMinLivenessScore must be between 0 and 100');
     }
 
     if (data.selfHostedKycBotProviderOrder) {
@@ -1712,6 +1740,8 @@ export class PlatformSettingsService {
       selfHostedKycBotEnabled: row.selfHostedKycBotEnabled,
       selfHostedKycBotProviderOrder: row.selfHostedKycBotProviderOrder,
       selfHostedKycDocumentTypes: row.selfHostedKycDocumentTypes,
+      selfHostedKycMinFaceMatchScore: row.selfHostedKycMinFaceMatchScore,
+      selfHostedKycMinLivenessScore: row.selfHostedKycMinLivenessScore,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,

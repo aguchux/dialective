@@ -27,6 +27,8 @@ export function KycSettingsPanel() {
   const [selfHostedAutoApprove, setSelfHostedAutoApprove] = useState(false);
   const [selfHostedBotEnabled, setSelfHostedBotEnabled] = useState(false);
   const [selfHostedDocumentTypes, setSelfHostedDocumentTypes] = useState('passport,national_id');
+  const [selfHostedMinFaceMatchScore, setSelfHostedMinFaceMatchScore] = useState('85');
+  const [selfHostedMinLivenessScore, setSelfHostedMinLivenessScore] = useState('80');
   const [manualPhoneVerificationEnabled, setManualPhoneVerificationEnabled] = useState(true);
   const [manualPhoneVerificationFeeTokens, setManualPhoneVerificationFeeTokens] = useState('1');
   const [manualPhoneVerificationWhatsappNumber, setManualPhoneVerificationWhatsappNumber] =
@@ -48,6 +50,8 @@ export function KycSettingsPanel() {
     setSelfHostedAutoApprove(settings.selfHostedKycAutoApproveEnabled);
     setSelfHostedBotEnabled(settings.selfHostedKycBotEnabled);
     setSelfHostedDocumentTypes(settings.selfHostedKycDocumentTypes);
+    setSelfHostedMinFaceMatchScore(String(settings.selfHostedKycMinFaceMatchScore));
+    setSelfHostedMinLivenessScore(String(settings.selfHostedKycMinLivenessScore));
     setManualPhoneVerificationEnabled(settings.manualPhoneVerificationEnabled);
     setManualPhoneVerificationFeeTokens(settings.manualPhoneVerificationFeeTokens);
     setManualPhoneVerificationWhatsappNumber(settings.manualPhoneVerificationWhatsappNumber);
@@ -70,6 +74,16 @@ export function KycSettingsPanel() {
       setError('Auto-cancel timeout must be a whole number between 5 and 10,080 minutes (7 days).');
       return;
     }
+    const minFaceMatchScore = Number(selfHostedMinFaceMatchScore);
+    if (!Number.isInteger(minFaceMatchScore) || minFaceMatchScore < 0 || minFaceMatchScore > 100) {
+      setError('DLKYC auto-approve face match threshold must be a whole number between 0 and 100.');
+      return;
+    }
+    const minLivenessScore = Number(selfHostedMinLivenessScore);
+    if (!Number.isInteger(minLivenessScore) || minLivenessScore < 0 || minLivenessScore > 100) {
+      setError('DLKYC auto-approve liveness threshold must be a whole number between 0 and 100.');
+      return;
+    }
     try {
       await updateSettings({
         isKycRequiredForWithdrawals: requiredForWithdrawals,
@@ -82,6 +96,8 @@ export function KycSettingsPanel() {
         selfHostedKycAutoApproveEnabled: selfHostedAutoApprove,
         selfHostedKycBotEnabled: selfHostedBotEnabled,
         selfHostedKycDocumentTypes: selfHostedDocumentTypes,
+        selfHostedKycMinFaceMatchScore: minFaceMatchScore,
+        selfHostedKycMinLivenessScore: minLivenessScore,
         manualPhoneVerificationEnabled,
         manualPhoneVerificationFeeTokens: Number(manualPhoneVerificationFeeTokens) || 0,
         manualPhoneVerificationWhatsappNumber,
@@ -265,6 +281,41 @@ export function KycSettingsPanel() {
                 </span>
               </span>
             </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm font-bold" htmlFor="dlkyc-min-face-match">
+                Auto-approve floor: face match (%)
+                <input
+                  className={inputClass}
+                  id="dlkyc-min-face-match"
+                  inputMode="numeric"
+                  max="100"
+                  min="0"
+                  onChange={(event) => setSelfHostedMinFaceMatchScore(event.target.value)}
+                  type="number"
+                  value={selfHostedMinFaceMatchScore}
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-bold" htmlFor="dlkyc-min-liveness">
+                Auto-approve floor: liveness (%)
+                <input
+                  className={inputClass}
+                  id="dlkyc-min-liveness"
+                  inputMode="numeric"
+                  max="100"
+                  min="0"
+                  onChange={(event) => setSelfHostedMinLivenessScore(event.target.value)}
+                  type="number"
+                  value={selfHostedMinLivenessScore}
+                />
+              </label>
+              <p className="text-sm leading-relaxed text-muted sm:col-span-2">
+                A submission must meet or exceed both floors (and raise no bot flags) to auto-approve
+                when the toggle above is on. Anything below either floor -- but not bad enough to
+                auto-decline outright -- lands in manual review instead. Defaults: 85% face match,
+                80% liveness.
+              </p>
+            </div>
 
             <label className="flex cursor-pointer items-start gap-3" htmlFor="dlkyc-bot-enabled">
               <input

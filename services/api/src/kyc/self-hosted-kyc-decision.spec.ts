@@ -71,4 +71,32 @@ describe('evaluateSelfHostedKyc', () => {
     );
     expect(result.band).toBe('REVIEW');
   });
+
+  it('uses the default 85/80 approve floors when minFaceMatchScore/minLivenessScore are omitted', () => {
+    const belowDefault = evaluateSelfHostedKyc(base({ faceMatchScore: 84, livenessScore: 90 }));
+    expect(belowDefault.band).toBe('REVIEW');
+    const atDefault = evaluateSelfHostedKyc(base({ faceMatchScore: 85, livenessScore: 80 }));
+    expect(atDefault.band).toBe('APPROVE');
+  });
+
+  it('honors an admin-lowered minFaceMatchScore/minLivenessScore', () => {
+    const result = evaluateSelfHostedKyc(
+      base({ faceMatchScore: 60, livenessScore: 70, minFaceMatchScore: 50, minLivenessScore: 65 }),
+    );
+    expect(result.band).toBe('APPROVE');
+  });
+
+  it('honors an admin-raised minFaceMatchScore/minLivenessScore, routing a would-be-default-pass to REVIEW', () => {
+    const result = evaluateSelfHostedKyc(
+      base({ faceMatchScore: 90, livenessScore: 90, minFaceMatchScore: 95, minLivenessScore: 95 }),
+    );
+    expect(result.band).toBe('REVIEW');
+  });
+
+  it('still declines outright below the fixed decline floor even if an admin-lowered approve floor would otherwise pass', () => {
+    const result = evaluateSelfHostedKyc(
+      base({ faceMatchScore: 30, livenessScore: 90, minFaceMatchScore: 20 }),
+    );
+    expect(result.band).toBe('DECLINE');
+  });
 });
