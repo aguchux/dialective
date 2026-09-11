@@ -77,6 +77,7 @@ import {
   MobileNavigation,
 } from '@/components/dashboard/DashboardShell';
 import {
+  DomainConversationSubmissionSummary,
   EarningsChartRange,
   LedgerEntryType,
   TrainerDashboardSummary,
@@ -119,6 +120,7 @@ import {
   useGetEarningHistoryQuery,
   useGetEarningsChartQuery,
   useGetMyWordRecordingsQuery,
+  useGetMyDomainConversationRecordingsQuery,
   useGetTrainerDashboardQuery,
   useGetCommunityStatsQuery,
   useGetReferralInvitationsQuery,
@@ -1587,12 +1589,39 @@ function qualityBreakdownTitle(submission: TrainerSubmissionSummary): string | u
   return parts.join('\n');
 }
 
+/** Maps a DomainConversationSubmissionSummary onto TrainerSubmissionSummary's shape so TaskRow/TaskCard/deriveTaskStatus can render either source without knowing which pipeline it came from. rawScore/score stay null -- there's no exact-match ground truth for a free-form conversation (see DomainConversationRecording's schema doc comment); audioUrl stays null since listMine doesn't return a signed playback URL for this kind yet, which TaskAudioButton already renders as an inert button. TRANSCRIBED never applies (no ASR/transcript step here), so it's simply never produced by this mapping. */
+function domainConversationToSubmissionSummary(
+  recording: DomainConversationSubmissionSummary,
+): TrainerSubmissionSummary {
+  return {
+    id: recording.id,
+    promptText: `${recording.prompt.domain}: ${recording.prompt.text}`,
+    dialectTag: recording.dialectTag,
+    status: recording.status,
+    tokensSpent: recording.tokensSpent,
+    rawScore: null,
+    score: null,
+    noiseScore: recording.noiseScore,
+    qualityScore: recording.qualityScore,
+    livenessScore: recording.livenessScore,
+    compositeScore: recording.compositeScore,
+    payoutTokenAmount: recording.payoutTokenAmount,
+    audioUrl: null,
+    rejectionReason: recording.rejectionReason,
+    createdAt: recording.createdAt,
+    scoredAt: recording.scoredAt,
+    settledAt: recording.settledAt,
+  };
+}
+
 /**
- * Two independent task pipelines feed My Tasks/My Scores: sentence-dictation
- * Word-training WordRecordings (scored via exact-match / peer
- * reverse-validation) -- see WordRecording's doc comment in schema.prisma.
- * Thin wrapper kept so callers don't need to change shape now that
- * dictation (Submission) no longer exists as a separate source to merge in.
+ * Two independent task pipelines feed My Tasks/My Scores: Word-training
+ * WordRecordings (scored via exact-match / peer reverse-validation -- see
+ * WordRecording's doc comment in schema.prisma) and Domain Conversation
+ * DomainConversationRecordings (scored via noise/quality/liveness only, no
+ * exact-match concept). Merged here so both pipelines' history/rewards show
+ * up together in one "Submitted tasks"/"My scores" list instead of the
+ * Domain Conversation half being invisible.
  */
 const MERGE_FETCH_PAGE_SIZE = 50;
 
@@ -1606,20 +1635,29 @@ export function useMergedSubmissions(
     { page: 1, pageSize: MERGE_FETCH_PAGE_SIZE, status },
     { pollingInterval },
   );
-
-  const isLoading = wordRecordings.isLoading;
-  const isFetching = wordRecordings.isFetching;
-  const isError = wordRecordings.isError;
-
-  const merged = [...(wordRecordings.data?.items ?? [])].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  const domainConversationStatus = status.filter(
+    (s): s is DomainConversationSubmissionSummary['status'] => s !== 'TRANSCRIBED',
   );
+  const domainConversations = useGetMyDomainConversationRecordingsQuery(
+    { page: 1, pageSize: MERGE_FETCH_PAGE_SIZE, status: domainConversationStatus },
+    { pollingInterval },
+  );
+
+  const isLoading = wordRecordings.isLoading || domainConversations.isLoading;
+  const isFetching = wordRecordings.isFetching || domainConversations.isFetching;
+  const isError = wordRecordings.isError && domainConversations.isError;
+
+  const merged = [
+    ...(wordRecordings.data?.items ?? []),
+    ...(domainConversations.data?.items.map(domainConversationToSubmissionSummary) ?? []),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const total = merged.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const items = merged.slice((page - 1) * pageSize, page * pageSize);
 
   function refetch() {
     void wordRecordings.refetch();
+    void domainConversations.refetch();
   }
 
   return { items, total, totalPages, isLoading, isFetching, isError, refetch };

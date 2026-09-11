@@ -483,14 +483,18 @@ export class WalletController {
       this.getPendingReferralInvites(req.user.sub),
     ]);
 
-    // Same SETTLED-word-recording count validateWithdrawalRequest enforces
-    // server-side (requireMinCompletedTasksForWithdrawal) -- surfaced here
-    // too so the dashboard can show trainers where they stand *before* they
-    // attempt a withdrawal, instead of only finding out from a rejected
-    // request.
-    const completedTasksForWithdrawal = await this.prisma.wordRecording.count({
-      where: { userId: req.user.sub, status: 'SETTLED' },
-    });
+    // Same SETTLED-task count validateWithdrawalRequest enforces server-side
+    // (requireMinCompletedTasksForWithdrawal, which sums both pipelines) --
+    // surfaced here too so the dashboard can show trainers where they stand
+    // *before* they attempt a withdrawal, instead of only finding out from
+    // a rejected request.
+    const [settledWordRecordings, settledDomainConversationRecordings] = await Promise.all([
+      this.prisma.wordRecording.count({ where: { userId: req.user.sub, status: 'SETTLED' } }),
+      this.prisma.domainConversationRecording.count({
+        where: { userId: req.user.sub, status: 'SETTLED' },
+      }),
+    ]);
+    const completedTasksForWithdrawal = settledWordRecordings + settledDomainConversationRecordings;
 
     const ledgerAmount = (types: string[]) =>
       ledgerTotals
@@ -1942,9 +1946,15 @@ export class WalletController {
   private async requireMinCompletedTasksForWithdrawal(userId: string): Promise<void> {
     const minTasks = await this.platformSettings.getMinCompletedTasksForWithdrawal();
     if (minTasks <= 0) return;
-    const completedTasks = await this.prisma.wordRecording.count({
-      where: { userId, status: 'SETTLED' },
-    });
+    // Counts both task pipelines -- a trainer who only does Domain
+    // Conversation work has settled recordings in a different table
+    // (DomainConversationRecording, not WordRecording) and must not be
+    // permanently blocked from ever clearing this gate.
+    const [settledWordRecordings, settledDomainConversationRecordings] = await Promise.all([
+      this.prisma.wordRecording.count({ where: { userId, status: 'SETTLED' } }),
+      this.prisma.domainConversationRecording.count({ where: { userId, status: 'SETTLED' } }),
+    ]);
+    const completedTasks = settledWordRecordings + settledDomainConversationRecordings;
     if (completedTasks < minTasks) {
       throw new UnprocessableEntityException(
         `Complete at least ${minTasks} tasks before requesting a withdrawal (${completedTasks}/${minTasks} so far)`,

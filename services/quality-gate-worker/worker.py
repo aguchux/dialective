@@ -9,6 +9,7 @@ import soundfile as sf
 from db import (
     build_db_connection,
     get_speech_expression_enabled,
+    reject_domain_conversation_recording,
     reject_submission,
     reject_word_recording,
     write_expression,
@@ -121,6 +122,22 @@ def compute_scores(
     return result
 
 
+def reject_record(db_conn, record_kind: str, record_id: str, reason: str) -> None:
+    """
+    Dispatches the REJECTED-write to the right table for whichever of the
+    three record kinds this job is -- domain_conversation_recording has its
+    own table/columns (see DomainConversationRecording in schema.prisma)
+    and must NOT fall into reject_word_recording's word_recordings UPDATE,
+    which would silently match 0 rows against the wrong table.
+    """
+    if record_kind == "submission":
+        reject_submission(db_conn, record_id, reason)
+    elif record_kind == "domain_conversation_recording":
+        reject_domain_conversation_recording(db_conn, record_id, reason)
+    else:
+        reject_word_recording(db_conn, record_id, reason)
+
+
 def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model, emotion_model):
     def handle(_msg_id: str, fields: dict) -> None:
         job = fields if not fields.get("data") else json.loads(fields["data"])
@@ -139,15 +156,14 @@ def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model, emotion
             try:
                 transcode_to_wav(raw_path, wav_path)
             except subprocess.CalledProcessError:
-                # Both record kinds now share the same hard-reject path --
+                # All three record kinds share the same hard-reject path --
                 # settlement-job's refundRejectedSubmissions()/
-                # refundRejectedWordRecordings() sweeps pick this up and
-                # release the trainer's locked tokens, then delete the audio
-                # object immediately (see settlement.service.ts).
-                if record_kind == "submission":
-                    reject_submission(db_conn, record_id, "unreadable_audio")
-                else:
-                    reject_word_recording(db_conn, record_id, "unreadable_audio")
+                # refundRejectedWordRecordings()/
+                # refundRejectedDomainConversationRecordings() sweeps pick
+                # this up and release the trainer's locked tokens, then
+                # delete the audio object immediately (see
+                # settlement.service.ts).
+                reject_record(db_conn, record_kind, record_id, "unreadable_audio")
                 return
 
             max_duration_s = (
@@ -155,13 +171,19 @@ def make_handler(s3, redis_client: redis.Redis, db_conn, liveness_model, emotion
             )
             ok, reason = prefilter_ok(wav_path, max_duration_s)
             if not ok:
-                if record_kind == "submission":
-                    reject_submission(db_conn, record_id, reason)
-                else:
-                    reject_word_recording(db_conn, record_id, reason)
+                reject_record(db_conn, record_kind, record_id, reason)
                 return
 
-            expression_enabled = get_speech_expression_enabled(db_conn)
+            expression_enabled = (
+                get_speech_expression_enabled(db_conn)
+                # domain_conversation_recordings has no emotion/tone/style/
+                # speed/energy/prosodyMetrics columns at all (see its
+                # schema.prisma model) -- write_expression would silently
+                # no-op against the wrong table for this kind, so skip the
+                # analysis entirely rather than compute output with nowhere
+                # correct to write it.
+                and record_kind != "domain_conversation_recording"
+            )
             scores = compute_scores(
                 wav_path,
                 liveness_model,

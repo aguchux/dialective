@@ -23,6 +23,7 @@ describe('WalletController crypto withdrawal eligibility', () => {
 
   function setup(overrides?: {
     settledWordRecordings?: number;
+    settledDomainConversationRecordings?: number;
     user?: { emailVerified: boolean; phoneVerifiedAt: Date | null; kycStatus: string };
     walletBalance?: number;
     minWalletBalanceTokens?: number;
@@ -30,6 +31,9 @@ describe('WalletController crypto withdrawal eligibility', () => {
   }) {
     const prisma = {
       wordRecording: { count: jest.fn().mockResolvedValue(overrides?.settledWordRecordings ?? 100) },
+      domainConversationRecording: {
+        count: jest.fn().mockResolvedValue(overrides?.settledDomainConversationRecordings ?? 0),
+      },
       user: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({
           email: 'trainer@example.com',
@@ -86,6 +90,22 @@ describe('WalletController crypto withdrawal eligibility', () => {
       where: { userId: 'trainer-1', status: 'SETTLED' },
     });
     expect(otp.issueForUser).not.toHaveBeenCalled();
+  });
+
+  // Regression: a trainer who only ever does Domain Conversation work has
+  // their settled tasks in DomainConversationRecording, a different table
+  // from WordRecording -- the gate must sum both or such a trainer could
+  // never clear it regardless of how much they'd actually done.
+  it('counts settled Domain Conversation recordings toward the same withdrawal-eligibility gate', async () => {
+    const { controller, otp } = setup({
+      settledWordRecordings: 40,
+      settledDomainConversationRecordings: 60,
+    });
+
+    await expect(
+      controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody),
+    ).resolves.toBeDefined();
+    expect(otp.issueForUser).toHaveBeenCalled();
   });
 
   it('applies the same verified-phone gate to crypto withdrawals', async () => {

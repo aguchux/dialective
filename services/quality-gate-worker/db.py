@@ -50,6 +50,35 @@ SET "noiseScore" = %(noise_score)s,
 WHERE id = %(record_id)s
 """
 
+# Unlike word_recordings (already status='SCORED' at creation -- see
+# WordsService.createRecording, which computes an exact-match score
+# synchronously and never depends on this worker to reach SCORED),
+# domain_conversation_recordings have no synchronous score at creation
+# (no exact-match concept for a free-form conversation) and are created
+# PENDING. This worker's score-write IS what moves them to SCORED --
+# settlement-job's settleDomainConversationRecordings() sweep only ever
+# looks at status='SCORED' rows, so without this transition here a
+# submission would sit PENDING forever and eventually get refunded by the
+# stuck-timeout sweep instead of ever settling.
+UPDATE_DOMAIN_CONVERSATION_RECORDING_SCORES_SQL = """
+UPDATE domain_conversation_recordings
+SET "noiseScore" = %(noise_score)s,
+    "qualityScore" = %(quality_score)s,
+    "livenessScore" = %(liveness_score)s,
+    "qualityGateCheckedAt" = now(),
+    status = 'SCORED',
+    "scoredAt" = now()
+WHERE id = %(record_id)s
+"""
+
+REJECT_DOMAIN_CONVERSATION_RECORDING_SQL = """
+UPDATE domain_conversation_recordings
+SET status = 'REJECTED',
+    "rejectionReason" = %(rejection_reason)s,
+    "qualityGateCheckedAt" = now()
+WHERE id = %(record_id)s
+"""
+
 # Mirrors UPDATE_SUBMISSION_SCORES_SQL's "updatedAt"/word_recordings asymmetry
 # above -- Submission sets "updatedAt", WordRecording doesn't, matching the
 # existing (pre-existing, not introduced by this feature) inconsistency
@@ -108,11 +137,12 @@ def write_scores(
     since this worker never creates rows, only annotates ones api already
     created.
     """
-    sql = (
-        UPDATE_SUBMISSION_SCORES_SQL
-        if record_kind == "submission"
-        else UPDATE_WORD_RECORDING_SCORES_SQL
-    )
+    if record_kind == "submission":
+        sql = UPDATE_SUBMISSION_SCORES_SQL
+    elif record_kind == "domain_conversation_recording":
+        sql = UPDATE_DOMAIN_CONVERSATION_RECORDING_SCORES_SQL
+    else:
+        sql = UPDATE_WORD_RECORDING_SCORES_SQL
     with conn.cursor() as cur:
         cur.execute(
             sql,
@@ -244,5 +274,26 @@ def reject_word_recording(conn, word_recording_id: str, rejection_reason: str) -
             logger.warning(
                 "reject_word_recording matched 0 rows for word_recording=%s",
                 word_recording_id,
+            )
+    conn.commit()
+
+
+def reject_domain_conversation_recording(
+    conn, recording_id: str, rejection_reason: str
+) -> None:
+    """
+    Mirrors reject_word_recording -- settlement-job's
+    refundRejectedDomainConversationRecordings() sweep picks this up the
+    same way.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            REJECT_DOMAIN_CONVERSATION_RECORDING_SQL,
+            {"record_id": recording_id, "rejection_reason": rejection_reason},
+        )
+        if cur.rowcount == 0:
+            logger.warning(
+                "reject_domain_conversation_recording matched 0 rows for domain_conversation_recording=%s",
+                recording_id,
             )
     conn.commit()
