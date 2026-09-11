@@ -113,6 +113,11 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: spaces_marketing_bucket
+            - name: SPACES_KYC_EVIDENCE_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_kyc_evidence_bucket
             - name: SPACES_ENDPOINT
               valueFrom:
                 secretKeyRef:
@@ -163,6 +168,11 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: stream_frontend_url
+            - name: KYC_APP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: kyc_app_url
             - name: STREAM_JWT_ACCESS_SECRET
               valueFrom:
                 secretKeyRef:
