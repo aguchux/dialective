@@ -22,10 +22,18 @@ import type {
   CommunityPostAuthor,
   CommunityPostCard,
   CommunityReply,
+  CommunityReactionType,
   CommunityRole,
   CommunitySpace,
 } from '@/store/api';
-import { Badge, Card, OverflowMenu, PrimaryButton, SecondaryButton, type OverflowMenuItem } from '@/components/ui';
+import {
+  Badge,
+  Card,
+  OverflowMenu,
+  PrimaryButton,
+  SecondaryButton,
+  type OverflowMenuItem,
+} from '@/components/ui';
 import {
   formatCompactCount,
   formatRelativeTime,
@@ -161,17 +169,19 @@ export function PostMetrics({
   post,
   onLike,
   onBookmark,
+  onReaction,
   showViews = true,
   showBookmark = true,
 }: {
   post: CommunityPostCard;
   onLike?: () => void;
   onBookmark?: () => void;
+  onReaction?: (type: Exclude<CommunityReactionType, 'LIKE'>) => void;
   showViews?: boolean;
   showBookmark?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-4 text-sm font-bold text-muted">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-bold text-muted">
       {onLike ? (
         <button
           aria-label={post.likedByMe ? 'Unlike post' : 'Like post'}
@@ -206,6 +216,38 @@ export function PostMetrics({
           <Eye aria-hidden="true" className="size-5" />
           {formatCompactCount(post.viewCount)}
         </span>
+      )}
+      {onReaction && (
+        <div
+          className="order-last flex basis-full items-center gap-1 pt-1 sm:order-none sm:basis-auto sm:pt-0"
+          aria-label="React to post"
+        >
+          {(
+            [
+              ['HAPPY', '😊', post.happyCount],
+              ['SMILE', '🙂', post.smileCount],
+              ['LOL', '😂', post.lolCount],
+              ['SAD', '😢', post.sadCount],
+              ['CRY', '😭', post.cryCount],
+            ] as const
+          ).map(([type, emoji, count]) => (
+            <button
+              aria-label={`${type.toLowerCase()} reaction${count ? `, ${count}` : ''}`}
+              aria-pressed={post.reactionTypeByMe === type}
+              className={`inline-flex min-h-10 min-w-10 items-center justify-center gap-0.5 rounded-full border px-1.5 text-base transition-colors hover:border-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${post.reactionTypeByMe === type ? 'border-accent bg-accent-soft' : 'border-transparent'}`}
+              key={type}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onReaction(type);
+              }}
+              type="button"
+            >
+              <span aria-hidden="true">{emoji}</span>
+              {count > 0 && <span className="text-xs text-muted">{formatCompactCount(count)}</span>}
+            </button>
+          ))}
+        </div>
       )}
       {showBookmark && onBookmark && (
         <button
@@ -253,7 +295,12 @@ export function buildContentOverflowItems({
   return [
     { label: 'Copy link', onSelect: () => onCopyLink?.(), hidden: !onCopyLink },
     { label: 'Edit', onSelect: () => onEdit?.(), hidden: !isOwner || !onEdit },
-    { label: 'Delete', onSelect: () => onDelete?.(), tone: 'danger', hidden: !isOwner || !onDelete },
+    {
+      label: 'Delete',
+      onSelect: () => onDelete?.(),
+      tone: 'danger',
+      hidden: !isOwner || !onDelete,
+    },
     { label: 'Report', onSelect: () => onReport?.(), tone: 'danger', hidden: isOwner || !onReport },
   ];
 }
@@ -265,6 +312,7 @@ export function PostCard({
   showBookmarkFooter = false,
   onLike,
   onBookmark,
+  onReaction,
   status,
   overflowItems,
 }: {
@@ -274,6 +322,7 @@ export function PostCard({
   showBookmarkFooter?: boolean;
   onLike?: () => void;
   onBookmark?: () => void;
+  onReaction?: (type: Exclude<CommunityReactionType, 'LIKE'>) => void;
   status?: 'PUBLISHED' | 'DRAFT';
   overflowItems?: OverflowMenuItem[];
 }) {
@@ -313,7 +362,12 @@ export function PostCard({
             Saved {formatRelativeTime(post.createdAt)}
           </div>
         ) : (
-          <PostMetrics onBookmark={onBookmark} onLike={onLike} post={post} />
+          <PostMetrics
+            onBookmark={onBookmark}
+            onLike={onLike}
+            onReaction={onReaction}
+            post={post}
+          />
         )}
       </div>
     </Card>
@@ -401,7 +455,12 @@ export function AttachmentGallery({
   attachments,
   className = '',
 }: {
-  attachments: { id: string; type: 'IMAGE' | 'AUDIO' | 'DOCUMENT'; url: string; originalName: string }[];
+  attachments: {
+    id: string;
+    type: 'IMAGE' | 'AUDIO' | 'DOCUMENT';
+    url: string;
+    originalName: string;
+  }[];
   className?: string;
 }) {
   if (!attachments.length) return null;

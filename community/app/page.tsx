@@ -10,6 +10,8 @@ import {
   useLikePostMutation,
   useListPostsQuery,
   useRemoveBookmarkMutation,
+  useReactToPostMutation,
+  useRemovePostReactionMutation,
   useUnlikePostMutation,
   type CommunityFeedTab,
 } from '@/store/api';
@@ -40,6 +42,8 @@ export default function HomePage() {
   const [unlikePost] = useUnlikePostMutation();
   const [addBookmark] = useAddBookmarkMutation();
   const [removeBookmark] = useRemoveBookmarkMutation();
+  const [reactToPost] = useReactToPostMutation();
+  const [removePostReaction] = useRemovePostReactionMutation();
   const { overflowItemsFor, dialogs } = usePostOverflow();
 
   return (
@@ -87,6 +91,11 @@ export default function HomePage() {
                 void (post.bookmarkedByMe ? removeBookmark(post.id) : addBookmark(post.id))
               }
               onLike={() => void (post.likedByMe ? unlikePost(post.id) : likePost(post.id))}
+              onReaction={(type) =>
+                void (post.reactionTypeByMe === type
+                  ? removePostReaction(post.id)
+                  : reactToPost({ postId: post.id, type }))
+              }
               overflowItems={overflowItemsFor(post, () => router.push(`/post/${post.slug}`))}
               post={post}
             />

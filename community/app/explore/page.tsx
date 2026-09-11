@@ -13,6 +13,8 @@ import {
   useRemoveBookmarkMutation,
   useSearchQuery,
   useUnlikePostMutation,
+  useReactToPostMutation,
+  useRemovePostReactionMutation,
 } from '@/store/api';
 import {
   EmptyState,
@@ -42,6 +44,8 @@ export default function ExplorePage() {
   const [unlikePost] = useUnlikePostMutation();
   const [addBookmark] = useAddBookmarkMutation();
   const [removeBookmark] = useRemoveBookmarkMutation();
+  const [reactToPost] = useReactToPostMutation();
+  const [removePostReaction] = useRemovePostReactionMutation();
   const {
     data: spaces,
     isLoading: spacesLoading,
@@ -141,10 +145,21 @@ export default function ExplorePage() {
                       <PostCard
                         key={post.id}
                         onBookmark={() =>
-                          void (post.bookmarkedByMe ? removeBookmark(post.id) : addBookmark(post.id))
+                          void (post.bookmarkedByMe
+                            ? removeBookmark(post.id)
+                            : addBookmark(post.id))
                         }
-                        onLike={() => void (post.likedByMe ? unlikePost(post.id) : likePost(post.id))}
-                        overflowItems={overflowItemsFor(post, () => router.push(`/post/${post.slug}`))}
+                        onLike={() =>
+                          void (post.likedByMe ? unlikePost(post.id) : likePost(post.id))
+                        }
+                        onReaction={(type) =>
+                          void (post.reactionTypeByMe === type
+                            ? removePostReaction(post.id)
+                            : reactToPost({ postId: post.id, type }))
+                        }
+                        overflowItems={overflowItemsFor(post, () =>
+                          router.push(`/post/${post.slug}`),
+                        )}
                         post={post}
                       />
                     ))}

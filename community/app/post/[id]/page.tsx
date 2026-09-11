@@ -17,6 +17,8 @@ import {
   useLikeReplyMutation,
   useListRepliesQuery,
   useRemoveBookmarkMutation,
+  useReactToPostMutation,
+  useRemovePostReactionMutation,
   useUnlikePostMutation,
   useUnlikeReplyMutation,
   useUpdatePostMutation,
@@ -73,6 +75,8 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
   const [unlikeReply] = useUnlikeReplyMutation();
   const [addBookmark] = useAddBookmarkMutation();
   const [removeBookmark] = useRemoveBookmarkMutation();
+  const [reactToPost] = useReactToPostMutation();
+  const [removePostReaction] = useRemovePostReactionMutation();
   const [createReply, { isLoading: replying }] = useCreateReplyMutation();
   const [createAttachmentUploadUrl] = useCreateAttachmentUploadUrlMutation();
   const [replyAttachments, setReplyAttachments] = useState<PendingAttachment[]>([]);
@@ -91,9 +95,9 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
   const [editingPost, setEditingPost] = useState(false);
   const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ kind: 'post' } | { kind: 'reply'; id: string } | null>(
-    null,
-  );
+  const [deleteTarget, setDeleteTarget] = useState<
+    { kind: 'post' } | { kind: 'reply'; id: string } | null
+  >(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
 
@@ -251,7 +255,9 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
                 await updatePost({ id: currentPost.id, title, body }).unwrap();
                 setEditingPost(false);
               } catch (err) {
-                setEditError(normalizeErrorMessage(err, 'Could not save your changes. Please try again.'));
+                setEditError(
+                  normalizeErrorMessage(err, 'Could not save your changes. Please try again.'),
+                );
               }
             }}
           />
@@ -278,6 +284,11 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
               void (post.bookmarkedByMe ? removeBookmark(post.id) : addBookmark(post.id))
             }
             onLike={() => void (post.likedByMe ? unlikePost(post.id) : likePost(post.id))}
+            onReaction={(type) =>
+              void (post.reactionTypeByMe === type
+                ? removePostReaction(post.id)
+                : reactToPost({ postId: post.id, type }))
+            }
             post={post}
             showViews
           />
@@ -328,7 +339,10 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
                       setEditingReplyId(null);
                     } catch (err) {
                       setEditError(
-                        normalizeErrorMessage(err, 'Could not save your changes. Please try again.'),
+                        normalizeErrorMessage(
+                          err,
+                          'Could not save your changes. Please try again.',
+                        ),
                       );
                     }
                   }}
@@ -457,7 +471,10 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
       ) : null}
 
       {deleteTarget && (
-        <Modal onClose={() => setDeleteTarget(null)} title={deleteTarget.kind === 'post' ? 'Delete post?' : 'Delete reply?'}>
+        <Modal
+          onClose={() => setDeleteTarget(null)}
+          title={deleteTarget.kind === 'post' ? 'Delete post?' : 'Delete reply?'}
+        >
           <p className="text-sm leading-relaxed text-muted">
             This cannot be undone. {deleteTarget.kind === 'post' ? 'The post' : 'The reply'} will be
             removed from the community.
@@ -470,7 +487,11 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
             >
               Cancel
             </button>
-            <PrimaryButton className="bg-danger hover:bg-danger" onClick={() => void confirmDelete()} type="button">
+            <PrimaryButton
+              className="bg-danger hover:bg-danger"
+              onClick={() => void confirmDelete()}
+              type="button"
+            >
               Delete
             </PrimaryButton>
           </div>
@@ -532,7 +553,12 @@ function PostEditForm({
         onChange={(event) => setTitle(event.target.value)}
         value={title}
       />
-      <TextArea maxLength={5000} onChange={(event) => setBody(event.target.value)} rows={8} value={body} />
+      <TextArea
+        maxLength={5000}
+        onChange={(event) => setBody(event.target.value)}
+        rows={8}
+        value={body}
+      />
       <div className="flex flex-col-reverse gap-2 sm:flex-row">
         <PrimaryButton
           onClick={async () => {
@@ -568,7 +594,12 @@ function ReplyEditForm({
 
   return (
     <div className="grid gap-3">
-      <TextArea maxLength={5000} onChange={(event) => setBody(event.target.value)} rows={4} value={body} />
+      <TextArea
+        maxLength={5000}
+        onChange={(event) => setBody(event.target.value)}
+        rows={4}
+        value={body}
+      />
       <div className="flex flex-col-reverse gap-2 sm:flex-row">
         <PrimaryButton
           onClick={async () => {

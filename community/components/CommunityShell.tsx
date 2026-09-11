@@ -184,12 +184,15 @@ function CommunitySidebar({
   const visibleSpaces = spaces.filter((space) => !space.isArchived).slice(0, 8);
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 hidden w-[240px] flex-col border-r border-line bg-surface lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-20 hidden w-[224px] min-w-0 max-w-[224px] flex-col overflow-x-hidden border-r border-line bg-surface lg:flex">
       <div className="border-b border-line px-5 py-4">
         <BrandLogo textClassName="text-base" size={32} />
       </div>
 
-      <nav aria-label="Community" className="flex-1 overflow-y-auto px-3 py-4">
+      <nav
+        aria-label="Community"
+        className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4"
+      >
         <div className="grid gap-1">
           {PRIMARY_NAV.map((item) => (
             <SidebarNavLink
@@ -204,10 +207,12 @@ function CommunitySidebar({
         </div>
 
         <div className="my-5 h-px bg-line" />
-        <div className="mb-2 flex items-center justify-between px-3">
-          <span className="text-xs font-black uppercase tracking-wide text-muted">Spaces</span>
+        <div className="mb-2 flex min-w-0 items-center justify-between gap-2 px-3">
+          <span className="min-w-0 truncate text-xs font-black uppercase tracking-wide text-muted">
+            Spaces
+          </span>
           <Link
-            className="text-xs font-extrabold text-accent hover:underline"
+            className="shrink-0 text-xs font-extrabold text-accent hover:underline"
             href="/explore#spaces"
           >
             See all
@@ -307,7 +312,7 @@ function SidebarNavLink({
       href={href}
     >
       <Icon aria-hidden="true" className="size-5 shrink-0" />
-      <span className="truncate">{label}</span>
+      <span className="min-w-0 truncate">{label}</span>
       {unreadCount > 0 && (
         <span className="ml-auto grid size-5 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-black text-white">
           {unreadCount > 9 ? '9+' : unreadCount}

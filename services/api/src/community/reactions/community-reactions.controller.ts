@@ -1,6 +1,8 @@
-import { Controller, Delete, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthenticatedRequest, JwtAuthGuard } from '../../auth/strategies/jwt-auth.guard';
 import { CommunityReactionsService } from './community-reactions.service';
+
+const REACTION_TYPES = ['HAPPY', 'SMILE', 'LOL', 'SAD', 'CRY'] as const;
 
 @Controller('community')
 @UseGuards(JwtAuthGuard)
@@ -15,6 +17,19 @@ export class CommunityReactionsController {
   @Delete('posts/:id/like')
   unlikePost(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.reactions.unlikePost(req.user.sub, id);
+  }
+
+  @Post('posts/:id/reaction')
+  reactPost(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body('type') type: string) {
+    if (!REACTION_TYPES.includes(type as (typeof REACTION_TYPES)[number])) {
+      return this.reactions.rejectInvalidType();
+    }
+    return this.reactions.reactPost(req.user.sub, id, type as (typeof REACTION_TYPES)[number]);
+  }
+
+  @Delete('posts/:id/reaction')
+  removePostReaction(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.reactions.removePostReaction(req.user.sub, id);
   }
 
   @Post('replies/:id/like')

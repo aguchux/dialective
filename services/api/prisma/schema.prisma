@@ -3739,7 +3739,12 @@ enum CommunityReplyStatus {
 }
 
 enum CommunityReactionType {
-  LIKE // sole MVP value -- modeled as an enum so a second reaction type is a data change later, not a schema migration
+  LIKE // legacy heart reaction retained for existing data
+  HAPPY
+  SMILE
+  LOL
+  SAD
+  CRY
 }
 
 enum CommunityAttachmentType {
@@ -3904,6 +3909,11 @@ model CommunityPost {
   viewCount  Int                 @default(0)
   replyCount Int                 @default(0)
   likeCount  Int                 @default(0)
+  happyCount Int                 @default(0)
+  smileCount Int                 @default(0)
+  lolCount   Int                 @default(0)
+  sadCount   Int                 @default(0)
+  cryCount   Int                 @default(0)
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
   deletedAt  DateTime?

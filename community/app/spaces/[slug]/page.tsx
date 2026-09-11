@@ -12,6 +12,8 @@ import {
   useListPostsQuery,
   useRemoveBookmarkMutation,
   useUnlikePostMutation,
+  useReactToPostMutation,
+  useRemovePostReactionMutation,
 } from '@/store/api';
 import {
   EmptyState,
@@ -51,6 +53,8 @@ export default function SpacePage({ params }: { params: { slug: string } }) {
   const [unlikePost] = useUnlikePostMutation();
   const [addBookmark] = useAddBookmarkMutation();
   const [removeBookmark] = useRemoveBookmarkMutation();
+  const [reactToPost] = useReactToPostMutation();
+  const [removePostReaction] = useRemovePostReactionMutation();
   const { overflowItemsFor, dialogs } = usePostOverflow();
   const router = useRouter();
 
@@ -133,6 +137,11 @@ export default function SpacePage({ params }: { params: { slug: string } }) {
                     void (post.bookmarkedByMe ? removeBookmark(post.id) : addBookmark(post.id))
                   }
                   onLike={() => void (post.likedByMe ? unlikePost(post.id) : likePost(post.id))}
+                  onReaction={(type) =>
+                    void (post.reactionTypeByMe === type
+                      ? removePostReaction(post.id)
+                      : reactToPost({ postId: post.id, type }))
+                  }
                   overflowItems={overflowItemsFor(post, () => router.push(`/post/${post.slug}`))}
                   post={post}
                 />

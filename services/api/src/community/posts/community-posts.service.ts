@@ -4,7 +4,11 @@ import { StorageService } from '../../storage/storage.service';
 import { renderCommunityBody } from '../community-content.util';
 import { slugifyUnique } from '../community-slug.util';
 import { attachmentsCreateInput, toAttachmentDto } from '../community-attachments.util';
-import { AUTHOR_SUMMARY_SELECT, AuthorSummarySource, toAuthorSummary } from '../profiles/community-profiles.service';
+import {
+  AUTHOR_SUMMARY_SELECT,
+  AuthorSummarySource,
+  toAuthorSummary,
+} from '../profiles/community-profiles.service';
 import { CreateCommunityPostDto } from '../dto/create-community-post.dto';
 import { UpdateCommunityPostDto } from '../dto/update-community-post.dto';
 import { ListCommunityPostsDto } from '../dto/list-community-posts.dto';
@@ -22,7 +26,7 @@ function postCardInclude(userId?: string) {
     attachments: true,
     ...(userId
       ? {
-          reactions: { where: { userId }, select: { id: true } },
+          reactions: { where: { userId }, select: { id: true, type: true } },
           bookmarks: { where: { userId }, select: { id: true } },
         }
       : {}),
@@ -92,7 +96,8 @@ export class CommunityPostsService {
       throw new ForbiddenException('Only a draft can be published from here');
     }
 
-    const tagIds = dto.tags !== undefined ? await this.tags.resolveOrCreateMany(dto.tags) : undefined;
+    const tagIds =
+      dto.tags !== undefined ? await this.tags.resolveOrCreateMany(dto.tags) : undefined;
     const updated = await this.prisma.communityPost.update({
       where: { id: postId },
       data: {
@@ -135,7 +140,10 @@ export class CommunityPostsService {
     if (!post || post.status === 'DELETED' || post.status === 'HIDDEN') {
       throw new NotFoundException('Post not found');
     }
-    await this.prisma.communityPost.update({ where: { id: post.id }, data: { viewCount: { increment: 1 } } });
+    await this.prisma.communityPost.update({
+      where: { id: post.id },
+      data: { viewCount: { increment: 1 } },
+    });
     return this.toCard(post);
   }
 
@@ -170,7 +178,10 @@ export class CommunityPostsService {
     const posts = await this.prisma.communityPost.findMany({
       where: {
         status: 'PUBLISHED',
-        OR: [{ title: { contains: term, mode: 'insensitive' } }, { body: { contains: term, mode: 'insensitive' } }],
+        OR: [
+          { title: { contains: term, mode: 'insensitive' } },
+          { body: { contains: term, mode: 'insensitive' } },
+        ],
       },
       take: limit,
       orderBy: { createdAt: 'desc' },
@@ -283,9 +294,16 @@ export class CommunityPostsService {
       ...rest,
       author: toAuthorSummary(author),
       tags: tags.map((t) => t.tag),
-      attachments: (attachments ?? []).map((attachment) => toAttachmentDto(this.storage, attachment)),
-      likedByMe: reactions !== undefined ? reactions.length > 0 : undefined,
+      attachments: (attachments ?? []).map((attachment) =>
+        toAttachmentDto(this.storage, attachment),
+      ),
+      likedByMe:
+        reactions !== undefined
+          ? reactions.some((reaction) => (reaction as { type?: string }).type === 'LIKE')
+          : undefined,
       bookmarkedByMe: bookmarks !== undefined ? bookmarks.length > 0 : undefined,
+      reactionTypeByMe:
+        reactions && reactions.length > 0 ? (reactions[0] as { type: string }).type : null,
     };
   }
 }

@@ -7,6 +7,7 @@ export type CommunityBadge = 'VERIFIED_TRAINER' | 'DISTRIBUTOR' | null;
 export type CommunityRole = 'MEMBER' | 'MODERATOR' | 'STAFF';
 export type CommunityUserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CommunityPostStatus = 'DRAFT' | 'PUBLISHED' | 'HIDDEN' | 'DELETED';
+export type CommunityReactionType = 'LIKE' | 'HAPPY' | 'SMILE' | 'LOL' | 'SAD' | 'CRY';
 
 export interface CommunityPublicAdSettings {
   adsterra: { enabled: boolean; scriptUrl: string | null };
@@ -79,12 +80,18 @@ export interface CommunityPostCard {
   viewCount: number;
   replyCount: number;
   likeCount: number;
+  happyCount: number;
+  smileCount: number;
+  lolCount: number;
+  sadCount: number;
+  cryCount: number;
   createdAt: string;
   author: CommunityPostAuthor;
   space: { id: string; name: string; slug: string };
   tags: CommunityTag[];
   attachments: CommunityAttachment[];
   likedByMe?: boolean;
+  reactionTypeByMe?: CommunityReactionType | null;
   bookmarkedByMe?: boolean;
 }
 
@@ -340,13 +347,21 @@ export const communityApi = createApi({
     }),
 
     listReplies: builder.query<CommunityReply[], { postId: string; sort?: CommunityReplySort }>({
-      query: ({ postId, sort }) => ({ url: `/posts/${postId}/replies`, params: sort ? { sort } : undefined }),
+      query: ({ postId, sort }) => ({
+        url: `/posts/${postId}/replies`,
+        params: sort ? { sort } : undefined,
+      }),
       providesTags: (_result, _error, { postId }) => [{ type: 'Replies', id: postId }],
     }),
 
     createReply: builder.mutation<
       CommunityReply,
-      { postId: string; body: string; parentReplyId?: string; attachments?: CommunityAttachmentInput[] }
+      {
+        postId: string;
+        body: string;
+        parentReplyId?: string;
+        attachments?: CommunityAttachmentInput[];
+      }
     >({
       query: ({ postId, ...body }) => ({ url: `/posts/${postId}/replies`, method: 'POST', body }),
       invalidatesTags: (_result, _error, { postId }) => [
@@ -368,6 +383,23 @@ export const communityApi = createApi({
 
     likePost: builder.mutation<void, string>({
       query: (postId) => ({ url: `/posts/${postId}/like`, method: 'POST' }),
+      invalidatesTags: (_result, _error, postId) => [{ type: 'Post', id: postId }, 'Posts'],
+    }),
+
+    reactToPost: builder.mutation<
+      void,
+      { postId: string; type: Exclude<CommunityReactionType, 'LIKE'> }
+    >({
+      query: ({ postId, type }) => ({
+        url: `/posts/${postId}/reaction`,
+        method: 'POST',
+        body: { type },
+      }),
+      invalidatesTags: (_result, _error, { postId }) => [{ type: 'Post', id: postId }, 'Posts'],
+    }),
+
+    removePostReaction: builder.mutation<void, string>({
+      query: (postId) => ({ url: `/posts/${postId}/reaction`, method: 'DELETE' }),
       invalidatesTags: (_result, _error, postId) => [{ type: 'Post', id: postId }, 'Posts'],
     }),
 
@@ -393,16 +425,30 @@ export const communityApi = createApi({
 
     addBookmark: builder.mutation<void, string>({
       query: (postId) => ({ url: `/posts/${postId}/bookmark`, method: 'POST' }),
-      invalidatesTags: ['Bookmarks'],
+      invalidatesTags: (_result, _error, postId) => [
+        'Bookmarks',
+        { type: 'Post', id: postId },
+        'Posts',
+      ],
     }),
 
     removeBookmark: builder.mutation<void, string>({
       query: (postId) => ({ url: `/posts/${postId}/bookmark`, method: 'DELETE' }),
-      invalidatesTags: ['Bookmarks'],
+      invalidatesTags: (_result, _error, postId) => [
+        'Bookmarks',
+        { type: 'Post', id: postId },
+        'Posts',
+      ],
     }),
 
-    listNotifications: builder.query<CommunityNotification[], { tab?: 'replies' | 'mentions' | 'announcements' } | void>({
-      query: (params) => ({ url: '/notifications', params: params?.tab ? { tab: params.tab } : undefined }),
+    listNotifications: builder.query<
+      CommunityNotification[],
+      { tab?: 'replies' | 'mentions' | 'announcements' } | void
+    >({
+      query: (params) => ({
+        url: '/notifications',
+        params: params?.tab ? { tab: params.tab } : undefined,
+      }),
       providesTags: ['Notifications'],
     }),
 
@@ -456,6 +502,8 @@ export const {
   useDeleteReplyMutation,
   useLikePostMutation,
   useUnlikePostMutation,
+  useReactToPostMutation,
+  useRemovePostReactionMutation,
   useLikeReplyMutation,
   useUnlikeReplyMutation,
   useListBookmarksQuery,
