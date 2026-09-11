@@ -1,4 +1,14 @@
-import { IsBoolean, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsUrl, Matches, Max, MaxLength, Min } from 'class-validator';
+
+// Adsterra/Monetag serve each ad unit's script from a per-account/per-unit
+// subdomain that varies (and can rotate) -- there's no fixed hostname to
+// pin an allowlist to. Require https + a .js path instead, which is the
+// actual shape of every <script src> both networks hand out. The write
+// path is admin-only (JwtAuthGuard + Roles(ADMIN) on the controller), so
+// this is a sanity check against pasting the wrong thing, not a security
+// boundary against untrusted input.
+const AD_SCRIPT_URL_OPTIONS = { require_protocol: true, protocols: ['https'] };
+const AD_SCRIPT_URL_MESSAGE = 'must be an https:// URL ending in .js';
 
 export class UpdateCommunitySettingsDto {
   @IsOptional()
@@ -32,16 +42,18 @@ export class UpdateCommunitySettingsDto {
   adsterraEnabled?: boolean;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(64)
-  adsterraSiteId?: string | null;
+  @IsUrl(AD_SCRIPT_URL_OPTIONS, { message: `adsterraScriptUrl ${AD_SCRIPT_URL_MESSAGE}` })
+  @Matches(/\.js(\?.*)?$/i, { message: `adsterraScriptUrl ${AD_SCRIPT_URL_MESSAGE}` })
+  @MaxLength(500)
+  adsterraScriptUrl?: string | null;
 
   @IsOptional()
   @IsBoolean()
   monetagEnabled?: boolean;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(64)
-  monetagZoneId?: string | null;
+  @IsUrl(AD_SCRIPT_URL_OPTIONS, { message: `monetagScriptUrl ${AD_SCRIPT_URL_MESSAGE}` })
+  @Matches(/\.js(\?.*)?$/i, { message: `monetagScriptUrl ${AD_SCRIPT_URL_MESSAGE}` })
+  @MaxLength(500)
+  monetagScriptUrl?: string | null;
 }

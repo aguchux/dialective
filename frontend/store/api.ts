@@ -1064,9 +1064,9 @@ export interface CommunitySettingsAdmin {
   newMemberPostingDelayMinutes: number;
   requireApprovalForNewMembers: boolean;
   adsterraEnabled: boolean;
-  adsterraSiteId: string | null;
+  adsterraScriptUrl: string | null;
   monetagEnabled: boolean;
-  monetagZoneId: string | null;
+  monetagScriptUrl: string | null;
 }
 
 export interface AdminCommunityContentPage<T> {

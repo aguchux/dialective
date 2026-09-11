@@ -9,8 +9,8 @@ export type CommunityUserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CommunityPostStatus = 'DRAFT' | 'PUBLISHED' | 'HIDDEN' | 'DELETED';
 
 export interface CommunityPublicAdSettings {
-  adsterra: { enabled: boolean; siteId: string | null };
-  monetag: { enabled: boolean; zoneId: string | null };
+  adsterra: { enabled: boolean; scriptUrl: string | null };
+  monetag: { enabled: boolean; scriptUrl: string | null };
 }
 
 export interface CommunityProfile {

@@ -33,63 +33,44 @@ function removeScript(id: string) {
   document.getElementById(id)?.remove();
 }
 
-// PLACEHOLDER -- not a verified Adsterra URL. Replace with the exact embed
-// snippet's src from the Adsterra dashboard (Site ID `siteId`, chosen ad
-// format) once available.
-function buildAdsterraSrc(siteId: string): string {
-  return `https://www.profitableratecpm.com/${siteId}/invoke.js`;
-}
-
-// PLACEHOLDER -- not a verified Monetag URL. Replace with the exact embed
-// snippet's src from the Monetag dashboard (Zone ID `zoneId`, chosen ad
-// format) once available.
-function buildMonetagSrc(zoneId: string): string {
-  return `https://groleegni.net/tag.min.js?z=${zoneId}`;
-}
-
 /**
  * Site-wide Adsterra/Monetag popunder+social-bar embeds, gated by
  * CommunitySettingsService.getPublicAdSettings (Settings -> Community ->
  * Ad networks). Each network only loads once BOTH admin-enabled AND its
- * site/zone ID are set -- the backend already withholds the ID otherwise,
- * so `enabled` here can be trusted at face value. Injected imperatively
- * (not next/script) because the IDs are only known after this query
- * resolves, mirroring frontend/components/TawkToWidget.tsx's pattern for
- * the same reason.
+ * script URL are set -- the backend already withholds the URL otherwise, so
+ * `enabled` here can be trusted at face value. The admin-entered URL is the
+ * exact <script src> from that network's own "Get code" panel (a Social Bar
+ * unit needs nothing else -- no container div, self-mounting). Injected
+ * imperatively (not next/script) because the URL is only known after this
+ * query resolves, mirroring frontend/components/TawkToWidget.tsx's pattern
+ * for the same reason.
  */
 export function AdNetworkScripts() {
   const pathname = usePathname();
   const { data: settings } = useGetPublicAdSettingsQuery();
   const excluded = isExcludedRoute(pathname);
 
-  const adsterraActive = !excluded && !!settings?.adsterra.enabled && !!settings.adsterra.siteId;
-  const monetagActive = !excluded && !!settings?.monetag.enabled && !!settings.monetag.zoneId;
+  const adsterraActive =
+    !excluded && !!settings?.adsterra.enabled && !!settings.adsterra.scriptUrl;
+  const monetagActive = !excluded && !!settings?.monetag.enabled && !!settings.monetag.scriptUrl;
 
   useEffect(() => {
-    if (!adsterraActive || !settings?.adsterra.siteId) {
+    if (!adsterraActive || !settings?.adsterra.scriptUrl) {
       removeScript(ADSTERRA_SCRIPT_ID);
       return;
     }
-    // TODO: replace with the exact invoke-script URL from the Adsterra
-    // dashboard for the chosen ad format (popunder/social bar) -- the
-    // format below is a placeholder, not a verified current URL. Adsterra
-    // typically gives a <script> snippet per zone; adapt buildAdsterraSrc.
-    injectScript(ADSTERRA_SCRIPT_ID, buildAdsterraSrc(settings.adsterra.siteId));
+    injectScript(ADSTERRA_SCRIPT_ID, settings.adsterra.scriptUrl);
     return () => removeScript(ADSTERRA_SCRIPT_ID);
-  }, [adsterraActive, settings?.adsterra.siteId]);
+  }, [adsterraActive, settings?.adsterra.scriptUrl]);
 
   useEffect(() => {
-    if (!monetagActive || !settings?.monetag.zoneId) {
+    if (!monetagActive || !settings?.monetag.scriptUrl) {
       removeScript(MONETAG_SCRIPT_ID);
       return;
     }
-    // TODO: replace with the exact tag URL from the Monetag dashboard for
-    // the chosen ad format -- the format below is a placeholder, not a
-    // verified current URL. Adapt buildMonetagSrc once the real snippet is
-    // available.
-    injectScript(MONETAG_SCRIPT_ID, buildMonetagSrc(settings.monetag.zoneId));
+    injectScript(MONETAG_SCRIPT_ID, settings.monetag.scriptUrl);
     return () => removeScript(MONETAG_SCRIPT_ID);
-  }, [monetagActive, settings?.monetag.zoneId]);
+  }, [monetagActive, settings?.monetag.scriptUrl]);
 
   return null;
 }

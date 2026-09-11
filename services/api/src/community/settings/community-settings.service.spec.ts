@@ -11,9 +11,9 @@ describe('CommunitySettingsService', () => {
       newMemberPostingDelayMinutes: 0,
       requireApprovalForNewMembers: false,
       adsterraEnabled: false,
-      adsterraSiteId: null,
+      adsterraScriptUrl: null,
       monetagEnabled: false,
-      monetagZoneId: null,
+      monetagScriptUrl: null,
       ...rowOverrides,
     };
     const prisma = {
@@ -63,40 +63,40 @@ describe('CommunitySettingsService', () => {
       newMemberPostingDelayMinutes: row.newMemberPostingDelayMinutes,
       requireApprovalForNewMembers: row.requireApprovalForNewMembers,
       adsterraEnabled: row.adsterraEnabled,
-      adsterraSiteId: row.adsterraSiteId,
+      adsterraScriptUrl: row.adsterraScriptUrl,
       monetagEnabled: row.monetagEnabled,
-      monetagZoneId: row.monetagZoneId,
+      monetagScriptUrl: row.monetagScriptUrl,
     });
   });
 
   describe('getPublicAdSettings', () => {
     it('withholds a network as disabled when the toggle is on but the ID is unset', async () => {
-      const { service } = setup({ adsterraEnabled: true, adsterraSiteId: null });
+      const { service } = setup({ adsterraEnabled: true, adsterraScriptUrl: null });
 
       expect(await service.getPublicAdSettings()).toMatchObject({
-        adsterra: { enabled: false, siteId: null },
+        adsterra: { enabled: false, scriptUrl: null },
       });
     });
 
     it('withholds a network as disabled when the ID is set but the toggle is off', async () => {
-      const { service } = setup({ monetagEnabled: false, monetagZoneId: 'zone-1' });
+      const { service } = setup({ monetagEnabled: false, monetagScriptUrl: 'https://example.monetag.test/tag.min.js?z=1' });
 
       expect(await service.getPublicAdSettings()).toMatchObject({
-        monetag: { enabled: false, zoneId: null },
+        monetag: { enabled: false, scriptUrl: null },
       });
     });
 
     it('reports a fully-configured network as enabled with its ID', async () => {
       const { service } = setup({
         adsterraEnabled: true,
-        adsterraSiteId: 'site-1',
+        adsterraScriptUrl: 'https://example.adsterra.test/invoke.js',
         monetagEnabled: true,
-        monetagZoneId: 'zone-1',
+        monetagScriptUrl: 'https://example.monetag.test/tag.min.js?z=1',
       });
 
       expect(await service.getPublicAdSettings()).toEqual({
-        adsterra: { enabled: true, siteId: 'site-1' },
-        monetag: { enabled: true, zoneId: 'zone-1' },
+        adsterra: { enabled: true, scriptUrl: 'https://example.adsterra.test/invoke.js' },
+        monetag: { enabled: true, scriptUrl: 'https://example.monetag.test/tag.min.js?z=1' },
       });
     });
   });
@@ -112,9 +112,9 @@ describe('CommunitySettingsService', () => {
       newMemberPostingDelayMinutes: 0,
       requireApprovalForNewMembers: false,
       adsterraEnabled: false,
-      adsterraSiteId: null,
+      adsterraScriptUrl: null,
       monetagEnabled: false,
-      monetagZoneId: null,
+      monetagScriptUrl: null,
     });
 
     const result = await service.update({ postingEnabled: false });

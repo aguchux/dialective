@@ -69,29 +69,32 @@ export class CommunitySettingsService {
       newMemberPostingDelayMinutes: row.newMemberPostingDelayMinutes,
       requireApprovalForNewMembers: row.requireApprovalForNewMembers,
       adsterraEnabled: row.adsterraEnabled,
-      adsterraSiteId: row.adsterraSiteId,
+      adsterraScriptUrl: row.adsterraScriptUrl,
       monetagEnabled: row.monetagEnabled,
-      monetagZoneId: row.monetagZoneId,
+      monetagScriptUrl: row.monetagScriptUrl,
     };
   }
 
   /**
    * Public, unauthenticated bundle for the Community app's own ad-script
-   * injector. Each network only reports enabled=true once its ID is also
-   * set -- an admin flipping the toggle on before saving the ID must never
-   * ship a half-configured/empty embed, same posture as
+   * injector. Each network only reports enabled=true once its script URL
+   * is also set -- an admin flipping the toggle on before saving the URL
+   * must never ship a half-configured/empty embed, same posture as
    * PlatformSettingsService.getTawkToWidget.
    */
   async getPublicAdSettings(): Promise<{
-    adsterra: { enabled: boolean; siteId: string | null };
-    monetag: { enabled: boolean; zoneId: string | null };
+    adsterra: { enabled: boolean; scriptUrl: string | null };
+    monetag: { enabled: boolean; scriptUrl: string | null };
   }> {
     const row = await this.getRow();
-    const adsterraEnabled = row.adsterraEnabled && Boolean(row.adsterraSiteId);
-    const monetagEnabled = row.monetagEnabled && Boolean(row.monetagZoneId);
+    const adsterraEnabled = row.adsterraEnabled && Boolean(row.adsterraScriptUrl);
+    const monetagEnabled = row.monetagEnabled && Boolean(row.monetagScriptUrl);
     return {
-      adsterra: { enabled: adsterraEnabled, siteId: adsterraEnabled ? row.adsterraSiteId : null },
-      monetag: { enabled: monetagEnabled, zoneId: monetagEnabled ? row.monetagZoneId : null },
+      adsterra: {
+        enabled: adsterraEnabled,
+        scriptUrl: adsterraEnabled ? row.adsterraScriptUrl : null,
+      },
+      monetag: { enabled: monetagEnabled, scriptUrl: monetagEnabled ? row.monetagScriptUrl : null },
     };
   }
 
@@ -103,9 +106,9 @@ export class CommunitySettingsService {
     newMemberPostingDelayMinutes?: number;
     requireApprovalForNewMembers?: boolean;
     adsterraEnabled?: boolean;
-    adsterraSiteId?: string | null;
+    adsterraScriptUrl?: string | null;
     monetagEnabled?: boolean;
-    monetagZoneId?: string | null;
+    monetagScriptUrl?: string | null;
   }) {
     const row = await this.prisma.communitySettings.upsert({
       where: { id: 'default' },

@@ -24,9 +24,9 @@ export function CommunitySettingsPanel() {
   const [newMemberPostingDelayMinutes, setNewMemberPostingDelayMinutes] = useState('0');
   const [requireApprovalForNewMembers, setRequireApprovalForNewMembers] = useState(false);
   const [adsterraEnabled, setAdsterraEnabled] = useState(false);
-  const [adsterraSiteId, setAdsterraSiteId] = useState('');
+  const [adsterraScriptUrl, setAdsterraScriptUrl] = useState('');
   const [monetagEnabled, setMonetagEnabled] = useState(false);
-  const [monetagZoneId, setMonetagZoneId] = useState('');
+  const [monetagScriptUrl, setMonetagScriptUrl] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,9 +39,9 @@ export function CommunitySettingsPanel() {
     setNewMemberPostingDelayMinutes(String(settings.newMemberPostingDelayMinutes));
     setRequireApprovalForNewMembers(settings.requireApprovalForNewMembers);
     setAdsterraEnabled(settings.adsterraEnabled);
-    setAdsterraSiteId(settings.adsterraSiteId ?? '');
+    setAdsterraScriptUrl(settings.adsterraScriptUrl ?? '');
     setMonetagEnabled(settings.monetagEnabled);
-    setMonetagZoneId(settings.monetagZoneId ?? '');
+    setMonetagScriptUrl(settings.monetagScriptUrl ?? '');
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -53,12 +53,12 @@ export function CommunitySettingsPanel() {
       setError('New-member posting delay must be a whole number between 0 and 10,080 minutes (7 days).');
       return;
     }
-    if (adsterraEnabled && !adsterraSiteId.trim()) {
-      setError('Enter an Adsterra site ID before enabling it.');
+    if (adsterraEnabled && !adsterraScriptUrl.trim()) {
+      setError('Paste the Adsterra script URL before enabling it.');
       return;
     }
-    if (monetagEnabled && !monetagZoneId.trim()) {
-      setError('Enter a Monetag zone ID before enabling it.');
+    if (monetagEnabled && !monetagScriptUrl.trim()) {
+      setError('Paste the Monetag script URL before enabling it.');
       return;
     }
     try {
@@ -70,9 +70,9 @@ export function CommunitySettingsPanel() {
         newMemberPostingDelayMinutes: delayMinutes,
         requireApprovalForNewMembers,
         adsterraEnabled,
-        adsterraSiteId: adsterraSiteId.trim() || null,
+        adsterraScriptUrl: adsterraScriptUrl.trim() || null,
         monetagEnabled,
-        monetagZoneId: monetagZoneId.trim() || null,
+        monetagScriptUrl: monetagScriptUrl.trim() || null,
       }).unwrap();
       setMessage('Community settings saved.');
     } catch (err) {
@@ -221,7 +221,7 @@ export function CommunitySettingsPanel() {
               <h3 className="font-bold">Ad networks</h3>
               <p className="mt-1 text-sm leading-relaxed text-muted">
                 Site-wide popunder/social-bar scripts, monetizing community.dialectlibrary.com.
-                Each network only loads once it's enabled AND its ID is set below -- a
+                Each network only loads once it's enabled AND its script URL is set below -- a
                 half-configured toggle never ships a broken embed.
               </p>
             </div>
@@ -240,16 +240,23 @@ export function CommunitySettingsPanel() {
                 />
                 <span className="block font-bold">Adsterra enabled</span>
               </label>
-              <label className="grid gap-1 text-sm font-bold" htmlFor="community-adsterra-site-id">
-                Site ID
+              <label
+                className="grid gap-1 text-sm font-bold"
+                htmlFor="community-adsterra-script-url"
+              >
+                Script URL (Social Bar)
                 <input
                   className={inputClass}
-                  id="community-adsterra-site-id"
-                  onChange={(event) => setAdsterraSiteId(event.target.value)}
-                  placeholder="e.g. 1234567"
-                  type="text"
-                  value={adsterraSiteId}
+                  id="community-adsterra-script-url"
+                  onChange={(event) => setAdsterraScriptUrl(event.target.value)}
+                  placeholder="https://pl.../invoke.js"
+                  type="url"
+                  value={adsterraScriptUrl}
                 />
+                <span className="text-sm font-normal text-muted">
+                  From the Adsterra dashboard's Social Bar ad unit -- &quot;Get code&quot; -- copy
+                  just the script&apos;s src URL, not the full snippet.
+                </span>
               </label>
             </div>
 
@@ -267,16 +274,22 @@ export function CommunitySettingsPanel() {
                 />
                 <span className="block font-bold">Monetag enabled</span>
               </label>
-              <label className="grid gap-1 text-sm font-bold" htmlFor="community-monetag-zone-id">
-                Zone ID
+              <label
+                className="grid gap-1 text-sm font-bold"
+                htmlFor="community-monetag-script-url"
+              >
+                Script URL
                 <input
                   className={inputClass}
-                  id="community-monetag-zone-id"
-                  onChange={(event) => setMonetagZoneId(event.target.value)}
-                  placeholder="e.g. 9876543"
-                  type="text"
-                  value={monetagZoneId}
+                  id="community-monetag-script-url"
+                  onChange={(event) => setMonetagScriptUrl(event.target.value)}
+                  placeholder="https://.../tag.min.js?z=..."
+                  type="url"
+                  value={monetagScriptUrl}
                 />
+                <span className="text-sm font-normal text-muted">
+                  From the Monetag dashboard's ad unit -- copy just the script&apos;s src URL.
+                </span>
               </label>
             </div>
           </div>
