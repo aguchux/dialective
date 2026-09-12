@@ -264,7 +264,13 @@ export class DomainConversationsService {
       bucket: body.bucket,
       audio_key: body.audioKey,
       dialect_tag: trainer.dialect!.tag,
-      max_duration_s: String(maxSeconds),
+      // Must match the durationGraceMs tolerance the check above already
+      // accepted this submission under -- a client-reported durationMs can
+      // sit right at maxSeconds while the worker's own ffmpeg-decoded
+      // duration comes out a touch higher (container/codec framing, not a
+      // real recording-length difference), so a bare maxSeconds here would
+      // wrongly hard-reject a submission this same endpoint just accepted.
+      max_duration_s: String(maxSeconds + durationGraceMs / 1000),
     });
 
     await this.checkAuditHoldThreshold(userId);

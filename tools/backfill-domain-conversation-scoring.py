@@ -80,13 +80,17 @@ def main() -> None:
     if not max_duration_row:
         raise SystemExit("platform_settings row not found -- refusing to guess a max duration")
     # Must match domain-conversations.service.ts's own max_duration_s publish
-    # exactly -- omitting this made worker.py's prefilter fall back to its
-    # flat 15s module default instead of the real (larger) admin-configured
-    # limit, wrongly rejecting every valid recording between 15s and the
-    # real max as duration_out_of_range. See the incident this script was
-    # patched for.
-    max_duration_s = max_duration_row["domainConversationMaxDurationSeconds"]
-    print(f"Using domainConversationMaxDurationSeconds={max_duration_s} for every requeued job.")
+    # exactly, including its +5s grace period -- omitting max_duration_s
+    # entirely made worker.py's prefilter fall back to its flat 15s module
+    # default instead of the real (larger) admin-configured limit; omitting
+    # just the grace still wrongly hard-rejects a submission whose
+    # ffmpeg-decoded duration comes out fractionally over the bare limit
+    # (container/codec framing, not a real recording-length difference) even
+    # though the original submit endpoint already accepted it under the same
+    # grace. See the incident this script was patched for.
+    DURATION_GRACE_S = 5
+    max_duration_s = max_duration_row["domainConversationMaxDurationSeconds"] + DURATION_GRACE_S
+    print(f"Using max_duration_s={max_duration_s} (admin limit + {DURATION_GRACE_S}s grace) for every requeued job.")
 
     print(f"Found {len(rows)} PENDING domain conversation recording(s) with audio still present.")
 

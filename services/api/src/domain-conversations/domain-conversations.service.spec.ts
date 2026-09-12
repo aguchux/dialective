@@ -281,6 +281,13 @@ describe('DomainConversationsService', () => {
         record_kind: 'domain_conversation_recording',
         word_recording_id: 'recording-1',
         dialect_tag: 'ig',
+        // Must be maxSeconds (60) + the same 5s grace the submit check
+        // above already accepted this recording under -- worker.py's
+        // prefilter has no grace of its own, so a bare maxSeconds here
+        // would wrongly hard-reject a submission this endpoint just let
+        // through whenever ffmpeg's re-decoded duration lands a touch
+        // above the raw client-reported one.
+        max_duration_s: '65',
       });
       expect(publishedPayload).not.toHaveProperty('asr_stream');
       expect(publishedPayload).not.toHaveProperty('expected_text');
