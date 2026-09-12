@@ -666,12 +666,12 @@ export function DomainConversationDialog({
                               responds in their own dialect -- there's no reverse
                               direction for this task type, unlike word recordings. */}
                           <span className="inline-flex items-center rounded-full bg-line px-3 py-1 text-xs font-extrabold text-muted">
-                            English → {prompt.dialectTag}
+                            English → {prompt.dialectName}
                           </span>
                         </div>
                         <p className="text-lg font-extrabold leading-relaxed">{prompt.promptText}</p>
                         <p className="text-xs font-bold text-muted">
-                          Record in {prompt.dialectTag} -- {minDurationSeconds}-{maxDurationSeconds}s
+                          Record in {prompt.dialectName} -- {minDurationSeconds}-{maxDurationSeconds}s
                         </p>
                       </div>
 

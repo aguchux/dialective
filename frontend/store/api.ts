@@ -1954,6 +1954,7 @@ export interface DomainConversationPrompt {
   domain: string;
   promptText: string;
   dialectTag: string;
+  dialectName: string;
   minDurationSeconds: number;
   maxDurationSeconds: number;
 }

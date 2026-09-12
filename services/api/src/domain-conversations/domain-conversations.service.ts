@@ -139,6 +139,7 @@ export class DomainConversationsService {
       domain: prompt.domain,
       promptText: prompt.text,
       dialectTag: trainer.dialect!.tag,
+      dialectName: trainer.dialect!.name,
       minDurationSeconds,
       maxDurationSeconds,
     };

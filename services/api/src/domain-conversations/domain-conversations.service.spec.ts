@@ -112,6 +112,7 @@ describe('DomainConversationsService', () => {
         domain: 'Market',
         promptText: prompt.text,
         dialectTag: 'ig',
+        dialectName: 'Igbo',
         minDurationSeconds: 15,
         maxDurationSeconds: 60,
       });
