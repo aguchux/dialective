@@ -1095,6 +1095,7 @@ export interface TrainerDashboardSummary {
   fundedTokens: string;
   trainingEarningsTokens: string;
   referralEarningsTokens: string;
+  totalTokensSinceJoin: string;
   paidOutTokens: string;
   pendingPayoutTokens: string;
   recentActivity: {

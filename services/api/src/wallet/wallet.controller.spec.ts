@@ -2107,3 +2107,86 @@ describe('WalletController.listWithdrawalsForAdmin', () => {
     );
   });
 });
+
+describe('WalletController.getTrainerDashboard', () => {
+  it('includes COURSE_COMPLETION_REWARD in trainingEarningsTokens and monthlyEarnings, and surfaces a real lifetime totalTokensSinceJoin', async () => {
+    const ledgerTotals = [
+      { type: 'TRAINING_PAYOUT', _sum: { amount: 20 } },
+      { type: 'COURSE_COMPLETION_REWARD', _sum: { amount: 6 } },
+      { type: 'REFERRAL_COMMISSION', _sum: { amount: 0.41 } },
+    ];
+    const prisma = {
+      user: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          referralCode: 'REF1',
+          referrals: [],
+          _count: { referrals: 0 },
+        }),
+        findUnique: jest.fn().mockResolvedValue({ country: null }),
+      },
+      wallet: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'wallet-1', balance: { toString: () => '15.0097', toNumber: () => 15.0097 }, lockedBalance: { toString: () => '1.8', toNumber: () => 1.8 } }),
+      },
+      referralSettings: {
+        upsert: jest.fn().mockResolvedValue({
+          fundingBonusRate: { toString: () => '0' },
+          fundingBonusEnabled: false,
+          payoutBonusRate: { toString: () => '0' },
+          payoutBonusEnabled: false,
+        }),
+      },
+      ledgerEntry: {
+        groupBy: jest.fn().mockResolvedValue(ledgerTotals),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      withdrawalRequest: { groupBy: jest.fn().mockResolvedValue([]) },
+      wordRecording: { count: jest.fn().mockResolvedValue(0) },
+      domainConversationRecording: { count: jest.fn().mockResolvedValue(0) },
+      referralInvite: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    const platformSettings = {
+      getTaskTokenCost: jest.fn().mockResolvedValue(1),
+      getScoringSlaMinutes: jest.fn().mockResolvedValue(60),
+      getWordTrainingRecordingTimeoutSeconds: jest.fn().mockResolvedValue(30),
+      getWordTrainingRecordingMaxTimeoutSeconds: jest.fn().mockResolvedValue(60),
+      getReferralCookiePersistSeconds: jest.fn().mockResolvedValue(86400),
+      getReferralInviteExpirySeconds: jest.fn().mockResolvedValue(86400),
+      getMinWithdrawalTokens: jest.fn().mockResolvedValue(1),
+      getMinCompletedTasksForWithdrawal: jest.fn().mockResolvedValue(0),
+      getMinWalletBalanceTokens: jest.fn().mockResolvedValue(0),
+      getTokenUsdRate: jest.fn().mockResolvedValue(0.16),
+    };
+    const trainerReport = { getTotalTokensSinceJoin: jest.fn().mockResolvedValue(49.4397) };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      platformSettings as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      undefined,
+      trainerReport as never,
+    );
+
+    const result = await controller.getTrainerDashboard({ user: { sub: 'user-1' } } as never);
+
+    expect(result.trainingEarningsTokens).toBe('26');
+    expect(result.totalTokensSinceJoin).toBe('49.4397');
+    expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          type: { in: expect.arrayContaining(['TRAINING_PAYOUT', 'COURSE_COMPLETION_REWARD']) },
+        }),
+      }),
+    );
+    expect(trainerReport.getTotalTokensSinceJoin).toHaveBeenCalledWith('user-1');
+  });
+});

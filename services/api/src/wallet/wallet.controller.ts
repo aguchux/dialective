@@ -466,6 +466,7 @@ export class WalletController {
           type: {
             in: [
               'TRAINING_PAYOUT',
+              'COURSE_COMPLETION_REWARD',
               'REFERRAL_COMMISSION',
               'REFERRAL_FUNDING_BONUS',
               'REFERRAL_PAYOUT_BONUS',
@@ -532,6 +533,7 @@ export class WalletController {
       minWithdrawalTokens,
       minCompletedTasksForWithdrawal,
       minWalletBalanceTokens,
+      totalTokensSinceJoin,
     ] = await Promise.all([
       this.getCurrentTokenUsdRate(),
       this.getLocalCurrency(req.user.sub),
@@ -544,6 +546,7 @@ export class WalletController {
       this.platformSettings.getMinWithdrawalTokens(),
       this.platformSettings.getMinCompletedTasksForWithdrawal(),
       this.platformSettings.getMinWalletBalanceTokens(),
+      this.trainerReport!.getTotalTokensSinceJoin(req.user.sub),
     ]);
 
     return {
@@ -571,12 +574,18 @@ export class WalletController {
           ).toString()
         : null,
       fundedTokens: ledgerAmount(['DEPOSIT']).toString(),
-      trainingEarningsTokens: ledgerAmount(['TRAINING_PAYOUT']).toString(),
+      // Course completion bonuses fold into "training earnings" here too --
+      // see trainer-report.service.ts's identical comment. This previously
+      // omitted COURSE_COMPLETION_REWARD while wallet/report's equivalent
+      // figure included it, so the same "Total earned" label showed two
+      // different numbers depending which screen a trainer was on.
+      trainingEarningsTokens: ledgerAmount(['TRAINING_PAYOUT', 'COURSE_COMPLETION_REWARD']).toString(),
       referralEarningsTokens: ledgerAmount([
         'REFERRAL_COMMISSION',
         'REFERRAL_FUNDING_BONUS',
         'REFERRAL_PAYOUT_BONUS',
       ]).toString(),
+      totalTokensSinceJoin: totalTokensSinceJoin.toString(),
       paidOutTokens: withdrawalAmount(WithdrawalStatus.PAID).toString(),
       pendingPayoutTokens: withdrawalAmount(WithdrawalStatus.PENDING).toString(),
       recentActivity: recentActivity.map((entry) => ({

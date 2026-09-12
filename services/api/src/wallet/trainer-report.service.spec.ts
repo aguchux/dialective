@@ -206,3 +206,44 @@ describe('TrainerReportService', () => {
     expect(report.totals.totalTokensSinceJoin).toBe('0');
   });
 });
+
+describe('TrainerReportService.getTotalTokensSinceJoin', () => {
+  it('returns 0 without querying ledgerEntry when the trainer has no wallet row yet', async () => {
+    const prisma = {
+      wallet: { findUnique: jest.fn().mockResolvedValue(null) },
+      ledgerEntry: { aggregate: jest.fn() },
+    };
+    const service = new TrainerReportService(prisma as never);
+
+    await expect(service.getTotalTokensSinceJoin('user-1')).resolves.toBe(0);
+    expect(prisma.ledgerEntry.aggregate).not.toHaveBeenCalled();
+  });
+
+  it('sums only LIFETIME_CREDIT_ENTRY_TYPES for the wallet, matching buildReport\'s totalTokensSinceJoin', async () => {
+    const prisma = {
+      wallet: { findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1' }) },
+      ledgerEntry: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 49.4397 } }) },
+    };
+    const service = new TrainerReportService(prisma as never);
+
+    await expect(service.getTotalTokensSinceJoin('user-1')).resolves.toBe(49.4397);
+    expect(prisma.ledgerEntry.aggregate).toHaveBeenCalledWith({
+      where: {
+        walletId: 'wallet-1',
+        type: {
+          in: expect.arrayContaining([
+            'TRAINING_PAYOUT',
+            'COURSE_COMPLETION_REWARD',
+            'REFERRAL_COMMISSION',
+            'REFERRAL_FUNDING_BONUS',
+            'REFERRAL_PAYOUT_BONUS',
+            'STARTUP_BONUS',
+            'TESTIMONY_APPROVED_REWARD',
+            'VALIDATION_REWARD',
+          ]),
+        },
+      },
+      _sum: { amount: true },
+    });
+  });
+});

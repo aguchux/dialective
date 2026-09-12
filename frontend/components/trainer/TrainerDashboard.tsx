@@ -957,7 +957,7 @@ function TokensView({
     page,
     pageSize,
   });
-  const cumulativeTokens = Number(summary.balance) + Number(summary.lockedBalance);
+  const cumulativeTokens = Number(summary.totalTokensSinceJoin);
 
   return (
     <div>
@@ -984,14 +984,13 @@ function TokensView({
           />
         </div>
       </div>
-      <section className="grid gap-3 sm:grid-cols-3" aria-label="Token balance summary">
+      <section className="grid gap-3 sm:grid-cols-2" aria-label="Token balance summary">
         <MetricCard
           icon={WalletCards}
           label="Cumulative tokens"
           value={formatCompactTokensValue(cumulativeTokens)}
-          subValue={formatCompactUsd(cumulativeTokens * summary.tokenUsdRate)}
           tone="purple"
-          tooltip="The total DL you've ever earned, including tokens already withdrawn or spent."
+          tooltip="The total DL you've ever earned, including tokens already withdrawn or spent on training tasks."
         />
         <MetricCard
           icon={CircleDollarSign}
@@ -1000,13 +999,6 @@ function TokensView({
           subValue={formatCompactUsd(Number(summary.balance) * summary.tokenUsdRate)}
           tone="blue"
           tooltip="Your spendable DL balance -- ready to withdraw or use right now."
-        />
-        <MetricCard
-          icon={Banknote}
-          label="Estimated value"
-          value={formatCompactUsd(cumulativeTokens * summary.tokenUsdRate)}
-          tone="green"
-          tooltip="Your cumulative tokens converted to US dollars at the current rate."
         />
       </section>
       <WithdrawalEligibilityNote

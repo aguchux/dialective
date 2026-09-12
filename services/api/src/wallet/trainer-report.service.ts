@@ -64,6 +64,28 @@ export interface TrainerReport {
 export class TrainerReportService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * The trainer's true lifetime "everything ever earned" figure -- shared by
+   * buildReport (below) and wallet.controller.ts's GET wallet/dashboard, so
+   * both surfaces show the same number under a "total earned"/"cumulative
+   * tokens" label instead of each re-deriving their own (previously
+   * wallet/dashboard exposed no lifetime total at all; its Tokens tab
+   * approximated one client-side as balance+lockedBalance, which excludes
+   * everything already withdrawn or spent -- the opposite of "lifetime").
+   */
+  async getTotalTokensSinceJoin(userId: string): Promise<number> {
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!wallet) return 0;
+    const lifetimeEarningsAgg = await this.prisma.ledgerEntry.aggregate({
+      where: { walletId: wallet.id, type: { in: LIFETIME_CREDIT_ENTRY_TYPES } },
+      _sum: { amount: true },
+    });
+    return Number(lifetimeEarningsAgg._sum.amount ?? 0);
+  }
+
   async buildReport(userId: string, from?: Date, to?: Date): Promise<TrainerReport> {
     const effectiveTo = to ?? new Date();
     const effectiveFrom = from ?? (await this.resolveSignupDate(userId));
