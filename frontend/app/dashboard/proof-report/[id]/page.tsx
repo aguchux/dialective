@@ -1,17 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { ArrowLeft, Download, Send } from 'lucide-react';
-import { AdminShell } from '@/components/admin/AdminShell';
-import { ActionButton } from '@/components/ui/ActionButton';
+import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { Download } from 'lucide-react';
+import { PortalContainerProvider } from '@/components/ui/PortalContainer';
+import { DashboardHeader, emailName } from '@/components/dashboard/DashboardShell';
 import {
   normalizeErrorMessage,
-  ProofAccountReportResponse,
-  useGetProofAccountReportQuery,
-  useLazyGetProofAccountReportPdfUrlQuery,
-  useSendProofAccountReportMutation,
+  ProofAccountReport,
+  useGetMyProofAccountReportQuery,
+  useLazyGetMyProofAccountReportPdfUrlQuery,
 } from '@/store/api';
 
 function formatTokens(value: string) {
@@ -36,15 +35,21 @@ function formatDate(iso: string) {
 const statLabel = 'text-xs font-bold uppercase text-muted';
 const statValue = 'text-2xl font-black text-ink';
 
-export default function ProofAccountReportPage() {
+export default function MyProofAccountReportPage() {
   const params = useParams<{ id: string }>();
-  const id = params.id;
-  const { data, isLoading, isError, refetch } = useGetProofAccountReportQuery(id);
-  const [fetchPdfUrl, { isFetching: downloading }] = useLazyGetProofAccountReportPdfUrlQuery();
-  const [sendReport, { isLoading: sending }] = useSendProofAccountReportMutation();
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);
+  const { data, isLoading, isError, refetch } = useGetMyProofAccountReportQuery(undefined, {
+    skip: status !== 'authenticated',
+  });
+  const [fetchPdfUrl, { isFetching: downloading }] = useLazyGetMyProofAccountReportPdfUrlQuery();
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') router.replace('/login');
+  }, [router, status]);
 
   useEffect(() => {
     return () => {
@@ -55,11 +60,11 @@ export default function ProofAccountReportPage() {
   async function downloadPdf() {
     setError(null);
     try {
-      const url = await fetchPdfUrl(id).unwrap();
+      const url = await fetchPdfUrl().unwrap();
       setObjectUrl(url);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `proof-account-${id}.pdf`;
+      link.download = `proof-account-${params.id}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -68,95 +73,78 @@ export default function ProofAccountReportPage() {
     }
   }
 
-  async function sendToTrainer() {
-    setError(null);
-    setNotice(null);
-    try {
-      await sendReport(id).unwrap();
-      setNotice('Sent -- the trainer can now view and download this report from their dashboard.');
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to send this report.'));
-    }
+  if (status === 'loading' || !session) {
+    return <div className="dashboard-theme min-h-screen bg-bg" />;
   }
 
+  const displayName =
+    [session.user.firstName, session.user.lastName].filter(Boolean).join(' ') ||
+    emailName(session.user.email);
+
   return (
-    <AdminShell>
-      <div className="grid gap-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="grid gap-2">
-            <Link
-              className="inline-flex w-fit items-center gap-1.5 text-sm font-bold text-muted hover:text-ink"
-              href="/admin/leaderboard"
-            >
-              <ArrowLeft className="size-4" aria-hidden="true" />
-              Back to leaderboard
-            </Link>
-            <h1 className="text-3xl font-black">Account proof report</h1>
-            <p className="leading-relaxed text-muted">
-              Full lifetime reconciliation -- every ledger entry that makes up this account&apos;s
-              balance, suitable for sending to a trainer who has questioned their numbers.
+    <div className="dashboard-theme min-h-screen bg-bg text-ink" ref={setThemeRoot}>
+      <PortalContainerProvider container={themeRoot}>
+        <DashboardHeader
+          activeView={null}
+          displayName={displayName}
+          email={session.user.email ?? 'Trainer'}
+          image={session.user.image}
+        />
+
+        <main className="mx-auto grid w-full max-w-4xl content-start gap-6 px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
+          <header className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-black">Your account proof report</h1>
+              <p className="mt-1 leading-relaxed text-muted">
+                A full lifetime breakdown of your token balance -- every transaction, and how they add
+                up.
+              </p>
+            </div>
+            {data && (
+              <button
+                className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-accent bg-accent px-3.5 text-sm font-extrabold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={downloading}
+                onClick={() => void downloadPdf()}
+                type="button"
+              >
+                <Download className="size-4" aria-hidden="true" />
+                {downloading ? 'Generating...' : 'Download PDF'}
+              </button>
+            )}
+          </header>
+
+          {error && (
+            <p className="leading-relaxed text-danger" role="alert">
+              {error}
             </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <ActionButton
-              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => void sendToTrainer()}
-              pending={sending}
-              pendingLabel="Sending"
-              type="button"
-            >
-              <Send className="size-4" aria-hidden="true" />
-              Send to trainer
-            </ActionButton>
-            <ActionButton
-              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-accent bg-accent px-4 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => void downloadPdf()}
-              pending={downloading}
-              pendingLabel="Generating"
-              type="button"
-            >
-              <Download className="size-4" aria-hidden="true" />
-              Download PDF
-            </ActionButton>
-          </div>
-        </div>
+          )}
 
-        {notice && (
-          <p className="leading-relaxed text-accent" role="status">
-            {notice}
-          </p>
-        )}
-        {error && (
-          <p className="leading-relaxed text-danger" role="alert">
-            {error}
-          </p>
-        )}
-
-        {isLoading ? (
-          <p className="text-muted">Loading...</p>
-        ) : isError || !data ? (
-          <div className="grid gap-3 rounded-lg border border-line bg-white p-5 text-center shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-            <p className="font-extrabold">Could not load this report.</p>
-            <button
-              className="inline-flex min-h-9 w-fit items-center justify-center justify-self-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted"
-              onClick={() => void refetch()}
-              type="button"
-            >
-              Try again
-            </button>
-          </div>
-        ) : (
-          <ReportBody data={data} />
-        )}
-      </div>
-    </AdminShell>
+          {isLoading ? (
+            <p className="text-muted">Loading...</p>
+          ) : isError || !data ? (
+            <div className="grid gap-3 rounded-lg border border-line bg-white p-5 text-center shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+              <p className="font-extrabold">
+                No proof report has been shared with you yet. If you were expecting one, contact
+                support.
+              </p>
+              <button
+                className="inline-flex min-h-9 w-fit items-center justify-center justify-self-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted"
+                onClick={() => void refetch()}
+                type="button"
+              >
+                Try again
+              </button>
+            </div>
+          ) : (
+            <ReportBody report={data.report} sharedAt={data.sharedAt} />
+          )}
+        </main>
+      </PortalContainerProvider>
+    </div>
   );
 }
 
-function ReportBody({ data }: { data: ProofAccountReportResponse }) {
-  const { user, report } = data;
-  const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email;
-
+function ReportBody({ report, sharedAt }: { report: ProofAccountReport; sharedAt: string }) {
   const stats: [string, string][] = [
     ['Total tokens since join', `${formatTokens(report.summary.totalTokensSinceJoin)} DL`],
     ['Available balance', `${formatTokens(report.summary.availableBalanceTokens)} DL`],
@@ -170,14 +158,10 @@ function ReportBody({ data }: { data: ProofAccountReportResponse }) {
   return (
     <div className="grid gap-6">
       <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-        <div className="grid gap-1">
-          <h2 className="text-xl font-black">{name}</h2>
-          <p className="text-sm text-muted">{user.email}</p>
-          <p className="text-xs text-muted">
-            Account opened {formatDate(report.accountCreatedAt)} &middot; generated{' '}
-            {formatDateTime(report.generatedAt)}
-          </p>
-        </div>
+        <p className="text-xs text-muted">
+          Account opened {formatDate(report.accountCreatedAt)} &middot; shared with you{' '}
+          {formatDateTime(sharedAt)}
+        </p>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {stats.map(([label, value]) => (
             <div key={label} className="grid gap-1">
@@ -192,7 +176,7 @@ function ReportBody({ data }: { data: ProofAccountReportResponse }) {
         <div className="grid gap-1">
           <h2 className="text-lg font-extrabold">Balance breakdown by transaction type</h2>
           <p className="text-sm text-muted">
-            Every credit and debit type ever posted to this wallet, summed -- this is what adds up to
+            Every credit and debit type ever posted to your wallet, summed -- this is what adds up to
             the totals above.
           </p>
         </div>
@@ -236,7 +220,7 @@ function ReportBody({ data }: { data: ProofAccountReportResponse }) {
         <div className="grid gap-1">
           <h2 className="text-lg font-extrabold">Full transaction history</h2>
           <p className="text-sm text-muted">
-            Every ledger entry on this wallet, oldest first ({report.ledgerEntries.length.toLocaleString()}
+            Every ledger entry on your wallet, oldest first ({report.ledgerEntries.length.toLocaleString()}
             {' '}total).
           </p>
         </div>

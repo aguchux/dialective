@@ -358,6 +358,30 @@ export class MailService {
     );
   }
 
+  /**
+   * Admin-triggered "Send to trainer" on the admin Proof Account report
+   * (WalletController.sendProofAccountReport) -- unlike
+   * sendTrainerReportPdfEmail, this links into the trainer's own dashboard
+   * (frontend/app/dashboard/proof-report/[id]) rather than attaching the
+   * PDF directly, since the report only becomes visible there once this
+   * same admin action creates the ProofReportShare row it depends on; the
+   * PDF is downloadable from that page instead.
+   */
+  async sendProofAccountReportEmail(payload: {
+    trainerEmail: string;
+    trainerFirstName: string | null;
+    userId: string;
+  }): Promise<void> {
+    const proofUrl = `${frontendUrl()}/dashboard/proof-report/${payload.userId}`;
+    const greeting = payload.trainerFirstName ? escapeHtml(payload.trainerFirstName) : 'there';
+    await this.send(
+      payload.trainerEmail,
+      'Your Dialect Library account proof report',
+      `<p>Hi ${greeting},</p><p>An admin has prepared a full account proof report for you -- a complete breakdown of your token balance, every transaction, and how they add up.</p><p>View and download it any time at <a href="${proofUrl}">${proofUrl}</a>.</p>`,
+      `Hi ${greeting},\n\nAn admin has prepared a full account proof report for you -- a complete breakdown of your token balance, every transaction, and how they add up.\n\nView and download it any time at ${proofUrl}\n`,
+    );
+  }
+
   private async send(
     to: string,
     subject: string,

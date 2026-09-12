@@ -920,6 +920,77 @@ export class WalletController {
     res.send(pdf);
   }
 
+  /**
+   * Admin-only "send this proof report to the trainer" CTA -- upserts the
+   * ProofReportShare gate (so GET wallet/proof-report below starts allowing
+   * this trainer's own request) and emails a link into their own dashboard.
+   * The link is a plain deep link protected by the trainer's existing
+   * session, same convention as every other dashboard link mail.service.ts
+   * sends -- not a signed one-time token -- because the share row is the
+   * actual access gate, and only exists once an admin has created it here.
+   */
+  @Post('admin/users/:id/proof-report/send')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async sendProofAccountReport(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, firstName: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    await this.prisma.proofReportShare.upsert({
+      where: { userId: id },
+      create: { userId: id, createdByAdminId: req.user.sub },
+      update: { lastSentAt: new Date() },
+    });
+    await this.mail.sendProofAccountReportEmail({
+      trainerEmail: user.email,
+      trainerFirstName: user.firstName,
+      userId: user.id,
+    });
+    return { sent: true };
+  }
+
+  /**
+   * Trainer's own view of a proof report an admin has sent them (see
+   * sendProofAccountReport above) -- 404s until that row exists, so this
+   * never becomes a second, unrestricted "my full ledger" endpoint distinct
+   * from the deliberately-gated Proof Account feature.
+   */
+  @Get('wallet/proof-report')
+  @UseGuards(JwtAuthGuard)
+  async getMyProofAccountReport(@Req() req: AuthenticatedRequest) {
+    const share = await this.prisma.proofReportShare.findUnique({ where: { userId: req.user.sub } });
+    if (!share) {
+      throw new NotFoundException('No proof report has been shared with you yet');
+    }
+    const report = await this.trainerReport!.buildProofAccountReport(req.user.sub);
+    return { sharedAt: share.lastSentAt, report };
+  }
+
+  @Get('wallet/proof-report/pdf')
+  @UseGuards(JwtAuthGuard)
+  async getMyProofAccountReportPdf(@Req() req: AuthenticatedRequest, @Res() res: Response) {
+    const [share, user] = await Promise.all([
+      this.prisma.proofReportShare.findUnique({ where: { userId: req.user.sub } }),
+      this.prisma.user.findUniqueOrThrow({
+        where: { id: req.user.sub },
+        select: { id: true, email: true, firstName: true, lastName: true },
+      }),
+    ]);
+    if (!share) {
+      throw new NotFoundException('No proof report has been shared with you yet');
+    }
+    const report = await this.trainerReport!.buildProofAccountReport(req.user.sub);
+    const accountLabel = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email;
+    const pdf = await renderProofAccountPdf(report, `${accountLabel} (${user.email})`);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="proof-account-${user.id}.pdf"`);
+    res.send(pdf);
+  }
+
   @Get('wallet/activity')
   @UseGuards(JwtAuthGuard)
   async listActivity(@Req() req: AuthenticatedRequest, @Query() query: ListEarningsDto) {

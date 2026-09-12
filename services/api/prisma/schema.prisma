@@ -210,6 +210,7 @@ model User {
   qracAffirmations                 QracAffirmationSubmission[]
   testimonies                      Testimony[]
   testimoniesEdited                Testimony[]                      @relation("TestimonyEditedBy")
+  proofReportShare                 ProofReportShare?
   communityProfile                 CommunityProfile?
   communityPosts                   CommunityPost[]
   communityReplies                 CommunityReply[]
@@ -1895,6 +1896,25 @@ model LedgerEntry {
   @@unique([walletId, type, reference])
   @@index([walletId])
   @@map("ledger_entries")
+}
+
+/// Gates a trainer's own access to their "Proof Account" report
+/// (GET wallet/proof-report). The report itself is always computable from
+/// the ledger, but a trainer may only view/download it once an admin has
+/// explicitly generated and shared it -- existence of this row is the gate,
+/// not a token in the URL, since the trainer reaches it through their
+/// already-authenticated dashboard session (frontend/app/dashboard/
+/// proof-report/[id]), same pattern as every other admin-to-dashboard deep
+/// link in mail.service.ts.
+model ProofReportShare {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdByAdminId String
+  createdAt        DateTime @default(now())
+  lastSentAt       DateTime @default(now())
+
+  @@map("proof_report_shares")
 }
 
 /// One row per NOWPayments invoice. Created `pending` when checkout is

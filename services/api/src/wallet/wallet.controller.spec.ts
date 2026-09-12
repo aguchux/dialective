@@ -1748,6 +1748,163 @@ describe('WalletController.getProofAccountReportPdf', () => {
   });
 });
 
+describe('WalletController.sendProofAccountReport', () => {
+  function setup(overrides: { user?: Record<string, unknown> | null } = {}) {
+    const user =
+      'user' in overrides
+        ? overrides.user
+        : { id: 'trainer-1', email: 'trainer@example.com', firstName: 'Ada' };
+    const prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue(user) },
+      proofReportShare: { upsert: jest.fn().mockResolvedValue({ userId: 'trainer-1' }) },
+    };
+    const mail = { sendProofAccountReportEmail: jest.fn().mockResolvedValue(undefined) };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      mail as never,
+      {} as never,
+    );
+    return { controller, prisma, mail };
+  }
+
+  it('creates the ProofReportShare gate and emails the trainer a dashboard link', async () => {
+    const { controller, prisma, mail } = setup();
+
+    await expect(
+      controller.sendProofAccountReport('trainer-1', { user: { sub: 'admin-1' } } as never),
+    ).resolves.toEqual({ sent: true });
+
+    expect(prisma.proofReportShare.upsert).toHaveBeenCalledWith({
+      where: { userId: 'trainer-1' },
+      create: { userId: 'trainer-1', createdByAdminId: 'admin-1' },
+      update: { lastSentAt: expect.any(Date) },
+    });
+    expect(mail.sendProofAccountReportEmail).toHaveBeenCalledWith({
+      trainerEmail: 'trainer@example.com',
+      trainerFirstName: 'Ada',
+      userId: 'trainer-1',
+    });
+  });
+
+  it('404s for a nonexistent user without creating a share or sending an email', async () => {
+    const { controller, prisma, mail } = setup({ user: null });
+
+    await expect(
+      controller.sendProofAccountReport('missing', { user: { sub: 'admin-1' } } as never),
+    ).rejects.toThrow('User not found');
+    expect(prisma.proofReportShare.upsert).not.toHaveBeenCalled();
+    expect(mail.sendProofAccountReportEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('WalletController.getMyProofAccountReport', () => {
+  function setup(overrides: { share?: Record<string, unknown> | null } = {}) {
+    const share = 'share' in overrides ? overrides.share : { userId: 'trainer-1', lastSentAt: new Date('2026-09-12T00:00:00Z') };
+    const prisma = { proofReportShare: { findUnique: jest.fn().mockResolvedValue(share) } };
+    const trainerReport = {
+      buildProofAccountReport: jest.fn().mockResolvedValue({ summary: { totalTokensSinceJoin: '1' } }),
+    };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      undefined,
+      trainerReport as never,
+    );
+    return { controller, prisma, trainerReport };
+  }
+
+  it('returns the report once a share row exists', async () => {
+    const { controller, trainerReport } = setup();
+
+    const result = await controller.getMyProofAccountReport({ user: { sub: 'trainer-1' } } as never);
+
+    expect(trainerReport.buildProofAccountReport).toHaveBeenCalledWith('trainer-1');
+    expect(result).toEqual({
+      sharedAt: new Date('2026-09-12T00:00:00Z'),
+      report: { summary: { totalTokensSinceJoin: '1' } },
+    });
+  });
+
+  it('404s when no admin has shared a report with this trainer yet', async () => {
+    const { controller, trainerReport } = setup({ share: null });
+
+    await expect(
+      controller.getMyProofAccountReport({ user: { sub: 'trainer-1' } } as never),
+    ).rejects.toThrow('No proof report has been shared with you yet');
+    expect(trainerReport.buildProofAccountReport).not.toHaveBeenCalled();
+  });
+});
+
+describe('WalletController.getMyProofAccountReportPdf', () => {
+  function setup(overrides: { share?: Record<string, unknown> | null } = {}) {
+    const share = 'share' in overrides ? overrides.share : { userId: 'trainer-1' };
+    const prisma = {
+      proofReportShare: { findUnique: jest.fn().mockResolvedValue(share) },
+      user: {
+        findUniqueOrThrow: jest
+          .fn()
+          .mockResolvedValue({ id: 'trainer-1', email: 'trainer@example.com', firstName: 'Ada', lastName: null }),
+      },
+    };
+    const trainerReport = {
+      buildProofAccountReport: jest.fn().mockResolvedValue({
+        summary: { totalTokensSinceJoin: '1' },
+        ledgerTotalsByType: [],
+        ledgerEntries: [],
+        accountCreatedAt: '2026-01-01T00:00:00.000Z',
+        generatedAt: '2026-09-12T00:00:00.000Z',
+      }),
+    };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      undefined,
+      trainerReport as never,
+    );
+    return { controller, prisma, trainerReport };
+  }
+
+  it('streams the PDF once a share row exists', async () => {
+    const { controller } = setup();
+    const res = { setHeader: jest.fn(), send: jest.fn() };
+
+    await controller.getMyProofAccountReportPdf({ user: { sub: 'trainer-1' } } as never, res as never);
+
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+    expect(res.send).toHaveBeenCalledWith(expect.any(Buffer));
+  });
+
+  it('404s when no admin has shared a report with this trainer yet, without rendering a PDF', async () => {
+    const { controller } = setup({ share: null });
+    const res = { setHeader: jest.fn(), send: jest.fn() };
+
+    await expect(
+      controller.getMyProofAccountReportPdf({ user: { sub: 'trainer-1' } } as never, res as never),
+    ).rejects.toThrow('No proof report has been shared with you yet');
+    expect(res.send).not.toHaveBeenCalled();
+  });
+});
+
 describe('WalletController.getAdminStats', () => {
   it('surfaces admin funding and admin adjustment totals as distinct, individually-signed figures', async () => {
     const zeroCount = jest.fn().mockResolvedValue(0);

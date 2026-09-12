@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { loadLogoPng } from '../common/brand-assets.util';
 import { ProofAccountReport } from './trainer-report.service';
 
 const ACCENT = '#6a18a8';
@@ -48,12 +49,24 @@ export function renderProofAccountPdf(
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    doc.fillColor(ACCENT).fontSize(20).font('Helvetica-Bold').text('Dialect Library');
+    const logo = loadLogoPng();
+    const headerTop = doc.y;
+    const headerTextX = logo ? doc.page.margins.left + 36 : doc.page.margins.left;
+    if (logo) {
+      doc.image(logo, doc.page.margins.left, headerTop, { width: 28, height: 28 });
+    }
+    doc
+      .fillColor(ACCENT)
+      .fontSize(20)
+      .font('Helvetica-Bold')
+      .text('Dialect Library', headerTextX, headerTop);
     doc
       .fillColor(INK)
       .fontSize(14)
       .font('Helvetica-Bold')
-      .text('Account proof report', { paragraphGap: 4 });
+      .text('Account proof report', headerTextX, doc.y, { paragraphGap: 4 });
+    doc.y = Math.max(doc.y, headerTop + 28) + 4;
+    doc.x = doc.page.margins.left;
     doc
       .fillColor(MUTED)
       .fontSize(10)

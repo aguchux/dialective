@@ -1494,6 +1494,11 @@ export interface ProofAccountReportResponse {
   report: ProofAccountReport;
 }
 
+export interface MyProofAccountReportResponse {
+  sharedAt: string;
+  report: ProofAccountReport;
+}
+
 export interface ApiAccessTokenSummary {
   key: string;
   isSet: boolean;
@@ -4009,6 +4014,21 @@ export const dialectivaApi = createApi({
       }),
       transformResponse: (blob: Blob) => URL.createObjectURL(blob),
     }),
+    sendProofAccountReport: builder.mutation<{ sent: boolean }, string>({
+      query: (userId) => ({ url: `/admin/users/${userId}/proof-report/send`, method: 'POST' }),
+    }),
+    getMyProofAccountReport: builder.query<MyProofAccountReportResponse, void>({
+      query: () => '/wallet/proof-report',
+    }),
+    // Same authenticated-blob pattern as getProofAccountReportPdfUrl above,
+    // just against the trainer's own gated endpoint instead of the admin one.
+    getMyProofAccountReportPdfUrl: builder.query<string, void>({
+      query: () => ({
+        url: '/wallet/proof-report/pdf',
+        responseHandler: (response: Response) => response.blob(),
+      }),
+      transformResponse: (blob: Blob) => URL.createObjectURL(blob),
+    }),
     getAdminP2PSettings: builder.query<P2PMarketSettings, void>({
       query: () => '/p2p/admin/settings',
       providesTags: ['P2P'],
@@ -5108,6 +5128,9 @@ export const {
   useGetAdminLeaderboardContributorsQuery,
   useGetProofAccountReportQuery,
   useLazyGetProofAccountReportPdfUrlQuery,
+  useSendProofAccountReportMutation,
+  useGetMyProofAccountReportQuery,
+  useLazyGetMyProofAccountReportPdfUrlQuery,
   useGetAdminP2PSettingsQuery,
   useUpdateAdminP2PSettingsMutation,
   useListAdminP2PTradesQuery,
