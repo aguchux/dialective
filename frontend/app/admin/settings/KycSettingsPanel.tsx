@@ -26,7 +26,9 @@ export function KycSettingsPanel() {
   const [activeKycProvider, setActiveKycProvider] = useState<'didit' | 'self'>('didit');
   const [selfHostedAutoApprove, setSelfHostedAutoApprove] = useState(false);
   const [selfHostedBotEnabled, setSelfHostedBotEnabled] = useState(false);
-  const [selfHostedDocumentTypes, setSelfHostedDocumentTypes] = useState('passport,national_id');
+  const [selfHostedDocumentTypes, setSelfHostedDocumentTypes] = useState(
+    'passport,national_id,drivers_license',
+  );
   const [selfHostedMinFaceMatchScore, setSelfHostedMinFaceMatchScore] = useState('85');
   const [selfHostedMinLivenessScore, setSelfHostedMinLivenessScore] = useState('80');
   const [selfHostedDoNotAutoDecline, setSelfHostedDoNotAutoDecline] = useState(false);
@@ -366,7 +368,7 @@ export function KycSettingsPanel() {
                 className={inputClass}
                 id="dlkyc-document-types"
                 onChange={(event) => setSelfHostedDocumentTypes(event.target.value)}
-                placeholder="passport,national_id"
+                placeholder="passport,national_id,drivers_license"
                 value={selfHostedDocumentTypes}
               />
             </label>

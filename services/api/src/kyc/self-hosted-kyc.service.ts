@@ -32,17 +32,21 @@ const EVIDENCE_BUCKET = process.env.SPACES_KYC_EVIDENCE_BUCKET ?? 'dialectiva-ky
 // non-JPEG capture path exists and that gap gets closed properly.
 const CAPTURED_IMAGE_CONTENT_TYPE = 'image/jpeg';
 
-// Only the two turn challenges have a pose direction FaceMatchService can
-// verify against landmark motion (see scoreLiveness's challengeType param)
-// -- "blink" has no yaw signal, so it's excluded here rather than kept as a
-// challenge nothing can check compliance against. Direction is from the
-// trainer's own point of view: the DLKYC capture UI never mirrors the
-// preview (VerificationFlow.tsx has no scaleX(-1)), so what the trainer
-// sees on screen is exactly what's captured and sent here.
-export type SelfieChallengeType = 'TURN_LEFT' | 'TURN_RIGHT';
+// Only TURN_RIGHT is offered -- TURN_LEFT was dropped after liveness scores
+// dropped sharply across real trainers once pose-compliance checking went
+// live. Root cause: the DLKYC capture UI never mirrors the preview
+// (VerificationFlow.tsx has no scaleX(-1)), so "turn your head to the left"
+// against a raw, unmirrored feed reads backwards to anyone used to a
+// mirror-like selfie camera -- they turn the visually-intuitive way, fail
+// checkPoseCompliance, and get capped at a 40 liveness score despite
+// genuinely attempting the challenge. "Turn right" against an unmirrored
+// feed doesn't fight the same mirror intuition (the nose visibly swings
+// right either way you think about it), so standardizing on it removes the
+// single largest source of false pose-compliance failures without weakening
+// the liveness check itself.
+export type SelfieChallengeType = 'TURN_RIGHT';
 const CHALLENGES: { type: SelfieChallengeType; text: string }[] = [
-  { type: 'TURN_LEFT', text: 'Turn your head to the left' },
-  { type: 'TURN_RIGHT', text: 'Turn your head to the right' },
+  { type: 'TURN_RIGHT', text: 'Turn your head slightly to the right' },
 ];
 
 /**
