@@ -100,8 +100,16 @@ import { TokenomicsService } from '../tokenomics/tokenomics.service';
  * NOT_STARTED/IN_PROGRESS/IN_REVIEW which just mean no verdict yet. */
 const REJECTED_KYC_STATUSES = new Set(['DECLINED', 'ABANDONED', 'EXPIRED']);
 
+// Course completion bonuses fold into "training earnings" everywhere this
+// list is used -- see trainer-report.service.ts's identical comment. Keep
+// this in sync with that file's EARNING_ENTRY_TYPES; both independently
+// back a "total earned"/"earnings" concept and previously drifted (this
+// list omitted COURSE_COMPLETION_REWARD, so a trainer's earnings chart and
+// earnings history silently excluded course-completion rewards that their
+// summary tiles did include).
 const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.TRAINING_PAYOUT,
+  LedgerEntryType.COURSE_COMPLETION_REWARD,
   LedgerEntryType.REFERRAL_COMMISSION,
   LedgerEntryType.REFERRAL_FUNDING_BONUS,
   LedgerEntryType.REFERRAL_PAYOUT_BONUS,
@@ -463,15 +471,7 @@ export class WalletController {
       this.prisma.ledgerEntry.findMany({
         where: {
           walletId: wallet.id,
-          type: {
-            in: [
-              'TRAINING_PAYOUT',
-              'COURSE_COMPLETION_REWARD',
-              'REFERRAL_COMMISSION',
-              'REFERRAL_FUNDING_BONUS',
-              'REFERRAL_PAYOUT_BONUS',
-            ],
-          },
+          type: { in: EARNING_ENTRY_TYPES },
           createdAt: { gte: sixMonthsAgo },
         },
         select: { amount: true, createdAt: true },

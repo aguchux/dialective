@@ -1329,6 +1329,83 @@ describe('WalletController earning history', () => {
       }),
     );
   });
+
+  it('includes COURSE_COMPLETION_REWARD alongside TRAINING_PAYOUT and referral types in the earning-history filter', async () => {
+    const prisma = {
+      wallet: { findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }) },
+      ledgerEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      },
+    };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await controller.listEarnings({ user: { sub: 'user-1' } } as never, { page: 1, pageSize: 10 });
+
+    expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          type: {
+            in: expect.arrayContaining([
+              'TRAINING_PAYOUT',
+              'COURSE_COMPLETION_REWARD',
+              'REFERRAL_COMMISSION',
+              'REFERRAL_FUNDING_BONUS',
+              'REFERRAL_PAYOUT_BONUS',
+            ]),
+          },
+        }),
+      }),
+    );
+  });
+});
+
+describe('WalletController.getEarningsChart', () => {
+  it('includes COURSE_COMPLETION_REWARD alongside TRAINING_PAYOUT and referral types in the chart filter', async () => {
+    const prisma = {
+      wallet: { findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }) },
+      ledgerEntry: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await controller.getEarningsChart({ user: { sub: 'user-1' } } as never, { range: 'week' } as never);
+
+    expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          type: {
+            in: expect.arrayContaining([
+              'TRAINING_PAYOUT',
+              'COURSE_COMPLETION_REWARD',
+              'REFERRAL_COMMISSION',
+              'REFERRAL_FUNDING_BONUS',
+              'REFERRAL_PAYOUT_BONUS',
+            ]),
+          },
+        }),
+      }),
+    );
+  });
 });
 
 describe('WalletController.getTrainerReport', () => {
