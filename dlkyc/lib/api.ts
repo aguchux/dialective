@@ -17,15 +17,6 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return json as T;
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new KycApiError(json.message ?? 'Something went wrong. Please try again.');
-  }
-  return json as T;
-}
-
 export interface ResumeSessionResult {
   verificationId: string;
   callbackUrl: string;
@@ -36,8 +27,10 @@ export function resumeSession(token: string) {
   return post<ResumeSessionResult>('/kyc/self/resume', { token });
 }
 
-export function getChallenge() {
-  return get<{ challenge: string }>('/kyc/self/challenge');
+export function getChallenge(verificationId: string, token: string) {
+  return post<{ challenge: string }>(`/kyc/self/verifications/${verificationId}/challenge`, {
+    token,
+  });
 }
 
 export function createDocumentUploadUrl(verificationId: string, token: string, contentType: string) {

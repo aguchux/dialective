@@ -32,10 +32,17 @@ const EVIDENCE_BUCKET = process.env.SPACES_KYC_EVIDENCE_BUCKET ?? 'dialectiva-ky
 // non-JPEG capture path exists and that gap gets closed properly.
 const CAPTURED_IMAGE_CONTENT_TYPE = 'image/jpeg';
 
-const CHALLENGES = [
-  'Turn your head to the left',
-  'Turn your head to the right',
-  'Blink slowly, twice',
+// Only the two turn challenges have a pose direction FaceMatchService can
+// verify against landmark motion (see scoreLiveness's challengeType param)
+// -- "blink" has no yaw signal, so it's excluded here rather than kept as a
+// challenge nothing can check compliance against. Direction is from the
+// trainer's own point of view: the DLKYC capture UI never mirrors the
+// preview (VerificationFlow.tsx has no scaleX(-1)), so what the trainer
+// sees on screen is exactly what's captured and sent here.
+export type SelfieChallengeType = 'TURN_LEFT' | 'TURN_RIGHT';
+const CHALLENGES: { type: SelfieChallengeType; text: string }[] = [
+  { type: 'TURN_LEFT', text: 'Turn your head to the left' },
+  { type: 'TURN_RIGHT', text: 'Turn your head to the right' },
 ];
 
 /**
@@ -117,8 +124,14 @@ export class SelfHostedKycService {
     };
   }
 
-  getChallenge(): { challenge: string } {
-    return { challenge: CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)] };
+  async getChallenge(verificationId: string, userId: string): Promise<{ challenge: string }> {
+    const verification = await this.getOwnedOpenVerification(verificationId, userId);
+    const chosen = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
+    await this.prisma.kycVerification.update({
+      where: { id: verification.id },
+      data: { selfieChallengeType: chosen.type },
+    });
+    return { challenge: chosen.text };
   }
 
   async createEvidenceUploadUrl(verificationId: string, userId: string, contentType: string) {
@@ -208,9 +221,10 @@ export class SelfHostedKycService {
       throw new BadRequestException('Document and selfie capture must be completed first');
     }
 
-    const { faceMatchScore, livenessScore } = await this.runDeterministicChecks(
+    const { faceMatchScore, livenessScore, poseCompliant } = await this.runDeterministicChecks(
       documentFront,
       selfieFrames,
+      verification.selfieChallengeType as 'TURN_LEFT' | 'TURN_RIGHT' | null,
     );
 
     const botEnabled = await this.settings.isSelfHostedKycBotEnabled();
@@ -232,7 +246,7 @@ export class SelfHostedKycService {
       doNotAutoDeclineEnabled,
     });
 
-    return this.toDiditDecision(result, botFindings);
+    return this.toDiditDecision(result, botFindings, poseCompliant);
   }
 
   /**
@@ -247,7 +261,8 @@ export class SelfHostedKycService {
   private async runDeterministicChecks(
     documentFront: { bucket: string; key: string },
     selfieFrames: { bucket: string; key: string }[],
-  ): Promise<{ faceMatchScore: number; livenessScore: number }> {
+    challengeType: 'TURN_LEFT' | 'TURN_RIGHT' | null,
+  ): Promise<{ faceMatchScore: number; livenessScore: number; poseCompliant: boolean | null }> {
     try {
       const [documentBuffer, selfieBuffers] = await Promise.all([
         this.downloadEvidence(documentFront),
@@ -255,26 +270,29 @@ export class SelfHostedKycService {
       ]);
 
       const documentFace = await this.faceMatch.detectSingleFace(documentBuffer);
-      const { livenessScore, bestFrameIndex } = await this.faceMatch.scoreLiveness(selfieBuffers);
+      const { livenessScore, bestFrameIndex, poseCompliant } = await this.faceMatch.scoreLiveness(
+        selfieBuffers,
+        challengeType,
+      );
 
       if (!documentFace) {
         this.logger.warn(`DLKYC evaluate: no face detected in document portrait`);
-        return { faceMatchScore: 0, livenessScore };
+        return { faceMatchScore: 0, livenessScore, poseCompliant };
       }
       const bestSelfieFace = await this.faceMatch.detectSingleFace(selfieBuffers[bestFrameIndex]);
       if (!bestSelfieFace) {
         this.logger.warn(`DLKYC evaluate: no face detected in any selfie frame`);
-        return { faceMatchScore: 0, livenessScore };
+        return { faceMatchScore: 0, livenessScore, poseCompliant };
       }
 
       const faceMatchScore = await this.faceMatch.compareDescriptors(
         documentFace.descriptor,
         bestSelfieFace.descriptor,
       );
-      return { faceMatchScore, livenessScore };
+      return { faceMatchScore, livenessScore, poseCompliant };
     } catch (err) {
       this.logger.error(`DLKYC face-match evaluation failed: ${String(err)}`);
-      return { faceMatchScore: 0, livenessScore: 0 };
+      return { faceMatchScore: 0, livenessScore: 0, poseCompliant: null };
     }
   }
 
@@ -316,7 +334,11 @@ export class SelfHostedKycService {
     }
   }
 
-  private toDiditDecision(result: KycEvaluationResult, botFindings: BotFindings | null): DiditDecision {
+  private toDiditDecision(
+    result: KycEvaluationResult,
+    botFindings: BotFindings | null,
+    poseCompliant: boolean | null,
+  ): DiditDecision {
     const statusByBand: Record<string, string> = {
       APPROVE: 'Approved',
       REVIEW: 'In Review',
@@ -330,7 +352,7 @@ export class SelfHostedKycService {
       livenessScore: result.livenessScore,
       livenessStatus: null,
       declineReason: result.declineReason,
-      raw: { provider: 'self', band: result.band, botFindings },
+      raw: { provider: 'self', band: result.band, botFindings, poseCompliant },
     };
   }
 

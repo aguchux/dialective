@@ -115,12 +115,16 @@ export class FaceMatchService {
    * multiple frozen or repeated images collapse to near-zero landmark
    * motion) and scores liveness from cross-frame landmark movement --
    * DLKYC_PLAN.md section 10's "frozen-frame, duplicate-frame detection"
-   * signal, reduced to its simplest deterministic form for v1 (no video
-   * burst, no active-instruction compliance scoring yet -- the challenge
-   * text is only used as a UX prompt today, not verified against motion
-   * direction).
+   * signal. When challengeType is a turn instruction, also verifies the
+   * trainer's head yaw actually moved in the instructed direction between
+   * the first and last valid frame (see checkPoseCompliance below) -- a
+   * static photo or a random head wobble no longer passes just because
+   * *some* landmark motion occurred; the motion must match what was asked.
    */
-  async scoreLiveness(frameBuffers: Buffer[]): Promise<{ livenessScore: number; bestFrameIndex: number }> {
+  async scoreLiveness(
+    frameBuffers: Buffer[],
+    challengeType?: 'TURN_LEFT' | 'TURN_RIGHT' | null,
+  ): Promise<{ livenessScore: number; bestFrameIndex: number; poseCompliant: boolean | null }> {
     const results: LivenessFrameResult[] = [];
     for (const buffer of frameBuffers) {
       const detection = await this.detectSingleFace(buffer);
@@ -132,7 +136,7 @@ export class FaceMatchService {
       .filter((index) => index >= 0);
     if (validIndexes.length < 2) {
       // Fewer than 2 usable frames -- cannot measure motion at all.
-      return { livenessScore: 0, bestFrameIndex: validIndexes[0] ?? 0 };
+      return { livenessScore: 0, bestFrameIndex: validIndexes[0] ?? 0, poseCompliant: null };
     }
 
     let totalMotion = 0;
@@ -149,11 +153,83 @@ export class FaceMatchService {
     // frames is normal micro-motion; near-zero movement across all frames
     // is the frozen/replayed-photo signature this is meant to catch.
     // Provisional scaling, same caveat as compareDescriptors above.
-    const livenessScore = Math.round(Math.min(avgMotion / 3, 1) * 100);
+    let livenessScore = Math.round(Math.min(avgMotion / 3, 1) * 100);
+
+    const poseCompliant = challengeType
+      ? checkPoseCompliance(
+          results[validIndexes[0]].landmarks!,
+          results[validIndexes[validIndexes.length - 1]].landmarks!,
+          challengeType,
+        )
+      : null;
+    // A turn instruction that clearly wasn't followed caps the liveness
+    // score rather than zeroing it outright -- real landmark motion still
+    // happened (ruling out a frozen/replayed photo), just not in the asked
+    // direction, so this is treated as a weaker pass signal, not the same
+    // as no motion at all.
+    if (poseCompliant === false) {
+      livenessScore = Math.min(livenessScore, 40);
+    }
 
     const bestFrameIndex = pickSharpestFrame(results, validIndexes);
-    return { livenessScore, bestFrameIndex };
+    return { livenessScore, bestFrameIndex, poseCompliant };
   }
+}
+
+/**
+ * Horizontal offset of the nose tip from the inter-eye midpoint, normalized
+ * by inter-eye distance so it's roughly scale-invariant across different
+ * face sizes/distances from camera. Positive means the nose has shifted
+ * toward the right edge of the (unmirrored) image -- which happens when the
+ * subject turns their head to their own left, since their face rotates to
+ * present more of their left side, swinging the nose rightward in-frame.
+ */
+function yawRatio(landmarks: FaceApiModule.FaceLandmarks68): number {
+  const leftEyeCenter = averagePoint(landmarks.getLeftEye());
+  const rightEyeCenter = averagePoint(landmarks.getRightEye());
+  const nose = landmarks.getNose();
+  const noseTip = nose[nose.length - 1];
+  const eyeMidpointX = (leftEyeCenter.x + rightEyeCenter.x) / 2;
+  const interEyeDistance = Math.hypot(
+    leftEyeCenter.x - rightEyeCenter.x,
+    leftEyeCenter.y - rightEyeCenter.y,
+  );
+  if (interEyeDistance === 0) return 0;
+  return (noseTip.x - eyeMidpointX) / interEyeDistance;
+}
+
+function averagePoint(points: FaceApiModule.Point[]): FaceApiModule.Point {
+  const sum = points.reduce((acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }), {
+    x: 0,
+    y: 0,
+  });
+  return { x: sum.x / points.length, y: sum.y / points.length } as FaceApiModule.Point;
+}
+
+// Minimum yaw-ratio swing between the first and last valid frame to count
+// as a genuine, deliberate turn rather than incidental head jitter --
+// derived empirically as "clearly more than normal micro-motion," same
+// provisional-until-real-data caveat as every other threshold in this file.
+const MIN_YAW_SWING = 0.08;
+
+/**
+ * Checks whether the head yaw moved in the instructed direction between the
+ * first and last valid selfie frame. TURN_LEFT (the trainer's own left)
+ * rotates their face to present more of their right side toward the
+ * camera, swinging the nose tip toward the left edge of the (unmirrored)
+ * frame -- i.e. yawRatio decreases. TURN_RIGHT is the mirror image: the
+ * nose swings right, so yawRatio increases. Exported for direct unit
+ * testing with plain {x,y} landmark fixtures.
+ */
+export function checkPoseCompliance(
+  firstLandmarks: { getLeftEye(): { x: number; y: number }[]; getRightEye(): { x: number; y: number }[]; getNose(): { x: number; y: number }[] },
+  lastLandmarks: { getLeftEye(): { x: number; y: number }[]; getRightEye(): { x: number; y: number }[]; getNose(): { x: number; y: number }[] },
+  challengeType: 'TURN_LEFT' | 'TURN_RIGHT',
+): boolean {
+  const firstYaw = yawRatio(firstLandmarks as FaceApiModule.FaceLandmarks68);
+  const lastYaw = yawRatio(lastLandmarks as FaceApiModule.FaceLandmarks68);
+  const delta = lastYaw - firstYaw;
+  return challengeType === 'TURN_LEFT' ? delta <= -MIN_YAW_SWING : delta >= MIN_YAW_SWING;
 }
 
 /** Exported for direct unit testing -- FaceApiModule.FaceLandmarks68 instances are awkward to construct in a test without a real model, so tests pass a minimal { positions: {x,y}[] } shape instead. */

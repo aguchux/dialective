@@ -74,7 +74,7 @@ export function VerificationFlow({ token }: { token: string }) {
       );
       await uploadToSignedUrl(uploadUrl, frontBlob, CAPTURE_CONTENT_TYPE);
       await submitDocument(verificationId, token, { documentType, frontKey: key });
-      const { challenge: nextChallenge } = await getChallenge();
+      const { challenge: nextChallenge } = await getChallenge(verificationId, token);
       setChallenge(nextChallenge);
       setStep('selfie-intro');
     } catch (err) {
@@ -184,8 +184,9 @@ function ConsentStep({ onContinue }: { onContinue: () => void }) {
         subtitle="We use your document photo and a short selfie to confirm your identity for payout protection."
       />
       <ul className="grid gap-2 text-sm leading-relaxed text-muted">
-        <li>- You&apos;ll photograph the front of an accepted ID document.</li>
-        <li>- You&apos;ll take a short selfie following an on-screen instruction.</li>
+        <li>- Have your accepted ID document ready in hand before you continue.</li>
+        <li>- You&apos;ll photograph the front of it live with your camera -- uploading a saved photo is not accepted.</li>
+        <li>- You&apos;ll take a short selfie and follow an on-screen instruction, such as turning your head.</li>
         <li>- Your evidence is stored privately and only used for this verification.</li>
         <li>- A result of Verified, Under review, or Unsuccessful will show here.</li>
       </ul>
@@ -225,7 +226,7 @@ function DocumentStep({
     <div className={`${cardClass} grid gap-4 p-6`}>
       <SectionTitle
         title="Photograph your document"
-        subtitle="Make sure all four edges are visible and the text is readable."
+        subtitle="Hold your document steady and line it up inside the rectangle below. Make sure all four edges are visible and the text is readable."
       />
       <label className="grid gap-1 text-sm font-bold">
         Document type
@@ -241,7 +242,11 @@ function DocumentStep({
           ))}
         </select>
       </label>
-      <CameraCapture guideLabel="Position the document inside the frame" onCapture={onCapture} rectGuide />
+      <CameraCapture
+        guideLabel="Position your ID document inside the rectangle, then capture"
+        onCapture={onCapture}
+        rectGuide
+      />
       {error && <p className="text-sm font-bold text-danger">{error}</p>}
     </div>
   );
@@ -250,7 +255,10 @@ function DocumentStep({
 function SelfieIntroStep({ challenge, onContinue }: { challenge: string; onContinue: () => void }) {
   return (
     <div className={`${cardClass} grid gap-4 p-6 text-center`}>
-      <SectionTitle title="Now, a quick selfie check" subtitle="Follow the instruction below when you're ready." />
+      <SectionTitle
+        title="Now, a quick selfie check"
+        subtitle="Keep your face inside the oval guide and follow the instruction below when you're ready."
+      />
       <p className="rounded-lg border border-accent bg-accent-soft px-4 py-3 font-black text-accent-dark">
         {challenge}
       </p>
@@ -277,7 +285,7 @@ function SelfieCaptureStep({
         burstCount={SELFIE_FRAME_COUNT}
         burstIntervalMs={SELFIE_FRAME_INTERVAL_MS}
         facingMode="user"
-        guideLabel="Keep your face inside the oval"
+        guideLabel="Keep your face inside the oval while you follow the instruction above"
         onCaptureBurst={onCaptured}
         oval
       />

@@ -736,6 +736,13 @@ model KycVerification {
   documentNumberMasked  String?
   faceMatchScore        Decimal?  @db.Decimal(5, 2)
   livenessScore         Decimal?  @db.Decimal(5, 2)
+  // Which selfie pose challenge (self-hosted DLKYC only) was issued for this
+  // attempt -- "TURN_LEFT" | "TURN_RIGHT", null for a Didit session or
+  // before getChallenge() is first called. Read back by evaluate()
+  // (self-hosted-kyc.service.ts) so scoreLiveness can verify the trainer's
+  // head actually turned in the instructed direction, not just that some
+  // motion occurred between frames.
+  selfieChallengeType   String?
   // Full Didit decision payload (document number, name, DOB, etc.) --
   // AES-256-GCM encrypted via kyc-crypto.util.ts, never stored plaintext.
   // The columns above are the masked/display subset admins actually need.

@@ -102,9 +102,13 @@ export class KycController {
     return this.selfHosted.resumeSession(body.token);
   }
 
-  @Get('kyc/self/challenge')
-  getSelfHostedChallenge() {
-    return this.selfHosted.getChallenge();
+  @Post('kyc/self/verifications/:verificationId/challenge')
+  getSelfHostedChallenge(
+    @Param('verificationId') verificationId: string,
+    @Body() body: ResumeSelfHostedKycDto,
+  ) {
+    const claims = this.verifyHandoffOwnership(body.token, verificationId);
+    return this.selfHosted.getChallenge(verificationId, claims.sub);
   }
 
   @Post('kyc/self/verifications/:verificationId/document-upload-url')
