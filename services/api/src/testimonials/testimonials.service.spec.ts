@@ -123,16 +123,37 @@ describe('TestimonialsService', () => {
       expect(result.kind).toBe('VIDEO');
     });
 
-    it('allows a new submission even while the trainer already has a PENDING testimony (submit at will, no cap)', async () => {
+    it('allows a new submission while under the monthly cap, regardless of the other testimony\'s status', async () => {
+      prisma.testimony.count.mockResolvedValue(1);
       const result = await service.submit('user-1', { kind: 'TEXT', text: 'again' } as any);
       expect(result.kind).toBe('TEXT');
       expect(prisma.testimony.create).toHaveBeenCalledTimes(1);
     });
 
-    it('allows a new submission even after an APPROVED testimony (each is reviewed and rewarded independently)', async () => {
-      const result = await service.submit('user-1', { kind: 'TEXT', text: 'one more' } as any);
+    it('rejects a third submission within the rolling 30-day window', async () => {
+      prisma.testimony.count.mockResolvedValue(2);
+
+      await expect(
+        service.submit('user-1', { kind: 'TEXT', text: 'one more' } as any),
+      ).rejects.toThrow('up to 2 testimonials per month');
+      expect(prisma.testimony.create).not.toHaveBeenCalled();
+    });
+
+    it('counts pending/approved/rejected submissions alike toward the monthly cap', async () => {
+      prisma.testimony.count.mockResolvedValue(2);
+
+      await expect(
+        service.submit('user-1', { kind: 'TEXT', text: 'retry' } as any),
+      ).rejects.toThrow('up to 2 testimonials per month');
+      expect(prisma.testimony.count).toHaveBeenCalledWith({
+        where: { userId: 'user-1', createdAt: { gte: expect.any(Date) } },
+      });
+    });
+
+    it('allows a new submission once older submissions have rolled outside the 30-day window', async () => {
+      prisma.testimony.count.mockResolvedValue(0);
+      const result = await service.submit('user-1', { kind: 'TEXT', text: 'fresh month' } as any);
       expect(result.kind).toBe('TEXT');
-      expect(prisma.testimony.create).toHaveBeenCalledTimes(1);
     });
   });
 

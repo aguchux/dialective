@@ -20,6 +20,12 @@ import { UpdateTestimonyVisibilityDto } from './dto/update-testimony-visibility.
 import { UpdateTestimonyTextDto } from './dto/update-testimony-text.dto';
 
 const TESTIMONY_BUCKET = process.env.SPACES_TESTIMONY_BUCKET ?? 'dialectiva-testimonials';
+// Anti-flooding guard: caps how many testimonies one trainer can submit in a
+// rolling 30-day window, regardless of status (pending/approved/rejected all
+// count) -- a rejected or still-pending submission shouldn't let someone
+// retry indefinitely to flood the review queue.
+const MAX_TESTIMONIES_PER_ROLLING_MONTH = 2;
+const ROLLING_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   'video/webm': 'webm',
   'video/mp4': 'mp4',
@@ -59,17 +65,19 @@ export class TestimonialsService {
   }
 
   /**
-   * Trainers may submit testimonials at will -- no cap on how many they
-   * have PENDING or APPROVED at once. Each submission is reviewed and
-   * rewarded independently (creditTestimonyReward is keyed by the
-   * individual testimony's id, so multiple approvals for the same trainer
-   * each pay out rather than colliding on one ledger entry).
+   * Each submission is reviewed and rewarded independently
+   * (creditTestimonyReward is keyed by the individual testimony's id, so
+   * multiple approvals for the same trainer each pay out rather than
+   * colliding on one ledger entry) -- but capped at
+   * MAX_TESTIMONIES_PER_ROLLING_MONTH per trainer per rolling 30 days to
+   * guard the review queue against one person flooding it.
    */
   async submit(userId: string, dto: CreateTestimonyDto) {
     if (!(await this.settings.isTestimonyEnabled())) {
       throw new ForbiddenException('Testimonials are not currently open');
     }
     await this.requireDiditVerification(userId);
+    await this.enforceMonthlySubmissionCap(userId);
 
     if (dto.kind === 'TEXT') {
       const maxLength = await this.settings.getTestimonyMaxTextLength();
@@ -264,6 +272,18 @@ export class TestimonialsService {
       total,
       totalPages,
     };
+  }
+
+  private async enforceMonthlySubmissionCap(userId: string): Promise<void> {
+    const since = new Date(Date.now() - ROLLING_MONTH_MS);
+    const recentCount = await this.prisma.testimony.count({
+      where: { userId, createdAt: { gte: since } },
+    });
+    if (recentCount >= MAX_TESTIMONIES_PER_ROLLING_MONTH) {
+      throw new ForbiddenException(
+        `You can submit up to ${MAX_TESTIMONIES_PER_ROLLING_MONTH} testimonials per month. Please try again later.`,
+      );
+    }
   }
 
   private async requireDiditVerification(userId: string): Promise<void> {
