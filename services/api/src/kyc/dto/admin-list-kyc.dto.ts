@@ -13,6 +13,12 @@ export class AdminListKycDto {
   @IsEnum(KycStatus)
   status?: KycStatus;
 
+  /** Matches against the verification's user: name, email, or mobile number (case-insensitive substring). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  search?: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

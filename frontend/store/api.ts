@@ -719,7 +719,13 @@ export interface PayoutAccount {
 export interface KycVerification {
   id: string;
   userId: string;
-  user: { id: string; email: string; firstName: string | null; lastName: string | null };
+  user: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    phoneNumber: string | null;
+  };
   provider: string;
   status: KycStatus;
   documentType: string | null;
@@ -3351,7 +3357,7 @@ export const dialectivaApi = createApi({
     }),
     listKycVerifications: builder.query<
       KycVerificationList,
-      { status?: KycStatus; page?: number; pageSize?: number } | void
+      { status?: KycStatus; search?: string; page?: number; pageSize?: number } | void
     >({
       query: (params) => ({ url: '/admin/kyc', params: params ?? undefined }),
       providesTags: ['Kyc'],

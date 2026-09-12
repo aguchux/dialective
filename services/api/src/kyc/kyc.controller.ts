@@ -175,6 +175,7 @@ export class KycController {
   adminList(@Query() query: AdminListKycDto) {
     return this.kyc.adminList({
       status: query.status as KycStatus | undefined,
+      search: query.search,
       page: query.page ?? 1,
       pageSize: query.pageSize ?? 20,
     });

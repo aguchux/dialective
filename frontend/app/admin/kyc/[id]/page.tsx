@@ -124,7 +124,12 @@ export default function AdminKycDetailPage() {
                 ? [row.user.firstName, row.user.lastName].filter(Boolean).join(' ') || row.user.email
                 : 'Verification not found'}
           </h1>
-          {row && <p className="leading-relaxed text-muted">{row.user.email}</p>}
+          {row && (
+            <p className="leading-relaxed text-muted">
+              {row.user.email}
+              {row.user.phoneNumber ? ` · ${row.user.phoneNumber}` : ''}
+            </p>
+          )}
         </div>
 
         {row && (

@@ -463,17 +463,39 @@ export class KycService {
     }
   }
 
-  async adminList(filters: { status?: KycStatus; page: number; pageSize: number }) {
-    const where: Prisma.KycVerificationWhereInput = filters.status
-      ? { status: filters.status }
-      : {};
+  async adminList(filters: {
+    status?: KycStatus;
+    search?: string;
+    page: number;
+    pageSize: number;
+  }) {
+    const search = filters.search?.trim();
+    const where: Prisma.KycVerificationWhereInput = {
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(search
+        ? {
+            user: {
+              OR: [
+                { email: { contains: search, mode: 'insensitive' as const } },
+                { firstName: { contains: search, mode: 'insensitive' as const } },
+                { lastName: { contains: search, mode: 'insensitive' as const } },
+                { phoneNumber: { contains: search, mode: 'insensitive' as const } },
+              ],
+            },
+          }
+        : {}),
+    };
     const [items, total] = await Promise.all([
       this.prisma.kycVerification.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (filters.page - 1) * filters.pageSize,
         take: filters.pageSize,
-        include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+        include: {
+          user: {
+            select: { id: true, email: true, firstName: true, lastName: true, phoneNumber: true },
+          },
+        },
       }),
       this.prisma.kycVerification.count({ where }),
     ]);
@@ -489,7 +511,11 @@ export class KycService {
   async adminGet(id: string) {
     const verification = await this.prisma.kycVerification.findUnique({
       where: { id },
-      include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+      include: {
+        user: {
+          select: { id: true, email: true, firstName: true, lastName: true, phoneNumber: true },
+        },
+      },
     });
     if (!verification) throw new NotFoundException('Verification not found');
     return toPublicVerification(verification);
@@ -598,7 +624,17 @@ function numOrNull(value: unknown): number | null {
 
 function toPublicVerification(
   verification: Prisma.KycVerificationGetPayload<{
-    include: { user: { select: { id: true; email: true; firstName: true; lastName: true } } };
+    include: {
+      user: {
+        select: {
+          id: true;
+          email: true;
+          firstName: true;
+          lastName: true;
+          phoneNumber: true;
+        };
+      };
+    };
   }>,
 ) {
   // Never includes decisionEncryptedJson -- ordinary reads never touch the decrypt path.
