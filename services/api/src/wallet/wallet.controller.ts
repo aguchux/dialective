@@ -4217,6 +4217,8 @@ export class WalletController {
       referralBonusAgg,
       trainingPayoutAgg,
       withdrawalPaidAgg,
+      adminFundingAgg,
+      adminAdjustmentAgg,
       blogPostsCount,
       publishedBlogPostsCount,
       draftBlogPostsCount,
@@ -4279,6 +4281,20 @@ export class WalletController {
         where: { status: WithdrawalStatus.PAID },
         _sum: { tokenAmount: true, usdtAmount: true },
       }),
+      // ADMIN_FUNDING is always a positive credit (the "+ Add DL" action);
+      // ADMIN_ADJUSTMENT is signed (positive or negative, the "- Debit DL"
+      // action always posts negative) -- summed separately so the dashboard
+      // can show "manually funded" and "manually adjusted" as distinct,
+      // individually-signed figures rather than one net number that hides
+      // which direction the tokens moved in.
+      this.prisma.ledgerEntry.aggregate({
+        where: { type: LedgerEntryType.ADMIN_FUNDING },
+        _sum: { amount: true },
+      }),
+      this.prisma.ledgerEntry.aggregate({
+        where: { type: LedgerEntryType.ADMIN_ADJUSTMENT },
+        _sum: { amount: true },
+      }),
       this.prisma.blogPost.count(),
       this.prisma.blogPost.count({ where: { status: BlogPostStatus.PUBLISHED } }),
       this.prisma.blogPost.count({ where: { status: BlogPostStatus.DRAFT } }),
@@ -4329,6 +4345,8 @@ export class WalletController {
       totalReferralBonuses: referralBonusAgg._sum.amount?.toString() ?? '0',
       totalTrainingPayouts: trainingPayoutAgg._sum.amount?.toString() ?? '0',
       totalWithdrawnTokens: withdrawalPaidAgg._sum.tokenAmount?.toString() ?? '0',
+      totalAdminFundingTokens: adminFundingAgg._sum.amount?.toString() ?? '0',
+      totalAdminAdjustmentTokens: adminAdjustmentAgg._sum.amount?.toString() ?? '0',
       totalWithdrawnUsdt: withdrawalPaidAgg._sum.usdtAmount?.toString() ?? '0',
       blogPostsCount,
       publishedBlogPostsCount,

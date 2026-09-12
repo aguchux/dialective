@@ -17,6 +17,7 @@ import {
   Sparkles,
   TrendingUp,
   Trophy,
+  UserCog,
   Users,
   WalletCards,
 } from 'lucide-react';
@@ -233,6 +234,22 @@ export default function AdminDashboardPage() {
       hint: stats ? `${formatCompactUsd(stats.totalWithdrawnUsdt)} USDT equivalent` : undefined,
       icon: CircleDollarSign,
       tone: 'cyan',
+    },
+    {
+      key: 'adminFunding',
+      label: 'Admin funding',
+      value: stats ? formatCompactTokens(stats.totalAdminFundingTokens) : loadingValue,
+      hint: 'Manually credited via "+ Add DL"',
+      icon: UserCog,
+      tone: 'purple',
+    },
+    {
+      key: 'adminAdjustments',
+      label: 'Admin adjustments',
+      value: stats ? formatCompactTokens(stats.totalAdminAdjustmentTokens) : loadingValue,
+      hint: 'Net of "- Debit DL" corrections',
+      icon: UserCog,
+      tone: 'rose',
     },
     {
       key: 'ipnEvents',

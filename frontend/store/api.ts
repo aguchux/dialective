@@ -1415,6 +1415,8 @@ export interface AdminStats {
   totalTrainingPayouts: string;
   totalWithdrawnTokens: string;
   totalWithdrawnUsdt: string;
+  totalAdminFundingTokens: string;
+  totalAdminAdjustmentTokens: string;
   blogPostsCount: number;
   publishedBlogPostsCount: number;
   draftBlogPostsCount: number;

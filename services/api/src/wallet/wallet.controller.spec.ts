@@ -1748,6 +1748,65 @@ describe('WalletController.getProofAccountReportPdf', () => {
   });
 });
 
+describe('WalletController.getAdminStats', () => {
+  it('surfaces admin funding and admin adjustment totals as distinct, individually-signed figures', async () => {
+    const zeroCount = jest.fn().mockResolvedValue(0);
+    const zeroAgg = jest.fn().mockResolvedValue({ _sum: {} });
+    const prisma = {
+      user: { count: zeroCount },
+      withdrawalRequest: { count: zeroCount, aggregate: zeroAgg },
+      dataAccessLead: { count: zeroCount },
+      country: { count: zeroCount },
+      dialect: { count: zeroCount },
+      word: { count: zeroCount },
+      wordTranslation: { count: zeroCount },
+      sentence: { count: zeroCount },
+      trainingSession: { count: zeroCount },
+      wordRecording: { count: zeroCount },
+      wallet: { count: zeroCount, aggregate: zeroAgg },
+      deposit: { count: zeroCount, aggregate: zeroAgg },
+      nowPaymentsIpnEvent: { count: zeroCount },
+      blogPost: { count: zeroCount },
+      referralSettings: {
+        upsert: jest.fn().mockResolvedValue({
+          fundingBonusRate: { toString: () => '0.1' },
+          fundingBonusEnabled: true,
+          payoutBonusRate: { toString: () => '0.05' },
+          payoutBonusEnabled: true,
+        }),
+      },
+      ledgerEntry: {
+        // Every ledgerEntry.aggregate call in getAdminStats is
+        // type-filtered -- keying the mock off the requested type (rather
+        // than call order) keeps this test readable and immune to
+        // reordering the surrounding Promise.all array.
+        aggregate: jest.fn().mockImplementation(({ where }: any) => {
+          const type = where?.type?.in ?? where?.type;
+          if (type === 'ADMIN_FUNDING') return Promise.resolve({ _sum: { amount: 500 } });
+          if (type === 'ADMIN_ADJUSTMENT') return Promise.resolve({ _sum: { amount: -120 } });
+          return Promise.resolve({ _sum: { amount: 0 } });
+        }),
+      },
+    };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    const stats = await controller.getAdminStats();
+
+    expect(stats.totalAdminFundingTokens).toBe('500');
+    expect(stats.totalAdminAdjustmentTokens).toBe('-120');
+  });
+});
+
 describe('WalletController admin leaderboard', () => {
   it('ranks earners by task payout ledger totals and contributors by submitted task count', async () => {
     const prisma = {
