@@ -146,7 +146,7 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
 });
 
 describe('SettlementService.refundRejectedDomainConversationRecordings', () => {
-  it('refunds locked tokens and deletes audio for a REJECTED row', async () => {
+  it('refunds locked tokens for a REJECTED row without deleting its audio', async () => {
     const prisma = {
       domainConversationRecording: {
         findMany: jest.fn().mockResolvedValue([
@@ -154,8 +154,6 @@ describe('SettlementService.refundRejectedDomainConversationRecordings', () => {
             id: 'dc-rec-3',
             userId: 'user-1',
             tokensSpent: { toNumber: () => 3 },
-            audioBucket: 'bucket-1',
-            audioKey: 'key-1',
           },
         ]),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -180,7 +178,10 @@ describe('SettlementService.refundRejectedDomainConversationRecordings', () => {
     const refundedCount = await service.refundRejectedDomainConversationRecordings();
 
     expect(refundedCount).toBe(1);
-    expect(storage.deleteObject).toHaveBeenCalledWith('bucket-1', 'key-1');
+    // A wrong rejection (bad config, a scoring bug) must stay recoverable --
+    // audio is never deleted from the reject path.
+    expect(storage.deleteObject).not.toHaveBeenCalled();
+    expect(prisma.domainConversationRecording.update).not.toHaveBeenCalled();
     expect(prisma.wallet.updateMany).toHaveBeenCalled();
   });
 });

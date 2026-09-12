@@ -383,7 +383,7 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
     };
   }
 
-  it('refunds a rejected word recording and deletes its audio object', async () => {
+  it('refunds a rejected word recording without touching its audio object', async () => {
     const prisma = buildPrismaMock({
       wordRecordings: [
         {
@@ -414,60 +414,11 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
         }),
       }),
     );
-    expect(deleteObject).toHaveBeenCalledWith(
-      'dialectiva-word-recordings',
-      'ig/english_to_dialect/prompt-1/wr-rejected-1.webm',
-    );
-    expect(prisma.wordRecording.update).toHaveBeenCalledWith({
-      where: { id: 'wr-rejected-1' },
-      data: { audioBucket: null, audioKey: null, audioDeletedAt: expect.any(Date) },
-    });
-  });
-
-  it('does not attempt to delete audio when audioBucket/audioKey are already null', async () => {
-    const prisma = buildPrismaMock({
-      wordRecordings: [
-        {
-          id: 'wr-rejected-2',
-          userId: 'user-1',
-          tokensSpent: { toNumber: () => 1 },
-          audioBucket: null,
-          audioKey: null,
-        },
-      ],
-    });
-    const deleteObject = jest.fn().mockResolvedValue(undefined);
-    const service = new SettlementService(prisma as never, { deleteObject } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
-
-    // @ts-expect-error -- private method under test
-    const count = await service.refundRejectedWordRecordings();
-
-    expect(count).toBe(1);
+    // A rejected recording's audio is never deleted here -- see
+    // refundRejectedWordRecordings' doc comment. A wrong rejection (bad
+    // config, a scoring bug) must stay recoverable.
     expect(deleteObject).not.toHaveBeenCalled();
     expect(prisma.wordRecording.update).not.toHaveBeenCalled();
-  });
-
-  it('still refunds the trainer even when audio deletion fails (Spaces down)', async () => {
-    const prisma = buildPrismaMock({
-      wordRecordings: [
-        {
-          id: 'wr-rejected-4',
-          userId: 'user-1',
-          tokensSpent: { toNumber: () => 2 },
-          audioBucket: 'dialectiva-word-recordings',
-          audioKey: 'yo/english_to_dialect/prompt-1/wr-rejected-4.webm',
-        },
-      ],
-    });
-    const deleteObject = jest.fn().mockRejectedValue(new Error('Spaces unavailable'));
-    const service = new SettlementService(prisma as never, { deleteObject } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
-
-    // @ts-expect-error -- private method under test
-    const count = await service.refundRejectedWordRecordings();
-
-    expect(count).toBe(1);
-    expect(prisma.wallet.updateMany).toHaveBeenCalled(); // refund still happened
-    expect(prisma.wordRecording.update).not.toHaveBeenCalled(); // audioDeletedAt write skipped
   });
 
   it('skips two overlapping runs from double-refunding the same rejected word recording', async () => {

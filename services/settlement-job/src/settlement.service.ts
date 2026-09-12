@@ -356,16 +356,19 @@ export class SettlementService {
    * payouts -- a row left REJECTED with refundedAt: null is naturally
    * retried next run.
    *
-   * Audio is deleted synchronously in the same pass, not left for
-   * audio-retention-job's delayed sweep -- a quality-rejected clip (silence/
-   * noise/unreadable) has no further use once refunded, unlike a
-   * settled/scored recording an admin might still want to audit within the
-   * configured retention window.
+   * Audio is deliberately left in place -- rejection/refund only reconciles
+   * the trainer's locked tokens, it never deletes the recording. A quality
+   * rejection (bad prefilter config, a stricter-than-intended admin
+   * setting, a scoring bug) can be wrong, and an immediately-deleted clip
+   * is unrecoverable even after the rejection itself is corrected. Any
+   * time-based purge of rejected audio is audio-retention-job's job, not
+   * this one's -- keeping the two concerns separate means a bug in the
+   * reject path can never again silently destroy evidence a moment later.
    */
   private async refundRejectedWordRecordings(): Promise<number> {
     const recordings = await this.prisma.wordRecording.findMany({
       where: { status: 'REJECTED', refundedAt: null },
-      select: { id: true, userId: true, tokensSpent: true, audioBucket: true, audioKey: true },
+      select: { id: true, userId: true, tokensSpent: true },
     });
 
     let refundedCount = 0;
@@ -381,7 +384,6 @@ export class SettlementService {
         if (await this.wasLocked(recording.id)) {
           await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
         }
-        await this.deleteAudioIfPresent(recording.id, recording.audioBucket, recording.audioKey);
         refundedCount += 1;
       } catch (err) {
         this.logger.error(
@@ -391,37 +393,6 @@ export class SettlementService {
     }
 
     return refundedCount;
-  }
-
-  /**
-   * Deletes the Spaces object and nulls audioBucket/audioKey (setting
-   * audioDeletedAt) in the same shape audio-retention-job's maybePurge
-   * already uses -- so a row deleted here is indistinguishable from one
-   * purged by the delayed sweep, and that sweep's own `audioBucket !=
-   * null, audioKey != null` guard means it will never re-attempt this
-   * object. Best-effort: a Spaces failure is logged, not thrown -- the
-   * refund itself must not roll back because a delete call failed
-   * (the row keeps its audioBucket/audioKey and quietly becomes eligible
-   * for audio-retention-job's own delayed purge as a fallback).
-   */
-  private async deleteAudioIfPresent(
-    id: string,
-    bucket: string | null,
-    key: string | null,
-  ): Promise<void> {
-    if (!bucket || !key) return;
-    try {
-      await this.storage.deleteObject(bucket, key);
-    } catch (err) {
-      this.logger.warn(
-        `Failed to delete audio for rejected wordRecording=${id} bucket=${bucket} key=${key}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return;
-    }
-    await this.prisma.wordRecording.update({
-      where: { id },
-      data: { audioBucket: null, audioKey: null, audioDeletedAt: new Date() },
-    });
   }
 
   /**
@@ -958,11 +929,16 @@ export class SettlementService {
     return { settledCount, eligibleCount: recordings.length, totalPayout };
   }
 
-  /** Mirrors refundRejectedWordRecordings -- REJECTED rows (quality-gate prefilter hard-reject) never reach SCORED, so the sweep above never sees them. */
+  /**
+   * Mirrors refundRejectedWordRecordings -- REJECTED rows (quality-gate
+   * prefilter hard-reject) never reach SCORED, so the sweep above never
+   * sees them. Audio is deliberately left in place, not deleted -- see
+   * refundRejectedWordRecordings' doc comment for why.
+   */
   private async refundRejectedDomainConversationRecordings(): Promise<number> {
     const recordings = await this.prisma.domainConversationRecording.findMany({
       where: { status: 'REJECTED', refundedAt: null },
-      select: { id: true, userId: true, tokensSpent: true, audioBucket: true, audioKey: true },
+      select: { id: true, userId: true, tokensSpent: true },
     });
 
     let refundedCount = 0;
@@ -978,11 +954,6 @@ export class SettlementService {
         if (await this.wasLocked(recording.id)) {
           await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
         }
-        await this.deleteDomainConversationAudioIfPresent(
-          recording.id,
-          recording.audioBucket,
-          recording.audioKey,
-        );
         refundedCount += 1;
       } catch (err) {
         this.logger.error(
@@ -992,26 +963,6 @@ export class SettlementService {
     }
 
     return refundedCount;
-  }
-
-  private async deleteDomainConversationAudioIfPresent(
-    id: string,
-    bucket: string | null,
-    key: string | null,
-  ): Promise<void> {
-    if (!bucket || !key) return;
-    try {
-      await this.storage.deleteObject(bucket, key);
-    } catch (err) {
-      this.logger.warn(
-        `Failed to delete audio for rejected domainConversationRecording=${id} bucket=${bucket} key=${key}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return;
-    }
-    await this.prisma.domainConversationRecording.update({
-      where: { id },
-      data: { audioBucket: null, audioKey: null, audioDeletedAt: new Date() },
-    });
   }
 
   /**
