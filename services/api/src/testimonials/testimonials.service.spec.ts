@@ -12,6 +12,8 @@ describe('TestimonialsService', () => {
     getTestimonyMaxVideoSeconds: jest.fn().mockResolvedValue(30),
     getTestimonyTextRewardTokens: jest.fn().mockResolvedValue(5),
     getTestimonyVideoRewardTokens: jest.fn().mockResolvedValue(10),
+    getTestimonyApprovalWeeklyLimit: jest.fn().mockResolvedValue(1),
+    getTestimonyApprovalMonthlyLimit: jest.fn().mockResolvedValue(3),
   };
   const storage = {
     createPresignedUploadUrl: jest
@@ -42,12 +44,15 @@ describe('TestimonialsService', () => {
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
       },
+      $transaction: jest.fn(async (callback: any) => callback(prisma)),
     };
     settings.isTestimonyEnabled.mockReset().mockResolvedValue(true);
     settings.getTestimonyMaxTextLength.mockReset().mockResolvedValue(200);
     settings.getTestimonyMaxVideoSeconds.mockReset().mockResolvedValue(30);
     settings.getTestimonyTextRewardTokens.mockReset().mockResolvedValue(5);
     settings.getTestimonyVideoRewardTokens.mockReset().mockResolvedValue(10);
+    settings.getTestimonyApprovalWeeklyLimit.mockReset().mockResolvedValue(1);
+    settings.getTestimonyApprovalMonthlyLimit.mockReset().mockResolvedValue(3);
     storage.createPresignedUploadUrl.mockClear();
     storage.getPublicObjectUrl.mockClear();
     (creditTestimonyReward as jest.Mock).mockReset().mockResolvedValue(true);
@@ -123,7 +128,7 @@ describe('TestimonialsService', () => {
       expect(result.kind).toBe('VIDEO');
     });
 
-    it('allows a new submission while under the monthly cap, regardless of the other testimony\'s status', async () => {
+    it("allows a new submission while under the monthly cap, regardless of the other testimony's status", async () => {
       prisma.testimony.count.mockResolvedValue(1);
       const result = await service.submit('user-1', { kind: 'TEXT', text: 'again' } as any);
       expect(result.kind).toBe('TEXT');
@@ -283,6 +288,22 @@ describe('TestimonialsService', () => {
         rejectionReason: 'low quality',
       } as any);
 
+      expect(creditTestimonyReward).not.toHaveBeenCalled();
+    });
+
+    it('blocks approval when the trainer reached the weekly approval limit', async () => {
+      prisma.testimony.findUnique.mockResolvedValue({
+        id: 'testimony-1',
+        userId: 'user-1',
+        status: 'PENDING',
+        kind: 'TEXT',
+      });
+      prisma.testimony.count.mockResolvedValue(1);
+
+      await expect(
+        service.review('admin-1', 'testimony-1', { status: 'APPROVED' } as any),
+      ).rejects.toThrow('weekly testimony approval limit of 1');
+      expect(prisma.testimony.update).not.toHaveBeenCalled();
       expect(creditTestimonyReward).not.toHaveBeenCalled();
     });
   });

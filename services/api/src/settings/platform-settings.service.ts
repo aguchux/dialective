@@ -255,6 +255,16 @@ export class PlatformSettingsService {
     return row.testimonyLandingLimit;
   }
 
+  async getTestimonyApprovalWeeklyLimit(): Promise<number> {
+    const row = await this.getRow();
+    return row.testimonyApprovalWeeklyLimit;
+  }
+
+  async getTestimonyApprovalMonthlyLimit(): Promise<number> {
+    const row = await this.getRow();
+    return row.testimonyApprovalMonthlyLimit;
+  }
+
   async getTestimonyTextRewardTokens(): Promise<number> {
     const row = await this.getRow();
     return row.testimonyTextRewardTokens.toNumber();
@@ -989,6 +999,8 @@ export class PlatformSettingsService {
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
       testimonyLandingLimit: row.testimonyLandingLimit,
+      testimonyApprovalWeeklyLimit: row.testimonyApprovalWeeklyLimit,
+      testimonyApprovalMonthlyLimit: row.testimonyApprovalMonthlyLimit,
       testimonyTextRewardTokens: row.testimonyTextRewardTokens.toString(),
       testimonyVideoRewardTokens: row.testimonyVideoRewardTokens.toString(),
       qualityGateEnabled: row.qualityGateEnabled,
@@ -1152,6 +1164,8 @@ export class PlatformSettingsService {
     testimonyMaxTextLength?: number;
     testimonyMaxVideoSeconds?: number;
     testimonyLandingLimit?: number;
+    testimonyApprovalWeeklyLimit?: number;
+    testimonyApprovalMonthlyLimit?: number;
     testimonyTextRewardTokens?: number;
     testimonyVideoRewardTokens?: number;
     qualityGateEnabled?: boolean;
@@ -1330,8 +1344,13 @@ export class PlatformSettingsService {
       }
     }
 
-    if (data.domainConversationMaxCyclesPerTrainer !== undefined && data.domainConversationMaxCyclesPerTrainer < 0) {
-      throw new BadRequestException('domainConversationMaxCyclesPerTrainer must be >= 0 (0 disables the cap)');
+    if (
+      data.domainConversationMaxCyclesPerTrainer !== undefined &&
+      data.domainConversationMaxCyclesPerTrainer < 0
+    ) {
+      throw new BadRequestException(
+        'domainConversationMaxCyclesPerTrainer must be >= 0 (0 disables the cap)',
+      );
     }
 
     if (data.domainConversationProviderOrder) {
@@ -1522,10 +1541,7 @@ export class PlatformSettingsService {
     }
 
     // 0 is the explicit "off" value for both (see schema doc comments).
-    if (
-      data.validationRewardPerRecording !== undefined &&
-      data.validationRewardPerRecording < 0
-    ) {
+    if (data.validationRewardPerRecording !== undefined && data.validationRewardPerRecording < 0) {
       throw new BadRequestException('validationRewardPerRecording must be >= 0');
     }
     if (data.validatorDeckMaxItems !== undefined && data.validatorDeckMaxItems < 0) {
@@ -1555,6 +1571,15 @@ export class PlatformSettingsService {
     }
     if (data.sessionMaxHours !== undefined && data.sessionMaxHours < 1) {
       throw new BadRequestException('sessionMaxHours must be >= 1');
+    }
+    if (data.testimonyApprovalWeeklyLimit !== undefined && data.testimonyApprovalWeeklyLimit < 0) {
+      throw new BadRequestException('testimonyApprovalWeeklyLimit must be >= 0');
+    }
+    if (
+      data.testimonyApprovalMonthlyLimit !== undefined &&
+      data.testimonyApprovalMonthlyLimit < 0
+    ) {
+      throw new BadRequestException('testimonyApprovalMonthlyLimit must be >= 0');
     }
 
     // wordTrainingEnabled/sentenceTrainingEnabled/reverseWordTrainingEnabled
@@ -1687,6 +1712,8 @@ export class PlatformSettingsService {
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
       testimonyLandingLimit: row.testimonyLandingLimit,
+      testimonyApprovalWeeklyLimit: row.testimonyApprovalWeeklyLimit,
+      testimonyApprovalMonthlyLimit: row.testimonyApprovalMonthlyLimit,
       testimonyTextRewardTokens: row.testimonyTextRewardTokens.toString(),
       testimonyVideoRewardTokens: row.testimonyVideoRewardTokens.toString(),
       qualityGateEnabled: row.qualityGateEnabled,
@@ -1874,6 +1901,8 @@ export class PlatformSettingsService {
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
       testimonyLandingLimit: row.testimonyLandingLimit,
+      testimonyApprovalWeeklyLimit: row.testimonyApprovalWeeklyLimit,
+      testimonyApprovalMonthlyLimit: row.testimonyApprovalMonthlyLimit,
       testimonyTextRewardTokens: row.testimonyTextRewardTokens.toString(),
       testimonyVideoRewardTokens: row.testimonyVideoRewardTokens.toString(),
     };

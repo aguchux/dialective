@@ -422,6 +422,16 @@ export class UpdatePlatformSettingsDto {
   testimonyLandingLimit?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  testimonyApprovalWeeklyLimit?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  testimonyApprovalMonthlyLimit?: number;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   testimonyTextRewardTokens?: number;

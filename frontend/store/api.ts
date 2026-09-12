@@ -1171,6 +1171,8 @@ export interface PublicClientSettings {
   testimonyMaxTextLength: number;
   testimonyMaxVideoSeconds: number;
   testimonyLandingLimit: number;
+  testimonyApprovalWeeklyLimit: number;
+  testimonyApprovalMonthlyLimit: number;
   testimonyTextRewardTokens: string;
   testimonyVideoRewardTokens: string;
 }
@@ -1211,12 +1213,21 @@ export type SubmitTestimonyInput =
 export interface TestimonyAdminPage {
   items: (Testimony & {
     videoUrl: string | null;
+    userApprovedCount: number;
+    userLastApprovedAt: string | null;
     user: { firstName: string | null; lastName: string | null; email: string };
   })[];
   page: number;
   pageSize: number;
   total: number;
   totalPages: number;
+  analytics: {
+    totalApproved: number;
+    approvedThisWeek: number;
+    approvedThisMonth: number;
+    lastApprovalAt: string | null;
+    lastApprovalTrainer: string | null;
+  };
 }
 
 export type MarketingAdFormat = 'FEED_SQUARE' | 'STORY' | 'LINK_PREVIEW';
@@ -1633,6 +1644,8 @@ export interface PlatformSettings {
   testimonyMaxTextLength: number;
   testimonyMaxVideoSeconds: number;
   testimonyLandingLimit: number;
+  testimonyApprovalWeeklyLimit: number;
+  testimonyApprovalMonthlyLimit: number;
   testimonyTextRewardTokens: string;
   testimonyVideoRewardTokens: string;
   qualityGateEnabled: boolean;
@@ -1783,6 +1796,8 @@ export interface PlatformSettingsInput {
   testimonyMaxTextLength?: number;
   testimonyMaxVideoSeconds?: number;
   testimonyLandingLimit?: number;
+  testimonyApprovalWeeklyLimit?: number;
+  testimonyApprovalMonthlyLimit?: number;
   testimonyTextRewardTokens?: number;
   testimonyVideoRewardTokens?: number;
   qualityGateEnabled?: boolean;
@@ -1919,6 +1934,13 @@ export interface SubmissionsPage {
   pageSize: number;
   total: number;
   totalPages: number;
+  analytics: {
+    totalApproved: number;
+    approvedThisWeek: number;
+    approvedThisMonth: number;
+    lastApprovalAt: string | null;
+    lastApprovalTrainer: string | null;
+  };
 }
 
 export interface DomainConversationPrompt {
@@ -2140,7 +2162,15 @@ export interface ValidatorDeckSummary {
   name: string;
   createdByUserId: string;
   ownerUserId: string;
-  status: 'DRAFT' | 'PENDING_L2' | 'PENDING_L3' | 'PENDING_ADMIN' | 'APPROVED' | 'PUBLISHED' | 'REJECTED' | 'ARCHIVED';
+  status:
+    | 'DRAFT'
+    | 'PENDING_L2'
+    | 'PENDING_L3'
+    | 'PENDING_ADMIN'
+    | 'APPROVED'
+    | 'PUBLISHED'
+    | 'REJECTED'
+    | 'ARCHIVED';
   dialectTag: string | null;
   countryCode: string | null;
   createdAt: string;
@@ -2822,7 +2852,11 @@ export const dialectivaApi = createApi({
       invalidatesTags: ['AdminCommunityTags'],
     }),
     renameAdminCommunityTag: builder.mutation<AdminCommunityTag, { id: string; name: string }>({
-      query: ({ id, name }) => ({ url: `/admin/community/tags/${id}`, method: 'PATCH', body: { name } }),
+      query: ({ id, name }) => ({
+        url: `/admin/community/tags/${id}`,
+        method: 'PATCH',
+        body: { name },
+      }),
       invalidatesTags: ['AdminCommunityTags'],
     }),
     mergeAdminCommunityTags: builder.mutation<AdminCommunityTag, { id: string; targetId: string }>({
@@ -2846,7 +2880,13 @@ export const dialectivaApi = createApi({
     }),
     getAdminCommunityMembers: builder.query<
       AdminCommunityMembersPage,
-      { page: number; pageSize: number; search?: string; status?: CommunityMemberStatus; role?: CommunityMemberRole }
+      {
+        page: number;
+        pageSize: number;
+        search?: string;
+        status?: CommunityMemberStatus;
+        role?: CommunityMemberRole;
+      }
     >({
       query: (params) => ({ url: '/admin/community/members', params }),
       providesTags: ['AdminCommunityMembers'],
@@ -2915,7 +2955,11 @@ export const dialectivaApi = createApi({
       providesTags: ['Wallet'],
     }),
     emailTrainerReport: builder.mutation<{ sent: boolean }, { from?: string; to?: string }>({
-      query: ({ from, to }) => ({ url: '/wallet/report/email', method: 'POST', params: { from, to } }),
+      query: ({ from, to }) => ({
+        url: '/wallet/report/email',
+        method: 'POST',
+        params: { from, to },
+      }),
     }),
     getEarningHistory: builder.query<
       EarningHistoryPage,
@@ -3111,7 +3155,11 @@ export const dialectivaApi = createApi({
       DomainConversationRecordingUpload,
       { assignmentId: string; contentType: string }
     >({
-      query: (body) => ({ url: '/domain-conversations/recordings/upload-url', method: 'POST', body }),
+      query: (body) => ({
+        url: '/domain-conversations/recordings/upload-url',
+        method: 'POST',
+        body,
+      }),
     }),
     submitDomainConversationRecording: builder.mutation<
       { recordingId: string; status: string },
@@ -3156,7 +3204,13 @@ export const dialectivaApi = createApi({
     }),
     createDomainPromptAdmin: builder.mutation<
       AdminDomainPrompt[],
-      { domain: string; scenarioKey: string; neutralText: string; maleText: string; femaleText: string }
+      {
+        domain: string;
+        scenarioKey: string;
+        neutralText: string;
+        maleText: string;
+        femaleText: string;
+      }
     >({
       query: (body) => ({ url: '/domain-conversations/admin/prompts', method: 'POST', body }),
       invalidatesTags: ['DomainPrompts'],
@@ -3165,7 +3219,11 @@ export const dialectivaApi = createApi({
       AdminDomainPrompt,
       { id: string; domain?: string; text?: string }
     >({
-      query: ({ id, ...body }) => ({ url: `/domain-conversations/admin/prompts/${id}`, method: 'PATCH', body }),
+      query: ({ id, ...body }) => ({
+        url: `/domain-conversations/admin/prompts/${id}`,
+        method: 'PATCH',
+        body,
+      }),
       invalidatesTags: ['DomainPrompts'],
     }),
     setDomainPromptDisabledAdmin: builder.mutation<
@@ -3234,7 +3292,12 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/wallet/deposits/flutterwave/${id}/check-status`, method: 'POST' }),
     }),
     getWithdrawalMinAmount: builder.query<
-      { currency: WithdrawalCurrency; network: WithdrawalNetwork; minAmount: number; minTokens: string },
+      {
+        currency: WithdrawalCurrency;
+        network: WithdrawalNetwork;
+        minAmount: number;
+        minTokens: string;
+      },
       { currency: WithdrawalCurrency; network: WithdrawalNetwork }
     >({
       query: (params) => ({ url: '/wallet/withdrawal-min-amount', params }),
@@ -3314,7 +3377,11 @@ export const dialectivaApi = createApi({
         walletAddress: string;
       }
     >({
-      query: (body) => ({ url: '/payout-accounts/stablecoin-wallet/setup/otp', method: 'POST', body }),
+      query: (body) => ({
+        url: '/payout-accounts/stablecoin-wallet/setup/otp',
+        method: 'POST',
+        body,
+      }),
     }),
     updatePayoutAccount: builder.mutation<PayoutAccount, { id: string; isDefault: boolean }>({
       query: ({ id, ...body }) => ({ url: `/payout-accounts/${id}`, method: 'PATCH', body }),
@@ -3367,7 +3434,11 @@ export const dialectivaApi = createApi({
       providesTags: ['Kyc'],
     }),
     listKycEvidence: builder.query<
-      { id: string; kind: 'DOCUMENT_FRONT' | 'DOCUMENT_BACK' | 'SELFIE_FRAME'; capturedAt: string }[],
+      {
+        id: string;
+        kind: 'DOCUMENT_FRONT' | 'DOCUMENT_BACK' | 'SELFIE_FRAME';
+        capturedAt: string;
+      }[],
       string
     >({
       query: (id) => `/admin/kyc/${id}/evidence`,
@@ -3416,11 +3487,19 @@ export const dialectivaApi = createApi({
       invalidatesTags: ['Kyc'],
     }),
     declineKycVerification: builder.mutation<KycVerification, { id: string; reason: string }>({
-      query: ({ id, reason }) => ({ url: `/admin/kyc/${id}/decline`, method: 'POST', body: { reason } }),
+      query: ({ id, reason }) => ({
+        url: `/admin/kyc/${id}/decline`,
+        method: 'POST',
+        body: { reason },
+      }),
       invalidatesTags: ['Kyc'],
     }),
     revokeKycVerification: builder.mutation<KycVerification, { id: string; reason: string }>({
-      query: ({ id, reason }) => ({ url: `/admin/kyc/${id}/revoke`, method: 'POST', body: { reason } }),
+      query: ({ id, reason }) => ({
+        url: `/admin/kyc/${id}/revoke`,
+        method: 'POST',
+        body: { reason },
+      }),
       invalidatesTags: ['Kyc'],
     }),
     getTokenomicsStatus: builder.query<TokenomicsStatus, void>({
@@ -3554,10 +3633,12 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/admin/withdrawals/${id}/refresh-nowpayments`, method: 'POST' }),
       invalidatesTags: ['Wallet'],
     }),
-    cancelNowPaymentsWithdrawal: builder.mutation<{ withdrawalId: string; status: string }, string>({
-      query: (id) => ({ url: `/admin/withdrawals/${id}/cancel-nowpayments`, method: 'POST' }),
-      invalidatesTags: ['Wallet'],
-    }),
+    cancelNowPaymentsWithdrawal: builder.mutation<{ withdrawalId: string; status: string }, string>(
+      {
+        query: (id) => ({ url: `/admin/withdrawals/${id}/cancel-nowpayments`, method: 'POST' }),
+        invalidatesTags: ['Wallet'],
+      },
+    ),
     bulkResolveWithdrawals: builder.mutation<
       { results: { id: string; ok: boolean; error?: string }[] },
       { ids: string[]; action: 'approve' | 'reject'; adminNote?: string }
@@ -3730,13 +3811,12 @@ export const dialectivaApi = createApi({
     changePassword: builder.mutation<void, { currentPassword: string; newPassword: string }>({
       query: (body) => ({ url: '/auth/change-password', method: 'POST', body }),
     }),
-    updateTwoFactor: builder.mutation<
-      PublicUser,
-      { emailEnabled?: boolean; smsEnabled?: boolean }
-    >({
-      query: (body) => ({ url: '/auth/me/two-factor', method: 'PATCH', body }),
-      invalidatesTags: ['Profile'],
-    }),
+    updateTwoFactor: builder.mutation<PublicUser, { emailEnabled?: boolean; smsEnabled?: boolean }>(
+      {
+        query: (body) => ({ url: '/auth/me/two-factor', method: 'PATCH', body }),
+        invalidatesTags: ['Profile'],
+      },
+    ),
     requestAccountCloseOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
       void
@@ -4146,7 +4226,10 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: (_result, _error, { id }) => ['Users', { type: 'Users', id }],
     }),
-    updateValidatorLevel: builder.mutation<PublicUser, { id: string; validatorLevel: 'L1' | 'L2' | 'L3' }>({
+    updateValidatorLevel: builder.mutation<
+      PublicUser,
+      { id: string; validatorLevel: 'L1' | 'L2' | 'L3' }
+    >({
       query: ({ id, validatorLevel }) => ({
         url: `/auth/admin/users/${id}/validator-level`,
         method: 'PATCH',
@@ -4319,13 +4402,12 @@ export const dialectivaApi = createApi({
       query: (params) => ({ url: '/admin-recordings', params }),
       providesTags: ['AdminRecordings'],
     }),
-    getUnsettled: builder.query<
-      UnsettledPage,
-      { page: number; pageSize: number; userId?: string }
-    >({
-      query: (params) => ({ url: '/admin-settlement/unsettled', params }),
-      providesTags: ['AdminSettlement'],
-    }),
+    getUnsettled: builder.query<UnsettledPage, { page: number; pageSize: number; userId?: string }>(
+      {
+        query: (params) => ({ url: '/admin-settlement/unsettled', params }),
+        providesTags: ['AdminSettlement'],
+      },
+    ),
     settleOne: builder.mutation<SettleResult, { id: string; force?: boolean }>({
       query: ({ id, force }) => ({
         url: `/admin-settlement/${id}/settle`,
@@ -4616,7 +4698,10 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/words/admin/${id}`, method: 'DELETE' }),
       invalidatesTags: ['AdminWords'],
     }),
-    setWordDisabled: builder.mutation<{ id: string; isDisabled: boolean }, { id: string; disabled: boolean }>({
+    setWordDisabled: builder.mutation<
+      { id: string; isDisabled: boolean },
+      { id: string; disabled: boolean }
+    >({
       query: ({ id, disabled }) => ({
         url: `/words/admin/${id}/disable`,
         method: 'PATCH',
@@ -4790,7 +4875,10 @@ export const dialectivaApi = createApi({
       { id: string; body: { name?: string; dialectTag?: string; countryCode?: string } }
     >({
       query: ({ id, body }) => ({ url: `/validator/decks/${id}`, method: 'PATCH', body }),
-      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+      ],
     }),
     addValidatorDeckItem: builder.mutation<ValidatorDeckItem, { id: string; recordingId: string }>({
       query: ({ id, recordingId }) => ({
@@ -4813,7 +4901,10 @@ export const dialectivaApi = createApi({
         url: `/validator/decks/${id}/items/${recordingId}`,
         method: 'DELETE',
       }),
-      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+      ],
     }),
     scoreValidatorDeckItem: builder.mutation<
       ValidatorDeckItem,
@@ -4824,7 +4915,10 @@ export const dialectivaApi = createApi({
         method: 'POST',
         body,
       }),
-      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+      ],
     }),
     updateValidatorTranscript: builder.mutation<
       ValidatorDeckItem,
@@ -4835,7 +4929,10 @@ export const dialectivaApi = createApi({
         method: 'PATCH',
         body: { transcript },
       }),
-      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+      ],
     }),
     flagValidatorDeckItem: builder.mutation<
       ValidatorDeckItem,
@@ -4846,7 +4943,10 @@ export const dialectivaApi = createApi({
         method: 'POST',
         body: { reason, note },
       }),
-      invalidatesTags: (_result, _error, { id }) => [{ type: 'ValidatorDecks', id }, 'ValidatorDecks'],
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'ValidatorDecks', id },
+        'ValidatorDecks',
+      ],
     }),
     getValidatorRecordings: builder.query<ValidatorRecordingsPage, ListValidatorRecordingsParams>({
       query: (params) => ({ url: '/validator/recordings', params }),
@@ -4911,7 +5011,11 @@ export const dialectivaApi = createApi({
       ValidatorDeckSummary,
       { id: string; body: ReassignValidatorDeckInput }
     >({
-      query: ({ id, body }) => ({ url: `/admin/validator-decks/${id}/reassign`, method: 'POST', body }),
+      query: ({ id, body }) => ({
+        url: `/admin/validator-decks/${id}/reassign`,
+        method: 'POST',
+        body,
+      }),
       invalidatesTags: (_result, _error, { id }) => [
         { type: 'ValidatorDecks', id },
         'ValidatorDecks',

@@ -134,7 +134,10 @@ function TestimonyTextEditor({ testimony }: { testimony: Testimony }) {
         title="Edit text testimonial"
       >
         <form className="grid gap-3" onSubmit={(event) => void save(event)}>
-          <label className="grid gap-1.5 text-sm font-bold" htmlFor={`testimony-text-${testimony.id}`}>
+          <label
+            className="grid gap-1.5 text-sm font-bold"
+            htmlFor={`testimony-text-${testimony.id}`}
+          >
             Corrected testimonial
             <textarea
               className="min-h-40 w-full resize-y rounded-lg border border-line bg-white p-3 text-sm font-normal leading-relaxed text-ink"
@@ -143,10 +146,23 @@ function TestimonyTextEditor({ testimony }: { testimony: Testimony }) {
               value={text}
             />
           </label>
-          {error && <p className="text-sm font-bold text-danger" role="alert">{error}</p>}
+          {error && (
+            <p className="text-sm font-bold text-danger" role="alert">
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-2">
-            <button className={secondaryButtonClass} onClick={() => setOpen(false)} type="button">Cancel</button>
-            <ActionButton className="inline-flex min-h-9 items-center justify-center rounded-lg bg-accent px-3 py-1.5 text-sm font-extrabold text-white hover:bg-accent-dark" pending={isLoading} pendingLabel="Saving" type="submit">Save correction</ActionButton>
+            <button className={secondaryButtonClass} onClick={() => setOpen(false)} type="button">
+              Cancel
+            </button>
+            <ActionButton
+              className="inline-flex min-h-9 items-center justify-center rounded-lg bg-accent px-3 py-1.5 text-sm font-extrabold text-white hover:bg-accent-dark"
+              pending={isLoading}
+              pendingLabel="Saving"
+              type="submit"
+            >
+              Save correction
+            </ActionButton>
           </div>
         </form>
       </DialogContent>
@@ -275,6 +291,32 @@ export default function AdminTestimonialsPage() {
           </p>
         </div>
 
+        {data?.analytics && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ['Approved total', data.analytics.totalApproved.toLocaleString()],
+              ['Approved this week', data.analytics.approvedThisWeek.toLocaleString()],
+              ['Approved this month', data.analytics.approvedThisMonth.toLocaleString()],
+              [
+                'Last approval',
+                data.analytics.lastApprovalAt
+                  ? `${data.analytics.lastApprovalTrainer ?? 'Unknown'} · ${new Date(data.analytics.lastApprovalAt).toLocaleDateString()}`
+                  : 'None yet',
+              ],
+            ].map(([label, value]) => (
+              <div
+                className="grid gap-1 rounded-lg border border-line bg-white p-4 shadow-[0_2px_8px_rgba(27,31,27,0.05)]"
+                key={label}
+              >
+                <p className="text-sm font-bold text-muted">{label}</p>
+                <p className="truncate text-xl font-black" title={value}>
+                  {value}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex gap-1">
           {STATUS_TABS.map((tab) => (
             <button
@@ -340,6 +382,12 @@ export default function AdminTestimonialsPage() {
                     )}
                     <p className="text-xs text-muted">
                       Submitted {new Date(item.createdAt).toLocaleString()}
+                    </p>
+                    <p className="text-xs font-bold text-muted">
+                      Trainer approvals: {item.userApprovedCount}
+                      {item.userLastApprovedAt
+                        ? ` · Last approved ${new Date(item.userLastApprovedAt).toLocaleString()}`
+                        : ' · No prior approvals'}
                     </p>
                     {item.adminEditedAt && (
                       <p className="text-xs font-bold text-amber-800">

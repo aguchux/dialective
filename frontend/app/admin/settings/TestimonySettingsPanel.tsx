@@ -21,6 +21,8 @@ export function TestimonySettingsPanel() {
   const [maxTextLength, setMaxTextLength] = useState('200');
   const [maxVideoSeconds, setMaxVideoSeconds] = useState('30');
   const [landingLimit, setLandingLimit] = useState('12');
+  const [weeklyApprovalLimit, setWeeklyApprovalLimit] = useState('1');
+  const [monthlyApprovalLimit, setMonthlyApprovalLimit] = useState('3');
   const [textRewardTokens, setTextRewardTokens] = useState('5');
   const [videoRewardTokens, setVideoRewardTokens] = useState('5');
   const [message, setMessage] = useState<string | null>(null);
@@ -32,6 +34,8 @@ export function TestimonySettingsPanel() {
     setMaxTextLength(String(settings.testimonyMaxTextLength));
     setMaxVideoSeconds(String(settings.testimonyMaxVideoSeconds));
     setLandingLimit(String(settings.testimonyLandingLimit));
+    setWeeklyApprovalLimit(String(settings.testimonyApprovalWeeklyLimit));
+    setMonthlyApprovalLimit(String(settings.testimonyApprovalMonthlyLimit));
     setTextRewardTokens(settings.testimonyTextRewardTokens);
     setVideoRewardTokens(settings.testimonyVideoRewardTokens);
   }, [settings]);
@@ -46,6 +50,8 @@ export function TestimonySettingsPanel() {
     const landingCount = Number(landingLimit);
     const textReward = Number(textRewardTokens);
     const videoReward = Number(videoRewardTokens);
+    const weeklyLimit = Number(weeklyApprovalLimit);
+    const monthlyLimit = Number(monthlyApprovalLimit);
     if (!Number.isFinite(textLength) || textLength < 1) {
       setError('Max text length must be a positive number.');
       return;
@@ -66,6 +72,14 @@ export function TestimonySettingsPanel() {
       setError('Video testimony reward must be zero or a positive number.');
       return;
     }
+    if (!Number.isInteger(weeklyLimit) || weeklyLimit < 0) {
+      setError('Weekly approval limit must be a whole number of zero or more.');
+      return;
+    }
+    if (!Number.isInteger(monthlyLimit) || monthlyLimit < 0) {
+      setError('Monthly approval limit must be a whole number of zero or more.');
+      return;
+    }
 
     try {
       await updateSettings({
@@ -75,6 +89,8 @@ export function TestimonySettingsPanel() {
         testimonyLandingLimit: landingCount,
         testimonyTextRewardTokens: textReward,
         testimonyVideoRewardTokens: videoReward,
+        testimonyApprovalWeeklyLimit: weeklyLimit,
+        testimonyApprovalMonthlyLimit: monthlyLimit,
       }).unwrap();
       setMessage('Testimony settings saved.');
     } catch (err) {
@@ -132,6 +148,42 @@ export function TestimonySettingsPanel() {
               type="number"
               value={maxTextLength}
             />
+          </div>
+
+          <div className="grid gap-1">
+            <label className="text-sm font-bold" htmlFor="testimony-weekly-approval-limit">
+              Max approvals per trainer in 7 days
+            </label>
+            <input
+              className={`${inputClass} max-w-40`}
+              id="testimony-weekly-approval-limit"
+              min="0"
+              onChange={(e) => setWeeklyApprovalLimit(e.target.value)}
+              step="1"
+              type="number"
+              value={weeklyApprovalLimit}
+            />
+            <p className="text-xs leading-relaxed text-muted">
+              Use 0 to disable this approval gate.
+            </p>
+          </div>
+
+          <div className="grid gap-1">
+            <label className="text-sm font-bold" htmlFor="testimony-monthly-approval-limit">
+              Max approvals per trainer in 30 days
+            </label>
+            <input
+              className={`${inputClass} max-w-40`}
+              id="testimony-monthly-approval-limit"
+              min="0"
+              onChange={(e) => setMonthlyApprovalLimit(e.target.value)}
+              step="1"
+              type="number"
+              value={monthlyApprovalLimit}
+            />
+            <p className="text-xs leading-relaxed text-muted">
+              Use 0 to disable this approval gate.
+            </p>
           </div>
 
           <div className="grid gap-1">

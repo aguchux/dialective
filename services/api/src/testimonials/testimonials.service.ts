@@ -113,19 +113,60 @@ export class TestimonialsService {
 
   async listForAdmin(query: ListTestimoniesAdminDto) {
     const where = query.status ? { status: query.status } : {};
-    const [total, items] = await Promise.all([
-      this.prisma.testimony.count({ where }),
-      this.prisma.testimony.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-        include: { user: { select: { firstName: true, lastName: true, email: true } } },
-      }),
-    ]);
+    const [total, items, totalApproved, approvedThisWeek, approvedThisMonth, lastApproval] =
+      await Promise.all([
+        this.prisma.testimony.count({ where }),
+        this.prisma.testimony.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: (query.page - 1) * query.pageSize,
+          take: query.pageSize,
+          include: { user: { select: { firstName: true, lastName: true, email: true } } },
+        }),
+        this.prisma.testimony.count({ where: { status: 'APPROVED' } }),
+        this.prisma.testimony.count({
+          where: {
+            status: 'APPROVED',
+            reviewedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          },
+        }),
+        this.prisma.testimony.count({
+          where: {
+            status: 'APPROVED',
+            reviewedAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+          },
+        }),
+        this.prisma.testimony.findFirst({
+          where: { status: 'APPROVED' },
+          orderBy: { reviewedAt: 'desc' },
+          select: {
+            reviewedAt: true,
+            user: { select: { firstName: true, lastName: true, email: true } },
+          },
+        }),
+      ]);
+    const userIds = [...new Set(items.map((item) => item.userId))];
+    const approvedForUsers = userIds.length
+      ? await this.prisma.testimony.findMany({
+          where: { userId: { in: userIds }, status: 'APPROVED' },
+          select: { userId: true, reviewedAt: true },
+          orderBy: { reviewedAt: 'desc' },
+        })
+      : [];
+    const approvalByUser = new Map<string, { count: number; lastAt: Date | null }>();
+    for (const approval of approvedForUsers) {
+      const current = approvalByUser.get(approval.userId);
+      approvalByUser.set(approval.userId, {
+        count: (current?.count ?? 0) + 1,
+        lastAt: current?.lastAt ?? approval.reviewedAt,
+      });
+    }
+
     return {
       items: items.map((item) => ({
         ...item,
+        userApprovedCount: approvalByUser.get(item.userId)?.count ?? 0,
+        userLastApprovedAt: approvalByUser.get(item.userId)?.lastAt?.toISOString() ?? null,
         videoUrl:
           item.videoBucket && item.videoKey
             ? this.storage.getPublicObjectUrl(item.videoBucket, item.videoKey)
@@ -135,25 +176,75 @@ export class TestimonialsService {
       pageSize: query.pageSize,
       total,
       totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+      analytics: {
+        totalApproved,
+        approvedThisWeek,
+        approvedThisMonth,
+        lastApprovalAt: lastApproval?.reviewedAt?.toISOString() ?? null,
+        lastApprovalTrainer: lastApproval
+          ? [lastApproval.user.firstName, lastApproval.user.lastName].filter(Boolean).join(' ') ||
+            lastApproval.user.email
+          : null,
+      },
     };
   }
 
   async review(adminId: string, testimonyId: string, dto: ReviewTestimonyDto) {
-    const testimony = await this.prisma.testimony.findUnique({ where: { id: testimonyId } });
-    if (!testimony) throw new NotFoundException('Testimony not found');
-    if (testimony.status !== 'PENDING') {
-      throw new ConflictException('This testimony has already been reviewed');
-    }
-
-    const updated = await this.prisma.testimony.update({
-      where: { id: testimonyId },
-      data: {
-        status: dto.status,
-        reviewedAt: new Date(),
-        reviewedByAdminId: adminId,
-        rejectionReason: dto.status === 'REJECTED' ? dto.rejectionReason : null,
+    const updated = await this.prisma.$transaction(
+      async (tx: any) => {
+        const testimony = await tx.testimony.findUnique({ where: { id: testimonyId } });
+        if (!testimony) throw new NotFoundException('Testimony not found');
+        if (testimony.status !== 'PENDING')
+          throw new ConflictException('This testimony has already been reviewed');
+        if (dto.status === 'APPROVED') {
+          const [weeklyLimit, monthlyLimit] = await Promise.all([
+            this.settings.getTestimonyApprovalWeeklyLimit(),
+            this.settings.getTestimonyApprovalMonthlyLimit(),
+          ]);
+          const [weeklyCount, monthlyCount] = await Promise.all([
+            weeklyLimit > 0
+              ? tx.testimony.count({
+                  where: {
+                    userId: testimony.userId,
+                    status: 'APPROVED',
+                    reviewedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+                  },
+                })
+              : 0,
+            monthlyLimit > 0
+              ? tx.testimony.count({
+                  where: {
+                    userId: testimony.userId,
+                    status: 'APPROVED',
+                    reviewedAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+                  },
+                })
+              : 0,
+          ]);
+          if (weeklyLimit > 0 && weeklyCount >= weeklyLimit)
+            throw new ForbiddenException(
+              `This trainer has reached the weekly testimony approval limit of ${weeklyLimit}.`,
+            );
+          if (monthlyLimit > 0 && monthlyCount >= monthlyLimit)
+            throw new ForbiddenException(
+              `This trainer has reached the monthly testimony approval limit of ${monthlyLimit}.`,
+            );
+        }
+        const updatedTestimony = await tx.testimony.update({
+          where: { id: testimonyId },
+          data: {
+            status: dto.status,
+            reviewedAt: new Date(),
+            reviewedByAdminId: adminId,
+            rejectionReason: dto.status === 'REJECTED' ? dto.rejectionReason : null,
+          },
+        });
+        return { testimony, updated: updatedTestimony };
       },
-    });
+      { isolationLevel: 'Serializable' },
+    );
+
+    const testimony = updated.testimony;
 
     if (dto.status === 'APPROVED') {
       // Best-effort: a reward-credit failure must never make the review
@@ -184,7 +275,7 @@ export class TestimonialsService {
       }
     }
 
-    return updated;
+    return updated.updated;
   }
 
   /**
