@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query/react';
 import { isValidPhoneNumber, parsePhoneNumberFromString } from 'libphonenumber-js';
 import { PhoneInput } from 'react-international-phone';
@@ -31,6 +31,7 @@ import {
   Plus,
   Play,
   RefreshCw,
+  Search,
   Send,
   Share2,
   Shield as ShieldIcon,
@@ -858,7 +859,7 @@ function WithdrawalEligibilityNote({
 function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refreshing: boolean }) {
   const usdValue = Number(data.balance) * data.tokenUsdRate;
   const router = useRouter();
-  const latest = data.recentActivity.slice(0, 10);
+  const latest = data.recentActivity;
   return (
     <div>
       <div className="flex items-start justify-between gap-3">
@@ -5231,16 +5232,36 @@ function ActivityList({
   compact?: boolean;
 }) {
   const [page, setPage] = useState(1);
-  const pageSize = compact ? Math.max(entries.length, 1) : 8;
-  const totalPages = Math.max(1, Math.ceil(entries.length / pageSize));
-  const startIndex = compact ? 0 : (page - 1) * pageSize;
-  const shown = entries.slice(startIndex, startIndex + pageSize);
-  const showingFrom = entries.length ? startIndex + 1 : 0;
-  const showingTo = Math.min(startIndex + shown.length, entries.length);
+  const [search, setSearch] = useState('');
+  const pageSize = compact ? 5 : 8;
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return entries;
+    return entries.filter((entry) => {
+      const label = activityLabels[entry.type]?.toLowerCase() ?? '';
+      return (
+        label.includes(query) ||
+        entry.reference.toLowerCase().includes(query) ||
+        entry.type.toLowerCase().includes(query) ||
+        formatDate(entry.createdAt).toLowerCase().includes(query)
+      );
+    });
+  }, [entries, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const startIndex = (page - 1) * pageSize;
+  const shown = filtered.slice(startIndex, startIndex + pageSize);
+  const showingFrom = filtered.length ? startIndex + 1 : 0;
+  const showingTo = Math.min(startIndex + shown.length, filtered.length);
 
   useEffect(() => {
     setPage((currentPage) => Math.min(currentPage, totalPages));
   }, [totalPages]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   if (!entries.length)
     return (
@@ -5254,32 +5275,56 @@ function ActivityList({
 
   return (
     <div className={`${cardClass} overflow-hidden`}>
-      <div className="divide-y divide-line md:hidden">
-        {shown.map((entry) => (
-          <ActivityMobileRow entry={entry} key={entry.id} />
-        ))}
+      <div className="border-b border-line px-4 py-3">
+        <label className="relative block">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+            aria-hidden="true"
+          />
+          <input
+            className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm font-medium text-ink placeholder:text-muted focus:border-accent focus:outline-none"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search activity by type, reference, or date..."
+            type="search"
+            value={search}
+            aria-label="Search recent activity"
+          />
+        </label>
       </div>
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[720px] text-left">
-          <thead className="bg-surface-muted/70 text-xs font-black uppercase text-muted">
-            <tr>
-              <th className="px-4 py-3">Activity</th>
-              <th className="px-4 py-3">Reference</th>
-              <th className="px-4 py-3">Date</th>
-              <th className="px-4 py-3 text-right">Amount</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
+      {filtered.length === 0 ? (
+        <p className="px-4 py-8 text-center text-sm font-bold text-muted">
+          No activity matches "{search}".
+        </p>
+      ) : (
+        <>
+          <div className="divide-y divide-line md:hidden">
             {shown.map((entry) => (
-              <ActivityTableRow entry={entry} key={entry.id} />
+              <ActivityMobileRow entry={entry} key={entry.id} />
             ))}
-          </tbody>
-        </table>
-      </div>
-      {!compact && entries.length > pageSize ? (
+          </div>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[720px] text-left">
+              <thead className="bg-surface-muted/70 text-xs font-black uppercase text-muted">
+                <tr>
+                  <th className="px-4 py-3">Activity</th>
+                  <th className="px-4 py-3">Reference</th>
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {shown.map((entry) => (
+                  <ActivityTableRow entry={entry} key={entry.id} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {filtered.length > pageSize ? (
         <div className="flex flex-col gap-3 border-t border-line px-4 py-3 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
           <span>
-            Showing {showingFrom}-{showingTo} of {entries.length}
+            Showing {showingFrom}-{showingTo} of {filtered.length}
           </span>
           <div className="flex items-center gap-2">
             <button
