@@ -658,9 +658,17 @@ export function DomainConversationDialog({
                   ) : (
                     <>
                       <div className="mx-auto grid w-full max-w-md justify-items-center gap-2 text-center">
-                        <span className="inline-flex items-center rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
-                          {prompt.domain}
-                        </span>
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                          <span className="inline-flex items-center rounded-full bg-accent-soft px-3 py-1 text-xs font-extrabold text-accent">
+                            {prompt.domain}
+                          </span>
+                          {/* Prompts here are always English text; the trainer always
+                              responds in their own dialect -- there's no reverse
+                              direction for this task type, unlike word recordings. */}
+                          <span className="inline-flex items-center rounded-full bg-line px-3 py-1 text-xs font-extrabold text-muted">
+                            English → {prompt.dialectTag}
+                          </span>
+                        </div>
                         <p className="text-lg font-extrabold leading-relaxed">{prompt.promptText}</p>
                         <p className="text-xs font-bold text-muted">
                           Record in {prompt.dialectTag} -- {minDurationSeconds}-{maxDurationSeconds}s
