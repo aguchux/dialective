@@ -86,6 +86,51 @@ export function renderTrainerReportPdf(
       .stroke();
     doc.moveDown(1);
 
+    if (report.ledgerTotalsByType.length > 0) {
+      doc.fillColor(INK).fontSize(12).font('Helvetica-Bold').text('Ledger breakdown (selected range)');
+      doc
+        .fillColor(MUTED)
+        .fontSize(8)
+        .font('Helvetica')
+        .text('Includes admin/system funding and other adjustments not counted in "Total earned" above.');
+      doc.moveDown(0.5);
+
+      const ledgerTableX = doc.page.margins.left;
+      const ledgerTableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+      const typeColWidth = ledgerTableWidth * 0.5;
+      const countColWidth = ledgerTableWidth * 0.2;
+      const amountColWidth = ledgerTableWidth * 0.3;
+
+      function drawLedgerRow(type: string, count: string, amount: string, header = false) {
+        const y = doc.y;
+        doc
+          .fillColor(header ? MUTED : INK)
+          .fontSize(9)
+          .font(header ? 'Helvetica-Bold' : 'Helvetica')
+          .text(type, ledgerTableX, y, { width: typeColWidth })
+          .text(count, ledgerTableX + typeColWidth, y, { width: countColWidth, align: 'right' })
+          .text(amount, ledgerTableX + typeColWidth + countColWidth, y, {
+            width: amountColWidth,
+            align: 'right',
+          });
+        doc.moveDown(0.4);
+      }
+
+      drawLedgerRow('Type', 'Count', 'Net amount (DL)', true);
+      for (const row of report.ledgerTotalsByType) {
+        if (doc.y > doc.page.height - doc.page.margins.bottom - 20) doc.addPage();
+        drawLedgerRow(row.type.replace(/_/g, ' '), String(row.count), formatTokens(row.totalAmount));
+      }
+
+      doc.moveDown(1.5);
+      doc
+        .strokeColor('#dddddd')
+        .moveTo(doc.page.margins.left, doc.y)
+        .lineTo(doc.page.width - doc.page.margins.right, doc.y)
+        .stroke();
+      doc.moveDown(1);
+    }
+
     doc.fillColor(INK).fontSize(12).font('Helvetica-Bold').text('Daily activity (selected range)');
     doc.moveDown(0.5);
 

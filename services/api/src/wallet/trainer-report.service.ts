@@ -79,6 +79,14 @@ export interface TrainerReport {
     heldBalanceTokens: string;
     totalWithdrawnTokens: string;
   };
+  // Every ledger entry type that touched this wallet within the report's
+  // from/to range, summed -- includes credit types LIFETIME_CREDIT_ENTRY_TYPES
+  // deliberately excludes (ADMIN_FUNDING, ADMIN_ADJUSTMENT, DEPOSIT,
+  // DISTRIBUTOR_*, etc.), so a trainer can reconcile totalTokensSinceJoin +
+  // everything else here against availableBalanceTokens + heldBalanceTokens +
+  // totalWithdrawnTokens instead of taking the summary totals on faith. Mirrors
+  // buildProofAccountReport's ledgerTotalsByType, scoped to this report's range.
+  ledgerTotalsByType: { type: string; totalAmount: string; count: number }[];
   daily: { date: string; recordings: number; earningsTokens: string }[];
 }
 
@@ -125,7 +133,7 @@ export class TrainerReportService {
       select: { id: true, balance: true, lockedBalance: true },
     });
 
-    const [ledgerTotals, ledgerDaily, wordRecordings, lifetimeEarningsAgg, withdrawnAgg] =
+    const [ledgerTotals, ledgerByTypeAllTypes, ledgerDaily, wordRecordings, lifetimeEarningsAgg, withdrawnAgg] =
       await Promise.all([
         wallet
           ? this.prisma.ledgerEntry.groupBy({
@@ -136,6 +144,18 @@ export class TrainerReportService {
                 createdAt: createdAtRange,
               },
               _sum: { amount: true },
+            })
+          : Promise.resolve([]),
+        // Unlike ledgerTotals above (EARNING_ENTRY_TYPES only, for the
+        // trainingEarnings/referralEarnings breakout), this covers every
+        // type that touched the wallet in range -- see ledgerTotalsByType's
+        // doc comment on TrainerReport for why.
+        wallet
+          ? this.prisma.ledgerEntry.groupBy({
+              by: ['type'],
+              where: { walletId: wallet.id, createdAt: createdAtRange },
+              _sum: { amount: true },
+              _count: { _all: true },
             })
           : Promise.resolve([]),
         wallet
@@ -225,6 +245,11 @@ export class TrainerReportService {
         heldBalanceTokens: (wallet?.lockedBalance.toNumber() ?? 0).toString(),
         totalWithdrawnTokens: Math.max(totalWithdrawn, 0).toString(),
       },
+      ledgerTotalsByType: ledgerByTypeAllTypes.map((entry) => ({
+        type: entry.type,
+        totalAmount: Number(entry._sum.amount ?? 0).toString(),
+        count: entry._count._all,
+      })),
       daily,
     };
   }

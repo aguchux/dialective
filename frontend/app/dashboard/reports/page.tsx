@@ -314,6 +314,46 @@ export default function TrainerReportsPage() {
                 </div>
               </section>
 
+              {data.ledgerTotalsByType.length > 0 && (
+                <section className="grid gap-2">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wide text-muted">
+                    Ledger breakdown (selected range)
+                  </h3>
+                  <p className="text-xs text-muted">
+                    Every credit and debit type posted to your account in this range, including
+                    admin/system funding and other adjustments not counted in "Total earned" above.
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-140 border-collapse text-left text-sm">
+                      <thead className="border-b border-line text-xs font-extrabold uppercase text-muted">
+                        <tr>
+                          <th className="py-2.5 pr-4">Type</th>
+                          <th className="py-2.5 pr-4 text-right">Count</th>
+                          <th className="py-2.5 text-right">Net amount (DL)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line">
+                        {data.ledgerTotalsByType.map((row) => (
+                          <tr key={row.type}>
+                            <td className="py-2.5 pr-4 font-bold">{row.type.replace(/_/g, ' ')}</td>
+                            <td className="py-2.5 pr-4 text-right text-muted">
+                              {row.count.toLocaleString()}
+                            </td>
+                            <td
+                              className={`py-2.5 text-right font-bold tabular-nums ${
+                                Number(row.totalAmount) < 0 ? 'text-danger' : 'text-accent'
+                              }`}
+                            >
+                              {formatCompactTokens(row.totalAmount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+
               <TrainerReportChart daily={data.daily} />
 
               {isFetching && (

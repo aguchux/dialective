@@ -1565,6 +1565,7 @@ describe('WalletController.emailTrainerReport', () => {
           heldBalanceTokens: '20',
           totalWithdrawnTokens: '580',
         },
+        ledgerTotalsByType: [],
         daily: [],
         from: '2026-08-01T00:00:00.000Z',
         to: '2026-08-07T00:00:00.000Z',

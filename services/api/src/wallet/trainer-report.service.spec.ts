@@ -72,8 +72,8 @@ describe('TrainerReportService', () => {
       { score: 90, compositeScore: 88, createdAt: new Date('2026-08-01T12:00:00Z') },
     ]);
     prisma.ledgerEntry.groupBy.mockResolvedValue([
-      { type: 'TRAINING_PAYOUT', _sum: { amount: 5 } },
-      { type: 'REFERRAL_COMMISSION', _sum: { amount: 1 } },
+      { type: 'TRAINING_PAYOUT', _sum: { amount: 5 }, _count: { _all: 1 } },
+      { type: 'REFERRAL_COMMISSION', _sum: { amount: 1 }, _count: { _all: 1 } },
     ]);
     prisma.ledgerEntry.findMany.mockResolvedValue([
       { amount: 5, createdAt: new Date('2026-08-01T10:00:00Z') },
@@ -95,6 +95,10 @@ describe('TrainerReportService', () => {
       heldBalanceTokens: '0',
       totalWithdrawnTokens: '0',
     });
+    expect(report.ledgerTotalsByType).toEqual([
+      { type: 'TRAINING_PAYOUT', totalAmount: '5', count: 1 },
+      { type: 'REFERRAL_COMMISSION', totalAmount: '1', count: 1 },
+    ]);
     expect(report.daily).toEqual([{ date: '2026-08-01', recordings: 3, earningsTokens: '6' }]);
   });
 
@@ -169,8 +173,8 @@ describe('TrainerReportService', () => {
     const from = new Date('2026-08-01T00:00:00Z');
     const to = new Date('2026-08-01T23:59:59Z');
     prisma.ledgerEntry.groupBy.mockResolvedValue([
-      { type: 'TRAINING_PAYOUT', _sum: { amount: 5 } },
-      { type: 'COURSE_COMPLETION_REWARD', _sum: { amount: 2 } },
+      { type: 'TRAINING_PAYOUT', _sum: { amount: 5 }, _count: { _all: 1 } },
+      { type: 'COURSE_COMPLETION_REWARD', _sum: { amount: 2 }, _count: { _all: 1 } },
     ]);
 
     const report = await service.buildReport('user-1', from, to);
