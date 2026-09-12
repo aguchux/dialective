@@ -6,6 +6,8 @@ describe('contentTypeForAudioKey', () => {
     ['ig/forward/abc/xyz.webm', 'audio/webm'],
     ['ig/forward/abc/xyz.ogg', 'audio/ogg'],
     ['ig/forward/abc/xyz.WAV', 'audio/wav'],
+    // iOS Safari's MediaRecorder fallback container.
+    ['ig/forward/abc/xyz.m4a', 'audio/mp4'],
   ])('%s -> %s', (key, expected) => {
     expect(contentTypeForAudioKey(key)).toBe(expected);
   });

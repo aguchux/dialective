@@ -224,6 +224,18 @@ describe('DomainConversationsService', () => {
         service.createUploadUrl(trainer.id, { assignmentId: assignment.id, contentType: 'audio/webm' }),
       ).rejects.toThrow('already been submitted');
     });
+
+    // iOS Safari's MediaRecorder supports neither webm nor ogg and falls
+    // back to audio/mp4 (an M4A container) -- must map to a real extension
+    // here, not the 'bin' a missing entry would silently produce.
+    it('maps iOS Safari\'s audio/mp4 fallback to an .m4a storage key', async () => {
+      await service.createUploadUrl(trainer.id, {
+        assignmentId: assignment.id,
+        contentType: 'audio/mp4' as never,
+      });
+      const [, key] = storage.createPresignedUploadUrl.mock.calls[0];
+      expect(key).toMatch(/\.m4a$/);
+    });
   });
 
   describe('createRecording', () => {

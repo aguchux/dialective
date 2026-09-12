@@ -8,6 +8,10 @@ const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
   wav: 'audio/wav',
   webm: 'audio/webm',
   ogg: 'audio/ogg',
+  // iOS Safari's MediaRecorder fallback -- see words.service.ts/
+  // domain-conversations.service.ts's EXTENSION_BY_CONTENT_TYPE comment for
+  // why an m4a container can show up in this fixed set now.
+  m4a: 'audio/mp4',
 };
 
 export function contentTypeForAudioKey(audioKey: string): string {

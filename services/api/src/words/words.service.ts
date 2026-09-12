@@ -35,6 +35,11 @@ const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   'audio/x-wav': 'wav',
   'audio/webm': 'webm',
   'audio/ogg': 'ogg',
+  // iOS Safari's MediaRecorder fallback -- see
+  // dto/create-word-recording-upload-url.dto.ts's ALLOWED_CONTENT_TYPES
+  // comment for why this content type shows up here at all.
+  'audio/mp4': 'm4a',
+  'audio/x-m4a': 'm4a',
 };
 
 @Injectable()
