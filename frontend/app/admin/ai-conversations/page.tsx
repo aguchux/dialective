@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { skipToken } from '@reduxjs/toolkit/query/react';
 import { AdminShell } from '@/components/admin/AdminShell';
+import { AssistantMessageContent } from '@/components/AssistantMessageContent';
 import { FaqEditorDialog } from '@/components/admin/FaqEditorDialog';
 import { Dialog, DialogContent } from '@/components/ui/Dialog';
 import { formatDateTime } from '@/components/dashboard/shared';
@@ -224,9 +225,13 @@ export default function AdminAiConversationsPage() {
                       >
                         {message.role === 'user' ? 'User' : 'AI assistant'}
                       </p>
-                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                        {message.content}
-                      </p>
+                      <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                        {message.role === 'user' ? (
+                          message.content
+                        ) : (
+                          <AssistantMessageContent content={message.content} />
+                        )}
+                      </div>
                       <time
                         className={`mt-2 block text-xs ${
                           message.role === 'user' ? 'text-white/75' : 'text-muted'

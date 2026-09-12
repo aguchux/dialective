@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, MessageCircle, Send, X } from 'lucide-react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
@@ -12,6 +11,7 @@ import {
 } from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Avatar } from '@/components/dashboard/shared';
+import { AssistantMessageContent } from '@/components/AssistantMessageContent';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string; createdAt: string };
 
@@ -160,7 +160,11 @@ export function AiAssistantWidget() {
                         : 'rounded-lg bg-surface-muted px-3 py-2 text-ink'
                     }
                   >
-                    {renderMessage(item.content)}
+                    {isUser ? (
+                      item.content
+                    ) : (
+                      <AssistantMessageContent content={item.content} />
+                    )}
                   </div>
                   <span className="px-1 text-xs text-muted">{formatTime(item.createdAt)}</span>
                 </div>
@@ -207,62 +211,5 @@ export function AiAssistantWidget() {
 function formatTime(value: string) {
   return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' }).format(
     new Date(value),
-  );
-}
-
-const SITE_URL = 'https://www.dialectlibrary.com';
-const SITE_ORIGINS = ['https://www.dialectlibrary.com', 'https://dialectlibrary.com'];
-
-function renderMessage(content: string) {
-  const parts = content.split(
-    /(\[[^\]]+\]\((?:\/[A-Za-z0-9_/?=&-]*|https:\/\/(?:www\.)?dialectlibrary\.com(?:\/[A-Za-z0-9_/?=&-]*)?|https:\/\/(?:www\.youtube\.com\/@DialectLibrary|wa\.me\/447424448030)|mailto:hello@dialectlibrary\.com)\))/g,
-  );
-  return parts.map((part, index) => {
-    const match = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
-    if (!match) return <span key={index}>{part}</span>;
-    const internalPath = toApprovedInternalPath(match[2]);
-    if (internalPath === null && !isApprovedExternalHref(match[2])) {
-      return <span key={index}>{part}</span>;
-    }
-    if (internalPath === null) {
-      return (
-        <a
-          className="font-bold underline"
-          href={match[2]}
-          key={index}
-          rel="noreferrer"
-          target="_blank"
-        >
-          {match[1]}
-        </a>
-      );
-    }
-    // The href stays relative so Link keeps this an instant client-side
-    // navigation, but the visible label is always the full
-    // https://www.dialectlibrary.com/... address -- a user reading (or
-    // copying) chat text should always see a complete, unambiguous URL,
-    // not a bare path that only resolves inside this app's own router.
-    return (
-      <Link className="font-bold underline" href={internalPath} key={index}>
-        {`${SITE_URL}${internalPath}`}
-      </Link>
-    );
-  });
-}
-
-/** Returns the relative path for an approved internal link, or null if href isn't one. */
-function toApprovedInternalPath(href: string): string | null {
-  if (/^\/[A-Za-z0-9_/?=&-]*$/.test(href)) return href;
-  const origin = SITE_ORIGINS.find((candidate) => href.startsWith(candidate));
-  if (!origin) return null;
-  const path = href.slice(origin.length) || '/';
-  return /^\/[A-Za-z0-9_/?=&-]*$/.test(path) ? path : null;
-}
-
-function isApprovedExternalHref(href: string) {
-  return (
-    href === 'https://www.youtube.com/@DialectLibrary' ||
-    href === 'https://wa.me/447424448030' ||
-    href === 'mailto:hello@dialectlibrary.com'
   );
 }

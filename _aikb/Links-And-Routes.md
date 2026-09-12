@@ -31,6 +31,10 @@ Routes below are listed as paths (e.g. `/dashboard?view=profile`) for brevity, b
 | Voice Stream pricing       | `/pricing`                           | Public, subscription pricing                                                     |
 | Referral campaign redirect | `/invite/{referral-code}/{campaign}` | Public; the shared campaign link records the visit and continues to registration |
 
+## Self-hosted identity verification app
+
+`kyc.dialectlibrary.com` is Dialect Library's own identity-verification app, used only when the self-hosted verification provider is active. It is reached exclusively through a one-time, signed link the platform generates when a trainer chooses "Verify identity" in Profile -- there is no bare, guessable, or bookmarkable URL to it. The assistant must never construct or offer a direct link to this domain; only point the trainer to [Profile](https://www.dialectlibrary.com/dashboard?view=profile) to start verification.
+
 ## Official external channels
 
 | Purpose                         | Link                                      | Notes                                                                                                                                                     |
@@ -93,7 +97,7 @@ Administrative routes are role-restricted. The assistant may identify the releva
 | Marketing (ad photos and headlines) | `/admin/marketing`           |
 | Data access leads                   | `/admin/data-access`         |
 | Audit queue                         | `/admin/audit-hold`          |
-| DIDIT identity verification         | `/admin/kyc`                 |
+| Identity verification review        | `/admin/kyc`                 |
 | Phone verification requests         | `/admin/phone-verifications` |
 | Leaderboard                         | `/admin/leaderboard`         |
 | Referrals                           | `/admin/referrals`           |

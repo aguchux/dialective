@@ -16,12 +16,21 @@ Dialect Library is a contributor platform for voice recordings and word translat
 - Official YouTube channel: [Dialect Library on YouTube](https://www.youtube.com/@DialectLibrary). Trainers can use it for published platform videos and guidance.
 - Official WhatsApp support: [Message Dialect Library on WhatsApp](https://wa.me/447424448030). Always give this as the clickable wa.me link, never the bare phone number, so the user can tap straight into a chat with support. The only code a trainer may send there is the temporary code displayed by the official Manual WhatsApp verification flow in Profile. Never ask a trainer to send passwords, SMS or email login codes, recovery codes, payment credentials, or identity documents through WhatsApp.
 
+## Identity verification (KYC)
+
+- Identity verification confirms a trainer's document and a live selfie before allowing certain actions (for example, a withdrawal at or above the configured threshold, or right after onboarding when required). The platform can use either of two verification providers -- only one is active at a time, and which one is active is an admin setting the assistant cannot see or change.
+- When the hosted provider is active, "Verify identity" in Profile redirects the trainer off-site to complete document and selfie capture, then returns them to the platform once done.
+- When the self-hosted provider (DLKYC) is active, "Verify identity" redirects the trainer to the platform's own verification app at kyc.dialectlibrary.com, where they photograph an accepted document, take a short selfie following an on-screen instruction, and submit for review -- then return to Dialect Library automatically.
+- Either provider resolves to one of: Verified, Under review, or Unsuccessful. "Under review" means a person (and, when enabled, an AI-assisted check that only flags things for a human reviewer and never approves or rejects on its own) is still deciding; it is not stuck or an error. There is no fixed time limit the assistant can promise.
+- If a verification is declined, the trainer can start a new attempt from Profile; a stale, unfinished attempt can also be cancelled from there to start fresh, or an administrator can reset one that is stuck.
+- The assistant must never ask a trainer to describe, upload, or paste an identity document, selfie, or verification code into the chat -- verification only happens through the official in-app or kyc.dialectlibrary.com flow.
+
 ## Accounts and onboarding
 
 - A contributor creates an account, verifies email, selects a country of origin and a dialect, and completes onboarding before training.
 - A country of origin identifies the account. Training country and dialect determine the work offered to a trainer.
 - Users can sign in with email and password or a passwordless email magic link. Password reset is available from the login flow.
-- A trainer can manage their name, country, dialect, phone verification, notification preferences, payment methods, and DIDIT identity verification from [Profile](https://www.dialectlibrary.com/dashboard?view=profile). A revoked or reset dialect must be selected again before training continues.
+- A trainer can manage their name, country, dialect, phone verification, notification preferences, payment methods, and identity verification from [Profile](https://www.dialectlibrary.com/dashboard?view=profile). A revoked or reset dialect must be selected again before training continues.
 - The browser app can be installed from the account menu when the install option is available. Installing it does not create a separate account or change wallet access.
 - Phone verification can be required before sensitive actions such as payment-method changes, trading, or withdrawals.
 - If an SMS OTP does not arrive, the trainer can open [Profile](https://www.dialectlibrary.com/dashboard?view=profile), choose **Verify mobile**, and select **WhatsApp Method**. After confirming the displayed DL charge, the platform generates a temporary code and shows the official WhatsApp number. The trainer sends only that displayed code to the number, then selects **I have sent the WhatsApp message**. The request remains pending until an administrator matches and verifies the code. The code expires after the administrator-configured number of minutes.
@@ -64,7 +73,7 @@ Dialect Library is a contributor platform for voice recordings and word translat
 
 ## Testimonials and marketing campaigns
 
-- Only DIDIT identity-verified trainers can submit a testimonial. From the Testimonials view, they can use "Add Testimonial" for short text or a short recorded video (limits are configurable). There is no cap on how many a verified trainer may submit.
+- Only identity-verified trainers can submit a testimonial. From the Testimonials view, they can use "Add Testimonial" for short text or a short recorded video (limits are configurable). There is no cap on how many a verified trainer may submit.
 - Each testimonial is reviewed independently by an administrator. An approved testimonial credits a one-time DL reward for that testimonial and may appear on the public homepage. A rejected one earns no reward but does not block future submissions. An admin can later hide an approved testimonial from the public homepage (e.g. for quality or a trainer's request) without reversing the approval or the reward already credited. The whole feature is admin-configurable and may be off.
 - Separately, the Campaigns view lets a trainer generate a trackable share link pairing an admin-provided ad photo with an admin-written headline for a chosen social format, and see view/registration counts per campaign. This is distinct from the plain referral link (Referrals view), which covers the trainer's own code, invite link, invitation history, and referral bonus rates.
 - [Campaigns](https://www.dialectlibrary.com/dashboard?view=campaigns) is for approved social media materials and trackable shares. A campaign URL sends a prospective trainer to registration with the trainer's referral attribution. Do not edit the generated URL or promise rewards in ad copy beyond the platform's current terms.
@@ -112,6 +121,10 @@ Verification helps secure the account and is required for some sensitive actions
 
 Yes, when Manual WhatsApp verification is enabled. Open [Profile](https://www.dialectlibrary.com/dashboard?view=profile), select **Verify mobile**, then select **WhatsApp Method**. Review and accept the displayed DL charge; the platform will show a temporary code and the official WhatsApp number. Send only that code, choose **I have sent the WhatsApp message**, and wait for an administrator to confirm it. The code expires after the configured time. This process verifies a working mobile/WhatsApp number; it never requires sharing a password or another security code.
 
+### How does identity verification work?
+
+Open [Profile](https://www.dialectlibrary.com/dashboard?view=profile) and choose to verify your identity. Depending on which verification provider is currently active, you are either redirected to the hosted provider or to the platform's own kyc.dialectlibrary.com app; either way you photograph an accepted document and take a short selfie, then return automatically once done. The result is Verified, Under review, or Unsuccessful -- "Under review" just means it has not finished yet, not that anything is wrong.
+
 ### Can I test recording without an account?
 
 The platform may offer a recording pipeline demonstration, but submitted training work and account rewards require an authenticated contributor account.
@@ -126,7 +139,7 @@ Withdrawals require a minimum number of completed (settled) tasks, plus any mini
 
 ### How do I submit a testimonial, and when do I get paid for it?
 
-First complete DIDIT identity verification in [Profile](https://www.dialectlibrary.com/dashboard?view=profile), then open [Testimonials](https://www.dialectlibrary.com/dashboard?view=testimonials) and use "Add Testimonial." Each submission is reviewed independently; an approved one earns the configured one-time DL reward and may appear publicly. You can submit more than one over time.
+First complete identity verification in [Profile](https://www.dialectlibrary.com/dashboard?view=profile), then open [Testimonials](https://www.dialectlibrary.com/dashboard?view=testimonials) and use "Add Testimonial." Each submission is reviewed independently; an approved one earns the configured one-time DL reward and may appear publicly. You can submit more than one over time.
 
 ### How is a Campaign link different from my referral link?
 
