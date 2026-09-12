@@ -1457,6 +1457,41 @@ export interface LeaderboardPage<T> {
   totalPages: number;
 }
 
+export interface ProofReportLedgerEntry {
+  id: string;
+  type: string;
+  amount: string;
+  reference: string | null;
+  createdAt: string;
+}
+
+export interface ProofAccountReport {
+  userId: string;
+  generatedAt: string;
+  accountCreatedAt: string;
+  summary: {
+    totalTokensSinceJoin: string;
+    availableBalanceTokens: string;
+    heldBalanceTokens: string;
+    totalWithdrawnTokens: string;
+    totalRecordings: number;
+    scoredRecordings: number;
+    avgScore: string | null;
+  };
+  ledgerTotalsByType: { type: string; totalAmount: string; count: number }[];
+  ledgerEntries: ProofReportLedgerEntry[];
+}
+
+export interface ProofAccountReportResponse {
+  user: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  };
+  report: ProofAccountReport;
+}
+
 export interface ApiAccessTokenSummary {
   key: string;
   isSet: boolean;
@@ -3957,6 +3992,21 @@ export const dialectivaApi = createApi({
         params: { page, pageSize },
       }),
     }),
+    getProofAccountReport: builder.query<ProofAccountReportResponse, string>({
+      query: (userId) => `/admin/users/${userId}/proof-report`,
+    }),
+    // Fetched as a blob (not a plain query URL) so the request carries the
+    // same bearer Authorization header every other admin call does -- a
+    // plain <a href> download would hit this JwtAuthGuard-protected route
+    // with no credentials at all. Consumers must revoke the returned object
+    // URL (URL.revokeObjectURL) once the download has been triggered.
+    getProofAccountReportPdfUrl: builder.query<string, string>({
+      query: (userId) => ({
+        url: `/admin/users/${userId}/proof-report/pdf`,
+        responseHandler: (response: Response) => response.blob(),
+      }),
+      transformResponse: (blob: Blob) => URL.createObjectURL(blob),
+    }),
     getAdminP2PSettings: builder.query<P2PMarketSettings, void>({
       query: () => '/p2p/admin/settings',
       providesTags: ['P2P'],
@@ -5054,6 +5104,8 @@ export const {
   useGetAdminLeaderboardQuery,
   useGetAdminLeaderboardEarnersQuery,
   useGetAdminLeaderboardContributorsQuery,
+  useGetProofAccountReportQuery,
+  useLazyGetProofAccountReportPdfUrlQuery,
   useGetAdminP2PSettingsQuery,
   useUpdateAdminP2PSettingsMutation,
   useListAdminP2PTradesQuery,

@@ -207,6 +207,117 @@ describe('TrainerReportService', () => {
   });
 });
 
+describe('TrainerReportService.buildProofAccountReport', () => {
+  it('returns an empty-but-well-formed report when the account has no wallet yet', async () => {
+    const prisma = {
+      user: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ createdAt: new Date('2026-01-01T00:00:00Z') }),
+      },
+      wallet: { findUnique: jest.fn().mockResolvedValue(null) },
+      ledgerEntry: { aggregate: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
+      wordRecording: { findMany: jest.fn() },
+    };
+    const service = new TrainerReportService(prisma as never);
+
+    const report = await service.buildProofAccountReport('user-1');
+
+    expect(prisma.ledgerEntry.aggregate).not.toHaveBeenCalled();
+    expect(report.summary).toEqual({
+      totalTokensSinceJoin: '0',
+      availableBalanceTokens: '0',
+      heldBalanceTokens: '0',
+      totalWithdrawnTokens: '0',
+      totalRecordings: 0,
+      scoredRecordings: 0,
+      avgScore: null,
+    });
+    expect(report.ledgerEntries).toEqual([]);
+    expect(report.ledgerTotalsByType).toEqual([]);
+  });
+
+  it('sums lifetime credits/withdrawals, breaks down every ledger type, and lists every entry oldest-first', async () => {
+    const prisma = {
+      user: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ createdAt: new Date('2026-01-01T00:00:00Z') }),
+      },
+      wallet: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'wallet-1',
+          balance: { toNumber: () => 15.0097399 },
+          lockedBalance: { toNumber: () => 1.8 },
+        }),
+      },
+      ledgerEntry: {
+        aggregate: jest
+          .fn()
+          .mockResolvedValueOnce({ _sum: { amount: 49.4397399 } }) // lifetime credits
+          .mockResolvedValueOnce({ _sum: { amount: -10 } }), // withdrawal + reversal net
+        groupBy: jest.fn().mockResolvedValue([
+          { type: 'TRAINING_PAYOUT', _sum: { amount: 33.0255 }, _count: { _all: 234 } },
+          { type: 'WITHDRAWAL', _sum: { amount: -40 }, _count: { _all: 4 } },
+          { type: 'WITHDRAWAL_REVERSED', _sum: { amount: 30 }, _count: { _all: 3 } },
+        ]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'entry-1',
+            type: 'STARTUP_BONUS',
+            amount: 10,
+            reference: 'Welcome bonus',
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+          },
+          {
+            id: 'entry-2',
+            type: 'TRAINING_PAYOUT',
+            amount: 0.5,
+            reference: null,
+            createdAt: new Date('2026-01-02T00:00:00Z'),
+          },
+        ]),
+      },
+      wordRecording: {
+        findMany: jest.fn().mockResolvedValue([{ score: 80 }, { score: null }, { score: 90 }]),
+      },
+    };
+    const service = new TrainerReportService(prisma as never);
+
+    const report = await service.buildProofAccountReport('user-1');
+
+    expect(report.summary).toEqual({
+      totalTokensSinceJoin: '49.4397399',
+      availableBalanceTokens: '15.0097399',
+      heldBalanceTokens: '1.8',
+      totalWithdrawnTokens: '10',
+      totalRecordings: 3,
+      scoredRecordings: 2,
+      avgScore: '85.00',
+    });
+    expect(report.ledgerTotalsByType).toEqual([
+      { type: 'TRAINING_PAYOUT', totalAmount: '33.0255', count: 234 },
+      { type: 'WITHDRAWAL', totalAmount: '-40', count: 4 },
+      { type: 'WITHDRAWAL_REVERSED', totalAmount: '30', count: 3 },
+    ]);
+    expect(report.ledgerEntries).toEqual([
+      {
+        id: 'entry-1',
+        type: 'STARTUP_BONUS',
+        amount: '10',
+        reference: 'Welcome bonus',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'entry-2',
+        type: 'TRAINING_PAYOUT',
+        amount: '0.5',
+        reference: null,
+        createdAt: '2026-01-02T00:00:00.000Z',
+      },
+    ]);
+    expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+    );
+  });
+});
+
 describe('TrainerReportService.getTotalTokensSinceJoin', () => {
   it('returns 0 without querying ledgerEntry when the trainer has no wallet row yet', async () => {
     const prisma = {

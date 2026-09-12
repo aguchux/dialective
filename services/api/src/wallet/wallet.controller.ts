@@ -13,12 +13,13 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UnprocessableEntityException,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
@@ -82,6 +83,7 @@ import { BulkResolveWithdrawalsDto } from './dto/bulk-resolve-withdrawals.dto';
 import { GetTrainerReportDto } from './dto/get-trainer-report.dto';
 import { TrainerReportService } from './trainer-report.service';
 import { renderTrainerReportPdf } from './trainer-report-pdf.util';
+import { renderProofAccountPdf } from './proof-account-pdf.util';
 import { CreateReferralInviteDto } from './dto/create-referral-invite.dto';
 import { ListReferralInvitationsDto } from './dto/list-referral-invitations.dto';
 import { tokensToUsdt, usdToTokens } from './token-rate.util';
@@ -863,6 +865,59 @@ export class WalletController {
       daily: report.daily.map((day) => ({ date: day.date, recordings: day.recordings })),
     });
     return { sent: true };
+  }
+
+  /**
+   * Full lifetime account reconciliation for the "Proof Account" CTA on the
+   * admin leaderboard (frontend/app/admin/leaderboard,
+   * frontend/app/admin/proof-report/[id]) -- JSON for the on-screen report
+   * page; see getProofAccountReportPdf below for the downloadable version.
+   * Any role, not just TRAINER, since distributors/partners/validators also
+   * have wallets and can raise the same "why is my balance X" question.
+   */
+  @Get('admin/users/:id/proof-report')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getProofAccountReport(@Param('id') id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const report = await this.trainerReport!.buildProofAccountReport(id);
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+      report,
+    };
+  }
+
+  @Get('admin/users/:id/proof-report/pdf')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getProofAccountReportPdf(@Param('id') id: string, @Res() res: Response) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const report = await this.trainerReport!.buildProofAccountReport(id);
+    const accountLabel = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email;
+    const pdf = await renderProofAccountPdf(report, `${accountLabel} (${user.email})`);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="proof-account-${user.id}.pdf"`,
+    );
+    res.send(pdf);
   }
 
   @Get('wallet/activity')

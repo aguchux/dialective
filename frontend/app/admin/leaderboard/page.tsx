@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { BadgeDollarSign, Trophy } from 'lucide-react';
+import { BadgeDollarSign, FileCheck, Trophy } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { formatCompactTokens } from '@/lib/format';
@@ -55,6 +56,19 @@ function MobileCell({ user }: { user: AdminLeaderboardUser }) {
         {user.phoneVerified ? 'Verified' : 'Unverified'}
       </span>
     </div>
+  );
+}
+
+function ProofAccountButton({ userId }: { userId: string }) {
+  return (
+    <Link
+      className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-bold text-ink transition-colors hover:bg-surface-muted"
+      href={`/admin/proof-report/${userId}`}
+      title="Generate a full account reconciliation report to share with this trainer"
+    >
+      <FileCheck className="size-3.5" aria-hidden="true" />
+      Proof Account
+    </Link>
   );
 }
 
@@ -170,6 +184,12 @@ function EarnersTab() {
       searchable: false,
       render: (row) => <span className="text-muted">{row.payoutCount.toLocaleString()}</span>,
     },
+    {
+      key: 'proofAccount',
+      header: 'Proof',
+      searchable: false,
+      render: (row) => <ProofAccountButton userId={row.user.id} />,
+    },
   ];
 
   if (isError) {
@@ -251,6 +271,12 @@ function ContributorsTab() {
       sortValue: (row) => row.submissions,
       searchable: false,
       render: (row) => <span className="text-muted">{row.submissions.toLocaleString()}</span>,
+    },
+    {
+      key: 'proofAccount',
+      header: 'Proof',
+      searchable: false,
+      render: (row) => <ProofAccountButton userId={row.user.id} />,
     },
   ];
 

@@ -1619,6 +1619,135 @@ describe('WalletController.emailTrainerReport', () => {
   });
 });
 
+describe('WalletController.getProofAccountReport', () => {
+  function setup(overrides: { user?: Record<string, unknown> | null } = {}) {
+    const user =
+      'user' in overrides
+        ? overrides.user
+        : { id: 'trainer-1', email: 'trainer@example.com', firstName: 'Ada', lastName: 'Lovelace' };
+    const prisma = { user: { findUnique: jest.fn().mockResolvedValue(user) } };
+    const proofReport = {
+      userId: 'trainer-1',
+      generatedAt: '2026-09-12T00:00:00.000Z',
+      accountCreatedAt: '2026-01-01T00:00:00.000Z',
+      summary: {
+        totalTokensSinceJoin: '49.4397399',
+        availableBalanceTokens: '15.0097399',
+        heldBalanceTokens: '1.8',
+        totalWithdrawnTokens: '10',
+        totalRecordings: 257,
+        scoredRecordings: 250,
+        avgScore: '84.50',
+      },
+      ledgerTotalsByType: [],
+      ledgerEntries: [],
+    };
+    const trainerReport = { buildProofAccountReport: jest.fn().mockResolvedValue(proofReport) };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      undefined,
+      trainerReport as never,
+    );
+    return { controller, prisma, trainerReport, proofReport };
+  }
+
+  it('builds the full lifetime reconciliation report for the given user id', async () => {
+    const { controller, trainerReport, proofReport } = setup();
+
+    await expect(controller.getProofAccountReport('trainer-1')).resolves.toEqual({
+      user: {
+        id: 'trainer-1',
+        email: 'trainer@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+      },
+      report: proofReport,
+    });
+    expect(trainerReport.buildProofAccountReport).toHaveBeenCalledWith('trainer-1');
+  });
+
+  it('404s for a nonexistent user without building a report', async () => {
+    const { controller, trainerReport } = setup({ user: null });
+
+    await expect(controller.getProofAccountReport('missing')).rejects.toThrow('User not found');
+    expect(trainerReport.buildProofAccountReport).not.toHaveBeenCalled();
+  });
+});
+
+describe('WalletController.getProofAccountReportPdf', () => {
+  function setup(overrides: { user?: Record<string, unknown> | null } = {}) {
+    const user =
+      'user' in overrides
+        ? overrides.user
+        : { id: 'trainer-1', email: 'trainer@example.com', firstName: 'Ada', lastName: 'Lovelace' };
+    const prisma = { user: { findUnique: jest.fn().mockResolvedValue(user) } };
+    const trainerReport = {
+      buildProofAccountReport: jest.fn().mockResolvedValue({
+        userId: 'trainer-1',
+        generatedAt: '2026-09-12T00:00:00.000Z',
+        accountCreatedAt: '2026-01-01T00:00:00.000Z',
+        summary: {
+          totalTokensSinceJoin: '49.4397399',
+          availableBalanceTokens: '15.0097399',
+          heldBalanceTokens: '1.8',
+          totalWithdrawnTokens: '10',
+          totalRecordings: 257,
+          scoredRecordings: 250,
+          avgScore: '84.50',
+        },
+        ledgerTotalsByType: [],
+        ledgerEntries: [],
+      }),
+    };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      undefined,
+      trainerReport as never,
+    );
+    return { controller, prisma, trainerReport };
+  }
+
+  it('streams a PDF attachment with the correct headers', async () => {
+    const { controller } = setup();
+    const res = { setHeader: jest.fn(), send: jest.fn() };
+
+    await controller.getProofAccountReportPdf('trainer-1', res as never);
+
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Disposition',
+      'attachment; filename="proof-account-trainer-1.pdf"',
+    );
+    expect(res.send).toHaveBeenCalledWith(expect.any(Buffer));
+  });
+
+  it('404s for a nonexistent user without rendering a PDF', async () => {
+    const { controller } = setup({ user: null });
+    const res = { setHeader: jest.fn(), send: jest.fn() };
+
+    await expect(controller.getProofAccountReportPdf('missing', res as never)).rejects.toThrow(
+      'User not found',
+    );
+    expect(res.send).not.toHaveBeenCalled();
+  });
+});
+
 describe('WalletController admin leaderboard', () => {
   it('ranks earners by task payout ledger totals and contributors by submitted task count', async () => {
     const prisma = {

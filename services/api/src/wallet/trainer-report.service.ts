@@ -28,6 +28,35 @@ const LIFETIME_CREDIT_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.VALIDATION_REWARD,
 ];
 
+export interface ProofReportLedgerEntry {
+  id: string;
+  type: string;
+  amount: string;
+  reference: string | null;
+  createdAt: string;
+}
+
+export interface ProofAccountReport {
+  userId: string;
+  generatedAt: string;
+  accountCreatedAt: string;
+  summary: {
+    totalTokensSinceJoin: string;
+    availableBalanceTokens: string;
+    heldBalanceTokens: string;
+    totalWithdrawnTokens: string;
+    totalRecordings: number;
+    scoredRecordings: number;
+    avgScore: string | null;
+  };
+  // Every credit/debit type that ever touched this wallet, summed -- lets a
+  // reader verify totalTokensSinceJoin/availableBalanceTokens themselves
+  // line by line instead of trusting the summary figures alone.
+  ledgerTotalsByType: { type: string; totalAmount: string; count: number }[];
+  // Full itemized history, oldest first -- the actual proof, not a rollup.
+  ledgerEntries: ProofReportLedgerEntry[];
+}
+
 export interface TrainerReport {
   from: string;
   to: string;
@@ -197,6 +226,111 @@ export class TrainerReportService {
         totalWithdrawnTokens: Math.max(totalWithdrawn, 0).toString(),
       },
       daily,
+    };
+  }
+
+  /**
+   * Full lifetime account reconciliation for the "Proof Account" admin CTA
+   * (frontend/app/admin/leaderboard) -- unlike buildReport (which windows to
+   * a from/to range for the trainer's own on-demand Reports screen), this
+   * always covers the account's entire history and includes every single
+   * ledger row, not just daily rollups, so an admin can hand a trainer a
+   * document that answers "why is my balance not (cumulative - withdrawn)"
+   * line by line rather than asserting a total.
+   */
+  async buildProofAccountReport(userId: string): Promise<ProofAccountReport> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { createdAt: true },
+    });
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { id: true, balance: true, lockedBalance: true },
+    });
+
+    if (!wallet) {
+      return {
+        userId,
+        generatedAt: new Date().toISOString(),
+        accountCreatedAt: user.createdAt.toISOString(),
+        summary: {
+          totalTokensSinceJoin: '0',
+          availableBalanceTokens: '0',
+          heldBalanceTokens: '0',
+          totalWithdrawnTokens: '0',
+          totalRecordings: 0,
+          scoredRecordings: 0,
+          avgScore: null,
+        },
+        ledgerTotalsByType: [],
+        ledgerEntries: [],
+      };
+    }
+
+    const [lifetimeEarningsAgg, withdrawnAgg, ledgerByType, ledgerEntries, wordRecordings] =
+      await Promise.all([
+        this.prisma.ledgerEntry.aggregate({
+          where: { walletId: wallet.id, type: { in: LIFETIME_CREDIT_ENTRY_TYPES } },
+          _sum: { amount: true },
+        }),
+        this.prisma.ledgerEntry.aggregate({
+          where: {
+            walletId: wallet.id,
+            type: { in: [LedgerEntryType.WITHDRAWAL, LedgerEntryType.WITHDRAWAL_REVERSED] },
+          },
+          _sum: { amount: true },
+        }),
+        this.prisma.ledgerEntry.groupBy({
+          by: ['type'],
+          where: { walletId: wallet.id },
+          _sum: { amount: true },
+          _count: { _all: true },
+        }),
+        this.prisma.ledgerEntry.findMany({
+          where: { walletId: wallet.id },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { id: true, type: true, amount: true, reference: true, createdAt: true },
+        }),
+        this.prisma.wordRecording.findMany({
+          where: { userId },
+          select: { score: true },
+        }),
+      ]);
+
+    const totalWithdrawn = -Number(withdrawnAgg._sum.amount ?? 0);
+    const scored = wordRecordings.filter((row) => row.score !== null);
+    const avgScore =
+      scored.length > 0
+        ? (
+            scored.reduce((total, row) => total + Number(row.score), 0) / scored.length
+          ).toFixed(2)
+        : null;
+
+    return {
+      userId,
+      generatedAt: new Date().toISOString(),
+      accountCreatedAt: user.createdAt.toISOString(),
+      summary: {
+        totalTokensSinceJoin: Number(lifetimeEarningsAgg._sum.amount ?? 0).toString(),
+        availableBalanceTokens: wallet.balance.toNumber().toString(),
+        heldBalanceTokens: wallet.lockedBalance.toNumber().toString(),
+        totalWithdrawnTokens: Math.max(totalWithdrawn, 0).toString(),
+        totalRecordings: wordRecordings.length,
+        scoredRecordings: scored.length,
+        avgScore,
+      },
+      ledgerTotalsByType: ledgerByType.map((entry) => ({
+        type: entry.type,
+        totalAmount: Number(entry._sum.amount ?? 0).toString(),
+        count: entry._count._all,
+      })),
+      ledgerEntries: ledgerEntries.map((entry) => ({
+        id: entry.id,
+        type: entry.type,
+        amount: entry.amount.toString(),
+        reference: entry.reference,
+        createdAt: entry.createdAt.toISOString(),
+      })),
     };
   }
 
