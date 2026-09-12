@@ -4340,7 +4340,18 @@ export class WalletController {
     const earnerWallets = await this.prisma.wallet.findMany({
       where: { id: { in: sortedEarners.map((entry) => entry.walletId) } },
       include: {
-        user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+            phoneNumber: true,
+            phoneVerifiedAt: true,
+            kycStatus: true,
+          },
+        },
       },
     });
     const walletById = new Map(earnerWallets.map((wallet) => [wallet.id, wallet]));
@@ -4348,9 +4359,10 @@ export class WalletController {
     const rows = sortedEarners.flatMap((entry) => {
       const wallet = walletById.get(entry.walletId);
       if (!wallet) return [];
+      const { phoneVerifiedAt, ...user } = wallet.user;
       return [
         {
-          user: wallet.user,
+          user: { ...user, phoneVerified: phoneVerifiedAt !== null },
           totalEarned: entry._sum.amount?.toString() ?? '0',
           payoutCount: entry._count._all,
         },
@@ -4379,17 +4391,27 @@ export class WalletController {
 
     const contributorUsers = await this.prisma.user.findMany({
       where: { id: { in: sortedContributorIds } },
-      select: { id: true, firstName: true, lastName: true, email: true, role: true },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        phoneNumber: true,
+        phoneVerifiedAt: true,
+        kycStatus: true,
+      },
     });
     const userById = new Map(contributorUsers.map((user) => [user.id, user]));
 
     const rows = sortedContributorIds.flatMap((userId) => {
-      const user = userById.get(userId);
+      const rawUser = userById.get(userId);
       const wordRecordings = contributorCounts.get(userId);
-      if (!user || wordRecordings === undefined) return [];
+      if (!rawUser || wordRecordings === undefined) return [];
+      const { phoneVerifiedAt, ...user } = rawUser;
       return [
         {
-          user,
+          user: { ...user, phoneVerified: phoneVerifiedAt !== null },
           totalTasks: wordRecordings,
           wordRecordings,
           submissions: 0,

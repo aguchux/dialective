@@ -1426,6 +1426,9 @@ export interface AdminLeaderboardUser {
   lastName: string | null;
   email: string;
   role: 'TRAINER' | 'ADMIN' | 'PARTNER' | 'DISTRIBUTOR' | 'VALIDATOR';
+  phoneNumber: string | null;
+  phoneVerified: boolean;
+  kycStatus: KycStatus;
 }
 
 export interface LeaderboardEarnerRow {

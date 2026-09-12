@@ -4,15 +4,16 @@ import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { BadgeDollarSign, Trophy } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
+import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { formatCompactTokens } from '@/lib/format';
 import {
   AdminLeaderboardUser,
+  KycStatus,
+  LeaderboardContributorRow,
+  LeaderboardEarnerRow,
   useGetAdminLeaderboardContributorsQuery,
   useGetAdminLeaderboardEarnersQuery,
 } from '@/store/api';
-
-const secondaryButtonClass =
-  'inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60';
 
 const tabs = [
   { key: 'earners', label: 'Top earners', icon: BadgeDollarSign },
@@ -20,7 +21,56 @@ const tabs = [
 ] as const;
 
 type TabKey = (typeof tabs)[number]['key'];
-const PAGE_SIZE = 20;
+// Fetched in one shot so the DataTable's client-side smart search can match
+// against every ranked row, not just whatever page the server handed back.
+const LEADERBOARD_FETCH_SIZE = 200;
+
+const kycStyles: Record<KycStatus, string> = {
+  NOT_STARTED: 'bg-slate-100 text-slate-700',
+  IN_PROGRESS: 'bg-amber-50 text-amber-700',
+  IN_REVIEW: 'bg-amber-50 text-amber-700',
+  APPROVED: 'bg-emerald-50 text-emerald-700',
+  DECLINED: 'bg-red-50 text-red-700',
+  ABANDONED: 'bg-slate-100 text-slate-700',
+  EXPIRED: 'bg-slate-100 text-slate-700',
+};
+
+function KycBadge({ status }: { status: KycStatus }) {
+  return (
+    <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${kycStyles[status]}`}>
+      {status.replace(/_/g, ' ')}
+    </span>
+  );
+}
+
+function MobileCell({ user }: { user: AdminLeaderboardUser }) {
+  return (
+    <div className="grid gap-1">
+      <span className="text-sm text-ink">{user.phoneNumber ?? 'No mobile number'}</span>
+      <span
+        className={`inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-bold ${
+          user.phoneVerified ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+        }`}
+      >
+        {user.phoneVerified ? 'Verified' : 'Unverified'}
+      </span>
+    </div>
+  );
+}
+
+function searchValue(user: AdminLeaderboardUser, ...rest: (string | number)[]) {
+  return [
+    user.firstName ?? '',
+    user.lastName ?? '',
+    user.email,
+    user.role,
+    user.phoneNumber ?? '',
+    user.kycStatus,
+    ...rest,
+  ]
+    .join(' ')
+    .toLowerCase();
+}
 
 export default function AdminLeaderboardPage() {
   const searchParams = useSearchParams();
@@ -68,178 +118,161 @@ export default function AdminLeaderboardPage() {
 }
 
 function EarnersTab() {
-  const [page, setPage] = useState(1);
-  const { data, isLoading, isFetching, isError, refetch } = useGetAdminLeaderboardEarnersQuery({
-    page,
-    pageSize: PAGE_SIZE,
+  const { data, isLoading, isError, refetch } = useGetAdminLeaderboardEarnersQuery({
+    page: 1,
+    pageSize: LEADERBOARD_FETCH_SIZE,
   });
 
-  return (
-    <section className="grid gap-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-      {isLoading ? (
-        <p className="p-5 text-muted">Loading...</p>
-      ) : isError ? (
+  const rows = data?.items ?? [];
+  const rankByUserId = new Map(rows.map((row, index) => [row.user.id, index + 1]));
+
+  const columns: DataTableColumn<LeaderboardEarnerRow>[] = [
+    {
+      key: 'rank',
+      header: 'Rank',
+      sortValue: (row) => rankByUserId.get(row.user.id) ?? 0,
+      searchable: false,
+      render: (row) => (
+        <span className="font-extrabold text-muted">{rankByUserId.get(row.user.id)}</span>
+      ),
+    },
+    {
+      key: 'trainer',
+      header: 'Trainer',
+      sortValue: (row) => searchValue(row.user),
+      render: (row) => <UserCell user={row.user} />,
+    },
+    {
+      key: 'mobile',
+      header: 'Mobile',
+      sortValue: (row) => row.user.phoneNumber ?? '',
+      render: (row) => <MobileCell user={row.user} />,
+    },
+    {
+      key: 'kyc',
+      header: 'KYC status',
+      sortValue: (row) => row.user.kycStatus,
+      render: (row) => <KycBadge status={row.user.kycStatus} />,
+    },
+    {
+      key: 'totalEarned',
+      header: 'DL earned',
+      sortValue: (row) => Number(row.totalEarned),
+      searchable: false,
+      render: (row) => (
+        <span className="font-extrabold text-accent">{formatCompactTokens(row.totalEarned)}</span>
+      ),
+    },
+    {
+      key: 'payoutCount',
+      header: 'Payouts',
+      sortValue: (row) => row.payoutCount,
+      searchable: false,
+      render: (row) => <span className="text-muted">{row.payoutCount.toLocaleString()}</span>,
+    },
+  ];
+
+  if (isError) {
+    return (
+      <section className="rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
         <ErrorState onRetry={() => void refetch()} />
-      ) : data && data.items.length > 0 ? (
-        <>
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-180 border-collapse text-left text-sm">
-              <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
-                <tr>
-                  <th className="px-5 py-3.5" scope="col">
-                    Rank
-                  </th>
-                  <th className="px-5 py-3.5" scope="col">
-                    Trainer
-                  </th>
-                  <th className="px-5 py-3.5" scope="col">
-                    DL earned
-                  </th>
-                  <th className="px-5 py-3.5" scope="col">
-                    Payouts
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {data.items.map((row, index) => (
-                  <tr key={row.user.id}>
-                    <td className="px-5 py-3.5 font-extrabold text-muted">
-                      {(page - 1) * PAGE_SIZE + index + 1}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <UserCell user={row.user} />
-                    </td>
-                    <td className="px-5 py-3.5 font-extrabold text-accent">
-                      {formatCompactTokens(row.totalEarned)}
-                    </td>
-                    <td className="px-5 py-3.5 text-muted">{row.payoutCount.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      </section>
+    );
+  }
 
-          <div className="divide-y divide-line md:hidden">
-            {data.items.map((row, index) => (
-              <article className="grid gap-2 p-4" key={row.user.id}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-2">
-                    <span className="text-sm font-extrabold text-muted">
-                      {(page - 1) * PAGE_SIZE + index + 1}
-                    </span>
-                    <UserCell user={row.user} />
-                  </div>
-                  <p className="shrink-0 font-extrabold text-accent">
-                    {formatCompactTokens(row.totalEarned)}
-                  </p>
-                </div>
-                <p className="text-xs text-muted">{row.payoutCount.toLocaleString()} payouts</p>
-              </article>
-            ))}
-          </div>
-
-          <PaginationFooter
-            page={data.page}
-            totalPages={data.totalPages}
-            isFetching={isFetching}
-            onChange={setPage}
-          />
-        </>
-      ) : (
-        <p className="p-5 text-muted">No task payouts yet.</p>
-      )}
-    </section>
+  return (
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.user.id}
+      isLoading={isLoading}
+      emptyMessage="No task payouts yet."
+      adjustablePageSize
+      pageSize={20}
+      searchPlaceholder="Search name, email, mobile, role or KYC status..."
+    />
   );
 }
 
 function ContributorsTab() {
-  const [page, setPage] = useState(1);
-  const { data, isLoading, isFetching, isError, refetch } = useGetAdminLeaderboardContributorsQuery(
-    { page, pageSize: PAGE_SIZE },
-  );
+  const { data, isLoading, isError, refetch } = useGetAdminLeaderboardContributorsQuery({
+    page: 1,
+    pageSize: LEADERBOARD_FETCH_SIZE,
+  });
+
+  const rows = data?.items ?? [];
+  const rankByUserId = new Map(rows.map((row, index) => [row.user.id, index + 1]));
+
+  const columns: DataTableColumn<LeaderboardContributorRow>[] = [
+    {
+      key: 'rank',
+      header: 'Rank',
+      sortValue: (row) => rankByUserId.get(row.user.id) ?? 0,
+      searchable: false,
+      render: (row) => (
+        <span className="font-extrabold text-muted">{rankByUserId.get(row.user.id)}</span>
+      ),
+    },
+    {
+      key: 'trainer',
+      header: 'Trainer',
+      sortValue: (row) => searchValue(row.user),
+      render: (row) => <UserCell user={row.user} />,
+    },
+    {
+      key: 'mobile',
+      header: 'Mobile',
+      sortValue: (row) => row.user.phoneNumber ?? '',
+      render: (row) => <MobileCell user={row.user} />,
+    },
+    {
+      key: 'kyc',
+      header: 'KYC status',
+      sortValue: (row) => row.user.kycStatus,
+      render: (row) => <KycBadge status={row.user.kycStatus} />,
+    },
+    {
+      key: 'totalTasks',
+      header: 'Total tasks',
+      sortValue: (row) => row.totalTasks,
+      searchable: false,
+      render: (row) => <span className="font-extrabold">{row.totalTasks.toLocaleString()}</span>,
+    },
+    {
+      key: 'wordRecordings',
+      header: 'Words',
+      sortValue: (row) => row.wordRecordings,
+      searchable: false,
+      render: (row) => <span className="text-muted">{row.wordRecordings.toLocaleString()}</span>,
+    },
+    {
+      key: 'submissions',
+      header: 'Sentences',
+      sortValue: (row) => row.submissions,
+      searchable: false,
+      render: (row) => <span className="text-muted">{row.submissions.toLocaleString()}</span>,
+    },
+  ];
+
+  if (isError) {
+    return (
+      <section className="rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+        <ErrorState onRetry={() => void refetch()} />
+      </section>
+    );
+  }
 
   return (
-    <section className="grid gap-4 overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
-      {isLoading ? (
-        <p className="p-5 text-muted">Loading...</p>
-      ) : isError ? (
-        <ErrorState onRetry={() => void refetch()} />
-      ) : data && data.items.length > 0 ? (
-        <>
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-180 border-collapse text-left text-sm">
-              <thead className="border-b border-line bg-surface-muted text-xs font-extrabold uppercase text-muted">
-                <tr>
-                  <th className="px-5 py-3.5" scope="col">
-                    Rank
-                  </th>
-                  <th className="px-5 py-3.5" scope="col">
-                    Trainer
-                  </th>
-                  <th className="px-5 py-3.5" scope="col">
-                    Total tasks
-                  </th>
-                  <th className="px-5 py-3.5" scope="col">
-                    Words
-                  </th>
-                  <th className="px-5 py-3.5" scope="col">
-                    Sentences
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {data.items.map((row, index) => (
-                  <tr key={row.user.id}>
-                    <td className="px-5 py-3.5 font-extrabold text-muted">
-                      {(page - 1) * PAGE_SIZE + index + 1}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <UserCell user={row.user} />
-                    </td>
-                    <td className="px-5 py-3.5 font-extrabold">
-                      {row.totalTasks.toLocaleString()}
-                    </td>
-                    <td className="px-5 py-3.5 text-muted">
-                      {row.wordRecordings.toLocaleString()}
-                    </td>
-                    <td className="px-5 py-3.5 text-muted">{row.submissions.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="divide-y divide-line md:hidden">
-            {data.items.map((row, index) => (
-              <article className="grid gap-2 p-4" key={row.user.id}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-2">
-                    <span className="text-sm font-extrabold text-muted">
-                      {(page - 1) * PAGE_SIZE + index + 1}
-                    </span>
-                    <UserCell user={row.user} />
-                  </div>
-                  <p className="shrink-0 font-extrabold">{row.totalTasks.toLocaleString()} tasks</p>
-                </div>
-                <p className="text-xs text-muted">
-                  {row.wordRecordings.toLocaleString()} words, {row.submissions.toLocaleString()}{' '}
-                  sentences
-                </p>
-              </article>
-            ))}
-          </div>
-
-          <PaginationFooter
-            page={data.page}
-            totalPages={data.totalPages}
-            isFetching={isFetching}
-            onChange={setPage}
-          />
-        </>
-      ) : (
-        <p className="p-5 text-muted">No submitted tasks yet.</p>
-      )}
-    </section>
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.user.id}
+      isLoading={isLoading}
+      emptyMessage="No submitted tasks yet."
+      adjustablePageSize
+      pageSize={20}
+      searchPlaceholder="Search name, email, mobile, role or KYC status..."
+    />
   );
 }
 
@@ -257,48 +290,13 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="grid gap-3 p-5 text-center">
       <p className="font-extrabold">Could not load the leaderboard.</p>
-      <button className={secondaryButtonClass} onClick={onRetry} type="button">
+      <button
+        className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+        onClick={onRetry}
+        type="button"
+      >
         Try again
       </button>
-    </div>
-  );
-}
-
-function PaginationFooter({
-  page,
-  totalPages,
-  isFetching,
-  onChange,
-}: {
-  page: number;
-  totalPages: number;
-  isFetching: boolean;
-  onChange: (page: number) => void;
-}) {
-  if (totalPages <= 1) return null;
-  return (
-    <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-muted px-4 py-3 md:px-5">
-      <p className="text-sm text-muted">
-        Page {page} of {totalPages} {isFetching ? '· refreshing…' : ''}
-      </p>
-      <div className="flex gap-2">
-        <button
-          className={secondaryButtonClass}
-          disabled={page <= 1}
-          onClick={() => onChange(page - 1)}
-          type="button"
-        >
-          Previous
-        </button>
-        <button
-          className={secondaryButtonClass}
-          disabled={page >= totalPages}
-          onClick={() => onChange(page + 1)}
-          type="button"
-        >
-          Next
-        </button>
-      </div>
     </div>
   );
 }
