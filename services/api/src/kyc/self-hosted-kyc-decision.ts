@@ -39,6 +39,14 @@ export interface KycEvaluationInput {
   minFaceMatchScore?: number;
   /** Admin-configurable auto-approve floor for livenessScore, 0-100. Defaults to LIVENESS_APPROVE_AT_OR_ABOVE_DEFAULT. */
   minLivenessScore?: number;
+  /**
+   * When true, a decisively-bad score routes to REVIEW instead of
+   * auto-DECLINE, so an admin can manually check a submission that failed
+   * the deterministic checks (e.g. a poor-quality photo) rather than the
+   * trainer being auto-rejected outright. Defaults to false (today's
+   * unconditional-auto-decline behavior).
+   */
+  doNotAutoDeclineEnabled?: boolean;
 }
 
 export interface KycEvaluationResult {
@@ -68,12 +76,19 @@ export function evaluateSelfHostedKyc(input: KycEvaluationInput): KycEvaluationR
     autoApproveEnabled,
     minFaceMatchScore = FACE_MATCH_APPROVE_AT_OR_ABOVE_DEFAULT,
     minLivenessScore = LIVENESS_APPROVE_AT_OR_ABOVE_DEFAULT,
+    doNotAutoDeclineEnabled = false,
   } = input;
 
-  // Clear fail: either signal is decisively bad -- decline outright,
-  // regardless of autoApproveEnabled (declining is never an "approval",
-  // so the auto-approve kill switch doesn't need to gate this branch).
+  // Clear fail: either signal is decisively bad. Normally declines
+  // outright, regardless of autoApproveEnabled (declining is never an
+  // "approval", so the auto-approve kill switch doesn't gate this branch)
+  // -- but when doNotAutoDeclineEnabled is on, route to REVIEW instead so
+  // an admin can manually check a submission that failed the deterministic
+  // checks rather than auto-rejecting the trainer outright.
   if (faceMatchScore < FACE_MATCH_DECLINE_BELOW) {
+    if (doNotAutoDeclineEnabled) {
+      return { band: 'REVIEW', faceMatchScore, livenessScore, declineReason: null };
+    }
     return {
       band: 'DECLINE',
       faceMatchScore,
@@ -82,6 +97,9 @@ export function evaluateSelfHostedKyc(input: KycEvaluationInput): KycEvaluationR
     };
   }
   if (livenessScore < LIVENESS_DECLINE_BELOW) {
+    if (doNotAutoDeclineEnabled) {
+      return { band: 'REVIEW', faceMatchScore, livenessScore, declineReason: null };
+    }
     return {
       band: 'DECLINE',
       faceMatchScore,

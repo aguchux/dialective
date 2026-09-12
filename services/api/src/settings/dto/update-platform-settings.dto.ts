@@ -724,6 +724,10 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  selfHostedKycDoNotAutoDeclineEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   authMaintenanceEnabled?: boolean;
 
   // ISO 8601 timestamp, or null to clear it (e.g. when switching maintenance

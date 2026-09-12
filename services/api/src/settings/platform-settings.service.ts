@@ -606,6 +606,11 @@ export class PlatformSettingsService {
     };
   }
 
+  async isSelfHostedKycDoNotAutoDeclineEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.selfHostedKycDoNotAutoDeclineEnabled;
+  }
+
   async getWithdrawalFeeSettings(): Promise<{
     mode: string;
     tokenAmount: number;
@@ -1046,6 +1051,7 @@ export class PlatformSettingsService {
       selfHostedKycDocumentTypes: row.selfHostedKycDocumentTypes,
       selfHostedKycMinFaceMatchScore: row.selfHostedKycMinFaceMatchScore,
       selfHostedKycMinLivenessScore: row.selfHostedKycMinLivenessScore,
+      selfHostedKycDoNotAutoDeclineEnabled: row.selfHostedKycDoNotAutoDeclineEnabled,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,
@@ -1208,6 +1214,7 @@ export class PlatformSettingsService {
     selfHostedKycDocumentTypes?: string;
     selfHostedKycMinFaceMatchScore?: number;
     selfHostedKycMinLivenessScore?: number;
+    selfHostedKycDoNotAutoDeclineEnabled?: boolean;
     authMaintenanceEnabled?: boolean;
     authMaintenanceUntil?: Date | null;
     authMaintenanceMessage?: string | null;
@@ -1742,6 +1749,7 @@ export class PlatformSettingsService {
       selfHostedKycDocumentTypes: row.selfHostedKycDocumentTypes,
       selfHostedKycMinFaceMatchScore: row.selfHostedKycMinFaceMatchScore,
       selfHostedKycMinLivenessScore: row.selfHostedKycMinLivenessScore,
+      selfHostedKycDoNotAutoDeclineEnabled: row.selfHostedKycDoNotAutoDeclineEnabled,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
       authMaintenanceMessage: row.authMaintenanceMessage,

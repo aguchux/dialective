@@ -221,6 +221,7 @@ export class SelfHostedKycService {
     const autoApproveEnabled = await this.settings.isSelfHostedKycAutoApproveEnabled();
     const { minFaceMatchScore, minLivenessScore } =
       await this.settings.getSelfHostedKycApproveThresholds();
+    const doNotAutoDeclineEnabled = await this.settings.isSelfHostedKycDoNotAutoDeclineEnabled();
     const result = evaluateSelfHostedKyc({
       faceMatchScore,
       livenessScore,
@@ -228,6 +229,7 @@ export class SelfHostedKycService {
       autoApproveEnabled,
       minFaceMatchScore,
       minLivenessScore,
+      doNotAutoDeclineEnabled,
     });
 
     return this.toDiditDecision(result, botFindings);

@@ -1637,6 +1637,7 @@ export interface PlatformSettings {
   selfHostedKycDocumentTypes: string;
   selfHostedKycMinFaceMatchScore: number;
   selfHostedKycMinLivenessScore: number;
+  selfHostedKycDoNotAutoDeclineEnabled: boolean;
   authMaintenanceEnabled: boolean;
   authMaintenanceUntil: string | null;
   authMaintenanceMessage: string | null;
@@ -1786,6 +1787,7 @@ export interface PlatformSettingsInput {
   selfHostedKycDocumentTypes?: string;
   selfHostedKycMinFaceMatchScore?: number;
   selfHostedKycMinLivenessScore?: number;
+  selfHostedKycDoNotAutoDeclineEnabled?: boolean;
   authMaintenanceEnabled?: boolean;
   authMaintenanceUntil?: string | null;
   authMaintenanceMessage?: string | null;

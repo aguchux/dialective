@@ -29,6 +29,7 @@ export function KycSettingsPanel() {
   const [selfHostedDocumentTypes, setSelfHostedDocumentTypes] = useState('passport,national_id');
   const [selfHostedMinFaceMatchScore, setSelfHostedMinFaceMatchScore] = useState('85');
   const [selfHostedMinLivenessScore, setSelfHostedMinLivenessScore] = useState('80');
+  const [selfHostedDoNotAutoDecline, setSelfHostedDoNotAutoDecline] = useState(false);
   const [manualPhoneVerificationEnabled, setManualPhoneVerificationEnabled] = useState(true);
   const [manualPhoneVerificationFeeTokens, setManualPhoneVerificationFeeTokens] = useState('1');
   const [manualPhoneVerificationWhatsappNumber, setManualPhoneVerificationWhatsappNumber] =
@@ -52,6 +53,7 @@ export function KycSettingsPanel() {
     setSelfHostedDocumentTypes(settings.selfHostedKycDocumentTypes);
     setSelfHostedMinFaceMatchScore(String(settings.selfHostedKycMinFaceMatchScore));
     setSelfHostedMinLivenessScore(String(settings.selfHostedKycMinLivenessScore));
+    setSelfHostedDoNotAutoDecline(settings.selfHostedKycDoNotAutoDeclineEnabled);
     setManualPhoneVerificationEnabled(settings.manualPhoneVerificationEnabled);
     setManualPhoneVerificationFeeTokens(settings.manualPhoneVerificationFeeTokens);
     setManualPhoneVerificationWhatsappNumber(settings.manualPhoneVerificationWhatsappNumber);
@@ -98,6 +100,7 @@ export function KycSettingsPanel() {
         selfHostedKycDocumentTypes: selfHostedDocumentTypes,
         selfHostedKycMinFaceMatchScore: minFaceMatchScore,
         selfHostedKycMinLivenessScore: minLivenessScore,
+        selfHostedKycDoNotAutoDeclineEnabled: selfHostedDoNotAutoDecline,
         manualPhoneVerificationEnabled,
         manualPhoneVerificationFeeTokens: Number(manualPhoneVerificationFeeTokens) || 0,
         manualPhoneVerificationWhatsappNumber,
@@ -316,6 +319,28 @@ export function KycSettingsPanel() {
                 80% liveness.
               </p>
             </div>
+
+            <label
+              className="flex cursor-pointer items-start gap-3"
+              htmlFor="dlkyc-do-not-auto-decline"
+            >
+              <input
+                checked={selfHostedDoNotAutoDecline}
+                className="mt-0.5 size-5 accent-accent"
+                id="dlkyc-do-not-auto-decline"
+                onChange={(event) => setSelfHostedDoNotAutoDecline(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Do not auto-decline -- send failures to review</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Off by default -- a decisively bad face match or liveness score auto-declines the
+                  trainer outright. When on, those same failing submissions land in the review queue
+                  instead, so an admin can manually check a poor-quality photo before rejecting it.
+                  Auto-approval of clear passes above is unaffected either way.
+                </span>
+              </span>
+            </label>
 
             <label className="flex cursor-pointer items-start gap-3" htmlFor="dlkyc-bot-enabled">
               <input

@@ -99,4 +99,32 @@ describe('evaluateSelfHostedKyc', () => {
     );
     expect(result.band).toBe('DECLINE');
   });
+
+  it('routes a decisively-bad face match to REVIEW instead of DECLINE when doNotAutoDeclineEnabled is on', () => {
+    const result = evaluateSelfHostedKyc(
+      base({ faceMatchScore: 10, doNotAutoDeclineEnabled: true }),
+    );
+    expect(result.band).toBe('REVIEW');
+    expect(result.declineReason).toBeNull();
+  });
+
+  it('routes a decisively-bad liveness score to REVIEW instead of DECLINE when doNotAutoDeclineEnabled is on', () => {
+    const result = evaluateSelfHostedKyc(
+      base({ livenessScore: 10, doNotAutoDeclineEnabled: true }),
+    );
+    expect(result.band).toBe('REVIEW');
+    expect(result.declineReason).toBeNull();
+  });
+
+  it('still declines outright when doNotAutoDeclineEnabled is omitted (defaults to false)', () => {
+    const result = evaluateSelfHostedKyc(base({ faceMatchScore: 10 }));
+    expect(result.band).toBe('DECLINE');
+  });
+
+  it('doNotAutoDeclineEnabled does not affect a clear pass -- auto-approval still applies normally', () => {
+    const result = evaluateSelfHostedKyc(
+      base({ faceMatchScore: 95, livenessScore: 95, doNotAutoDeclineEnabled: true }),
+    );
+    expect(result.band).toBe('APPROVE');
+  });
 });
