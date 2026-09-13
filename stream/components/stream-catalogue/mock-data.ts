@@ -500,6 +500,16 @@ export const verifiedSpeakers: VerifiedSpeaker[] = [
     avatarUrl: avatars[4].url,
     avatarAlt: avatars[4].alt,
   },
+  {
+    id: 'ngozi-e',
+    name: 'Ngozi E.',
+    language: 'Igbo',
+    country: 'Nigeria',
+    hours: 10.3,
+    score: 9.3,
+    avatarUrl: avatars[0].url,
+    avatarAlt: avatars[0].alt,
+  },
 ];
 
 export const catalogueMetrics: CatalogueMetric[] = [

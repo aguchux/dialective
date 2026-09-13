@@ -177,11 +177,13 @@ export function CarouselRow({
   className = '',
   hideScrollbar = false,
   label,
+  rows = 1,
 }: {
   children: ReactNode;
   className?: string;
   hideScrollbar?: boolean;
   label: string;
+  rows?: number;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<{ pointerId: number; startX: number; startScrollLeft: number; moved: boolean } | null>(
@@ -262,9 +264,9 @@ export function CarouselRow({
     <div className={`relative min-w-0 ${className}`}>
       <div
         aria-label={label}
-        className={`flex h-full min-w-0 gap-2 overflow-x-auto transition-[filter] duration-200 ${
-          hideScrollbar ? 'stream-catalogue-scrollbar-hidden' : 'stream-catalogue-scrollbar pb-1'
-        } ${
+        className={`h-full min-w-0 gap-2 overflow-x-auto transition-[filter] duration-200 ${
+          rows > 1 ? 'grid grid-flow-col auto-cols-max' : 'flex'
+        } ${hideScrollbar ? 'stream-catalogue-scrollbar-hidden' : 'stream-catalogue-scrollbar pb-1'} ${
           isDragging
             ? 'cursor-grabbing scroll-auto select-none brightness-110 saturate-125'
             : 'cursor-grab scroll-smooth'
@@ -280,6 +282,7 @@ export function CarouselRow({
         }}
         ref={scrollerRef}
         role="group"
+        style={rows > 1 ? { gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` } : undefined}
       >
         {children}
       </div>
