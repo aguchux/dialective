@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, SlidersHorizontal, X } from 'lucide-react';
 import type { CatalogueFilters, FilterKey } from './types';
 
@@ -13,6 +13,26 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'license', label: 'License' },
 ];
 
+// Each cascading field requires the one before it to be picked first:
+// Country -> Dialect -> Subdialect. Quality Score and License stay
+// available once a country is chosen (they don't need dialect/subdialect).
+const PREREQUISITE: Partial<Record<FilterKey, FilterKey>> = {
+  dialect: 'country',
+  subdialect: 'dialect',
+  quality: 'country',
+  license: 'country',
+};
+
+function isFilterLocked(key: FilterKey, filters: CatalogueFilters): boolean {
+  const prerequisite = PREREQUISITE[key];
+  return prerequisite ? !filters[prerequisite] : false;
+}
+
+function prerequisiteLabel(key: FilterKey): string {
+  const prerequisite = PREREQUISITE[key];
+  return prerequisite ? FILTERS.find((filter) => filter.key === prerequisite)?.label ?? '' : '';
+}
+
 export function FilterBar({
   filters,
   onClear,
@@ -24,18 +44,89 @@ export function FilterBar({
   onChange: (key: FilterKey, value: string | null) => void;
   options: Record<FilterKey, string[]>;
 }) {
-  const [panelOpen, setPanelOpen] = useState(false);
-  const barRef = useRef<HTMLDivElement>(null);
+  const [openKey, setOpenKey] = useState<FilterKey | null>(null);
   const hasFilters = Object.values(filters).some(Boolean);
-  const activeCount = Object.values(filters).filter(Boolean).length;
+
+  return (
+    <div className="stream-catalogue-scrollbar flex min-w-0 items-center gap-2 overflow-x-auto pb-1">
+      <SlidersHorizontal aria-hidden="true" className="ml-1 size-4 shrink-0 text-catalogue-muted" />
+      {FILTERS.map((filter) => (
+        <FilterButton
+          disabled={isFilterLocked(filter.key, filters)}
+          filter={filter}
+          isOpen={openKey === filter.key}
+          key={filter.key}
+          onChange={onChange}
+          onToggle={() => setOpenKey((current) => (current === filter.key ? null : filter.key))}
+          options={options[filter.key]}
+          value={filters[filter.key]}
+        />
+      ))}
+      {hasFilters && (
+        <button
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 px-2 text-xs font-semibold text-catalogue-blue-bright hover:text-catalogue-ink"
+          onClick={onClear}
+          type="button"
+        >
+          <X aria-hidden="true" className="size-3.5" />
+          Clear all
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FilterButton({
+  disabled = false,
+  filter,
+  isOpen,
+  onChange,
+  onToggle,
+  options,
+  value,
+}: {
+  disabled?: boolean;
+  filter: { key: FilterKey; label: string };
+  isOpen: boolean;
+  onChange: (key: FilterKey, value: string | null) => void;
+  onToggle: () => void;
+  options: string[];
+  value: string | null;
+}) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelStyle, setPanelStyle] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setPanelStyle(null);
+      return;
+    }
+    function place() {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const panelWidth = panelRef.current?.offsetWidth ?? 176;
+      const left = Math.min(rect.left, window.innerWidth - panelWidth - 12);
+      setPanelStyle({ left: Math.max(12, left), top: rect.bottom + 6 });
+    }
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
-    if (!panelOpen) return;
+    if (!isOpen) return;
     function handlePointerDown(event: PointerEvent) {
-      if (!barRef.current?.contains(event.target as Node)) setPanelOpen(false);
+      const target = event.target as Node;
+      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      onToggle();
     }
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setPanelOpen(false);
+      if (event.key === 'Escape') onToggle();
     }
     document.addEventListener('pointerdown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
@@ -43,111 +134,61 @@ export function FilterBar({
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [panelOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   return (
-    <div className="relative" ref={barRef}>
-      <div className="stream-catalogue-scrollbar flex min-w-0 items-center gap-2 overflow-x-auto pb-1">
-        <button
-          aria-expanded={panelOpen}
-          className={`flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 ${
-            activeCount > 0
-              ? 'border-catalogue-blue/70 bg-catalogue-blue-soft text-catalogue-blue-bright'
-              : 'border-catalogue-line bg-catalogue-surface text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink'
-          }`}
-          onClick={() => setPanelOpen((current) => !current)}
-          type="button"
+    <>
+      <button
+        aria-expanded={isOpen}
+        className={`flex h-8 shrink-0 items-center gap-2 rounded-lg border px-3 text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 ${
+          disabled ? 'cursor-not-allowed opacity-40' : ''
+        } ${
+          value
+            ? 'border-catalogue-blue/70 bg-catalogue-blue-soft text-catalogue-blue-bright'
+            : 'border-catalogue-line bg-catalogue-surface text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink'
+        }`}
+        disabled={disabled}
+        onClick={onToggle}
+        ref={buttonRef}
+        title={disabled ? `Choose ${prerequisiteLabel(filter.key)} first` : undefined}
+        type="button"
+      >
+        {value ?? filter.label}
+        <ChevronDown aria-hidden="true" className={`size-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {isOpen && (
+        <div
+          className="fixed z-50 min-w-44 overflow-hidden rounded-lg border border-catalogue-line-strong bg-catalogue-surface-raised p-1 shadow-catalogue"
+          ref={panelRef}
+          style={{
+            left: panelStyle?.left ?? -9999,
+            top: panelStyle?.top ?? -9999,
+            visibility: panelStyle ? 'visible' : 'hidden',
+          }}
         >
-          <SlidersHorizontal aria-hidden="true" className="size-3.5" />
-          Filters
-          {activeCount > 0 && (
-            <span className="grid size-4 place-items-center rounded-full bg-catalogue-blue text-[9px] font-bold text-white">
-              {activeCount}
-            </span>
+          {options.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-catalogue-dim">No matching options.</p>
+          ) : (
+            options.map((option) => (
+              <button
+                className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-xs text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink"
+                key={option}
+                onClick={() => {
+                  onChange(filter.key, option === value ? null : option);
+                  onToggle();
+                }}
+                type="button"
+              >
+                {option}
+                {option === value && (
+                  <Check aria-hidden="true" className="size-3.5 text-catalogue-blue-bright" />
+                )}
+              </button>
+            ))
           )}
-          <ChevronDown
-            aria-hidden="true"
-            className={`size-3.5 transition-transform ${panelOpen ? 'rotate-180' : ''}`}
-          />
-        </button>
-
-        {FILTERS.filter((filter) => filters[filter.key]).map((filter) => (
-          <button
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-catalogue-blue/70 bg-catalogue-blue-soft px-3 text-xs font-semibold text-catalogue-blue-bright"
-            key={filter.key}
-            onClick={() => onChange(filter.key, null)}
-            type="button"
-          >
-            {filters[filter.key]}
-            <X aria-hidden="true" className="size-3" />
-          </button>
-        ))}
-
-        {hasFilters && (
-          <button
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 px-2 text-xs font-semibold text-catalogue-blue-bright hover:text-catalogue-ink"
-            onClick={onClear}
-            type="button"
-          >
-            <X aria-hidden="true" className="size-3.5" />
-            Clear all
-          </button>
-        )}
-      </div>
-
-      {panelOpen && (
-        <div className="absolute left-0 top-10 z-30 grid w-full min-w-[320px] gap-4 rounded-[10px] border border-catalogue-line-strong bg-catalogue-surface-raised p-4 shadow-catalogue sm:grid-cols-2 lg:grid-cols-3">
-          {FILTERS.map((filter) => (
-            <FilterGroup
-              filter={filter}
-              key={filter.key}
-              onChange={onChange}
-              options={options[filter.key]}
-              value={filters[filter.key]}
-            />
-          ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function FilterGroup({
-  filter,
-  onChange,
-  options,
-  value,
-}: {
-  filter: { key: FilterKey; label: string };
-  onChange: (key: FilterKey, value: string | null) => void;
-  options: string[];
-  value: string | null;
-}) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-catalogue-dim">
-        {filter.label}
-      </p>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {options.map((option) => {
-          const selected = option === value;
-          return (
-            <button
-              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                selected
-                  ? 'border-catalogue-blue/70 bg-catalogue-blue text-white'
-                  : 'border-catalogue-line bg-catalogue-surface text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink'
-              }`}
-              key={option}
-              onClick={() => onChange(filter.key, selected ? null : option)}
-              type="button"
-            >
-              {selected && <Check aria-hidden="true" className="size-3" />}
-              {option}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    </>
   );
 }

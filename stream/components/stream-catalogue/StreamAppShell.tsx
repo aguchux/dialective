@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, X } from 'lucide-react';
 import { useGetCatalogueShowcaseQuery } from '@/store/api';
 import { defaultFilters } from './mock-data';
-import type { CatalogueFilters, FilterKey, StreamDeck, VerifiedSpeaker } from './types';
+import type { CatalogueCollection, CatalogueFilters, FilterKey, StreamDeck, VerifiedSpeaker } from './types';
 import { CollectionCard } from './CollectionCard';
 import { CollectionInspector } from './CollectionInspector';
 import { DiscoverHero } from './DiscoverHero';
@@ -130,8 +130,61 @@ export function StreamAppShell() {
   }
 
   function updateFilter(key: FilterKey, value: string | null) {
-    setFilters((current) => ({ ...current, [key]: value }));
+    setFilters((current) => {
+      const next = { ...current, [key]: value };
+      // Cascading filters: changing an upstream field clears anything
+      // downstream of it (country -> dialect -> subdialect -> quality ->
+      // license) since a previously-picked value may no longer apply to
+      // the narrowed-down option list.
+      const cascadeOrder: FilterKey[] = ['country', 'dialect', 'subdialect', 'quality', 'license'];
+      const changedIndex = cascadeOrder.indexOf(key);
+      if (changedIndex !== -1) {
+        for (const laterKey of cascadeOrder.slice(changedIndex + 1)) next[laterKey] = null;
+      }
+      return next;
+    });
   }
+
+  // Each field's option list is derived from collections matching every
+  // *upstream* filter already chosen, so picking Country narrows the
+  // Dialect list to that country's dialects, picking Dialect narrows
+  // Subdialect, and so on -- rather than one static flat list per field.
+  const cascadedFilterOptions = useMemo(() => {
+    function optionsFor(uptoKey: FilterKey): CatalogueCollection[] {
+      const cascadeOrder: FilterKey[] = ['country', 'dialect', 'subdialect', 'quality', 'license'];
+      const uptoIndex = cascadeOrder.indexOf(uptoKey);
+      return collections.filter((collection) => {
+        if (filters.language && collection.language !== filters.language) return false;
+        for (const key of cascadeOrder.slice(0, uptoIndex)) {
+          const value = filters[key];
+          if (!value) continue;
+          if (key === 'quality') {
+            if (collection.qualityScore < Number(value.replace('+', ''))) return false;
+          } else if (key === 'subdialect') {
+            if (!collection.subdialect.toLowerCase().includes(value.toLowerCase())) return false;
+          } else if (key === 'license') {
+            if (!collection.license.toLowerCase().includes(value.toLowerCase())) return false;
+          } else if (collection[key] !== value) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    const uniqueSorted = (values: string[]) => Array.from(new Set(values)).sort();
+
+    return {
+      language: filterOptions?.language ?? [],
+      country: uniqueSorted(optionsFor('country').map((c) => c.country)),
+      dialect: uniqueSorted(optionsFor('dialect').map((c) => c.dialect)),
+      subdialect: uniqueSorted(
+        optionsFor('subdialect').flatMap((c) => c.subdialect.split(',').map((s) => s.trim())),
+      ),
+      quality: ['9.5+', '9.0+', '8.5+'],
+      license: uniqueSorted(optionsFor('license').map((c) => c.license)),
+    } satisfies Record<FilterKey, string[]>;
+  }, [collections, filterOptions, filters]);
 
   function scrollTo(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -187,7 +240,7 @@ export function StreamAppShell() {
                 filters={filters}
                 onChange={updateFilter}
                 onClear={() => setFilters(defaultFilters)}
-                options={filterOptions}
+                options={cascadedFilterOptions}
               />
             )}
 
