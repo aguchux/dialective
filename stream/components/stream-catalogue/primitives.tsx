@@ -78,7 +78,21 @@ export function Waveform({
   );
 }
 
-export function ScoreBadge({ score }: { score: number }) {
+export function ScoreBadge({
+  size = 'md',
+  score,
+}: {
+  size?: 'sm' | 'md';
+  score: number;
+}) {
+  if (size === 'sm') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-catalogue-blue/70 px-1.5 py-0.5 text-[9px] font-bold text-white opacity-80 shadow-sm backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100">
+        {score.toFixed(1)}
+      </span>
+    );
+  }
+
   return (
     <span className="inline-flex items-center gap-1 rounded-md bg-catalogue-blue/80 px-2 py-1 text-[11px] font-bold text-white shadow-sm backdrop-blur-sm">
       {score.toFixed(1)}

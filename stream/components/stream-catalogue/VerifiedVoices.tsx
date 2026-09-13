@@ -42,7 +42,7 @@ export function VerifiedVoices({
             ? Array.from({ length: 12 }, (_, index) => <VoiceCardSkeleton key={index} />)
             : visibleSpeakers.map((speaker) => (
                 <FocusableRow key={speaker.id} onClick={() => onSelect(speaker)}>
-                  <article className="flex w-[108px] shrink-0 flex-col rounded-[10px] border border-catalogue-line bg-catalogue-surface-raised p-2 transition-colors hover:border-catalogue-line-strong hover:bg-catalogue-surface-hover">
+                  <article className="group flex w-[108px] shrink-0 flex-col rounded-[10px] border border-catalogue-line bg-catalogue-surface-raised p-2 transition-colors hover:border-catalogue-line-strong hover:bg-catalogue-surface-hover">
                     <div className="relative mx-auto w-fit">
                       <CoverImage
                         alt={speaker.avatarAlt}
@@ -51,8 +51,8 @@ export function VerifiedVoices({
                         src={speaker.avatarUrl}
                         width={40}
                       />
-                      <span className="absolute -right-1.5 -top-1.5">
-                        <ScoreBadge score={speaker.score} />
+                      <span className="absolute -right-2 -top-2">
+                        <ScoreBadge score={speaker.score} size="sm" />
                       </span>
                     </div>
                     <p className="mt-1.5 truncate text-center text-[11px] font-semibold text-catalogue-ink">
