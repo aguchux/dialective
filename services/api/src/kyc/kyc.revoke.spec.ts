@@ -15,6 +15,12 @@ function setup() {
   };
   const user = {
     update: jest.fn(),
+    findUnique: jest.fn().mockResolvedValue({
+      email: 'trainer@example.com',
+      phoneNumber: null,
+      phoneVerifiedAt: null,
+      smsNotificationsEnabled: false,
+    }),
   };
   const prisma = {
     kycVerification,
@@ -24,13 +30,15 @@ function setup() {
   const didit = {};
   const selfHosted = {};
   const settings = {};
+  const mail = { sendKycDeclinedEmail: jest.fn().mockResolvedValue(undefined) };
   const service = new KycService(
     prisma as never,
     didit as never,
     selfHosted as never,
     settings as never,
+    mail as never,
   );
-  return { service, prisma };
+  return { service, prisma, mail };
 }
 
 describe('KycService.adminRevokeVerification', () => {
@@ -61,7 +69,7 @@ describe('KycService.adminRevokeVerification', () => {
   });
 
   it('flips an APPROVED verification (either provider) back to DECLINED and clears the identity fingerprint', async () => {
-    const { service, prisma } = setup();
+    const { service, prisma, mail } = setup();
     prisma.kycVerification.findUnique.mockResolvedValue({
       id: 'v1',
       userId: 'user-1',
@@ -94,6 +102,10 @@ describe('KycService.adminRevokeVerification', () => {
     expect(prisma.user.update).toHaveBeenLastCalledWith({
       where: { id: 'user-1' },
       data: { diditIdentityFingerprint: null },
+    });
+    expect(mail.sendKycDeclinedEmail).toHaveBeenCalledWith({
+      trainerEmail: 'trainer@example.com',
+      reason: 'Fraud discovered after approval',
     });
   });
 });

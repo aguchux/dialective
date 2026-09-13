@@ -20,11 +20,13 @@ function setup() {
   const didit = { createSession: jest.fn() };
   const selfHosted = {};
   const settings = { getActiveKycProvider: jest.fn().mockResolvedValue('didit') };
+  const mail = {};
   const service = new KycService(
     prisma as never,
     didit as never,
     selfHosted as never,
     settings as never,
+    mail as never,
   );
   return { service, prisma, didit };
 }

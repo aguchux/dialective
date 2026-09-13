@@ -1,8 +1,10 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { KycStatus, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { MailService } from '../mail/mail.service';
+import { SmsService } from '../sms/sms.service';
 import { DiditDecision, DiditService } from './didit.service';
 import { SelfHostedKycService } from './self-hosted-kyc.service';
 import {
@@ -48,7 +50,45 @@ export class KycService {
     private readonly didit: DiditService,
     private readonly selfHosted: SelfHostedKycService,
     private readonly settings: PlatformSettingsService,
+    private readonly mail: MailService,
+    @Optional() private readonly sms?: SmsService,
   ) {}
+
+  /**
+   * Best-effort decline/revoke notification -- mirrors the pattern in
+   * WordsService.checkAuditHoldThreshold: a failed email/SMS send must never
+   * unwind the decision that was already applied, so both are fire-and-forget
+   * with their own try/catch + logger call.
+   */
+  private async notifyKycDeclined(userId: string, reason: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        email: true,
+        phoneNumber: true,
+        phoneVerifiedAt: true,
+        smsNotificationsEnabled: true,
+      },
+    });
+    if (!user) return;
+
+    try {
+      await this.mail.sendKycDeclinedEmail({ trainerEmail: user.email, reason });
+    } catch (err) {
+      this.logger.error(`Failed to send KYC decline email for user=${userId}: ${(err as Error).message}`);
+    }
+
+    if (this.sms && user.phoneNumber && user.phoneVerifiedAt && user.smsNotificationsEnabled) {
+      try {
+        await this.sms.sendTransactional(
+          user.phoneNumber,
+          `Dialect Library: your identity verification was declined. Reason: ${reason}. Please review and resubmit from your dashboard.`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to send KYC decline SMS for user=${userId}: ${(err as Error).message}`);
+      }
+    }
+  }
 
   async getActiveProvider(): Promise<'didit' | 'self'> {
     return this.settings.getActiveKycProvider();
@@ -232,6 +272,7 @@ export class KycService {
       declineReason: reason,
       raw: { provider: 'self', adminOverride: 'decline', reason },
     });
+    await this.notifyKycDeclined(verification.userId, reason);
     return this.prisma.kycVerification.findUniqueOrThrow({ where: { id } });
   }
 
@@ -269,6 +310,7 @@ export class KycService {
       data: { diditIdentityFingerprint: null },
     });
     this.logger.warn(`Admin revoked previously-approved KycVerification ${id}: ${reason}`);
+    await this.notifyKycDeclined(verification.userId, reason);
     return this.prisma.kycVerification.findUniqueOrThrow({ where: { id } });
   }
 

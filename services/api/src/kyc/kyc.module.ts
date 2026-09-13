@@ -7,9 +7,11 @@ import { FaceMatchService } from './face-match.service';
 import { KycEvidenceRedactionService } from './kyc-evidence-redaction.service';
 import { StorageModule } from '../storage/storage.module';
 import { LlmModule } from '../llm/llm.module';
+import { MailModule } from '../mail/mail.module';
+import { SmsModule } from '../sms/sms.module';
 
 @Module({
-  imports: [StorageModule, LlmModule],
+  imports: [StorageModule, LlmModule, MailModule, SmsModule],
   controllers: [KycController],
   providers: [
     KycService,

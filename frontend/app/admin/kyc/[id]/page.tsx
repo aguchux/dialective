@@ -20,6 +20,81 @@ import {
   useRevokeKycVerificationMutation,
 } from '@/store/api';
 
+const KYC_DECLINE_REASONS = [
+  'Selfie not clear or visible',
+  'No valid ID uploaded',
+  'Face mismatch between selfie and ID',
+  'Name on ID does not match name on profile',
+  'ID document expired',
+  'ID document appears altered or tampered with',
+  'Blurry or unreadable ID photo',
+  'ID type not accepted',
+  'Selfie liveness check failed',
+  'Date of birth does not match profile',
+  'Duplicate identity already verified on another account',
+  'Other (see details below)',
+] as const;
+
+function DeclineReasonPicker({
+  detail,
+  idPrefix,
+  onDetailChange,
+  onReasonChange,
+  reason,
+}: {
+  detail: string;
+  idPrefix: string;
+  onDetailChange: (value: string) => void;
+  onReasonChange: (value: string) => void;
+  reason: string;
+}) {
+  return (
+    <div className="grid gap-2">
+      <p className="text-sm font-bold">Reason for declining (shown to the trainer)</p>
+      <div className="grid gap-1.5">
+        {KYC_DECLINE_REASONS.map((option) => {
+          const optionId = `${idPrefix}-${option}`;
+          return (
+            <label
+              className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm has-checked:border-accent has-checked:bg-accent/5"
+              htmlFor={optionId}
+              key={option}
+            >
+              <input
+                checked={reason === option}
+                className="size-4 accent-accent"
+                id={optionId}
+                name={idPrefix}
+                onChange={() => onReasonChange(option)}
+                type="radio"
+                value={option}
+              />
+              {option}
+            </label>
+          );
+        })}
+      </div>
+      <label className="text-xs font-bold text-muted" htmlFor={`${idPrefix}-detail`}>
+        Additional details (optional)
+      </label>
+      <textarea
+        className="min-h-16 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+        id={`${idPrefix}-detail`}
+        onChange={(event) => onDetailChange(event.target.value)}
+        placeholder="Add specifics the trainer should know..."
+        value={detail}
+      />
+    </div>
+  );
+}
+
+/** Combines the picked preset reason with any optional free-text detail into the single string sent to the backend / shown to the trainer. */
+function composeDeclineReason(reason: string, detail: string): string {
+  const trimmedDetail = detail.trim();
+  if (!reason) return trimmedDetail;
+  return trimmedDetail ? `${reason} -- ${trimmedDetail}` : reason;
+}
+
 export default function AdminKycDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -34,8 +109,10 @@ export default function AdminKycDetailPage() {
     useLazyGetKycDecisionQuery();
   const [error, setError] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState('');
+  const [declineDetail, setDeclineDetail] = useState('');
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [revokeReason, setRevokeReason] = useState('');
+  const [revokeDetail, setRevokeDetail] = useState('');
   const [showRevokeForm, setShowRevokeForm] = useState(false);
   const [decisionRevealed, setDecisionRevealed] = useState(false);
 
@@ -44,8 +121,10 @@ export default function AdminKycDetailPage() {
     setError(null);
     setShowDeclineForm(false);
     setDeclineReason('');
+    setDeclineDetail('');
     setShowRevokeForm(false);
     setRevokeReason('');
+    setRevokeDetail('');
   }, [id]);
 
   async function refreshRow() {
@@ -77,24 +156,26 @@ export default function AdminKycDetailPage() {
   }
 
   async function declineRow() {
-    if (!declineReason.trim()) return;
+    if (!declineReason) return;
     setError(null);
     try {
-      await decline({ id, reason: declineReason.trim() }).unwrap();
+      await decline({ id, reason: composeDeclineReason(declineReason, declineDetail) }).unwrap();
       setShowDeclineForm(false);
       setDeclineReason('');
+      setDeclineDetail('');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to decline this verification.'));
     }
   }
 
   async function revokeRow() {
-    if (!revokeReason.trim()) return;
+    if (!revokeReason) return;
     setError(null);
     try {
-      await revoke({ id, reason: revokeReason.trim() }).unwrap();
+      await revoke({ id, reason: composeDeclineReason(revokeReason, revokeDetail) }).unwrap();
       setShowRevokeForm(false);
       setRevokeReason('');
+      setRevokeDetail('');
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to revoke this verification.'));
     }
@@ -193,6 +274,57 @@ export default function AdminKycDetailPage() {
 
             <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
               <h2 className="text-lg font-black">Actions</h2>
+
+              {showDeclineForm && (
+                <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3">
+                  <DeclineReasonPicker
+                    detail={declineDetail}
+                    idPrefix="kyc-decline-reason"
+                    onDetailChange={setDeclineDetail}
+                    onReasonChange={setDeclineReason}
+                    reason={declineReason}
+                  />
+                  <div>
+                    <ActionButton
+                      className="min-h-10 rounded-lg border border-danger bg-danger px-4 font-extrabold text-white disabled:opacity-60"
+                      disabled={!declineReason}
+                      onClick={() => void declineRow()}
+                      pending={declining}
+                      pendingLabel="Declining"
+                      type="button"
+                    >
+                      Confirm decline
+                    </ActionButton>
+                  </div>
+                </div>
+              )}
+              {showRevokeForm && (
+                <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3">
+                  <p className="text-xs font-bold text-muted">
+                    Also re-blocks withdrawals/onboarding immediately.
+                  </p>
+                  <DeclineReasonPicker
+                    detail={revokeDetail}
+                    idPrefix="kyc-revoke-reason"
+                    onDetailChange={setRevokeDetail}
+                    onReasonChange={setRevokeReason}
+                    reason={revokeReason}
+                  />
+                  <div>
+                    <ActionButton
+                      className="min-h-10 rounded-lg border border-danger bg-danger px-4 font-extrabold text-white disabled:opacity-60"
+                      disabled={!revokeReason}
+                      onClick={() => void revokeRow()}
+                      pending={revoking}
+                      pendingLabel="Revoking"
+                      type="button"
+                    >
+                      Confirm revoke
+                    </ActionButton>
+                  </div>
+                </div>
+              )}
+
               {row.status === 'IN_PROGRESS' || row.status === 'IN_REVIEW' ? (
                 <div className="flex flex-wrap gap-2">
                   {row.provider === 'didit' && (
@@ -251,57 +383,6 @@ export default function AdminKycDetailPage() {
                   This verification is {row.status.replace(/_/g, ' ').toLowerCase()} -- no further
                   actions available.
                 </p>
-              )}
-              {showDeclineForm && (
-                <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3">
-                  <label className="text-sm font-bold" htmlFor="kyc-decline-reason">
-                    Reason for declining (shown to the trainer)
-                  </label>
-                  <textarea
-                    className="min-h-20 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
-                    id="kyc-decline-reason"
-                    onChange={(event) => setDeclineReason(event.target.value)}
-                    value={declineReason}
-                  />
-                  <div>
-                    <ActionButton
-                      className="min-h-10 rounded-lg border border-danger bg-danger px-4 font-extrabold text-white disabled:opacity-60"
-                      disabled={!declineReason.trim()}
-                      onClick={() => void declineRow()}
-                      pending={declining}
-                      pendingLabel="Declining"
-                      type="button"
-                    >
-                      Confirm decline
-                    </ActionButton>
-                  </div>
-                </div>
-              )}
-              {showRevokeForm && (
-                <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3">
-                  <label className="text-sm font-bold" htmlFor="kyc-revoke-reason">
-                    Reason for revoking (shown to the trainer; also re-blocks withdrawals/onboarding
-                    immediately)
-                  </label>
-                  <textarea
-                    className="min-h-20 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
-                    id="kyc-revoke-reason"
-                    onChange={(event) => setRevokeReason(event.target.value)}
-                    value={revokeReason}
-                  />
-                  <div>
-                    <ActionButton
-                      className="min-h-10 rounded-lg border border-danger bg-danger px-4 font-extrabold text-white disabled:opacity-60"
-                      disabled={!revokeReason.trim()}
-                      onClick={() => void revokeRow()}
-                      pending={revoking}
-                      pendingLabel="Revoking"
-                      type="button"
-                    >
-                      Confirm revoke
-                    </ActionButton>
-                  </div>
-                </div>
               )}
             </section>
           </>

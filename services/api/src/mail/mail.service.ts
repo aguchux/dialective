@@ -51,6 +51,11 @@ interface AuditHoldNotification {
   submissionCount: number;
 }
 
+interface KycDeclinedNotification {
+  trainerEmail: string;
+  reason: string;
+}
+
 interface AnomalyAlertNotification {
   recipientEmail: string;
   organizationName: string;
@@ -315,6 +320,17 @@ export class MailService {
       'Your phone number is verified',
       phoneVerifiedHtml(phoneNumber, dashboardUrl),
       phoneVerifiedText(phoneNumber, dashboardUrl),
+    );
+  }
+
+  /** Fired from KycService.adminDeclineSelfHosted/adminRevokeVerification once an admin declines or revokes an identity verification. */
+  async sendKycDeclinedEmail(payload: KycDeclinedNotification): Promise<void> {
+    const dashboardUrl = `${frontendUrl()}/dashboard`;
+    await this.send(
+      payload.trainerEmail,
+      'Your identity verification needs attention',
+      kycDeclinedHtml(payload.reason, dashboardUrl),
+      kycDeclinedText(payload.reason, dashboardUrl),
     );
   }
 
@@ -696,6 +712,20 @@ function phoneVerifiedHtml(phoneNumber: string, dashboardUrl: string): string {
 function phoneVerifiedText(phoneNumber: string, dashboardUrl: string): string {
   return `Your phone number ${phoneNumber} has been verified.
 You can now request withdrawals and trade on the P2P market.
+Go to your dashboard: ${dashboardUrl}`;
+}
+
+function kycDeclinedHtml(reason: string, dashboardUrl: string): string {
+  return `<p>We weren&rsquo;t able to verify your identity with the details you submitted.</p>
+<p><strong>Reason:</strong> ${escapeHtml(reason)}</p>
+<p>You can review this and submit a new verification from your dashboard.</p>
+<p><a href="${dashboardUrl}">Go to your dashboard</a></p>`;
+}
+
+function kycDeclinedText(reason: string, dashboardUrl: string): string {
+  return `We weren't able to verify your identity with the details you submitted.
+Reason: ${reason}
+You can review this and submit a new verification from your dashboard.
 Go to your dashboard: ${dashboardUrl}`;
 }
 
