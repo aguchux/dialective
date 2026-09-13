@@ -87,7 +87,7 @@ export async function LandingPage() {
       <div className="relative isolate overflow-hidden">
         <div
           className="pointer-events-none absolute inset-0 -z-10 bg-[#c9eff7] bg-cover bg-top bg-no-repeat"
-          style={{ backgroundImage: "url('/landing-hero.png')" }}
+          style={{ backgroundImage: "url('/landing-hero.jpg')" }}
           aria-hidden="true"
         />
         <div className="px-4 md:px-[3.4rem]">

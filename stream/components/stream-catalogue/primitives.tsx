@@ -8,6 +8,7 @@ import type {
   ReactNode,
 } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { Check, ChevronLeft, ChevronRight, CirclePlay, MoreHorizontal, Play } from 'lucide-react';
 
 export function formatHours(value: number): string {
@@ -39,7 +40,14 @@ export function CoverImage({
   width: number;
 }) {
   return (
-    <img alt={alt} className={className} height={height} loading="lazy" src={src} width={width} />
+    <Image
+      alt={alt}
+      className={className}
+      height={height}
+      loading="lazy"
+      src={src}
+      width={width}
+    />
   );
 }
 

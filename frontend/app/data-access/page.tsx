@@ -90,7 +90,7 @@ export default function DataAccessPage() {
                 fill
                 priority
                 sizes="(max-width: 767px) calc(100vw - 72px), 620px"
-                src="/stream-banner.png"
+                src="/stream-banner.jpg"
               />
             </div>
             <p className="max-w-2xl text-lg leading-relaxed text-[rgba(5,5,5,0.68)]">

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Image from 'next/image';
 import { BrandLogo } from './BrandLogo';
 
 const WAVEFORM = [
@@ -68,14 +69,13 @@ function HeroAtmosphere() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_16%,rgba(22,88,192,0.34),transparent_38%),radial-gradient(circle_at_78%_42%,rgba(12,99,243,0.18),transparent_36%),linear-gradient(145deg,#06152f_0%,#031027_72%)]" />
       <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(74,135,255,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(74,135,255,0.2)_1px,transparent_1px)] [background-size:54px_54px] [mask-image:linear-gradient(to_bottom,black,transparent_72%)]" />
       <div className="absolute right-[-9%] top-[16%] h-[50%] w-[62%] overflow-hidden rounded-[34px] opacity-60 mix-blend-screen">
-        <img
+        <Image
           alt="A group of people recording audio in a studio; photo by cottonbro studio on Pexels."
-          className="h-full w-full object-cover object-center grayscale-[15%]"
-          height={800}
-          loading="eager"
+          className="object-cover object-center grayscale-[15%]"
+          fill
+          priority
+          sizes="(max-width: 1023px) 0px, 40vw"
           src="https://images.pexels.com/photos/6878694/pexels-photo-6878694.jpeg"
-          style={{ height: '100%', width: '100%' }}
-          width={1200}
         />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,#031027_0%,rgba(3,16,39,0.08)_42%,rgba(3,16,39,0.42)_100%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,16,39,0.12),#031027_100%)]" />

@@ -80,7 +80,7 @@ export default function StreamPage() {
               fill
               priority
               sizes="(max-width: 767px) calc(100vw - 72px), (max-width: 1280px) 40vw, 500px"
-              src="/voice-stream-product.png"
+              src="/voice-stream-product.jpg"
             />
           </div>
         </section>
