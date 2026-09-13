@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   BarChart3,
   Code2,
@@ -21,15 +22,15 @@ import type { PinnedCollection } from './types';
 import { CoverImage } from './primitives';
 
 const NAV_ITEMS = [
-  { href: '#home', label: 'Home', icon: Home },
-  { href: '#discover', label: 'Discover', icon: Search },
-  { href: '#voice-library', label: 'Voice Library', icon: Library },
-  { href: '#stream-decks', label: 'Stream Decks', icon: Layers3 },
-  { href: '#validation', label: 'Validation', icon: ShieldCheck },
-  { href: '#api', label: 'API', icon: Code2 },
-  { href: '#usage', label: 'Usage', icon: BarChart3 },
-  { href: '/dashboard/team', label: 'Team', icon: UsersRound },
-  { href: '/dashboard/billing', label: 'Settings', icon: Settings },
+  { href: '/', label: 'Home', icon: Home },
+  { href: '/discover', label: 'Discover', icon: Search },
+  { href: '/voice-library', label: 'Voice Library', icon: Library },
+  { href: '/stream-decks', label: 'Stream Decks', icon: Layers3 },
+  { href: '/validation', label: 'Validation', icon: ShieldCheck },
+  { href: '/api', label: 'API', icon: Code2 },
+  { href: '/usage', label: 'Usage', icon: BarChart3 },
+  { href: '/team', label: 'Team', icon: UsersRound },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function StreamSidebar({
@@ -41,6 +42,8 @@ export function StreamSidebar({
   onClose?: () => void;
   pinnedCollections: PinnedCollection[];
 }) {
+  const pathname = usePathname();
+
   return (
     <aside
       className={`stream-catalogue-sidebar stream-catalogue-scrollbar fixed inset-y-0 left-0 z-50 flex w-[260px] shrink-0 flex-col overflow-y-auto border-r border-catalogue-line bg-catalogue-surface px-4 pb-[var(--catalogue-player-height)] pt-5 transition-transform duration-200 md:sticky md:top-0 md:z-10 md:translate-x-0 md:transition-none ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
@@ -64,10 +67,9 @@ export function StreamSidebar({
       </div>
 
       <nav aria-label="Stream catalogue" className="mt-7 grid gap-1">
-        {NAV_ITEMS.map((item, index) => {
+        {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          const active = index === 0;
-          const isExternalRoute = item.href.startsWith('/');
+          const active = item.href === '/' ? pathname === '/' : pathname?.startsWith(item.href);
           return (
             <Link
               aria-current={active ? 'page' : undefined}
@@ -85,7 +87,6 @@ export function StreamSidebar({
                 className={`size-[18px] ${active ? 'text-catalogue-blue-bright' : ''}`}
               />
               <span>{item.label}</span>
-              {isExternalRoute && <span className="sr-only">Open dashboard route</span>}
             </Link>
           );
         })}
