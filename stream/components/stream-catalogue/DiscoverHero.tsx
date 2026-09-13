@@ -15,12 +15,12 @@ export function DiscoverHero({
 }) {
   return (
     <section
-      className="relative overflow-hidden rounded-[10px] border border-catalogue-blue/35 bg-[linear-gradient(115deg,#0e2353_0%,#0c1a38_48%,#0b1426_100%)] p-5 shadow-catalogue sm:p-6"
+      className="relative overflow-hidden rounded-[10px] border border-catalogue-blue/35 bg-[linear-gradient(115deg,#33244a_0%,#241a34_48%,#1a1424_100%)] p-4 shadow-catalogue sm:p-5"
       id="home"
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_74%_32%,rgba(57,129,255,0.35),transparent_34%),linear-gradient(rgba(57,129,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(57,129,255,0.12)_1px,transparent_1px)] [background-size:auto,42px_42px,42px_42px]"
+        className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_74%_32%,rgba(168,102,224,0.35),transparent_34%),linear-gradient(rgba(168,102,224,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(168,102,224,0.12)_1px,transparent_1px)] [background-size:auto,42px_42px,42px_42px]"
       />
       <div
         aria-hidden="true"
@@ -30,14 +30,14 @@ export function DiscoverHero({
           <path
             d="M0 82 C20 57 28 112 47 74 S75 72 91 53 S121 103 139 66 S168 76 184 43 S213 88 232 72 S258 30 276 61 S299 101 321 57 S348 77 400 37"
             fill="none"
-            stroke="#3981ff"
+            stroke="#c08bef"
             strokeLinecap="round"
             strokeWidth="2"
           />
           <path
             d="M0 91 C20 76 30 108 50 88 S78 68 95 78 S125 93 145 74 S170 80 190 62 S215 102 235 80 S265 53 282 71 S306 92 327 76 S353 78 400 55"
             fill="none"
-            stroke="#2368ff"
+            stroke="#a866e0"
             strokeOpacity="0.45"
             strokeWidth="1"
           />
@@ -79,7 +79,7 @@ export function DiscoverHero({
         <div className="grid gap-2.5 sm:grid-cols-3">
           {metrics.map((metric) => (
             <div
-              className="rounded-lg border border-white/10 bg-[#091731]/75 p-3.5 backdrop-blur-sm"
+              className="rounded-lg border border-white/10 bg-[#231a33]/75 p-3.5 backdrop-blur-sm"
               key={metric.label}
             >
               <div className="flex items-center justify-between gap-2">

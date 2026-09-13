@@ -12,7 +12,7 @@ export function StreamTopbar({
   onSearchChange: (value: string) => void;
 }) {
   return (
-    <header className="sticky top-0 z-30 flex min-h-[72px] items-center gap-3 border-b border-catalogue-line bg-catalogue-bg/95 px-4 backdrop-blur-md sm:px-5 lg:px-7">
+    <header className="sticky top-0 z-30 flex min-h-14 items-center gap-3 border-b border-catalogue-line bg-catalogue-bg/95 px-4 backdrop-blur-md sm:px-5 lg:px-7">
       <button
         aria-label="Open navigation"
         className="grid size-10 shrink-0 place-items-center rounded-lg text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink md:hidden"

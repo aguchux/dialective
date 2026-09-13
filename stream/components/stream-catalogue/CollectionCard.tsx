@@ -19,7 +19,7 @@ export function CollectionCard({
     <article
       className={`group relative w-[174px] shrink-0 cursor-pointer rounded-[10px] border bg-catalogue-surface-raised p-1.5 text-left transition-all hover:-translate-y-0.5 hover:border-catalogue-line-strong hover:bg-catalogue-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 sm:w-[184px] ${
         selected
-          ? 'border-catalogue-blue/80 shadow-[0_0_0_1px_rgba(35,104,255,0.2)]'
+          ? 'border-catalogue-blue/80 shadow-[0_0_0_1px_rgba(168,102,224,0.2)]'
           : 'border-catalogue-line'
       }`}
       onClick={onSelect}

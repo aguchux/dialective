@@ -106,21 +106,21 @@
 @layer components {
   .stream-catalogue {
     color-scheme: dark;
-    --catalogue-bg: #060c14;
-    --catalogue-surface: #0b1420;
-    --catalogue-surface-raised: #101b2a;
-    --catalogue-surface-hover: #16243a;
-    --catalogue-line: #1d2b3c;
-    --catalogue-line-strong: #2b3d55;
-    --catalogue-ink: #f5f7fb;
-    --catalogue-muted: #93a0b3;
-    --catalogue-dim: #637086;
-    --catalogue-blue: #2368ff;
-    --catalogue-blue-bright: #3981ff;
-    --catalogue-blue-soft: #142b63;
-    --catalogue-green: #65d58a;
-    --catalogue-yellow: #f2bf4a;
-    --catalogue-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+    --catalogue-bg: #15111c;
+    --catalogue-surface: #1f1929;
+    --catalogue-surface-raised: #291f36;
+    --catalogue-surface-hover: #33264a;
+    --catalogue-line: #392c49;
+    --catalogue-line-strong: #4c3b60;
+    --catalogue-ink: #f3edf9;
+    --catalogue-muted: #ab9ebd;
+    --catalogue-dim: #7d7190;
+    --catalogue-blue: #a866e0;
+    --catalogue-blue-bright: #c08bef;
+    --catalogue-blue-soft: #33244a;
+    --catalogue-green: #34d399;
+    --catalogue-yellow: #e2a24f;
+    --catalogue-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
     --bg: var(--catalogue-bg);
     --surface: var(--catalogue-surface);
     --surface-muted: var(--catalogue-surface-raised);
@@ -128,7 +128,7 @@
     --muted: var(--catalogue-muted);
     --line: var(--catalogue-line);
     --accent: var(--catalogue-blue);
-    --accent-dark: #174bc4;
+    --accent-dark: #8a4bc4;
     --accent-soft: var(--catalogue-blue-soft);
   }
 

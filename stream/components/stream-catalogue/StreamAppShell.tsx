@@ -117,7 +117,7 @@ export function StreamAppShell() {
   }
 
   return (
-    <div className="stream-catalogue min-h-screen w-full overflow-x-hidden bg-catalogue-bg text-catalogue-ink [--catalogue-player-height:72px] sm:[--catalogue-player-height:80px]">
+    <div className="stream-catalogue min-h-screen w-full overflow-x-hidden bg-catalogue-bg text-catalogue-ink [--catalogue-player-height:56px] sm:[--catalogue-player-height:60px]">
       <div className="flex min-h-screen pb-[var(--catalogue-player-height)] md:grid md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)_355px]">
         <StreamSidebar
           mobileOpen={mobileMenuOpen}

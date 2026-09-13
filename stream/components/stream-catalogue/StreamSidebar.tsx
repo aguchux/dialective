@@ -131,7 +131,7 @@ export function StreamSidebar({
         ))}
       </div>
 
-      <div className="relative mt-auto overflow-hidden rounded-[10px] border border-catalogue-blue/30 bg-[linear-gradient(145deg,#102654,#0a172b)] p-4">
+      <div className="relative mt-auto overflow-hidden rounded-[10px] border border-catalogue-blue/30 bg-[linear-gradient(145deg,#33244a,#1a1424)] p-4">
         <SlidersHorizontal
           aria-hidden="true"
           className="absolute -bottom-2 -right-1 size-20 text-catalogue-blue/20"
