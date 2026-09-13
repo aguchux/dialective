@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { Eye, EyeOff, KeyRound, Lock, LockKeyhole, Mail, X } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
@@ -165,12 +166,21 @@ export function AuthGateDialog({
               </div>
             </div>
             <div>
-              <label
-                className="mb-1 block text-[11px] font-semibold text-catalogue-muted"
-                htmlFor="auth-gate-password"
-              >
-                Password
-              </label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label
+                  className="block text-[11px] font-semibold text-catalogue-muted"
+                  htmlFor="auth-gate-password"
+                >
+                  Password
+                </label>
+                <Link
+                  className="shrink-0 text-[11px] font-semibold text-catalogue-blue-bright transition-colors hover:text-catalogue-ink"
+                  href="/forgot-password"
+                  onClick={onClose}
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <LockKeyhole
                   aria-hidden="true"
@@ -245,6 +255,17 @@ export function AuthGateDialog({
                 Social sign-in is coming soon.
               </span>
             </div>
+
+            <p className="mt-1 text-center text-[11px] text-catalogue-muted">
+              Don&apos;t have an account?{' '}
+              <Link
+                className="font-semibold text-catalogue-blue-bright hover:text-catalogue-ink"
+                href="/register"
+                onClick={onClose}
+              >
+                Request access
+              </Link>
+            </p>
           </form>
         ) : (
           <form className="grid gap-2.5" onSubmit={submitOtp}>

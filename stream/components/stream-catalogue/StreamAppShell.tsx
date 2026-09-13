@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, X } from 'lucide-react';
+import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { ArrowRight, RefreshCw, X } from 'lucide-react';
 import { useGetCatalogueShowcaseQuery } from '@/store/api';
 import { defaultFilters } from './mock-data';
 import type { CatalogueCollection, CatalogueFilters, FilterKey, StreamDeck, VerifiedSpeaker } from './types';
@@ -23,6 +25,7 @@ import {
 import { VerifiedVoices } from './VerifiedVoices';
 
 export function StreamAppShell() {
+  const { status: sessionStatus } = useSession();
   const {
     data: showcase,
     isFetching,
@@ -232,12 +235,23 @@ export function StreamAppShell() {
             )}
 
             {filterOptions && (
-              <FilterBar
-                filters={filters}
-                onChange={updateFilter}
-                onClear={() => setFilters(defaultFilters)}
-                options={cascadedFilterOptions}
-              />
+              <div className="flex min-w-0 items-center gap-3">
+                <FilterBar
+                  filters={filters}
+                  onChange={updateFilter}
+                  onClear={() => setFilters(defaultFilters)}
+                  options={cascadedFilterOptions}
+                />
+                {sessionStatus === 'unauthenticated' && (
+                  <Link
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap bg-catalogue-blue px-3 text-xs font-semibold text-white no-underline transition-colors hover:bg-catalogue-blue-bright"
+                    href="/register"
+                  >
+                    Start Here
+                    <ArrowRight aria-hidden="true" className="size-3.5" />
+                  </Link>
+                )}
+              </div>
             )}
 
             {isLoading ? (
