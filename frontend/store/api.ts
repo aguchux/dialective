@@ -1683,6 +1683,13 @@ export interface PlatformSettings {
   whatsappTemplateId: string | null;
   /** Whether an API key is currently saved -- the key itself is never returned to the client, see PlatformSettingsService.getForAdmin. */
   whatsappApiKeySet: boolean;
+  whatsappProvider: string;
+  whatsappMetaPhoneNumberId: string | null;
+  whatsappMetaBusinessAccountId: string | null;
+  whatsappMetaTemplateName: string | null;
+  whatsappMetaTemplateLanguage: string;
+  /** Whether a Meta access token is currently saved -- the token itself is never returned to the client. */
+  whatsappMetaAccessTokenSet: boolean;
   cryptoWithdrawalsEnabled: boolean;
   nowPaymentsPayoutsEnabled: boolean;
   allowedWithdrawalCurrencies: string;
@@ -1841,6 +1848,13 @@ export interface PlatformSettingsInput {
   whatsappTemplateId?: string;
   /** Plaintext -- encrypted server-side before persisting, never echoed back. Omit to leave unchanged; pass '' to clear. */
   whatsappApiKey?: string;
+  whatsappProvider?: string;
+  whatsappMetaPhoneNumberId?: string;
+  whatsappMetaBusinessAccountId?: string;
+  whatsappMetaTemplateName?: string;
+  whatsappMetaTemplateLanguage?: string;
+  /** Plaintext -- encrypted server-side before persisting, never echoed back. Omit to leave unchanged; pass '' to clear. */
+  whatsappMetaAccessToken?: string;
   cryptoWithdrawalsEnabled?: boolean;
   nowPaymentsPayoutsEnabled?: boolean;
   allowedWithdrawalCurrencies?: string;

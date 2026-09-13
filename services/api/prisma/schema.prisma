@@ -2555,6 +2555,14 @@ model PlatformSettings {
   whatsappApiKeyEncrypted                    String? // AES-256-GCM ciphertext (base64) of the MailerSend API key -- see whatsapp-crypto.util.ts. Admin-rotatable from the settings panel without a redeploy, unlike SMS provider credentials which stay in env vars.
   whatsappApiKeyIv                           String?
   whatsappApiKeyAuthTag                      String?
+  whatsappProvider                           String    @default("mailersend") // "mailersend" | "meta_direct" -- which backend actually sends when otpChannel="whatsapp"/whatsappOtpEnabled is on. Only one is active at a time, mirroring how SMS has one active provider chain rather than a simultaneous multi-provider fallback.
+  whatsappMetaPhoneNumberId                  String? // Meta WhatsApp Business phone number id, used in the Graph API send endpoint path (POST /{Phone-Number-ID}/messages)
+  whatsappMetaBusinessAccountId              String? // WABA id -- not required to send (only phoneNumberId is used in the send endpoint), kept for admin reference/debugging only
+  whatsappMetaTemplateName                   String? // Approved Meta template name for the OTP message (distinct field from whatsappTemplateId -- MailerSend addresses templates by an opaque id, Meta direct addresses them by name)
+  whatsappMetaTemplateLanguage               String    @default("en_US") // Meta template language code, e.g. "en_US"
+  whatsappMetaAccessTokenEncrypted           String? // AES-256-GCM ciphertext (base64) of the Meta system-user/long-lived access token -- see whatsapp-crypto.util.ts, same encryption key as whatsappApiKeyEncrypted (both are WhatsApp-messaging secrets, same blast radius)
+  whatsappMetaAccessTokenIv                  String?
+  whatsappMetaAccessTokenAuthTag             String?
   validationRewardPerRecording               Decimal   @default(0) @db.Decimal(20, 8) // flat DL amount credited per VALID ValidatorDeckItem when its containing deck is published (docs/validators.md) -- 0 disables validator payouts entirely (publish/bridge still happens, just no crediting); see packages/db/src/validator-payouts.ts for the full split
   validatorDeckMaxItems                      Int       @default(2000) // cap on ValidatorDeckItem rows per ValidatorDeck; 0 = uncapped
   validatorL1ApprovalBonusPercent            Decimal   @default(5) @db.Decimal(5, 2) // additive bonus (% of a deck's base reward) paid to an L1 validator when THEY are the one reviewing/approving another party's deck in an availability-gated fallback scenario (rare -- the normal chain never routes a deck to an L1 approver) -- see validator-payouts.ts

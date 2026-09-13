@@ -623,6 +623,38 @@ export class UpdatePlatformSettingsDto {
   whatsappApiKey?: string;
 
   @IsOptional()
+  @IsString()
+  @Matches(/^(mailersend|meta_direct)$/)
+  whatsappProvider?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  whatsappMetaPhoneNumberId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  whatsappMetaBusinessAccountId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  whatsappMetaTemplateName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  whatsappMetaTemplateLanguage?: string;
+
+  // Plaintext Meta system-user/long-lived access token -- same
+  // encrypt-before-persist, never-echoed-back handling as whatsappApiKey.
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  whatsappMetaAccessToken?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   validationRewardPerRecording?: number;

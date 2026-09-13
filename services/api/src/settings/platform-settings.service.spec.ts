@@ -127,9 +127,68 @@ describe('PlatformSettingsService.getWhatsappConfig', () => {
     });
 
     await expect(service.getWhatsappConfig()).resolves.toEqual({
+      provider: 'mailersend',
       apiKey: 'test-api-key',
       senderId: '15550001234',
       templateId: 'otp_code',
+    });
+  });
+});
+
+describe('PlatformSettingsService.getWhatsappConfig (meta_direct)', () => {
+  it('returns null when the active provider is meta_direct but the access token is missing', async () => {
+    const { service } = setup({
+      whatsappOtpEnabled: true,
+      whatsappProvider: 'meta_direct',
+      whatsappMetaPhoneNumberId: '123456789',
+      whatsappMetaTemplateName: 'otp_code',
+      whatsappMetaTemplateLanguage: 'en_US',
+      whatsappMetaAccessTokenEncrypted: null,
+      whatsappMetaAccessTokenIv: null,
+      whatsappMetaAccessTokenAuthTag: null,
+    });
+
+    await expect(service.getWhatsappConfig()).resolves.toBeNull();
+  });
+
+  it('returns null when the active provider is meta_direct but the phone number id is missing', async () => {
+    const encrypted = encryptWhatsappField('meta-access-token');
+    const { service } = setup({
+      whatsappOtpEnabled: true,
+      whatsappProvider: 'meta_direct',
+      whatsappMetaPhoneNumberId: null,
+      whatsappMetaTemplateName: 'otp_code',
+      whatsappMetaTemplateLanguage: 'en_US',
+      whatsappMetaAccessTokenEncrypted: encrypted.encryptedValue,
+      whatsappMetaAccessTokenIv: encrypted.iv,
+      whatsappMetaAccessTokenAuthTag: encrypted.authTag,
+    });
+
+    await expect(service.getWhatsappConfig()).resolves.toBeNull();
+  });
+
+  it('decrypts and returns the Meta direct config when enabled and fully configured, ignoring MailerSend fields', async () => {
+    const encrypted = encryptWhatsappField('meta-access-token');
+    const { service } = setup({
+      whatsappOtpEnabled: true,
+      whatsappProvider: 'meta_direct',
+      whatsappSenderId: null,
+      whatsappTemplateId: null,
+      whatsappApiKeyEncrypted: null,
+      whatsappMetaPhoneNumberId: '123456789',
+      whatsappMetaTemplateName: 'otp_code',
+      whatsappMetaTemplateLanguage: 'en_US',
+      whatsappMetaAccessTokenEncrypted: encrypted.encryptedValue,
+      whatsappMetaAccessTokenIv: encrypted.iv,
+      whatsappMetaAccessTokenAuthTag: encrypted.authTag,
+    });
+
+    await expect(service.getWhatsappConfig()).resolves.toEqual({
+      provider: 'meta_direct',
+      accessToken: 'meta-access-token',
+      phoneNumberId: '123456789',
+      templateName: 'otp_code',
+      templateLanguage: 'en_US',
     });
   });
 });
@@ -184,11 +243,42 @@ describe('PlatformSettingsService.update WhatsApp API key handling', () => {
     expect(writeCall.update.whatsappApiKeyAuthTag).toBeUndefined();
   });
 
+  it('encrypts a plaintext whatsappMetaAccessToken before persisting and never writes the plaintext field', async () => {
+    const { service, prisma } = setupWriteOnly();
+
+    await service.update({ whatsappMetaAccessToken: 'meta-token' }).catch(() => {});
+
+    const writeCall = prisma.platformSettings.upsert.mock.calls[0][0];
+    expect(writeCall.update.whatsappMetaAccessToken).toBeUndefined();
+    expect(writeCall.update.whatsappMetaAccessTokenEncrypted).toEqual(expect.any(String));
+    expect(writeCall.update.whatsappMetaAccessTokenIv).toEqual(expect.any(String));
+    expect(writeCall.update.whatsappMetaAccessTokenAuthTag).toEqual(expect.any(String));
+  });
+
+  it('clears the stored Meta access token when whatsappMetaAccessToken is the empty string', async () => {
+    const { service, prisma } = setupWriteOnly();
+
+    await service.update({ whatsappMetaAccessToken: '' }).catch(() => {});
+
+    const writeCall = prisma.platformSettings.upsert.mock.calls[0][0];
+    expect(writeCall.update.whatsappMetaAccessTokenEncrypted).toBeNull();
+    expect(writeCall.update.whatsappMetaAccessTokenIv).toBeNull();
+    expect(writeCall.update.whatsappMetaAccessTokenAuthTag).toBeNull();
+  });
+
   it('rejects an otpChannel value other than "sms" or "whatsapp"', async () => {
     const { service } = setup({});
 
     await expect(service.update({ otpChannel: 'carrier-pigeon' })).rejects.toThrow(
       'otpChannel must be "sms" or "whatsapp"',
+    );
+  });
+
+  it('rejects a whatsappProvider value other than "mailersend" or "meta_direct"', async () => {
+    const { service } = setup({});
+
+    await expect(service.update({ whatsappProvider: 'twilio' })).rejects.toThrow(
+      'whatsappProvider must be "mailersend" or "meta_direct"',
     );
   });
 });

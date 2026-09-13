@@ -380,15 +380,55 @@ export class PlatformSettingsService {
   }
 
   /**
-   * Decrypts and returns the MailerSend WhatsApp config in one call, or null
-   * if WhatsApp OTP is disabled or any required field is missing --
-   * WhatsappService treats null as "fall back to SMS" rather than throwing,
-   * so an incompletely-configured admin panel never breaks OTP delivery.
+   * Decrypts and returns whichever WhatsApp backend is currently active
+   * (whatsappProvider), tagged so WhatsappService knows which provider
+   * class to invoke without a second settings read. Returns null if
+   * WhatsApp OTP is disabled or the active provider is missing any
+   * required field -- WhatsappService treats null as "fall back to SMS"
+   * rather than throwing, so an incompletely-configured admin panel never
+   * breaks OTP delivery. Only one provider's config is ever built (not
+   * both), matching whatsappProvider's "one active backend" model -- see
+   * its doc comment in schema.prisma.
    */
-  async getWhatsappConfig(): Promise<{ apiKey: string; senderId: string; templateId: string } | null> {
+  async getWhatsappConfig(): Promise<
+    | { provider: 'mailersend'; apiKey: string; senderId: string; templateId: string }
+    | {
+        provider: 'meta_direct';
+        accessToken: string;
+        phoneNumberId: string;
+        templateName: string;
+        templateLanguage: string;
+      }
+    | null
+  > {
     const row = await this.getRow();
+    if (!row.whatsappOtpEnabled) return null;
+
+    if (row.whatsappProvider === 'meta_direct') {
+      if (
+        !row.whatsappMetaPhoneNumberId ||
+        !row.whatsappMetaTemplateName ||
+        !row.whatsappMetaAccessTokenEncrypted ||
+        !row.whatsappMetaAccessTokenIv ||
+        !row.whatsappMetaAccessTokenAuthTag
+      ) {
+        return null;
+      }
+      const accessToken = decryptWhatsappField({
+        encryptedValue: row.whatsappMetaAccessTokenEncrypted,
+        iv: row.whatsappMetaAccessTokenIv,
+        authTag: row.whatsappMetaAccessTokenAuthTag,
+      });
+      return {
+        provider: 'meta_direct',
+        accessToken,
+        phoneNumberId: row.whatsappMetaPhoneNumberId,
+        templateName: row.whatsappMetaTemplateName,
+        templateLanguage: row.whatsappMetaTemplateLanguage,
+      };
+    }
+
     if (
-      !row.whatsappOtpEnabled ||
       !row.whatsappSenderId ||
       !row.whatsappTemplateId ||
       !row.whatsappApiKeyEncrypted ||
@@ -402,7 +442,12 @@ export class PlatformSettingsService {
       iv: row.whatsappApiKeyIv,
       authTag: row.whatsappApiKeyAuthTag,
     });
-    return { apiKey, senderId: row.whatsappSenderId, templateId: row.whatsappTemplateId };
+    return {
+      provider: 'mailersend',
+      apiKey,
+      senderId: row.whatsappSenderId,
+      templateId: row.whatsappTemplateId,
+    };
   }
 
   async isP2pSmsTradeCreatedEnabled(): Promise<boolean> {
@@ -1077,6 +1122,12 @@ export class PlatformSettingsService {
       // "is a key currently saved," which this boolean answers without
       // giving the client anything to leak.
       whatsappApiKeySet: !!row.whatsappApiKeyEncrypted,
+      whatsappProvider: row.whatsappProvider,
+      whatsappMetaPhoneNumberId: row.whatsappMetaPhoneNumberId,
+      whatsappMetaBusinessAccountId: row.whatsappMetaBusinessAccountId,
+      whatsappMetaTemplateName: row.whatsappMetaTemplateName,
+      whatsappMetaTemplateLanguage: row.whatsappMetaTemplateLanguage,
+      whatsappMetaAccessTokenSet: !!row.whatsappMetaAccessTokenEncrypted,
       validationRewardPerRecording: row.validationRewardPerRecording.toString(),
       validatorDeckMaxItems: row.validatorDeckMaxItems,
       validatorL1ApprovalBonusPercent: row.validatorL1ApprovalBonusPercent.toString(),
@@ -1248,6 +1299,13 @@ export class PlatformSettingsService {
     whatsappTemplateId?: string | null;
     /** Plaintext -- encrypted in place before persisting, never stored or echoed back as-is. Omit to leave the existing stored key untouched; pass '' to clear it. */
     whatsappApiKey?: string;
+    whatsappProvider?: string;
+    whatsappMetaPhoneNumberId?: string | null;
+    whatsappMetaBusinessAccountId?: string | null;
+    whatsappMetaTemplateName?: string | null;
+    whatsappMetaTemplateLanguage?: string;
+    /** Plaintext -- encrypted in place before persisting, never stored or echoed back as-is. Omit to leave the existing stored token untouched; pass '' to clear it. */
+    whatsappMetaAccessToken?: string;
     validationRewardPerRecording?: number;
     validatorDeckMaxItems?: number;
     validatorL1ApprovalBonusPercent?: number;
@@ -1586,6 +1644,47 @@ export class PlatformSettingsService {
       delete whatsappApiKeyUpdate.whatsappApiKey;
     }
 
+    if (
+      data.whatsappProvider !== undefined &&
+      data.whatsappProvider !== 'mailersend' &&
+      data.whatsappProvider !== 'meta_direct'
+    ) {
+      throw new BadRequestException('whatsappProvider must be "mailersend" or "meta_direct"');
+    }
+
+    if (data.whatsappMetaPhoneNumberId !== undefined) {
+      const trimmed = data.whatsappMetaPhoneNumberId?.trim() ?? null;
+      data.whatsappMetaPhoneNumberId = trimmed === '' ? null : trimmed;
+    }
+    if (data.whatsappMetaBusinessAccountId !== undefined) {
+      const trimmed = data.whatsappMetaBusinessAccountId?.trim() ?? null;
+      data.whatsappMetaBusinessAccountId = trimmed === '' ? null : trimmed;
+    }
+    if (data.whatsappMetaTemplateName !== undefined) {
+      const trimmed = data.whatsappMetaTemplateName?.trim() ?? null;
+      data.whatsappMetaTemplateName = trimmed === '' ? null : trimmed;
+    }
+    // whatsappMetaAccessToken is plaintext input, never a real column --
+    // same encrypt-or-clear-then-delete shape as whatsappApiKey above.
+    const whatsappMetaAccessTokenUpdate = data as typeof data & {
+      whatsappMetaAccessTokenEncrypted?: string | null;
+      whatsappMetaAccessTokenIv?: string | null;
+      whatsappMetaAccessTokenAuthTag?: string | null;
+    };
+    if (data.whatsappMetaAccessToken !== undefined) {
+      if (data.whatsappMetaAccessToken === '') {
+        whatsappMetaAccessTokenUpdate.whatsappMetaAccessTokenEncrypted = null;
+        whatsappMetaAccessTokenUpdate.whatsappMetaAccessTokenIv = null;
+        whatsappMetaAccessTokenUpdate.whatsappMetaAccessTokenAuthTag = null;
+      } else {
+        const encrypted = encryptWhatsappField(data.whatsappMetaAccessToken);
+        whatsappMetaAccessTokenUpdate.whatsappMetaAccessTokenEncrypted = encrypted.encryptedValue;
+        whatsappMetaAccessTokenUpdate.whatsappMetaAccessTokenIv = encrypted.iv;
+        whatsappMetaAccessTokenUpdate.whatsappMetaAccessTokenAuthTag = encrypted.authTag;
+      }
+      delete whatsappMetaAccessTokenUpdate.whatsappMetaAccessToken;
+    }
+
     const anyWeightProvided =
       data.qualityWeightConsensus !== undefined ||
       data.qualityWeightNoise !== undefined ||
@@ -1841,6 +1940,12 @@ export class PlatformSettingsService {
       // "is a key currently saved," which this boolean answers without
       // giving the client anything to leak.
       whatsappApiKeySet: !!row.whatsappApiKeyEncrypted,
+      whatsappProvider: row.whatsappProvider,
+      whatsappMetaPhoneNumberId: row.whatsappMetaPhoneNumberId,
+      whatsappMetaBusinessAccountId: row.whatsappMetaBusinessAccountId,
+      whatsappMetaTemplateName: row.whatsappMetaTemplateName,
+      whatsappMetaTemplateLanguage: row.whatsappMetaTemplateLanguage,
+      whatsappMetaAccessTokenSet: !!row.whatsappMetaAccessTokenEncrypted,
       validationRewardPerRecording: row.validationRewardPerRecording.toString(),
       validatorDeckMaxItems: row.validatorDeckMaxItems,
       validatorL1ApprovalBonusPercent: row.validatorL1ApprovalBonusPercent.toString(),
