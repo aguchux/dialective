@@ -16,7 +16,7 @@ export function RecentStreamDecks({
   onSelect: (deck: StreamDeck) => void;
 }) {
   return (
-    <section className="min-w-0" id="stream-decks">
+    <section className="flex min-w-0 flex-col" id="stream-decks">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[15px] font-bold text-catalogue-ink sm:text-base">
           Recently Added to Stream Decks
@@ -28,7 +28,7 @@ export function RecentStreamDecks({
           View all
         </button>
       </div>
-      <div className="mt-2 grid overflow-hidden rounded-[10px] border border-catalogue-line bg-catalogue-surface">
+      <div className="mt-2 grid flex-1 auto-rows-fr overflow-hidden rounded-[10px] border border-catalogue-line bg-catalogue-surface">
         {decks.map((deck) => {
           const added = addedDeckIds.has(deck.id);
           return (

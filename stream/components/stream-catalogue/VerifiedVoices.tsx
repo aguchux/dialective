@@ -19,7 +19,7 @@ export function VerifiedVoices({
   const hasMore = speakers.length > VISIBLE_LIMIT;
 
   return (
-    <section className="min-w-0" id="voice-library">
+    <section className="flex min-w-0 flex-col" id="voice-library">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[15px] font-bold text-catalogue-ink sm:text-base">
           Top Verified Voices
@@ -34,11 +34,11 @@ export function VerifiedVoices({
           </button>
         )}
       </div>
-      <div className="mt-2">
+      <div className="mt-2 flex flex-1 flex-col justify-center overflow-hidden rounded-[10px] border border-catalogue-line bg-catalogue-surface p-3">
         <CarouselRow label="Top verified voices">
           {visibleSpeakers.map((speaker) => (
             <FocusableRow key={speaker.id} onClick={() => onSelect(speaker)}>
-              <article className="relative w-[108px] shrink-0 rounded-[10px] border border-catalogue-line bg-catalogue-surface p-2.5 transition-colors hover:border-catalogue-line-strong hover:bg-catalogue-surface-hover">
+              <article className="relative w-[108px] shrink-0 rounded-[10px] border border-catalogue-line bg-catalogue-surface-raised p-2.5 transition-colors hover:border-catalogue-line-strong hover:bg-catalogue-surface-hover">
                 <div className="relative mx-auto w-fit">
                   <CoverImage
                     alt={speaker.avatarAlt}
