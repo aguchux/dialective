@@ -536,6 +536,7 @@ export class WalletController {
       minCompletedTasksForWithdrawal,
       minWalletBalanceTokens,
       totalTokensSinceJoin,
+      otherCreditsTokens,
     ] = await Promise.all([
       this.getCurrentTokenUsdRate(),
       this.getLocalCurrency(req.user.sub),
@@ -549,6 +550,7 @@ export class WalletController {
       this.platformSettings.getMinCompletedTasksForWithdrawal(),
       this.platformSettings.getMinWalletBalanceTokens(),
       this.trainerReport!.getTotalTokensSinceJoin(req.user.sub),
+      this.trainerReport!.getOtherCreditsSinceJoin(req.user.sub),
     ]);
 
     return {
@@ -588,6 +590,7 @@ export class WalletController {
         'REFERRAL_PAYOUT_BONUS',
       ]).toString(),
       totalTokensSinceJoin: totalTokensSinceJoin.toString(),
+      otherCreditsTokens: otherCreditsTokens.toString(),
       paidOutTokens: withdrawalAmount(WithdrawalStatus.PAID).toString(),
       pendingPayoutTokens: withdrawalAmount(WithdrawalStatus.PENDING).toString(),
       recentActivity: recentActivity.map((entry) => ({

@@ -13,14 +13,11 @@ const SAMPLE_REPORT: TrainerReport = {
     referralEarningsTokens: '5',
     totalEarningsTokens: '125',
     totalTokensSinceJoin: '900',
+    otherCreditsTokens: '50',
     availableBalanceTokens: '300',
     heldBalanceTokens: '20',
     totalWithdrawnTokens: '580',
   },
-  ledgerTotalsByType: [
-    { type: 'TRAINING_PAYOUT', totalAmount: '120', count: 8 },
-    { type: 'ADMIN_FUNDING', totalAmount: '50', count: 1 },
-  ],
   daily: [
     { date: '2026-08-01', recordings: 3, earningsTokens: '30' },
     { date: '2026-08-02', recordings: 9, earningsTokens: '95' },
@@ -42,12 +39,4 @@ describe('renderTrainerReportPdf', () => {
     expect(buffer.length).toBeGreaterThan(100);
   });
 
-  it('handles an empty ledgerTotalsByType array without throwing', async () => {
-    const buffer = await renderTrainerReportPdf(
-      { ...SAMPLE_REPORT, ledgerTotalsByType: [] },
-      'Test Trainer',
-    );
-
-    expect(buffer.length).toBeGreaterThan(100);
-  });
 });

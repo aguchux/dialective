@@ -28,6 +28,23 @@ const LIFETIME_CREDIT_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.VALIDATION_REWARD,
 ];
 
+// Real value added to a trainer's balance by someone other than the trainer's
+// own platform activity -- an admin top-up, a raw deposit, or a distributor
+// allocation. Not "earned" (excluded from LIFETIME_CREDIT_ENTRY_TYPES above),
+// but also not a lock/refund hold-and-release with no net effect, so it still
+// belongs on trainer-facing screens: this is the other half of "what actually
+// added value to my balance besides what I earned." SUB_DISTRIBUTOR_ADJUSTMENT
+// is signed (can be negative) and is included as-is, same as ADMIN_ADJUSTMENT.
+const EXTERNAL_TOPUP_ENTRY_TYPES: LedgerEntryType[] = [
+  LedgerEntryType.DEPOSIT,
+  LedgerEntryType.ADMIN_FUNDING,
+  LedgerEntryType.ADMIN_ADJUSTMENT,
+  LedgerEntryType.DISTRIBUTOR_BULK_ALLOCATION,
+  LedgerEntryType.DISTRIBUTOR_FUNDING_BONUS,
+  LedgerEntryType.DISTRIBUTOR_PAYOUT_BONUS,
+  LedgerEntryType.SUB_DISTRIBUTOR_ADJUSTMENT,
+];
+
 export interface ProofReportLedgerEntry {
   id: string;
   type: string;
@@ -75,18 +92,17 @@ export interface TrainerReport {
     // I stand right now" alongside the range-scoped recording/earnings
     // figures above.
     totalTokensSinceJoin: string;
+    // Real value added by an external actor (admin funding/adjustment,
+    // deposit, distributor allocation) -- not earned through the platform,
+    // but not lock/refund noise either. Shown alongside totalTokensSinceJoin
+    // so a trainer can reconcile availableBalanceTokens without needing the
+    // raw per-type ledger breakdown (that stays admin-only -- see
+    // ProofAccountReport.ledgerTotalsByType).
+    otherCreditsTokens: string;
     availableBalanceTokens: string;
     heldBalanceTokens: string;
     totalWithdrawnTokens: string;
   };
-  // Every ledger entry type that touched this wallet within the report's
-  // from/to range, summed -- includes credit types LIFETIME_CREDIT_ENTRY_TYPES
-  // deliberately excludes (ADMIN_FUNDING, ADMIN_ADJUSTMENT, DEPOSIT,
-  // DISTRIBUTOR_*, etc.), so a trainer can reconcile totalTokensSinceJoin +
-  // everything else here against availableBalanceTokens + heldBalanceTokens +
-  // totalWithdrawnTokens instead of taking the summary totals on faith. Mirrors
-  // buildProofAccountReport's ledgerTotalsByType, scoped to this report's range.
-  ledgerTotalsByType: { type: string; totalAmount: string; count: number }[];
   daily: { date: string; recordings: number; earningsTokens: string }[];
 }
 
@@ -123,6 +139,20 @@ export class TrainerReportService {
     return Number(lifetimeEarningsAgg._sum.amount ?? 0);
   }
 
+  /** Lifetime counterpart to getTotalTokensSinceJoin, for EXTERNAL_TOPUP_ENTRY_TYPES -- see that constant's doc comment. */
+  async getOtherCreditsSinceJoin(userId: string): Promise<number> {
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!wallet) return 0;
+    const otherCreditsAgg = await this.prisma.ledgerEntry.aggregate({
+      where: { walletId: wallet.id, type: { in: EXTERNAL_TOPUP_ENTRY_TYPES } },
+      _sum: { amount: true },
+    });
+    return Number(otherCreditsAgg._sum.amount ?? 0);
+  }
+
   async buildReport(userId: string, from?: Date, to?: Date): Promise<TrainerReport> {
     const effectiveTo = to ?? new Date();
     const effectiveFrom = from ?? (await this.resolveSignupDate(userId));
@@ -133,7 +163,7 @@ export class TrainerReportService {
       select: { id: true, balance: true, lockedBalance: true },
     });
 
-    const [ledgerTotals, ledgerByTypeAllTypes, ledgerDaily, wordRecordings, lifetimeEarningsAgg, withdrawnAgg] =
+    const [ledgerTotals, ledgerDaily, wordRecordings, lifetimeEarningsAgg, otherCreditsAgg, withdrawnAgg] =
       await Promise.all([
         wallet
           ? this.prisma.ledgerEntry.groupBy({
@@ -144,18 +174,6 @@ export class TrainerReportService {
                 createdAt: createdAtRange,
               },
               _sum: { amount: true },
-            })
-          : Promise.resolve([]),
-        // Unlike ledgerTotals above (EARNING_ENTRY_TYPES only, for the
-        // trainingEarnings/referralEarnings breakout), this covers every
-        // type that touched the wallet in range -- see ledgerTotalsByType's
-        // doc comment on TrainerReport for why.
-        wallet
-          ? this.prisma.ledgerEntry.groupBy({
-              by: ['type'],
-              where: { walletId: wallet.id, createdAt: createdAtRange },
-              _sum: { amount: true },
-              _count: { _all: true },
             })
           : Promise.resolve([]),
         wallet
@@ -178,6 +196,15 @@ export class TrainerReportService {
         wallet
           ? this.prisma.ledgerEntry.aggregate({
               where: { walletId: wallet.id, type: { in: LIFETIME_CREDIT_ENTRY_TYPES } },
+              _sum: { amount: true },
+            })
+          : Promise.resolve({ _sum: { amount: null } }),
+        // Lifetime (no date filter), same rationale as lifetimeEarningsAgg
+        // above but for EXTERNAL_TOPUP_ENTRY_TYPES -- real balance-adding
+        // value from an external actor, kept separate from "earned."
+        wallet
+          ? this.prisma.ledgerEntry.aggregate({
+              where: { walletId: wallet.id, type: { in: EXTERNAL_TOPUP_ENTRY_TYPES } },
               _sum: { amount: true },
             })
           : Promise.resolve({ _sum: { amount: null } }),
@@ -241,15 +268,11 @@ export class TrainerReportService {
         referralEarningsTokens: referralEarnings.toString(),
         totalEarningsTokens: (trainingEarnings + referralEarnings).toString(),
         totalTokensSinceJoin: Number(lifetimeEarningsAgg._sum.amount ?? 0).toString(),
+        otherCreditsTokens: Number(otherCreditsAgg._sum.amount ?? 0).toString(),
         availableBalanceTokens: (wallet?.balance.toNumber() ?? 0).toString(),
         heldBalanceTokens: (wallet?.lockedBalance.toNumber() ?? 0).toString(),
         totalWithdrawnTokens: Math.max(totalWithdrawn, 0).toString(),
       },
-      ledgerTotalsByType: ledgerByTypeAllTypes.map((entry) => ({
-        type: entry.type,
-        totalAmount: Number(entry._sum.amount ?? 0).toString(),
-        count: entry._count._all,
-      })),
       daily,
     };
   }

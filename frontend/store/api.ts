@@ -1102,6 +1102,7 @@ export interface TrainerDashboardSummary {
   trainingEarningsTokens: string;
   referralEarningsTokens: string;
   totalTokensSinceJoin: string;
+  otherCreditsTokens: string;
   paidOutTokens: string;
   pendingPayoutTokens: string;
   recentActivity: {
@@ -1353,15 +1354,11 @@ export interface TrainerReport {
     referralEarningsTokens: string;
     totalEarningsTokens: string;
     totalTokensSinceJoin: string;
+    otherCreditsTokens: string;
     availableBalanceTokens: string;
     heldBalanceTokens: string;
     totalWithdrawnTokens: string;
   };
-  // Every ledger entry type that touched the wallet in this report's range,
-  // summed -- includes admin/system funding and other non-earning credit
-  // types the totals above deliberately exclude, so the report can show a
-  // full reconciliation rather than just the earnings summary.
-  ledgerTotalsByType: { type: string; totalAmount: string; count: number }[];
   daily: { date: string; recordings: number; earningsTokens: string }[];
 }
 

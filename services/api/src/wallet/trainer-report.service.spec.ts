@@ -91,14 +91,11 @@ describe('TrainerReportService', () => {
       referralEarningsTokens: '1',
       totalEarningsTokens: '6',
       totalTokensSinceJoin: '0',
+      otherCreditsTokens: '0',
       availableBalanceTokens: '0',
       heldBalanceTokens: '0',
       totalWithdrawnTokens: '0',
     });
-    expect(report.ledgerTotalsByType).toEqual([
-      { type: 'TRAINING_PAYOUT', totalAmount: '5', count: 1 },
-      { type: 'REFERRAL_COMMISSION', totalAmount: '1', count: 1 },
-    ]);
     expect(report.daily).toEqual([{ date: '2026-08-01', recordings: 3, earningsTokens: '6' }]);
   });
 
@@ -110,6 +107,7 @@ describe('TrainerReportService', () => {
     });
     prisma.ledgerEntry.aggregate
       .mockResolvedValueOnce({ _sum: { amount: 500 } }) // lifetime credits
+      .mockResolvedValueOnce({ _sum: { amount: 25 } }) // other credits (external top-ups)
       .mockResolvedValueOnce({ _sum: { amount: -120 } }); // withdrawal + reversal net
 
     const report = await service.buildReport(
@@ -119,6 +117,7 @@ describe('TrainerReportService', () => {
     );
 
     expect(report.totals.totalTokensSinceJoin).toBe('500');
+    expect(report.totals.otherCreditsTokens).toBe('25');
     expect(report.totals.availableBalanceTokens).toBe('42');
     expect(report.totals.heldBalanceTokens).toBe('8');
     expect(report.totals.totalWithdrawnTokens).toBe('120');
@@ -157,6 +156,7 @@ describe('TrainerReportService', () => {
 
   it('nets a fully-reversed withdrawal back to zero rather than going negative', async () => {
     prisma.ledgerEntry.aggregate
+      .mockResolvedValueOnce({ _sum: { amount: 0 } })
       .mockResolvedValueOnce({ _sum: { amount: 0 } })
       .mockResolvedValueOnce({ _sum: { amount: 0 } }); // WITHDRAWAL (-100) + WITHDRAWAL_REVERSED (+100)
 
@@ -208,6 +208,7 @@ describe('TrainerReportService', () => {
     expect(report.totals.heldBalanceTokens).toBe('0');
     expect(report.totals.totalWithdrawnTokens).toBe('0');
     expect(report.totals.totalTokensSinceJoin).toBe('0');
+    expect(report.totals.otherCreditsTokens).toBe('0');
   });
 });
 
@@ -355,6 +356,46 @@ describe('TrainerReportService.getTotalTokensSinceJoin', () => {
             'STARTUP_BONUS',
             'TESTIMONY_APPROVED_REWARD',
             'VALIDATION_REWARD',
+          ]),
+        },
+      },
+      _sum: { amount: true },
+    });
+  });
+});
+
+describe('TrainerReportService.getOtherCreditsSinceJoin', () => {
+  it('returns 0 without querying ledgerEntry when the trainer has no wallet row yet', async () => {
+    const prisma = {
+      wallet: { findUnique: jest.fn().mockResolvedValue(null) },
+      ledgerEntry: { aggregate: jest.fn() },
+    };
+    const service = new TrainerReportService(prisma as never);
+
+    await expect(service.getOtherCreditsSinceJoin('user-1')).resolves.toBe(0);
+    expect(prisma.ledgerEntry.aggregate).not.toHaveBeenCalled();
+  });
+
+  it('sums only EXTERNAL_TOPUP_ENTRY_TYPES for the wallet', async () => {
+    const prisma = {
+      wallet: { findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1' }) },
+      ledgerEntry: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 25 } }) },
+    };
+    const service = new TrainerReportService(prisma as never);
+
+    await expect(service.getOtherCreditsSinceJoin('user-1')).resolves.toBe(25);
+    expect(prisma.ledgerEntry.aggregate).toHaveBeenCalledWith({
+      where: {
+        walletId: 'wallet-1',
+        type: {
+          in: expect.arrayContaining([
+            'DEPOSIT',
+            'ADMIN_FUNDING',
+            'ADMIN_ADJUSTMENT',
+            'DISTRIBUTOR_BULK_ALLOCATION',
+            'DISTRIBUTOR_FUNDING_BONUS',
+            'DISTRIBUTOR_PAYOUT_BONUS',
+            'SUB_DISTRIBUTOR_ADJUSTMENT',
           ]),
         },
       },

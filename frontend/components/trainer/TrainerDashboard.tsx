@@ -23,6 +23,7 @@ import {
   CircleDollarSign,
   Clock3,
   Copy,
+  Gift,
   Headphones,
   Megaphone,
   MessageSquareQuote,
@@ -958,7 +959,8 @@ function TokensView({
     page,
     pageSize,
   });
-  const cumulativeTokens = Number(summary.totalTokensSinceJoin);
+  const tokensEarned = Number(summary.totalTokensSinceJoin);
+  const otherCredits = Number(summary.otherCreditsTokens);
 
   return (
     <div>
@@ -985,13 +987,20 @@ function TokensView({
           />
         </div>
       </div>
-      <section className="grid gap-3 sm:grid-cols-2" aria-label="Token balance summary">
+      <section className="grid gap-3 sm:grid-cols-3" aria-label="Token balance summary">
         <MetricCard
           icon={WalletCards}
-          label="Cumulative tokens"
-          value={formatCompactTokensValue(cumulativeTokens)}
+          label="Tokens earned"
+          value={formatCompactTokensValue(tokensEarned)}
           tone="purple"
-          tooltip="The total DL you've ever earned, including tokens already withdrawn or spent on training tasks."
+          tooltip="Total DL you've earned from training, courses, referrals, and rewards -- including any you've already withdrawn. Task locks and refunds are temporary holds, not spending, so they aren't counted here."
+        />
+        <MetricCard
+          icon={Gift}
+          label="Other credits"
+          value={formatCompactTokensValue(otherCredits)}
+          tone="purple"
+          tooltip="Funding added to your account by an admin or a deposit -- not earned through tasks, but it still adds to your available balance."
         />
         <MetricCard
           icon={CircleDollarSign}

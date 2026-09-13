@@ -1561,11 +1561,11 @@ describe('WalletController.emailTrainerReport', () => {
           referralEarningsTokens: '0.5',
           totalEarningsTokens: '3.5',
           totalTokensSinceJoin: '900',
+          otherCreditsTokens: '50',
           availableBalanceTokens: '300',
           heldBalanceTokens: '20',
           totalWithdrawnTokens: '580',
         },
-        ledgerTotalsByType: [],
         daily: [],
         from: '2026-08-01T00:00:00.000Z',
         to: '2026-08-07T00:00:00.000Z',
@@ -2608,7 +2608,10 @@ describe('WalletController.getTrainerDashboard', () => {
       getMinWalletBalanceTokens: jest.fn().mockResolvedValue(0),
       getTokenUsdRate: jest.fn().mockResolvedValue(0.16),
     };
-    const trainerReport = { getTotalTokensSinceJoin: jest.fn().mockResolvedValue(49.4397) };
+    const trainerReport = {
+      getTotalTokensSinceJoin: jest.fn().mockResolvedValue(49.4397),
+      getOtherCreditsSinceJoin: jest.fn().mockResolvedValue(5),
+    };
     const controller = new WalletController(
       prisma as never,
       {} as never,
@@ -2627,6 +2630,7 @@ describe('WalletController.getTrainerDashboard', () => {
 
     expect(result.trainingEarningsTokens).toBe('26');
     expect(result.totalTokensSinceJoin).toBe('49.4397');
+    expect(result.otherCreditsTokens).toBe('5');
     expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -2635,5 +2639,6 @@ describe('WalletController.getTrainerDashboard', () => {
       }),
     );
     expect(trainerReport.getTotalTokensSinceJoin).toHaveBeenCalledWith('user-1');
+    expect(trainerReport.getOtherCreditsSinceJoin).toHaveBeenCalledWith('user-1');
   });
 });
