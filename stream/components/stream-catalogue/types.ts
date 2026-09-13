@@ -1,4 +1,4 @@
-export type FilterKey = 'language' | 'country' | 'dialect' | 'subdialect' | 'quality' | 'license';
+export type FilterKey = 'country' | 'dialect' | 'subdialect' | 'quality' | 'license';
 export type CollectionStatus = 'verified' | 'licensed';
 export type PlaybackState = 'playing' | 'paused';
 
@@ -59,7 +59,6 @@ export interface CatalogueMetric {
 }
 
 export interface CatalogueFilters {
-  language: string | null;
   country: string | null;
   dialect: string | null;
   subdialect: string | null;

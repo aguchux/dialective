@@ -69,7 +69,6 @@ export function StreamAppShell() {
           collection.dialect,
           collection.subdialect,
         ].some((value) => value.toLowerCase().includes(query));
-      const matchesLanguage = !filters.language || collection.language === filters.language;
       const matchesCountry = !filters.country || collection.country === filters.country;
       const matchesDialect = !filters.dialect || collection.dialect === filters.dialect;
       const matchesSubdialect =
@@ -82,7 +81,6 @@ export function StreamAppShell() {
         collection.license.toLowerCase().includes(filters.license.toLowerCase());
       return (
         matchesQuery &&
-        matchesLanguage &&
         matchesCountry &&
         matchesDialect &&
         matchesSubdialect &&
@@ -154,7 +152,6 @@ export function StreamAppShell() {
       const cascadeOrder: FilterKey[] = ['country', 'dialect', 'subdialect', 'quality', 'license'];
       const uptoIndex = cascadeOrder.indexOf(uptoKey);
       return collections.filter((collection) => {
-        if (filters.language && collection.language !== filters.language) return false;
         for (const key of cascadeOrder.slice(0, uptoIndex)) {
           const value = filters[key];
           if (!value) continue;
@@ -175,7 +172,6 @@ export function StreamAppShell() {
     const uniqueSorted = (values: string[]) => Array.from(new Set(values)).sort();
 
     return {
-      language: filterOptions?.language ?? [],
       country: uniqueSorted(optionsFor('country').map((c) => c.country)),
       dialect: uniqueSorted(optionsFor('dialect').map((c) => c.dialect)),
       subdialect: uniqueSorted(

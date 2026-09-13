@@ -557,7 +557,6 @@ export const pinnedCollections: PinnedCollection[] = [
 ];
 
 export const filterOptions: Record<FilterKey, string[]> = {
-  language: ['Igbo', 'Yoruba', 'Hausa', 'Swahili', 'Amharic'],
   country: ['Nigeria', 'Kenya', 'Ethiopia', 'Ghana'],
   dialect: ['Igbo', 'Yoruba', 'Hausa', 'Swahili', 'Amharic'],
   subdialect: ['Owerri', 'Lagos', 'Kano', 'Nairobi', 'Addis Ababa'],
@@ -573,7 +572,6 @@ export const validationBreakdown: ValidationBreakdown[] = [
 ];
 
 export const defaultFilters = {
-  language: null,
   country: null,
   dialect: null,
   subdialect: null,

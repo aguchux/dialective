@@ -5,7 +5,6 @@ import { Check, ChevronDown, SlidersHorizontal, X } from 'lucide-react';
 import type { CatalogueFilters, FilterKey } from './types';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'language', label: 'Language' },
   { key: 'country', label: 'Country' },
   { key: 'dialect', label: 'Dialect' },
   { key: 'subdialect', label: 'Subdialect' },
