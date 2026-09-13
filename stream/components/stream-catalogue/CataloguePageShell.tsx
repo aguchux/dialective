@@ -8,10 +8,12 @@ import { StreamTopbar } from './StreamTopbar';
 export function CataloguePageShell({
   children,
   description,
+  icon,
   title,
 }: {
   children?: ReactNode;
   description?: string;
+  icon?: ReactNode;
   title: string;
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -42,7 +44,14 @@ export function CataloguePageShell({
           />
           <div className="mx-auto grid min-w-0 max-w-[1360px] gap-5 px-4 py-5 sm:px-5 lg:px-7">
             <div>
-              <h1 className="text-xl font-bold text-catalogue-ink sm:text-2xl">{title}</h1>
+              <h1 className="flex items-center gap-2.5 text-xl font-bold text-catalogue-ink sm:text-2xl">
+                {icon && (
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-catalogue-blue/20 text-catalogue-blue-bright ring-1 ring-inset ring-catalogue-blue/40 sm:size-9">
+                    {icon}
+                  </span>
+                )}
+                {title}
+              </h1>
               {description && (
                 <p className="mt-1 text-sm text-catalogue-muted">{description}</p>
               )}

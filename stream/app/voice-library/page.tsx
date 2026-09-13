@@ -1,3 +1,4 @@
+import { Library } from 'lucide-react';
 import { CataloguePageShell } from '@/components/stream-catalogue/CataloguePageShell';
 import { PagePlaceholder } from '@/components/stream-catalogue/PagePlaceholder';
 
@@ -5,6 +6,7 @@ export default function VoiceLibraryPage() {
   return (
     <CataloguePageShell
       description="Browse and manage licensed voice recordings and verified dialect samples."
+      icon={<Library aria-hidden="true" className="size-[18px] sm:size-5" />}
       title="Voice Library"
     >
       <PagePlaceholder />
