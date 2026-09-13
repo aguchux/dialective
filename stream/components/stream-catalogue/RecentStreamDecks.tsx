@@ -28,15 +28,15 @@ export function RecentStreamDecks({
           View all
         </button>
       </div>
-      <div className="mt-2 grid flex-1 auto-rows-fr overflow-hidden rounded-[10px] border border-catalogue-line bg-catalogue-surface">
+      <div className="mt-2 grid flex-1 auto-rows-fr gap-2">
         {decks.map((deck) => {
           const added = addedDeckIds.has(deck.id);
           return (
             <FocusableRow key={deck.id} onClick={() => onSelect(deck)}>
-              <div className="grid min-w-0 grid-cols-[34px_minmax(0,1.05fr)_minmax(80px,0.9fr)_auto_auto] items-center gap-2 border-b border-catalogue-line px-2.5 py-2 last:border-b-0 hover:bg-catalogue-surface-hover sm:grid-cols-[38px_minmax(0,1.2fr)_minmax(120px,1fr)_auto_auto] sm:gap-3 sm:px-3">
+              <div className="grid min-w-0 grid-cols-[34px_minmax(0,1.05fr)_minmax(80px,0.9fr)_auto_auto] items-center gap-2 rounded-full border border-catalogue-line bg-catalogue-surface px-2.5 py-2 transition-colors hover:border-catalogue-line-strong hover:bg-catalogue-surface-hover sm:grid-cols-[38px_minmax(0,1.2fr)_minmax(120px,1fr)_auto_auto] sm:gap-3 sm:px-3">
                 <CoverImage
                   alt={deck.coverAlt}
-                  className="size-8 rounded-md object-cover sm:size-9"
+                  className="size-8 rounded-full object-cover sm:size-9"
                   height={36}
                   src={deck.coverUrl}
                   width={36}

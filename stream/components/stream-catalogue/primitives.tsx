@@ -143,7 +143,15 @@ export function MoreButton({ label, onClick }: { label: string; onClick?: () => 
   );
 }
 
-export function FocusableRow({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+export function FocusableRow({
+  children,
+  className = '',
+  onClick,
+}: {
+  children: ReactNode;
+  className?: string;
+  onClick: () => void;
+}) {
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
@@ -153,7 +161,7 @@ export function FocusableRow({ children, onClick }: { children: ReactNode; onCli
 
   return (
     <div
-      className="min-w-0 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60"
+      className={`min-w-0 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 ${className}`}
       onClick={onClick}
       onKeyDown={handleKeyDown}
       role="button"
@@ -166,10 +174,12 @@ export function FocusableRow({ children, onClick }: { children: ReactNode; onCli
 
 export function CarouselRow({
   children,
+  className = '',
   hideScrollbar = false,
   label,
 }: {
   children: ReactNode;
+  className?: string;
   hideScrollbar?: boolean;
   label: string;
 }) {
@@ -249,10 +259,10 @@ export function CarouselRow({
   }
 
   return (
-    <div className="relative min-w-0">
+    <div className={`relative min-w-0 ${className}`}>
       <div
         aria-label={label}
-        className={`flex min-w-0 gap-2 overflow-x-auto transition-[filter] duration-200 ${
+        className={`flex h-full min-w-0 gap-2 overflow-x-auto transition-[filter] duration-200 ${
           hideScrollbar ? 'stream-catalogue-scrollbar-hidden' : 'stream-catalogue-scrollbar pb-1'
         } ${
           isDragging

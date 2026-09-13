@@ -34,11 +34,11 @@ export function VerifiedVoices({
           </button>
         )}
       </div>
-      <div className="mt-2 flex flex-1 flex-col justify-center">
-        <CarouselRow hideScrollbar label="Top verified voices">
+      <div className="mt-2 flex flex-1 flex-col">
+        <CarouselRow className="flex-1" hideScrollbar label="Top verified voices">
           {visibleSpeakers.map((speaker) => (
-            <FocusableRow key={speaker.id} onClick={() => onSelect(speaker)}>
-              <article className="relative w-[108px] shrink-0 rounded-[10px] border border-catalogue-line bg-catalogue-surface-raised p-2.5 transition-colors hover:border-catalogue-line-strong hover:bg-catalogue-surface-hover">
+            <FocusableRow className="h-full" key={speaker.id} onClick={() => onSelect(speaker)}>
+              <article className="flex h-full w-[108px] shrink-0 flex-col justify-center rounded-[10px] border border-catalogue-line bg-catalogue-surface-raised p-2.5 transition-colors hover:border-catalogue-line-strong hover:bg-catalogue-surface-hover">
                 <div className="relative mx-auto w-fit">
                   <CoverImage
                     alt={speaker.avatarAlt}
