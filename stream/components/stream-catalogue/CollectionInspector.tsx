@@ -19,6 +19,7 @@ import {
   formatSpeakers,
   PlayButton,
   ScoreBadge,
+  Skeleton,
   VerifiedMark,
   Waveform,
 } from './primitives';
@@ -26,6 +27,7 @@ import {
 export function CollectionInspector({
   added,
   collection,
+  isLoading = false,
   isPlaying,
   onAdd,
   onClose,
@@ -34,12 +36,35 @@ export function CollectionInspector({
 }: {
   added: boolean;
   collection: CatalogueCollection | null;
+  isLoading?: boolean;
   isPlaying: boolean;
   onAdd: () => void;
   onClose: () => void;
   onTogglePlay: () => void;
   validation: ValidationBreakdown[];
 }) {
+  if (isLoading) {
+    return (
+      <div className="px-5 pb-8 pt-5 lg:px-4">
+        <div className="flex items-start gap-3">
+          <Skeleton className="size-16 shrink-0 rounded-lg" />
+          <div className="min-w-0 flex-1">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="mt-2 h-3 w-1/2" />
+            <Skeleton className="mt-2 h-5 w-20 rounded-full" />
+          </div>
+        </div>
+        <div className="mt-5 grid grid-cols-3 gap-2 border-y border-catalogue-line py-3">
+          {Array.from({ length: 3 }, (_, index) => (
+            <Skeleton className="mx-auto h-10 w-14" key={index} />
+          ))}
+        </div>
+        <Skeleton className="mt-5 h-3 w-40" />
+        <Skeleton className="mt-3 h-16 w-full" />
+      </div>
+    );
+  }
+
   if (!collection) {
     return (
       <div className="grid min-h-[60vh] place-items-center p-6 text-center">

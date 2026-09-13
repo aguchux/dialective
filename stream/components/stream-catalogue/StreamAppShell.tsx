@@ -1,17 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { X } from 'lucide-react';
-import {
-  catalogueMetrics,
-  collections,
-  defaultFilters,
-  filterOptions,
-  pinnedCollections,
-  streamDecks,
-  validationBreakdown,
-  verifiedSpeakers,
-} from './mock-data';
+import { useEffect, useMemo, useState } from 'react';
+import { RefreshCw, X } from 'lucide-react';
+import { useGetCatalogueShowcaseQuery } from '@/store/api';
+import { defaultFilters } from './mock-data';
 import type { CatalogueFilters, FilterKey, StreamDeck, VerifiedSpeaker } from './types';
 import { CollectionCard } from './CollectionCard';
 import { CollectionInspector } from './CollectionInspector';
@@ -21,19 +13,47 @@ import { RecentStreamDecks } from './RecentStreamDecks';
 import { StreamPlayerBar } from './StreamPlayerBar';
 import { StreamSidebar } from './StreamSidebar';
 import { StreamTopbar } from './StreamTopbar';
-import { CarouselRow, EmptyCatalogueState, SectionHeading } from './primitives';
+import {
+  CarouselRow,
+  CollectionCardSkeleton,
+  EmptyCatalogueState,
+  HeroSkeleton,
+  SectionHeading,
+} from './primitives';
 import { VerifiedVoices } from './VerifiedVoices';
 
 export function StreamAppShell() {
+  const {
+    data: showcase,
+    isFetching,
+    isLoading,
+    isError,
+    refetch,
+  } = useGetCatalogueShowcaseQuery();
+
+  const collections = showcase?.collections ?? [];
+  const streamDecks = showcase?.streamDecks ?? [];
+  const verifiedSpeakers = showcase?.verifiedSpeakers ?? [];
+  const catalogueMetrics = showcase?.catalogueMetrics ?? [];
+  const pinnedCollections = showcase?.pinnedCollections ?? [];
+  const filterOptions = showcase?.filterOptions;
+  const validationBreakdown = showcase?.validationBreakdown ?? [];
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<CatalogueFilters>(defaultFilters);
-  const [selectedCollectionId, setSelectedCollectionId] = useState(collections[0].id);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const [addedCollectionIds, setAddedCollectionIds] = useState<Set<string>>(new Set());
   const [addedDeckIds, setAddedDeckIds] = useState<Set<string>>(new Set());
   const [showAllCollections, setShowAllCollections] = useState(false);
+
+  useEffect(() => {
+    if (!selectedCollectionId && collections.length > 0) {
+      setSelectedCollectionId(collections[0].id);
+    }
+  }, [collections, selectedCollectionId]);
 
   const selectedCollection =
     collections.find((collection) => collection.id === selectedCollectionId) ?? null;
@@ -70,7 +90,7 @@ export function StreamAppShell() {
         matchesLicense
       );
     });
-  }, [filters, searchTerm]);
+  }, [collections, filters, searchTerm]);
 
   function selectCollection(id: string, openMobile = true) {
     setSelectedCollectionId(id);
@@ -81,13 +101,13 @@ export function StreamAppShell() {
   function selectDeck(deck: StreamDeck) {
     const related =
       collections.find((collection) => collection.dialect === deck.dialect) ?? collections[0];
-    selectCollection(related.id);
+    if (related) selectCollection(related.id);
   }
 
   function selectSpeaker(speaker: VerifiedSpeaker) {
     const related =
       collections.find((collection) => collection.language === speaker.language) ?? collections[0];
-    selectCollection(related.id);
+    if (related) selectCollection(related.id);
   }
 
   function toggleCollectionAdded() {
@@ -142,22 +162,44 @@ export function StreamAppShell() {
 
         <main className="stream-catalogue-scrollbar min-w-0 overflow-y-auto">
           <StreamTopbar
+            isRefreshing={isFetching && !isLoading}
             onMenu={() => setMobileMenuOpen(true)}
             onSearchChange={setSearchTerm}
             searchTerm={searchTerm}
           />
           <div className="mx-auto grid min-w-0 max-w-[1360px] gap-5 px-4 py-5 sm:px-5 lg:px-7">
-            <FilterBar
-              filters={filters}
-              onChange={updateFilter}
-              onClear={() => setFilters(defaultFilters)}
-              options={filterOptions}
-            />
-            <DiscoverHero
-              metrics={catalogueMetrics}
-              onExplore={() => scrollTo('featured-collections')}
-              onHowItWorks={() => scrollTo('recent-decks')}
-            />
+            {isError && (
+              <div className="flex items-center justify-between gap-3 rounded-[10px] border border-catalogue-yellow/40 bg-catalogue-yellow/10 px-4 py-2.5 text-xs text-catalogue-ink">
+                <span>Couldn&apos;t load the voice catalogue. Showing what&apos;s cached, if anything.</span>
+                <button
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-catalogue-line-strong px-2.5 py-1 font-semibold hover:bg-catalogue-surface-hover"
+                  onClick={() => void refetch()}
+                  type="button"
+                >
+                  <RefreshCw aria-hidden="true" className="size-3.5" />
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {filterOptions && (
+              <FilterBar
+                filters={filters}
+                onChange={updateFilter}
+                onClear={() => setFilters(defaultFilters)}
+                options={filterOptions}
+              />
+            )}
+
+            {isLoading ? (
+              <HeroSkeleton />
+            ) : (
+              <DiscoverHero
+                metrics={catalogueMetrics}
+                onExplore={() => scrollTo('featured-collections')}
+                onHowItWorks={() => scrollTo('recent-decks')}
+              />
+            )}
 
             <section className="min-w-0" id="featured-collections">
               <SectionHeading
@@ -174,7 +216,13 @@ export function StreamAppShell() {
                 }
                 title="Featured Voice Collections"
               />
-              {visibleCollections.length ? (
+              {isLoading ? (
+                <div className="mt-2 flex min-w-0 gap-2 overflow-hidden">
+                  {Array.from({ length: 6 }, (_, index) => (
+                    <CollectionCardSkeleton key={index} />
+                  ))}
+                </div>
+              ) : visibleCollections.length ? (
                 <div className="mt-2">
                   <CarouselRow label="Featured voice collections">
                     {visibleCollections.map((collection) => (
@@ -205,10 +253,11 @@ export function StreamAppShell() {
               <RecentStreamDecks
                 addedDeckIds={addedDeckIds}
                 decks={streamDecks}
+                isLoading={isLoading}
                 onAdd={toggleDeckAdded}
                 onSelect={selectDeck}
               />
-              <VerifiedVoices onSelect={selectSpeaker} speakers={verifiedSpeakers} />
+              <VerifiedVoices isLoading={isLoading} onSelect={selectSpeaker} speakers={verifiedSpeakers} />
             </div>
           </div>
         </main>
@@ -217,9 +266,10 @@ export function StreamAppShell() {
           <CollectionInspector
             added={selectedCollection ? addedCollectionIds.has(selectedCollection.id) : false}
             collection={selectedCollection}
+            isLoading={isLoading}
             isPlaying={isPlaying}
             onAdd={toggleCollectionAdded}
-            onClose={() => setSelectedCollectionId('')}
+            onClose={() => setSelectedCollectionId(null)}
             onTogglePlay={() => setIsPlaying((current) => !current)}
             validation={validationBreakdown}
           />

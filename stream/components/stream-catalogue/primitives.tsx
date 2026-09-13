@@ -318,3 +318,72 @@ export function EmptyCatalogueState({ query }: { query: string }) {
     </div>
   );
 }
+
+export function Skeleton({ className = '' }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`block animate-pulse rounded-md bg-catalogue-line-strong/50 ${className}`}
+    />
+  );
+}
+
+export function CollectionCardSkeleton() {
+  return (
+    <div className="w-[174px] shrink-0 rounded-[10px] border border-catalogue-line bg-catalogue-surface-raised p-1.5 sm:w-[184px]">
+      <Skeleton className="aspect-[1.08] w-full rounded-lg" />
+      <div className="px-1 pb-1 pt-2">
+        <Skeleton className="h-3.5 w-3/4" />
+        <Skeleton className="mt-2 h-3 w-1/2" />
+      </div>
+    </div>
+  );
+}
+
+export function VoiceCardSkeleton() {
+  return (
+    <div className="flex h-full w-[108px] shrink-0 flex-col justify-center rounded-[10px] border border-catalogue-line bg-catalogue-surface-raised p-2.5">
+      <Skeleton className="mx-auto size-14 rounded-full" />
+      <Skeleton className="mx-auto mt-2 h-3 w-16" />
+      <Skeleton className="mx-auto mt-1.5 h-2.5 w-20" />
+      <Skeleton className="mx-auto mt-1.5 h-2.5 w-12" />
+    </div>
+  );
+}
+
+export function DeckPillSkeleton() {
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-full border border-catalogue-line bg-catalogue-surface px-2.5 py-2 sm:gap-3 sm:px-3">
+      <Skeleton className="size-8 shrink-0 rounded-full sm:size-9" />
+      <div className="min-w-0 flex-1">
+        <Skeleton className="h-3 w-2/3" />
+        <Skeleton className="mt-1.5 h-2.5 w-1/3" />
+      </div>
+      <Skeleton className="hidden h-6 w-16 shrink-0 sm:block" />
+      <Skeleton className="size-7 shrink-0 rounded-full" />
+    </div>
+  );
+}
+
+export function HeroSkeleton() {
+  return (
+    <div className="grid gap-6 rounded-[10px] border border-catalogue-blue/20 bg-catalogue-surface p-4 shadow-catalogue sm:p-5 lg:grid-cols-[minmax(0,0.92fr)_minmax(480px,1.08fr)] lg:items-center">
+      <div className="max-w-[440px]">
+        <Skeleton className="h-5 w-32 rounded-full" />
+        <Skeleton className="mt-4 h-8 w-full" />
+        <Skeleton className="mt-2 h-8 w-3/4" />
+        <Skeleton className="mt-3 h-3.5 w-full" />
+        <Skeleton className="mt-1.5 h-3.5 w-2/3" />
+        <div className="mt-5 flex gap-2.5">
+          <Skeleton className="h-10 w-44 rounded-lg" />
+          <Skeleton className="h-10 w-32 rounded-lg" />
+        </div>
+      </div>
+      <div className="grid gap-2.5 sm:grid-cols-3">
+        {Array.from({ length: 3 }, (_, index) => (
+          <Skeleton className="h-32 rounded-lg" key={index} />
+        ))}
+      </div>
+    </div>
+  );
+}

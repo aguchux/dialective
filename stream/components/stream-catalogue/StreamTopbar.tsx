@@ -1,12 +1,14 @@
 'use client';
 
-import { Bell, Building2, ChevronDown, Menu, Search } from 'lucide-react';
+import { Bell, Building2, ChevronDown, Loader2, Menu, Search } from 'lucide-react';
 
 export function StreamTopbar({
+  isRefreshing = false,
   onMenu,
   searchTerm,
   onSearchChange,
 }: {
+  isRefreshing?: boolean;
   onMenu: () => void;
   searchTerm: string;
   onSearchChange: (value: string) => void;
@@ -33,10 +35,20 @@ export function StreamTopbar({
           placeholder="Search voices, dialects, speakers, or collections…"
           value={searchTerm}
         />
-        <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 text-[10px] text-catalogue-dim sm:flex">
-          <kbd className="rounded border border-catalogue-line-strong px-1.5 py-0.5">⌘</kbd>
-          <kbd className="rounded border border-catalogue-line-strong px-1.5 py-0.5">K</kbd>
-        </span>
+        {isRefreshing ? (
+          <span
+            aria-label="Refreshing catalogue"
+            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-catalogue-blue-bright"
+            role="status"
+          >
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+          </span>
+        ) : (
+          <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 text-[10px] text-catalogue-dim sm:flex">
+            <kbd className="rounded border border-catalogue-line-strong px-1.5 py-0.5">⌘</kbd>
+            <kbd className="rounded border border-catalogue-line-strong px-1.5 py-0.5">K</kbd>
+          </span>
+        )}
       </label>
       <div className="hidden items-center gap-2 sm:flex">
         <button

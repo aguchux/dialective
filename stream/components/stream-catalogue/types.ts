@@ -79,3 +79,13 @@ export interface ValidationBreakdown {
   label: string;
   score: number;
 }
+
+export interface CatalogueShowcase {
+  collections: CatalogueCollection[];
+  streamDecks: StreamDeck[];
+  verifiedSpeakers: VerifiedSpeaker[];
+  catalogueMetrics: CatalogueMetric[];
+  pinnedCollections: PinnedCollection[];
+  filterOptions: Record<FilterKey, string[]>;
+  validationBreakdown: ValidationBreakdown[];
+}

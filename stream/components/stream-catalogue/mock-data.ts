@@ -1,6 +1,7 @@
 import type {
   CatalogueCollection,
   CatalogueMetric,
+  CatalogueShowcase,
   FilterKey,
   PinnedCollection,
   StreamDeck,
@@ -569,3 +570,20 @@ export const defaultFilters = {
   quality: null,
   license: null,
 } as const;
+
+// Bundles the catalogue's showcase data (collections, decks, speakers,
+// metrics, filter options, validation breakdown) into the shape RTK
+// Query's getCatalogueShowcase endpoint returns. Called from that
+// endpoint's queryFn, not imported directly by UI components -- the
+// component tree only ever sees data through useGetCatalogueShowcaseQuery.
+export function buildCatalogueShowcase(): CatalogueShowcase {
+  return {
+    collections,
+    streamDecks,
+    verifiedSpeakers,
+    catalogueMetrics,
+    pinnedCollections,
+    filterOptions,
+    validationBreakdown,
+  };
+}

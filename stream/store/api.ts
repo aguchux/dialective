@@ -2,6 +2,8 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 import { getCurrentSession } from '@/lib/client-session';
 import type { SubscriberOrgRole } from '@/lib/api-client';
+import { buildCatalogueShowcase } from '@/components/stream-catalogue/mock-data';
+import type { CatalogueShowcase } from '@/components/stream-catalogue/types';
 
 export interface SubscriberMe {
   id: string;
@@ -407,6 +409,7 @@ export const streamApi = createApi({
     'OAuthClients',
     'PublicDecks',
     'ValidationQueue',
+    'CatalogueShowcase',
   ],
   endpoints: (builder) => ({
     getMe: builder.query<SubscriberMe, void>({
@@ -735,6 +738,20 @@ export const streamApi = createApi({
       query: () => '/reports/anomalies',
       providesTags: ['Reports'],
     }),
+
+    // Public marketing/discovery catalogue shown on the unauthenticated
+    // landing page. No backend endpoint exists for this yet -- queryFn
+    // stands in for one so the page consumes RTK Query's cache/loading/
+    // refetch lifecycle exactly like the real endpoints above, and can be
+    // swapped for a real `query:` call later without touching call sites.
+    getCatalogueShowcase: builder.query<CatalogueShowcase, void>({
+      queryFn: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        return { data: buildCatalogueShowcase() };
+      },
+      providesTags: ['CatalogueShowcase'],
+      keepUnusedDataFor: 300,
+    }),
   }),
 });
 
@@ -793,4 +810,5 @@ export const {
   useGetValidationContributionReportQuery,
   useGetProvenanceReportQuery,
   useGetAnomalyEventsQuery,
+  useGetCatalogueShowcaseQuery,
 } = streamApi;
