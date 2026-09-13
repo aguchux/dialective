@@ -174,7 +174,7 @@ export function CarouselRow({
   }
 
   return (
-    <div className="group/carousel relative min-w-0">
+    <div className="relative min-w-0">
       <div
         aria-label={label}
         className="stream-catalogue-scrollbar flex min-w-0 gap-2 overflow-x-auto scroll-smooth pb-1"
@@ -185,7 +185,7 @@ export function CarouselRow({
       </div>
       <button
         aria-label={`Scroll ${label} left`}
-        className="absolute -left-2 top-1/2 hidden size-8 -translate-y-1/2 place-items-center rounded-full border border-catalogue-line-strong bg-catalogue-surface text-catalogue-ink opacity-0 shadow-catalogue transition-opacity hover:bg-catalogue-surface-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 group-hover/carousel:opacity-100 sm:grid"
+        className="absolute left-1 top-1 z-10 hidden size-7 place-items-center rounded-full bg-catalogue-blue text-white shadow-catalogue transition-colors hover:bg-catalogue-blue-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue-bright/60 sm:grid"
         onClick={() => scrollByAmount(-1)}
         type="button"
       >
@@ -193,7 +193,7 @@ export function CarouselRow({
       </button>
       <button
         aria-label={`Scroll ${label} right`}
-        className="absolute -right-2 top-1/2 hidden size-8 -translate-y-1/2 place-items-center rounded-full border border-catalogue-line-strong bg-catalogue-surface text-catalogue-ink opacity-0 shadow-catalogue transition-opacity hover:bg-catalogue-surface-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 group-hover/carousel:opacity-100 sm:grid"
+        className="absolute right-1 top-1 z-10 hidden size-7 place-items-center rounded-full bg-catalogue-blue text-white shadow-catalogue transition-colors hover:bg-catalogue-blue-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue-bright/60 sm:grid"
         onClick={() => scrollByAmount(1)}
         type="button"
       >
