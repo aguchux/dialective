@@ -73,7 +73,7 @@ export function StreamSidebar({
               aria-current={active ? 'page' : undefined}
               className={`flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 ${
                 active
-                  ? 'bg-catalogue-blue/20 text-catalogue-ink shadow-[inset_0_0_0_1px_rgba(57,129,255,0.18)]'
+                  ? 'bg-catalogue-blue/20 text-catalogue-ink ring-1 ring-inset ring-catalogue-blue/60'
                   : 'text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink'
               }`}
               href={item.href}

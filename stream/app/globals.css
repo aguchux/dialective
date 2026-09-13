@@ -200,6 +200,17 @@ body {
   color: var(--ink);
 }
 
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+a,
+input[type='range'],
+input[type='checkbox'],
+input[type='radio'],
+select,
+label {
+  cursor: pointer;
+}
+
 @keyframes stream-catalogue-wave {
   from {
     transform: scaleY(0.72);
