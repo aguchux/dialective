@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { ManualPhoneVerificationStatus } from '@dialectiva/db';
 
 export class ListManualPhoneVerificationsDto {
@@ -18,5 +18,18 @@ export class ListManualPhoneVerificationsDto {
   @IsInt()
   @Min(1)
   @Max(100)
-  pageSize = 20;
+  pageSize = 5;
+
+  @IsOptional()
+  @IsString()
+  @Max(100)
+  search?: string;
+
+  @IsOptional()
+  @IsIn(['user', 'phone', 'status', 'sentAt', 'createdAt'])
+  sortBy: 'user' | 'phone' | 'status' | 'sentAt' | 'createdAt' = 'createdAt';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder: 'asc' | 'desc' = 'desc';
 }

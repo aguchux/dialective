@@ -4193,7 +4193,14 @@ export const dialectivaApi = createApi({
     }),
     listAdminManualPhoneVerifications: builder.query<
       ManualPhoneVerificationPage,
-      { status?: ManualPhoneVerificationStatus; page?: number; pageSize?: number } | void
+      {
+        status?: ManualPhoneVerificationStatus;
+        page?: number;
+        pageSize?: number;
+        search?: string;
+        sortBy?: 'user' | 'phone' | 'status' | 'sentAt' | 'createdAt';
+        sortOrder?: 'asc' | 'desc';
+      } | void
     >({
       query: (params) => ({ url: '/auth/admin/phone-verifications', params: params ?? undefined }),
       providesTags: ['Users'],

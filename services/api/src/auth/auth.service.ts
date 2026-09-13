@@ -114,7 +114,6 @@ export interface PublicUser {
   potentialDuplicateNameMatches?: PotentialDuplicateNameMatch[];
 }
 
-
 export interface PotentialDuplicateNameMatch {
   id: string;
   firstName: string | null;
@@ -383,7 +382,8 @@ export class AuthService {
       return this.issueAuthResult(user);
     }
 
-    const usePhoneChannel = user.twoFactorSmsEnabled && !!user.phoneVerifiedAt && !!user.phoneNumber;
+    const usePhoneChannel =
+      user.twoFactorSmsEnabled && !!user.phoneVerifiedAt && !!user.phoneNumber;
     const phoneChannel: OtpChannel =
       usePhoneChannel &&
       (await this.platformSettings.getOtpChannel()) === 'whatsapp' &&
@@ -785,7 +785,13 @@ export class AuthService {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const contextHash = adminActionContextHash({ action: 'account-close', userId });
     const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
-    return this.otp.issueForUser(userId, OtpPurpose.ACCOUNT_CLOSE, destination, contextHash, channel);
+    return this.otp.issueForUser(
+      userId,
+      OtpPurpose.ACCOUNT_CLOSE,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   /**
@@ -1218,14 +1224,41 @@ export class AuthService {
     status?: ManualPhoneVerificationStatus;
     page: number;
     pageSize: number;
+    search?: string;
+    sortBy?: 'user' | 'phone' | 'status' | 'sentAt' | 'createdAt';
+    sortOrder?: 'asc' | 'desc';
   }) {
     await this.expireManualPhoneVerificationRequests();
-    const where = { ...(params.status ? { status: params.status } : {}) };
+    const search = params.search?.trim();
+    const where: any = {
+      ...(params.status ? { status: params.status } : {}),
+      ...(search
+        ? {
+            OR: [
+              { phoneNumber: { contains: search, mode: 'insensitive' as const } },
+              { user: { email: { contains: search, mode: 'insensitive' as const } } },
+              { user: { firstName: { contains: search, mode: 'insensitive' as const } } },
+              { user: { lastName: { contains: search, mode: 'insensitive' as const } } },
+            ],
+          }
+        : {}),
+    };
+    const direction = params.sortOrder ?? 'desc';
+    const orderBy: any =
+      params.sortBy === 'user'
+        ? { user: { firstName: direction } }
+        : params.sortBy === 'phone'
+          ? { phoneNumber: direction }
+          : params.sortBy === 'status'
+            ? { status: direction }
+            : params.sortBy === 'sentAt'
+              ? { sentAt: direction }
+              : [{ createdAt: direction }, { id: direction }];
     const [total, items] = await this.prisma.$transaction([
       this.prisma.manualPhoneVerificationRequest.count({ where }),
       this.prisma.manualPhoneVerificationRequest.findMany({
         where,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        orderBy,
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
         include: {
@@ -1512,9 +1545,7 @@ export class AuthService {
       // stale level doesn't linger on a non-validator account.
       data: {
         role,
-        ...(role === Role.VALIDATOR
-          ? { validatorLevel: 'L1' as const }
-          : { validatorLevel: null }),
+        ...(role === Role.VALIDATOR ? { validatorLevel: 'L1' as const } : { validatorLevel: null }),
       },
       include: { dialect: true, dialectVariant: true },
     });
@@ -1643,7 +1674,10 @@ export class AuthService {
     userId: string,
     validatorLevel: ValidatorLevel,
   ): Promise<PublicUser> {
-    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
     if (!target) throw new NotFoundException('User not found');
 
     const user = await this.prisma.user.update({
@@ -1661,7 +1695,10 @@ export class AuthService {
 
   /** Admin-only: which dialects a validator is currently onboarded to review. */
   async listValidatorDialectAssignments(userId: string) {
-    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
     if (!target) throw new NotFoundException('User not found');
     const assignments = await this.prisma.validatorDialectAssignment.findMany({
       where: { userId },
@@ -1679,7 +1716,10 @@ export class AuthService {
 
   /** Admin-only: grants a validator access to browse/create decks for one more dialect. */
   async assignValidatorDialect(adminId: string, userId: string, dialectId: string) {
-    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
     if (!target) throw new NotFoundException('User not found');
     if (target.role !== Role.VALIDATOR) {
       throw new UnprocessableEntityException('Only a VALIDATOR can be onboarded to a dialect');
@@ -1806,7 +1846,13 @@ export class AuthService {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
     const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
     const contextHash = adminActionContextHash({ action: 'user-lock', userId, status });
-    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
+    return this.otp.issueForUser(
+      adminId,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   /**
@@ -1926,7 +1972,13 @@ export class AuthService {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
     const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
     const contextHash = adminActionContextHash({ action: 'audit-hold-release', userId });
-    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
+    return this.otp.issueForUser(
+      adminId,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   /**
@@ -1999,7 +2051,13 @@ export class AuthService {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
     const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
     const contextHash = adminActionContextHash({ action: 'phone-verification-revoke', userId });
-    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
+    return this.otp.issueForUser(
+      adminId,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   /**
@@ -2053,7 +2111,13 @@ export class AuthService {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
     const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
     const contextHash = adminActionContextHash({ action: 'user-delete', userId });
-    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
+    return this.otp.issueForUser(
+      adminId,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   /**

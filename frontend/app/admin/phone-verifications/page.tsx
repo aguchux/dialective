@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Search } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent } from '@/components/ui/Dialog';
@@ -24,10 +25,18 @@ const statuses: ('ALL' | ManualPhoneVerificationStatus)[] = [
 export default function AdminPhoneVerificationsPage() {
   const [status, setStatus] = useState<'ALL' | ManualPhoneVerificationStatus>('PENDING');
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'user' | 'phone' | 'status' | 'sentAt' | 'createdAt'>(
+    'createdAt',
+  );
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [verifyRow, setVerifyRow] = useState<ManualPhoneVerificationRow | null>(null);
   const { data, isLoading, isFetching } = useListAdminManualPhoneVerificationsQuery({
     page,
-    pageSize: 20,
+    pageSize: 5,
+    search: search.trim() || undefined,
+    sortBy,
+    sortOrder,
     ...(status !== 'ALL' ? { status } : {}),
   });
   const rows = data?.items ?? [];
@@ -42,23 +51,43 @@ export default function AdminPhoneVerificationsPage() {
               Review WhatsApp manual mobile verification requests.
             </p>
           </div>
-          <label className="grid gap-1 text-sm font-bold">
-            Status
-            <select
-              className="min-h-10 rounded-lg border border-line bg-white px-3"
-              onChange={(event) => {
-                setStatus(event.target.value as typeof status);
-                setPage(1);
-              }}
-              value={status}
-            >
-              {statuses.map((item) => (
-                <option key={item} value={item}>
-                  {item === 'ALL' ? 'All' : item.toLowerCase()}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="grid gap-1 text-sm font-bold">
+              Search
+              <span className="relative">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+                  aria-hidden="true"
+                />
+                <input
+                  className="min-h-10 w-full rounded-lg border border-line bg-white py-2 pl-9 pr-3 font-normal outline-none focus:border-accent sm:w-64"
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Name, email, or phone"
+                  value={search}
+                />
+              </span>
+            </label>
+            <label className="grid gap-1 text-sm font-bold">
+              Status
+              <select
+                className="min-h-10 rounded-lg border border-line bg-white px-3"
+                onChange={(event) => {
+                  setStatus(event.target.value as typeof status);
+                  setPage(1);
+                }}
+                value={status}
+              >
+                {statuses.map((item) => (
+                  <option key={item} value={item}>
+                    {item === 'ALL' ? 'All' : item.toLowerCase()}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </header>
 
         <section className="overflow-hidden rounded-lg border border-line bg-white shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -66,12 +95,52 @@ export default function AdminPhoneVerificationsPage() {
             <table className="w-full min-w-[900px] border-collapse text-left text-sm">
               <thead className="bg-surface-muted text-xs uppercase text-muted">
                 <tr>
-                  <th className="px-4 py-3">User</th>
-                  <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">Status</th>
+                  <SortableHeader
+                    label="User"
+                    column="user"
+                    sortBy={sortBy}
+                    sortOrder={sortOrder}
+                    onSort={(column) =>
+                      updateSort(column, sortBy, sortOrder, setSortBy, setSortOrder, setPage)
+                    }
+                  />
+                  <SortableHeader
+                    label="Phone"
+                    column="phone"
+                    sortBy={sortBy}
+                    sortOrder={sortOrder}
+                    onSort={(column) =>
+                      updateSort(column, sortBy, sortOrder, setSortBy, setSortOrder, setPage)
+                    }
+                  />
+                  <SortableHeader
+                    label="Status"
+                    column="status"
+                    sortBy={sortBy}
+                    sortOrder={sortOrder}
+                    onSort={(column) =>
+                      updateSort(column, sortBy, sortOrder, setSortBy, setSortOrder, setPage)
+                    }
+                  />
                   <th className="px-4 py-3">Fee</th>
-                  <th className="px-4 py-3">Sent</th>
-                  <th className="px-4 py-3">Created</th>
+                  <SortableHeader
+                    label="Sent"
+                    column="sentAt"
+                    sortBy={sortBy}
+                    sortOrder={sortOrder}
+                    onSort={(column) =>
+                      updateSort(column, sortBy, sortOrder, setSortBy, setSortOrder, setPage)
+                    }
+                  />
+                  <SortableHeader
+                    label="Created"
+                    column="createdAt"
+                    sortBy={sortBy}
+                    sortOrder={sortOrder}
+                    onSort={(column) =>
+                      updateSort(column, sortBy, sortOrder, setSortBy, setSortOrder, setPage)
+                    }
+                  />
                   <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
@@ -123,6 +192,57 @@ export default function AdminPhoneVerificationsPage() {
         <VerifyDialog row={verifyRow} onOpenChange={(open) => !open && setVerifyRow(null)} />
       </div>
     </AdminShell>
+  );
+}
+
+type SortColumn = 'user' | 'phone' | 'status' | 'sentAt' | 'createdAt';
+
+function updateSort(
+  column: SortColumn,
+  currentColumn: SortColumn,
+  currentOrder: 'asc' | 'desc',
+  setColumn: (value: SortColumn) => void,
+  setOrder: (value: 'asc' | 'desc') => void,
+  setPage: (value: number) => void,
+) {
+  setColumn(column);
+  setOrder(column === currentColumn && currentOrder === 'asc' ? 'desc' : 'asc');
+  setPage(1);
+}
+
+function SortableHeader({
+  label,
+  column,
+  sortBy,
+  sortOrder,
+  onSort,
+}: {
+  label: string;
+  column: SortColumn;
+  sortBy: SortColumn;
+  sortOrder: 'asc' | 'desc';
+  onSort: (column: SortColumn) => void;
+}) {
+  const active = sortBy === column;
+  return (
+    <th className="px-4 py-3">
+      <button
+        className="inline-flex items-center gap-1 font-bold uppercase hover:text-accent"
+        onClick={() => onSort(column)}
+        type="button"
+      >
+        {label}
+        {active ? (
+          sortOrder === 'asc' ? (
+            <ArrowUp className="size-3.5" aria-hidden="true" />
+          ) : (
+            <ArrowDown className="size-3.5" aria-hidden="true" />
+          )
+        ) : (
+          <ChevronsUpDown className="size-3.5 opacity-50" aria-hidden="true" />
+        )}
+      </button>
+    </th>
   );
 }
 
