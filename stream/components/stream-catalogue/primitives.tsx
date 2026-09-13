@@ -1,5 +1,8 @@
+'use client';
+
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
-import { Check, CirclePlay, MoreHorizontal, Play } from 'lucide-react';
+import { useRef } from 'react';
+import { Check, ChevronLeft, ChevronRight, CirclePlay, MoreHorizontal, Play } from 'lucide-react';
 
 export function formatHours(value: number): string {
   return `${value.toLocaleString('en-US', { maximumFractionDigits: 1 })} hrs`;
@@ -151,6 +154,51 @@ export function FocusableRow({ children, onClick }: { children: ReactNode; onCli
       tabIndex={0}
     >
       {children}
+    </div>
+  );
+}
+
+export function CarouselRow({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label: string;
+}) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+
+  function scrollByAmount(direction: 1 | -1) {
+    const node = scrollerRef.current;
+    if (!node) return;
+    node.scrollBy({ left: direction * node.clientWidth * 0.85, behavior: 'smooth' });
+  }
+
+  return (
+    <div className="group/carousel relative min-w-0">
+      <div
+        aria-label={label}
+        className="stream-catalogue-scrollbar flex min-w-0 gap-2 overflow-x-auto scroll-smooth pb-1"
+        ref={scrollerRef}
+        role="group"
+      >
+        {children}
+      </div>
+      <button
+        aria-label={`Scroll ${label} left`}
+        className="absolute -left-2 top-1/2 hidden size-8 -translate-y-1/2 place-items-center rounded-full border border-catalogue-line-strong bg-catalogue-surface text-catalogue-ink opacity-0 shadow-catalogue transition-opacity hover:bg-catalogue-surface-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 group-hover/carousel:opacity-100 sm:grid"
+        onClick={() => scrollByAmount(-1)}
+        type="button"
+      >
+        <ChevronLeft aria-hidden="true" className="size-4" />
+      </button>
+      <button
+        aria-label={`Scroll ${label} right`}
+        className="absolute -right-2 top-1/2 hidden size-8 -translate-y-1/2 place-items-center rounded-full border border-catalogue-line-strong bg-catalogue-surface text-catalogue-ink opacity-0 shadow-catalogue transition-opacity hover:bg-catalogue-surface-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 group-hover/carousel:opacity-100 sm:grid"
+        onClick={() => scrollByAmount(1)}
+        type="button"
+      >
+        <ChevronRight aria-hidden="true" className="size-4" />
+      </button>
     </div>
   );
 }

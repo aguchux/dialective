@@ -21,7 +21,7 @@ import { RecentStreamDecks } from './RecentStreamDecks';
 import { StreamPlayerBar } from './StreamPlayerBar';
 import { StreamSidebar } from './StreamSidebar';
 import { StreamTopbar } from './StreamTopbar';
-import { EmptyCatalogueState, SectionHeading } from './primitives';
+import { CarouselRow, EmptyCatalogueState, SectionHeading } from './primitives';
 import { VerifiedVoices } from './VerifiedVoices';
 
 export function StreamAppShell() {
@@ -33,6 +33,7 @@ export function StreamAppShell() {
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const [addedCollectionIds, setAddedCollectionIds] = useState<Set<string>>(new Set());
   const [addedDeckIds, setAddedDeckIds] = useState<Set<string>>(new Set());
+  const [showAllCollections, setShowAllCollections] = useState(false);
 
   const selectedCollection =
     collections.find((collection) => collection.id === selectedCollectionId) ?? null;
@@ -116,6 +117,12 @@ export function StreamAppShell() {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  const featuredLimit = 6;
+  const visibleCollections = showAllCollections
+    ? filteredCollections
+    : filteredCollections.slice(0, featuredLimit);
+  const hasMoreCollections = filteredCollections.length > featuredLimit;
+
   return (
     <div className="stream-catalogue min-h-screen w-full overflow-x-hidden bg-catalogue-bg text-catalogue-ink [--catalogue-player-height:56px] sm:[--catalogue-player-height:60px]">
       <div className="flex min-h-screen pb-[var(--catalogue-player-height)] md:grid md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)_355px]">
@@ -155,29 +162,34 @@ export function StreamAppShell() {
             <section className="min-w-0" id="featured-collections">
               <SectionHeading
                 action={
-                  <button
-                    className="text-xs font-semibold text-catalogue-blue-bright hover:text-catalogue-ink"
-                    type="button"
-                  >
-                    View all
-                  </button>
+                  hasMoreCollections ? (
+                    <button
+                      className="text-xs font-semibold text-catalogue-blue-bright hover:text-catalogue-ink"
+                      onClick={() => setShowAllCollections((current) => !current)}
+                      type="button"
+                    >
+                      {showAllCollections ? 'Show less' : 'View all'}
+                    </button>
+                  ) : undefined
                 }
                 title="Featured Voice Collections"
               />
-              {filteredCollections.length ? (
-                <div className="stream-catalogue-scrollbar mt-2 flex min-w-0 gap-2 overflow-x-auto pb-2">
-                  {filteredCollections.map((collection) => (
-                    <CollectionCard
-                      collection={collection}
-                      key={collection.id}
-                      onPlay={() => {
-                        selectCollection(collection.id);
-                        setIsPlaying(true);
-                      }}
-                      onSelect={() => selectCollection(collection.id)}
-                      selected={collection.id === selectedCollectionId}
-                    />
-                  ))}
+              {visibleCollections.length ? (
+                <div className="mt-2">
+                  <CarouselRow label="Featured voice collections">
+                    {visibleCollections.map((collection) => (
+                      <CollectionCard
+                        collection={collection}
+                        key={collection.id}
+                        onPlay={() => {
+                          selectCollection(collection.id);
+                          setIsPlaying(true);
+                        }}
+                        onSelect={() => selectCollection(collection.id)}
+                        selected={collection.id === selectedCollectionId}
+                      />
+                    ))}
+                  </CarouselRow>
                 </div>
               ) : (
                 <div className="mt-2">
