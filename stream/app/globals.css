@@ -179,6 +179,14 @@
     background: var(--catalogue-line-strong);
   }
 
+  .stream-catalogue-scrollbar-hidden {
+    scrollbar-width: none;
+  }
+
+  .stream-catalogue-scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+
   .stream-catalogue-waveform-bar {
     animation: stream-catalogue-wave 2.8s ease-in-out infinite alternate;
   }

@@ -166,9 +166,11 @@ export function FocusableRow({ children, onClick }: { children: ReactNode; onCli
 
 export function CarouselRow({
   children,
+  hideScrollbar = false,
   label,
 }: {
   children: ReactNode;
+  hideScrollbar?: boolean;
   label: string;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -250,7 +252,9 @@ export function CarouselRow({
     <div className="relative min-w-0">
       <div
         aria-label={label}
-        className={`stream-catalogue-scrollbar flex min-w-0 gap-2 overflow-x-auto pb-1 transition-[filter] duration-200 ${
+        className={`flex min-w-0 gap-2 overflow-x-auto transition-[filter] duration-200 ${
+          hideScrollbar ? 'stream-catalogue-scrollbar-hidden' : 'stream-catalogue-scrollbar pb-1'
+        } ${
           isDragging
             ? 'cursor-grabbing scroll-auto select-none brightness-110 saturate-125'
             : 'cursor-grab scroll-smooth'

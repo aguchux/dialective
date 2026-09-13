@@ -34,8 +34,8 @@ export function VerifiedVoices({
           </button>
         )}
       </div>
-      <div className="mt-2 flex flex-1 flex-col justify-center overflow-hidden rounded-[10px] border border-catalogue-line bg-catalogue-surface p-3">
-        <CarouselRow label="Top verified voices">
+      <div className="mt-2 flex flex-1 flex-col justify-center">
+        <CarouselRow hideScrollbar label="Top verified voices">
           {visibleSpeakers.map((speaker) => (
             <FocusableRow key={speaker.id} onClick={() => onSelect(speaker)}>
               <article className="relative w-[108px] shrink-0 rounded-[10px] border border-catalogue-line bg-catalogue-surface-raised p-2.5 transition-colors hover:border-catalogue-line-strong hover:bg-catalogue-surface-hover">
