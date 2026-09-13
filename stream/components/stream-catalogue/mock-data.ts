@@ -479,6 +479,26 @@ export const verifiedSpeakers: VerifiedSpeaker[] = [
     avatarUrl: avatars[1].url,
     avatarAlt: avatars[1].alt,
   },
+  {
+    id: 'kwame-o',
+    name: 'Kwame O.',
+    language: 'Yoruba',
+    country: 'Nigeria',
+    hours: 11.7,
+    score: 9.2,
+    avatarUrl: avatars[3].url,
+    avatarAlt: avatars[3].alt,
+  },
+  {
+    id: 'zainab-d',
+    name: 'Zainab D.',
+    language: 'Hausa',
+    country: 'Nigeria',
+    hours: 12.9,
+    score: 9.4,
+    avatarUrl: avatars[4].url,
+    avatarAlt: avatars[4].alt,
+  },
 ];
 
 export const catalogueMetrics: CatalogueMetric[] = [

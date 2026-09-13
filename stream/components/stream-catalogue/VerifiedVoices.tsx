@@ -5,7 +5,7 @@ import { Globe2 } from 'lucide-react';
 import type { VerifiedSpeaker } from './types';
 import { CarouselRow, CoverImage, FocusableRow, ScoreBadge } from './primitives';
 
-const VISIBLE_LIMIT = 5;
+const VISIBLE_LIMIT = 8;
 
 export function VerifiedVoices({
   onSelect,

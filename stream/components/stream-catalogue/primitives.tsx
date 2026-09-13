@@ -185,7 +185,7 @@ export function CarouselRow({
       </div>
       <button
         aria-label={`Scroll ${label} left`}
-        className="absolute left-1 top-1 z-10 hidden size-7 place-items-center rounded-full bg-catalogue-blue text-white shadow-catalogue transition-colors hover:bg-catalogue-blue-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue-bright/60 sm:grid"
+        className="absolute left-1 top-1/2 z-10 hidden size-7 -translate-y-1/2 place-items-center rounded-full bg-catalogue-blue text-white shadow-catalogue transition-colors hover:bg-catalogue-blue-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue-bright/60 sm:grid"
         onClick={() => scrollByAmount(-1)}
         type="button"
       >
@@ -193,7 +193,7 @@ export function CarouselRow({
       </button>
       <button
         aria-label={`Scroll ${label} right`}
-        className="absolute right-1 top-1 z-10 hidden size-7 place-items-center rounded-full bg-catalogue-blue text-white shadow-catalogue transition-colors hover:bg-catalogue-blue-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue-bright/60 sm:grid"
+        className="absolute right-1 top-1/2 z-10 hidden size-7 -translate-y-1/2 place-items-center rounded-full bg-catalogue-blue text-white shadow-catalogue transition-colors hover:bg-catalogue-blue-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue-bright/60 sm:grid"
         onClick={() => scrollByAmount(1)}
         type="button"
       >

@@ -117,7 +117,7 @@ export function StreamAppShell() {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  const featuredLimit = 6;
+  const featuredLimit = 8;
   const visibleCollections = showAllCollections
     ? filteredCollections
     : filteredCollections.slice(0, featuredLimit);
