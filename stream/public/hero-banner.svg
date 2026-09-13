@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 420" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="heroBase" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3a2a52" />
+      <stop offset="45%" stop-color="#241a34" />
+      <stop offset="100%" stop-color="#170f22" />
+    </linearGradient>
+    <radialGradient id="heroGlowA" cx="80%" cy="20%" r="55%">
+      <stop offset="0%" stop-color="#c08bef" stop-opacity="0.45" />
+      <stop offset="55%" stop-color="#a866e0" stop-opacity="0.12" />
+      <stop offset="100%" stop-color="#a866e0" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="heroGlowB" cx="8%" cy="90%" r="50%">
+      <stop offset="0%" stop-color="#6a18a8" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#6a18a8" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="waveStroke1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a866e0" stop-opacity="0" />
+      <stop offset="15%" stop-color="#c08bef" stop-opacity="0.85" />
+      <stop offset="85%" stop-color="#a866e0" stop-opacity="0.55" />
+      <stop offset="100%" stop-color="#a866e0" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="waveStroke2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a866e0" stop-opacity="0" />
+      <stop offset="20%" stop-color="#8a4bc4" stop-opacity="0.6" />
+      <stop offset="80%" stop-color="#8a4bc4" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#8a4bc4" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1400" height="420" fill="url(#heroBase)" />
+  <rect width="1400" height="420" fill="url(#heroGlowA)" />
+  <rect width="1400" height="420" fill="url(#heroGlowB)" />
+
+  <g opacity="0.16" stroke="#c08bef" stroke-width="1">
+    <path d="M0 60 H1400 M0 130 H1400 M0 200 H1400 M0 270 H1400 M0 340 H1400" />
+    <path d="M60 0 V420 M170 0 V420 M280 0 V420 M390 0 V420 M500 0 V420 M610 0 V420 M720 0 V420 M830 0 V420 M940 0 V420 M1050 0 V420 M1160 0 V420 M1270 0 V420 M1380 0 V420" />
+  </g>
+
+  <g fill="none" stroke-linecap="round">
+    <path d="M-20 260 C 120 200, 220 320, 360 250 S 600 160, 740 240 S 980 320, 1120 230 S 1340 170, 1420 220"
+      stroke="url(#waveStroke1)" stroke-width="2.5" />
+    <path d="M-20 300 C 140 340, 240 220, 400 290 S 640 360, 780 280 S 1000 200, 1140 280 S 1340 340, 1420 300"
+      stroke="url(#waveStroke2)" stroke-width="1.5" />
+    <path d="M-20 210 C 100 240, 260 150, 420 210 S 660 280, 820 200 S 1040 130, 1200 200 S 1360 250, 1420 210"
+      stroke="url(#waveStroke2)" stroke-width="1" opacity="0.5" />
+  </g>
+
+  <g fill="#c08bef">
+    <circle cx="220" cy="90" r="2" opacity="0.7" />
+    <circle cx="340" cy="150" r="1.5" opacity="0.5" />
+    <circle cx="510" cy="70" r="2" opacity="0.6" />
+    <circle cx="680" cy="120" r="1.5" opacity="0.45" />
+    <circle cx="860" cy="60" r="2" opacity="0.65" />
+    <circle cx="990" cy="140" r="1.5" opacity="0.5" />
+    <circle cx="1150" cy="80" r="2" opacity="0.6" />
+    <circle cx="1290" cy="150" r="1.5" opacity="0.4" />
+  </g>
+
+  <rect width="1400" height="420" fill="url(#heroBase)" fill-opacity="0.06" />
+</svg>

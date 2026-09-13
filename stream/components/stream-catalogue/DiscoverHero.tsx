@@ -15,34 +15,13 @@ export function DiscoverHero({
 }) {
   return (
     <section
-      className="relative overflow-hidden rounded-[10px] border border-catalogue-blue/35 bg-[linear-gradient(115deg,#33244a_0%,#241a34_48%,#1a1424_100%)] p-4 shadow-catalogue sm:p-5"
+      className="relative overflow-hidden rounded-[10px] border border-catalogue-blue/35 bg-[#241a34] bg-[url('/hero-banner.svg')] bg-cover bg-center p-4 shadow-catalogue sm:p-5"
       id="home"
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_74%_32%,rgba(168,102,224,0.35),transparent_34%),linear-gradient(rgba(168,102,224,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(168,102,224,0.12)_1px,transparent_1px)] [background-size:auto,42px_42px,42px_42px]"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(100deg,rgba(26,20,36,0.55)_0%,rgba(26,20,36,0.15)_55%,rgba(26,20,36,0.55)_100%)]"
       />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-6 bottom-4 h-32 w-[48%] opacity-60 sm:h-40"
-      >
-        <svg className="h-full w-full" preserveAspectRatio="none" viewBox="0 0 400 120">
-          <path
-            d="M0 82 C20 57 28 112 47 74 S75 72 91 53 S121 103 139 66 S168 76 184 43 S213 88 232 72 S258 30 276 61 S299 101 321 57 S348 77 400 37"
-            fill="none"
-            stroke="#c08bef"
-            strokeLinecap="round"
-            strokeWidth="2"
-          />
-          <path
-            d="M0 91 C20 76 30 108 50 88 S78 68 95 78 S125 93 145 74 S170 80 190 62 S215 102 235 80 S265 53 282 71 S306 92 327 76 S353 78 400 55"
-            fill="none"
-            stroke="#a866e0"
-            strokeOpacity="0.45"
-            strokeWidth="1"
-          />
-        </svg>
-      </div>
       <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(480px,1.08fr)] lg:items-center">
         <div className="max-w-[440px]">
           <div className="inline-flex items-center gap-2 rounded-full border border-catalogue-blue/35 bg-catalogue-blue/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-catalogue-blue-bright">
