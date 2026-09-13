@@ -45,6 +45,8 @@ import {
 export type DashboardView =
   | 'home'
   | 'tokens'
+  | 'tokens-earned'
+  | 'other-credits'
   | 'earnings'
   | 'training'
   | 'market'

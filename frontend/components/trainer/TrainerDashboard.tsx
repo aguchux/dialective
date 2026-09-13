@@ -127,6 +127,7 @@ import {
   useGetCommunityStatsQuery,
   useGetReferralInvitationsQuery,
   useGetWalletActivityQuery,
+  WalletActivityPage,
   useSendReferralInviteMutation,
   useUpdateProfileMutation,
   MarketingAdFormat,
@@ -148,6 +149,10 @@ const allViewIds: DashboardView[] = [
   'profile',
   'security',
   'notifications',
+  // Drill-down sub-views of Tokens -- reachable only by clicking the
+  // "Tokens earned"/"Other credits" cards, not their own tab.
+  'tokens-earned',
+  'other-credits',
 ];
 
 export const activityLabels: Record<LedgerEntryType, string> = {
@@ -787,6 +792,8 @@ function DashboardViewContent({
   if (activeView === 'testimonials') return <TestimonialsView onGiveTestimony={onGiveTestimony} />;
   if (activeView === 'scores') return <ScoresView />;
   if (activeView === 'tokens') return <TokensView data={data} refreshing={refreshing} />;
+  if (activeView === 'tokens-earned') return <TokensEarnedView refreshing={refreshing} />;
+  if (activeView === 'other-credits') return <OtherCreditsView refreshing={refreshing} />;
   return <HomeView data={data} refreshing={refreshing} />;
 }
 
@@ -993,14 +1000,16 @@ function TokensView({
           label="Tokens earned"
           value={formatCompactTokensValue(tokensEarned)}
           tone="purple"
-          tooltip="Total DL you've earned from training, courses, referrals, and rewards -- including any you've already withdrawn. Task locks and refunds are temporary holds, not spending, so they aren't counted here."
+          href="/dashboard?view=tokens-earned"
+          tooltip="Total DL you've earned from training, courses, referrals, and rewards -- including any you've already withdrawn. Task locks and refunds are temporary holds, not spending, so they aren't counted here. Click to see every entry."
         />
         <MetricCard
           icon={Gift}
           label="Other credits"
           value={formatCompactTokensValue(otherCredits)}
           tone="purple"
-          tooltip="Funding added to your account by an admin or a deposit -- not earned through tasks, but it still adds to your available balance."
+          href="/dashboard?view=other-credits"
+          tooltip="Funding added to your account by an admin or a deposit -- not earned through tasks, but it still adds to your available balance. Click to see every entry."
         />
         <MetricCard
           icon={CircleDollarSign}
@@ -1015,89 +1024,190 @@ function TokensView({
         completedTasksForWithdrawal={summary.completedTasksForWithdrawal}
         minCompletedTasksForWithdrawal={summary.minCompletedTasksForWithdrawal}
       />
-      <section className={`${cardClass} mt-6 overflow-hidden`}>
-        {isLoading ? (
-          <div className="grid min-h-52 place-items-center" role="status">
-            <RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" />
-            <span className="sr-only">Loading token activity</span>
-          </div>
-        ) : isError ? (
-          <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
-            <p className="font-extrabold">Could not load your token activity.</p>
-            <button
-              className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted"
-              onClick={() => void refetch()}
-              type="button"
-            >
-              Try again
-            </button>
-          </div>
-        ) : data && data.items.length ? (
-          <>
-            <div className="divide-y divide-line md:hidden">
-              {data.items.map((entry) => (
-                <ActivityMobileRow entry={entry} key={entry.id} />
-              ))}
-            </div>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[720px] text-left">
-                <thead className="bg-surface-muted/70 text-xs font-black uppercase text-muted">
-                  <tr>
-                    <th className="px-4 py-3">Activity</th>
-                    <th className="px-4 py-3">Reference</th>
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {data.items.map((entry) => (
-                    <ActivityTableRow entry={entry} key={entry.id} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex flex-col gap-3 border-t border-line px-4 py-3 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-              <span>
-                Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, data.total)} of{' '}
-                {data.total}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  aria-label="Previous activity page"
-                  className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink disabled:cursor-not-allowed disabled:opacity-45"
-                  disabled={page <= 1}
-                  onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
-                  type="button"
-                >
-                  <ChevronLeft className="size-4" aria-hidden="true" />
-                </button>
-                <span className="min-w-16 text-center font-bold text-ink">
-                  {page} / {data.totalPages}
-                </span>
-                <button
-                  aria-label="Next activity page"
-                  className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink disabled:cursor-not-allowed disabled:opacity-45"
-                  disabled={page >= data.totalPages}
-                  onClick={() =>
-                    setPage((currentPage) => Math.min(data.totalPages, currentPage + 1))
-                  }
-                  type="button"
-                >
-                  <ChevronRight className="size-4" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <EmptyPanel
-            icon={Clock3}
-            title="No account activity yet"
-            actionHref={undefined}
-            actionLabel={undefined}
-          />
-        )}
-      </section>
+      <LedgerActivityPanel
+        data={data}
+        isLoading={isLoading}
+        isError={isError}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onRetry={refetch}
+        emptyTitle="No account activity yet"
+      />
     </div>
+  );
+}
+
+/**
+ * Drill-down for the "Tokens earned" card -- same activity table/pagination
+ * as TokensView, scoped server-side to LIFETIME_CREDIT_ENTRY_TYPES via
+ * category='earned' so a trainer can see exactly which entries make up that
+ * summary figure instead of taking it on faith.
+ */
+function TokensEarnedView({ refreshing }: { refreshing: boolean }) {
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const { data, isLoading, isFetching, isError, refetch } = useGetWalletActivityQuery({
+    page,
+    pageSize,
+    category: 'earned',
+  });
+
+  return (
+    <div>
+      <ViewHeading
+        title="Tokens earned"
+        subtitle="Every training payout, course reward, referral bonus, and other earning credited to your wallet."
+        refreshing={refreshing || isFetching}
+      />
+      <LedgerActivityPanel
+        data={data}
+        isLoading={isLoading}
+        isError={isError}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onRetry={refetch}
+        emptyTitle="No earnings yet"
+      />
+    </div>
+  );
+}
+
+/**
+ * Drill-down for the "Other credits" card -- same shape as
+ * TokensEarnedView, scoped to category='other-credits'
+ * (EXTERNAL_TOPUP_ENTRY_TYPES: admin funding/adjustments, deposits,
+ * distributor allocations) so a trainer can see exactly what makes up the
+ * non-earned portion of their balance.
+ */
+function OtherCreditsView({ refreshing }: { refreshing: boolean }) {
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const { data, isLoading, isFetching, isError, refetch } = useGetWalletActivityQuery({
+    page,
+    pageSize,
+    category: 'other-credits',
+  });
+
+  return (
+    <div>
+      <ViewHeading
+        title="Other credits"
+        subtitle="Admin funding, adjustments, and deposits credited to your wallet -- not earned through tasks."
+        refreshing={refreshing || isFetching}
+      />
+      <LedgerActivityPanel
+        data={data}
+        isLoading={isLoading}
+        isError={isError}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onRetry={refetch}
+        emptyTitle="No other credits yet"
+      />
+    </div>
+  );
+}
+
+function LedgerActivityPanel({
+  data,
+  isLoading,
+  isError,
+  page,
+  pageSize,
+  onPageChange,
+  onRetry,
+  emptyTitle,
+}: {
+  data: WalletActivityPage | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  page: number;
+  pageSize: number;
+  onPageChange: (updater: (currentPage: number) => number) => void;
+  onRetry: () => void;
+  emptyTitle: string;
+}) {
+  return (
+    <section className={`${cardClass} mt-6 overflow-hidden`}>
+      {isLoading ? (
+        <div className="grid min-h-52 place-items-center" role="status">
+          <RefreshCw className="size-5 animate-spin text-accent" aria-hidden="true" />
+          <span className="sr-only">Loading token activity</span>
+        </div>
+      ) : isError ? (
+        <div className="grid min-h-52 place-items-center gap-3 p-5 text-center">
+          <p className="font-extrabold">Could not load your token activity.</p>
+          <button
+            className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted"
+            onClick={() => void onRetry()}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
+      ) : data && data.items.length ? (
+        <>
+          <div className="divide-y divide-line md:hidden">
+            {data.items.map((entry) => (
+              <ActivityMobileRow entry={entry} key={entry.id} />
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[720px] text-left">
+              <thead className="bg-surface-muted/70 text-xs font-black uppercase text-muted">
+                <tr>
+                  <th className="px-4 py-3">Activity</th>
+                  <th className="px-4 py-3">Reference</th>
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {data.items.map((entry) => (
+                  <ActivityTableRow entry={entry} key={entry.id} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-col gap-3 border-t border-line px-4 py-3 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, data.total)} of{' '}
+              {data.total}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                aria-label="Previous activity page"
+                className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink disabled:cursor-not-allowed disabled:opacity-45"
+                disabled={page <= 1}
+                onClick={() => onPageChange((currentPage) => Math.max(1, currentPage - 1))}
+                type="button"
+              >
+                <ChevronLeft className="size-4" aria-hidden="true" />
+              </button>
+              <span className="min-w-16 text-center font-bold text-ink">
+                {page} / {data.totalPages}
+              </span>
+              <button
+                aria-label="Next activity page"
+                className="grid size-9 place-items-center rounded-lg border border-line bg-surface text-ink disabled:cursor-not-allowed disabled:opacity-45"
+                disabled={page >= data.totalPages}
+                onClick={() =>
+                  onPageChange((currentPage) => Math.min(data.totalPages, currentPage + 1))
+                }
+                type="button"
+              >
+                <ChevronRight className="size-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <EmptyPanel icon={Clock3} title={emptyTitle} actionHref={undefined} actionLabel={undefined} />
+      )}
+    </section>
   );
 }
 

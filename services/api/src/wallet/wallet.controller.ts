@@ -81,7 +81,11 @@ import { GetWithdrawalMinAmountDto } from './dto/get-withdrawal-min-amount.dto';
 import { ListWithdrawalsAdminDto } from './dto/list-withdrawals-admin.dto';
 import { BulkResolveWithdrawalsDto } from './dto/bulk-resolve-withdrawals.dto';
 import { GetTrainerReportDto } from './dto/get-trainer-report.dto';
-import { TrainerReportService } from './trainer-report.service';
+import {
+  EXTERNAL_TOPUP_ENTRY_TYPES,
+  LIFETIME_CREDIT_ENTRY_TYPES,
+  TrainerReportService,
+} from './trainer-report.service';
 import { renderTrainerReportPdf } from './trainer-report-pdf.util';
 import { renderProofAccountPdf } from './proof-account-pdf.util';
 import { CreateReferralInviteDto } from './dto/create-referral-invite.dto';
@@ -998,7 +1002,11 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async listActivity(@Req() req: AuthenticatedRequest, @Query() query: ListEarningsDto) {
     const wallet = await this.getOrCreateWallet(req.user.sub);
-    const where: Prisma.LedgerEntryWhereInput = { walletId: wallet.id };
+    const where: Prisma.LedgerEntryWhereInput = {
+      walletId: wallet.id,
+      ...(query.category === 'earned' ? { type: { in: LIFETIME_CREDIT_ENTRY_TYPES } } : {}),
+      ...(query.category === 'other-credits' ? { type: { in: EXTERNAL_TOPUP_ENTRY_TYPES } } : {}),
+    };
     const skip = (query.page - 1) * query.pageSize;
     const [entries, total] = await Promise.all([
       this.prisma.ledgerEntry.findMany({

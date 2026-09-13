@@ -2974,8 +2974,14 @@ export const dialectivaApi = createApi({
       }),
       providesTags: ['Wallet'],
     }),
-    getWalletActivity: builder.query<WalletActivityPage, { page: number; pageSize: number }>({
-      query: ({ page, pageSize }) => ({ url: '/wallet/activity', params: { page, pageSize } }),
+    getWalletActivity: builder.query<
+      WalletActivityPage,
+      { page: number; pageSize: number; category?: 'earned' | 'other-credits' }
+    >({
+      query: ({ page, pageSize, category }) => ({
+        url: '/wallet/activity',
+        params: { page, pageSize, category },
+      }),
       providesTags: ['Wallet'],
     }),
     getEarningsChart: builder.query<EarningsChart, { range: EarningsChartRange }>({

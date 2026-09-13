@@ -1370,6 +1370,83 @@ describe('WalletController earning history', () => {
   });
 });
 
+describe('WalletController.listActivity', () => {
+  function setup() {
+    const prisma = {
+      wallet: { findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }) },
+      ledgerEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      },
+    };
+    const controller = new WalletController(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { prisma, controller };
+  }
+
+  it('returns every ledger entry type when no category is given', async () => {
+    const { prisma, controller } = setup();
+
+    await controller.listActivity({ user: { sub: 'user-1' } } as never, {
+      page: 1,
+      pageSize: 10,
+    } as never);
+
+    expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { walletId: 'wallet-1' } }),
+    );
+  });
+
+  it('filters to LIFETIME_CREDIT_ENTRY_TYPES for category=earned', async () => {
+    const { prisma, controller } = setup();
+
+    await controller.listActivity({ user: { sub: 'user-1' } } as never, {
+      page: 1,
+      pageSize: 10,
+      category: 'earned',
+    } as never);
+
+    expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          walletId: 'wallet-1',
+          type: {
+            in: expect.arrayContaining(['TRAINING_PAYOUT', 'STARTUP_BONUS', 'VALIDATION_REWARD']),
+          },
+        },
+      }),
+    );
+  });
+
+  it('filters to EXTERNAL_TOPUP_ENTRY_TYPES for category=other-credits', async () => {
+    const { prisma, controller } = setup();
+
+    await controller.listActivity({ user: { sub: 'user-1' } } as never, {
+      page: 1,
+      pageSize: 10,
+      category: 'other-credits',
+    } as never);
+
+    expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          walletId: 'wallet-1',
+          type: { in: expect.arrayContaining(['ADMIN_FUNDING', 'ADMIN_ADJUSTMENT', 'DEPOSIT']) },
+        },
+      }),
+    );
+  });
+});
+
 describe('WalletController.getEarningsChart', () => {
   it('includes COURSE_COMPLETION_REWARD alongside TRAINING_PAYOUT and referral types in the chart filter', async () => {
     const prisma = {

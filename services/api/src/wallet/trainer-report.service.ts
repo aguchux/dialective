@@ -21,7 +21,7 @@ const EARNING_ENTRY_TYPES: LedgerEntryType[] = [
 // restored). Also excludes DEPOSIT/ADMIN_FUNDING/ADMIN_ADJUSTMENT/
 // DISTRIBUTOR_* -- those are balance top-ups from an external actor, not
 // something the trainer earned through the platform.
-const LIFETIME_CREDIT_ENTRY_TYPES: LedgerEntryType[] = [
+export const LIFETIME_CREDIT_ENTRY_TYPES: LedgerEntryType[] = [
   ...EARNING_ENTRY_TYPES,
   LedgerEntryType.STARTUP_BONUS,
   LedgerEntryType.TESTIMONY_APPROVED_REWARD,
@@ -35,7 +35,7 @@ const LIFETIME_CREDIT_ENTRY_TYPES: LedgerEntryType[] = [
 // belongs on trainer-facing screens: this is the other half of "what actually
 // added value to my balance besides what I earned." SUB_DISTRIBUTOR_ADJUSTMENT
 // is signed (can be negative) and is included as-is, same as ADMIN_ADJUSTMENT.
-const EXTERNAL_TOPUP_ENTRY_TYPES: LedgerEntryType[] = [
+export const EXTERNAL_TOPUP_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.DEPOSIT,
   LedgerEntryType.ADMIN_FUNDING,
   LedgerEntryType.ADMIN_ADJUSTMENT,
