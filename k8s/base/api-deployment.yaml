@@ -118,6 +118,11 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: spaces_kyc_evidence_bucket
+            - name: SPACES_COMMUNITY_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_community_bucket
             - name: SPACES_ENDPOINT
               valueFrom:
                 secretKeyRef:
