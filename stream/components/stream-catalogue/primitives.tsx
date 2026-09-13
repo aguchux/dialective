@@ -1,7 +1,13 @@
 'use client';
 
-import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
-import { useRef } from 'react';
+import type {
+  CSSProperties,
+  KeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, CirclePlay, MoreHorizontal, Play } from 'lucide-react';
 
 export function formatHours(value: number): string {
@@ -74,7 +80,7 @@ export function Waveform({
 
 export function ScoreBadge({ score }: { score: number }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-catalogue-blue px-2 py-1 text-[11px] font-bold text-white">
+    <span className="inline-flex items-center gap-1 rounded-md bg-catalogue-blue/80 px-2 py-1 text-[11px] font-bold text-white shadow-sm backdrop-blur-sm">
       {score.toFixed(1)}
     </span>
   );
@@ -166,6 +172,11 @@ export function CarouselRow({
   label: string;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef<{ pointerId: number; startX: number; startScrollLeft: number; moved: boolean } | null>(
+    null,
+  );
+  const suppressNextClick = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   function scrollByAmount(direction: 1 | -1) {
     const node = scrollerRef.current;
@@ -173,11 +184,86 @@ export function CarouselRow({
     node.scrollBy({ left: direction * node.clientWidth * 0.85, behavior: 'smooth' });
   }
 
+  useEffect(() => {
+    const node = scrollerRef.current;
+    if (!node) return;
+
+    // React attaches onWheel as a passive listener, which silently drops
+    // preventDefault() -- registering natively with passive:false is the
+    // only way to actually claim vertical wheel input for horizontal
+    // scroll instead of the page scrolling underneath the row.
+    function handleWheel(event: globalThis.WheelEvent) {
+      if (!node || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+      event.preventDefault();
+      node.scrollLeft += event.deltaY;
+    }
+
+    node.addEventListener('wheel', handleWheel, { passive: false });
+    return () => node.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    const node = scrollerRef.current;
+    if (!node || event.pointerType === 'touch' || event.button !== 0) return;
+    dragState.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: node.scrollLeft,
+      moved: false,
+    };
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const node = scrollerRef.current;
+    const drag = dragState.current;
+    if (!node || !drag || drag.pointerId !== event.pointerId) return;
+    const delta = event.clientX - drag.startX;
+    if (!drag.moved && Math.abs(delta) > 3) {
+      drag.moved = true;
+      node.setPointerCapture(event.pointerId);
+      setIsDragging(true);
+    }
+    if (!drag.moved) return;
+    node.scrollLeft = drag.startScrollLeft - delta;
+  }
+
+  function endDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const node = scrollerRef.current;
+    const drag = dragState.current;
+    if (!node || !drag || drag.pointerId !== event.pointerId) return;
+    if (node.hasPointerCapture(event.pointerId)) node.releasePointerCapture(event.pointerId);
+    dragState.current = null;
+    if (isDragging) setIsDragging(false);
+  }
+
+  function handleClickCapture(event: ReactMouseEvent<HTMLDivElement>) {
+    // Swallow the trailing click that follows a drag so cards don't get
+    // "selected" just because the pointer released over them.
+    if (suppressNextClick.current) {
+      suppressNextClick.current = false;
+      event.stopPropagation();
+      event.preventDefault();
+    }
+  }
+
   return (
     <div className="relative min-w-0">
       <div
         aria-label={label}
-        className="stream-catalogue-scrollbar flex min-w-0 gap-2 overflow-x-auto scroll-smooth pb-1"
+        className={`stream-catalogue-scrollbar flex min-w-0 gap-2 overflow-x-auto pb-1 transition-[filter] duration-200 ${
+          isDragging
+            ? 'cursor-grabbing scroll-auto select-none brightness-110 saturate-125'
+            : 'cursor-grab scroll-smooth'
+        }`}
+        onClickCapture={handleClickCapture}
+        onPointerCancel={endDrag}
+        onPointerDown={handlePointerDown}
+        onPointerLeave={endDrag}
+        onPointerMove={handlePointerMove}
+        onPointerUp={(event) => {
+          suppressNextClick.current = dragState.current?.moved ?? false;
+          endDrag(event);
+        }}
         ref={scrollerRef}
         role="group"
       >
