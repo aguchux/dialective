@@ -122,6 +122,8 @@ function setup(
         expiryMinutes: 30,
       }),
     isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false),
+    getOtpChannel: jest.fn().mockResolvedValue('sms'),
+    isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),
   };
   const p2p = { adminCancelAllForUser: jest.fn() };
   const storage = { deleteObject: jest.fn() };

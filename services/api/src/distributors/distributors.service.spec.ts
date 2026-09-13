@@ -66,7 +66,11 @@ function setup(settingsOverrides: Record<string, unknown> = {}) {
     issueForUser: jest.fn().mockResolvedValue({ otpRequestId: 'otp-1', expiresInSeconds: 600 }),
     verify: jest.fn(),
   };
-  const service = new DistributorsService(prisma as never, otp as never);
+  const platformSettings = {
+    getOtpChannel: jest.fn().mockResolvedValue('sms'),
+    isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),
+  };
+  const service = new DistributorsService(prisma as never, otp as never, platformSettings as never);
   return {
     service,
     prisma: prisma as never as {

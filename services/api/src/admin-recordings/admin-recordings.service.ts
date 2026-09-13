@@ -148,7 +148,7 @@ export class AdminRecordingsService {
       throw new UnprocessableEntityException('This recording has no payout to claw back');
     }
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
-    const { destination, channel } = resolveOtpDestination(admin);
+    const { destination, channel } = await resolveOtpDestination(admin, this.settings);
     const contextHash = adminActionContextHash({
       action: 'recording-audit-clawback',
       kind: 'word',

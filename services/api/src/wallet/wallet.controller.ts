@@ -1034,7 +1034,7 @@ export class WalletController {
   async requestDepositOtp(@Req() req: AuthenticatedRequest, @Body() body: RequestDepositOtpDto) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
     const contextHash = depositContextHash({ usdAmount: body.usdAmount, currency: body.currency });
-    const { destination, channel } = resolveOtpDestination(user);
+    const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
     return this.otp.issueForUser(req.user.sub, OtpPurpose.DEPOSIT, destination, contextHash, channel);
   }
 
@@ -1102,7 +1102,7 @@ export class WalletController {
     // currency are what economically matter, so this reuses
     // depositContextHash as-is rather than a Flutterwave-specific variant.
     const contextHash = depositContextHash({ usdAmount: body.usdAmount, currency: body.currency });
-    const { destination, channel } = resolveOtpDestination(user);
+    const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
     return this.otp.issueForUser(req.user.sub, OtpPurpose.DEPOSIT, destination, contextHash, channel);
   }
 
@@ -2297,7 +2297,7 @@ export class WalletController {
     @Body() body: RequestWithdrawalOtpDto,
   ) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
-    const { destination, channel } = resolveOtpDestination(user);
+    const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
 
     if (body.payoutMethod && body.payoutMethod !== 'CRYPTO') {
       await this.validateFiatWithdrawalRequest(
@@ -2675,7 +2675,7 @@ export class WalletController {
   async requestResolveWithdrawalOtp(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     const withdrawal = await this.prisma.withdrawalRequest.findUniqueOrThrow({ where: { id } });
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
-    const { destination, channel } = resolveOtpDestination(admin);
+    const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
     const contextHash = adminActionContextHash({
       action: 'withdrawal',
       id,
@@ -4634,7 +4634,7 @@ export class WalletController {
     @Body() body: CreateTrainingPayoutDto,
   ) {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
-    const { destination, channel } = resolveOtpDestination(admin);
+    const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
     const contextHash = adminActionContextHash({
       action: 'training-payout',
       userId: body.userId,
@@ -4718,7 +4718,7 @@ export class WalletController {
       throw new UnprocessableEntityException('Debit amount must be negative');
     }
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
-    const { destination, channel } = resolveOtpDestination(admin);
+    const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
     const contextHash = adminActionContextHash({
       action: 'admin-wallet-adjustment',
       userId: body.userId,

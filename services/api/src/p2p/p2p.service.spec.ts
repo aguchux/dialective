@@ -96,7 +96,11 @@ describe('P2PService.requestTradeOtp', () => {
   beforeEach(() => {
     prisma = { user: { findUniqueOrThrow: jest.fn() } };
     otp = { issueForUser: jest.fn().mockResolvedValue({ otpRequestId: 'otp-1', expiresInSeconds: 600 }) };
-    service = new P2PService(prisma, otp, {} as any, {} as any);
+    const platformSettings = {
+      getOtpChannel: jest.fn().mockResolvedValue('sms'),
+      isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),
+    };
+    service = new P2PService(prisma, otp, platformSettings as any, {} as any);
   });
 
   it('emails the OTP when the caller has no verified phone', async () => {

@@ -1,5 +1,6 @@
 import { OtpService } from './otp.service';
 import { SmsDeliveryException } from '../sms/sms-delivery.exception';
+import { WhatsappDeliveryException } from '../sms/whatsapp-delivery.exception';
 
 function setup() {
   const prisma: any = {
@@ -15,8 +16,9 @@ function setup() {
   };
   const mail = { sendOtpEmail: jest.fn().mockResolvedValue(undefined) };
   const sms = { sendOtp: jest.fn() };
-  const service = new OtpService(prisma, mail as never, sms as never);
-  return { service, prisma, mail, sms };
+  const whatsapp = { sendOtp: jest.fn(), isConfigured: jest.fn().mockResolvedValue(true) };
+  const service = new OtpService(prisma, mail as never, sms as never, whatsapp as never);
+  return { service, prisma, mail, sms, whatsapp };
 }
 
 describe('OtpService.issueForUser dual-channel delivery', () => {
@@ -81,6 +83,46 @@ describe('OtpService.issueForUser dual-channel delivery', () => {
       expect.any(String),
       'WITHDRAWAL',
     );
+  });
+
+  it('sends both WhatsApp and email in parallel when channel is WHATSAPP', async () => {
+    const { service, prisma, mail, whatsapp } = setup();
+    whatsapp.sendOtp.mockResolvedValue(undefined);
+    prisma.user.findUnique.mockResolvedValue({ email: 'trainer@example.com' });
+
+    await service.issueForUser('user-1', 'WITHDRAWAL', '+15551234567', null, 'WHATSAPP');
+
+    expect(whatsapp.sendOtp).toHaveBeenCalledWith('+15551234567', expect.any(String));
+    expect(mail.sendOtpEmail).toHaveBeenCalledWith(
+      'trainer@example.com',
+      expect.any(String),
+      'WITHDRAWAL',
+    );
+  });
+
+  it('still succeeds via email when WhatsApp delivery fails', async () => {
+    const { service, prisma, mail, whatsapp } = setup();
+    whatsapp.sendOtp.mockRejectedValue(new WhatsappDeliveryException());
+    prisma.user.findUnique.mockResolvedValue({ email: 'trainer@example.com' });
+
+    await service.issueForUser('user-1', 'WITHDRAWAL', '+15551234567', null, 'WHATSAPP');
+
+    expect(mail.sendOtpEmail).toHaveBeenCalledWith(
+      'trainer@example.com',
+      expect.any(String),
+      'WITHDRAWAL',
+    );
+  });
+
+  it('throws when both WhatsApp and email delivery fail', async () => {
+    const { service, prisma, mail, whatsapp } = setup();
+    whatsapp.sendOtp.mockRejectedValue(new WhatsappDeliveryException());
+    mail.sendOtpEmail.mockRejectedValue(new Error('smtp down'));
+    prisma.user.findUnique.mockResolvedValue({ email: 'trainer@example.com' });
+
+    await expect(
+      service.issueForUser('user-1', 'WITHDRAWAL', '+15551234567', null, 'WHATSAPP'),
+    ).rejects.toBeInstanceOf(WhatsappDeliveryException);
   });
 });
 

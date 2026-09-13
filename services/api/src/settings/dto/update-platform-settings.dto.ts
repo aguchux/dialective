@@ -596,6 +596,33 @@ export class UpdatePlatformSettingsDto {
   referralSmsPayoutBonusEnabled?: boolean;
 
   @IsOptional()
+  @IsString()
+  @Matches(/^(sms|whatsapp)$/)
+  otpChannel?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  whatsappOtpEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  whatsappSenderId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  whatsappTemplateId?: string;
+
+  // Plaintext MailerSend API key -- PlatformSettingsService.update encrypts
+  // it before persisting and never stores/echoes the plaintext. Pass '' to
+  // clear a previously-saved key; omit to leave it untouched.
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  whatsappApiKey?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   validationRewardPerRecording?: number;

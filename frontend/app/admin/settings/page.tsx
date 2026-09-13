@@ -14,6 +14,7 @@ import { SpeechExpressionSettingsPanel } from './SpeechExpressionSettingsPanel';
 import { SpellingNormalizationSettingsPanel } from './SpellingNormalizationSettingsPanel';
 import { P2PMarketSettingsPanel } from './P2PMarketSettingsPanel';
 import { SmsSettingsPanel } from './SmsSettingsPanel';
+import { WhatsappMessagingSettingsPanel } from './WhatsappMessagingSettingsPanel';
 import { WithdrawalSettingsPanel } from './WithdrawalSettingsPanel';
 import { FlutterwaveSettingsPanel } from './FlutterwaveSettingsPanel';
 import { KycSettingsPanel } from './KycSettingsPanel';
@@ -51,6 +52,7 @@ const groups = [
   { key: 'spellingNormalization', label: 'Spelling Normalization' },
   { key: 'p2pMarket', label: 'P2P Market' },
   { key: 'sms', label: 'SMS Providers' },
+  { key: 'whatsappMessaging', label: 'WhatsApp Messaging' },
   { key: 'withdrawals', label: 'Crypto Withdrawals' },
   { key: 'flutterwave', label: 'Flutterwave (Fiat)' },
   { key: 'kyc', label: 'Identity Verification' },
@@ -82,6 +84,7 @@ const panelComponents: Record<GroupKey, () => JSX.Element> = {
   spellingNormalization: SpellingNormalizationSettingsPanel,
   p2pMarket: P2PMarketSettingsPanel,
   sms: SmsSettingsPanel,
+  whatsappMessaging: WhatsappMessagingSettingsPanel,
   withdrawals: WithdrawalSettingsPanel,
   flutterwave: FlutterwaveSettingsPanel,
   kyc: KycSettingsPanel,

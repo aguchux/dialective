@@ -1,4 +1,9 @@
 import { PlatformSettingsService } from './platform-settings.service';
+import { encryptWhatsappField } from '../common/whatsapp-crypto.util';
+
+beforeAll(() => {
+  process.env.WHATSAPP_SETTINGS_ENCRYPTION_KEY ??= 'test-only-passphrase-not-used-in-prod';
+});
 
 function setup(row: Record<string, unknown>) {
   const prisma = {
@@ -65,6 +70,126 @@ describe('PlatformSettingsService.getTawkToWidget', () => {
       propertyId: 'prop-1',
       widgetId: 'widget-1',
     });
+  });
+});
+
+describe('PlatformSettingsService.getWhatsappConfig', () => {
+  it('returns null when whatsappOtpEnabled is false, even if every other field is set', async () => {
+    const encrypted = encryptWhatsappField('test-api-key');
+    const { service } = setup({
+      whatsappOtpEnabled: false,
+      whatsappSenderId: '15550001234',
+      whatsappTemplateId: 'otp_code',
+      whatsappApiKeyEncrypted: encrypted.encryptedValue,
+      whatsappApiKeyIv: encrypted.iv,
+      whatsappApiKeyAuthTag: encrypted.authTag,
+    });
+
+    await expect(service.getWhatsappConfig()).resolves.toBeNull();
+  });
+
+  it('returns null when enabled but the sender id is missing', async () => {
+    const encrypted = encryptWhatsappField('test-api-key');
+    const { service } = setup({
+      whatsappOtpEnabled: true,
+      whatsappSenderId: null,
+      whatsappTemplateId: 'otp_code',
+      whatsappApiKeyEncrypted: encrypted.encryptedValue,
+      whatsappApiKeyIv: encrypted.iv,
+      whatsappApiKeyAuthTag: encrypted.authTag,
+    });
+
+    await expect(service.getWhatsappConfig()).resolves.toBeNull();
+  });
+
+  it('returns null when enabled but no API key has ever been saved', async () => {
+    const { service } = setup({
+      whatsappOtpEnabled: true,
+      whatsappSenderId: '15550001234',
+      whatsappTemplateId: 'otp_code',
+      whatsappApiKeyEncrypted: null,
+      whatsappApiKeyIv: null,
+      whatsappApiKeyAuthTag: null,
+    });
+
+    await expect(service.getWhatsappConfig()).resolves.toBeNull();
+  });
+
+  it('decrypts and returns the full config when enabled and fully configured', async () => {
+    const encrypted = encryptWhatsappField('test-api-key');
+    const { service } = setup({
+      whatsappOtpEnabled: true,
+      whatsappSenderId: '15550001234',
+      whatsappTemplateId: 'otp_code',
+      whatsappApiKeyEncrypted: encrypted.encryptedValue,
+      whatsappApiKeyIv: encrypted.iv,
+      whatsappApiKeyAuthTag: encrypted.authTag,
+    });
+
+    await expect(service.getWhatsappConfig()).resolves.toEqual({
+      apiKey: 'test-api-key',
+      senderId: '15550001234',
+      templateId: 'otp_code',
+    });
+  });
+});
+
+describe('PlatformSettingsService.update WhatsApp API key handling', () => {
+  // update()'s return path needs a fully-shaped row (every Decimal-like
+  // field calling .toString()); these tests only care about what gets
+  // written, so upsert rejects to short-circuit before that return
+  // construction runs, and each assertion happens on the call args captured
+  // before the (expected, ignored) rejection.
+  function setupWriteOnly() {
+    const prisma = {
+      platformSettings: {
+        upsert: jest.fn().mockRejectedValue(new Error('stop before return construction')),
+      },
+    };
+    const service = new PlatformSettingsService(prisma as never);
+    return { service, prisma };
+  }
+
+  it('encrypts a plaintext whatsappApiKey before persisting and never writes the plaintext field', async () => {
+    const { service, prisma } = setupWriteOnly();
+
+    await service.update({ whatsappApiKey: 'my-new-key' }).catch(() => {});
+
+    const writeCall = prisma.platformSettings.upsert.mock.calls[0][0];
+    expect(writeCall.update.whatsappApiKey).toBeUndefined();
+    expect(writeCall.update.whatsappApiKeyEncrypted).toEqual(expect.any(String));
+    expect(writeCall.update.whatsappApiKeyIv).toEqual(expect.any(String));
+    expect(writeCall.update.whatsappApiKeyAuthTag).toEqual(expect.any(String));
+  });
+
+  it('clears the stored key when whatsappApiKey is the empty string', async () => {
+    const { service, prisma } = setupWriteOnly();
+
+    await service.update({ whatsappApiKey: '' }).catch(() => {});
+
+    const writeCall = prisma.platformSettings.upsert.mock.calls[0][0];
+    expect(writeCall.update.whatsappApiKeyEncrypted).toBeNull();
+    expect(writeCall.update.whatsappApiKeyIv).toBeNull();
+    expect(writeCall.update.whatsappApiKeyAuthTag).toBeNull();
+  });
+
+  it('leaves the stored key untouched when whatsappApiKey is omitted', async () => {
+    const { service, prisma } = setupWriteOnly();
+
+    await service.update({ whatsappSenderId: '15550001234' }).catch(() => {});
+
+    const writeCall = prisma.platformSettings.upsert.mock.calls[0][0];
+    expect(writeCall.update.whatsappApiKeyEncrypted).toBeUndefined();
+    expect(writeCall.update.whatsappApiKeyIv).toBeUndefined();
+    expect(writeCall.update.whatsappApiKeyAuthTag).toBeUndefined();
+  });
+
+  it('rejects an otpChannel value other than "sms" or "whatsapp"', async () => {
+    const { service } = setup({});
+
+    await expect(service.update({ otpChannel: 'carrier-pigeon' })).rejects.toThrow(
+      'otpChannel must be "sms" or "whatsapp"',
+    );
   });
 });
 

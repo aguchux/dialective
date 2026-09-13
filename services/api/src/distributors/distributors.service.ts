@@ -10,6 +10,7 @@ import { LedgerEntryType, OtpPurpose, Prisma, Role, UserStatus } from '@dialecti
 import { PrismaService } from '../prisma/prisma.service';
 import { OtpService } from '../otp/otp.service';
 import { resolveOtpDestination } from '../otp/otp.util';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { adminActionContextHash } from '../wallet/otp-context.util';
 import {
   AdjustSubDistributorWalletDto,
@@ -24,6 +25,7 @@ export class DistributorsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly otp: OtpService,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   async getSettings() {
@@ -314,7 +316,7 @@ export class DistributorsService {
       amount: dto.amount,
       reference: dto.reference,
     });
-    const { destination, channel } = resolveOtpDestination(caller);
+    const { destination, channel } = await resolveOtpDestination(caller, this.platformSettings);
     return this.otp.issueForUser(
       callerId,
       OtpPurpose.SUB_DISTRIBUTOR_ADJUSTMENT,

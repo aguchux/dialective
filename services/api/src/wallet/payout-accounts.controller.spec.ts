@@ -59,6 +59,8 @@ function setup(
     getAllowedWithdrawalNetworks: jest
       .fn()
       .mockResolvedValue(overrides.allowedNetworks ?? ['TRC20']),
+    getOtpChannel: jest.fn().mockResolvedValue('sms'),
+    isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),
   };
   const controller = new PayoutAccountsController(
     prisma as never,

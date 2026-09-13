@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { decryptWhatsappField, encryptWhatsappField } from '../common/whatsapp-crypto.util';
 
 const LLM_PROVIDER_KEYS = ['openai', 'deepseek', 'anthropic'];
 const SMS_PROVIDER_KEYS = ['termii', 'twilio', 'africastalking'];
@@ -365,6 +366,43 @@ export class PlatformSettingsService {
   async getSmsTransactionalProviderOrder(): Promise<string> {
     const row = await this.getRow();
     return row.smsTransactionalProviderOrder;
+  }
+
+  /** "sms" or "whatsapp" -- the platform-wide preferred channel for a verified-phone user's OTP, see resolveOtpDestination. */
+  async getOtpChannel(): Promise<string> {
+    const row = await this.getRow();
+    return row.otpChannel;
+  }
+
+  async isWhatsappOtpEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.whatsappOtpEnabled;
+  }
+
+  /**
+   * Decrypts and returns the MailerSend WhatsApp config in one call, or null
+   * if WhatsApp OTP is disabled or any required field is missing --
+   * WhatsappService treats null as "fall back to SMS" rather than throwing,
+   * so an incompletely-configured admin panel never breaks OTP delivery.
+   */
+  async getWhatsappConfig(): Promise<{ apiKey: string; senderId: string; templateId: string } | null> {
+    const row = await this.getRow();
+    if (
+      !row.whatsappOtpEnabled ||
+      !row.whatsappSenderId ||
+      !row.whatsappTemplateId ||
+      !row.whatsappApiKeyEncrypted ||
+      !row.whatsappApiKeyIv ||
+      !row.whatsappApiKeyAuthTag
+    ) {
+      return null;
+    }
+    const apiKey = decryptWhatsappField({
+      encryptedValue: row.whatsappApiKeyEncrypted,
+      iv: row.whatsappApiKeyIv,
+      authTag: row.whatsappApiKeyAuthTag,
+    });
+    return { apiKey, senderId: row.whatsappSenderId, templateId: row.whatsappTemplateId };
   }
 
   async isP2pSmsTradeCreatedEnabled(): Promise<boolean> {
@@ -1030,6 +1068,15 @@ export class PlatformSettingsService {
       walletSmsDepositConfirmedEnabled: row.walletSmsDepositConfirmedEnabled,
       referralSmsFundingBonusEnabled: row.referralSmsFundingBonusEnabled,
       referralSmsPayoutBonusEnabled: row.referralSmsPayoutBonusEnabled,
+      otpChannel: row.otpChannel,
+      whatsappOtpEnabled: row.whatsappOtpEnabled,
+      whatsappSenderId: row.whatsappSenderId,
+      whatsappTemplateId: row.whatsappTemplateId,
+      // The API key itself is never returned, even masked -- there's no
+      // legitimate reason for the admin UI to need anything more than
+      // "is a key currently saved," which this boolean answers without
+      // giving the client anything to leak.
+      whatsappApiKeySet: !!row.whatsappApiKeyEncrypted,
       validationRewardPerRecording: row.validationRewardPerRecording.toString(),
       validatorDeckMaxItems: row.validatorDeckMaxItems,
       validatorL1ApprovalBonusPercent: row.validatorL1ApprovalBonusPercent.toString(),
@@ -1195,6 +1242,12 @@ export class PlatformSettingsService {
     walletSmsDepositConfirmedEnabled?: boolean;
     referralSmsFundingBonusEnabled?: boolean;
     referralSmsPayoutBonusEnabled?: boolean;
+    otpChannel?: string;
+    whatsappOtpEnabled?: boolean;
+    whatsappSenderId?: string | null;
+    whatsappTemplateId?: string | null;
+    /** Plaintext -- encrypted in place before persisting, never stored or echoed back as-is. Omit to leave the existing stored key untouched; pass '' to clear it. */
+    whatsappApiKey?: string;
     validationRewardPerRecording?: number;
     validatorDeckMaxItems?: number;
     validatorL1ApprovalBonusPercent?: number;
@@ -1497,6 +1550,42 @@ export class PlatformSettingsService {
       data.smsSenderId = trimmed === '' ? null : trimmed;
     }
 
+    if (data.otpChannel !== undefined && data.otpChannel !== 'sms' && data.otpChannel !== 'whatsapp') {
+      throw new BadRequestException('otpChannel must be "sms" or "whatsapp"');
+    }
+
+    if (data.whatsappSenderId !== undefined) {
+      const trimmed = data.whatsappSenderId?.trim() ?? null;
+      data.whatsappSenderId = trimmed === '' ? null : trimmed;
+    }
+    if (data.whatsappTemplateId !== undefined) {
+      const trimmed = data.whatsappTemplateId?.trim() ?? null;
+      data.whatsappTemplateId = trimmed === '' ? null : trimmed;
+    }
+    // whatsappApiKey is plaintext input, never a real column -- encrypt it
+    // here (or clear the stored ciphertext on ''), then delete the
+    // plaintext field so the upsert below never tries to write an unknown
+    // Prisma field. Omitted entirely (undefined) leaves the existing
+    // stored key untouched -- see whatsapp-crypto.util.ts.
+    const whatsappApiKeyUpdate = data as typeof data & {
+      whatsappApiKeyEncrypted?: string | null;
+      whatsappApiKeyIv?: string | null;
+      whatsappApiKeyAuthTag?: string | null;
+    };
+    if (data.whatsappApiKey !== undefined) {
+      if (data.whatsappApiKey === '') {
+        whatsappApiKeyUpdate.whatsappApiKeyEncrypted = null;
+        whatsappApiKeyUpdate.whatsappApiKeyIv = null;
+        whatsappApiKeyUpdate.whatsappApiKeyAuthTag = null;
+      } else {
+        const encrypted = encryptWhatsappField(data.whatsappApiKey);
+        whatsappApiKeyUpdate.whatsappApiKeyEncrypted = encrypted.encryptedValue;
+        whatsappApiKeyUpdate.whatsappApiKeyIv = encrypted.iv;
+        whatsappApiKeyUpdate.whatsappApiKeyAuthTag = encrypted.authTag;
+      }
+      delete whatsappApiKeyUpdate.whatsappApiKey;
+    }
+
     const anyWeightProvided =
       data.qualityWeightConsensus !== undefined ||
       data.qualityWeightNoise !== undefined ||
@@ -1743,6 +1832,15 @@ export class PlatformSettingsService {
       walletSmsDepositConfirmedEnabled: row.walletSmsDepositConfirmedEnabled,
       referralSmsFundingBonusEnabled: row.referralSmsFundingBonusEnabled,
       referralSmsPayoutBonusEnabled: row.referralSmsPayoutBonusEnabled,
+      otpChannel: row.otpChannel,
+      whatsappOtpEnabled: row.whatsappOtpEnabled,
+      whatsappSenderId: row.whatsappSenderId,
+      whatsappTemplateId: row.whatsappTemplateId,
+      // The API key itself is never returned, even masked -- there's no
+      // legitimate reason for the admin UI to need anything more than
+      // "is a key currently saved," which this boolean answers without
+      // giving the client anything to leak.
+      whatsappApiKeySet: !!row.whatsappApiKeyEncrypted,
       validationRewardPerRecording: row.validationRewardPerRecording.toString(),
       validatorDeckMaxItems: row.validatorDeckMaxItems,
       validatorL1ApprovalBonusPercent: row.validatorL1ApprovalBonusPercent.toString(),

@@ -1677,6 +1677,12 @@ export interface PlatformSettings {
   walletSmsDepositConfirmedEnabled: boolean;
   referralSmsFundingBonusEnabled: boolean;
   referralSmsPayoutBonusEnabled: boolean;
+  otpChannel: string;
+  whatsappOtpEnabled: boolean;
+  whatsappSenderId: string | null;
+  whatsappTemplateId: string | null;
+  /** Whether an API key is currently saved -- the key itself is never returned to the client, see PlatformSettingsService.getForAdmin. */
+  whatsappApiKeySet: boolean;
   cryptoWithdrawalsEnabled: boolean;
   nowPaymentsPayoutsEnabled: boolean;
   allowedWithdrawalCurrencies: string;
@@ -1829,6 +1835,12 @@ export interface PlatformSettingsInput {
   walletSmsDepositConfirmedEnabled?: boolean;
   referralSmsFundingBonusEnabled?: boolean;
   referralSmsPayoutBonusEnabled?: boolean;
+  otpChannel?: string;
+  whatsappOtpEnabled?: boolean;
+  whatsappSenderId?: string;
+  whatsappTemplateId?: string;
+  /** Plaintext -- encrypted server-side before persisting, never echoed back. Omit to leave unchanged; pass '' to clear. */
+  whatsappApiKey?: string;
   cryptoWithdrawalsEnabled?: boolean;
   nowPaymentsPayoutsEnabled?: boolean;
   allowedWithdrawalCurrencies?: string;

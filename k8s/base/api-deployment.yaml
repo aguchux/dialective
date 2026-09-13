@@ -305,6 +305,11 @@ spec:
                 secretKeyRef:
                   name: kyc-crypto-creds
                   key: kyc_document_encryption_key
+            - name: WHATSAPP_SETTINGS_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: whatsapp-crypto-creds
+                  key: whatsapp_settings_encryption_key
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:

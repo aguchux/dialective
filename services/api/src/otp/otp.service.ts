@@ -4,10 +4,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { SmsService } from '../sms/sms.service';
 import { SmsDeliveryException } from '../sms/sms-delivery.exception';
+import { WhatsappService } from '../sms/whatsapp.service';
+import { WhatsappDeliveryException } from '../sms/whatsapp-delivery.exception';
 import { generateOpaqueToken, hashToken } from '../auth/token.util';
 import { generateOtpCode, hashOtpCode } from './otp.util';
 
-export type OtpChannel = 'EMAIL' | 'SMS';
+export type OtpChannel = 'EMAIL' | 'SMS' | 'WHATSAPP';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_TTL_SECONDS = OTP_TTL_MS / 1000;
@@ -42,21 +44,24 @@ export class OtpService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly sms: SmsService,
+    private readonly whatsapp: WhatsappService,
   ) {}
 
   /**
-   * Sends the code on BOTH channels whenever SMS is in play, rather than
-   * picking one -- a trainer with thin SMS coverage for their country (see
-   * SmsFallbackChain / smsProviderOrder) must never be left with zero
-   * delivered codes just because SMS was preferred. destination/channel
-   * (from resolveOtpDestination) still decides the PRIMARY channel and is
-   * used as the sole channel when there's no phone to dual-send to (e.g.
-   * unverified phone -- channel is EMAIL and destination is the email); once
-   * SMS is the channel, email always goes out too, in parallel, using the
-   * user's own email address looked up here (rather than threading an extra
-   * parameter through every call site, since every caller already has the
-   * row). A failed SMS provider chain no longer needs to be caught specially
-   * -- it simply means only the email side landed, which already happened
+   * Sends the code on BOTH channels whenever SMS or WHATSAPP is in play,
+   * rather than picking one -- a trainer with thin SMS coverage for their
+   * country (see SmsFallbackChain / smsProviderOrder), or a mis/under-
+   * configured MailerSend WhatsApp setup (see PlatformSettingsService.
+   * getWhatsappConfig), must never be left with zero delivered codes just
+   * because that channel was preferred. destination/channel (from
+   * resolveOtpDestination) still decides the PRIMARY channel and is used as
+   * the sole channel when there's no phone to dual-send to (e.g. unverified
+   * phone -- channel is EMAIL and destination is the email); once SMS or
+   * WHATSAPP is the channel, email always goes out too, in parallel, using
+   * the user's own email address looked up here (rather than threading an
+   * extra parameter through every call site, since every caller already has
+   * the row). A failed provider no longer needs to be caught specially -- it
+   * simply means only the email side landed, which already happened
    * unconditionally.
    */
   private async deliver(
@@ -66,7 +71,7 @@ export class OtpService {
     purpose: OtpPurpose,
     userId: string,
   ): Promise<void> {
-    if (channel !== 'SMS') {
+    if (channel === 'EMAIL') {
       await this.mail.sendOtpEmail(destination, code, purpose);
       return;
     }
@@ -74,22 +79,26 @@ export class OtpService {
       where: { id: userId },
       select: { email: true },
     });
+    const primarySend =
+      channel === 'WHATSAPP' ? this.whatsapp.sendOtp(destination, code) : this.sms.sendOtp(destination, code);
+    const expectedException = channel === 'WHATSAPP' ? WhatsappDeliveryException : SmsDeliveryException;
+    const channelLabel = channel === 'WHATSAPP' ? 'WhatsApp' : 'SMS';
     const results = await Promise.allSettled([
-      this.sms.sendOtp(destination, code),
+      primarySend,
       ...(user ? [this.mail.sendOtpEmail(user.email, code, purpose)] : []),
     ]);
-    const [smsResult, mailResult] = results;
-    if (smsResult.status === 'rejected' && !(smsResult.reason instanceof SmsDeliveryException)) {
-      throw smsResult.reason;
+    const [primaryResult, mailResult] = results;
+    if (primaryResult.status === 'rejected' && !(primaryResult.reason instanceof expectedException)) {
+      throw primaryResult.reason;
     }
-    if (smsResult.status === 'rejected') {
-      this.logger.warn(`SMS delivery failed for user=${userId} purpose=${purpose}`);
+    if (primaryResult.status === 'rejected') {
+      this.logger.warn(`${channelLabel} delivery failed for user=${userId} purpose=${purpose}`);
     }
     if (mailResult?.status === 'rejected') {
       this.logger.warn(`Email delivery failed for user=${userId} purpose=${purpose}`);
     }
-    if (smsResult.status === 'rejected' && (!mailResult || mailResult.status === 'rejected')) {
-      throw smsResult.reason;
+    if (primaryResult.status === 'rejected' && (!mailResult || mailResult.status === 'rejected')) {
+      throw primaryResult.reason;
     }
   }
 

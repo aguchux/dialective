@@ -181,7 +181,7 @@ export class P2PService {
             fiatCurrency: dto.fiatCurrency!,
           })
         : p2pTradeOtpContextHash({ action: 'accept-offer', offerId: dto.offerId! });
-    const { destination, channel } = resolveOtpDestination(user);
+    const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
     return this.otp.issueForUser(userId, OtpPurpose.P2P_TRADE, destination, contextHash, channel);
   }
 

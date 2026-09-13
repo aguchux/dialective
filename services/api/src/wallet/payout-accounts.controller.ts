@@ -281,7 +281,7 @@ export class PayoutAccountsController {
       stablecoinAsset: body.stablecoinAsset,
       stablecoinNetwork: body.stablecoinNetwork,
     });
-    const { destination, channel } = resolveOtpDestination(user);
+    const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
     return this.otp.issueForUser(
       req.user.sub,
       OtpPurpose.PAYOUT_ACCOUNT_SETUP,
@@ -365,7 +365,7 @@ export class PayoutAccountsController {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
     await this.requireDeletable(req.user.sub, id);
     const contextHash = payoutAccountDeleteContextHash({ payoutAccountId: id });
-    const { destination, channel } = resolveOtpDestination(user);
+    const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
     return this.otp.issueForUser(
       req.user.sub,
       OtpPurpose.PAYOUT_ACCOUNT_DELETE,

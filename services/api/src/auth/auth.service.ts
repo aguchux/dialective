@@ -30,7 +30,7 @@ import {
 import { isValidPhoneNumber } from 'libphonenumber-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
-import { OtpService, IssuedRequestOtp } from '../otp/otp.service';
+import { OtpService, IssuedRequestOtp, OtpChannel } from '../otp/otp.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { P2PService } from '../p2p/p2p.service';
 import { StorageService } from '../storage/storage.service';
@@ -383,12 +383,18 @@ export class AuthService {
       return this.issueAuthResult(user);
     }
 
-    const useSms = user.twoFactorSmsEnabled && !!user.phoneVerifiedAt && !!user.phoneNumber;
+    const usePhoneChannel = user.twoFactorSmsEnabled && !!user.phoneVerifiedAt && !!user.phoneNumber;
+    const phoneChannel: OtpChannel =
+      usePhoneChannel &&
+      (await this.platformSettings.getOtpChannel()) === 'whatsapp' &&
+      (await this.platformSettings.isWhatsappOtpEnabled())
+        ? 'WHATSAPP'
+        : 'SMS';
     const { ticket, expiresInSeconds } = await this.otp.issueWithTicket(
       user.id,
       OtpPurpose.LOGIN,
-      useSms ? user.phoneNumber! : user.email,
-      useSms ? 'SMS' : 'EMAIL',
+      usePhoneChannel ? user.phoneNumber! : user.email,
+      usePhoneChannel ? phoneChannel : 'EMAIL',
     );
     return { otpRequired: true, ticket, expiresInSeconds };
   }
@@ -778,7 +784,7 @@ export class AuthService {
   async requestAccountCloseOtp(userId: string): Promise<IssuedRequestOtp> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const contextHash = adminActionContextHash({ action: 'account-close', userId });
-    const { destination, channel } = resolveOtpDestination(user);
+    const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
     return this.otp.issueForUser(userId, OtpPurpose.ACCOUNT_CLOSE, destination, contextHash, channel);
   }
 
@@ -1798,7 +1804,7 @@ export class AuthService {
     if (userId === adminId)
       throw new BadRequestException('You cannot suspend or block your own account');
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
-    const { destination, channel } = resolveOtpDestination(admin);
+    const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
     const contextHash = adminActionContextHash({ action: 'user-lock', userId, status });
     return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
   }
@@ -1918,7 +1924,7 @@ export class AuthService {
 
   async requestAuditHoldReleaseOtp(adminId: string, userId: string) {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
-    const { destination, channel } = resolveOtpDestination(admin);
+    const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
     const contextHash = adminActionContextHash({ action: 'audit-hold-release', userId });
     return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
   }
@@ -1991,7 +1997,7 @@ export class AuthService {
 
   async requestRevokePhoneOtp(adminId: string, userId: string) {
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
-    const { destination, channel } = resolveOtpDestination(admin);
+    const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
     const contextHash = adminActionContextHash({ action: 'phone-verification-revoke', userId });
     return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
   }
@@ -2045,7 +2051,7 @@ export class AuthService {
   async requestUserDeleteOtp(adminId: string, userId: string) {
     if (userId === adminId) throw new BadRequestException('You cannot delete your own account');
     const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminId } });
-    const { destination, channel } = resolveOtpDestination(admin);
+    const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
     const contextHash = adminActionContextHash({ action: 'user-delete', userId });
     return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
   }
