@@ -1,7 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 
-type BrandLogoMode = 'inline' | 'stacked';
+type BrandLogoMode = 'inline' | 'stacked' | 'catalogue';
 
 interface BrandLogoProps {
   href?: string;
@@ -33,6 +33,15 @@ export function BrandLogo({
           <span className="text-[1.55rem] font-extrabold tracking-[-0.04em]">Dialect</span>
           <span className="mt-1 text-[0.58rem] font-bold uppercase tracking-[0.24em] text-auth-accent">
             Library Stream
+          </span>
+        </span>
+      ) : mode === 'catalogue' ? (
+        <span className={`flex flex-col leading-none ${textClassName}`}>
+          <span className="text-[0.95rem] font-semibold uppercase tracking-[0.12em]">
+            Dialect Library
+          </span>
+          <span className="mt-1 text-[0.75rem] font-medium uppercase tracking-[0.38em] text-catalogue-blue-bright">
+            Stream
           </span>
         </span>
       ) : (

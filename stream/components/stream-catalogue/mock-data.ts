@@ -1,0 +1,386 @@
+import type {
+  CatalogueCollection,
+  CatalogueMetric,
+  FilterKey,
+  PinnedCollection,
+  StreamDeck,
+  ValidationBreakdown,
+  VerifiedSpeaker,
+} from './types';
+
+const covers = {
+  igbo: {
+    url: 'https://images.pexels.com/photos/33762212/pexels-photo-33762212.jpeg',
+    alt: 'Portrait of a woman in a colorful headwrap, photo by mk_photoz on Pexels.',
+  },
+  yoruba: {
+    url: 'https://images.pexels.com/photos/8102697/pexels-photo-8102697.jpeg',
+    alt: 'Close portrait of a Black speaker in dark studio light, photo by Ron Lach on Pexels.',
+  },
+  hausa: {
+    url: 'https://images.pexels.com/photos/30253046/pexels-photo-30253046.jpeg',
+    alt: 'Traditional West African architecture, photo by Kaybee Photography on Pexels.',
+  },
+  swahili: {
+    url: 'https://images.pexels.com/photos/31837751/pexels-photo-31837751.jpeg',
+    alt: 'Aerial view of an African city, photo by Abduljalil Attahir on Pexels.',
+  },
+  amharic: {
+    url: 'https://images.pexels.com/photos/31474508/pexels-photo-31474508.jpeg',
+    alt: 'Colorful traditional palace facade, photo by Sadiq Hashim on Pexels.',
+  },
+  multilingual: {
+    url: 'https://images.pexels.com/photos/6305505/pexels-photo-6305505.jpeg',
+    alt: 'Studio microphone and audio equipment, photo by Rajesh Murmu on Pexels.',
+  },
+};
+
+const avatars = [
+  {
+    url: 'https://images.pexels.com/photos/8412297/pexels-photo-8412297.jpeg',
+    alt: 'Speaker wearing headphones, photo by ANTONI SHKRABA production on Pexels.',
+  },
+  {
+    url: 'https://images.pexels.com/photos/28774804/pexels-photo-28774804.jpeg',
+    alt: 'Speaker in traditional clothing, photo by Sanusi Jabir on Pexels.',
+  },
+  {
+    url: 'https://images.pexels.com/photos/6954179/pexels-photo-6954179.jpeg',
+    alt: 'Smiling African speaker portrait, photo by George Milton on Pexels.',
+  },
+  {
+    url: 'https://images.pexels.com/photos/6144038/pexels-photo-6144038.jpeg',
+    alt: 'Professional African speaker portrait, photo by cottonbro studio on Pexels.',
+  },
+  {
+    url: 'https://images.pexels.com/photos/36053652/pexels-photo-36053652.jpeg',
+    alt: 'African speaker portrait, photo by Okiki Onipede on Pexels.',
+  },
+];
+
+function waveform(seed: number, count = 28): number[] {
+  return Array.from({ length: count }, (_, index) => {
+    const value = Math.abs(
+      Math.sin(seed * 1.7 + index * 0.82) * 0.58 + Math.cos(index * 0.37) * 0.26,
+    );
+    return Math.max(12, Math.round(18 + value * 58));
+  });
+}
+
+export const collections: CatalogueCollection[] = [
+  {
+    id: 'igbo-voices',
+    title: 'Igbo Voices',
+    subtitle: 'Dialect Collection',
+    language: 'Igbo',
+    country: 'Nigeria',
+    dialect: 'Igbo',
+    subdialect: 'Owerri, Onitsha, Aba',
+    hours: 42,
+    speakers: 812,
+    qualityScore: 9.4,
+    recordingQuality: 'Studio & Field',
+    license: 'Commercial (Royalty-Free)',
+    lastUpdated: 'May 12, 2024',
+    description:
+      'High-quality Igbo speech data collected across southeastern Nigeria. Includes conversations, narratives, and studio recordings.',
+    coverUrl: covers.igbo.url,
+    coverAlt: covers.igbo.alt,
+    status: 'verified',
+    preview: {
+      title: 'Conversation • Owerri • Female • 28s',
+      durationSeconds: 28,
+      waveform: waveform(1),
+    },
+  },
+  {
+    id: 'yoruba-studio-speech',
+    title: 'Yoruba Studio Speech',
+    subtitle: 'Studio Collection',
+    language: 'Yoruba',
+    country: 'Nigeria',
+    dialect: 'Yoruba',
+    subdialect: 'Lagos, Ibadan, Akure',
+    hours: 38,
+    speakers: 690,
+    qualityScore: 9.2,
+    recordingQuality: 'Studio',
+    license: 'Commercial (Royalty-Free)',
+    lastUpdated: 'June 4, 2024',
+    description:
+      'Clean, expressive Yoruba studio speech with regional coverage across southwestern Nigeria and balanced speaker demographics.',
+    coverUrl: covers.yoruba.url,
+    coverAlt: covers.yoruba.alt,
+    status: 'verified',
+    preview: {
+      title: 'Studio prompt • Lagos • Male • 31s',
+      durationSeconds: 31,
+      waveform: waveform(2),
+    },
+  },
+  {
+    id: 'hausa-conversational',
+    title: 'Hausa Conversational',
+    subtitle: 'Conversation Collection',
+    language: 'Hausa',
+    country: 'Nigeria',
+    dialect: 'Hausa',
+    subdialect: 'Kano, Kaduna, Sokoto',
+    hours: 55,
+    speakers: 1100,
+    qualityScore: 9.3,
+    recordingQuality: 'Studio & Field',
+    license: 'Research & Commercial',
+    lastUpdated: 'April 28, 2024',
+    description:
+      'Natural Hausa conversations with carefully balanced recordings from northern Nigeria and multiple age groups.',
+    coverUrl: covers.hausa.url,
+    coverAlt: covers.hausa.alt,
+    status: 'verified',
+    preview: {
+      title: 'Daily dialogue • Kano • Mixed • 24s',
+      durationSeconds: 24,
+      waveform: waveform(3),
+    },
+  },
+  {
+    id: 'swahili-urban',
+    title: 'Swahili Urban',
+    subtitle: 'Urban Collection',
+    language: 'Swahili',
+    country: 'Kenya',
+    dialect: 'Swahili',
+    subdialect: 'Nairobi, Mombasa',
+    hours: 45,
+    speakers: 820,
+    qualityScore: 9.3,
+    recordingQuality: 'Studio & Field',
+    license: 'Commercial (Royalty-Free)',
+    lastUpdated: 'March 18, 2024',
+    description:
+      'Contemporary urban Swahili voices from Nairobi and Mombasa, covering everyday interactions and media-style narration.',
+    coverUrl: covers.swahili.url,
+    coverAlt: covers.swahili.alt,
+    status: 'licensed',
+    preview: {
+      title: 'Street interview • Nairobi • Female • 34s',
+      durationSeconds: 34,
+      waveform: waveform(4),
+    },
+  },
+  {
+    id: 'amharic-verified',
+    title: 'Amharic Verified',
+    subtitle: 'Verified Collection',
+    language: 'Amharic',
+    country: 'Ethiopia',
+    dialect: 'Amharic',
+    subdialect: 'Addis Ababa, Gondar',
+    hours: 36,
+    speakers: 640,
+    qualityScore: 9.1,
+    recordingQuality: 'Studio',
+    license: 'Research & Commercial',
+    lastUpdated: 'February 9, 2024',
+    description:
+      'Verified Amharic speech from Addis Ababa and Gondar with consistent recording quality and rich metadata.',
+    coverUrl: covers.amharic.url,
+    coverAlt: covers.amharic.alt,
+    status: 'verified',
+    preview: {
+      title: 'Narrative read • Addis Ababa • Male • 27s',
+      durationSeconds: 27,
+      waveform: waveform(5),
+    },
+  },
+  {
+    id: 'multilingual-premium',
+    title: 'Multilingual Premium',
+    subtitle: 'Multi-language Collection',
+    language: 'Multiple',
+    country: 'Africa',
+    dialect: 'Multiple',
+    subdialect: 'Curated regional mix',
+    hours: 210,
+    speakers: 3500,
+    qualityScore: 9.6,
+    recordingQuality: 'Studio & Field',
+    license: 'Commercial (Royalty-Free)',
+    lastUpdated: 'July 1, 2024',
+    description:
+      'A premium cross-region collection spanning high-demand African languages, dialects, and recording environments.',
+    coverUrl: covers.multilingual.url,
+    coverAlt: covers.multilingual.alt,
+    status: 'verified',
+    preview: {
+      title: 'Conversation mix • Multiple • 32s',
+      durationSeconds: 32,
+      waveform: waveform(6),
+    },
+  },
+];
+
+export const streamDecks: StreamDeck[] = [
+  {
+    id: 'lagos-market-conversations',
+    title: 'Lagos Market Conversations',
+    dialect: 'Yoruba',
+    country: 'Nigeria',
+    durationSeconds: 8245,
+    coverUrl: covers.yoruba.url,
+    coverAlt: covers.yoruba.alt,
+    waveform: waveform(12, 38),
+  },
+  {
+    id: 'kano-daily-dialogues',
+    title: 'Kano Daily Dialogues',
+    dialect: 'Hausa',
+    country: 'Nigeria',
+    durationSeconds: 6502,
+    coverUrl: covers.hausa.url,
+    coverAlt: covers.hausa.alt,
+    waveform: waveform(18, 38),
+  },
+  {
+    id: 'nairobi-street-interviews',
+    title: 'Nairobi Street Interviews',
+    dialect: 'Swahili',
+    country: 'Kenya',
+    durationSeconds: 7321,
+    coverUrl: covers.swahili.url,
+    coverAlt: covers.swahili.alt,
+    waveform: waveform(24, 38),
+  },
+  {
+    id: 'addis-ababa-narratives',
+    title: 'Addis Ababa Narratives',
+    dialect: 'Amharic',
+    country: 'Ethiopia',
+    durationSeconds: 8127,
+    coverUrl: covers.amharic.url,
+    coverAlt: covers.amharic.alt,
+    waveform: waveform(30, 38),
+  },
+];
+
+export const verifiedSpeakers: VerifiedSpeaker[] = [
+  {
+    id: 'adaeze-n',
+    name: 'Adaeze N.',
+    language: 'Igbo',
+    country: 'Nigeria',
+    hours: 12.4,
+    score: 9.6,
+    avatarUrl: avatars[0].url,
+    avatarAlt: avatars[0].alt,
+  },
+  {
+    id: 'ibrahim-m',
+    name: 'Ibrahim M.',
+    language: 'Hausa',
+    country: 'Nigeria',
+    hours: 15.7,
+    score: 9.5,
+    avatarUrl: avatars[1].url,
+    avatarAlt: avatars[1].alt,
+  },
+  {
+    id: 'amina-k',
+    name: 'Amina K.',
+    language: 'Swahili',
+    country: 'Kenya',
+    hours: 11.2,
+    score: 9.4,
+    avatarUrl: avatars[2].url,
+    avatarAlt: avatars[2].alt,
+  },
+  {
+    id: 'mesfin-t',
+    name: 'Mesfin T.',
+    language: 'Amharic',
+    country: 'Ethiopia',
+    hours: 10.8,
+    score: 9.4,
+    avatarUrl: avatars[3].url,
+    avatarAlt: avatars[3].alt,
+  },
+  {
+    id: 'tosin-a',
+    name: 'Tosin A.',
+    language: 'Yoruba',
+    country: 'Nigeria',
+    hours: 9.6,
+    score: 9.3,
+    avatarUrl: avatars[4].url,
+    avatarAlt: avatars[4].alt,
+  },
+];
+
+export const catalogueMetrics: CatalogueMetric[] = [
+  { label: 'Total hours streamed', value: '12,450', delta: '+18%', trend: waveform(2, 18) },
+  { label: 'Active stream decks', value: '24', delta: '+12%', trend: waveform(7, 18) },
+  { label: 'API calls (this month)', value: '2.8M', delta: '+22%', trend: waveform(13, 18) },
+];
+
+export const pinnedCollections: PinnedCollection[] = [
+  {
+    id: 'african-premium-pack',
+    title: 'African Premium Pack',
+    meta: '126 hrs • 2.4K speakers',
+    coverUrl: covers.igbo.url,
+    coverAlt: covers.igbo.alt,
+  },
+  {
+    id: 'west-african-voices',
+    title: 'West African Voices',
+    meta: '64 hrs • 1.2K speakers',
+    coverUrl: covers.hausa.url,
+    coverAlt: covers.hausa.alt,
+  },
+  {
+    id: 'swahili-urban-pack',
+    title: 'Swahili Urban Pack',
+    meta: '48 hrs • 980 speakers',
+    coverUrl: covers.swahili.url,
+    coverAlt: covers.swahili.alt,
+  },
+  {
+    id: 'amharic-verified-set',
+    title: 'Amharic Verified Set',
+    meta: '36 hrs • 620 speakers',
+    coverUrl: covers.amharic.url,
+    coverAlt: covers.amharic.alt,
+  },
+  {
+    id: 'multilingual-core',
+    title: 'Multilingual Core',
+    meta: '210 hrs • 3.8K speakers',
+    coverUrl: covers.multilingual.url,
+    coverAlt: covers.multilingual.alt,
+  },
+];
+
+export const filterOptions: Record<FilterKey, string[]> = {
+  language: ['Igbo', 'Yoruba', 'Hausa', 'Swahili', 'Amharic'],
+  country: ['Nigeria', 'Kenya', 'Ethiopia', 'Ghana'],
+  dialect: ['Igbo', 'Yoruba', 'Hausa', 'Swahili', 'Amharic'],
+  subdialect: ['Owerri', 'Lagos', 'Kano', 'Nairobi', 'Addis Ababa'],
+  quality: ['9.5+', '9.0+', '8.5+'],
+  license: ['Commercial', 'Research', 'Royalty-Free'],
+};
+
+export const validationBreakdown: ValidationBreakdown[] = [
+  { label: 'Audio Quality', score: 9.6 },
+  { label: 'Transcription Accuracy', score: 9.3 },
+  { label: 'Speaker Diversity', score: 9.4 },
+  { label: 'Metadata Completeness', score: 9.3 },
+];
+
+export const defaultFilters = {
+  language: null,
+  country: null,
+  dialect: null,
+  subdialect: null,
+  quality: null,
+  license: null,
+} as const;
