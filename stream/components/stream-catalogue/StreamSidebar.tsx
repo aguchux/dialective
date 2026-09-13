@@ -1,13 +1,13 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   BarChart3,
   Code2,
   Home,
   Layers3,
   Library,
+  Lock,
   Pin,
   Plus,
   Search,
@@ -20,17 +20,18 @@ import {
 import { BrandLogo } from '@/components/BrandLogo';
 import type { PinnedCollection } from './types';
 import { CoverImage } from './primitives';
+import { useAuthGate } from './useAuthGate';
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Home', icon: Home },
-  { href: '/discover', label: 'Discover', icon: Search },
-  { href: '/voice-library', label: 'Voice Library', icon: Library },
-  { href: '/stream-decks', label: 'Stream Decks', icon: Layers3 },
-  { href: '/validation', label: 'Validation', icon: ShieldCheck },
-  { href: '/api', label: 'API', icon: Code2 },
-  { href: '/usage', label: 'Usage', icon: BarChart3 },
-  { href: '/team', label: 'Team', icon: UsersRound },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/', label: 'Home', icon: Home, protected: false },
+  { href: '/discover', label: 'Discover', icon: Search, protected: false },
+  { href: '/voice-library', label: 'Voice Library', icon: Library, protected: false },
+  { href: '/stream-decks', label: 'Stream Decks', icon: Layers3, protected: false },
+  { href: '/validation', label: 'Validation', icon: ShieldCheck, protected: false },
+  { href: '/api', label: 'API', icon: Code2, protected: true },
+  { href: '/usage', label: 'Usage', icon: BarChart3, protected: true },
+  { href: '/team', label: 'Team', icon: UsersRound, protected: true },
+  { href: '/settings', label: 'Settings', icon: Settings, protected: true },
 ];
 
 export function StreamSidebar({
@@ -43,6 +44,8 @@ export function StreamSidebar({
   pinnedCollections: PinnedCollection[];
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { guard, dialog } = useAuthGate();
 
   return (
     <aside
@@ -71,26 +74,37 @@ export function StreamSidebar({
           const Icon = item.icon;
           const active = item.href === '/' ? pathname === '/' : pathname?.startsWith(item.href);
           return (
-            <Link
+            <button
               aria-current={active ? 'page' : undefined}
-              className={`flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 ${
+              className={`flex min-h-10 items-center gap-3 rounded-lg px-3 text-left text-sm font-medium no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 ${
                 active
                   ? 'bg-catalogue-blue/20 text-catalogue-ink ring-1 ring-inset ring-catalogue-blue/60'
                   : 'text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink'
               }`}
-              href={item.href}
               key={item.label}
-              onClick={onClose}
+              onClick={() => {
+                onClose?.();
+                if (item.protected) {
+                  guard(item.href, () => router.push(item.href));
+                } else {
+                  router.push(item.href);
+                }
+              }}
+              type="button"
             >
               <Icon
                 aria-hidden="true"
                 className={`size-[18px] ${active ? 'text-catalogue-blue-bright' : ''}`}
               />
-              <span>{item.label}</span>
-            </Link>
+              <span className="flex-1">{item.label}</span>
+              {item.protected && (
+                <Lock aria-hidden="true" className="size-3.5 shrink-0 text-catalogue-dim" />
+              )}
+            </button>
           );
         })}
       </nav>
+      {dialog}
 
       <div className="my-5 h-px bg-catalogue-line" />
       <div className="flex items-center justify-between px-2">

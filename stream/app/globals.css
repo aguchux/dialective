@@ -239,6 +239,23 @@ label {
   }
 }
 
+@keyframes auth-gate-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-catalogue-auth-gate {
+    animation: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .stream-catalogue-waveform-bar {
     animation: none;
