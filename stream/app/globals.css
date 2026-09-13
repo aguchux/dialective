@@ -13,6 +13,21 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-success: var(--success);
+  --color-catalogue-bg: var(--catalogue-bg);
+  --color-catalogue-surface: var(--catalogue-surface);
+  --color-catalogue-surface-raised: var(--catalogue-surface-raised);
+  --color-catalogue-surface-hover: var(--catalogue-surface-hover);
+  --color-catalogue-line: var(--catalogue-line);
+  --color-catalogue-line-strong: var(--catalogue-line-strong);
+  --color-catalogue-ink: var(--catalogue-ink);
+  --color-catalogue-muted: var(--catalogue-muted);
+  --color-catalogue-dim: var(--catalogue-dim);
+  --color-catalogue-blue: var(--catalogue-blue);
+  --color-catalogue-blue-bright: var(--catalogue-blue-bright);
+  --color-catalogue-blue-soft: var(--catalogue-blue-soft);
+  --color-catalogue-green: var(--catalogue-green);
+  --color-catalogue-yellow: var(--catalogue-yellow);
+  --shadow-catalogue: var(--catalogue-shadow);
   --color-auth-frame: var(--auth-frame);
   --color-auth-hero: var(--auth-hero);
   --color-auth-hero-deep: var(--auth-hero-deep);
@@ -27,44 +42,45 @@
   --shadow-auth-card: var(--auth-shadow-card);
 }
 
-/* Voice Stream is a distinct commercial product (AI data-infrastructure,
-   not the trainer dashboard) -- deep indigo/graphite palette with a cyan
-   accent, evoking a technical console rather than a consumer app. */
+/* Aligned with the trainer dashboard's purple design system
+   (frontend/app/globals.css) so Stream reads as part of the same platform
+   rather than a bolted-on separate product. */
 :root {
   color-scheme: light;
-  --bg: #f5f6fa;
+  --bg: #f7f5fa;
   --surface: #ffffff;
-  --surface-muted: #eef0f7;
-  --ink: #12131f;
-  --muted: #5b5f76;
-  --line: #dde0ec;
-  --accent: #2f6fed;
-  --accent-dark: #1e51c2;
-  --accent-soft: #e8effe;
-  --warning: #b45309;
-  --danger: #b91c1c;
+  --surface-muted: #f0eaf7;
+  --ink: #1f1929;
+  --muted: #675d75;
+  --line: #ded4ea;
+  --accent: #6a18a8;
+  --accent-dark: #4f1080;
+  --accent-soft: #e8dcf5;
+  --warning: #8a4b0f;
+  --danger: #a12a2a;
   --success: #15803d;
 }
 
-/* Dashboard console theme -- always dark, matching the product mockup
-   (deep navy ground, blue accent, translucent card surfaces). Scoped under
-   .stream-console rather than a `.dark`/prefers-color-scheme toggle: the
-   dashboard shell is the one surface meant to look like a technical
-   console at all times, while marketing/auth pages stay on the light
-   palette above. */
+/* Dashboard console theme -- always dark, mirroring the trainer
+   dashboard's dark-mode token set (frontend/app/globals.css's
+   `.dark .dashboard-theme` scope) rather than a separate blue palette.
+   Scoped under .stream-console rather than a `.dark`/prefers-color-scheme
+   toggle: the dashboard shell is the one surface meant to look like a
+   technical console at all times, while marketing/auth pages stay on the
+   light palette above. */
 .stream-console {
   color-scheme: dark;
-  --bg: #0a0f1e;
-  --surface: #111834;
-  --surface-muted: #16204a;
-  --ink: #f4f6fb;
-  --muted: #8791b3;
-  --line: #263063;
-  --accent: #2f6fed;
-  --accent-dark: #1e51c2;
-  --accent-soft: #1b2450;
-  --warning: #e8a23d;
-  --danger: #ef5350;
+  --bg: #15111c;
+  --surface: #1f1929;
+  --surface-muted: #291f36;
+  --ink: #f3edf9;
+  --muted: #ab9ebd;
+  --line: #392c49;
+  --accent: #a866e0;
+  --accent-dark: #8a4bc4;
+  --accent-soft: #33244a;
+  --warning: #e2a24f;
+  --danger: #e2645f;
   --success: #34d399;
 }
 
@@ -73,21 +89,68 @@
    though the auth page around it is always dark. */
 .stream-console-light {
   color-scheme: light;
-  --bg: #f5f6fa;
+  --bg: #f7f5fa;
   --surface: #ffffff;
-  --surface-muted: #eef0f7;
-  --ink: #12131f;
-  --muted: #5b5f76;
-  --line: #dde0ec;
-  --accent: #2f6fed;
-  --accent-dark: #1e51c2;
-  --accent-soft: #e8effe;
-  --warning: #b45309;
-  --danger: #b91c1c;
+  --surface-muted: #f0eaf7;
+  --ink: #1f1929;
+  --muted: #675d75;
+  --line: #ded4ea;
+  --accent: #6a18a8;
+  --accent-dark: #4f1080;
+  --accent-soft: #e8dcf5;
+  --warning: #8a4b0f;
+  --danger: #a12a2a;
   --success: #15803d;
 }
 
 @layer components {
+  .stream-catalogue {
+    color-scheme: dark;
+    --catalogue-bg: #060c14;
+    --catalogue-surface: #0b1420;
+    --catalogue-surface-raised: #101b2a;
+    --catalogue-surface-hover: #16243a;
+    --catalogue-line: #1d2b3c;
+    --catalogue-line-strong: #2b3d55;
+    --catalogue-ink: #f5f7fb;
+    --catalogue-muted: #93a0b3;
+    --catalogue-dim: #637086;
+    --catalogue-blue: #2368ff;
+    --catalogue-blue-bright: #3981ff;
+    --catalogue-blue-soft: #142b63;
+    --catalogue-green: #65d58a;
+    --catalogue-yellow: #f2bf4a;
+    --catalogue-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+    --bg: var(--catalogue-bg);
+    --surface: var(--catalogue-surface);
+    --surface-muted: var(--catalogue-surface-raised);
+    --ink: var(--catalogue-ink);
+    --muted: var(--catalogue-muted);
+    --line: var(--catalogue-line);
+    --accent: var(--catalogue-blue);
+    --accent-dark: #174bc4;
+    --accent-soft: var(--catalogue-blue-soft);
+  }
+
+  .stream-catalogue-scrollbar {
+    scrollbar-color: var(--catalogue-line-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  .stream-catalogue-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .stream-catalogue-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--catalogue-line-strong);
+  }
+
+  .stream-catalogue-waveform-bar {
+    animation: stream-catalogue-wave 2.8s ease-in-out infinite alternate;
+  }
+
   .stream-auth {
     color-scheme: light;
     width: 100%;
@@ -135,4 +198,19 @@
 body {
   background: var(--bg);
   color: var(--ink);
+}
+
+@keyframes stream-catalogue-wave {
+  from {
+    transform: scaleY(0.72);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-catalogue-waveform-bar {
+    animation: none;
+  }
 }

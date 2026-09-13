@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { ComponentType, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
-import { Download, Play, Search as SearchIcon } from 'lucide-react';
+import { Activity, CheckCircle2, Clock3, Download, Play, Search as SearchIcon } from 'lucide-react';
 import {
   useGetOrganizationQuery,
   useGetSubscriberAnalyticsReportQuery,
@@ -102,17 +102,20 @@ export default function OverviewPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <MetricCard
+          icon={Clock3}
           label="Total Hours Streamed"
           value={analytics ? formatHours(analytics.totalHoursStreamed) : '—'}
           unit="hrs"
           chartData={chartData.map((p) => p.successful)}
         />
         <MetricCard
+          icon={Activity}
           label="API Requests"
           value={analytics ? formatCompactNumber(analytics.totalRequests) : '—'}
           chartData={chartData.map((p) => p.successful)}
         />
         <MetricCard
+          icon={CheckCircle2}
           label="Success Rate"
           value={successRatePct ? `${successRatePct}%` : '—'}
           chartData={chartData.map((p) => p.successful)}
@@ -274,11 +277,13 @@ export default function OverviewPage() {
 }
 
 function MetricCard({
+  icon: Icon,
   label,
   value,
   unit,
   chartData,
 }: {
+  icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>;
   label: string;
   value: string;
   unit?: string;
@@ -290,21 +295,26 @@ function MetricCard({
   );
 
   return (
-    <Card className="p-5">
-      <p className="text-sm font-bold text-muted">{label}</p>
-      <p className="mt-2 text-3xl font-black text-ink">
-        {value}
-        {unit && <span className="ml-1.5 text-base font-bold text-muted">{unit}</span>}
-      </p>
-      {sparkline.length > 1 && (
-        <div className="mt-3 h-10">
-          <ResponsiveContainer height="100%" width="100%">
-            <BarChart data={sparkline}>
-              <Bar dataKey="v" fill="var(--color-accent)" radius={[2, 2, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+    <Card className="flex min-h-32 items-start gap-3 p-4 md:p-5">
+      <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+        <Icon aria-hidden="true" className="size-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-muted">{label}</p>
+        <p className="mt-2 text-2xl font-black leading-tight text-ink">
+          {value}
+          {unit && <span className="ml-1.5 text-sm font-bold text-muted">{unit}</span>}
+        </p>
+        {sparkline.length > 1 && (
+          <div className="mt-2 h-8">
+            <ResponsiveContainer height="100%" width="100%">
+              <BarChart data={sparkline}>
+                <Bar dataKey="v" fill="var(--color-accent)" radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
