@@ -59,6 +59,38 @@
   --warning: #8a4b0f;
   --danger: #a12a2a;
   --success: #15803d;
+
+  /* Root-level fallbacks for the catalogue/auth token sets so Tailwind's
+     @theme color-catalogue and color-auth re-exports (which alias these
+     var() names) resolve even outside .stream-catalogue/.stream-auth --
+     those scopes override every value below with their real palette. */
+  --catalogue-bg: #15111c;
+  --catalogue-surface: #1f1929;
+  --catalogue-surface-raised: #291f36;
+  --catalogue-surface-hover: #33264a;
+  --catalogue-line: #392c49;
+  --catalogue-line-strong: #4c3b60;
+  --catalogue-ink: #f3edf9;
+  --catalogue-muted: #ab9ebd;
+  --catalogue-dim: #7d7190;
+  --catalogue-blue: #a866e0;
+  --catalogue-blue-bright: #c08bef;
+  --catalogue-blue-soft: #33244a;
+  --catalogue-green: #34d399;
+  --catalogue-yellow: #e2a24f;
+  --catalogue-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
+  --auth-frame: #dfe6f0;
+  --auth-hero: #06152f;
+  --auth-hero-deep: #031027;
+  --auth-panel: #f7f9fc;
+  --auth-card: #ffffff;
+  --auth-ink: #0b1a37;
+  --auth-muted: #657082;
+  --auth-line: #dde3ec;
+  --auth-accent: #0d63f3;
+  --auth-accent-dark: #0954d4;
+  --auth-accent-soft: #e8f0ff;
+  --auth-shadow-card: 0 10px 32px rgba(8, 20, 44, 0.08);
 }
 
 /* Dashboard console theme -- always dark, mirroring the trainer

@@ -147,7 +147,7 @@ export function FocusableRow({ children, onClick }: { children: ReactNode; onCli
 
   return (
     <div
-      className="min-w-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60"
+      className="min-w-0 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60"
       onClick={onClick}
       onKeyDown={handleKeyDown}
       role="button"
