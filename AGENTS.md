@@ -42,6 +42,32 @@ Redis Streams remains the live broker for ASR, quality-gating, ISVC scoring, and
 
 **Revisit RabbitMQ if/when a concrete trigger shows up:** per-dialect/per-org priority queues, routing to genuinely different worker pools by job type, or Redis Streams' DIY retry/DLQ logic becoming a real operational pain point at higher volume. Do not change a Redis Streams producer or worker to RabbitMQ merely because the broker exists — a dedicated migration plan, queue durability policy, client configuration, monitoring, and rollback path are required first.
 
+### GCP cross-cloud `vosk-worker` (`k8s/gcp-cloud/`)
+
+A second `vosk-worker` + KEDA deployment runs on GKE, consuming the *same*
+`asr-jobs-vosk` stream / `asr-workers-vosk` consumer group as DO's own
+`vosk-worker` — same stream/group name across both clusters is what makes
+this a genuinely shared queue rather than two separate ones; Redis Streams
+delivers each message to exactly one consumer within a group regardless of
+which cluster that consumer's pod happens to run in. GCP reaches DO's
+Redis and Postgres over the public internet (no VPN/interconnect) via
+`redis-external`/`postgres-external` LoadBalancer Services
+(`k8s/base/redis-external.yaml`, `postgres-external.yaml`), each IP-
+allowlisted (DO's `do-loadbalancer-allowlist` annotation) to GCP's static
+NAT egress IP only, TLS-only (self-managed certs, not cert-manager — raw
+TCP has no HTTP-01 path and DNS-01 support wasn't confirmed on the
+cluster's ClusterIssuer), password-required. Every Redis client across the
+whole fleet (not just the GCP one) reads `REDIS_PASSWORD`/`REDIS_TLS` env
+vars — see `services/api/src/common/redis-connection.util.ts` and each
+Python worker's `worker.py` — backward-compatible when unset. **Only
+`vosk-worker` runs on GCP** — no CronJob (`settlement-job`, `fx-rate-job`,
+etc. stay DO-only: they write directly to the one shared Postgres and are
+designed to run exactly once per schedule; running them on GCP too would
+double-execute financial/settlement logic) and no other queue-driven
+worker (this was scoped to vosk-worker specifically, not a general
+multi-cloud migration). See `k8s/gcp-cloud/README.md` for the full staged
+rollout runbook.
+
 ### Lessons worth keeping (from incidents, not speculation)
 
 - **A CI green check is not proof of a production deploy.** `prisma-migrate.yml` only validates schema/migrations against a disposable CI Postgres — it never touches production. A schema change once merged to `main`, passed that check, and was never actually applied to the live database, silently breaking `/settings/public` and `settlement-job` until caught manually. `prisma-deploy.yml` now runs automatically after every push to `main` specifically to close this gap — see "CI/CD" below. Don't treat `prisma-migrate.yml` passing as "the migration shipped."

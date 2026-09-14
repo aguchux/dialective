@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: dai
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+# Same secretGenerator/configMapGenerator pattern as
+# ../../../overlays/prod/kustomization.yaml: copy each secrets/*.env.example
+# to secrets/*.env and configs/*.env.example to configs/*.env, gitignored,
+# fill in real values. redis-tls-ca and postgres-tls-ca are NOT listed here
+# -- they hold cert files, not key=value env lines, and are created
+# directly via `kubectl create secret generic --from-file` (see their
+# .env.example files for the exact commands) rather than through
+# kustomize's secretGenerator.
+secretGenerator:
+  - name: postgres-creds
+    envs:
+      - secrets/postgres.env
+  - name: spaces-creds
+    envs:
+      - secrets/spaces.env
+  - name: redis-auth
+    envs:
+      - secrets/redis-auth.env
+
+configMapGenerator:
+  - name: vosk-worker-config
+    envs:
+      - configs/vosk-worker.env

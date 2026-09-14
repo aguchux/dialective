@@ -1,0 +1,138 @@
+# GCP-hosted twin of ../../base/vosk-worker-deployment.yaml -- same image,
+# same consumer group, same idempotent model-fetch init container. Only
+# difference from the DO version: REDIS_HOST points at DO's external
+# redis-external LoadBalancer (not the DO-cluster-internal
+# redis.dai.svc.cluster.local DNS name, which GCP can't resolve or reach),
+# over the TLS port with REDIS_TLS/REDIS_TLS_CA set, and its own PVC (GCP's
+# own disk -- the model is downloaded independently here, no cross-cloud
+# volume sharing). ASR_STREAM/CONSUMER_GROUP are IDENTICAL to DO's --  that
+# sameness is what makes the queue genuinely shared: Redis Streams delivers
+# each message to exactly one consumer within a consumer group regardless
+# of which cluster that consumer's pod happens to run in.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vosk-worker
+  labels:
+    app: vosk-worker
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: vosk-worker
+  template:
+    metadata:
+      labels:
+        app: vosk-worker
+    spec:
+      initContainers:
+        - name: fetch-model
+          image: python:3.11-slim
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              if [ -d /models/vosk-model-small-en-us-0.15 ]; then
+                echo "model already present, skipping download"
+                exit 0
+              fi
+              apt-get update && apt-get install -y wget unzip
+              wget -O /tmp/model.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+              unzip /tmp/model.zip -d /models
+              rm /tmp/model.zip
+          volumeMounts:
+            - name: model-repo
+              mountPath: /models
+      containers:
+        - name: vosk-worker
+          image: golojan/dialect-vosk-worker:latest
+          env:
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: redis_host
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: redis_port
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+            - name: REDIS_TLS
+              value: "true"
+            # requests_ca_bundle-style trust for the self-managed cert (see
+            # ../../overlays/prod/secrets/redis-tls.env.example) -- redis-py's
+            # ssl_ca_certs points at this file so vosk-worker validates the
+            # server's identity against the specific cert DO issued, not
+            # public CAs (there is no public CA cert here, it's self-signed).
+            - name: REDIS_TLS_CA
+              value: /redis-tls/ca.crt
+            - name: ASR_STREAM
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: asr_stream
+            - name: CONSENSUS_STREAM
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: consensus_stream
+            - name: CONSUMER_GROUP
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: consumer_group
+            - name: SPACES_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: vosk-worker-config
+                  key: spaces_region
+            - name: SPACES_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: endpoint
+            - name: SPACES_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: access_key
+            - name: SPACES_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: secret_key
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: connection_string
+          # Not set on DO's vosk-worker either (see AGENTS.md's whisper-
+          # worker eviction lesson -- that one got sized only after an
+          # incident). Vosk's model is far smaller than Whisper's; size
+          # these once real GCP usage is observed rather than guessing.
+          volumeMounts:
+            - name: model-repo
+              mountPath: /models
+              readOnly: true
+            - name: redis-tls-ca
+              mountPath: /redis-tls
+              readOnly: true
+            - name: postgres-tls-ca
+              mountPath: /postgres-tls
+              readOnly: true
+      volumes:
+        - name: model-repo
+          persistentVolumeClaim:
+            claimName: asr-model-repo-pvc
+        - name: redis-tls-ca
+          secret:
+            secretName: redis-tls-ca
+        - name: postgres-tls-ca
+          secret:
+            secretName: postgres-tls-ca

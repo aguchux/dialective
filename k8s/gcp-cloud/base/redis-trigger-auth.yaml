@@ -1,0 +1,12 @@
+# GCP-side copy of ../../base/redis-trigger-auth.yaml -- separate cluster,
+# separate KEDA install, so this is its own TriggerAuthentication resource
+# even though the secret value it references is the same DO Redis password.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-trigger-auth
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: redis-auth
+      key: password

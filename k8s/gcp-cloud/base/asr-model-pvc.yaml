@@ -1,0 +1,16 @@
+# GCP-side counterpart to ../../base/model-pvc.yaml's asr-model-repo-pvc --
+# own disk, GKE's default `standard-rwo` storageClassName (Persistent Disk,
+# RWO like DO's do-block-storage). Same PVC/claim name so
+# vosk-worker-deployment.yaml's volumes.persistentVolumeClaim.claimName
+# reference is identical between the two clusters -- no cross-cloud sharing,
+# each cluster just has its own copy of the model under the same claim name.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: asr-model-repo-pvc
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard-rwo
