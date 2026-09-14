@@ -5,6 +5,7 @@ metadata:
 spec:
   scaleTargetRef:
     name: whisper-worker
+    kind: StatefulSet
   minReplicaCount: 0
   maxReplicaCount: 5
   cooldownPeriod: 120

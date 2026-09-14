@@ -1,14 +1,38 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Service
 metadata:
   name: whisper-worker
   labels:
     app: whisper-worker
 spec:
+  clusterIP: None
+  selector:
+    app: whisper-worker
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: whisper-worker
+  labels:
+    app: whisper-worker
+spec:
+  serviceName: whisper-worker
+  # KEDA (whisper-worker-keda.yaml) drives replica count 0-5 off Redis
+  # stream lag; this is just the floor when nothing has scaled it yet.
   replicas: 1
   selector:
     matchLabels:
       app: whisper-worker
+  # Each pod gets its OWN PVC via volumeClaimTemplates below instead of one
+  # shared ReadWriteOnce PVC -- DigitalOcean's block-storage CSI only
+  # supports RWO, so a shared PVC can only ever be attached to one pod's
+  # node at a time. Scaling past 1 replica with the old Deployment+shared-
+  # PVC setup left every extra pod permanently stuck in ContainerCreating
+  # waiting to attach a volume another pod already held (see the 9-day
+  # stuck rollout this replaced). /models is a HuggingFace Hub download
+  # cache (models--org--name dirs), not shared state each replica needs to
+  # see the same copy of -- a per-pod cache that's cold on first boot and
+  # warm afterward is the right tradeoff, not a shared filesystem.
   template:
     metadata:
       labels:
@@ -96,7 +120,12 @@ spec:
             - name: whisper-model-repo
               mountPath: /models
               readOnly: false
-      volumes:
-        - name: whisper-model-repo
-          persistentVolumeClaim:
-            claimName: whisper-model-repo-pvc
+  volumeClaimTemplates:
+    - metadata:
+        name: whisper-model-repo
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+        storageClassName: do-block-storage

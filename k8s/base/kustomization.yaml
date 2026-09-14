@@ -13,7 +13,6 @@ resources:
   - pgadmin-ingress.yaml
   - model-pvc.yaml
   - tts-model-pvc.yaml
-  - whisper-model-pvc.yaml
   - chatdialect-model-pvc.yaml
   - api-deployment.yaml
   - api-hpa.yaml
@@ -25,7 +24,7 @@ resources:
   - chatdialect-agent-deployment.yaml
   - vosk-worker-deployment.yaml
   - vosk-worker-keda.yaml
-  - whisper-worker-deployment.yaml
+  - whisper-worker-statefulset.yaml
   - whisper-worker-keda.yaml
   - quality-gate-worker-deployment.yaml
   - quality-gate-worker-keda.yaml
