@@ -64,9 +64,24 @@ secretGenerator:
   - name: rabbitmq-creds
     envs:
       - secrets/rabbitmq.env
+  # No hash suffix: unlike every other secretGenerator entry, this name is
+  # also referenced literally by KEDA's TriggerAuthentication.spec.
+  # secretTargetRef.name (redis-trigger-auth.yaml, and its GCP-side twin) --
+  # kustomize's name-reference transformer only rewrites secretKeyRef
+  # fields it recognizes as Kubernetes-native secret references, and
+  # TriggerAuthentication's secretTargetRef isn't one of them. A hashed
+  # name here means every apply after a password rotation would leave
+  # every ScaledObject pointing at a stale, nonexistent secret name (this
+  # broke exactly that way on 2026-09-14 -- KEDAScalerFailed:
+  # NOAUTH/secret-not-found for prompt-audio-service, vosk-worker, and
+  # whisper-worker's scalers). Trade-off: this secret no longer forces a
+  # rolling restart on password change the way the others do -- roll the
+  # Deployments/StatefulSet manually after rotating it.
   - name: redis-auth
     envs:
       - secrets/redis-auth.env
+    options:
+      disableNameSuffixHash: true
 
 configMapGenerator:
   - name: api-config

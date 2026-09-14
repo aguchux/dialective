@@ -22,9 +22,15 @@ secretGenerator:
   - name: spaces-creds
     envs:
       - secrets/spaces.env
+  # No hash suffix: also referenced literally by KEDA's TriggerAuthentication
+  # (vosk-worker-keda.yaml's authenticationRef) -- see the matching note in
+  # ../../../overlays/prod/kustomization.yaml for why a hashed name here
+  # broke every ScaledObject on the DO side.
   - name: redis-auth
     envs:
       - secrets/redis-auth.env
+    options:
+      disableNameSuffixHash: true
 
 configMapGenerator:
   - name: vosk-worker-config
