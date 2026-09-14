@@ -21,7 +21,7 @@ spec:
         consumerGroup: asr-workers-vosk
         lagCount: "1"
         activationLagCount: "0"
-        tls: enable
+        enableTLS: "true"
         unsafeSsl: "true" # self-signed cert -- see redis-tls.env.example
       authenticationRef:
         name: redis-trigger-auth
