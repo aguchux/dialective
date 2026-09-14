@@ -63,6 +63,7 @@ import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationListPanel } from '@/components/notifications/NotificationListPanel';
 import { DeletePayoutAccountDialog } from '@/components/wallet/DeletePayoutAccountDialog';
 import { SecurityView } from '@/components/trainer/SecurityView';
+import { TrainerAdBanner } from '@/components/trainer/TrainerAdBanner';
 import {
   Avatar,
   cardClass,
@@ -197,7 +198,8 @@ export function TrainerDashboard() {
   // below.
   const hasSeenSessionRef = useRef(false);
   if (status === 'authenticated') hasSeenSessionRef.current = true;
-  const effectiveStatus = status === 'loading' && hasSeenSessionRef.current ? 'authenticated' : status;
+  const effectiveStatus =
+    status === 'loading' && hasSeenSessionRef.current ? 'authenticated' : status;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);
@@ -255,7 +257,6 @@ export function TrainerDashboard() {
     }
     setTaskPickerOpen(true);
   }
-
 
   useEffect(() => {
     if (status !== 'authenticated') return;
@@ -340,6 +341,7 @@ export function TrainerDashboard() {
           )}
 
           {activeView === 'home' && <CommunityStatsCta />}
+          <TrainerAdBanner slot="top" />
 
           {activeView === 'profile' ? (
             <ProfileView session={session} update={update} />
@@ -565,7 +567,8 @@ function EmailVerificationBanner() {
 
 type MicPermissionState = 'unknown' | 'granted' | 'prompt' | 'denied';
 
-const COMMUNITY_URL = process.env.NEXT_PUBLIC_COMMUNITY_URL ?? 'https://community.dialectlibrary.com';
+const COMMUNITY_URL =
+  process.env.NEXT_PUBLIC_COMMUNITY_URL ?? 'https://community.dialectlibrary.com';
 
 /**
  * Live counts from CommunityStatsService, shown as a "join the community"
@@ -932,6 +935,7 @@ function HomeView({ data, refreshing }: { data: TrainerDashboardSummary; refresh
             ` · rate as of ${formatDateTime(data.localCurrency.updatedAt)}`}
         </p>
       )}
+      <TrainerAdBanner slot="balance" />
       <WithdrawalEligibilityNote
         completedTasksForWithdrawal={data.completedTasksForWithdrawal}
         minCompletedTasksForWithdrawal={data.minCompletedTasksForWithdrawal}
@@ -1205,7 +1209,12 @@ function LedgerActivityPanel({
           </div>
         </>
       ) : (
-        <EmptyPanel icon={Clock3} title={emptyTitle} actionHref={undefined} actionLabel={undefined} />
+        <EmptyPanel
+          icon={Clock3}
+          title={emptyTitle}
+          actionHref={undefined}
+          actionLabel={undefined}
+        />
       )}
     </section>
   );
@@ -1542,8 +1551,8 @@ function TrainingView({
               </div>
               <h3 className="text-xl font-black">Word training</h3>
               <p className="mt-2 leading-relaxed text-muted">
-                Translate individual words and sentences, record their pronunciation, and
-                validate dialect submissions.
+                Translate individual words and sentences, record their pronunciation, and validate
+                dialect submissions.
               </p>
             </div>
             <div>
@@ -3535,8 +3544,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                               pendingLabel="Submitting"
                               type="button"
                             >
-                              <Check className="mr-1.5 inline size-4" />
-                              I have sent the WhatsApp message
+                              <Check className="mr-1.5 inline size-4" />I have sent the WhatsApp
+                              message
                             </ActionButton>
                             <button
                               className="text-sm font-bold text-muted underline-offset-2 hover:text-danger hover:underline"
@@ -4599,8 +4608,10 @@ function payoutMethodForAccount(
 }
 
 function payoutAccountLabel(account: PayoutAccount): string {
-  if (account.type === 'BANK') return `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`;
-  if (account.type === 'MOBILE_MONEY') return `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`;
+  if (account.type === 'BANK')
+    return `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`;
+  if (account.type === 'MOBILE_MONEY')
+    return `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`;
   if (account.type === 'STABLECOIN_WALLET') {
     return `${account.stablecoinAsset} (${account.stablecoinNetwork}) · ${account.walletAddressMasked}`;
   }
@@ -4726,8 +4737,13 @@ function WithdrawTokensDialog({
         setMessage('Choose a payout method before continuing.');
         return;
       }
-      if (selectedPayoutAccount?.type === 'STRIPE_CONNECT' && !selectedPayoutAccount.stripePayoutsEnabled) {
-        setMessage('Finish Stripe onboarding for this payout account before requesting a withdrawal.');
+      if (
+        selectedPayoutAccount?.type === 'STRIPE_CONNECT' &&
+        !selectedPayoutAccount.stripePayoutsEnabled
+      ) {
+        setMessage(
+          'Finish Stripe onboarding for this payout account before requesting a withdrawal.',
+        );
         return;
       }
     } else {
@@ -5002,7 +5018,10 @@ function WithdrawTokensDialog({
                 />
               )}
               {method === 'fiat' && selectedPayoutAccount && (
-                <ConfirmRow label="Payout account" value={payoutAccountLabel(selectedPayoutAccount)} />
+                <ConfirmRow
+                  label="Payout account"
+                  value={payoutAccountLabel(selectedPayoutAccount)}
+                />
               )}
               {method === 'crypto' && (
                 <ConfirmRow
@@ -5106,9 +5125,9 @@ function WithdrawTokensDialog({
               )}
               {belowProviderMinimum && providerMinAmount && (
                 <span className="text-xs font-bold text-danger">
-                  The payout provider requires at least{' '}
-                  {formatTokens(providerMinAmount.minTokens)} DL for {destinationCurrency} on{' '}
-                  {destinationNetwork} (≈ {providerMinAmount.minAmount} {destinationCurrency}).
+                  The payout provider requires at least {formatTokens(providerMinAmount.minTokens)}{' '}
+                  DL for {destinationCurrency} on {destinationNetwork} (≈{' '}
+                  {providerMinAmount.minAmount} {destinationCurrency}).
                 </span>
               )}
             </label>
