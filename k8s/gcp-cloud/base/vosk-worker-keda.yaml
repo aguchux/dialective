@@ -16,7 +16,7 @@ spec:
   triggers:
     - type: redis-streams
       metadata:
-        address: REPLACE_WITH_REDIS_EXTERNAL_HOST:6380
+        address: 45.55.99.91:6380
         stream: asr-jobs-vosk
         consumerGroup: asr-workers-vosk
         lagCount: "1"
