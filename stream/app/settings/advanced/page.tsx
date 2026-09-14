@@ -10,7 +10,7 @@ export default function SettingsAdvancedPage() {
       title="Settings"
     >
       <SettingsTabs />
-      <PagePlaceholder />
+      <PagePlaceholder note="Advanced controls like organization deletion and data export aren't available yet." />
     </CataloguePageShell>
   );
 }

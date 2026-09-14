@@ -10,7 +10,7 @@ export default function SettingsNotificationsPage() {
       title="Settings"
     >
       <SettingsTabs />
-      <PagePlaceholder />
+      <PagePlaceholder note="Notification preferences aren't available yet -- this section will let you control email and SMS alerts once that's built." />
     </CataloguePageShell>
   );
 }

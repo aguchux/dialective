@@ -1,7 +1,7 @@
 import { Settings } from 'lucide-react';
 import { CataloguePageShell } from '@/components/stream-catalogue/CataloguePageShell';
-import { PagePlaceholder } from '@/components/stream-catalogue/PagePlaceholder';
 import { SettingsTabs } from '@/components/stream-catalogue/SettingsTabs';
+import { BillingSettingsView } from '@/components/stream-catalogue/settings/BillingSettingsView';
 
 export default function SettingsBillingPage() {
   return (
@@ -10,7 +10,7 @@ export default function SettingsBillingPage() {
       title="Settings"
     >
       <SettingsTabs />
-      <PagePlaceholder />
+      <BillingSettingsView />
     </CataloguePageShell>
   );
 }

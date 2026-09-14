@@ -25,7 +25,15 @@ export interface SubscriptionPlan {
   monthlyUsdAmount: string;
   maxStreamDecks: number | null;
   maxTeamMembers: number | null;
+  enterpriseSecurityPoliciesEnabled: boolean;
+  features: string[];
   active: boolean;
+}
+
+export interface BillingUsage {
+  periodStart: string;
+  bytesUsed: string;
+  requestsUsed: number;
 }
 
 export type SubscriptionStatus =
@@ -50,6 +58,25 @@ export interface SubscriberOrganization {
   name: string;
   slug: string;
   subscription: Subscription | null;
+}
+
+export interface SecurityPolicy {
+  id: string;
+  organizationId: string;
+  requireSso: boolean;
+  refreshTokenTtlMinutes: number | null;
+  minRoleForApiKeyCreation: SubscriberOrgRole[];
+  requireIpAllowlist: boolean;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertSecurityPolicyInput {
+  requireSso?: boolean;
+  refreshTokenTtlMinutes?: number | null;
+  minRoleForApiKeyCreation?: SubscriberOrgRole[];
+  requireIpAllowlist?: boolean;
 }
 
 export interface PendingInvite {
@@ -453,6 +480,8 @@ export const streamApi = createApi({
     'PublicDecks',
     'ValidationQueue',
     'CatalogueShowcase',
+    'BillingUsage',
+    'SecurityPolicy',
   ],
   endpoints: (builder) => ({
     getMe: builder.query<SubscriberMe, void>({
@@ -511,6 +540,26 @@ export const streamApi = createApi({
 
     createCheckoutSession: builder.mutation<{ checkoutUrl?: string; activated?: true }, { planKey: string }>({
       query: (body) => ({ url: '/billing/checkout-session', method: 'POST', body }),
+    }),
+
+    getBillingUsage: builder.query<BillingUsage, void>({
+      query: () => '/billing/usage',
+      providesTags: ['BillingUsage'],
+    }),
+
+    getSecurityPolicy: builder.query<SecurityPolicy | null, void>({
+      query: () => '/security-policy',
+      providesTags: ['SecurityPolicy'],
+    }),
+
+    upsertSecurityPolicy: builder.mutation<SecurityPolicy, UpsertSecurityPolicyInput>({
+      query: (body) => ({ url: '/security-policy', method: 'POST', body }),
+      invalidatesTags: ['SecurityPolicy', 'Activity'],
+    }),
+
+    removeSecurityPolicy: builder.mutation<void, void>({
+      query: () => ({ url: '/security-policy', method: 'DELETE' }),
+      invalidatesTags: ['SecurityPolicy', 'Activity'],
     }),
 
     searchCatalogue: builder.query<
@@ -820,6 +869,10 @@ export const {
   useListOrgActivityQuery,
   useGetSubscriptionQuery,
   useCreateCheckoutSessionMutation,
+  useGetBillingUsageQuery,
+  useGetSecurityPolicyQuery,
+  useUpsertSecurityPolicyMutation,
+  useRemoveSecurityPolicyMutation,
   useSearchCatalogueQuery,
   usePreviewRecordingMutation,
   useSubmitValidationMutation,

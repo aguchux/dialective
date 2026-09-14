@@ -1,7 +1,7 @@
 import { Settings } from 'lucide-react';
 import { CataloguePageShell } from '@/components/stream-catalogue/CataloguePageShell';
-import { PagePlaceholder } from '@/components/stream-catalogue/PagePlaceholder';
 import { SettingsTabs } from '@/components/stream-catalogue/SettingsTabs';
+import { IntegrationsSettingsView } from '@/components/stream-catalogue/settings/IntegrationsSettingsView';
 
 export default function SettingsIntegrationsPage() {
   return (
@@ -10,7 +10,7 @@ export default function SettingsIntegrationsPage() {
       title="Settings"
     >
       <SettingsTabs />
-      <PagePlaceholder />
+      <IntegrationsSettingsView />
     </CataloguePageShell>
   );
 }
