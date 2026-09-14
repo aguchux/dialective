@@ -114,6 +114,7 @@ model User {
   // gates both recording pool browsing and deck creation.
   validatorDialectAssignments     ValidatorDialectAssignment[] @relation("ValidatorDialectAssignments")
   validatorDialectAssignmentsMade ValidatorDialectAssignment[] @relation("ValidatorDialectAssignedBy")
+  wordValidations                 WordValidation[]
   // Automatic compliance hold, distinct from `status` (admin-driven
   // suspend/block) -- set by WordsService.createRecording the moment a
   // trainer's lifetime WordRecording count crosses a multiple of
@@ -553,9 +554,9 @@ model ValidatorDialectAssignment {
 /// storage path or cache key from variant tag MUST also include the parent
 /// dialect's tag (see WordsService's upload key builder).
 model DialectVariant {
-  id        String   @id @default(uuid())
-  dialectId String
-  dialect   Dialect  @relation(fields: [dialectId], references: [id], onDelete: Cascade)
+  id          String   @id @default(uuid())
+  dialectId   String
+  dialect     Dialect  @relation(fields: [dialectId], references: [id], onDelete: Cascade)
   tag         String
   name        String
   active      Boolean  @default(true) // disabled sub-dialects are hidden from selection and revoke current trainer selections
@@ -687,28 +688,28 @@ model OtpCode {
 }
 
 model ManualPhoneVerificationRequest {
-  id                String                        @id @default(uuid())
-  userId            String
-  user              User                          @relation("ManualPhoneVerificationUser", fields: [userId], references: [id], onDelete: Cascade)
-  phoneNumber       String
-  otpHash           String
-  status            ManualPhoneVerificationStatus @default(PENDING)
-  feeTokenAmount    Decimal                       @default(1) @db.Decimal(20, 8)
-  attempts          Int                           @default(0) // wrong-OTP guesses by the reviewing admin; mirrors OtpCode's attempts/maxAttempts lockout pattern
-  maxAttempts       Int                           @default(5)
-  sentAt            DateTime?
-  verifiedByAdminId String?
-  verifiedByAdmin   User?                         @relation("ManualPhoneVerificationAdmin", fields: [verifiedByAdminId], references: [id], onDelete: SetNull)
-  verifiedAt        DateTime?
+  id                  String                        @id @default(uuid())
+  userId              String
+  user                User                          @relation("ManualPhoneVerificationUser", fields: [userId], references: [id], onDelete: Cascade)
+  phoneNumber         String
+  otpHash             String
+  status              ManualPhoneVerificationStatus @default(PENDING)
+  feeTokenAmount      Decimal                       @default(1) @db.Decimal(20, 8)
+  attempts            Int                           @default(0) // wrong-OTP guesses by the reviewing admin; mirrors OtpCode's attempts/maxAttempts lockout pattern
+  maxAttempts         Int                           @default(5)
+  sentAt              DateTime?
+  verifiedByAdminId   String?
+  verifiedByAdmin     User?                         @relation("ManualPhoneVerificationAdmin", fields: [verifiedByAdminId], references: [id], onDelete: SetNull)
+  verifiedAt          DateTime?
   // True when an admin confirmed the number is reachable by other means
   // (e.g. a call) and verified without the trainer's WhatsApp OTP code --
   // false for the normal code-entry path. Audit trail only, never affects
   // gating: a verified request is a verified request either way.
-  verifiedWithoutCode Boolean                     @default(false)
-  rejectedAt        DateTime?
-  expiresAt         DateTime
-  createdAt         DateTime                      @default(now())
-  updatedAt         DateTime                      @updatedAt
+  verifiedWithoutCode Boolean                       @default(false)
+  rejectedAt          DateTime?
+  expiresAt           DateTime
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
 
   @@index([status, createdAt])
   @@index([userId, status])
@@ -859,6 +860,7 @@ model Word {
   trainingAssignments WordTrainingAssignment[]
   translations        WordTranslation[]
   skips               WordSkip[]
+  validationPicks     WordValidation[]
 
   @@index([isDisabled])
   @@map("words")
@@ -1243,6 +1245,10 @@ model WordRecording {
   adminAuditedAt            DateTime?
   createdAt                 DateTime                @default(now())
 
+  validations           WordValidation[]
+  wrongDialectFlagCount Int              @default(0) // distinct-validator WRONG_DIALECT tally, incremented once per validator on first flag -- see WordValidationService.submit
+  misplacedDialectAt    DateTime? // set once wrongDialectFlagCount reaches PlatformSettings.misplacedDialectFlagThreshold; non-null means this recording sits in the admin "Misplaced Dialects" queue awaiting delete/reassign
+
   @@index([wordId])
   @@index([sentenceId])
   @@index([userId, createdAt])
@@ -1250,7 +1256,65 @@ model WordRecording {
   @@index([dialectTag])
   @@index([status])
   @@index([rawScore])
+  @@index([misplacedDialectAt])
   @@map("word_recordings")
+}
+
+/// Tiers a validation verdict can come from -- TRAINER is the ordinary
+/// "Dialect Validation" trainer task (peer word recordings, own dialect,
+/// no token cost, flat payout on submit -- see WordValidationService). L1/
+/// L2/L3 are reserved for the staff Validator Dashboard's approval chain
+/// (docs/validators.md) to eventually write into this same table instead
+/// of (or alongside) ValidatorDeckItem -- not wired up by any service yet.
+enum ValidatorTier {
+  TRAINER
+  L1
+  L2
+  L3
+}
+
+/// Problem flags a validator can tick on a WordRecording instead of (or
+/// alongside) picking the word they heard. WRONG_DIALECT is the only one
+/// with a side effect (see WordRecording.wrongDialectFlagCount) -- the rest
+/// are informational, surfaced to admin for context but don't drive any
+/// automatic state change.
+enum WordValidationFlag {
+  WRONG_DIALECT
+  NO_AUDIO
+  UNCLEAR_NOISY
+  MULTIPLE_SPEAKERS
+  NO_WORD_MATCH
+  TOO_FAST
+  TOO_SLOW
+}
+
+/// One trainer's (or, eventually, one staff validator's) verdict on a peer's
+/// WordRecording -- the "Dialect Validation" task. Deliberately its own
+/// table rather than columns on WordRecording or a ValidatorDeckItem reuse:
+/// many validators independently judge the same recording (unique per
+/// (recordingId, validatorId) pair), and ValidatorDeckItem is deck-scoped/
+/// staff-only, the wrong shape for an unscoped trainer verdict.
+model WordValidation {
+  id          String        @id @default(uuid())
+  recordingId String
+  recording   WordRecording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  validatorId String
+  validator   User          @relation(fields: [validatorId], references: [id], onDelete: Cascade)
+  tier        ValidatorTier @default(TRAINER)
+
+  selectedWordId String? // the candidate word the validator ticked as "what I heard" -- null when only flags were ticked (e.g. NO_WORD_MATCH, WRONG_DIALECT)
+  selectedWord   Word?    @relation(fields: [selectedWordId], references: [id], onDelete: SetNull)
+  isCorrectMatch Boolean? // selectedWordId === recording.wordId, computed at submit time; null when selectedWordId is null
+
+  transcript String? // optional free-text transcription of what the validator heard
+  flags      WordValidationFlag[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([recordingId, validatorId])
+  @@index([recordingId])
+  @@index([validatorId])
+  @@map("word_validations")
 }
 
 enum DomainPromptGenderVariant {
@@ -2477,7 +2541,7 @@ model PlatformSettings {
   tawkToWidgetId                             String? // Tawk.to "Widget ID" from the same embed snippet -- the second path segment
   supportChatMode                            String    @default("TAWK") // NONE | TAWK | AI; TAWK remains the compatibility default for existing deployments
   trainerAdsterra728Enabled                  Boolean   @default(false) // admin gate for the trainer dashboard's 728x90 Adsterra unit
-  trainerAdsterra728ScriptUrl               String? // Adsterra 728x90 script src managed in admin settings
+  trainerAdsterra728ScriptUrl                String? // Adsterra 728x90 script src managed in admin settings
   trainerAdsterra728Key                      String? // public Adsterra unit key, returned only when enabled and configured
   pwaInstallPromptEnabled                    Boolean   @default(true) // master switch for authenticated PWA install prompts; the avatar-menu install action remains available when supported
   pwaInstallPromptReminderMinutes            Int       @default(60) // minimum interval before a dismissed PWA install prompt may reappear on the same device/account
@@ -2522,6 +2586,9 @@ model PlatformSettings {
   domainConversationMinDurationSeconds       Int? // overrides DOMAIN_CONVERSATION_MIN_DURATION_SECONDS when set; recording Submit/Stop stays disabled below this elapsed time
   domainConversationMaxDurationSeconds       Int? // overrides DOMAIN_CONVERSATION_MAX_DURATION_SECONDS when set; recording force-stops at this elapsed time, mirroring wordTrainingRecordingMaxTimeoutSeconds's auto-stop-at-ceiling behavior
   domainConversationTaskTokenCost            Decimal?  @db.Decimal(20, 8) // overrides DOMAIN_CONVERSATION_TASK_TOKEN_COST when set; tokens debited per Domain Conversation submission, separate from taskTokenCost (word training)
+  dialectValidationTaskEnabled               Boolean   @default(false) // admin content gate: whether trainers see the "Dialect Validation" task card at all
+  dialectValidationPayoutTokens              Decimal?  @db.Decimal(20, 8) // flat reward credited per submitted validation (VALIDATION_REWARD ledger entry), no upfront lock unlike other tasks -- task is effectively inactive/hidden to trainers when null or <= 0, mirroring dialectValidationTaskEnabled's gate rather than a separate disable path
+  misplacedDialectFlagThreshold              Int       @default(3) // distinct validators ticking WRONG_DIALECT on the same WordRecording before it auto-moves into the admin "Misplaced Dialects" queue -- see WordRecording.wrongDialectFlagCount/misplacedDialectAt
   domainConversationGenerationEnabled        Boolean   @default(false) // master switch for domain-conversation-prompt-job; job no-ops when false. Single platform-wide toggle (prompts are dialect-agnostic, unlike llmGenerationEnabled's per-country/per-dialect layering)
   domainConversationPromptsPerRun            Int       @default(15) // batch size requested from the LLM per scheduled run, mirrors llmItemsPerRun
   domainConversationMaxPromptPoolSize        Int       @default(500) // hard cap on total DomainPrompt rows (all variants combined); job stops generating new scenarios once reached, mirrors llmMaxTotalGeneratedItems

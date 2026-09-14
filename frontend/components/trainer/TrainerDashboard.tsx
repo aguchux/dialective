@@ -36,6 +36,7 @@ import {
   Send,
   Share2,
   Shield as ShieldIcon,
+  ShieldCheck,
   Sparkles,
   Square,
   Star,
@@ -57,6 +58,7 @@ import { resolveDialectName, useDialectName } from '@/lib/dialect-name';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
 import { TaskPickerDialog } from '@/components/trainer/TaskPickerDialog';
 import { DomainConversationDialog } from '@/components/trainer/DomainConversationDialog';
+import { DialectValidationDialog } from '@/components/trainer/DialectValidationDialog';
 import { TestimonyDialog } from '@/components/trainer/TestimonyDialog';
 import { MarketView } from '@/components/p2p/MarketView';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -206,6 +208,7 @@ export function TrainerDashboard() {
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [trainingOpen, setTrainingOpen] = useState(false);
   const [domainConversationOpen, setDomainConversationOpen] = useState(false);
+  const [dialectValidationOpen, setDialectValidationOpen] = useState(false);
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
   const [requiredCoursesOpen, setRequiredCoursesOpen] = useState(false);
   const [midSessionRequiredCourses, setMidSessionRequiredCourses] = useState<
@@ -359,6 +362,7 @@ export function TrainerDashboard() {
               data={data}
               dialectTag={session.user.dialectTag}
               domainConversationEnabled={!!publicSettings?.domainConversationTaskEnabled}
+              dialectValidationEnabled={!!publicSettings?.dialectValidationTaskEnabled}
               email={session.user.email ?? ''}
               refreshing={isFetching}
               onStartTask={handleStartTask}
@@ -369,8 +373,13 @@ export function TrainerDashboard() {
 
         <MobileNavigation activeView={activeView} />
         <TaskPickerDialog
+          dialectValidationEnabled={!!publicSettings?.dialectValidationTaskEnabled}
           domainConversationEnabled={!!publicSettings?.domainConversationTaskEnabled}
           onOpenChange={setTaskPickerOpen}
+          onSelectDialectValidation={() => {
+            setTaskPickerOpen(false);
+            setDialectValidationOpen(true);
+          }}
           onSelectDomainConversation={() => {
             setTaskPickerOpen(false);
             setDomainConversationOpen(true);
@@ -400,6 +409,14 @@ export function TrainerDashboard() {
             setRequiredCoursesOpen(true);
           }}
           onInsufficientBalance={() => setLowBalanceOpen(true)}
+        />
+        <DialectValidationDialog
+          onOpenChange={setDialectValidationOpen}
+          open={dialectValidationOpen}
+          onRequiredCourses={(courses) => {
+            setMidSessionRequiredCourses(courses);
+            setRequiredCoursesOpen(true);
+          }}
         />
         <LowBalanceDialog
           onOpenChange={setLowBalanceOpen}
@@ -766,6 +783,7 @@ function DashboardViewContent({
   data,
   dialectTag,
   domainConversationEnabled,
+  dialectValidationEnabled,
   email,
   refreshing,
   onStartTask,
@@ -775,6 +793,7 @@ function DashboardViewContent({
   data: TrainerDashboardSummary;
   dialectTag: string | null;
   domainConversationEnabled: boolean;
+  dialectValidationEnabled: boolean;
   email: string;
   refreshing: boolean;
   onStartTask: () => void;
@@ -786,6 +805,7 @@ function DashboardViewContent({
       <TrainingView
         dialectTag={dialectTag}
         domainConversationEnabled={domainConversationEnabled}
+        dialectValidationEnabled={dialectValidationEnabled}
         onStartTask={onStartTask}
       />
     );
@@ -1490,10 +1510,12 @@ type TrainingTab = 'training' | 'tasks';
 function TrainingView({
   dialectTag,
   domainConversationEnabled,
+  dialectValidationEnabled,
   onStartTask,
 }: {
   dialectTag: string | null;
   domainConversationEnabled: boolean;
+  dialectValidationEnabled: boolean;
   onStartTask: () => void;
 }) {
   const [tab, setTab] = useState<TrainingTab>('tasks');
@@ -1591,6 +1613,39 @@ function TrainingView({
               <div>
                 <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
                   <span className="rounded-md bg-surface-muted px-2 py-1">Free-form voice</span>
+                  <span className="rounded-md bg-surface-muted px-2 py-1">
+                    {dialectName ?? 'Your dialect'}
+                  </span>
+                </div>
+                <button
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white hover:bg-accent-dark sm:w-auto"
+                  onClick={onStartTask}
+                  type="button"
+                >
+                  Start task <ArrowRight className="size-4" aria-hidden="true" />
+                </button>
+              </div>
+            </article>
+          )}
+          {dialectValidationEnabled && (
+            <article className={`${cardClass} grid min-h-64 content-between gap-6 p-5 md:p-6`}>
+              <div>
+                <div className="mb-5 flex items-start justify-between gap-3">
+                  <span className="grid size-11 place-items-center rounded-lg bg-accent-soft text-accent">
+                    <ShieldCheck className="size-5" aria-hidden="true" />
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    <span className="size-1.5 rounded-full bg-emerald-500" /> Available
+                  </span>
+                </div>
+                <h3 className="text-xl font-black">Dialect Validation</h3>
+                <p className="mt-2 leading-relaxed text-muted">
+                  Listen to peer recordings in your dialect and confirm which word was said.
+                </p>
+              </div>
+              <div>
+                <div className="mb-4 flex flex-wrap gap-2 text-xs font-bold text-muted">
+                  <span className="rounded-md bg-surface-muted px-2 py-1">Listening review</span>
                   <span className="rounded-md bg-surface-muted px-2 py-1">
                     {dialectName ?? 'Your dialect'}
                   </span>

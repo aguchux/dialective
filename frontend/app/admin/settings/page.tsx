@@ -30,6 +30,7 @@ import { DykSettingsPanel } from './DykSettingsPanel';
 import { CommunitySettingsPanel } from './CommunitySettingsPanel';
 import { StreamSettingsPanel } from './StreamSettingsPanel';
 import { DomainConversationSettingsPanel } from './DomainConversationSettingsPanel';
+import { DialectValidationSettingsPanel } from './DialectValidationSettingsPanel';
 import { AdsMonetisationSettingsPanel } from './AdsMonetisationSettingsPanel';
 
 const groups = [
@@ -42,6 +43,7 @@ const groups = [
   { key: 'distributors', label: 'Distributor Settings' },
   { key: 'trainingTasks', label: 'Training & Tasks' },
   { key: 'domainConversation', label: 'Domain Conversation' },
+  { key: 'dialectValidation', label: 'Dialect Validation' },
   { key: 'notifications', label: 'Notification Settings' },
   { key: 'liveChat', label: 'Live Chat' },
   { key: 'pwa', label: 'Web App Install' },
@@ -75,6 +77,7 @@ const panelComponents: Record<GroupKey, () => JSX.Element> = {
   distributors: DistributorSettingsPanel,
   trainingTasks: TrainingTasksSettingsPanel,
   domainConversation: DomainConversationSettingsPanel,
+  dialectValidation: DialectValidationSettingsPanel,
   notifications: NotificationSettingsPanel,
   liveChat: LiveChatSettingsPanel,
   pwa: PwaSettingsPanel,

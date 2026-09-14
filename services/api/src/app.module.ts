@@ -9,6 +9,7 @@ import { RabbitMqModule } from './rabbitmq/rabbitmq.module';
 import { AsrRegistryModule } from './asr-registry/asr-registry.module';
 import { WordsModule } from './words/words.module';
 import { DomainConversationsModule } from './domain-conversations/domain-conversations.module';
+import { WordValidationModule } from './word-validation/word-validation.module';
 import { SentencesModule } from './sentences/sentences.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
 import { MarketingModule } from './marketing/marketing.module';
@@ -49,6 +50,7 @@ import { CommunityModule } from './community/community.module';
     AsrRegistryModule,
     WordsModule,
     DomainConversationsModule,
+    WordValidationModule,
     SentencesModule,
     TestimonialsModule,
     MarketingModule,

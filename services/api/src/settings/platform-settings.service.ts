@@ -882,6 +882,21 @@ export class PlatformSettingsService {
     return row.domainConversationTaskEnabled;
   }
 
+  async isDialectValidationTaskEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.dialectValidationTaskEnabled;
+  }
+
+  async getDialectValidationPayoutTokens(): Promise<number> {
+    const row = await this.getRow();
+    return row.dialectValidationPayoutTokens?.toNumber() ?? 0;
+  }
+
+  async getMisplacedDialectFlagThreshold(): Promise<number> {
+    const row = await this.getRow();
+    return row.misplacedDialectFlagThreshold;
+  }
+
   async getDomainConversationMinDurationSeconds(): Promise<number> {
     const row = await this.getRow();
     if (row.domainConversationMinDurationSeconds !== null) {
@@ -1023,6 +1038,9 @@ export class PlatformSettingsService {
       wordTrainingEnabled: row.wordTrainingEnabled,
       sentenceTrainingEnabled: row.sentenceTrainingEnabled,
       domainConversationTaskEnabled: row.domainConversationTaskEnabled,
+      dialectValidationTaskEnabled: row.dialectValidationTaskEnabled,
+      dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
+      misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
       domainConversationMinDurationSeconds,
       domainConversationMaxDurationSeconds,
       domainConversationTaskTokenCost: row.domainConversationTaskTokenCost?.toString() ?? null,
@@ -1208,6 +1226,9 @@ export class PlatformSettingsService {
     wordTrainingEnabled?: boolean;
     sentenceTrainingEnabled?: boolean;
     domainConversationTaskEnabled?: boolean;
+    dialectValidationTaskEnabled?: boolean;
+    dialectValidationPayoutTokens?: number | null;
+    misplacedDialectFlagThreshold?: number;
     domainConversationMinDurationSeconds?: number;
     domainConversationMaxDurationSeconds?: number;
     domainConversationTaskTokenCost?: number | null;
@@ -1876,6 +1897,9 @@ export class PlatformSettingsService {
       wordTrainingEnabled: row.wordTrainingEnabled,
       sentenceTrainingEnabled: row.sentenceTrainingEnabled,
       domainConversationTaskEnabled: row.domainConversationTaskEnabled,
+      dialectValidationTaskEnabled: row.dialectValidationTaskEnabled,
+      dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
+      misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
       domainConversationMinDurationSeconds,
       domainConversationMaxDurationSeconds,
       domainConversationTaskTokenCost: row.domainConversationTaskTokenCost?.toString() ?? null,
@@ -2091,6 +2115,9 @@ export class PlatformSettingsService {
       wordTrainingRecordingTimeoutSeconds,
       wordTrainingRecordingMaxTimeoutSeconds,
       domainConversationTaskEnabled: row.domainConversationTaskEnabled,
+      dialectValidationTaskEnabled: row.dialectValidationTaskEnabled,
+      dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
+      misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
       sessionIdleTimeoutMinutes: row.sessionIdleTimeoutMinutes,
       sessionMaxHours: row.sessionMaxHours,
       phoneVerificationRequired,

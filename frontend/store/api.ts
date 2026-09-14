@@ -1146,6 +1146,7 @@ export interface PublicClientSettings {
   wordTrainingRecordingTimeoutSeconds: number;
   wordTrainingRecordingMaxTimeoutSeconds: number;
   domainConversationTaskEnabled: boolean;
+  dialectValidationTaskEnabled: boolean;
   sessionIdleTimeoutMinutes: number;
   sessionMaxHours: number;
   phoneVerificationRequired: boolean;
@@ -1599,6 +1600,9 @@ export interface PlatformSettings {
   wordTrainingEnabled: boolean;
   sentenceTrainingEnabled: boolean;
   domainConversationTaskEnabled: boolean;
+  dialectValidationTaskEnabled: boolean;
+  dialectValidationPayoutTokens: string | null;
+  misplacedDialectFlagThreshold: number;
   domainConversationMinDurationSeconds: number;
   domainConversationMaxDurationSeconds: number;
   domainConversationTaskTokenCost: string | null;
@@ -1767,6 +1771,9 @@ export interface PlatformSettingsInput {
   wordTrainingEnabled?: boolean;
   sentenceTrainingEnabled?: boolean;
   domainConversationTaskEnabled?: boolean;
+  dialectValidationTaskEnabled?: boolean;
+  dialectValidationPayoutTokens?: number | null;
+  misplacedDialectFlagThreshold?: number;
   domainConversationMinDurationSeconds?: number;
   domainConversationMaxDurationSeconds?: number;
   domainConversationTaskTokenCost?: number;
@@ -2003,6 +2010,41 @@ export interface DomainConversationRecordingUpload {
   key: string;
   bucket: string;
   expiresInSeconds: number;
+}
+
+export type WordValidationFlag =
+  | 'WRONG_DIALECT'
+  | 'NO_AUDIO'
+  | 'UNCLEAR_NOISY'
+  | 'MULTIPLE_SPEAKERS'
+  | 'NO_WORD_MATCH'
+  | 'TOO_FAST'
+  | 'TOO_SLOW';
+
+export interface WordValidationItem {
+  recordingId: string;
+  audioUrl: string | null;
+  wordOptions: { id: string; text: string }[];
+  dialectTag: string;
+  dialectName: string;
+}
+
+export interface MisplacedDialectRecording {
+  id: string;
+  dialectTag: string;
+  wrongDialectFlagCount: number;
+  misplacedDialectAt: string;
+  audioUrl: string | null;
+  word: { text: string } | null;
+  createdAt: string;
+}
+
+export interface MisplacedDialectRecordingsPage {
+  items: MisplacedDialectRecording[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface DomainConversationSubmissionSummary {
@@ -2675,6 +2717,7 @@ export const dialectivaApi = createApi({
     'RequiredCourses',
     'Submissions',
     'DomainConversationSubmissions',
+    'MisplacedDialectRecordings',
     'DomainPrompts',
     'AdminWords',
     'AdminSentences',
@@ -3234,6 +3277,42 @@ export const dialectivaApi = createApi({
         params: { page, pageSize, status: status?.join(',') },
       }),
       providesTags: ['DomainConversationSubmissions'],
+    }),
+    getNextWordValidationItem: builder.query<WordValidationItem, string>({
+      query: (sessionId) => `/word-validation/sessions/${sessionId}/next`,
+    }),
+    submitWordValidation: builder.mutation<
+      { validationId: string; rewarded: boolean; rewardAmount: string | null; misplaced: boolean },
+      {
+        recordingId: string;
+        selectedWordId?: string;
+        transcript?: string;
+        flags?: WordValidationFlag[];
+      }
+    >({
+      query: (body) => ({ url: '/word-validation/submit', method: 'POST', body }),
+      invalidatesTags: ['Wallet'],
+    }),
+    getMisplacedDialectRecordings: builder.query<
+      MisplacedDialectRecordingsPage,
+      { page: number; pageSize: number }
+    >({
+      query: ({ page, pageSize }) => ({
+        url: '/word-validation/admin/misplaced-dialects',
+        params: { page, pageSize },
+      }),
+      providesTags: ['MisplacedDialectRecordings'],
+    }),
+    resolveMisplacedDialectRecording: builder.mutation<
+      { status: string; dialectTag?: string },
+      { id: string; action: 'DELETE' | 'REASSIGN'; dialectTag?: string; dialectVariantId?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/word-validation/admin/misplaced-dialects/${id}/resolve`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['MisplacedDialectRecordings'],
     }),
     getAdminDomainPrompts: builder.query<
       AdminDomainPromptsPage,
@@ -5198,6 +5277,10 @@ export const {
   useCreateDomainConversationRecordingUploadMutation,
   useSubmitDomainConversationRecordingMutation,
   useGetMyDomainConversationRecordingsQuery,
+  useLazyGetNextWordValidationItemQuery,
+  useSubmitWordValidationMutation,
+  useGetMisplacedDialectRecordingsQuery,
+  useResolveMisplacedDialectRecordingMutation,
   useGetAdminDomainPromptsQuery,
   useGetAdminDomainPromptDomainsQuery,
   useCreateDomainPromptAdminMutation,

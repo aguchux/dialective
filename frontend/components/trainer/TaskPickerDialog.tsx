@@ -1,7 +1,7 @@
 'use client';
 
 import * as RadixDialog from '@radix-ui/react-dialog';
-import { ArrowRight, BookOpenCheck, MessagesSquare, X } from 'lucide-react';
+import { ArrowRight, BookOpenCheck, MessagesSquare, ShieldCheck, X } from 'lucide-react';
 import { usePortalContainer } from '@/components/ui/PortalContainer';
 
 /**
@@ -16,13 +16,17 @@ export function TaskPickerDialog({
   onOpenChange,
   onSelectWordTraining,
   onSelectDomainConversation,
+  onSelectDialectValidation,
   domainConversationEnabled,
+  dialectValidationEnabled,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectWordTraining: () => void;
   onSelectDomainConversation: () => void;
+  onSelectDialectValidation: () => void;
   domainConversationEnabled: boolean;
+  dialectValidationEnabled: boolean;
 }) {
   const portalContainer = usePortalContainer();
 
@@ -94,6 +98,24 @@ export function TaskPickerDialog({
                     <span className="block text-lg font-black">Domain Conversation</span>
                     <span className="mt-1 block text-sm leading-relaxed text-muted">
                       Record a short conversation in an everyday scenario, in your own dialect.
+                    </span>
+                  </span>
+                  <ArrowRight className="size-5 text-accent" aria-hidden="true" />
+                </button>
+              )}
+              {dialectValidationEnabled && (
+                <button
+                  className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-lg border-2 border-accent bg-surface p-5 text-left shadow-[0_12px_32px_rgba(88,28,135,0.10)]"
+                  onClick={onSelectDialectValidation}
+                  type="button"
+                >
+                  <span className="grid size-12 place-items-center rounded-lg bg-accent-soft text-accent">
+                    <ShieldCheck className="size-6" aria-hidden="true" />
+                  </span>
+                  <span>
+                    <span className="block text-lg font-black">Dialect Validation</span>
+                    <span className="mt-1 block text-sm leading-relaxed text-muted">
+                      Listen to a peer&apos;s recording in your dialect and confirm the word.
                     </span>
                   </span>
                   <ArrowRight className="size-5 text-accent" aria-hidden="true" />
