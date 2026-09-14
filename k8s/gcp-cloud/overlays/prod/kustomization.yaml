@@ -36,3 +36,6 @@ configMapGenerator:
   - name: vosk-worker-config
     envs:
       - configs/vosk-worker.env
+  - name: quality-gate-worker-config
+    envs:
+      - configs/quality-gate-worker.env

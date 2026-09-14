@@ -5,4 +5,6 @@ resources:
   - asr-model-pvc.yaml
   - vosk-worker-deployment.yaml
   - vosk-worker-keda.yaml
+  - quality-gate-worker-deployment.yaml
+  - quality-gate-worker-keda.yaml
   - redis-trigger-auth.yaml

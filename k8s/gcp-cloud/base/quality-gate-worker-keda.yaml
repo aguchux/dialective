@@ -1,0 +1,30 @@
+# Same shape as ../../base/quality-gate-worker-keda.yaml, pointed at the
+# external redis-external address -- same stream/consumerGroup names, so
+# this scaler and DO's scaler are just two more consumers competing for the
+# same lag signal on the same quality-gate-jobs queue. Uses enableTLS (not
+# `tls: enable`, which is not a real field KEDA's redis-streams scaler
+# recognizes -- see the fix on vosk-worker-keda.yaml, same bug would apply
+# here since this is the same trigger type against the same TLS port).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: quality-gate-worker-scaler
+spec:
+  scaleTargetRef:
+    name: quality-gate-worker
+  minReplicaCount: 0
+  maxReplicaCount: 15
+  cooldownPeriod: 120
+  pollingInterval: 15
+  triggers:
+    - type: redis-streams
+      metadata:
+        address: 45.55.99.91:6380
+        stream: quality-gate-jobs
+        consumerGroup: quality-gate-workers
+        lagCount: "1"
+        activationLagCount: "0"
+        enableTLS: "true"
+        unsafeSsl: "true" # self-signed cert -- see redis-tls.env.example
+      authenticationRef:
+        name: redis-trigger-auth
