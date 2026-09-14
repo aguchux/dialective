@@ -53,17 +53,16 @@ export function AuthGateDialog({
 
   useEffect(() => {
     if (!open) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKeyDown);
+    // Deliberately no Escape-key or outside-click handler here: this dialog
+    // gates protected routes, and closing it any way other than the
+    // explicit close button makes it too easy to dismiss by accident and
+    // land on a page the user isn't signed in to see.
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = overflow;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -107,12 +106,7 @@ export function AuthGateDialog({
       className="stream-catalogue fixed inset-0 z-[100] grid place-items-center overflow-y-auto p-4 py-8"
       role="dialog"
     >
-      <button
-        aria-label="Close sign-in dialog"
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onClose}
-        type="button"
-      />
+      <div aria-hidden="true" className="fixed inset-0 bg-black/70 backdrop-blur-sm" />
       <div
         className="stream-catalogue-auth-gate relative z-10 w-full max-w-[360px] animate-[auth-gate-in_0.18s_ease-out] border border-catalogue-line bg-catalogue-surface p-5 shadow-[0_24px_64px_rgba(0,0,0,0.45)]"
         ref={dialogRef}
