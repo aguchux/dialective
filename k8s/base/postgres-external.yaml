@@ -19,7 +19,7 @@ metadata:
     app: postgres
   annotations:
     service.beta.kubernetes.io/do-loadbalancer-name: "postgres-external"
-    service.beta.kubernetes.io/do-loadbalancer-allowlist: "136.113.157.197/32"
+    service.beta.kubernetes.io/do-loadbalancer-allowlist: "136.113.157.197/32,23.251.152.0/32"
 spec:
   type: LoadBalancer
   selector:
