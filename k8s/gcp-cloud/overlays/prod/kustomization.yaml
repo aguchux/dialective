@@ -31,6 +31,16 @@ secretGenerator:
       - secrets/redis-auth.env
     options:
       disableNameSuffixHash: true
+  # Added alongside whisper-worker on 2026-09-14 -- see whisper-worker-
+  # statefulset.yaml's comment. Only the single key each secret actually
+  # needs (see secrets/auth.env.example, secrets/hf.env.example), not DO's
+  # full auth.env/hf.env files.
+  - name: auth-creds
+    envs:
+      - secrets/auth.env
+  - name: hf-creds
+    envs:
+      - secrets/hf.env
 
 configMapGenerator:
   - name: vosk-worker-config
@@ -39,3 +49,6 @@ configMapGenerator:
   - name: quality-gate-worker-config
     envs:
       - configs/quality-gate-worker.env
+  - name: whisper-worker-config
+    envs:
+      - configs/whisper-worker.env

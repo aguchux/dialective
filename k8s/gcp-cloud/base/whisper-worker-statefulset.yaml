@@ -1,0 +1,154 @@
+# GCP-hosted twin of ../../base/whisper-worker-statefulset.yaml -- same
+# image, same consumer group over DO's shared Redis (asr-jobs-whisper /
+# asr-workers-whisper), so this and DO's StatefulSet are just two more
+# consumers competing for the same lag signal on the same queue. Added
+# 2026-09-14 because DO's whisper-worker was capped at its ScaledObject's
+# maxReplicaCount (5) with a ~29k entry lag in asr-jobs-whisper -- GCP adds
+# real additional capacity, the same way vosk-worker/quality-gate-worker
+# already do for their own streams.
+#
+# Own per-pod PVC via volumeClaimTemplates (GKE's standard-rwo Persistent
+# Disk, RWO -- same reasoning as DO's do-block-storage: a shared PVC can
+# only attach to one pod's node at a time, so each replica needs its own
+# HuggingFace Hub download cache under /models, cold on first boot and warm
+# afterward).
+apiVersion: v1
+kind: Service
+metadata:
+  name: whisper-worker
+  labels:
+    app: whisper-worker
+spec:
+  clusterIP: None
+  selector:
+    app: whisper-worker
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: whisper-worker
+  labels:
+    app: whisper-worker
+spec:
+  serviceName: whisper-worker
+  # KEDA (whisper-worker-keda.yaml) drives replica count 0-5 off Redis
+  # stream lag; this is just the floor when nothing has scaled it yet.
+  replicas: 0
+  selector:
+    matchLabels:
+      app: whisper-worker
+  template:
+    metadata:
+      labels:
+        app: whisper-worker
+    spec:
+      containers:
+        - name: whisper-worker
+          image: golojan/dialect-whisper-worker:latest
+          env:
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: whisper-worker-config
+                  key: redis_host
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: whisper-worker-config
+                  key: redis_port
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+            - name: REDIS_TLS
+              value: "true"
+            - name: REDIS_TLS_CA
+              value: /redis-tls/ca.crt
+            - name: ASR_STREAM
+              valueFrom:
+                configMapKeyRef:
+                  name: whisper-worker-config
+                  key: asr_stream
+            - name: CONSENSUS_STREAM
+              valueFrom:
+                configMapKeyRef:
+                  name: whisper-worker-config
+                  key: consensus_stream
+            - name: CONSUMER_GROUP
+              valueFrom:
+                configMapKeyRef:
+                  name: whisper-worker-config
+                  key: consumer_group
+            - name: SPACES_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: whisper-worker-config
+                  key: spaces_region
+            - name: SPACES_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: endpoint
+            - name: SPACES_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: access_key
+            - name: SPACES_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: secret_key
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-creds
+                  key: hf_token
+            - name: API_TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auth-creds
+                  key: api_token_encryption_key
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: connection_string
+          # Same figures as DO's -- see that file's comment (the 2026-08-23
+          # eviction incident). GKE's cluster autoscaler needs these set to
+          # add nodes as replicas scale up, same reasoning as
+          # quality-gate-worker-deployment.yaml's requests here.
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2560Mi
+            limits:
+              cpu: "2"
+              memory: 3584Mi
+          volumeMounts:
+            - name: whisper-model-repo
+              mountPath: /models
+              readOnly: false
+            - name: redis-tls-ca
+              mountPath: /redis-tls
+              readOnly: true
+            - name: postgres-tls-ca
+              mountPath: /postgres-tls
+              readOnly: true
+      volumes:
+        - name: redis-tls-ca
+          secret:
+            secretName: redis-tls-ca
+        - name: postgres-tls-ca
+          secret:
+            secretName: postgres-tls-ca
+  volumeClaimTemplates:
+    - metadata:
+        name: whisper-model-repo
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+        storageClassName: standard-rwo

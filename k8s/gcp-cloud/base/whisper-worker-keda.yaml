@@ -1,0 +1,29 @@
+# Same shape as ../../base/whisper-worker-keda.yaml, pointed at the
+# external redis-external address instead of the DO-cluster-internal DNS
+# name -- same stream/consumerGroup names, so this scaler and DO's scaler
+# are just two more consumers competing for the same lag signal on the
+# same queue (asr-jobs-whisper / asr-workers-whisper).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: whisper-worker-scaler
+spec:
+  scaleTargetRef:
+    name: whisper-worker
+    kind: StatefulSet
+  minReplicaCount: 0
+  maxReplicaCount: 10
+  cooldownPeriod: 120
+  pollingInterval: 15
+  triggers:
+    - type: redis-streams
+      metadata:
+        address: 45.55.99.91:6380
+        stream: asr-jobs-whisper
+        consumerGroup: asr-workers-whisper
+        lagCount: "1"
+        activationLagCount: "0"
+        enableTLS: "true"
+        unsafeSsl: "true" # self-signed cert -- see redis-tls.env.example
+      authenticationRef:
+        name: redis-trigger-auth
