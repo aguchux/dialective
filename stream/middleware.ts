@@ -10,6 +10,14 @@ import { NextResponse, type NextRequest } from 'next/server';
  * code renders.
  */
 export async function middleware(request: NextRequest) {
+  // NextAuth's own routes (sign-in, callback, session, csrf) live under
+  // /api/auth/** -- the matcher below can't exclude a sub-path directly, so
+  // this bails out before the token check, otherwise the login flow itself
+  // gets redirected to /login and can never complete.
+  if (request.nextUrl.pathname.startsWith('/api/auth')) {
+    return NextResponse.next();
+  }
+
   const token = await getToken({ req: request });
 
   if (token && token.authError !== 'RefreshTokenInvalid') {
@@ -22,5 +30,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/team/:path*'],
+  matcher: ['/dashboard/:path*', '/team/:path*', '/api/:path*', '/usage/:path*', '/settings/:path*'],
 };
