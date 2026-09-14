@@ -2842,6 +2842,11 @@ model SubscriberOrganization {
   id               String   @id @default(uuid())
   name             String
   slug             String   @unique // DLORG-style external id, generated at creation
+  website          String?
+  industry         String?
+  description      String?
+  supportEmail     String?
+  companySize      String?
   stripeCustomerId String?  @unique
   createdAt        DateTime @default(now())
 

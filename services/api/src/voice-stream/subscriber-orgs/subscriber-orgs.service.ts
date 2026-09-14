@@ -45,7 +45,17 @@ export class SubscriberOrgsService {
     return org;
   }
 
-  async updateOrganization(organizationId: string, data: { name?: string }) {
+  async updateOrganization(
+    organizationId: string,
+    data: {
+      name?: string;
+      website?: string;
+      industry?: string;
+      description?: string;
+      supportEmail?: string;
+      companySize?: string;
+    },
+  ) {
     return this.prisma.subscriberOrganization.update({
       where: { id: organizationId },
       data,

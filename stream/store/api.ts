@@ -57,7 +57,21 @@ export interface SubscriberOrganization {
   id: string;
   name: string;
   slug: string;
+  website: string | null;
+  industry: string | null;
+  description: string | null;
+  supportEmail: string | null;
+  companySize: string | null;
   subscription: Subscription | null;
+}
+
+export interface UpdateOrganizationInput {
+  name?: string;
+  website?: string;
+  industry?: string;
+  description?: string;
+  supportEmail?: string;
+  companySize?: string;
 }
 
 export interface SecurityPolicy {
@@ -494,7 +508,7 @@ export const streamApi = createApi({
       providesTags: ['Organization'],
     }),
 
-    updateOrganization: builder.mutation<SubscriberOrganization, { name?: string }>({
+    updateOrganization: builder.mutation<SubscriberOrganization, UpdateOrganizationInput>({
       query: (body) => ({ url: '/organization', method: 'PATCH', body }),
       invalidatesTags: ['Organization'],
     }),
