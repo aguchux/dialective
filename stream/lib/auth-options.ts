@@ -25,6 +25,27 @@ const refreshCache = new Map<string, RefreshCacheEntry>();
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
+  // NextAuth v4's default cookie name/secure-flag is inferred from
+  // NEXTAUTH_URL / the request's forwarded protocol. Behind Vercel's proxy
+  // that inference can silently pick the non-`__Secure-` cookie name (or the
+  // wrong `secure` flag) on some requests, so a session set during
+  // client-side navigation "works" (SessionProvider still has it in memory)
+  // but a hard reload -- which forces the browser to actually present a
+  // fresh cookie -- can't find it and signs the user out. Pinning this
+  // explicitly (mirrors frontend/lib/auth-options.ts, minus the cross-domain
+  // `domain` since stream.dialectlibrary.com doesn't share SSO with
+  // frontend/community) removes the guesswork.
+  cookies: {
+    sessionToken: {
+      name: '__Secure-next-auth.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: true,
+      },
+    },
+  },
   providers: [
     CredentialsProvider({
       id: 'otp-verify',
