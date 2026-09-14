@@ -1,55 +1,18 @@
 'use client';
 
-import { FormEvent, ReactNode, Suspense, useState } from 'react';
+import { FormEvent, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { Eye, EyeOff, KeyRound, LockKeyhole, Mail } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { AuthShell } from '@/components/AuthShell';
+import { AuthPrimaryButton } from '@/components/AuthPrimaryButton';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { Card, ErrorText, FieldLabel, TextInput } from '@/components/ui';
 
 const authInputClassName =
   'min-h-[46px] rounded-[7px] border-auth-line bg-auth-card px-3.5 text-[15px] text-auth-ink placeholder:text-auth-muted/70 focus:border-auth-accent focus:ring-2 focus:ring-auth-accent/15 focus-visible:outline-none';
-
-/**
- * Dedicated primary CTA for this page, deliberately NOT the shared
- * PrimaryButton (whose base bg-accent/rounded-lg classes were fighting this
- * page's bg-auth-accent/rounded-[7px] overrides at equal CSS specificity --
- * class *order* in the compiled stylesheet decided the winner, not the JSX
- * override, which made the button intermittently render with no visible
- * fill). Explicit inline background/text color guarantees the fill always
- * renders regardless of utility-class cascade order.
- */
-function AuthPrimaryButton({
-  children,
-  className = '',
-  disabled,
-  type = 'button',
-}: {
-  children: ReactNode;
-  className?: string;
-  disabled?: boolean;
-  type?: 'button' | 'submit';
-}) {
-  return (
-    <button
-      className={`inline-flex min-h-[46px] w-full items-center justify-center rounded-[7px] text-[15px] font-semibold shadow-[0_1px_2px_rgba(13,99,243,0.25)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-auth-accent/35 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
-      disabled={disabled}
-      style={{ backgroundColor: 'var(--auth-accent, #0d63f3)', color: '#fff' }}
-      onMouseEnter={(e) => {
-        if (!disabled) e.currentTarget.style.backgroundColor = 'var(--auth-accent-dark, #0954d4)';
-      }}
-      onMouseLeave={(e) => {
-        if (!disabled) e.currentTarget.style.backgroundColor = 'var(--auth-accent, #0d63f3)';
-      }}
-      type={type}
-    >
-      {children}
-    </button>
-  );
-}
 
 function LoginForm() {
   const router = useRouter();

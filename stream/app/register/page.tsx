@@ -4,11 +4,18 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
-import { Eye, EyeOff } from 'lucide-react';
+import { Building2, Eye, EyeOff, Globe, KeyRound, LockKeyhole, Mail } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { leadsApi, LeadsApiError } from '@/lib/leads-api';
 import { AuthShell } from '@/components/AuthShell';
-import { Card, ErrorText, FieldLabel, PrimaryButton, TextInput } from '@/components/ui';
+import { AuthPrimaryButton } from '@/components/AuthPrimaryButton';
+import { Card, ErrorText, FieldLabel, TextInput } from '@/components/ui';
+
+const authInputClassName =
+  'min-h-[46px] rounded-[7px] border-auth-line bg-auth-card px-3.5 text-[15px] text-auth-ink placeholder:text-auth-muted/70 focus:border-auth-accent focus:ring-2 focus:ring-auth-accent/15 focus-visible:outline-none';
+
+const fieldLabelClassName =
+  '!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-auth-ink';
 
 /**
  * Branches on PlatformSettings.streamSelfServeSignupEnabled
@@ -40,8 +47,13 @@ export default function RegisterPage() {
   if (selfServeEnabled === null) {
     return (
       <AuthShell>
-        <Card className="p-6">
-          <p className="text-sm text-muted">Loading...</p>
+        <Card className="w-full min-w-0 border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+          <div aria-hidden="true" className="grid min-w-0 animate-pulse gap-4">
+            <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+            <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+            <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+            <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+          </div>
         </Card>
       </AuthShell>
     );
@@ -111,64 +123,121 @@ function SignupForm() {
 
   return (
     <AuthShell>
-      <div className="mb-6 text-center">
-        <h1 className="text-2xl font-black text-ink">Create your account</h1>
-        <p className="mt-1 text-sm text-muted">
-          {step === 'details'
-            ? 'Set up your organization on Dialect Library Voice Stream.'
-            : `Enter the code we sent to ${email}`}
-        </p>
-      </div>
-      <Card className="p-6">
+      <Card className="w-full min-w-0 border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+        <div className="mb-6 text-center">
+          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-auth-ink sm:text-[32px]">
+            Create your account
+          </h1>
+          <p className="mt-2 text-[15px] text-auth-muted">
+            {step === 'details'
+              ? 'Set up your organization on Dialect Library Voice Stream'
+              : `Enter the code we sent to ${email}`}
+          </p>
+        </div>
         {step === 'details' ? (
-          <form className="grid gap-3" onSubmit={submitDetails}>
+          <form className="grid min-w-0 gap-4" onSubmit={submitDetails}>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <FieldLabel>First name</FieldLabel>
+                <FieldLabel className={fieldLabelClassName} htmlFor="first-name">
+                  First name
+                </FieldLabel>
                 <TextInput
+                  autoComplete="given-name"
+                  className={authInputClassName}
+                  id="first-name"
                   onChange={(e) => setFirstName(e.target.value)}
                   required
                   value={firstName}
                 />
               </div>
               <div>
-                <FieldLabel>Last name</FieldLabel>
-                <TextInput onChange={(e) => setLastName(e.target.value)} required value={lastName} />
+                <FieldLabel className={fieldLabelClassName} htmlFor="last-name">
+                  Last name
+                </FieldLabel>
+                <TextInput
+                  autoComplete="family-name"
+                  className={authInputClassName}
+                  id="last-name"
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                  value={lastName}
+                />
               </div>
             </div>
             <div>
-              <FieldLabel>Work email</FieldLabel>
-              <TextInput
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@acme.com"
-                required
-                type="email"
-                value={email}
-              />
-            </div>
-            <div>
-              <FieldLabel>Company / organization</FieldLabel>
-              <TextInput
-                onChange={(e) => setOrganizationName(e.target.value)}
-                placeholder="Acme AI Ltd"
-                required
-                value={organizationName}
-              />
-            </div>
-            <div>
-              <FieldLabel>Website</FieldLabel>
-              <TextInput
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://acme.com"
-                type="url"
-                value={website}
-              />
-            </div>
-            <div>
-              <FieldLabel>Password</FieldLabel>
+              <FieldLabel className={fieldLabelClassName} htmlFor="signup-email">
+                Work email
+              </FieldLabel>
               <div className="relative">
+                <Mail
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                />
                 <TextInput
-                  className="pr-11"
+                  autoComplete="email"
+                  className={`${authInputClassName} pl-11`}
+                  id="signup-email"
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@acme.com"
+                  required
+                  type="email"
+                  value={email}
+                />
+              </div>
+            </div>
+            <div>
+              <FieldLabel className={fieldLabelClassName} htmlFor="organization-name">
+                Company / organization
+              </FieldLabel>
+              <div className="relative">
+                <Building2
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                />
+                <TextInput
+                  autoComplete="organization"
+                  className={`${authInputClassName} pl-11`}
+                  id="organization-name"
+                  onChange={(e) => setOrganizationName(e.target.value)}
+                  placeholder="Acme AI Ltd"
+                  required
+                  value={organizationName}
+                />
+              </div>
+            </div>
+            <div>
+              <FieldLabel className={fieldLabelClassName} htmlFor="organization-website">
+                Website
+              </FieldLabel>
+              <div className="relative">
+                <Globe
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                />
+                <TextInput
+                  autoComplete="url"
+                  className={`${authInputClassName} pl-11`}
+                  id="organization-website"
+                  onChange={(e) => setWebsite(e.target.value)}
+                  placeholder="https://acme.com"
+                  type="url"
+                  value={website}
+                />
+              </div>
+            </div>
+            <div>
+              <FieldLabel className={fieldLabelClassName} htmlFor="signup-password">
+                Password
+              </FieldLabel>
+              <div className="relative">
+                <LockKeyhole
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                />
+                <TextInput
+                  autoComplete="new-password"
+                  className={`${authInputClassName} pl-11 pr-12`}
+                  id="signup-password"
                   minLength={8}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 8 characters"
@@ -178,7 +247,7 @@ function SignupForm() {
                 />
                 <button
                   aria-label={passwordVisible ? 'Hide password' : 'Show password'}
-                  className="absolute right-0 top-0 grid h-10 w-11 place-items-center text-muted transition-colors hover:text-ink"
+                  className="absolute right-0 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-r-[7px] text-auth-muted transition-colors hover:text-auth-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-auth-accent/35"
                   onClick={() => setPasswordVisible((visible) => !visible)}
                   type="button"
                 >
@@ -191,32 +260,46 @@ function SignupForm() {
               </div>
             </div>
             {error && <ErrorText>{error}</ErrorText>}
-            <PrimaryButton disabled={pending} type="submit">
+            <AuthPrimaryButton disabled={pending} type="submit">
               {pending ? 'Creating account...' : 'Create account'}
-            </PrimaryButton>
+            </AuthPrimaryButton>
           </form>
         ) : (
-          <form className="grid gap-4" onSubmit={submitOtp}>
+          <form className="grid min-w-0 gap-4" onSubmit={submitOtp}>
             <div>
-              <FieldLabel>Verification code</FieldLabel>
-              <TextInput
-                inputMode="numeric"
-                maxLength={6}
-                onChange={(e) => setCode(e.target.value)}
-                required
-                value={code}
-              />
+              <FieldLabel className={fieldLabelClassName} htmlFor="signup-otp">
+                Verification code
+              </FieldLabel>
+              <div className="relative">
+                <KeyRound
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                />
+                <TextInput
+                  autoComplete="one-time-code"
+                  className={`${authInputClassName} pl-11 tracking-[0.24em]`}
+                  id="signup-otp"
+                  inputMode="numeric"
+                  maxLength={6}
+                  onChange={(e) => setCode(e.target.value)}
+                  required
+                  value={code}
+                />
+              </div>
             </div>
             {error && <ErrorText>{error}</ErrorText>}
-            <PrimaryButton disabled={pending} type="submit">
+            <AuthPrimaryButton disabled={pending} type="submit">
               {pending ? 'Verifying...' : 'Verify and continue'}
-            </PrimaryButton>
+            </AuthPrimaryButton>
           </form>
         )}
       </Card>
-      <p className="mt-6 text-center text-sm text-muted">
+      <p className="mt-6 text-center text-sm text-auth-muted">
         Already have an account?{' '}
-        <Link className="font-bold text-accent hover:underline" href="/login">
+        <Link
+          className="font-semibold text-auth-accent hover:text-auth-accent-dark hover:underline"
+          href="/login"
+        >
           Sign in
         </Link>
       </p>
@@ -256,34 +339,48 @@ function RequestAccessForm() {
 
   return (
     <AuthShell>
-      <div className="mb-6 text-center">
-        <h1 className="text-2xl font-black text-ink">Request access</h1>
-        <p className="mt-1 text-sm text-muted">
-          Tell us about your organization and we&apos;ll follow up about coverage and licensing.
-        </p>
-      </div>
-      <Card className="p-6">
+      <Card className="w-full min-w-0 border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+        <div className="mb-6 text-center">
+          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-auth-ink sm:text-[32px]">
+            Request access
+          </h1>
+          <p className="mt-2 text-[15px] text-auth-muted">
+            {submitted
+              ? "We've received your request"
+              : "Tell us about your organization and we'll follow up about coverage and licensing"}
+          </p>
+        </div>
         {submitted ? (
-          <div className="grid gap-2 text-center">
-            <p className="text-sm font-bold text-ink">Thanks — request received</p>
-            <p className="text-sm text-muted">
-              We&apos;ll reach out at the email you provided to discuss your needs and onboarding.
-            </p>
-          </div>
+          <p
+            className="rounded-[7px] border border-success/30 bg-success/10 px-3.5 py-3 text-center text-sm font-bold text-success"
+            role="status"
+          >
+            We&apos;ll reach out at the email you provided to discuss your needs and onboarding.
+          </p>
         ) : (
-          <form className="grid gap-3" onSubmit={submit}>
+          <form className="grid min-w-0 gap-4" onSubmit={submit}>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <FieldLabel>First name</FieldLabel>
+                <FieldLabel className={fieldLabelClassName} htmlFor="ra-first-name">
+                  First name
+                </FieldLabel>
                 <TextInput
+                  autoComplete="given-name"
+                  className={authInputClassName}
+                  id="ra-first-name"
                   onChange={(e) => setFirstName(e.target.value)}
                   required
                   value={firstName}
                 />
               </div>
               <div>
-                <FieldLabel>Last name</FieldLabel>
+                <FieldLabel className={fieldLabelClassName} htmlFor="ra-last-name">
+                  Last name
+                </FieldLabel>
                 <TextInput
+                  autoComplete="family-name"
+                  className={authInputClassName}
+                  id="ra-last-name"
                   onChange={(e) => setLastName(e.target.value)}
                   required
                   value={lastName}
@@ -291,44 +388,80 @@ function RequestAccessForm() {
               </div>
             </div>
             <div>
-              <FieldLabel>Work email</FieldLabel>
-              <TextInput
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@acme.com"
-                required
-                type="email"
-                value={email}
-              />
+              <FieldLabel className={fieldLabelClassName} htmlFor="ra-email">
+                Work email
+              </FieldLabel>
+              <div className="relative">
+                <Mail
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                />
+                <TextInput
+                  autoComplete="email"
+                  className={`${authInputClassName} pl-11`}
+                  id="ra-email"
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@acme.com"
+                  required
+                  type="email"
+                  value={email}
+                />
+              </div>
             </div>
             <div>
-              <FieldLabel>Company / organization</FieldLabel>
-              <TextInput
-                onChange={(e) => setOrganization(e.target.value)}
-                placeholder="Acme AI Ltd"
-                required
-                value={organization}
-              />
+              <FieldLabel className={fieldLabelClassName} htmlFor="ra-organization">
+                Company / organization
+              </FieldLabel>
+              <div className="relative">
+                <Building2
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                />
+                <TextInput
+                  autoComplete="organization"
+                  className={`${authInputClassName} pl-11`}
+                  id="ra-organization"
+                  onChange={(e) => setOrganization(e.target.value)}
+                  placeholder="Acme AI Ltd"
+                  required
+                  value={organization}
+                />
+              </div>
             </div>
             <div>
-              <FieldLabel>Website</FieldLabel>
-              <TextInput
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://acme.com"
-                required
-                type="url"
-                value={website}
-              />
+              <FieldLabel className={fieldLabelClassName} htmlFor="ra-website">
+                Website
+              </FieldLabel>
+              <div className="relative">
+                <Globe
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                />
+                <TextInput
+                  autoComplete="url"
+                  className={`${authInputClassName} pl-11`}
+                  id="ra-website"
+                  onChange={(e) => setWebsite(e.target.value)}
+                  placeholder="https://acme.com"
+                  required
+                  type="url"
+                  value={website}
+                />
+              </div>
             </div>
             {error && <ErrorText>{error}</ErrorText>}
-            <PrimaryButton disabled={pending} type="submit">
+            <AuthPrimaryButton disabled={pending} type="submit">
               {pending ? 'Submitting request...' : 'Request access'}
-            </PrimaryButton>
+            </AuthPrimaryButton>
           </form>
         )}
       </Card>
-      <p className="mt-6 text-center text-sm text-muted">
+      <p className="mt-6 text-center text-sm text-auth-muted">
         Already have an account?{' '}
-        <Link className="font-bold text-accent hover:underline" href="/login">
+        <Link
+          className="font-semibold text-auth-accent hover:text-auth-accent-dark hover:underline"
+          href="/login"
+        >
           Sign in
         </Link>
       </p>
