@@ -122,6 +122,20 @@ export class UpdatePlatformSettingsDto {
   domainConversationTaskEnabled?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  dialectValidationTaskEnabled?: boolean;
+
+  @IsOptional()
+  @Min(0)
+  @IsNumber()
+  dialectValidationPayoutTokens?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  misplacedDialectFlagThreshold?: number;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(300)
