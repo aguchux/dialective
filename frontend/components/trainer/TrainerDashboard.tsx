@@ -4892,10 +4892,14 @@ function WithdrawTokensDialog({
               <ShieldIcon className="size-12 text-accent" aria-hidden="true" />
               {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
                 <>
-                  <p className="font-extrabold">Under review by the Dialect Admin.</p>
+                  <p className="font-extrabold">Thanks -- we&apos;ve got your ID and selfie.</p>
+                  <div className="w-full rounded-lg bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    Under review by the Dialect Admin. No action needed -- we&apos;ll notify you
+                    the moment it&apos;s done.
+                  </div>
                   <p className="text-sm leading-relaxed text-muted">
-                    Your ID and selfie are being reviewed. This usually takes a few minutes --
-                    check back shortly. If it&apos;s stuck, you can cancel and try again.
+                    This usually takes a few minutes -- feel free to check back shortly. If
+                    it&apos;s stuck, you can cancel and try again.
                   </p>
                 </>
               ) : kycStatus === 'DECLINED' ||
