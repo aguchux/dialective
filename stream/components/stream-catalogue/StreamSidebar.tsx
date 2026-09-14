@@ -45,7 +45,7 @@ export function StreamSidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { guard, dialog } = useAuthGate();
+  const { guard, dialog, isAuthenticated } = useAuthGate();
 
   return (
     <aside
@@ -97,7 +97,7 @@ export function StreamSidebar({
                 className={`size-[18px] ${active ? 'text-catalogue-blue-bright' : ''}`}
               />
               <span className="flex-1">{item.label}</span>
-              {item.protected && (
+              {item.protected && !isAuthenticated && (
                 <Lock aria-hidden="true" className="size-3.5 shrink-0 text-catalogue-dim" />
               )}
             </button>

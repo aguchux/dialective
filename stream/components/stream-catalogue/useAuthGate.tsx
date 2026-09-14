@@ -43,5 +43,5 @@ export function useAuthGate() {
     <AuthGateDialog onClose={close} onSuccess={handleSuccess} open={open} />
   );
 
-  return { guard, dialog };
+  return { guard, dialog, isAuthenticated: status === 'authenticated' };
 }
