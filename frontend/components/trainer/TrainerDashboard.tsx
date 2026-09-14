@@ -2712,7 +2712,7 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
       setVerificationDialogOpen(false);
       window.location.assign(session.url);
     } catch (err) {
-      setVerificationError(normalizeErrorMessage(err, 'Could not start DIDIT verification.'));
+      setVerificationError(normalizeErrorMessage(err, 'Could not start identity verification.'));
     }
   }
 
@@ -2775,12 +2775,12 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
           <div>
             <h2 className="text-lg font-black">Verify your identity to submit a testimonial</h2>
             <p className="mt-1 text-sm leading-relaxed text-muted">
-              Testimonial rewards are available only after DIDIT approves your identity
-              verification.
+              Testimonial rewards are available only after your identity verification is
+              approved.
             </p>
             {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
               <p className="mt-2 text-sm font-bold text-amber-700">
-                Your DIDIT verification is being reviewed.
+                Your ID is under review by the Dialect Admin.
               </p>
             ) : null}
             {verificationError && (
@@ -2838,15 +2838,14 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
       <Dialog open={verificationDialogOpen} onOpenChange={setVerificationDialogOpen}>
         <DialogContent
           title="Identity verification required"
-          description="Only DIDIT-verified trainers can submit a testimonial or receive its DL reward."
+          description="Only verified trainers can submit a testimonial or receive its DL reward."
         >
           <div className="grid gap-4">
             {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
               <>
                 <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
-                  Your DIDIT identity verification is already being reviewed. You can submit a
-                  testimonial once it is approved. If this is stuck, you can cancel it and try
-                  again.
+                  Your ID is under review by the Dialect Admin. You can submit a testimonial
+                  once it is approved. If this is stuck, you can cancel it and try again.
                 </p>
                 {verificationError && (
                   <p className="text-sm font-bold text-danger">{verificationError}</p>
@@ -2864,7 +2863,7 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
             ) : (
               <>
                 <p className="text-sm leading-relaxed text-muted">
-                  Complete the secure DIDIT ID and selfie check, then return here after approval to
+                  Complete a secure ID and selfie check, then return here after approval to
                   continue.
                 </p>
                 {verificationError && (
@@ -2874,10 +2873,10 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
                   className="min-h-11 justify-center rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => void startVerification()}
                   pending={isStartingKyc}
-                  pendingLabel="Opening DIDIT"
+                  pendingLabel="Opening verification"
                   type="button"
                 >
-                  Complete DIDIT verification
+                  Complete identity verification
                 </ActionButton>
               </>
             )}
@@ -3568,7 +3567,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
         <div className={`${cardClass} grid gap-4 p-5`}>
           <SectionTitle
             title="Identity verification"
-            subtitle="A quick ID scan and selfie, verified by Didit -- required before your first withdrawal above the platform's threshold."
+            subtitle="A quick ID scan and selfie check -- required before your first withdrawal above the platform's threshold."
           />
           {kycStatus === 'APPROVED' ? (
             <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
@@ -3577,8 +3576,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
           ) : kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
             <>
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                Verification in progress -- we&apos;re reviewing your ID and selfie. If this is
-                stuck, you can cancel it and try again.
+                Your ID is under review by the Dialect Admin. If this is stuck, you can cancel
+                it and try again.
               </p>
               {error && (
                 <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
@@ -4893,9 +4892,9 @@ function WithdrawTokensDialog({
               <ShieldIcon className="size-12 text-accent" aria-hidden="true" />
               {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
                 <>
-                  <p className="font-extrabold">Verification in progress.</p>
+                  <p className="font-extrabold">Under review by the Dialect Admin.</p>
                   <p className="text-sm leading-relaxed text-muted">
-                    We&apos;re reviewing your ID and selfie. This usually takes a few minutes --
+                    Your ID and selfie are being reviewed. This usually takes a few minutes --
                     check back shortly. If it&apos;s stuck, you can cancel and try again.
                   </p>
                 </>
