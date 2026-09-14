@@ -13,6 +13,9 @@ function setup() {
     },
     subscriberRefreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     subscriberOrganization: { findUniqueOrThrow: jest.fn() },
+    subscriberInvite: { findMany: jest.fn().mockResolvedValue([]) },
+    orgActivityEvent: { findMany: jest.fn().mockResolvedValue([]) },
+    subscriberUser: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   };
   const orgActivity = { record: jest.fn().mockResolvedValue(undefined) };
@@ -238,5 +241,40 @@ describe('SubscriberOrgsService.removeMember', () => {
 
     await expect(service.removeMember('org-1', 'm-1', 'actor-1')).rejects.toThrow(ForbiddenException);
     expect(prisma.subscriberMembership.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('SubscriberOrgsService.listPendingInvites', () => {
+  it('only queries un-accepted, non-expired invites for the org', async () => {
+    const { service, prisma } = setup();
+
+    await service.listPendingInvites('org-1');
+
+    expect(prisma.subscriberInvite.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { organizationId: 'org-1', acceptedAt: null, expiresAt: { gt: expect.any(Date) } },
+      }),
+    );
+  });
+});
+
+describe('SubscriberOrgsService.listActivity', () => {
+  it('resolves actor names for events with a non-null actorUserId', async () => {
+    const { service, prisma } = setup();
+    prisma.orgActivityEvent.findMany.mockResolvedValue([
+      { id: 'e-1', organizationId: 'org-1', eventType: 'MEMBER_ROLE_CHANGED', actorUserId: 'actor-1', metadata: {}, createdAt: new Date() },
+      { id: 'e-2', organizationId: 'org-1', eventType: 'SUBSCRIPTION_PLAN_CHANGED', actorUserId: null, metadata: {}, createdAt: new Date() },
+    ]);
+    prisma.subscriberUser.findMany.mockResolvedValue([
+      { id: 'actor-1', firstName: 'Ada', lastName: 'Nwosu', email: 'ada@example.com' },
+    ]);
+
+    const result = await service.listActivity('org-1');
+
+    expect(prisma.subscriberUser.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ['actor-1'] } } }),
+    );
+    expect(result[0].actor).toMatchObject({ firstName: 'Ada' });
+    expect(result[1].actor).toBeNull();
   });
 });

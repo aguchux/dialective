@@ -135,6 +135,48 @@ export class SubscriberOrgsService {
     });
   }
 
+  async listPendingInvites(organizationId: string) {
+    return this.prisma.subscriberInvite.findMany({
+      where: { organizationId, acceptedAt: null, expiresAt: { gt: new Date() } },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        invitedByUserId: true,
+        expiresAt: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Recent Access Changes feed -- reads OrgActivityEvent, which
+   * inviteMember/updateMemberRole/removeMember already write to (see
+   * OrgActivityService.record's call sites). actorUserId has no FK relation
+   * (it's null for system-initiated events), so actor names are resolved
+   * here in a second query rather than via Prisma `include`.
+   */
+  async listActivity(organizationId: string, limit = 20) {
+    const events = await this.prisma.orgActivityEvent.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 100),
+    });
+    const actorIds = [...new Set(events.map((e) => e.actorUserId).filter((id): id is string => id !== null))];
+    const actors = actorIds.length
+      ? await this.prisma.subscriberUser.findMany({
+          where: { id: { in: actorIds } },
+          select: { id: true, firstName: true, lastName: true, email: true },
+        })
+      : [];
+    const actorsById = new Map(actors.map((a) => [a.id, a]));
+    return events.map((event) => ({
+      ...event,
+      actor: event.actorUserId ? (actorsById.get(event.actorUserId) ?? null) : null,
+    }));
+  }
+
   private async assertNotLastOwner(organizationId: string, excludingMembershipId: string) {
     const otherOwners = await this.prisma.subscriberMembership.count({
       where: {

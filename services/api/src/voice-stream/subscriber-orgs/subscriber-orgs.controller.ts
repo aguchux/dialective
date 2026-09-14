@@ -47,6 +47,20 @@ export class SubscriberOrgsController {
     return this.orgs.listMembers(subscriber.organizationId);
   }
 
+  @Get('organization/invites')
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(SubscriberOrgRole.OWNER, SubscriberOrgRole.ADMIN)
+  listPendingInvites(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
+    return this.orgs.listPendingInvites(subscriber.organizationId);
+  }
+
+  @Get('organization/activity')
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(SubscriberOrgRole.OWNER, SubscriberOrgRole.ADMIN)
+  listActivity(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
+    return this.orgs.listActivity(subscriber.organizationId);
+  }
+
   @Patch('organization/members/:id')
   @UseGuards(SubscriberRolesGuard)
   @SubscriberRoles(SubscriberOrgRole.OWNER, SubscriberOrgRole.ADMIN)

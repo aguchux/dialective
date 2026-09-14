@@ -52,6 +52,47 @@ export interface SubscriberOrganization {
   subscription: Subscription | null;
 }
 
+export interface PendingInvite {
+  id: string;
+  email: string;
+  role: SubscriberOrgRole;
+  invitedByUserId: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export type OrgActivityEventType =
+  | 'KEY_CREATED'
+  | 'KEY_ROTATED'
+  | 'KEY_REVOKED'
+  | 'OAUTH_CLIENT_CREATED'
+  | 'OAUTH_CLIENT_REVOKED'
+  | 'MEMBER_INVITED'
+  | 'MEMBER_ROLE_CHANGED'
+  | 'MEMBER_REMOVED'
+  | 'SUBSCRIPTION_PLAN_CHANGED'
+  | 'DECK_CREATED'
+  | 'DECK_RENAMED'
+  | 'DECK_DELETED'
+  | 'DECK_ITEM_ADDED'
+  | 'DECK_ITEM_REMOVED'
+  | 'DECK_VISIBILITY_CHANGED'
+  | 'SSO_CONFIGURED'
+  | 'SSO_DISABLED'
+  | 'SSO_LOGIN'
+  | 'SECURITY_POLICY_UPDATED'
+  | 'SECURITY_POLICY_REMOVED';
+
+export interface OrgActivityEvent {
+  id: string;
+  organizationId: string;
+  eventType: OrgActivityEventType;
+  actorUserId: string | null;
+  actor: { id: string; firstName: string; lastName: string; email: string } | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface SubscriberMember {
   id: string;
   role: SubscriberOrgRole;
@@ -400,6 +441,8 @@ export const streamApi = createApi({
     'Me',
     'Organization',
     'Members',
+    'Invites',
+    'Activity',
     'Subscription',
     'StreamDecks',
     'Validations',
@@ -438,17 +481,27 @@ export const streamApi = createApi({
         method: 'PATCH',
         body: { role },
       }),
-      invalidatesTags: ['Members'],
+      invalidatesTags: ['Members', 'Activity'],
     }),
 
     removeMember: builder.mutation<void, string>({
       query: (id) => ({ url: `/organization/members/${id}`, method: 'DELETE' }),
-      invalidatesTags: ['Members'],
+      invalidatesTags: ['Members', 'Activity'],
     }),
 
     inviteMember: builder.mutation<void, { email: string; role: SubscriberOrgRole }>({
       query: (body) => ({ url: '/auth/invites', method: 'POST', body }),
-      invalidatesTags: ['Members'],
+      invalidatesTags: ['Members', 'Invites'],
+    }),
+
+    listPendingInvites: builder.query<PendingInvite[], void>({
+      query: () => '/organization/invites',
+      providesTags: ['Invites'],
+    }),
+
+    listOrgActivity: builder.query<OrgActivityEvent[], void>({
+      query: () => '/organization/activity',
+      providesTags: ['Activity'],
     }),
 
     getSubscription: builder.query<Subscription | null, void>({
@@ -763,6 +816,8 @@ export const {
   useUpdateMemberRoleMutation,
   useRemoveMemberMutation,
   useInviteMemberMutation,
+  useListPendingInvitesQuery,
+  useListOrgActivityQuery,
   useGetSubscriptionQuery,
   useCreateCheckoutSessionMutation,
   useSearchCatalogueQuery,
