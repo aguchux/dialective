@@ -71,3 +71,18 @@ spec:
                 secretKeyRef:
                   name: postgres-creds
                   key: connection_string
+          # Added 2026-09-14 after un-pausing this ScaledObject ramped 15
+          # replicas onto a single DO node with zero requests set -- the
+          # node had nothing to measure pressure against, so nothing
+          # rescheduled or triggered a scale-out until it OOM-evicted
+          # several pods outright (same class of incident AGENTS.md
+          # documents for whisper-worker). Conservative starting values for
+          # a KB-scale classifier + ffmpeg subprocess, not load-tested --
+          # revisit once `kubectl top pods` data exists for this workload.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

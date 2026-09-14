@@ -5,6 +5,12 @@
 # `tls: enable`, which is not a real field KEDA's redis-streams scaler
 # recognizes -- see the fix on vosk-worker-keda.yaml, same bug would apply
 # here since this is the same trigger type against the same TLS port).
+#
+# maxReplicaCount is 30 here (vs. 15 on DO) now that
+# quality-gate-worker-deployment.yaml sets real CPU/memory requests --
+# GKE's cluster autoscaler can add nodes (node pool's max-nodes=3,
+# e2-standard-2 each) as replicas climb instead of overpacking the single
+# existing node the way DO did before requests existed.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -13,7 +19,7 @@ spec:
   scaleTargetRef:
     name: quality-gate-worker
   minReplicaCount: 0
-  maxReplicaCount: 15
+  maxReplicaCount: 30
   cooldownPeriod: 120
   pollingInterval: 15
   triggers:

@@ -81,6 +81,19 @@ spec:
                 secretKeyRef:
                   name: postgres-creds
                   key: connection_string
+          # Same values as ../../base/quality-gate-worker-deployment.yaml --
+          # see that file's comment. Also needed here so GKE's cluster
+          # autoscaler has something to measure pressure against and can
+          # actually add nodes (up to the node pool's max-nodes=3) as
+          # replicas scale up, instead of overpacking the single existing
+          # node the way DO did before requests were set.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           volumeMounts:
             - name: redis-tls-ca
               mountPath: /redis-tls
