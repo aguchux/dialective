@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { ManualPhoneVerificationStatus } from '@dialectiva/db';
 
 export class ListManualPhoneVerificationsDto {
@@ -22,7 +22,7 @@ export class ListManualPhoneVerificationsDto {
 
   @IsOptional()
   @IsString()
-  @Max(100)
+  @MaxLength(100)
   search?: string;
 
   @IsOptional()

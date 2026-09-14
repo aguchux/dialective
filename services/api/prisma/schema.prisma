@@ -698,6 +698,11 @@ model ManualPhoneVerificationRequest {
   verifiedByAdminId String?
   verifiedByAdmin   User?                         @relation("ManualPhoneVerificationAdmin", fields: [verifiedByAdminId], references: [id], onDelete: SetNull)
   verifiedAt        DateTime?
+  // True when an admin confirmed the number is reachable by other means
+  // (e.g. a call) and verified without the trainer's WhatsApp OTP code --
+  // false for the normal code-entry path. Audit trail only, never affects
+  // gating: a verified request is a verified request either way.
+  verifiedWithoutCode Boolean                     @default(false)
   rejectedAt        DateTime?
   expiresAt         DateTime
   createdAt         DateTime                      @default(now())

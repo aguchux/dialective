@@ -1293,6 +1293,7 @@ export class AuthService {
           phoneVerified: item.user.phoneVerifiedAt !== null,
         },
         verifiedByAdmin: item.verifiedByAdmin,
+        verifiedWithoutCode: item.verifiedWithoutCode,
       })),
       page: params.page,
       pageSize: params.pageSize,
@@ -1332,6 +1333,40 @@ export class AuthService {
       throw new UnauthorizedException('Invalid verification code');
     }
 
+    return this.completeManualPhoneVerification(adminId, requestId, request, false);
+  }
+
+  /**
+   * Lets an admin verify a request without the trainer's WhatsApp OTP code
+   * -- for when the admin has confirmed by other means (e.g. a call) that
+   * the number is reachable. Same claim/fee/mark-verified path as the
+   * code-entry flow, just skipping the OTP check; verifiedWithoutCode
+   * records which path was used for audit purposes only, it never affects
+   * gating.
+   */
+  async confirmManualPhoneVerificationRequest(adminId: string, requestId: string) {
+    await this.expireManualPhoneVerificationRequests();
+    const request = await this.prisma.manualPhoneVerificationRequest.findUnique({
+      where: { id: requestId },
+    });
+    if (!request) throw new NotFoundException('Manual verification request not found');
+    if (request.status !== ManualPhoneVerificationStatus.PENDING) {
+      throw new UnprocessableEntityException('This verification request is no longer pending');
+    }
+    if (request.expiresAt < new Date()) {
+      await this.expireManualPhoneVerificationRequests();
+      throw new UnprocessableEntityException('This verification request has expired');
+    }
+
+    return this.completeManualPhoneVerification(adminId, requestId, request, true);
+  }
+
+  private async completeManualPhoneVerification(
+    adminId: string,
+    requestId: string,
+    request: { userId: string; feeTokenAmount: Prisma.Decimal; phoneNumber: string },
+    verifiedWithoutCode: boolean,
+  ) {
     try {
       await this.prisma.$transaction(async (tx) => {
         // where: { status: PENDING } makes this claim atomic: if two verify
@@ -1344,6 +1379,7 @@ export class AuthService {
             status: ManualPhoneVerificationStatus.VERIFIED,
             verifiedByAdminId: adminId,
             verifiedAt: new Date(),
+            verifiedWithoutCode,
           },
         });
         if (claim.count === 0) {
@@ -1433,6 +1469,7 @@ export class AuthService {
       createdAt: item.createdAt,
       user: { ...item.user, phoneVerified: item.user.phoneVerifiedAt !== null },
       verifiedByAdmin: item.verifiedByAdmin,
+      verifiedWithoutCode: item.verifiedWithoutCode,
     };
   }
 

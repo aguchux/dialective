@@ -264,6 +264,18 @@ export class AuthController {
     return this.auth.verifyManualPhoneVerificationRequest(admin.sub, id, dto.code);
   }
 
+  @Post('admin/phone-verifications/:id/confirm')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Throttle({ default: { limit: 10, ttl: 60 * 1000 } })
+  confirmManualPhoneVerification(
+    @CurrentUser() admin: AccessTokenClaims,
+    @Param('id') id: string,
+  ) {
+    return this.auth.confirmManualPhoneVerificationRequest(admin.sub, id);
+  }
+
   @Post('admin/phone-verifications/:id/reject')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, RolesGuard)

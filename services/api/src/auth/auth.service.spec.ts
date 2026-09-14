@@ -854,6 +854,86 @@ describe('AuthService.verifyManualPhoneVerificationRequest', () => {
   });
 });
 
+describe('AuthService.confirmManualPhoneVerificationRequest', () => {
+  function pendingRequest(overrides: Partial<{ expiresAt: Date }> = {}) {
+    return {
+      id: 'request-1',
+      userId: 'user-1',
+      phoneNumber: '+1234567890',
+      otpHash: hashOtpCode('123456'),
+      status: 'PENDING',
+      feeTokenAmount: new Prisma.Decimal(1),
+      attempts: 0,
+      maxAttempts: 5,
+      expiresAt: overrides.expiresAt ?? new Date(Date.now() + 60_000),
+    };
+  }
+
+  it('verifies without a code, charges the fee, and marks verifiedWithoutCode', async () => {
+    const { service, prisma, mail } = setup();
+    const request = pendingRequest();
+    prisma.manualPhoneVerificationRequest.updateMany.mockResolvedValue({ count: 1 });
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(request);
+    prisma.wallet.upsert.mockResolvedValue({ id: 'wallet-1' });
+    prisma.wallet.updateMany.mockResolvedValue({ count: 1 });
+    prisma.manualPhoneVerificationRequest.findUniqueOrThrow.mockResolvedValue({
+      ...request,
+      status: 'VERIFIED',
+      verifiedWithoutCode: true,
+      user: {
+        id: 'user-1',
+        email: 'a@b.com',
+        firstName: null,
+        lastName: null,
+        phoneNumber: '+1234567890',
+        phoneVerifiedAt: new Date(),
+      },
+      verifiedByAdmin: { id: 'admin-1', email: 'admin@b.com', firstName: null, lastName: null },
+    });
+
+    const result = await service.confirmManualPhoneVerificationRequest('admin-1', 'request-1');
+
+    expect(result.status).toBe('VERIFIED');
+    expect(result.verifiedWithoutCode).toBe(true);
+    expect(prisma.manualPhoneVerificationRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'request-1', status: 'PENDING' },
+        data: expect.objectContaining({ verifiedWithoutCode: true }),
+      }),
+    );
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: expect.objectContaining({ phoneNumber: '+1234567890' }),
+      }),
+    );
+    expect(mail.sendPhoneVerifiedEmail).toHaveBeenCalledWith('a@b.com', '+1234567890');
+  });
+
+  it('rejects an already-resolved request without needing a code', async () => {
+    const { service, prisma } = setup();
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue({
+      ...pendingRequest(),
+      status: 'REJECTED',
+    });
+
+    await expect(
+      service.confirmManualPhoneVerificationRequest('admin-1', 'request-1'),
+    ).rejects.toThrow(UnprocessableEntityException);
+  });
+
+  it('rejects an expired request', async () => {
+    const { service, prisma } = setup();
+    prisma.manualPhoneVerificationRequest.findUnique.mockResolvedValue(
+      pendingRequest({ expiresAt: new Date(Date.now() - 1000) }),
+    );
+
+    await expect(
+      service.confirmManualPhoneVerificationRequest('admin-1', 'request-1'),
+    ).rejects.toThrow(UnprocessableEntityException);
+  });
+});
+
 describe('AuthService.rejectManualPhoneVerificationRequest', () => {
   it('rejects the request without touching the wallet -- the fee was never charged', async () => {
     const { service, prisma } = setup();

@@ -1328,6 +1328,7 @@ export interface ManualPhoneVerificationRow {
     firstName: string | null;
     lastName: string | null;
   } | null;
+  verifiedWithoutCode: boolean;
 }
 
 export interface ManualPhoneVerificationPage {
@@ -4223,6 +4224,10 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['Users'],
     }),
+    confirmAdminManualPhoneVerification: builder.mutation<ManualPhoneVerificationRow, string>({
+      query: (id) => ({ url: `/auth/admin/phone-verifications/${id}/confirm`, method: 'POST' }),
+      invalidatesTags: ['Users'],
+    }),
     rejectAdminManualPhoneVerification: builder.mutation<ManualPhoneVerificationRow, string>({
       query: (id) => ({ url: `/auth/admin/phone-verifications/${id}/reject`, method: 'POST' }),
       invalidatesTags: ['Users'],
@@ -5299,6 +5304,7 @@ export const {
   useGetAuditHoldQueueQuery,
   useListAdminManualPhoneVerificationsQuery,
   useVerifyAdminManualPhoneVerificationMutation,
+  useConfirmAdminManualPhoneVerificationMutation,
   useRejectAdminManualPhoneVerificationMutation,
   useListAdminSmsContactsQuery,
   useListAdminSmsMessagesQuery,

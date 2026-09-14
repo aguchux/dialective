@@ -9,6 +9,7 @@ import {
   ManualPhoneVerificationRow,
   ManualPhoneVerificationStatus,
   normalizeErrorMessage,
+  useConfirmAdminManualPhoneVerificationMutation,
   useListAdminManualPhoneVerificationsQuery,
   useRejectAdminManualPhoneVerificationMutation,
   useVerifyAdminManualPhoneVerificationMutation,
@@ -254,6 +255,7 @@ function RequestRow({
   onVerify: (row: ManualPhoneVerificationRow) => void;
 }) {
   const [reject, { isLoading: rejecting }] = useRejectAdminManualPhoneVerificationMutation();
+  const [confirm, { isLoading: confirming }] = useConfirmAdminManualPhoneVerificationMutation();
   const [error, setError] = useState<string | null>(null);
   const name = useMemo(
     () => [row.user.firstName, row.user.lastName].filter(Boolean).join(' ') || row.user.email,
@@ -269,6 +271,22 @@ function RequestRow({
     }
   }
 
+  async function confirmRow() {
+    setError(null);
+    if (
+      !window.confirm(
+        `Confirm ${row.phoneNumber} is reachable and verify it without the trainer's code?`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await confirm(row.id).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to verify this number.'));
+    }
+  }
+
   return (
     <>
       <tr className="border-t border-line">
@@ -279,6 +297,9 @@ function RequestRow({
         <td className="px-4 py-3 font-bold">{row.phoneNumber}</td>
         <td className="px-4 py-3">
           <StatusBadge status={row.status} />
+          {row.status === 'VERIFIED' && row.verifiedWithoutCode && (
+            <div className="mt-1 text-xs font-bold text-muted">without code</div>
+          )}
         </td>
         <td className="px-4 py-3">{row.feeTokenAmount} DL</td>
         <td className="px-4 py-3">{row.sentAt ? formatDateTime(row.sentAt) : 'Not marked sent'}</td>
@@ -293,6 +314,16 @@ function RequestRow({
               >
                 Verify
               </button>
+              <ActionButton
+                className="min-h-9 rounded-lg border border-line px-3 font-bold hover:bg-surface-muted disabled:opacity-60"
+                onClick={() => void confirmRow()}
+                pending={confirming}
+                pendingLabel="Verifying"
+                title="Verify without the trainer's code -- use only once you've confirmed the number is reachable another way."
+                type="button"
+              >
+                Number confirmed
+              </ActionButton>
               <ActionButton
                 className="min-h-9 rounded-lg border border-line px-3 font-bold hover:bg-surface-muted disabled:opacity-60"
                 onClick={() => void rejectRow()}
