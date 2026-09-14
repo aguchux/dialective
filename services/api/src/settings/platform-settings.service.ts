@@ -1050,6 +1050,9 @@ export class PlatformSettingsService {
       tawkToPropertyId: row.tawkToPropertyId,
       tawkToWidgetId: row.tawkToWidgetId,
       supportChatMode: row.supportChatMode,
+      trainerAdsterra728Enabled: row.trainerAdsterra728Enabled,
+      trainerAdsterra728ScriptUrl: row.trainerAdsterra728ScriptUrl,
+      trainerAdsterra728Key: row.trainerAdsterra728Key,
       pwaInstallPromptEnabled: row.pwaInstallPromptEnabled,
       weeklyTrainerReportEnabled: row.weeklyTrainerReportEnabled,
       pwaInstallPromptReminderMinutes: row.pwaInstallPromptReminderMinutes,
@@ -1230,6 +1233,9 @@ export class PlatformSettingsService {
     tawkToPropertyId?: string | null;
     tawkToWidgetId?: string | null;
     supportChatMode?: string;
+    trainerAdsterra728Enabled?: boolean;
+    trainerAdsterra728ScriptUrl?: string | null;
+    trainerAdsterra728Key?: string | null;
     pwaInstallPromptEnabled?: boolean;
     pwaInstallPromptReminderMinutes?: number;
     weeklyTrainerReportEnabled?: boolean;
@@ -1541,6 +1547,28 @@ export class PlatformSettingsService {
       }
     }
 
+    if (data.trainerAdsterra728ScriptUrl !== undefined) {
+      const trimmed = data.trainerAdsterra728ScriptUrl?.trim() ?? null;
+      if (trimmed && !/^https:\/\//i.test(trimmed)) {
+        throw new BadRequestException('trainerAdsterra728ScriptUrl must use https://');
+      }
+      data.trainerAdsterra728ScriptUrl = trimmed;
+    }
+    if (data.trainerAdsterra728Key !== undefined) {
+      const trimmed = data.trainerAdsterra728Key?.trim() ?? null;
+      data.trainerAdsterra728Key = trimmed || null;
+    }
+    if (data.trainerAdsterra728Enabled) {
+      const existing = await this.getRow();
+      const scriptUrl = data.trainerAdsterra728ScriptUrl ?? existing.trainerAdsterra728ScriptUrl;
+      const key = data.trainerAdsterra728Key ?? existing.trainerAdsterra728Key;
+      if (!scriptUrl || !key) {
+        throw new BadRequestException(
+          'Add the Adsterra 728x90 script URL and unit key before enabling the trainer ad',
+        );
+      }
+    }
+
     const SUPPORTED_WITHDRAWAL_CURRENCIES = ['USDT', 'USDC'];
     const SUPPORTED_WITHDRAWAL_NETWORKS = ['TRC20', 'ERC20', 'BEP20', 'SOL', 'POLYGON'];
 
@@ -1608,7 +1636,11 @@ export class PlatformSettingsService {
       data.smsSenderId = trimmed === '' ? null : trimmed;
     }
 
-    if (data.otpChannel !== undefined && data.otpChannel !== 'sms' && data.otpChannel !== 'whatsapp') {
+    if (
+      data.otpChannel !== undefined &&
+      data.otpChannel !== 'sms' &&
+      data.otpChannel !== 'whatsapp'
+    ) {
       throw new BadRequestException('otpChannel must be "sms" or "whatsapp"');
     }
 
@@ -1871,6 +1903,9 @@ export class PlatformSettingsService {
       tawkToPropertyId: row.tawkToPropertyId,
       tawkToWidgetId: row.tawkToWidgetId,
       supportChatMode: row.supportChatMode,
+      trainerAdsterra728Enabled: row.trainerAdsterra728Enabled,
+      trainerAdsterra728ScriptUrl: row.trainerAdsterra728ScriptUrl,
+      trainerAdsterra728Key: row.trainerAdsterra728Key,
       wordStuckTimeoutMinutes: row.wordStuckTimeoutMinutes,
       scoringSlaMinutes: row.scoringSlaMinutes,
       auditHoldEveryNSubmissions: row.auditHoldEveryNSubmissions,
@@ -2077,6 +2112,12 @@ export class PlatformSettingsService {
       tawkToPropertyId: tawkTo.propertyId,
       tawkToWidgetId: tawkTo.widgetId,
       supportChatMode: supportChat.mode,
+      trainerAdsterra728:
+        row.trainerAdsterra728Enabled &&
+        row.trainerAdsterra728ScriptUrl &&
+        row.trainerAdsterra728Key
+          ? { scriptUrl: row.trainerAdsterra728ScriptUrl, key: row.trainerAdsterra728Key }
+          : null,
       pwaInstallPromptEnabled: row.pwaInstallPromptEnabled,
       weeklyTrainerReportEnabled: row.weeklyTrainerReportEnabled,
       pwaInstallPromptReminderMinutes: row.pwaInstallPromptReminderMinutes,

@@ -614,6 +614,20 @@ export class UpdatePlatformSettingsDto {
   @MaxLength(100)
   whatsappTemplateId?: string;
 
+  @IsOptional()
+  @IsBoolean()
+  trainerAdsterra728Enabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  trainerAdsterra728ScriptUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  trainerAdsterra728Key?: string;
+
   // Plaintext MailerSend API key -- PlatformSettingsService.update encrypts
   // it before persisting and never stores/echoes the plaintext. Pass '' to
   // clear a previously-saved key; omit to leave it untouched.

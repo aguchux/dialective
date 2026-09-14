@@ -2469,6 +2469,9 @@ model PlatformSettings {
   tawkToPropertyId                           String? // Tawk.to "Property ID" from the widget's embed snippet -- the first path segment of https://embed.tawk.to/<propertyId>/<widgetId>
   tawkToWidgetId                             String? // Tawk.to "Widget ID" from the same embed snippet -- the second path segment
   supportChatMode                            String    @default("TAWK") // NONE | TAWK | AI; TAWK remains the compatibility default for existing deployments
+  trainerAdsterra728Enabled                  Boolean   @default(false) // admin gate for the trainer dashboard's 728x90 Adsterra unit
+  trainerAdsterra728ScriptUrl               String? // Adsterra 728x90 script src managed in admin settings
+  trainerAdsterra728Key                      String? // public Adsterra unit key, returned only when enabled and configured
   pwaInstallPromptEnabled                    Boolean   @default(true) // master switch for authenticated PWA install prompts; the avatar-menu install action remains available when supported
   pwaInstallPromptReminderMinutes            Int       @default(60) // minimum interval before a dismissed PWA install prompt may reappear on the same device/account
   weeklyTrainerReportEnabled                 Boolean   @default(true) // master switch for the Monday weekly-trainer-report email (weekly-trainer-report.ts CronJob); checked once at job start, gates the whole run rather than per-recipient

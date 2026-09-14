@@ -30,10 +30,12 @@ import { DykSettingsPanel } from './DykSettingsPanel';
 import { CommunitySettingsPanel } from './CommunitySettingsPanel';
 import { StreamSettingsPanel } from './StreamSettingsPanel';
 import { DomainConversationSettingsPanel } from './DomainConversationSettingsPanel';
+import { AdsMonetisationSettingsPanel } from './AdsMonetisationSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
   { key: 'stream', label: 'Stream Settings' },
+  { key: 'adsMonetisation', label: 'Ads & Monetisation' },
   { key: 'landingPage', label: 'Landing Page' },
   { key: 'maintenance', label: 'Site Maintenance' },
   { key: 'referrals', label: 'Referral Bonuses' },
@@ -66,6 +68,7 @@ type GroupKey = (typeof groups)[number]['key'];
 const panelComponents: Record<GroupKey, () => JSX.Element> = {
   general: GeneralSettingsPanel,
   stream: StreamSettingsPanel,
+  adsMonetisation: AdsMonetisationSettingsPanel,
   landingPage: LandingPageSettingsPanel,
   maintenance: MaintenanceSettingsPanel,
   referrals: ReferralBonusSettingsPanel,

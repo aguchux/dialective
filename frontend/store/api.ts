@@ -1156,6 +1156,7 @@ export interface PublicClientSettings {
   tawkToPropertyId: string | null;
   tawkToWidgetId: string | null;
   supportChatMode: 'NONE' | 'TAWK' | 'AI';
+  trainerAdsterra728: { scriptUrl: string; key: string } | null;
   pwaInstallPromptEnabled: boolean;
   pwaInstallPromptReminderMinutes: number;
   isKycRequiredForWithdrawals: boolean;
@@ -1614,6 +1615,9 @@ export interface PlatformSettings {
   tawkToPropertyId: string | null;
   tawkToWidgetId: string | null;
   supportChatMode: 'NONE' | 'TAWK' | 'AI';
+  trainerAdsterra728Enabled: boolean;
+  trainerAdsterra728ScriptUrl: string | null;
+  trainerAdsterra728Key: string | null;
   pwaInstallPromptEnabled: boolean;
   pwaInstallPromptReminderMinutes: number;
   weeklyTrainerReportEnabled: boolean;
@@ -1779,6 +1783,9 @@ export interface PlatformSettingsInput {
   tawkToPropertyId?: string;
   tawkToWidgetId?: string;
   supportChatMode?: 'NONE' | 'TAWK' | 'AI';
+  trainerAdsterra728Enabled?: boolean;
+  trainerAdsterra728ScriptUrl?: string | null;
+  trainerAdsterra728Key?: string | null;
   pwaInstallPromptEnabled?: boolean;
   pwaInstallPromptReminderMinutes?: number;
   weeklyTrainerReportEnabled?: boolean;

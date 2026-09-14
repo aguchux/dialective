@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useId, useRef } from 'react';
+import { useGetPublicClientSettingsQuery } from '@/store/api';
 
 /** Loads the dedicated 728x90 unit when its public ad-unit configuration exists. */
 export function TrainerAdBanner({ slot }: { slot: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const instanceId = useId().replace(/:/g, '');
-  const scriptUrl = process.env.NEXT_PUBLIC_ADSTERRA_728_SCRIPT_URL;
-  const key = process.env.NEXT_PUBLIC_ADSTERRA_728_KEY;
+  const { data: settings } = useGetPublicClientSettingsQuery();
+  const scriptUrl = settings?.trainerAdsterra728?.scriptUrl;
+  const key = settings?.trainerAdsterra728?.key;
 
   useEffect(() => {
     const container = containerRef.current;
