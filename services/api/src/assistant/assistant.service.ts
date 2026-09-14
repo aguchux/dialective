@@ -13,6 +13,7 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import Redis from 'ioredis';
 import { BlogPostStatus, CourseVisibility } from '@dialectiva/db';
+import { buildRedisConnectionOptions } from '../common/redis-connection.util';
 import { LlmNormalizerService } from '../llm/llm-normalizer.service';
 import { parseProviderOrder } from '../llm/llm-provider.interface';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
@@ -53,8 +54,7 @@ export class AssistantService implements OnModuleDestroy {
     // tests that construct this service directly without Nest's DI/lifecycle)
     // until the anonymous-quota path actually calls a Redis command.
     this.redis = new Redis({
-      host: process.env.REDIS_HOST ?? 'redis',
-      port: Number(process.env.REDIS_PORT ?? 6379),
+      ...buildRedisConnectionOptions(),
       lazyConnect: true,
       maxRetriesPerRequest: 1,
     });

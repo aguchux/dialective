@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
+import { buildRedisConnectionOptions } from '../common/redis-connection.util';
 
 const MAX_DELIVERY_ATTEMPTS = 3;
 const RECLAIM_IDLE_MS = 5 * 60 * 1000;
@@ -26,10 +27,7 @@ export class RedisStreamsService implements OnModuleDestroy {
   private consuming = false;
 
   constructor() {
-    this.redis = new Redis({
-      host: process.env.REDIS_HOST ?? 'redis',
-      port: Number(process.env.REDIS_PORT ?? 6379),
-    });
+    this.redis = new Redis(buildRedisConnectionOptions());
   }
 
   async onModuleDestroy() {

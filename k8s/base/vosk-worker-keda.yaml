@@ -17,3 +17,5 @@ spec:
         consumerGroup: asr-workers-vosk
         lagCount: "1"
         activationLagCount: "0"
+      authenticationRef:
+        name: redis-trigger-auth

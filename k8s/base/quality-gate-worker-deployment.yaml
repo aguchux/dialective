@@ -31,6 +31,11 @@ spec:
                 configMapKeyRef:
                   name: quality-gate-worker-config
                   key: redis_port
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
             - name: QUALITY_GATE_STREAM
               valueFrom:
                 configMapKeyRef:

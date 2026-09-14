@@ -17,3 +17,5 @@ spec:
         consumerGroup: prompt-audio-workers
         lagCount: "1"
         activationLagCount: "0"
+      authenticationRef:
+        name: redis-trigger-auth

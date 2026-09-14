@@ -1,0 +1,38 @@
+# External access to Redis for the GCP-hosted vosk-worker deployment
+# (k8s/gcp-cloud/) -- DO's block storage / cluster network has no VPN/
+# interconnect to GCP, so a GCP pod reaches this exact Redis instance (the
+# one asr-jobs-vosk queue both clusters' vosk-worker replicas share) over
+# the public internet instead. Deliberately a separate LoadBalancer Service
+# from the in-cluster `redis` Service (redis.yaml) -- mirrors
+# livekit-service.yaml's split between livekit-server's ClusterIP (internal)
+# and livekit-rtc's LoadBalancer (external): internal traffic keeps using
+# the plain, cluster-internal port with no LB cost or extra hop; only
+# traffic that genuinely needs to leave the cluster gets a public IP.
+#
+# Only the TLS port (6380) is exposed here, never plain 6379 -- an external
+# client MUST use AUTH+TLS, there is no unauthenticated external path.
+#
+# do-loadbalancer-allowlist restricts inbound connections to GCP's static
+# egress IP only (reserved via `gcloud compute addresses create`, see
+# k8s/gcp-cloud/README.md) -- update the placeholder below with that real
+# IP before applying. Without this annotation the LB would accept
+# connections from anywhere on the internet, which is not the agreed
+# posture (password+TLS+allowlist, not password+TLS alone).
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-external
+  labels:
+    app: redis
+  annotations:
+    service.beta.kubernetes.io/do-loadbalancer-name: "redis-external"
+    service.beta.kubernetes.io/do-loadbalancer-allowlist: "REPLACE_WITH_GCP_STATIC_EGRESS_IP/32"
+spec:
+  type: LoadBalancer
+  selector:
+    app: redis
+  ports:
+    - name: redis-tls
+      port: 6380
+      targetPort: 6380
+      protocol: TCP

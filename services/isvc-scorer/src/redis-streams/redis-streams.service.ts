@@ -29,6 +29,11 @@ export class RedisStreamsService implements OnModuleDestroy {
     this.redis = new Redis({
       host: process.env.REDIS_HOST ?? 'redis',
       port: Number(process.env.REDIS_PORT ?? 6379),
+      // Optional: unset means no AUTH (today's default). See
+      // k8s/base/redis.yaml's requirepass + TLS listener rollout -- every
+      // Redis client across the fleet reads these same two env vars.
+      ...(process.env.REDIS_PASSWORD ? { password: process.env.REDIS_PASSWORD } : {}),
+      ...(process.env.REDIS_TLS === 'true' ? { tls: {} } : {}),
     });
   }
 

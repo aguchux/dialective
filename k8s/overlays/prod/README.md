@@ -13,9 +13,17 @@ cp spaces.env.example spaces.env
 cp pgadmin.env.example pgadmin.env
 cp auth.env.example auth.env
 cp stream.env.example stream.env
+cp redis-auth.env.example redis-auth.env
 cd -
 kubectl apply -k k8s/overlays/prod/
 ```
+
+`redis-auth` and the TLS certs (`redis-tls`, `postgres-tls`) exist to let a
+GCP-hosted `vosk-worker` reach this cluster's Redis/Postgres over the public
+internet — see `k8s/gcp-cloud/README.md` for the full staged rollout
+(deploying this alone does not change anything for existing in-cluster
+consumers until `--requirepass`/TLS are actually turned on, which is a
+separate, carefully-ordered step in that doc).
 
 `kustomization.yaml`'s `secretGenerator` reads `k8s/overlays/prod/secrets/{postgres,spaces,pgadmin,auth,stream,...}.env` into one Secret each:
 

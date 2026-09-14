@@ -6,9 +6,12 @@ resources:
   # production release workflow creates it once per image instead of running
   # database migrations during every kustomize apply or API pod restart.
   - redis.yaml
+  - redis-external.yaml
+  - redis-trigger-auth.yaml
   - rabbitmq.yaml
   - rabbitmq-ingress.yaml
   - postgres.yaml
+  - postgres-external.yaml
   - pgadmin.yaml
   - pgadmin-ingress.yaml
   - model-pvc.yaml

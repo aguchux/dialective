@@ -4,6 +4,10 @@ k8s/overlays/prod/secrets/*
 !k8s/overlays/prod/secrets/*.example
 k8s/overlays/prod/configs/*
 !k8s/overlays/prod/configs/*.example
+k8s/gcp-cloud/overlays/prod/secrets/*
+!k8s/gcp-cloud/overlays/prod/secrets/*.example
+k8s/gcp-cloud/overlays/prod/configs/*
+!k8s/gcp-cloud/overlays/prod/configs/*.example
 node_modules/
 dist/
 # Local-dev-only copy of models/asr-registry.yaml. AsrRegistryService

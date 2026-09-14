@@ -18,3 +18,5 @@ spec:
         consumerGroup: asr-workers-whisper
         lagCount: "1"
         activationLagCount: "0"
+      authenticationRef:
+        name: redis-trigger-auth

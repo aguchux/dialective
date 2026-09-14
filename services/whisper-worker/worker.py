@@ -21,6 +21,11 @@ logger = logging.getLogger("whisper-worker")
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+# Optional: unset means no AUTH/TLS (today's default, safe before requirepass
+# is turned on). See k8s/base/redis.yaml's requirepass + TLS listener
+# rollout -- every Redis client across the fleet reads these same env vars.
+REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD") or None
+REDIS_TLS = os.environ.get("REDIS_TLS", "").lower() == "true"
 ASR_STREAM = os.environ.get("ASR_STREAM", "asr-jobs-whisper")
 CONSENSUS_STREAM = os.environ.get("CONSENSUS_STREAM", "consensus-jobs")
 CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "asr-workers-whisper")
@@ -378,7 +383,13 @@ def make_handler(s3, redis_client: redis.Redis, db_conn):
 
 
 def main() -> None:
-    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    redis_client = redis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        password=REDIS_PASSWORD,
+        ssl=REDIS_TLS,
+        decode_responses=True,
+    )
     s3 = build_spaces_client()
     db_conn = build_db_connection()
 

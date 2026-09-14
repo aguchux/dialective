@@ -58,6 +58,11 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: redis_port
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
             - name: RABBITMQ_HOST
               valueFrom:
                 configMapKeyRef:

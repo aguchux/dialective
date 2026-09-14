@@ -22,6 +22,20 @@ logger = logging.getLogger("vosk-worker")
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+# Optional: unset means no AUTH/TLS (today's default, safe before requirepass
+# is turned on). See k8s/base/redis.yaml's requirepass + TLS listener
+# rollout -- every Redis client across the fleet reads these same env vars.
+REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD") or None
+REDIS_TLS = os.environ.get("REDIS_TLS", "").lower() == "true"
+# Only vosk-worker ever connects to Redis across the public internet (the
+# GCP deployment reaching DO's redis-external LoadBalancer -- see
+# k8s/gcp-cloud/base/vosk-worker-deployment.yaml); DO's own vosk-worker
+# replicas talk to the cluster-internal, non-TLS `redis` hostname and never
+# set this. The server's cert is self-managed (not a public CA -- see
+# k8s/overlays/prod/secrets/redis-tls.env.example), so redis-py needs this
+# CA file to validate the server's identity rather than trusting the system
+# CA bundle, which would never match a self-signed cert.
+REDIS_TLS_CA = os.environ.get("REDIS_TLS_CA") or None
 ASR_STREAM = os.environ.get("ASR_STREAM", "asr-jobs-vosk")
 CONSENSUS_STREAM = os.environ.get("CONSENSUS_STREAM", "consensus-jobs")
 CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "asr-workers-vosk")
@@ -277,7 +291,14 @@ def make_handler(s3, redis_client: redis.Redis, db_conn):
 
 
 def main() -> None:
-    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    redis_client = redis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        password=REDIS_PASSWORD,
+        ssl=REDIS_TLS,
+        ssl_ca_certs=REDIS_TLS_CA,
+        decode_responses=True,
+    )
     s3 = build_spaces_client()
     db_conn = build_db_connection()
 

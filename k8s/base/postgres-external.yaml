@@ -1,0 +1,31 @@
+# External access to Postgres for the GCP-hosted vosk-worker deployment
+# (k8s/gcp-cloud/) -- vosk-worker persists transcription results directly to
+# Postgres (write_submission_row), not just Redis, so GCP needs real DB
+# access too. Same allowlist-restricted LoadBalancer pattern as
+# redis-external.yaml, but Postgres already requires username+password auth
+# (unlike Redis, which had none) -- the new exposure surface here is
+# smaller: connection requires real credentials already, this just adds a
+# reachable network path + enforces TLS on it (sslmode=require on every
+# connection string GCP uses, see k8s/gcp-cloud/overlays/prod/secrets/
+# postgres.env.example) so the password isn't sent in cleartext over the
+# public internet. postgres:16-alpine ships with SSL support built in but
+# it's OFF by default (no ssl=on, no cert configured) -- see
+# k8s/base/postgres.yaml's args for the corresponding server-side change.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-external
+  labels:
+    app: postgres
+  annotations:
+    service.beta.kubernetes.io/do-loadbalancer-name: "postgres-external"
+    service.beta.kubernetes.io/do-loadbalancer-allowlist: "REPLACE_WITH_GCP_STATIC_EGRESS_IP/32"
+spec:
+  type: LoadBalancer
+  selector:
+    app: postgres
+  ports:
+    - name: postgres-tls
+      port: 5432
+      targetPort: 5432
+      protocol: TCP

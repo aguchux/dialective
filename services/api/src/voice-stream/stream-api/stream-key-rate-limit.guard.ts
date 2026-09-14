@@ -8,6 +8,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import Redis from 'ioredis';
+import { buildRedisConnectionOptions } from '../../common/redis-connection.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthenticatedStreamKeyRequest } from './stream-key-auth.guard';
 
@@ -34,10 +35,7 @@ const WINDOW_SECONDS = 60;
 @Injectable()
 export class StreamKeyRateLimitGuard implements CanActivate, OnModuleDestroy {
   private readonly logger = new Logger(StreamKeyRateLimitGuard.name);
-  private readonly redis = new Redis({
-    host: process.env.REDIS_HOST ?? 'redis',
-    port: Number(process.env.REDIS_PORT ?? 6379),
-  });
+  private readonly redis = new Redis(buildRedisConnectionOptions());
 
   constructor(private readonly prisma: PrismaService) {}
 

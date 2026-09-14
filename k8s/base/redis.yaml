@@ -33,22 +33,71 @@ spec:
       containers:
         - name: redis
           image: redis:7.2-alpine
-          args: ["--appendonly", "yes"]
+          # --requirepass: every client (in-cluster and external) now needs
+          # AUTH -- see services/api/src/common/redis-connection.util.ts and
+          # each Python worker's REDIS_PASSWORD handling. --tls-port opens a
+          # SECOND, TLS-only listener alongside the existing plain 6379 --
+          # in-cluster traffic (same private network) keeps using plain
+          # 6379, only the external redis-external LoadBalancer Service
+          # (below) targets 6380/TLS. --tls-auth-clients no: this is
+          # server-only TLS (encrypts the wire, proves server identity to
+          # GCP), not mutual-TLS -- client certs would add another moving
+          # part with no real benefit given AUTH already gates access and
+          # the LoadBalancer's IP allowlist already restricts who can reach
+          # this port at all.
+          args:
+            - "--appendonly"
+            - "yes"
+            - "--requirepass"
+            - "$(REDIS_PASSWORD)"
+            - "--tls-port"
+            - "6380"
+            - "--tls-cert-file"
+            - "/tls/tls.crt"
+            - "--tls-key-file"
+            - "/tls/tls.key"
+            - "--tls-auth-clients"
+            - "no"
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
           ports:
             - containerPort: 6379
+            - containerPort: 6380
           volumeMounts:
             - name: redis-data
               mountPath: /data
+            - name: redis-tls
+              mountPath: /tls
+              readOnly: true
+          # redis-cli needs -a/--tls to reach an AUTH+TLS-required server --
+          # probing the plain 6379 port with a bare PING still works exactly
+          # as before, so requirepass doesn't need to touch these.
           readinessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ["redis-cli", "-a", "$(REDIS_PASSWORD)", "--no-auth-warning", "ping"]
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ["redis-cli", "-a", "$(REDIS_PASSWORD)", "--no-auth-warning", "ping"]
             initialDelaySeconds: 15
             periodSeconds: 20
+      volumes:
+        # Self-managed cert (not cert-manager -- Redis's raw-TCP TLS
+        # listener has no HTTP-01 challenge path, and DNS-01 support on the
+        # cluster's ClusterIssuer wasn't confirmed). One-time openssl-
+        # generated long-lived cert, stored as a plain TLS secret the same
+        # way every other credential in this overlay is -- see
+        # k8s/overlays/prod/secrets/redis-tls.env.example and
+        # k8s/gcp-cloud/README.md for the exact generation command and the
+        # staged rollout order.
+        - name: redis-tls
+          secret:
+            secretName: redis-tls
   volumeClaimTemplates:
     - metadata:
         name: redis-data

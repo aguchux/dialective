@@ -64,6 +64,9 @@ secretGenerator:
   - name: rabbitmq-creds
     envs:
       - secrets/rabbitmq.env
+  - name: redis-auth
+    envs:
+      - secrets/redis-auth.env
 
 configMapGenerator:
   - name: api-config

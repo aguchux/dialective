@@ -8,6 +8,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import Redis from 'ioredis';
+import { buildRedisConnectionOptions } from '../../common/redis-connection.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthenticatedStreamKeyRequest } from './stream-key-auth.guard';
 
@@ -31,10 +32,7 @@ const FLEET_MAX_REQUESTS_PER_MINUTE = Number(process.env.FLEET_MAX_REQUESTS_PER_
 @Injectable()
 export class DedicatedCapacityGuard implements CanActivate, OnModuleDestroy {
   private readonly logger = new Logger(DedicatedCapacityGuard.name);
-  private readonly redis = new Redis({
-    host: process.env.REDIS_HOST ?? 'redis',
-    port: Number(process.env.REDIS_PORT ?? 6379),
-  });
+  private readonly redis = new Redis(buildRedisConnectionOptions());
 
   constructor(private readonly prisma: PrismaService) {}
 

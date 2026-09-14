@@ -33,6 +33,26 @@ spec:
       containers:
         - name: postgres
           image: postgres:16-alpine
+          # TLS off by default on this image -- required once postgres
+          # traffic can leave the cluster via postgres-external.yaml's
+          # LoadBalancer (GCP's vosk-worker connecting over the public
+          # internet). In-cluster connections (api, every worker/CronJob)
+          # are unaffected: Postgres's TLS is opt-in per client via
+          # sslmode on the connection string, so DO's own DATABASE_URL
+          # values don't need sslmode=require and keep connecting exactly
+          # as before -- only k8s/gcp-cloud/overlays/prod's DATABASE_URL
+          # sets sslmode=require. Postgres itself needs 0600 permissions on
+          # the key file to start with ssl=on, hence the initContainer
+          # copying + chmod'ing it into an emptyDir rather than mounting
+          # the secret (a Secret volume's file permissions can't be forced
+          # to 0600 the way Postgres's own strict check demands).
+          args:
+            - "-c"
+            - "ssl=on"
+            - "-c"
+            - "ssl_cert_file=/postgres-tls-runtime/tls.crt"
+            - "-c"
+            - "ssl_key_file=/postgres-tls-runtime/tls.key"
           ports:
             - containerPort: 5432
           env:
@@ -59,6 +79,9 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+            - name: postgres-tls-runtime
+              mountPath: /postgres-tls-runtime
+              readOnly: true
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
@@ -69,6 +92,30 @@ spec:
               command: ["pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
             initialDelaySeconds: 30
             periodSeconds: 20
+      initContainers:
+        - name: fix-tls-perms
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              cp /postgres-tls/tls.crt /postgres-tls-runtime/tls.crt
+              cp /postgres-tls/tls.key /postgres-tls-runtime/tls.key
+              chmod 600 /postgres-tls-runtime/tls.key
+              chown 70:70 /postgres-tls-runtime/tls.key /postgres-tls-runtime/tls.crt
+          volumeMounts:
+            - name: postgres-tls
+              mountPath: /postgres-tls
+              readOnly: true
+            - name: postgres-tls-runtime
+              mountPath: /postgres-tls-runtime
+      volumes:
+        - name: postgres-tls
+          secret:
+            secretName: postgres-tls
+        - name: postgres-tls-runtime
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: postgres-data

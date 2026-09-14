@@ -1,0 +1,15 @@
+# Shared by every KEDA ScaledObject whose trigger is redis-streams
+# (vosk-worker-keda.yaml, whisper-worker-keda.yaml,
+# quality-gate-worker-keda.yaml, prompt-audio-service-keda.yaml) -- all four
+# scale off the same in-cluster Redis instance with the same requirepass
+# value (see redis.yaml), so one TriggerAuthentication covers all of them
+# via authenticationRef rather than duplicating this per ScaledObject.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-trigger-auth
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: redis-auth
+      key: password

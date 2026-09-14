@@ -28,6 +28,11 @@ spec:
                 configMapKeyRef:
                   name: isvc-scorer-config
                   key: redis_port
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
             - name: ISVC_STREAM
               valueFrom:
                 configMapKeyRef:
