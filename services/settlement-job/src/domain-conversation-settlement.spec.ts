@@ -2,7 +2,12 @@ jest.mock('@dialectiva/db', () => {
   const actual = jest.requireActual('@dialectiva/db');
   return {
     ...actual,
-    computeTrainingPayout: jest.fn(() => ({ toNumber: () => 1 })),
+    // Delegates to the real no-loss-plus-bonus formula instead of a fixed
+    // stub -- settleDomainConversationRecordings now feeds compositeScore
+    // through this exactly like settleWordRecordings does, so the test
+    // below needs a real payout number (stake back + score-scaled bonus) to
+    // assert against, not a flat 1.
+    computeTrainingPayout: jest.fn(actual.computeTrainingPayout),
     creditTrainingPayoutOps: jest.fn().mockResolvedValue({
       ops: [],
       result: { referrerUserId: null, referralPayoutBonus: '0' },
@@ -11,7 +16,10 @@ jest.mock('@dialectiva/db', () => {
   };
 });
 
+import { Prisma } from '@dialectiva/db';
 import { computeDomainConversationCompositeScore, SettlementService } from './settlement.service';
+
+const { Decimal } = Prisma;
 
 describe('computeDomainConversationCompositeScore', () => {
   it('blends noise/quality/liveness by their configured weights', () => {
@@ -53,7 +61,7 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
           {
             id: 'dc-rec-1',
             userId: 'user-1',
-            tokensSpent: { toNumber: () => 3 },
+            tokensSpent: new Decimal(3),
             noiseScore: { toNumber: () => 90 },
             qualityScore: { toNumber: () => 90 },
             livenessScore: { toNumber: () => 90 },
@@ -84,12 +92,15 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
     );
   }
 
-  it('settles a SCORED row that clears the quality floor, paying out flat tokensSpent', async () => {
+  it('settles a SCORED row that clears the quality floor, paying out tokensSpent plus a score-scaled bonus', async () => {
     const prisma = buildPrismaMock();
     const service = buildService(prisma);
 
+    // compositeScore = (90*40 + 90*30 + 90*30) / 100 = 90
+    // payout = computeTrainingPayout(3, 90, bonusCapMultiple=1) = 3 + 3*0.9*1 = 5.7
     // @ts-expect-error -- private method under test
     const result = await service.settleDomainConversationRecordings(
+      1,
       { noise: 40, quality: 30, liveness: 30 },
       50,
       0,
@@ -97,7 +108,7 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
     );
 
     expect(result.settledCount).toBe(1);
-    expect(result.totalPayout).toBe(3);
+    expect(result.totalPayout).toBeCloseTo(5.7);
     expect(prisma.domainConversationRecording.update).toHaveBeenCalledWith({
       where: { id: 'dc-rec-1' },
       data: expect.objectContaining({
@@ -129,6 +140,7 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
 
     // @ts-expect-error -- private method under test
     const result = await service.settleDomainConversationRecordings(
+      1,
       { noise: 40, quality: 30, liveness: 30 },
       50,
       0,

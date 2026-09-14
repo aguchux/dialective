@@ -159,6 +159,7 @@ export class SettlementService {
     const domainConversationMinQualityScoreForPayout =
       await this.getDomainConversationMinQualityScoreForPayout();
     const domainConversationResult = await this.settleDomainConversationRecordings(
+      bonusCapMultiple,
       domainConversationQualityWeights,
       domainConversationMinQualityScoreForPayout,
       settlementDelayMinutes,
@@ -814,22 +815,29 @@ export class SettlementService {
   }
 
   // --- Domain Conversation settlement --------------------------------------
-  // Simpler than WordRecording's: no consensus/exact-match ground truth to
-  // scale a bonus off (see DomainConversationRecording's schema doc
-  // comment), so a SCORED row pays out FLAT tokensSpent once compositeScore
-  // clears domainConversationMinQualityScoreForPayout, else refunds -- no
-  // computeTrainingPayout, no TrainingPayoutClaim dedup (there is no
-  // "source" concept here to dedup repeat attempts against).
+  // Simpler than WordRecording's in one respect only: no consensus/exact-
+  // match ground truth (see DomainConversationRecording's schema doc
+  // comment), so payoutScore is compositeScore itself rather than a
+  // word-recording-style blend with a consensus/ASR-match score. The payout
+  // formula is otherwise the same no-loss-plus-bonus shape as word
+  // recordings -- computeTrainingPayout(tokensSpent, compositeScore,
+  // bonusCapMultiple) -- not a flat refund of tokensSpent; a SCORED row
+  // still just refunds (no bonus) when compositeScore misses
+  // domainConversationMinQualityScoreForPayout. No TrainingPayoutClaim
+  // dedup, since there is no "source" concept here to dedup repeat
+  // attempts against.
 
   /**
    * Reads SCORED-but-unsettled DomainConversationRecording rows, computes
    * compositeScore from quality-gate-worker's noise/quality/liveness
-   * signals, and either settles (flat payout) or refunds depending on
+   * signals, and either settles (stake back + score-scaled bonus, via
+   * computeTrainingPayout) or refunds (stake back only) depending on
    * whether it clears the admin-configured quality floor. Mirrors
    * settleWordRecordings' sequential-not-transactional posture -- one bad
    * row logs-and-continues.
    */
   private async settleDomainConversationRecordings(
+    bonusCapMultiple: number,
     qualityWeights: DomainConversationQualityWeights,
     minQualityScoreForPayout: number,
     settlementDelayMinutes: number,
@@ -881,7 +889,7 @@ export class SettlementService {
           continue;
         }
 
-        const payout = recording.tokensSpent;
+        const payout = computeTrainingPayout(recording.tokensSpent, compositeScore, bonusCapMultiple);
         const { ops, result } = await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id);
         const mintOps = mintingPaused
           ? []
