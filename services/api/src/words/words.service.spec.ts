@@ -152,6 +152,38 @@ describe('WordsService', () => {
       );
       expect(prisma.trainingSession.create).not.toHaveBeenCalled();
     });
+
+    it('blocks the session with a distinct message when the dialect has tasks paused', async () => {
+      prisma.user.findUnique.mockResolvedValueOnce({ auditHoldAt: null, auditHoldReleasedAt: null }).mockResolvedValueOnce({
+        ...trainer,
+        dialect: { ...trainer.dialect, tasksPaused: true },
+      });
+      await expect(service.startSession(trainer.id)).rejects.toThrow(
+        'Training tasks are temporarily paused for your dialect',
+      );
+      expect(prisma.trainingSession.create).not.toHaveBeenCalled();
+    });
+
+    it('blocks the session with a distinct message when the sub-dialect has tasks paused', async () => {
+      prisma.user.findUnique.mockResolvedValueOnce({ auditHoldAt: null, auditHoldReleasedAt: null }).mockResolvedValueOnce({
+        ...trainer,
+        dialectVariant: { ...trainer.dialectVariant, tasksPaused: true },
+      });
+      await expect(service.startSession(trainer.id)).rejects.toThrow(
+        'Training tasks are temporarily paused for your dialect',
+      );
+      expect(prisma.trainingSession.create).not.toHaveBeenCalled();
+    });
+
+    it('allows the session when tasksPaused is false and everything else is fine', async () => {
+      prisma.user.findUnique.mockResolvedValueOnce({ auditHoldAt: null, auditHoldReleasedAt: null }).mockResolvedValueOnce({
+        ...trainer,
+        dialect: { ...trainer.dialect, tasksPaused: false },
+        dialectVariant: { ...trainer.dialectVariant, tasksPaused: false },
+      });
+      const result = await service.startSession(trainer.id);
+      expect(result.sessionId).toBe(session.id);
+    });
   });
 
   describe('audit hold threshold (checkAuditHoldThreshold via createRecording)', () => {

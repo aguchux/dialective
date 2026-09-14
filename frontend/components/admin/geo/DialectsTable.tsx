@@ -47,6 +47,7 @@ export function DialectsTable({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [availabilityId, setAvailabilityId] = useState<string | null>(null);
+  const [pausingId, setPausingId] = useState<string | null>(null);
   const [editingKeyboardFor, setEditingKeyboardFor] = useState<AdminDialect | null>(null);
   const [editingVariantsFor, setEditingVariantsFor] = useState<AdminDialect | null>(null);
 
@@ -83,6 +84,18 @@ export function DialectsTable({
       setError(normalizeErrorMessage(err, 'Unable to update dialect availability.'));
     } finally {
       setAvailabilityId(null);
+    }
+  }
+
+  async function handleToggleTasksPaused(id: string, tasksPaused: boolean) {
+    setError(null);
+    setPausingId(id);
+    try {
+      await updateDialect({ id, body: { tasksPaused } }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to update task availability.'));
+    } finally {
+      setPausingId(null);
     }
   }
 
@@ -140,6 +153,30 @@ export function DialectsTable({
             type="checkbox"
           />
           {d.llmGenerationEnabled ? 'Enabled' : 'Disabled'}
+        </label>
+      ),
+    },
+    {
+      key: 'tasks',
+      header: 'Tasks',
+      sortValue: (d) => (d.tasksPaused ? 0 : 1),
+      render: (d) => (
+        <label
+          className="flex items-center gap-2 text-sm font-bold"
+          title="Pausing stops new word-training tasks for this dialect without touching trainers already assigned to it -- unlike Revoke, this does not reset onboarding."
+        >
+          <input
+            checked={!d.tasksPaused}
+            className="size-4 accent-accent"
+            disabled={pausingId === d.id}
+            onChange={(e) => handleToggleTasksPaused(d.id, !e.target.checked)}
+            type="checkbox"
+          />
+          <span
+            className={d.tasksPaused ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}
+          >
+            {d.tasksPaused ? 'Paused' : 'Running'}
+          </span>
         </label>
       ),
     },
@@ -350,6 +387,7 @@ function DialectVariantsDialog({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [availabilityId, setAvailabilityId] = useState<string | null>(null);
+  const [pausingId, setPausingId] = useState<string | null>(null);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -413,6 +451,18 @@ function DialectVariantsDialog({
     }
   }
 
+  async function handleToggleTasksPaused(id: string, tasksPaused: boolean) {
+    setError(null);
+    setPausingId(id);
+    try {
+      await updateVariant({ id, dialectId: dialect.id, body: { tasksPaused } }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to update task availability.'));
+    } finally {
+      setPausingId(null);
+    }
+  }
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
@@ -470,6 +520,14 @@ function DialectVariantsDialog({
                           <span className={variant.active ? 'text-emerald-700' : 'text-slate-600'}>
                             {variant.active ? 'Active' : 'Revoked'}
                           </span>{' '}
+                          &middot;{' '}
+                          <span
+                            className={
+                              variant.tasksPaused ? 'text-amber-700' : 'text-emerald-700'
+                            }
+                          >
+                            Tasks {variant.tasksPaused ? 'paused' : 'running'}
+                          </span>{' '}
                           &middot; {variant._count.users} user
                           {variant._count.users === 1 ? '' : 's'}{' '}
                           &middot; {variant._count.wordRecordings} word recording
@@ -484,6 +542,16 @@ function DialectVariantsDialog({
                         >
                           Edit
                         </button>
+                        <ActionButton
+                          className={secondaryButtonClass}
+                          onClick={() => handleToggleTasksPaused(variant.id, !variant.tasksPaused)}
+                          pending={pausingId === variant.id}
+                          pendingLabel={variant.tasksPaused ? 'Resuming' : 'Pausing'}
+                          title="Pausing stops new word-training tasks without resetting trainers already assigned to this sub-dialect."
+                          type="button"
+                        >
+                          {variant.tasksPaused ? 'Resume tasks' : 'Pause tasks'}
+                        </ActionButton>
                         <ActionButton
                           className={variant.active ? dangerButtonClass : secondaryButtonClass}
                           onClick={() => handleToggleAvailability(variant.id, !variant.active)}

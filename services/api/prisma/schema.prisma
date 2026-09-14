@@ -509,6 +509,7 @@ model Dialect {
   name                 String
   countryId            String
   active               Boolean                      @default(true) // disabled dialects are hidden from onboarding and revoke current trainer selections
+  tasksPaused          Boolean                      @default(false) // stops new word-training task assignment for this dialect WITHOUT touching onboarding/active or resetting trainers already assigned to it -- see WordsService.getTrainer(); a lighter-weight gate than `active` for temporarily pausing tasks (e.g. content backlog, quality issue) while keeping trainers assigned
   llmGenerationEnabled Boolean                      @default(false) // per-dialect override within an enabled country -- lets admin exclude one dialect without disabling the whole country
   keyboardLayout       String? // space-separated dialect-specific characters/diacritics for the inline virtual keyboard on the word-training spelling input; admin-edited, optionally AI-drafted via POST /geo/admin/dialects/:id/generate-keyboard-layout
   country              Country                      @relation(fields: [countryId], references: [id])
@@ -555,10 +556,11 @@ model DialectVariant {
   id        String   @id @default(uuid())
   dialectId String
   dialect   Dialect  @relation(fields: [dialectId], references: [id], onDelete: Cascade)
-  tag       String
-  name      String
-  active    Boolean  @default(true) // disabled sub-dialects are hidden from selection and revoke current trainer selections
-  createdAt DateTime @default(now())
+  tag         String
+  name        String
+  active      Boolean  @default(true) // disabled sub-dialects are hidden from selection and revoke current trainer selections
+  tasksPaused Boolean  @default(false) // same non-destructive task-pause gate as Dialect.tasksPaused, scoped to this sub-dialect only
+  createdAt   DateTime @default(now())
 
   users                        User[]
   wordRecordings               WordRecording[]

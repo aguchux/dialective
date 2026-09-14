@@ -7,6 +7,7 @@ import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { DialectsTable } from '@/components/admin/geo/DialectsTable';
+import { AllVariantsTable } from '@/components/admin/geo/AllVariantsTable';
 import {
   AdminCountry,
   AdminDialect,
@@ -45,6 +46,7 @@ export default function AdminGeoPage() {
 
         <CountriesSection countries={countries} isLoading={isLoadingCountries} />
         <DialectsSection dialects={dialects} isLoading={isLoadingDialects} />
+        <SubDialectsSection />
       </div>
     </AdminShell>
   );
@@ -535,6 +537,21 @@ function DialectsSection({
     <section className="grid gap-4">
       <h2 className="text-2xl leading-snug">Dialects</h2>
       <DialectsTable dialects={dialects} isLoading={isLoading} />
+    </section>
+  );
+}
+
+function SubDialectsSection() {
+  return (
+    <section className="grid gap-4">
+      <div className="grid gap-1">
+        <h2 className="text-2xl leading-snug">Sub-dialects</h2>
+        <p className="leading-relaxed text-muted">
+          Every sub-dialect across every country, searchable by name -- pause or resume word
+          tasks for a specific sub-dialect directly, without opening its parent dialect first.
+        </p>
+      </div>
+      <AllVariantsTable />
     </section>
   );
 }

@@ -304,6 +304,7 @@ export class GeoController {
             name: dto.name,
             countryId: dto.countryId,
             active: dto.active,
+            tasksPaused: dto.tasksPaused,
             llmGenerationEnabled: dto.llmGenerationEnabled,
             keyboardLayout: dto.keyboardLayout,
           },
@@ -369,6 +370,29 @@ export class GeoController {
   // --- Admin: dialect variants ---------------------------------------------
 
   /**
+   * Every sub-dialect across every dialect/country in one flat, searchable
+   * list -- lets an admin locate a specific sub-dialect (e.g. "Izzi") to
+   * pause its tasks directly, without first knowing which parent dialect
+   * it lives under. Complements listDialectVariantsForAdmin (scoped to one
+   * dialect), which stays in place for the existing drill-down "Variants"
+   * dialog.
+   */
+  @Get('admin/dialect-variants')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  listAllDialectVariantsForAdmin() {
+    return this.prisma.dialectVariant.findMany({
+      include: {
+        dialect: {
+          select: { id: true, name: true, tag: true, country: { select: { name: true } } },
+        },
+        _count: { select: { users: true, wordRecordings: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
    * Variant list with basic usage counts (users, recordings tagged with
    * each variant) for the admin Coverage table's expandable dialect row --
    * see the dialect-variants plan's "Reporting" phase.
@@ -413,7 +437,7 @@ export class GeoController {
       return await this.prisma.$transaction(async (tx) => {
         const variant = await tx.dialectVariant.update({
           where: { id },
-          data: { tag: dto.tag, name: dto.name, active: dto.active },
+          data: { tag: dto.tag, name: dto.name, active: dto.active, tasksPaused: dto.tasksPaused },
         });
         if (dto.active === false) {
           await this.resetTrainerDialectAssignments(tx, { dialectVariantId: id });

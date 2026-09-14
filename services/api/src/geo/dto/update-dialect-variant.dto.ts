@@ -14,4 +14,8 @@ export class UpdateDialectVariantDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  tasksPaused?: boolean;
 }

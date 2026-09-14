@@ -22,6 +22,10 @@ export class UpdateDialectDto {
   active?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  tasksPaused?: boolean;
+
+  @IsOptional()
   @IsString()
   keyboardLayout?: string;
 }

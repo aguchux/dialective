@@ -869,6 +869,14 @@ export class WordsService {
       trainer.dialectVariant?.active === false
     )
       throw new UnprocessableEntityException('Complete dialect onboarding before training');
+    // Distinct from the onboarding check above: the trainer's dialect
+    // assignment is still valid, tasks are just paused admin-side (content
+    // backlog, quality issue, etc). No onboarding reset happens for this --
+    // see Dialect.tasksPaused / DialectVariant.tasksPaused's schema comment.
+    if (trainer.dialect.tasksPaused || trainer.dialectVariant?.tasksPaused)
+      throw new UnprocessableEntityException(
+        'Training tasks are temporarily paused for your dialect. Check back soon.',
+      );
     return trainer;
   }
 

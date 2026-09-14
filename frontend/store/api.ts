@@ -194,13 +194,19 @@ export interface DialectVariant {
 
 export interface AdminDialectVariant extends DialectVariant {
   active: boolean;
+  tasksPaused: boolean;
   _count: { users: number; wordRecordings: number };
+}
+
+export interface AdminDialectVariantFlat extends AdminDialectVariant {
+  dialect: { id: string; name: string; tag: string; country: { name: string } };
 }
 
 export interface DialectVariantInput {
   tag: string;
   name: string;
   active?: boolean;
+  tasksPaused?: boolean;
 }
 
 export interface AdminCountry {
@@ -221,6 +227,7 @@ export interface AdminDialect {
   name: string;
   countryId: string;
   active: boolean;
+  tasksPaused: boolean;
   llmGenerationEnabled: boolean;
   keyboardLayout: string | null;
   country: { id: string; name: string; code: string };
@@ -258,6 +265,7 @@ export interface DialectInput {
   name: string;
   countryId: string;
   active?: boolean;
+  tasksPaused?: boolean;
   llmGenerationEnabled?: boolean;
   keyboardLayout?: string;
 }
@@ -4575,6 +4583,10 @@ export const dialectivaApi = createApi({
         { type: 'AdminDialects', id: `${dialectId}-variants` },
       ],
     }),
+    getAllAdminDialectVariants: builder.query<AdminDialectVariantFlat[], void>({
+      query: () => '/geo/admin/dialect-variants',
+      providesTags: ['AdminDialects'],
+    }),
     createDialectVariant: builder.mutation<
       AdminDialectVariant,
       { dialectId: string; body: DialectVariantInput }
@@ -4586,6 +4598,7 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: (_result, _error, { dialectId }) => [
         { type: 'AdminDialects', id: `${dialectId}-variants` },
+        'AdminDialects',
       ],
     }),
     updateDialectVariant: builder.mutation<
@@ -4599,6 +4612,7 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: (_result, _error, { dialectId }) => [
         { type: 'AdminDialects', id: `${dialectId}-variants` },
+        'AdminDialects',
       ],
     }),
     deleteDialectVariant: builder.mutation<
@@ -4608,6 +4622,7 @@ export const dialectivaApi = createApi({
       query: ({ id }) => ({ url: `/geo/admin/dialect-variants/${id}`, method: 'DELETE' }),
       invalidatesTags: (_result, _error, { dialectId }) => [
         { type: 'AdminDialects', id: `${dialectId}-variants` },
+        'AdminDialects',
       ],
     }),
     getPlatformSettings: builder.query<PlatformSettings, void>({
@@ -5350,6 +5365,7 @@ export const {
   useResetCountryExchangeRateMutation,
   useGetAdminDialectsQuery,
   useGetAdminDialectVariantsQuery,
+  useGetAllAdminDialectVariantsQuery,
   useCreateDialectVariantMutation,
   useUpdateDialectVariantMutation,
   useDeleteDialectVariantMutation,

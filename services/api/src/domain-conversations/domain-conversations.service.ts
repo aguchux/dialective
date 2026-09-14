@@ -445,6 +445,13 @@ export class DomainConversationsService {
     ) {
       throw new UnprocessableEntityException('Complete dialect onboarding before training');
     }
+    // Distinct from the onboarding check above -- see WordsService.getTrainer's
+    // matching comment and Dialect.tasksPaused's schema comment.
+    if (trainer.dialect.tasksPaused || trainer.dialectVariant?.tasksPaused) {
+      throw new UnprocessableEntityException(
+        'Training tasks are temporarily paused for your dialect. Check back soon.',
+      );
+    }
     return trainer;
   }
 
