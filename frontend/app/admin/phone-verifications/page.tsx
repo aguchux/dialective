@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronsUpDown, Search } from 'lucide-react';
+import { type FormEvent, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, PhoneCall, Search } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
-import { Dialog, DialogContent } from '@/components/ui/Dialog';
+import { Dialog, DialogClose, DialogContent } from '@/components/ui/Dialog';
 import {
   ManualPhoneVerificationRow,
   ManualPhoneVerificationStatus,
@@ -255,8 +255,8 @@ function RequestRow({
   onVerify: (row: ManualPhoneVerificationRow) => void;
 }) {
   const [reject, { isLoading: rejecting }] = useRejectAdminManualPhoneVerificationMutation();
-  const [confirm, { isLoading: confirming }] = useConfirmAdminManualPhoneVerificationMutation();
   const [error, setError] = useState<string | null>(null);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const name = useMemo(
     () => [row.user.firstName, row.user.lastName].filter(Boolean).join(' ') || row.user.email,
     [row.user.email, row.user.firstName, row.user.lastName],
@@ -268,22 +268,6 @@ function RequestRow({
       await reject(row.id).unwrap();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to reject request.'));
-    }
-  }
-
-  async function confirmRow() {
-    setError(null);
-    if (
-      !window.confirm(
-        `Confirm ${row.phoneNumber} is reachable and verify it without the trainer's code?`,
-      )
-    ) {
-      return;
-    }
-    try {
-      await confirm(row.id).unwrap();
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to verify this number.'));
     }
   }
 
@@ -314,16 +298,15 @@ function RequestRow({
               >
                 Verify
               </button>
-              <ActionButton
-                className="min-h-9 rounded-lg border border-line px-3 font-bold hover:bg-surface-muted disabled:opacity-60"
-                onClick={() => void confirmRow()}
-                pending={confirming}
-                pendingLabel="Verifying"
+              <button
+                aria-label="Verify without the trainer's code"
+                className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-line px-2 hover:bg-surface-muted"
+                onClick={() => setConfirmDialogOpen(true)}
                 title="Verify without the trainer's code -- use only once you've confirmed the number is reachable another way."
                 type="button"
               >
-                Number confirmed
-              </ActionButton>
+                <PhoneCall aria-hidden="true" className="size-4" />
+              </button>
               <ActionButton
                 className="min-h-9 rounded-lg border border-line px-3 font-bold hover:bg-surface-muted disabled:opacity-60"
                 onClick={() => void rejectRow()}
@@ -346,7 +329,81 @@ function RequestRow({
           </td>
         </tr>
       )}
+      {confirmDialogOpen && (
+        <ConfirmWithoutCodeDialog row={row} onClose={() => setConfirmDialogOpen(false)} />
+      )}
     </>
+  );
+}
+
+const BYPASS_PASSPHRASE = 'BYPASS';
+
+/**
+ * Verifying without the trainer's OTP skips the one proof that the admin
+ * actually reached the trainer -- a stray click here silently marks an
+ * unconfirmed number as verified. Typing the passphrase is a deliberate,
+ * hard-to-misclick gate (not a real secret) in front of that, cheaper than a
+ * full OTP round-trip since this is an admin-to-admin confirmation, not a
+ * trainer-facing security boundary.
+ */
+function ConfirmWithoutCodeDialog({
+  row,
+  onClose,
+}: {
+  row: ManualPhoneVerificationRow;
+  onClose: () => void;
+}) {
+  const [passphrase, setPassphrase] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [confirm, { isLoading }] = useConfirmAdminManualPhoneVerificationMutation();
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      await confirm(row.id).unwrap();
+      onClose();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to verify this number.'));
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        title="Verify without a code"
+        description={`Confirm you've reached ${row.phoneNumber} another way (e.g. a call). Type ${BYPASS_PASSPHRASE} to continue.`}
+      >
+        <form className="grid gap-3" onSubmit={submit}>
+          <input
+            autoFocus
+            className="min-h-9 w-full rounded-lg border border-line bg-white px-3 py-1.5 text-sm uppercase tracking-widest text-ink dark:bg-surface-muted"
+            onChange={(e) => setPassphrase(e.target.value.toUpperCase())}
+            placeholder={BYPASS_PASSPHRASE}
+            value={passphrase}
+          />
+          {error && (
+            <p className="leading-relaxed text-danger" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <DialogClose className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60">
+              Cancel
+            </DialogClose>
+            <ActionButton
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-line bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={passphrase !== BYPASS_PASSPHRASE}
+              pending={isLoading}
+              pendingLabel="Verifying"
+              type="submit"
+            >
+              Verify
+            </ActionButton>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
