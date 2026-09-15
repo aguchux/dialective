@@ -942,9 +942,13 @@ export interface WhatsAppValidationMyRequest {
   expiresAt: string;
   createdAt: string;
   // Set once a validator has claimed this request -- lets the requester
-  // reach out first instead of only waiting to be contacted. Null while
-  // PENDING, or if the claiming validator has no phone number on file.
+  // reach out first instead of only waiting to be contacted, and confirm
+  // (name + number together) they're messaging the right person, not
+  // someone impersonating the claimant. Null while PENDING, or if the
+  // claiming validator has no phone number on file.
   validatorPhoneNumber: string | null;
+  validatorFirstName: string | null;
+  validatorLastName: string | null;
 }
 
 export interface WhatsAppValidationClaim {
@@ -958,6 +962,12 @@ export interface WhatsAppValidationClaim {
   claimExpiresAt: string | null;
   verifiedAt: string | null;
   createdAt: string;
+  // Shown alongside the phone number so a validator can confirm they're
+  // about to message the right account before/while verifying -- guards
+  // against a phishing attempt where a scammer's number is passed off as
+  // belonging to the request.
+  requesterFirstName: string | null;
+  requesterLastName: string | null;
 }
 
 export interface P2PMarketSettings {

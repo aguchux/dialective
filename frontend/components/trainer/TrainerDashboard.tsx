@@ -3573,7 +3573,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                                 <p className="text-sm leading-relaxed text-ink">
                                   A member has claimed your request. Send them this code over
                                   WhatsApp -- if they haven&apos;t messaged you yet, you can reach
-                                  out first:
+                                  out first. Only trust a message from this exact name and number:
                                 </p>
                                 {activeWhatsAppValidationRequest.validatorPhoneNumber ? (
                                   <a
@@ -3583,7 +3583,17 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                                     target="_blank"
                                   >
                                     <Phone className="size-4" aria-hidden="true" />{' '}
-                                    {activeWhatsAppValidationRequest.validatorPhoneNumber}
+                                    {(() => {
+                                      const validatorName = [
+                                        activeWhatsAppValidationRequest.validatorFirstName,
+                                        activeWhatsAppValidationRequest.validatorLastName,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ');
+                                      return validatorName
+                                        ? `${validatorName} · ${activeWhatsAppValidationRequest.validatorPhoneNumber}`
+                                        : activeWhatsAppValidationRequest.validatorPhoneNumber;
+                                    })()}
                                   </a>
                                 ) : (
                                   <p className="text-sm font-bold text-muted">

@@ -179,13 +179,23 @@ describe('WhatsAppValidatorService', () => {
       expect(result).toBeNull();
     });
 
-    it('includes the claiming validator\'s phone number once claimed', async () => {
+    it('includes the claiming validator\'s phone number and name once claimed', async () => {
       prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
         ...baseRequest,
-        claimedByValidator: { phoneNumber: '+15551234567' },
+        claimedByValidator: { phoneNumber: '+15551234567', firstName: 'Ada', lastName: 'Lovelace' },
       });
       const result = await service.myRequest(requesterId);
       expect(result?.validatorPhoneNumber).toBe('+15551234567');
+      expect(result?.validatorFirstName).toBe('Ada');
+      expect(result?.validatorLastName).toBe('Lovelace');
+      // Fetching the validator's name must be part of the same query, not a
+      // second lookup -- anti-phishing only works if name and number always
+      // arrive together, never one without the other.
+      expect(prisma.whatsAppValidationRequest.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: { claimedByValidator: { select: { phoneNumber: true, firstName: true, lastName: true } } },
+        }),
+      );
     });
 
     it('is null while unclaimed (PENDING)', async () => {
@@ -196,6 +206,8 @@ describe('WhatsAppValidatorService', () => {
       });
       const result = await service.myRequest(requesterId);
       expect(result?.validatorPhoneNumber).toBeNull();
+      expect(result?.validatorFirstName).toBeNull();
+      expect(result?.validatorLastName).toBeNull();
     });
   });
 
@@ -205,22 +217,33 @@ describe('WhatsAppValidatorService', () => {
       await expect(service.listPending(validatorId)).rejects.toThrow(ForbiddenException);
     });
 
-    it('lists PENDING requests excluding the caller\'s own', async () => {
-      await service.listPending(validatorId);
+    it('lists PENDING requests excluding the caller\'s own, including the requester\'s name', async () => {
+      prisma.whatsAppValidationRequest.findMany.mockResolvedValue([
+        { ...baseRequest, status: 'PENDING', requester: { firstName: 'Chidi', lastName: 'Okoro' } },
+      ]);
+      const result = await service.listPending(validatorId);
       expect(prisma.whatsAppValidationRequest.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ status: 'PENDING', requesterId: { not: validatorId } }),
           orderBy: { createdAt: 'asc' },
+          include: { requester: { select: { firstName: true, lastName: true } } },
         }),
       );
+      expect(result[0].requesterFirstName).toBe('Chidi');
+      expect(result[0].requesterLastName).toBe('Okoro');
     });
   });
 
   describe('myClaim', () => {
-    it('returns the validator\'s currently-claimed request, if any', async () => {
-      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue(baseRequest);
+    it('returns the validator\'s currently-claimed request, including the requester\'s name', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
+        ...baseRequest,
+        requester: { firstName: 'Chidi', lastName: 'Okoro' },
+      });
       const result = await service.myClaim(validatorId);
       expect(result?.id).toBe(requestId);
+      expect(result?.requesterFirstName).toBe('Chidi');
+      expect(result?.requesterLastName).toBe('Okoro');
     });
 
     it('returns null when nothing is claimed', async () => {

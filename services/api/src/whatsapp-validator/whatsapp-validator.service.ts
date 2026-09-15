@@ -151,7 +151,9 @@ export class WhatsAppValidatorService {
     const row = await this.prisma.whatsAppValidationRequest.findFirst({
       where: { requesterId: userId },
       orderBy: { createdAt: 'desc' },
-      include: { claimedByValidator: { select: { phoneNumber: true } } },
+      include: {
+        claimedByValidator: { select: { phoneNumber: true, firstName: true, lastName: true } },
+      },
     });
     return row ? this.toRequesterPublic(row) : null;
   }
@@ -179,6 +181,7 @@ export class WhatsAppValidatorService {
       },
       orderBy: { createdAt: 'asc' },
       take: 50,
+      include: { requester: { select: { firstName: true, lastName: true } } },
     });
     return rows.map((row) => this.toValidatorPublic(row));
   }
@@ -198,6 +201,7 @@ export class WhatsAppValidatorService {
         status: WhatsAppValidationRequestStatus.CLAIMED,
         claimExpiresAt: { gt: now },
       },
+      include: { requester: { select: { firstName: true, lastName: true } } },
     });
     return row ? this.toValidatorPublic(row) : null;
   }
@@ -253,6 +257,7 @@ export class WhatsAppValidatorService {
 
     const claimed = await this.prisma.whatsAppValidationRequest.findUniqueOrThrow({
       where: { id: requestId },
+      include: { requester: { select: { firstName: true, lastName: true } } },
     });
     return this.toValidatorPublic(claimed);
   }
@@ -372,6 +377,7 @@ export class WhatsAppValidatorService {
 
     const updated = await this.prisma.whatsAppValidationRequest.findUniqueOrThrow({
       where: { id: requestId },
+      include: { requester: { select: { firstName: true, lastName: true } } },
     });
     return this.toValidatorPublic(updated);
   }
@@ -434,7 +440,11 @@ export class WhatsAppValidatorService {
     rejectedAt: Date | null;
     expiresAt: Date;
     createdAt: Date;
-    claimedByValidator?: { phoneNumber: string | null } | null;
+    claimedByValidator?: {
+      phoneNumber: string | null;
+      firstName: string | null;
+      lastName: string | null;
+    } | null;
   }) {
     return {
       id: row.id,
@@ -447,9 +457,14 @@ export class WhatsAppValidatorService {
       createdAt: row.createdAt,
       // Only meaningful once CLAIMED/VERIFIED -- lets the requester reach
       // out to the validator first instead of only ever waiting to be
-      // contacted. Null while PENDING (nothing to show) or if the
-      // validator has no phone number on file.
+      // contacted, and confirm they're messaging the right person (name +
+      // number together) rather than trusting a bare phone number, which
+      // is exactly what a phishing/impersonation attempt would also show.
+      // Null while PENDING (nothing to show) or if the validator has no
+      // phone number on file.
       validatorPhoneNumber: row.claimedByValidator?.phoneNumber ?? null,
+      validatorFirstName: row.claimedByValidator?.firstName ?? null,
+      validatorLastName: row.claimedByValidator?.lastName ?? null,
     };
   }
 
@@ -464,6 +479,7 @@ export class WhatsAppValidatorService {
     claimExpiresAt: Date | null;
     verifiedAt: Date | null;
     createdAt: Date;
+    requester?: { firstName: string | null; lastName: string | null } | null;
   }) {
     return {
       id: row.id,
@@ -476,6 +492,12 @@ export class WhatsAppValidatorService {
       claimExpiresAt: row.claimExpiresAt,
       verifiedAt: row.verifiedAt,
       createdAt: row.createdAt,
+      // Shown alongside the phone number so a validator can cross-check
+      // "is this really the account I'm about to verify" before/while
+      // messaging -- a bare phone number alone gives a scammer room to
+      // claim to be someone else's request.
+      requesterFirstName: row.requester?.firstName ?? null,
+      requesterLastName: row.requester?.lastName ?? null,
     };
   }
 }

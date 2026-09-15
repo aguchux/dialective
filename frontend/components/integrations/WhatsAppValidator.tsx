@@ -31,6 +31,16 @@ function statusBadgeClass(status: WhatsAppValidationRequestStatus): string {
   return 'bg-accent-soft text-accent';
 }
 
+/** Name is always shown paired with a phone number, never alone -- together they let either side confirm they're talking to the right person instead of trusting a bare phone number a scammer could also produce. */
+function formatContact(
+  firstName: string | null,
+  lastName: string | null,
+  phoneNumber: string,
+): string {
+  const name = [firstName, lastName].filter(Boolean).join(' ');
+  return name ? `${name} · ${phoneNumber}` : phoneNumber;
+}
+
 /**
  * WhatsApp Validator integration page -- the peer-driven counterpart to
  * the platform's staff-reviewed manual phone verification. Two tabs:
@@ -149,9 +159,10 @@ function ValidateTab() {
               <MessageCircle className="size-5" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <p className="truncate font-black">{myClaim.phoneNumber}</p>
+              <p className="truncate font-black">{formatContact(myClaim.requesterFirstName, myClaim.requesterLastName, myClaim.phoneNumber)}</p>
               <p className="text-xs font-bold text-muted">
-                Message this member on WhatsApp and ask for their code, then enter it below.
+                Message this member on WhatsApp and ask for their code, then enter it below. Confirm
+                their name matches before you verify.
               </p>
             </div>
           </div>
@@ -205,7 +216,9 @@ function ValidateTab() {
                     <MessageCircle className="size-5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate font-black">{request.phoneNumber}</p>
+                    <p className="truncate font-black">
+                      {formatContact(request.requesterFirstName, request.requesterLastName, request.phoneNumber)}
+                    </p>
                     <p className="text-xs font-bold text-muted">
                       Earn {request.feeTokenAmount} DL &middot; requested{' '}
                       {formatDateTime(request.createdAt)}
@@ -321,7 +334,8 @@ function GetVerifiedTab() {
             <div className="grid gap-2">
               <p className="text-sm text-muted">
                 A validator has claimed your request. Send them your code over WhatsApp -- if they
-                haven't messaged you yet, you can reach out first:
+                haven't messaged you yet, you can reach out first. Only trust a message from this
+                exact name and number:
               </p>
               {activeRequest.validatorPhoneNumber ? (
                 <a
@@ -330,7 +344,12 @@ function GetVerifiedTab() {
                   rel="noreferrer"
                   target="_blank"
                 >
-                  <Phone className="size-4" aria-hidden="true" /> {activeRequest.validatorPhoneNumber}
+                  <Phone className="size-4" aria-hidden="true" />{' '}
+                  {formatContact(
+                    activeRequest.validatorFirstName,
+                    activeRequest.validatorLastName,
+                    activeRequest.validatorPhoneNumber,
+                  )}
                 </a>
               ) : (
                 <p className="text-sm font-bold text-muted">
