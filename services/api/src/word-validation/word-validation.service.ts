@@ -6,7 +6,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { WordValidationFlag } from '@dialectiva/db';
+import { SubmissionStatus, WordValidationFlag } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { StorageService } from '../storage/storage.service';
@@ -250,11 +250,16 @@ export class WordValidationService {
   /** Mirrors WordsService.pickReverseSource's peer/own-dialect query, minus
    * per-session exclusion (this task has no assignment/upload lifecycle) --
    * excludes the trainer's own recordings and anything they've already
-   * validated or that's already in the misplaced-dialect queue. */
+   * validated or that's already in the misplaced-dialect queue. Restricted
+   * to SCORED/SETTLED recordings -- a PENDING/TRANSCRIBED recording has no
+   * consensus score yet, so a peer has nothing reliable to check it
+   * against; SETTLED stays eligible since settlement is just the payout
+   * step downstream of scoring and doesn't change the recording itself. */
   private async pickCandidate(userId: string, dialectTag: string) {
     const where = {
       dialectTag,
       direction: 'ENGLISH_TO_DIALECT' as const,
+      status: { in: ['SCORED', 'SETTLED'] as SubmissionStatus[] },
       userId: { not: userId },
       noiseRating: { not: 'NOISY' as const },
       misplacedDialectAt: null,

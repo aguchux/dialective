@@ -117,7 +117,7 @@ export function DialectValidationSettingsPanel() {
               id="dialect-validation-payout"
               min="0"
               onChange={(e) => setPayoutTokens(e.target.value)}
-              step="0.1"
+              step="0.01"
               type="number"
               value={payoutTokens}
             />

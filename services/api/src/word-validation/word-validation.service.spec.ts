@@ -120,6 +120,20 @@ describe('WordValidationService', () => {
         }),
       );
     });
+
+    it('only offers SCORED/SETTLED recordings -- an unscored one has nothing for a peer to check against', async () => {
+      await service.nextItem(trainer.id, session.id);
+      expect(prisma.wordRecording.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: { in: ['SCORED', 'SETTLED'] } }),
+        }),
+      );
+      expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: { in: ['SCORED', 'SETTLED'] } }),
+        }),
+      );
+    });
   });
 
   describe('submit', () => {
