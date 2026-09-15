@@ -893,4 +893,28 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsBoolean()
   streamSelfServeSignupEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  topBannerEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  topBannerImageBucket?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  topBannerImageKey?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  topBannerAltText?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  topBannerLearnMoreUrl?: string | null;
 }

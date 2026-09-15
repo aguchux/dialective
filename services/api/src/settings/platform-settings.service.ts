@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { decryptWhatsappField, encryptWhatsappField } from '../common/whatsapp-crypto.util';
 
 const LLM_PROVIDER_KEYS = ['openai', 'deepseek', 'anthropic'];
@@ -18,7 +20,10 @@ const ROW_CACHE_TTL_MS = 5_000;
 
 @Injectable()
 export class PlatformSettingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   // Every getter/setter below funnels through getRow(), and a single
   // request can easily call several of them (e.g. WalletController.
@@ -554,6 +559,25 @@ export class PlatformSettingsService {
       enabled,
       propertyId: enabled ? row.tawkToPropertyId : null,
       widgetId: enabled ? row.tawkToWidgetId : null,
+    };
+  }
+
+  async getTopBanner(): Promise<{
+    enabled: boolean;
+    imageUrl: string | null;
+    altText: string | null;
+    learnMoreUrl: string | null;
+  }> {
+    const row = await this.getRow();
+    const enabled = row.topBannerEnabled && Boolean(row.topBannerImageBucket) && Boolean(row.topBannerImageKey);
+    return {
+      enabled,
+      imageUrl:
+        enabled && row.topBannerImageBucket && row.topBannerImageKey
+          ? this.storage.getPublicObjectUrl(row.topBannerImageBucket, row.topBannerImageKey)
+          : null,
+      altText: enabled ? row.topBannerAltText : null,
+      learnMoreUrl: enabled ? row.topBannerLearnMoreUrl : null,
     };
   }
 
@@ -1204,9 +1228,37 @@ export class PlatformSettingsService {
       landingShowPoolVolume: row.landingShowPoolVolume,
       landingShowPayout: row.landingShowPayout,
       streamSelfServeSignupEnabled: row.streamSelfServeSignupEnabled,
+      topBannerEnabled: row.topBannerEnabled,
+      topBannerImageUrl:
+        row.topBannerImageBucket && row.topBannerImageKey
+          ? this.storage.getPublicObjectUrl(row.topBannerImageBucket, row.topBannerImageKey)
+          : null,
+      topBannerAltText: row.topBannerAltText,
+      topBannerLearnMoreUrl: row.topBannerLearnMoreUrl,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
+  }
+
+  /**
+   * Presigned upload for the top banner image -- reuses the same public
+   * `dyk/` prefix as DykService.upload rather than a dedicated prefix,
+   * since the production Spaces bucket policy only grants public GET on a
+   * fixed allow-list of prefixes (blog/*, courses/*, dyk/*, ads/*, see
+   * k8s/overlays/prod/README.md's 2026-09-15 KYC-exposure incident notes)
+   * and a new prefix would silently 403 until someone updates that policy
+   * outside this codebase.
+   */
+  async uploadTopBannerImage(contentType: string) {
+    const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[contentType];
+    if (!extension) {
+      throw new BadRequestException('contentType must be image/jpeg, image/png, or image/webp');
+    }
+    const key = `dyk/${randomUUID()}.${extension}`;
+    const bucket =
+      process.env.SPACES_MARKETING_BUCKET ?? process.env.SPACES_BLOG_MEDIA_BUCKET ?? 'dialectiva-marketing';
+    const result = await this.storage.createPresignedUploadUrl(bucket, key, contentType, true);
+    return { uploadUrl: result.url, key, bucket };
   }
 
   async update(data: {
@@ -1382,6 +1434,11 @@ export class PlatformSettingsService {
     landingShowPoolVolume?: boolean;
     landingShowPayout?: boolean;
     streamSelfServeSignupEnabled?: boolean;
+    topBannerEnabled?: boolean;
+    topBannerImageBucket?: string | null;
+    topBannerImageKey?: string | null;
+    topBannerAltText?: string | null;
+    topBannerLearnMoreUrl?: string | null;
   }) {
     if (data.authMaintenanceEnabled) {
       // Turning it on (or extending it) always needs a concrete end time --
@@ -2090,6 +2147,7 @@ export class PlatformSettingsService {
       isFlutterwavePayoutsEnabled,
       isStripePayoutsEnabled,
       isCryptoWithdrawalsEnabled,
+      topBanner,
     ] = await Promise.all([
       this.getReferralCookiePersistSeconds(),
       this.getReferralInviteExpirySeconds(),
@@ -2108,6 +2166,7 @@ export class PlatformSettingsService {
       this.isFlutterwavePayoutsEnabled(),
       this.isStripePayoutsEnabled(),
       this.isCryptoWithdrawalsEnabled(),
+      this.getTopBanner(),
     ]);
     return {
       referralCookiePersistSeconds,
@@ -2139,6 +2198,10 @@ export class PlatformSettingsService {
       tawkToPropertyId: tawkTo.propertyId,
       tawkToWidgetId: tawkTo.widgetId,
       supportChatMode: supportChat.mode,
+      topBannerEnabled: topBanner.enabled,
+      topBannerImageUrl: topBanner.imageUrl,
+      topBannerAltText: topBanner.altText,
+      topBannerLearnMoreUrl: topBanner.learnMoreUrl,
       trainerAdsterra728:
         row.trainerAdsterra728Enabled &&
         row.trainerAdsterra728ScriptUrl &&

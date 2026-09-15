@@ -1278,6 +1278,10 @@ export interface PublicClientSettings {
   testimonyApprovalMonthlyLimit: number;
   testimonyTextRewardTokens: string;
   testimonyVideoRewardTokens: string;
+  topBannerEnabled: boolean;
+  topBannerImageUrl: string | null;
+  topBannerAltText: string | null;
+  topBannerLearnMoreUrl: string | null;
 }
 
 export type TestimonyKind = 'VIDEO' | 'TEXT';
@@ -1842,6 +1846,10 @@ export interface PlatformSettings {
   landingShowPoolVolume: boolean;
   landingShowPayout: boolean;
   streamSelfServeSignupEnabled: boolean;
+  topBannerEnabled: boolean;
+  topBannerImageUrl: string | null;
+  topBannerAltText: string | null;
+  topBannerLearnMoreUrl: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2013,6 +2021,11 @@ export interface PlatformSettingsInput {
   landingShowPoolVolume?: boolean;
   landingShowPayout?: boolean;
   streamSelfServeSignupEnabled?: boolean;
+  topBannerEnabled?: boolean;
+  topBannerImageBucket?: string | null;
+  topBannerImageKey?: string | null;
+  topBannerAltText?: string | null;
+  topBannerLearnMoreUrl?: string | null;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';
@@ -5008,6 +5021,16 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['PlatformSettings'],
     }),
+    // Admin-only presigned upload for the top banner image -- browser PUTs
+    // the raw file bytes directly to `uploadUrl`, then the caller saves
+    // {bucket, key} via updatePlatformSettings, same two-step flow as
+    // every other image upload in this app (blog, course, marketing, DYK).
+    uploadTopBannerImage: builder.mutation<
+      { uploadUrl: string; key: string; bucket: string },
+      { contentType: string }
+    >({
+      query: (body) => ({ url: '/admin/platform-settings/top-banner/upload-url', method: 'POST', body }),
+    }),
     getApiAccessTokens: builder.query<ApiAccessTokenSummary[], void>({
       query: () => '/admin/api-access-tokens',
       providesTags: ['ApiAccessTokens'],
@@ -5701,6 +5724,7 @@ export const {
   useUpdateFaqMutation,
   useDeleteFaqMutation,
   useUpdatePlatformSettingsMutation,
+  useUploadTopBannerImageMutation,
   useGetApiAccessTokensQuery,
   useSetApiAccessTokenMutation,
   useDeleteApiAccessTokenMutation,

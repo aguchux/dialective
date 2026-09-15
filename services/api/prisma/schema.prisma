@@ -2794,6 +2794,11 @@ model PlatformSettings {
   landingShowPoolVolume                      Boolean   @default(true)
   landingShowPayout                          Boolean   @default(true)
   streamSelfServeSignupEnabled               Boolean   @default(false) // when true, POST /voice-stream/auth/register is open to the public and the Stream /register page shows a real signup form instead of the lead-capture "Request access" form; when false (default), Stream onboarding stays admin-invite-only
+  topBannerEnabled                           Boolean   @default(false) // master switch for the promotional top banner shown directly under the dashboard header to every logged-in trainer; requires topBannerImageBucket/Key to actually render, same withholding pattern as tawkToEnabled
+  topBannerImageBucket                       String? // DigitalOcean Spaces bucket for the uploaded banner image (see StorageService/BannerService) -- bucket+key stored rather than a raw URL so the CDN/domain stays decoupled from the DB, same shape as MarketingAdPhoto
+  topBannerImageKey                          String?
+  topBannerAltText                           String? // accessible alt text for the banner image
+  topBannerLearnMoreUrl                      String? // destination when the banner (or its "Learn more" affordance) is clicked -- opens in a new tab; banner is not clickable at all if unset
   updatedAt                                  DateTime  @updatedAt
   createdAt                                  DateTime  @default(now())
 

@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   normalizeErrorMessage,
   useGetPlatformSettingsQuery,
   useUpdatePlatformSettingsMutation,
+  useUploadTopBannerImageMutation,
 } from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
+
+const ALLOWED_BANNER_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const inputClass =
   'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
@@ -16,6 +19,8 @@ const primaryButtonClass =
 export function GeneralSettingsPanel() {
   const { data: settings, isLoading } = useGetPlatformSettingsQuery();
   const [updateSettings, { isLoading: isSaving }] = useUpdatePlatformSettingsMutation();
+  const [uploadTopBannerImage, { isLoading: isUploadingBanner }] = useUploadTopBannerImageMutation();
+  const bannerFileInputRef = useRef<HTMLInputElement>(null);
 
   const [tokenUsdRate, setTokenUsdRate] = useState('');
   const [minWithdrawalTokens, setMinWithdrawalTokens] = useState('');
@@ -34,6 +39,17 @@ export function GeneralSettingsPanel() {
   const [noFailOnTrainEnabled, setNoFailOnTrainEnabled] = useState(false);
   const [minScoreRange, setMinScoreRange] = useState('');
   const [maxScoreRange, setMaxScoreRange] = useState('');
+  const [topBannerEnabled, setTopBannerEnabled] = useState(false);
+  const [topBannerImageUrl, setTopBannerImageUrl] = useState<string | null>(null);
+  const [topBannerImageBucket, setTopBannerImageBucket] = useState<string | null>(null);
+  const [topBannerImageKey, setTopBannerImageKey] = useState<string | null>(null);
+  // Tracks whether the image field actually changed this session (new
+  // upload or explicit removal) -- distinct from bucket/key being null on
+  // initial load, so a save that never touches the image doesn't
+  // accidentally overwrite it with nulls.
+  const [topBannerImageDirty, setTopBannerImageDirty] = useState(false);
+  const [topBannerAltText, setTopBannerAltText] = useState('');
+  const [topBannerLearnMoreUrl, setTopBannerLearnMoreUrl] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,7 +76,43 @@ export function GeneralSettingsPanel() {
     setNoFailOnTrainEnabled(settings.noFailOnTrainEnabled);
     setMinScoreRange(settings.minScoreRange);
     setMaxScoreRange(settings.maxScoreRange);
+    setTopBannerEnabled(settings.topBannerEnabled);
+    setTopBannerImageUrl(settings.topBannerImageUrl);
+    setTopBannerImageDirty(false);
+    setTopBannerAltText(settings.topBannerAltText ?? '');
+    setTopBannerLearnMoreUrl(settings.topBannerLearnMoreUrl ?? '');
   }, [settings]);
+
+  async function handleBannerFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setError(null);
+    if (!ALLOWED_BANNER_TYPES.includes(file.type)) {
+      setError('Banner image must be JPEG, PNG, or WebP.');
+      return;
+    }
+    try {
+      const { uploadUrl, bucket, key } = await uploadTopBannerImage({
+        contentType: file.type,
+      }).unwrap();
+      const putResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!putResponse.ok) {
+        throw new Error('Upload to storage failed');
+      }
+      setTopBannerImageBucket(bucket);
+      setTopBannerImageKey(key);
+      setTopBannerImageUrl(URL.createObjectURL(file));
+      setTopBannerImageDirty(true);
+      setMessage(null);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to upload banner image.'));
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -105,6 +157,12 @@ export function GeneralSettingsPanel() {
         noFailOnTrainEnabled,
         ...(minScoreRange !== '' ? { minScoreRange: Number(minScoreRange) } : {}),
         ...(maxScoreRange !== '' ? { maxScoreRange: Number(maxScoreRange) } : {}),
+        topBannerEnabled,
+        ...(topBannerImageDirty
+          ? { topBannerImageBucket, topBannerImageKey }
+          : {}),
+        topBannerAltText: topBannerAltText || null,
+        topBannerLearnMoreUrl: topBannerLearnMoreUrl || null,
       }).unwrap();
       setMessage('General settings saved.');
     } catch (err) {
@@ -464,6 +522,102 @@ export function GeneralSettingsPanel() {
                 </span>
               </span>
             </label>
+          </div>
+
+          <div className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4">
+            <label
+              className="flex cursor-pointer items-start gap-3"
+              htmlFor="top-banner-enabled"
+            >
+              <input
+                checked={topBannerEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="top-banner-enabled"
+                onChange={(event) => setTopBannerEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Top banner</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Shows full-width directly under the header on the trainer dashboard, to every
+                  logged-in trainer. A trainer can dismiss it for their current login session; it
+                  reappears the next time they sign in.
+                </span>
+              </span>
+            </label>
+
+            {topBannerImageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt={topBannerAltText || 'Top banner preview'}
+                className="max-h-40 w-full rounded-lg border border-line object-cover"
+                src={topBannerImageUrl}
+              />
+            )}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <ActionButton
+                className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-white px-3 text-sm font-bold hover:bg-surface-muted dark:bg-surface-muted"
+                onClick={() => bannerFileInputRef.current?.click()}
+                pending={isUploadingBanner}
+                pendingLabel="Uploading"
+                type="button"
+              >
+                {topBannerImageUrl ? 'Replace image' : 'Upload image'}
+              </ActionButton>
+              {topBannerImageUrl && (
+                <button
+                  className="text-sm font-bold text-danger hover:underline"
+                  onClick={() => {
+                    setTopBannerImageUrl(null);
+                    setTopBannerImageBucket(null);
+                    setTopBannerImageKey(null);
+                    setTopBannerImageDirty(true);
+                  }}
+                  type="button"
+                >
+                  Remove image
+                </button>
+              )}
+              <input
+                accept={ALLOWED_BANNER_TYPES.join(',')}
+                className="hidden"
+                onChange={handleBannerFileChange}
+                ref={bannerFileInputRef}
+                type="file"
+              />
+            </div>
+
+            <div className="grid gap-1">
+              <label className="font-bold" htmlFor="top-banner-alt-text">
+                Alt text
+              </label>
+              <input
+                className={inputClass}
+                id="top-banner-alt-text"
+                placeholder="Describe the banner image"
+                value={topBannerAltText}
+                onChange={(e) => setTopBannerAltText(e.target.value)}
+              />
+            </div>
+
+            <div className="grid gap-1">
+              <label className="font-bold" htmlFor="top-banner-learn-more-url">
+                Learn more link
+              </label>
+              <p className="text-sm leading-relaxed text-muted">
+                Opens in a new tab when the banner is clicked. Leave blank to make the banner
+                non-clickable.
+              </p>
+              <input
+                className={inputClass}
+                id="top-banner-learn-more-url"
+                placeholder="https://..."
+                type="url"
+                value={topBannerLearnMoreUrl}
+                onChange={(e) => setTopBannerLearnMoreUrl(e.target.value)}
+              />
+            </div>
           </div>
 
           <div>

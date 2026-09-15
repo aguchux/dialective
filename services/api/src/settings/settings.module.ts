@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { StorageModule } from '../storage/storage.module';
 import { PlatformSettingsService } from './platform-settings.service';
 import {
   PublicSettingsController,
@@ -13,6 +14,7 @@ import {
 // maintenance on every authenticated request.
 @Global()
 @Module({
+  imports: [StorageModule],
   controllers: [SettingsController, PublicSettingsController, StreamPublicSettingsController],
   providers: [PlatformSettingsService],
   exports: [PlatformSettingsService],

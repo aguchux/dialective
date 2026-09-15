@@ -11,9 +11,87 @@ function setup(row: Record<string, unknown>) {
       upsert: jest.fn().mockResolvedValue({ id: 'default', ...row }),
     },
   };
-  const service = new PlatformSettingsService(prisma as never);
-  return { service, prisma };
+  const storage = {
+    getPublicObjectUrl: jest.fn((bucket: string, key: string) => `https://cdn.example.com/${bucket}/${key}`),
+    createPresignedUploadUrl: jest
+      .fn()
+      .mockResolvedValue({ url: 'https://upload.example.com', expiresInSeconds: 900 }),
+  };
+  const service = new PlatformSettingsService(prisma as never, storage as never);
+  return { service, prisma, storage };
 }
+
+describe('PlatformSettingsService.getTopBanner', () => {
+  it('returns disabled with nothing exposed when the master switch is off, even if an image is set', async () => {
+    const { service } = setup({
+      topBannerEnabled: false,
+      topBannerImageBucket: 'bucket-1',
+      topBannerImageKey: 'dyk/a.jpg',
+      topBannerAltText: 'Alt',
+      topBannerLearnMoreUrl: 'https://example.com',
+    });
+
+    await expect(service.getTopBanner()).resolves.toEqual({
+      enabled: false,
+      imageUrl: null,
+      altText: null,
+      learnMoreUrl: null,
+    });
+  });
+
+  it('returns disabled when enabled but no image bucket/key is set', async () => {
+    const { service } = setup({
+      topBannerEnabled: true,
+      topBannerImageBucket: null,
+      topBannerImageKey: null,
+    });
+
+    await expect(service.getTopBanner()).resolves.toEqual({
+      enabled: false,
+      imageUrl: null,
+      altText: null,
+      learnMoreUrl: null,
+    });
+  });
+
+  it('returns the resolved public image URL when enabled with an image set', async () => {
+    const { service, storage } = setup({
+      topBannerEnabled: true,
+      topBannerImageBucket: 'dialectiva-marketing',
+      topBannerImageKey: 'dyk/banner.jpg',
+      topBannerAltText: 'Switching to P2P',
+      topBannerLearnMoreUrl: 'https://example.com/learn-more',
+    });
+
+    await expect(service.getTopBanner()).resolves.toEqual({
+      enabled: true,
+      imageUrl: 'https://cdn.example.com/dialectiva-marketing/dyk/banner.jpg',
+      altText: 'Switching to P2P',
+      learnMoreUrl: 'https://example.com/learn-more',
+    });
+    expect(storage.getPublicObjectUrl).toHaveBeenCalledWith('dialectiva-marketing', 'dyk/banner.jpg');
+  });
+});
+
+describe('PlatformSettingsService.uploadTopBannerImage', () => {
+  it('rejects an unsupported content type', async () => {
+    const { service } = setup({});
+    await expect(service.uploadTopBannerImage('image/gif')).rejects.toThrow();
+  });
+
+  it('generates a key under the public dyk/ prefix and returns the presigned upload URL', async () => {
+    const { service, storage } = setup({});
+    const result = await service.uploadTopBannerImage('image/png');
+    expect(result.key).toMatch(/^dyk\/[0-9a-f-]+\.png$/);
+    expect(result.uploadUrl).toBe('https://upload.example.com');
+    expect(storage.createPresignedUploadUrl).toHaveBeenCalledWith(
+      expect.any(String),
+      result.key,
+      'image/png',
+      true,
+    );
+  });
+});
 
 describe('PlatformSettingsService.getTawkToWidget', () => {
   it('returns disabled with no IDs when the master switch is off, even if IDs are set', async () => {
@@ -205,7 +283,7 @@ describe('PlatformSettingsService.update WhatsApp API key handling', () => {
         upsert: jest.fn().mockRejectedValue(new Error('stop before return construction')),
       },
     };
-    const service = new PlatformSettingsService(prisma as never);
+    const service = new PlatformSettingsService(prisma as never, {} as never);
     return { service, prisma };
   }
 

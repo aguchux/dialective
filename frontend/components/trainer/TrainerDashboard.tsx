@@ -82,6 +82,7 @@ import {
   emailName,
   MobileNavigation,
 } from '@/components/dashboard/DashboardShell';
+import { TopPromoBanner } from '@/components/dashboard/TopPromoBanner';
 import {
   DomainConversationSubmissionSummary,
   EarningsChartRange,
@@ -316,6 +317,8 @@ export function TrainerDashboard() {
               : null
           }
         />
+
+        <TopPromoBanner />
 
         {me && !me.emailVerified && <EmailVerificationBanner />}
         {incompleteRequiredCourses && incompleteRequiredCourses.length > 0 && (
