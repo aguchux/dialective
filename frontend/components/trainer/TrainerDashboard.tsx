@@ -344,7 +344,7 @@ export function TrainerDashboard() {
           )}
 
           {activeView === 'home' && <CommunityStatsCta />}
-          <TrainerAdBanner slot="top" />
+          {activeView !== 'market' && <TrainerAdBanner slot="top" />}
 
           {activeView === 'profile' ? (
             <ProfileView session={session} update={update} />

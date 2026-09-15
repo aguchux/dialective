@@ -39,12 +39,19 @@ function useIsPageVisible(): boolean {
 const MARKET_LIST_POLL_MS = 7000;
 
 type SortBy = 'createdAt' | 'tokenAmount' | 'fiatAmount' | 'price';
+type MarketType = 'SELL' | 'BUY' | 'ALL';
 
 const SORT_OPTIONS: { id: SortBy; label: string }[] = [
   { id: 'createdAt', label: 'Newest' },
   { id: 'price', label: 'Price' },
   { id: 'tokenAmount', label: 'DL amount' },
   { id: 'fiatAmount', label: 'Fiat amount' },
+];
+
+const MARKET_TYPE_OPTIONS: { id: MarketType; label: string }[] = [
+  { id: 'ALL', label: 'All markets' },
+  { id: 'SELL', label: 'Sell offers' },
+  { id: 'BUY', label: 'Buy requests' },
 ];
 
 function parseCsv(value: string | undefined): string[] {
@@ -62,8 +69,6 @@ function parseCsv(value: string | undefined): string[] {
  * scoped to just the list, not the whole tabbed view.
  */
 export function MarketOfferList({
-  type,
-  title,
   settings,
   onAccept,
   onCancel,
@@ -74,8 +79,6 @@ export function MarketOfferList({
   disabled,
   viewerId,
 }: {
-  type: 'SELL' | 'BUY';
-  title: string;
   settings: P2PMarketSettings | undefined;
   onAccept: (offer: P2POffer) => void;
   onCancel: (offer: P2POffer) => void;
@@ -86,6 +89,7 @@ export function MarketOfferList({
   disabled: boolean;
   viewerId: string | undefined;
 }) {
+  const [type, setType] = useState<MarketType>('ALL');
   const [search, setSearch] = useState('');
   const [fiatCurrency, setFiatCurrency] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
@@ -102,7 +106,7 @@ export function MarketOfferList({
 
   const { data, isFetching } = useListP2POffersQuery(
     {
-      type,
+      type: type === 'ALL' ? undefined : type,
       search: debouncedSearch || undefined,
       fiatCurrency: fiatCurrency || undefined,
       paymentMethod: paymentMethod || undefined,
@@ -122,8 +126,20 @@ export function MarketOfferList({
   return (
     <section className="mx-[calc(50%-50vw)] w-screen px-4 md:px-6">
       <div className="mx-auto max-w-[1600px]">
-        <SectionTitle title={title} subtitle="Active marketplace posts." />
+        <SectionTitle title="Market" subtitle="Active marketplace posts." />
         <div className="mb-4 flex flex-wrap items-center gap-2">
+          <select
+            className="min-h-10 rounded-lg border border-line bg-white px-3 text-sm font-bold dark:bg-surface-muted"
+            onChange={(e) => setType(e.target.value as MarketType)}
+            value={type}
+            aria-label="Filter by market type"
+          >
+            {MARKET_TYPE_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <div className="relative max-w-sm flex-1 min-w-[220px]">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
