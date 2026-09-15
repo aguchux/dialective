@@ -42,6 +42,35 @@ function formatContact(
   return name ? `${name} · ${phoneNumber}` : phoneNumber;
 }
 
+function waLink(phoneNumber: string): string {
+  return `https://wa.me/${phoneNumber.replace(/\D/g, '')}`;
+}
+
+/** Tap-to-chat link, styled like an inline text link rather than a button -- used wherever a phone number/name appears so either side can jump straight into WhatsApp with the peer instead of copying the number by hand. */
+function WhatsAppContactLink({
+  firstName,
+  lastName,
+  phoneNumber,
+  className = '',
+}: {
+  firstName: string | null;
+  lastName: string | null;
+  phoneNumber: string;
+  className?: string;
+}) {
+  return (
+    <a
+      className={`inline-flex items-center gap-1.5 underline decoration-dotted underline-offset-2 hover:text-accent ${className}`}
+      href={waLink(phoneNumber)}
+      rel="noreferrer"
+      target="_blank"
+    >
+      <Phone className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="truncate">{formatContact(firstName, lastName, phoneNumber)}</span>
+    </a>
+  );
+}
+
 /**
  * WhatsApp Validator integration page -- the peer-driven counterpart to
  * the platform's staff-reviewed manual phone verification. Two tabs:
@@ -244,11 +273,15 @@ function ClaimedRequestCard({ claim }: { claim: WhatsAppValidationClaim }) {
         </span>
         <div className="min-w-0">
           <p className="truncate font-black">
-            {formatContact(claim.requesterFirstName, claim.requesterLastName, claim.phoneNumber)}
+            <WhatsAppContactLink
+              firstName={claim.requesterFirstName}
+              lastName={claim.requesterLastName}
+              phoneNumber={claim.phoneNumber}
+            />
           </p>
           <p className="text-xs font-bold text-muted">
-            Message this member on WhatsApp and ask for their code, then enter it below. Confirm
-            their name matches before you verify.
+            Tap the name above to message this member on WhatsApp and ask for their code, then
+            enter it below. Confirm their name matches before you verify.
           </p>
         </div>
       </div>
@@ -391,7 +424,7 @@ function GetVerifiedTab() {
               {activeRequest.validatorPhoneNumber ? (
                 <a
                   className="inline-flex w-fit items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 font-extrabold text-ink hover:bg-surface-muted dark:bg-surface-muted"
-                  href={`https://wa.me/${activeRequest.validatorPhoneNumber.replace(/\D/g, '')}`}
+                  href={waLink(activeRequest.validatorPhoneNumber)}
                   rel="noreferrer"
                   target="_blank"
                 >
