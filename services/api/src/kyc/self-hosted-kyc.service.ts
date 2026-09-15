@@ -6,6 +6,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { KycEvidenceKind, KycStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
@@ -250,22 +251,27 @@ export class SelfHostedKycService {
       doNotAutoDeclineEnabled,
     });
 
-    return this.toDiditDecision(result, botFindings, poseCompliant);
+    const decision = this.toDiditDecision(result, botFindings, poseCompliant);
+    decision.raw = {
+      ...(decision.raw as Record<string, unknown>),
+      thresholds: { minFaceMatchScore, minLivenessScore },
+      autoApproveEnabled,
+      approvalSource: 'submission',
+      evaluatedAt: new Date().toISOString(),
+    };
+    return decision;
   }
 
   /**
    * Runs FaceMatchService against the stored document-portrait image and
-   * selfie frames. Any failure here (no face detected in the document, no
-   * face detected in enough selfie frames, a model/decode error) is treated
-   * as a 0 score rather than thrown -- self-hosted-kyc-decision.ts's
-   * FACE_MATCH_DECLINE_BELOW/LIVENESS_DECLINE_BELOW thresholds then
-   * correctly decline an unusable submission instead of the whole
-   * evaluate() call 500ing on a bad photo.
+   * selfie frames. Missing faces produce a failed check. Processing errors
+   * get two retries, then leave the stored evidence available for resubmission.
    */
   private async runDeterministicChecks(
     documentFront: { bucket: string; key: string },
     selfieFrames: { bucket: string; key: string }[],
     challengeType: 'TURN_LEFT' | 'TURN_RIGHT' | null,
+    attempt = 0,
   ): Promise<{ faceMatchScore: number; livenessScore: number; poseCompliant: boolean | null }> {
     try {
       const [documentBuffer, selfieBuffers] = await Promise.all([
@@ -296,7 +302,11 @@ export class SelfHostedKycService {
       return { faceMatchScore, livenessScore, poseCompliant };
     } catch (err) {
       this.logger.error(`DLKYC face-match evaluation failed: ${String(err)}`);
-      return { faceMatchScore: 0, livenessScore: 0, poseCompliant: null };
+      if (attempt < 2)
+        return this.runDeterministicChecks(documentFront, selfieFrames, challengeType, attempt + 1);
+      throw new ServiceUnavailableException(
+        'Identity checks could not complete. Please retry submission; your evidence has been saved.',
+      );
     }
   }
 

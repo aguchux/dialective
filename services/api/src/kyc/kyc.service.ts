@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { KycStatus, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,6 +13,7 @@ import { MailService } from '../mail/mail.service';
 import { SmsService } from '../sms/sms.service';
 import { DiditDecision, DiditService } from './didit.service';
 import { SelfHostedKycService } from './self-hosted-kyc.service';
+import { recheckEligibility } from './kyc-recheck-policy';
 import {
   decryptKycField,
   encryptKycField,
@@ -44,6 +51,126 @@ const DIDIT_STATUS_MAP: Record<string, KycStatus> = {
 @Injectable()
 export class KycService {
   private readonly logger = new Logger(KycService.name);
+  private recheckRunning = false;
+  private recheckCursor: string | undefined;
+
+  @Cron('0 */5 * * * *')
+  async recheckScheduled(): Promise<void> {
+    if (this.recheckRunning) return;
+    this.recheckRunning = true;
+    try {
+      const result = await this.recheckSelfHosted(false, this.recheckCursor);
+      this.recheckCursor = result.nextCursor ?? undefined;
+      if (result.scanned) this.logger.log(`DLKYC recheck: ${JSON.stringify(result)}`);
+    } catch (error) {
+      this.logger.error(`DLKYC recheck failed: ${String(error)}`);
+    } finally {
+      this.recheckRunning = false;
+    }
+  }
+
+  async recheckSelfHosted(preview = true, after?: string) {
+    const enabled = await this.settings.isSelfHostedKycAutoApproveEnabled();
+    const thresholds = await this.settings.getSelfHostedKycApproveThresholds();
+    const result = {
+      enabled,
+      scanned: 0,
+      eligible: 0,
+      approved: 0,
+      skipped: 0,
+      errors: 0,
+      nextCursor: null as string | null,
+      thresholds,
+    };
+    if (!enabled) return result;
+    const rows = await this.prisma.kycVerification.findMany({
+      where: {
+        provider: 'self',
+        status: KycStatus.IN_REVIEW,
+        ...(after ? { id: { gt: after } } : {}),
+      },
+      orderBy: { id: 'asc' },
+      take: 100,
+    });
+    result.scanned = rows.length;
+    result.nextCursor = rows.length === 100 ? rows[rows.length - 1].id : null;
+    for (const row of rows) {
+      try {
+        if (!row.decisionEncryptedJson) {
+          result.skipped++;
+          continue;
+        }
+        const raw = JSON.parse(
+          decryptKycField(
+            row.decisionEncryptedJson as unknown as Parameters<typeof decryptKycField>[0],
+          ),
+        );
+        if (
+          recheckEligibility(
+            row.faceMatchScore?.toNumber() ?? null,
+            row.livenessScore?.toNumber() ?? null,
+            raw,
+            thresholds,
+          )
+        ) {
+          result.skipped++;
+          continue;
+        }
+        const approved = await this.prisma.$transaction(
+          async (tx) => {
+            // Serializable transactions prevent cancellation, a newer attempt or a
+            // second API replica from racing the decision and account update.
+            const latest = await tx.kycVerification.findFirst({
+              where: { userId: row.userId },
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            });
+            if (!latest || latest.id !== row.id || latest.status !== KycStatus.IN_REVIEW)
+              return false;
+            if (
+              JSON.stringify(latest.decisionEncryptedJson) !==
+              JSON.stringify(row.decisionEncryptedJson)
+            )
+              return false;
+            const user = await tx.user.findUnique({ where: { id: row.userId } });
+            if (!user || user.kycStatus !== KycStatus.IN_REVIEW) return false;
+            if (preview) return true;
+            const now = new Date();
+            const claimed = await tx.kycVerification.updateMany({
+              where: { id: row.id, status: KycStatus.IN_REVIEW },
+              data: {
+                status: KycStatus.APPROVED,
+                declineReason: null,
+                decisionEncryptedJson: encryptKycField(
+                  JSON.stringify({
+                    ...raw,
+                    band: 'APPROVE',
+                    approvalSource: 'threshold-recheck',
+                    approvedAt: now.toISOString(),
+                    thresholds,
+                  }),
+                ) as unknown as Prisma.InputJsonValue,
+              },
+            });
+            if (!claimed.count) return false;
+            await tx.user.update({
+              where: { id: row.userId },
+              data: { kycStatus: KycStatus.APPROVED, kycVerifiedAt: now },
+            });
+            return true;
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+        if (approved) {
+          result.eligible++;
+          if (!preview) result.approved++;
+        } else result.skipped++;
+      } catch (error) {
+        result.errors++;
+        this.logger.warn(`DLKYC recheck deferred verification=${row.id}: ${String(error)}`);
+      }
+    }
+    return result;
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -75,7 +202,9 @@ export class KycService {
     try {
       await this.mail.sendKycDeclinedEmail({ trainerEmail: user.email, reason });
     } catch (err) {
-      this.logger.error(`Failed to send KYC decline email for user=${userId}: ${(err as Error).message}`);
+      this.logger.error(
+        `Failed to send KYC decline email for user=${userId}: ${(err as Error).message}`,
+      );
     }
 
     if (this.sms && user.phoneNumber && user.phoneVerifiedAt && user.smsNotificationsEnabled) {
@@ -85,7 +214,9 @@ export class KycService {
           `Dialect Library: your identity verification was declined. Reason: ${reason}. Please review and resubmit from your dashboard.`,
         );
       } catch (err) {
-        this.logger.error(`Failed to send KYC decline SMS for user=${userId}: ${(err as Error).message}`);
+        this.logger.error(
+          `Failed to send KYC decline SMS for user=${userId}: ${(err as Error).message}`,
+        );
       }
     }
   }
@@ -110,19 +241,25 @@ export class KycService {
 
     const staleBefore = new Date(Date.now() - minutes * 60 * 1000);
     const stale = await this.prisma.kycVerification.findMany({
-      where: { status: { in: NON_TERMINAL_STATUSES }, createdAt: { lt: staleBefore } },
+      where: {
+        status: { in: NON_TERMINAL_STATUSES },
+        createdAt: { lt: staleBefore },
+        NOT: { provider: 'self', status: KycStatus.IN_REVIEW },
+      },
       select: { id: true, userId: true },
     });
     if (stale.length === 0) return;
 
     for (const verification of stale) {
-      await this.prisma.kycVerification.update({
-        where: { id: verification.id },
+      const cancelled = await this.prisma.kycVerification.updateMany({
+        where: { id: verification.id, status: { in: NON_TERMINAL_STATUSES },
+          NOT: { provider: 'self', status: KycStatus.IN_REVIEW } },
         data: {
           status: KycStatus.ABANDONED,
           declineReason: `Auto-cancelled after ${minutes} minutes without completion.`,
         },
       });
+      if (!cancelled.count) continue;
       // Only reflect ABANDONED onto User.kycStatus if this user has no
       // OTHER active (non-stale) attempt still in flight -- a user can have
       // more than one KycVerification row (each createVerificationSession
@@ -137,8 +274,8 @@ export class KycService {
         select: { id: true },
       });
       if (!stillActive) {
-        await this.prisma.user.update({
-          where: { id: verification.userId },
+        await this.prisma.user.updateMany({
+          where: { id: verification.userId, kycStatus: { in: NON_TERMINAL_STATUSES } },
           data: { kycStatus: KycStatus.ABANDONED },
         });
       }
@@ -158,7 +295,10 @@ export class KycService {
     const provider = await this.getActiveProvider();
     if (provider === 'self') {
       const { sessionId, kycAppUrl } = await this.selfHosted.createSession(userId, callbackUrl);
-      await this.prisma.user.update({ where: { id: userId }, data: { kycStatus: KycStatus.IN_PROGRESS } });
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { kycStatus: KycStatus.IN_PROGRESS },
+      });
       // SelfHostedKycService.createSession already inserted the
       // KycVerification row (it needs the row's id before the handoff token
       // can be signed) -- unlike the Didit branch below, no upsert needed
@@ -464,20 +604,34 @@ export class KycService {
         : null;
 
     try {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.kycVerification.update({
-          where: { id: verificationId },
-          data: verificationData,
-        });
-        await tx.user.update({
-          where: { id: userId },
-          data: {
-            kycStatus: status,
-            kycVerifiedAt: status === KycStatus.APPROVED ? resolvedAt : undefined,
-            ...(identityFingerprint ? { diditIdentityFingerprint: identityFingerprint } : {}),
-          },
-        });
-      });
+      await this.prisma.$transaction(
+        async (tx) => {
+          if (
+            decision?.raw &&
+            (decision.raw as Record<string, unknown>).approvalSource === 'submission'
+          ) {
+            const latest = await tx.kycVerification.findFirst({
+              where: { userId },
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            });
+            if (!latest || latest.id !== verificationId || latest.status !== KycStatus.IN_PROGRESS)
+              return;
+          }
+          await tx.kycVerification.update({
+            where: { id: verificationId },
+            data: verificationData,
+          });
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              kycStatus: status,
+              kycVerifiedAt: status === KycStatus.APPROVED ? resolvedAt : undefined,
+              ...(identityFingerprint ? { diditIdentityFingerprint: identityFingerprint } : {}),
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
     } catch (err) {
       const duplicateIdentity =
         err instanceof Prisma.PrismaClientKnownRequestError &&

@@ -5,10 +5,10 @@ function setup(settingsOverrides: { enabled?: boolean; minutes?: number } = {}) 
     kycVerification: {
       findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn().mockResolvedValue(null),
-      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     user: {
-      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   };
   const didit = {};
@@ -48,14 +48,14 @@ describe('KycService.autoCancelStaleVerifications', () => {
 
     await service.autoCancelStaleVerifications();
 
-    expect(prisma.kycVerification.update).toHaveBeenCalledWith(
+    expect(prisma.kycVerification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'kyc-1' },
+        where: expect.objectContaining({ id: 'kyc-1' }),
         data: expect.objectContaining({ status: 'ABANDONED' }),
       }),
     );
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ id: 'user-1' }),
       data: { kycStatus: 'ABANDONED' },
     });
   });
@@ -69,10 +69,10 @@ describe('KycService.autoCancelStaleVerifications', () => {
 
     await service.autoCancelStaleVerifications();
 
-    expect(prisma.kycVerification.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'kyc-old' } }),
+    expect(prisma.kycVerification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: 'kyc-old' }) }),
     );
-    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
 
   it('queries only non-terminal statuses older than the configured timeout', async () => {
@@ -96,7 +96,7 @@ describe('KycService.autoCancelStaleVerifications', () => {
 
     await service.autoCancelStaleVerifications();
 
-    expect(prisma.kycVerification.update).not.toHaveBeenCalled();
-    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.kycVerification.updateMany).not.toHaveBeenCalled();
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
 });

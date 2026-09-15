@@ -181,6 +181,20 @@ export class KycController {
     });
   }
 
+  @Get('admin/kyc/recheck/preview')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  recheckPreview() {
+    return this.kyc.recheckSelfHosted(true);
+  }
+
+  @Post('admin/kyc/recheck/run')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  recheckRun() {
+    return this.kyc.recheckSelfHosted(false);
+  }
+
   @Get('admin/kyc/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

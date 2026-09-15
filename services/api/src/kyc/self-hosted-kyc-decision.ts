@@ -79,6 +79,14 @@ export function evaluateSelfHostedKyc(input: KycEvaluationInput): KycEvaluationR
     doNotAutoDeclineEnabled = false,
   } = input;
 
+  if (
+    ![faceMatchScore, livenessScore, minFaceMatchScore, minLivenessScore].every(
+      (value) => Number.isFinite(value) && value >= 0 && value <= 100,
+    )
+  ) {
+    return { band: 'REVIEW', faceMatchScore, livenessScore, declineReason: null };
+  }
+
   // Clear fail: either signal is decisively bad. Normally declines
   // outright, regardless of autoApproveEnabled (declining is never an
   // "approval", so the auto-approve kill switch doesn't gate this branch)

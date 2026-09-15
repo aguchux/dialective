@@ -7,6 +7,7 @@ import {
   useUpdatePlatformSettingsMutation,
 } from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { KycRecheckPanel } from './KycRecheckPanel';
 
 const inputClass =
   'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
@@ -59,9 +60,7 @@ export function KycSettingsPanel() {
     setManualPhoneVerificationEnabled(settings.manualPhoneVerificationEnabled);
     setManualPhoneVerificationFeeTokens(settings.manualPhoneVerificationFeeTokens);
     setManualPhoneVerificationWhatsappNumber(settings.manualPhoneVerificationWhatsappNumber);
-    setManualPhoneVerificationExpiryMinutes(
-      String(settings.manualPhoneVerificationExpiryMinutes),
-    );
+    setManualPhoneVerificationExpiryMinutes(String(settings.manualPhoneVerificationExpiryMinutes));
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -193,7 +192,10 @@ export function KycSettingsPanel() {
           </div>
 
           <div className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4">
-            <label className="flex cursor-pointer items-start gap-3" htmlFor="kyc-auto-cancel-stale">
+            <label
+              className="flex cursor-pointer items-start gap-3"
+              htmlFor="kyc-auto-cancel-stale"
+            >
               <input
                 checked={autoCancelStaleEnabled}
                 className="mt-0.5 size-5 accent-accent"
@@ -212,7 +214,10 @@ export function KycSettingsPanel() {
               </span>
             </label>
 
-            <label className="grid max-w-xs gap-1 text-sm font-bold" htmlFor="kyc-auto-cancel-minutes">
+            <label
+              className="grid max-w-xs gap-1 text-sm font-bold"
+              htmlFor="kyc-auto-cancel-minutes"
+            >
               Timeout (minutes)
               <input
                 className={inputClass}
@@ -240,7 +245,9 @@ export function KycSettingsPanel() {
                 type="checkbox"
               />
               <span>
-                <span className="block font-bold">Enable DLKYC (self-hosted, kyc.dialectlibrary.com)</span>
+                <span className="block font-bold">
+                  Enable DLKYC (self-hosted, kyc.dialectlibrary.com)
+                </span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   Our own identity-verification app, alongside Didit -- not a replacement. When off,
                   the active provider below is forced back to Didit regardless of its stored value.
@@ -248,7 +255,10 @@ export function KycSettingsPanel() {
               </span>
             </label>
 
-            <label className="grid max-w-xs gap-1 text-sm font-bold" htmlFor="dlkyc-active-provider">
+            <label
+              className="grid max-w-xs gap-1 text-sm font-bold"
+              htmlFor="dlkyc-active-provider"
+            >
               Active provider
               <select
                 className={inputClass}
@@ -315,10 +325,10 @@ export function KycSettingsPanel() {
                 />
               </label>
               <p className="text-sm leading-relaxed text-muted sm:col-span-2">
-                A submission must meet or exceed both floors (and raise no bot flags) to auto-approve
-                when the toggle above is on. Anything below either floor -- but not bad enough to
-                auto-decline outright -- lands in manual review instead. Defaults: 85% face match,
-                80% liveness.
+                A submission must meet or exceed both floors (and raise no bot flags) to
+                auto-approve when the toggle above is on. Anything below either floor -- but not bad
+                enough to auto-decline outright -- lands in manual review instead. Defaults: 85%
+                face match, 80% liveness.
               </p>
             </div>
 
@@ -334,7 +344,9 @@ export function KycSettingsPanel() {
                 type="checkbox"
               />
               <span>
-                <span className="block font-bold">Do not auto-decline -- send failures to review</span>
+                <span className="block font-bold">
+                  Do not auto-decline -- send failures to review
+                </span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   Off by default -- a decisively bad face match or liveness score auto-declines the
                   trainer outright. When on, those same failing submissions land in the review queue
@@ -446,6 +458,7 @@ export function KycSettingsPanel() {
               Save identity verification settings
             </ActionButton>
           </div>
+          <KycRecheckPanel />
         </form>
       )}
 
