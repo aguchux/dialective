@@ -941,6 +941,10 @@ export interface WhatsAppValidationMyRequest {
   rejectedAt: string | null;
   expiresAt: string;
   createdAt: string;
+  // Set once a validator has claimed this request -- lets the requester
+  // reach out first instead of only waiting to be contacted. Null while
+  // PENDING, or if the claiming validator has no phone number on file.
+  validatorPhoneNumber: string | null;
 }
 
 export interface WhatsAppValidationClaim {
@@ -2927,12 +2931,22 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/whatsapp-validator/requests', method: 'POST', body }),
       invalidatesTags: ['WhatsAppValidator', 'Profile'],
     }),
-    listMyWhatsAppValidationRequests: builder.query<WhatsAppValidationMyRequest[], void>({
+    // The requester's own single request (there's at most one live one at a
+    // time), not a history list -- null when they have none.
+    getMyWhatsAppValidationRequest: builder.query<WhatsAppValidationMyRequest | null, void>({
       query: () => '/whatsapp-validator/requests/mine',
       providesTags: ['WhatsAppValidator'],
     }),
-    claimNextWhatsAppValidation: builder.mutation<WhatsAppValidationClaim, void>({
-      query: () => ({ url: '/whatsapp-validator/next', method: 'POST' }),
+    listPendingWhatsAppValidations: builder.query<WhatsAppValidationClaim[], void>({
+      query: () => '/whatsapp-validator/pending',
+      providesTags: ['WhatsAppValidator'],
+    }),
+    getMyWhatsAppValidationClaim: builder.query<WhatsAppValidationClaim | null, void>({
+      query: () => '/whatsapp-validator/my-claim',
+      providesTags: ['WhatsAppValidator'],
+    }),
+    claimWhatsAppValidation: builder.mutation<WhatsAppValidationClaim, string>({
+      query: (id) => ({ url: `/whatsapp-validator/requests/${id}/claim`, method: 'POST' }),
       invalidatesTags: ['WhatsAppValidator'],
     }),
     verifyWhatsAppValidationRequest: builder.mutation<
@@ -5540,8 +5554,10 @@ export const {
   useSubscribeToIntegrationMutation,
   useUnsubscribeFromIntegrationMutation,
   useRequestWhatsAppValidationMutation,
-  useListMyWhatsAppValidationRequestsQuery,
-  useClaimNextWhatsAppValidationMutation,
+  useGetMyWhatsAppValidationRequestQuery,
+  useListPendingWhatsAppValidationsQuery,
+  useGetMyWhatsAppValidationClaimQuery,
+  useClaimWhatsAppValidationMutation,
   useVerifyWhatsAppValidationRequestMutation,
   useRejectWhatsAppValidationRequestMutation,
   useListAdminIntegrationsQuery,
