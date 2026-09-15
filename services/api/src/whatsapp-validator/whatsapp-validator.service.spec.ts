@@ -203,6 +203,29 @@ describe('WhatsAppValidatorService', () => {
       prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, id: 'other-request' });
       await expect(service.claim(validatorId, requestId)).rejects.toThrow(ConflictException);
     });
+
+    it('scopes the claim update with requesterId: { not: caller } so a user can never claim their own request', async () => {
+      // Real Postgres never matches this row for a self-claim (requesterId
+      // === validatorId), which updateMany surfaces as count: 0 -- same
+      // "vanished/unavailable" outcome as losing a claim race, and the
+      // correct behavior even if a validator guesses/spoofs their own
+      // request's id directly rather than seeing it via listPending
+      // (which already excludes it from view).
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue(null);
+      // First two updateMany calls are expireStale/releaseStaleClaims housekeeping;
+      // the third is the actual claim attempt, which the DB-level requesterId
+      // guard correctly refuses to match (count: 0).
+      prisma.whatsAppValidationRequest.updateMany
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 0 });
+      await expect(service.claim(requesterId, requestId)).rejects.toThrow(NotFoundException);
+      expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: requestId, requesterId: { not: requesterId } }),
+        }),
+      );
+    });
   });
 
   describe('verify', () => {
