@@ -776,6 +776,7 @@ enum WhatsAppValidationRequestStatus {
   VERIFIED
   REJECTED // sent back to the pool by the claimant -- terminal only via EXPIRED/VERIFIED, see WhatsAppValidatorService.reject
   EXPIRED
+  CANCELLED // requester withdrew the request entirely -- terminal, see WhatsAppValidatorService.cancelRequest
 }
 
 /// Peer-driven counterpart to ManualPhoneVerificationRequest -- same

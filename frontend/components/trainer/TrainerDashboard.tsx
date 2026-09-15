@@ -103,6 +103,8 @@ import {
   useSavePhoneUnverifiedMutation,
   useRequestWhatsAppValidationMutation,
   useRegenerateWhatsAppValidationCodeMutation,
+  useReleaseWhatsAppValidationClaimMutation,
+  useCancelWhatsAppValidationRequestMutation,
   useGetMyWhatsAppValidationRequestQuery,
   useListIntegrationsQuery,
   useGetPublicClientSettingsQuery,
@@ -3032,6 +3034,10 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     useRequestWhatsAppValidationMutation();
   const [regenerateWhatsAppValidationCode, { isLoading: whatsAppValidationRegenerating }] =
     useRegenerateWhatsAppValidationCodeMutation();
+  const [releaseWhatsAppValidationClaim, { isLoading: whatsAppValidationReleasing }] =
+    useReleaseWhatsAppValidationClaimMutation();
+  const [cancelWhatsAppValidationRequest, { isLoading: whatsAppValidationCancelling }] =
+    useCancelWhatsAppValidationRequestMutation();
   // Polls while the dialog's WhatsApp mode is open so the requester sees the
   // status flip to CLAIMED (and the claiming validator's phone number
   // appear) live, without needing to close and reopen the dialog.
@@ -3043,7 +3049,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const whatsAppValidationEnabled = !!whatsAppValidatorIntegration;
   const whatsAppValidationFeeTokens = whatsAppValidatorIntegration?.feeTokenAmount ?? '0';
   const activeWhatsAppValidationRequest =
-    myWhatsAppValidationRequest && myWhatsAppValidationRequest.status !== 'VERIFIED'
+    myWhatsAppValidationRequest &&
+    (myWhatsAppValidationRequest.status === 'PENDING' || myWhatsAppValidationRequest.status === 'CLAIMED')
       ? myWhatsAppValidationRequest
       : null;
   // A peer (not this session) is the one who calls verify(), so this
@@ -3218,7 +3225,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     }
   }
 
-  /** The code is only ever shown once (never persisted in plaintext) -- lets the trainer recover from a lost code (closed tab, page reload) instead of being stuck waiting out the 24h expiry. Releases a CLAIMED request back to the pool server-side, since the claiming validator has nothing to verify against once the code changes underneath them. */
+  /** The code is only ever shown once (never persisted in plaintext) -- lets the trainer recover from a lost code (closed tab, page reload) instead of being stuck waiting out the expiry. Does not touch an existing claim -- a claim is permanent until explicitly released or the request is cancelled. */
   async function regenerateWhatsAppCode() {
     setPhoneMessage(null);
     setPhoneError(null);
@@ -3227,6 +3234,29 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       setWhatsAppValidationIssuedCode(result.code);
     } catch (err) {
       setPhoneError(normalizeErrorMessage(err, 'Could not generate a new code.'));
+    }
+  }
+
+  /** Frees the current validator's claim without cancelling the request itself, returning it to PENDING for another subscribed validator to pick up. */
+  async function releaseWhatsAppClaim() {
+    setPhoneMessage(null);
+    setPhoneError(null);
+    try {
+      await releaseWhatsAppValidationClaim().unwrap();
+    } catch (err) {
+      setPhoneError(normalizeErrorMessage(err, 'Could not release this claim.'));
+    }
+  }
+
+  /** Withdraws the WhatsApp validation request entirely (terminal CANCELLED status), from either PENDING or CLAIMED. */
+  async function cancelWhatsAppValidation() {
+    setPhoneMessage(null);
+    setPhoneError(null);
+    try {
+      await cancelWhatsAppValidationRequest().unwrap();
+      setWhatsAppValidationIssuedCode(null);
+    } catch (err) {
+      setPhoneError(normalizeErrorMessage(err, 'Could not cancel this request.'));
     }
   }
 
@@ -3603,17 +3633,43 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                                 )}
                               </div>
                             )}
-                            {whatsAppValidationIssuedCode && (
-                              <ActionButton
-                                className="min-h-9 justify-self-start rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
-                                onClick={() => void regenerateWhatsAppCode()}
-                                pending={whatsAppValidationRegenerating}
-                                pendingLabel="Generating"
-                                type="button"
-                              >
-                                Generate a different code
-                              </ActionButton>
-                            )}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                {whatsAppValidationIssuedCode && (
+                                  <ActionButton
+                                    className="min-h-9 justify-self-start rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                                    onClick={() => void regenerateWhatsAppCode()}
+                                    pending={whatsAppValidationRegenerating}
+                                    pendingLabel="Generating"
+                                    type="button"
+                                  >
+                                    Generate a different code
+                                  </ActionButton>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                {activeWhatsAppValidationRequest.status === 'CLAIMED' && (
+                                  <ActionButton
+                                    className="min-h-9 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                                    onClick={() => void releaseWhatsAppClaim()}
+                                    pending={whatsAppValidationReleasing}
+                                    pendingLabel="Releasing"
+                                    type="button"
+                                  >
+                                    Release to another validator
+                                  </ActionButton>
+                                )}
+                                <ActionButton
+                                  className="min-h-9 rounded-lg border border-danger/30 px-3 text-sm font-bold text-danger hover:bg-danger/10"
+                                  onClick={() => void cancelWhatsAppValidation()}
+                                  pending={whatsAppValidationCancelling}
+                                  pendingLabel="Cancelling"
+                                  type="button"
+                                >
+                                  Cancel request
+                                </ActionButton>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>

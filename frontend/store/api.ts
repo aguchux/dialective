@@ -929,7 +929,13 @@ export interface AdminIntegration {
   updatedAt: string;
 }
 
-export type WhatsAppValidationRequestStatus = 'PENDING' | 'CLAIMED' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
+export type WhatsAppValidationRequestStatus =
+  | 'PENDING'
+  | 'CLAIMED'
+  | 'VERIFIED'
+  | 'REJECTED'
+  | 'EXPIRED'
+  | 'CANCELLED';
 
 export interface WhatsAppValidationRequestResult {
   requestId: string;
@@ -2958,11 +2964,23 @@ export const dialectivaApi = createApi({
     // The code is only ever shown once (never persisted in plaintext) --
     // this replaces the requester's live request with a fresh code/hash
     // when they've lost the one they were shown (closed the tab, reloaded
-    // the page). Releases a CLAIMED request back to PENDING, since the
-    // claiming validator has nothing to verify against once the code
-    // changes underneath them.
+    // the page). Does not touch an existing claim -- a claim is permanent
+    // until explicitly released/cancelled, see releaseWhatsAppValidationClaim.
     regenerateWhatsAppValidationCode: builder.mutation<{ requestId: string; code: string }, void>({
       query: () => ({ url: '/whatsapp-validator/requests/mine/regenerate', method: 'POST' }),
+      invalidatesTags: ['WhatsAppValidator'],
+    }),
+    // Requester-only: frees the current validator's claim without
+    // cancelling the request itself, returning it to PENDING for another
+    // subscribed validator to pick up.
+    releaseWhatsAppValidationClaim: builder.mutation<{ released: boolean }, void>({
+      query: () => ({ url: '/whatsapp-validator/requests/mine/release-claim', method: 'POST' }),
+      invalidatesTags: ['WhatsAppValidator'],
+    }),
+    // Requester-only: withdraws the request entirely (terminal CANCELLED
+    // status), from either PENDING or CLAIMED.
+    cancelWhatsAppValidationRequest: builder.mutation<{ cancelled: boolean }, void>({
+      query: () => ({ url: '/whatsapp-validator/requests/mine/cancel', method: 'POST' }),
       invalidatesTags: ['WhatsAppValidator'],
     }),
     // The requester's own single request (there's at most one live one at a
@@ -5600,6 +5618,8 @@ export const {
   useUnsubscribeFromIntegrationMutation,
   useRequestWhatsAppValidationMutation,
   useRegenerateWhatsAppValidationCodeMutation,
+  useReleaseWhatsAppValidationClaimMutation,
+  useCancelWhatsAppValidationRequestMutation,
   useGetMyWhatsAppValidationRequestQuery,
   useListPendingWhatsAppValidationsQuery,
   useListMyWhatsAppValidationClaimsQuery,

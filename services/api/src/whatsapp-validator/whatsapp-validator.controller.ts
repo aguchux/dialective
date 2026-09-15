@@ -24,6 +24,16 @@ export class WhatsAppValidatorController {
     return this.whatsappValidator.regenerateCode(req.user.sub);
   }
 
+  @Post('requests/mine/release-claim')
+  releaseClaim(@Req() req: AuthenticatedRequest) {
+    return this.whatsappValidator.releaseClaim(req.user.sub);
+  }
+
+  @Post('requests/mine/cancel')
+  cancelRequest(@Req() req: AuthenticatedRequest) {
+    return this.whatsappValidator.cancelRequest(req.user.sub);
+  }
+
   @Get('pending')
   listPending(@Req() req: AuthenticatedRequest, @Query() query: ListPendingWhatsAppValidationDto) {
     return this.whatsappValidator.listPending(req.user.sub, query.page, query.pageSize);

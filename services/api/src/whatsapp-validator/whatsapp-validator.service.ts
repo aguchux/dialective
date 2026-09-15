@@ -459,6 +459,73 @@ export class WhatsAppValidatorService {
     return { released: true };
   }
 
+  /**
+   * Requester-only counterpart to reject() -- lets the requester free up a
+   * validator who's gone unresponsive (or whom they no longer want to deal
+   * with) without cancelling their own request outright. Returns the
+   * request to PENDING for another subscribed validator to pick up; only
+   * meaningful while CLAIMED, same as reject(). Acts on the requester's own
+   * single live request (same "at most one" invariant as regenerateCode),
+   * not an arbitrary id -- a requester has no business releasing anyone
+   * else's claim.
+   */
+  async releaseClaim(requesterUserId: string) {
+    const request = await this.prisma.whatsAppValidationRequest.findFirst({
+      where: { requesterId: requesterUserId, status: WhatsAppValidationRequestStatus.CLAIMED },
+    });
+    if (!request) {
+      throw new NotFoundException('No claimed WhatsApp validation request to release');
+    }
+    const released = await this.prisma.whatsAppValidationRequest.updateMany({
+      where: { id: request.id, status: WhatsAppValidationRequestStatus.CLAIMED },
+      data: {
+        status: WhatsAppValidationRequestStatus.PENDING,
+        claimedByValidatorId: null,
+        claimedAt: null,
+        claimExpiresAt: null,
+      },
+    });
+    if (released.count === 0) {
+      throw new ConflictException('This request is no longer claimed');
+    }
+    return { released: true };
+  }
+
+  /**
+   * Requester-only. Withdraws the request entirely -- unlike releaseClaim,
+   * this ends it for good (CANCELLED is terminal, same standing as
+   * VERIFIED/EXPIRED) rather than returning it to the pool. Allowed from
+   * PENDING or CLAIMED; no fee has ever been charged at this point (see
+   * verify -- the fee is only ever collected on success), so there's
+   * nothing to refund.
+   */
+  async cancelRequest(requesterUserId: string) {
+    const request = await this.prisma.whatsAppValidationRequest.findFirst({
+      where: {
+        requesterId: requesterUserId,
+        status: {
+          in: [WhatsAppValidationRequestStatus.PENDING, WhatsAppValidationRequestStatus.CLAIMED],
+        },
+      },
+    });
+    if (!request) {
+      throw new NotFoundException('No active WhatsApp validation request to cancel');
+    }
+    const cancelled = await this.prisma.whatsAppValidationRequest.updateMany({
+      where: { id: request.id, status: request.status },
+      data: {
+        status: WhatsAppValidationRequestStatus.CANCELLED,
+        claimedByValidatorId: null,
+        claimedAt: null,
+        claimExpiresAt: null,
+      },
+    });
+    if (cancelled.count === 0) {
+      throw new ConflictException('This request can no longer be cancelled');
+    }
+    return { cancelled: true };
+  }
+
   private async expireStale(now = new Date()): Promise<void> {
     // Same reasoning as AuthService.expireManualPhoneVerificationRequests
     // -- an expired, never-completed request never charged the requester,

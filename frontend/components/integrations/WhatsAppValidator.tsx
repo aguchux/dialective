@@ -6,12 +6,14 @@ import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, EmptyPanel, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
 import {
   normalizeErrorMessage,
+  useCancelWhatsAppValidationRequestMutation,
   useClaimWhatsAppValidationMutation,
   useGetMyWhatsAppValidationRequestQuery,
   useListMyWhatsAppValidationClaimsQuery,
   useListPendingWhatsAppValidationsQuery,
   useRegenerateWhatsAppValidationCodeMutation,
   useRejectWhatsAppValidationRequestMutation,
+  useReleaseWhatsAppValidationClaimMutation,
   useRequestWhatsAppValidationMutation,
   useVerifyWhatsAppValidationRequestMutation,
   WhatsAppValidationClaim,
@@ -24,11 +26,12 @@ const STATUS_LABELS: Record<WhatsAppValidationRequestStatus, string> = {
   VERIFIED: 'Verified',
   REJECTED: 'Sent back to the pool',
   EXPIRED: 'Expired',
+  CANCELLED: 'Cancelled',
 };
 
 function statusBadgeClass(status: WhatsAppValidationRequestStatus): string {
   if (status === 'VERIFIED') return 'bg-success/10 text-success';
-  if (status === 'EXPIRED' || status === 'REJECTED') return 'bg-danger/10 text-danger';
+  if (status === 'EXPIRED' || status === 'REJECTED' || status === 'CANCELLED') return 'bg-danger/10 text-danger';
   return 'bg-accent-soft text-accent';
 }
 
@@ -331,6 +334,8 @@ function GetVerifiedTab() {
   const { data: myRequest, isLoading } = useGetMyWhatsAppValidationRequestQuery();
   const [requestVerification, { isLoading: requesting }] = useRequestWhatsAppValidationMutation();
   const [regenerateCode, { isLoading: regenerating }] = useRegenerateWhatsAppValidationCodeMutation();
+  const [releaseClaim, { isLoading: releasing }] = useReleaseWhatsAppValidationClaimMutation();
+  const [cancelRequest, { isLoading: cancelling }] = useCancelWhatsAppValidationRequestMutation();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
@@ -356,7 +361,28 @@ function GetVerifiedTab() {
     }
   }
 
-  const activeRequest = myRequest && myRequest.status !== 'VERIFIED' ? myRequest : null;
+  async function handleReleaseClaim() {
+    setError('');
+    try {
+      await releaseClaim().unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to release this claim.'));
+    }
+  }
+
+  async function handleCancel() {
+    setError('');
+    try {
+      await cancelRequest().unwrap();
+      setIssuedCode(null);
+      setPhoneNumber('');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to cancel this request.'));
+    }
+  }
+
+  const activeRequest =
+    myRequest && (myRequest.status === 'PENDING' || myRequest.status === 'CLAIMED') ? myRequest : null;
 
   if (isLoading) {
     return <div className={`${cardClass} h-40 animate-pulse`} />;
@@ -445,17 +471,43 @@ function GetVerifiedTab() {
           <p className="text-sm font-extrabold">
             {activeRequest.feeTokenAmount} DL will be deducted from your balance once verified.
           </p>
-          {issuedCode && (
-            <ActionButton
-              className="min-h-9 justify-self-start rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
-              onClick={handleRegenerate}
-              pending={regenerating}
-              pendingLabel="Generating"
-              type="button"
-            >
-              Generate a different code
-            </ActionButton>
-          )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              {issuedCode && (
+                <ActionButton
+                  className="min-h-9 justify-self-start rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                  onClick={handleRegenerate}
+                  pending={regenerating}
+                  pendingLabel="Generating"
+                  type="button"
+                >
+                  Generate a different code
+                </ActionButton>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {activeRequest.status === 'CLAIMED' && (
+                <ActionButton
+                  className="min-h-9 rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                  onClick={handleReleaseClaim}
+                  pending={releasing}
+                  pendingLabel="Releasing"
+                  type="button"
+                >
+                  Release to another validator
+                </ActionButton>
+              )}
+              <ActionButton
+                className="min-h-9 rounded-lg border border-danger/30 px-3 text-sm font-bold text-danger hover:bg-danger/10"
+                onClick={handleCancel}
+                pending={cancelling}
+                pendingLabel="Cancelling"
+                type="button"
+              >
+                Cancel request
+              </ActionButton>
+            </div>
+          </div>
         </div>
       </div>
     );

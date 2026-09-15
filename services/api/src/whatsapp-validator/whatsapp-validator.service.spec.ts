@@ -495,4 +495,60 @@ describe('WhatsAppValidatorService', () => {
       await expect(service.reject('someone-else', requestId)).rejects.toThrow(ForbiddenException);
     });
   });
+
+  describe('releaseClaim', () => {
+    it('returns the requester\'s claimed request to PENDING, clearing the claim', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, status: 'CLAIMED' });
+      const result = await service.releaseClaim(requesterId);
+      expect(result).toEqual({ released: true });
+      expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: requestId, status: 'CLAIMED' },
+          data: expect.objectContaining({ status: 'PENDING', claimedByValidatorId: null }),
+        }),
+      );
+    });
+
+    it('throws when the requester has no claimed request', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue(null);
+      await expect(service.releaseClaim(requesterId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws a conflict if the claim moved under us (e.g. just verified)', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, status: 'CLAIMED' });
+      prisma.whatsAppValidationRequest.updateMany.mockResolvedValue({ count: 0 });
+      await expect(service.releaseClaim(requesterId)).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('cancelRequest', () => {
+    it('cancels a PENDING request', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, status: 'PENDING' });
+      const result = await service.cancelRequest(requesterId);
+      expect(result).toEqual({ cancelled: true });
+      expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: requestId, status: 'PENDING' },
+          data: expect.objectContaining({ status: 'CANCELLED', claimedByValidatorId: null }),
+        }),
+      );
+    });
+
+    it('cancels a CLAIMED request, clearing the claim', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, status: 'CLAIMED' });
+      const result = await service.cancelRequest(requesterId);
+      expect(result).toEqual({ cancelled: true });
+      expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: requestId, status: 'CLAIMED' },
+          data: expect.objectContaining({ status: 'CANCELLED', claimedByValidatorId: null, claimedAt: null }),
+        }),
+      );
+    });
+
+    it('throws when the requester has no active request', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue(null);
+      await expect(service.cancelRequest(requesterId)).rejects.toThrow(NotFoundException);
+    });
+  });
 });
