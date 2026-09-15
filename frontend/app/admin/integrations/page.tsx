@@ -40,6 +40,15 @@ export default function AdminIntegrationsPage() {
     }
   }
 
+  async function handleMaxConcurrentClaimsChange(id: string, maxConcurrentClaims: number) {
+    setError('');
+    try {
+      await updateIntegration({ id, maxConcurrentClaims }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to update this integration.'));
+    }
+  }
+
   const columns: DataTableColumn<AdminIntegration>[] = [
     {
       key: 'name',
@@ -75,6 +84,27 @@ export default function AdminIntegrationsPage() {
       ),
     },
     {
+      key: 'maxConcurrentClaims',
+      header: 'Max claims/member',
+      searchable: false,
+      render: (row) => (
+        <input
+          className="min-h-9 w-20 rounded-lg border border-line bg-surface px-2 text-sm"
+          defaultValue={row.maxConcurrentClaims}
+          key={row.id + row.maxConcurrentClaims}
+          min="1"
+          onBlur={(e) => {
+            const next = Number(e.target.value);
+            if (Number.isInteger(next) && next >= 1 && next !== row.maxConcurrentClaims) {
+              handleMaxConcurrentClaimsChange(row.id, next);
+            }
+          }}
+          step="1"
+          type="number"
+        />
+      ),
+    },
+    {
       key: 'enabled',
       header: 'Enabled',
       searchable: false,
@@ -100,9 +130,9 @@ export default function AdminIntegrationsPage() {
         <div>
           <h1 className="text-2xl font-black">Integrations</h1>
           <p className="text-sm text-muted">
-            Gate each peer-fulfilled product's enablement and fee independently. New integrations
-            are added by implementing them in code, not from this page -- they appear here
-            automatically once shipped.
+            Gate each peer-fulfilled product's enablement, fee, and how many claims a single
+            member may hold at once, independently. New integrations are added by implementing
+            them in code, not from this page -- they appear here automatically once shipped.
           </p>
         </div>
 

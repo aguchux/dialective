@@ -46,6 +46,7 @@ export class IntegrationsService implements OnModuleInit {
           iconKey: definition.iconKey,
           feeTokenAmount: definition.defaultFeeTokenAmount,
           sortOrder: definition.defaultSortOrder,
+          maxConcurrentClaims: definition.defaultMaxConcurrentClaims,
         },
         update: {
           name: definition.name,
@@ -147,9 +148,9 @@ export class IntegrationsService implements OnModuleInit {
 
   /**
    * Admin's only write path -- gates an existing (registry-created) row.
-   * enabled/feeTokenAmount/sortOrder only; name/description/category/
-   * iconKey are never admin-editable, they come from the registry (see
-   * UpdateIntegrationDto).
+   * enabled/feeTokenAmount/maxConcurrentClaims/sortOrder only; name/
+   * description/category/iconKey are never admin-editable, they come from
+   * the registry (see UpdateIntegrationDto).
    */
   async update(id: string, dto: UpdateIntegrationDto) {
     const existing = await this.prisma.integration.findUnique({ where: { id } });
@@ -159,6 +160,7 @@ export class IntegrationsService implements OnModuleInit {
       data: {
         enabled: dto.enabled,
         feeTokenAmount: dto.feeTokenAmount,
+        maxConcurrentClaims: dto.maxConcurrentClaims,
         sortOrder: dto.sortOrder,
       },
     });
@@ -198,6 +200,7 @@ export class IntegrationsService implements OnModuleInit {
     iconKey: string | null;
     enabled: boolean;
     feeTokenAmount: Prisma.Decimal;
+    maxConcurrentClaims: number;
     sortOrder: number;
     createdAt: Date;
     updatedAt: Date;
@@ -211,6 +214,7 @@ export class IntegrationsService implements OnModuleInit {
       iconKey: row.iconKey,
       enabled: row.enabled,
       feeTokenAmount: row.feeTokenAmount.toString(),
+      maxConcurrentClaims: row.maxConcurrentClaims,
       sortOrder: row.sortOrder,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

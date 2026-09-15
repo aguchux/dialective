@@ -18,6 +18,8 @@ export interface IntegrationDefinition {
   /** Default fee shown/used until an admin changes it via the gate. */
   defaultFeeTokenAmount: number;
   defaultSortOrder: number;
+  /** Default concurrent-claim cap per subscribed member, until an admin changes it via the gate. */
+  defaultMaxConcurrentClaims: number;
 }
 
 export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
@@ -29,5 +31,6 @@ export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
     iconKey: 'MessageCircle',
     defaultFeeTokenAmount: 2,
     defaultSortOrder: 0,
+    defaultMaxConcurrentClaims: 5,
   },
 ];

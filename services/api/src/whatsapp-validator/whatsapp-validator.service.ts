@@ -187,23 +187,25 @@ export class WhatsAppValidatorService {
   }
 
   /**
-   * The validator's own currently-claimed request, if any -- lets the
-   * "Validate" list view show the code-entry panel for whatever this
-   * validator has locked, alongside the rest of the (now-filtered-out)
-   * pending list.
+   * The validator's own currently-claimed requests -- lets the "Validate"
+   * list view show a code-entry panel for each one this validator has
+   * locked, alongside the rest of the (now-filtered-out) pending list. Can
+   * be more than one now that Integration.maxConcurrentClaims allows
+   * holding several claims at once (see claim()).
    */
-  async myClaim(validatorUserId: string) {
+  async myClaims(validatorUserId: string) {
     const now = new Date();
     await this.releaseStaleClaims(now);
-    const row = await this.prisma.whatsAppValidationRequest.findFirst({
+    const rows = await this.prisma.whatsAppValidationRequest.findMany({
       where: {
         claimedByValidatorId: validatorUserId,
         status: WhatsAppValidationRequestStatus.CLAIMED,
         claimExpiresAt: { gt: now },
       },
+      orderBy: { claimedAt: 'asc' },
       include: { requester: { select: { firstName: true, lastName: true } } },
     });
-    return row ? this.toValidatorPublic(row) : null;
+    return rows.map((row) => this.toValidatorPublic(row));
   }
 
   /**
@@ -211,27 +213,41 @@ export class WhatsAppValidatorService {
    * pull) -- atomic updateMany-with-status-guard, same idiom used
    * throughout p2p.service.ts and AuthService's manual-verification flow,
    * so two validators clicking the same row at the same moment don't both
-   * win it.
+   * win it. Once claimed, a request is locked to that one validator and
+   * never reappears in listPending or is claimable by anyone else -- the
+   * updateMany's `status: PENDING` guard below is what enforces that (a
+   * second claim attempt on the same row always finds status already
+   * CLAIMED and matches zero rows).
+   *
+   * A validator may hold up to Integration.maxConcurrentClaims claims at
+   * once (admin-configurable per integration, default set in
+   * INTEGRATION_REGISTRY -- see requireEnabled's returned row), not just
+   * one -- lets an active validator work through several requests in
+   * parallel instead of serializing on finish-or-skip.
    */
   async claim(validatorUserId: string, requestId: string) {
     const isSubscribed = await this.integrations.isSubscribed(validatorUserId, INTEGRATION_SLUG);
     if (!isSubscribed) {
       throw new ForbiddenException('Subscribe to WhatsApp Validator before claiming requests');
     }
+    const integration = await this.integrations.requireEnabled(INTEGRATION_SLUG);
 
     const now = new Date();
     await this.expireStale(now);
     await this.releaseStaleClaims(now);
 
-    const existingClaim = await this.prisma.whatsAppValidationRequest.findFirst({
+    const openClaimCount = await this.prisma.whatsAppValidationRequest.count({
       where: {
         claimedByValidatorId: validatorUserId,
         status: WhatsAppValidationRequestStatus.CLAIMED,
         claimExpiresAt: { gt: now },
+        id: { not: requestId },
       },
     });
-    if (existingClaim && existingClaim.id !== requestId) {
-      throw new ConflictException('Finish or skip your current request before claiming another');
+    if (openClaimCount >= integration.maxConcurrentClaims) {
+      throw new ConflictException(
+        `You already have ${integration.maxConcurrentClaims} open claim(s) -- finish or skip one before claiming another`,
+      );
     }
 
     const claimExpiresAt = new Date(now.getTime() + CLAIM_TTL_MINUTES * 60 * 1000);

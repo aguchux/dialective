@@ -28,9 +28,9 @@ export class WhatsAppValidatorController {
     return this.whatsappValidator.listPending(req.user.sub);
   }
 
-  @Get('my-claim')
-  myClaim(@Req() req: AuthenticatedRequest) {
-    return this.whatsappValidator.myClaim(req.user.sub);
+  @Get('my-claims')
+  myClaims(@Req() req: AuthenticatedRequest) {
+    return this.whatsappValidator.myClaims(req.user.sub);
   }
 
   @Post('requests/:id/claim')

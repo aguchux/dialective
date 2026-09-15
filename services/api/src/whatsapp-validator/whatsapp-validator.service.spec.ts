@@ -52,6 +52,7 @@ describe('WhatsAppValidatorService', () => {
         findUniqueOrThrow: jest.fn().mockResolvedValue({ ...baseRequest, status: 'VERIFIED' }),
         create: jest.fn().mockResolvedValue(baseRequest),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValue(0),
       },
       wallet: {
         upsert: jest.fn().mockResolvedValue({ id: 'wallet-1' }),
@@ -63,7 +64,10 @@ describe('WhatsAppValidatorService', () => {
     };
     mail = { sendPhoneVerifiedEmail: jest.fn().mockResolvedValue(undefined) };
     integrations = {
-      requireEnabled: jest.fn().mockResolvedValue({ feeTokenAmount: new Prisma.Decimal(2) }),
+      requireEnabled: jest.fn().mockResolvedValue({
+        feeTokenAmount: new Prisma.Decimal(2),
+        maxConcurrentClaims: 5,
+      }),
       isSubscribed: jest.fn().mockResolvedValue(true),
     };
     service = new WhatsAppValidatorService(prisma, mail, integrations);
@@ -234,22 +238,22 @@ describe('WhatsAppValidatorService', () => {
     });
   });
 
-  describe('myClaim', () => {
-    it('returns the validator\'s currently-claimed request, including the requester\'s name', async () => {
-      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
-        ...baseRequest,
-        requester: { firstName: 'Chidi', lastName: 'Okoro' },
-      });
-      const result = await service.myClaim(validatorId);
-      expect(result?.id).toBe(requestId);
-      expect(result?.requesterFirstName).toBe('Chidi');
-      expect(result?.requesterLastName).toBe('Okoro');
+  describe('myClaims', () => {
+    it('returns every currently-claimed request, including each requester\'s name', async () => {
+      prisma.whatsAppValidationRequest.findMany.mockResolvedValue([
+        { ...baseRequest, requester: { firstName: 'Chidi', lastName: 'Okoro' } },
+        { ...baseRequest, id: 'request-2', requester: { firstName: 'Ada', lastName: 'Lovelace' } },
+      ]);
+      const result = await service.myClaims(validatorId);
+      expect(result).toHaveLength(2);
+      expect(result[0].requesterFirstName).toBe('Chidi');
+      expect(result[1].requesterFirstName).toBe('Ada');
     });
 
-    it('returns null when nothing is claimed', async () => {
-      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue(null);
-      const result = await service.myClaim(validatorId);
-      expect(result).toBeNull();
+    it('returns an empty list when nothing is claimed', async () => {
+      prisma.whatsAppValidationRequest.findMany.mockResolvedValue([]);
+      const result = await service.myClaims(validatorId);
+      expect(result).toEqual([]);
     });
   });
 
@@ -289,9 +293,49 @@ describe('WhatsAppValidatorService', () => {
       await expect(service.claim(validatorId, requestId)).rejects.toThrow(NotFoundException);
     });
 
-    it('rejects claiming a second request while one is already held', async () => {
-      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, id: 'other-request' });
+    it('rejects claiming once the validator is at Integration.maxConcurrentClaims', async () => {
+      integrations.requireEnabled.mockResolvedValue({
+        feeTokenAmount: new Prisma.Decimal(2),
+        maxConcurrentClaims: 3,
+      });
+      prisma.whatsAppValidationRequest.count.mockResolvedValue(3);
       await expect(service.claim(validatorId, requestId)).rejects.toThrow(ConflictException);
+      expect(prisma.whatsAppValidationRequest.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'CLAIMED' }) }),
+      );
+    });
+
+    it('allows claiming below the configured limit', async () => {
+      integrations.requireEnabled.mockResolvedValue({
+        feeTokenAmount: new Prisma.Decimal(2),
+        maxConcurrentClaims: 3,
+      });
+      prisma.whatsAppValidationRequest.count.mockResolvedValue(2);
+      prisma.whatsAppValidationRequest.findUniqueOrThrow.mockResolvedValue({
+        ...baseRequest,
+        status: 'CLAIMED',
+      });
+      await expect(service.claim(validatorId, requestId)).resolves.toBeDefined();
+    });
+
+    it('excludes the request being (re-)claimed from its own open-claim count', async () => {
+      // Idempotent re-claim of a request this validator already holds must
+      // not count against itself.
+      integrations.requireEnabled.mockResolvedValue({
+        feeTokenAmount: new Prisma.Decimal(2),
+        maxConcurrentClaims: 1,
+      });
+      prisma.whatsAppValidationRequest.count.mockResolvedValue(0);
+      prisma.whatsAppValidationRequest.findUniqueOrThrow.mockResolvedValue({
+        ...baseRequest,
+        status: 'CLAIMED',
+      });
+      await service.claim(validatorId, requestId);
+      expect(prisma.whatsAppValidationRequest.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: { not: requestId } }),
+        }),
+      );
     });
 
     it('scopes the claim update with requesterId: { not: caller } so a user can never claim their own request', async () => {

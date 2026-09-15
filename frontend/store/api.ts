@@ -918,6 +918,9 @@ export interface AdminIntegration {
   iconKey: string | null;
   enabled: boolean;
   feeTokenAmount: string;
+  // How many open claims a single subscribed member may hold on this
+  // integration at once (e.g. concurrent WhatsApp Validator requests).
+  maxConcurrentClaims: number;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -2961,8 +2964,11 @@ export const dialectivaApi = createApi({
       query: () => '/whatsapp-validator/pending',
       providesTags: ['WhatsAppValidator'],
     }),
-    getMyWhatsAppValidationClaim: builder.query<WhatsAppValidationClaim | null, void>({
-      query: () => '/whatsapp-validator/my-claim',
+    // A validator may hold several concurrent claims (admin-configurable
+    // via Integration.maxConcurrentClaims) -- this is now a list, not a
+    // single request.
+    listMyWhatsAppValidationClaims: builder.query<WhatsAppValidationClaim[], void>({
+      query: () => '/whatsapp-validator/my-claims',
       providesTags: ['WhatsAppValidator'],
     }),
     claimWhatsAppValidation: builder.mutation<WhatsAppValidationClaim, string>({
@@ -4421,6 +4427,7 @@ export const dialectivaApi = createApi({
         id: string;
         enabled?: boolean;
         feeTokenAmount?: number;
+        maxConcurrentClaims?: number;
         sortOrder?: number;
       }
     >({
@@ -5577,7 +5584,7 @@ export const {
   useRegenerateWhatsAppValidationCodeMutation,
   useGetMyWhatsAppValidationRequestQuery,
   useListPendingWhatsAppValidationsQuery,
-  useGetMyWhatsAppValidationClaimQuery,
+  useListMyWhatsAppValidationClaimsQuery,
   useClaimWhatsAppValidationMutation,
   useVerifyWhatsAppValidationRequestMutation,
   useRejectWhatsAppValidationRequestMutation,

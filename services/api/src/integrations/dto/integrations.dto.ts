@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ListIntegrationsDto {
@@ -35,6 +35,12 @@ export class UpdateIntegrationDto {
   @IsNumber()
   @Min(0)
   feeTokenAmount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  maxConcurrentClaims?: number;
 
   @IsOptional()
   @Type(() => Number)

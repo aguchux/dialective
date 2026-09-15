@@ -7,13 +7,14 @@ import { cardClass, EmptyPanel, formatDateTime, SectionTitle } from '@/component
 import {
   normalizeErrorMessage,
   useClaimWhatsAppValidationMutation,
-  useGetMyWhatsAppValidationClaimQuery,
   useGetMyWhatsAppValidationRequestQuery,
+  useListMyWhatsAppValidationClaimsQuery,
   useListPendingWhatsAppValidationsQuery,
   useRegenerateWhatsAppValidationCodeMutation,
   useRejectWhatsAppValidationRequestMutation,
   useRequestWhatsAppValidationMutation,
   useVerifyWhatsAppValidationRequestMutation,
+  WhatsAppValidationClaim,
   WhatsAppValidationRequestStatus,
 } from '@/store/api';
 
@@ -87,18 +88,14 @@ export function WhatsAppValidator() {
 }
 
 function ValidateTab() {
-  const { data: myClaim, isFetching: loadingClaim } = useGetMyWhatsAppValidationClaimQuery();
+  const { data: myClaims = [], isFetching: loadingClaims } = useListMyWhatsAppValidationClaimsQuery();
   const {
     data: pending = [],
     isFetching: loadingPending,
     refetch: refetchPending,
-  } = useListPendingWhatsAppValidationsQuery(undefined, { skip: !!myClaim });
+  } = useListPendingWhatsAppValidationsQuery();
   const [claimRequest, { isLoading: claiming }] = useClaimWhatsAppValidationMutation();
-  const [verify, { isLoading: verifying }] = useVerifyWhatsAppValidationRequestMutation();
-  const [reject, { isLoading: rejecting }] = useRejectWhatsAppValidationRequestMutation();
-  const [code, setCode] = useState('');
   const [error, setError] = useState('');
-  const [verified, setVerified] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
 
   async function handleClaim(id: string) {
@@ -114,29 +111,6 @@ function ValidateTab() {
     }
   }
 
-  async function handleVerify(event: FormEvent) {
-    event.preventDefault();
-    if (!myClaim) return;
-    setError('');
-    try {
-      await verify({ id: myClaim.id, code: code.trim() }).unwrap();
-      setVerified(true);
-      setCode('');
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Invalid verification code.'));
-    }
-  }
-
-  async function handleReject() {
-    if (!myClaim) return;
-    setError('');
-    try {
-      await reject(myClaim.id).unwrap();
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Unable to release this request.'));
-    }
-  }
-
   return (
     <div className="grid gap-4">
       {error && (
@@ -145,101 +119,149 @@ function ValidateTab() {
         </p>
       )}
 
-      {verified && (
-        <div className={`${cardClass} flex items-center gap-3 p-4`}>
-          <CheckCircle2 className="size-6 shrink-0 text-success" aria-hidden="true" />
-          <p className="font-bold">Verified. Your payout has been credited.</p>
+      {myClaims.length > 0 && (
+        <div className="grid gap-3">
+          {myClaims.map((claim) => (
+            <ClaimedRequestCard key={claim.id} claim={claim} />
+          ))}
         </div>
       )}
 
-      {myClaim ? (
-        <form className={`${cardClass} grid gap-3 p-5`} onSubmit={handleVerify}>
-          <div className="flex items-center gap-2">
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
-              <MessageCircle className="size-5" aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate font-black">{formatContact(myClaim.requesterFirstName, myClaim.requesterLastName, myClaim.phoneNumber)}</p>
-              <p className="text-xs font-bold text-muted">
-                Message this member on WhatsApp and ask for their code, then enter it below. Confirm
-                their name matches before you verify.
-              </p>
-            </div>
-          </div>
-          <p className="text-sm font-extrabold">You'll earn {myClaim.feeTokenAmount} DL on success</p>
-          <label className="grid gap-1.5 text-sm font-bold" htmlFor="whatsapp-validate-code">
-            Code from the member
-            <input
-              className="min-h-11 rounded-lg border border-line bg-white px-3 text-center text-lg font-black tracking-[0.3em] dark:bg-surface-muted"
-              id="whatsapp-validate-code"
-              inputMode="numeric"
-              maxLength={6}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-              placeholder="123456"
-              value={code}
-            />
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <ActionButton
-              className="min-h-11 flex-1 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50"
-              disabled={code.trim().length !== 6}
-              pending={verifying}
-              pendingLabel="Verifying"
-              type="submit"
+      {!loadingPending && !loadingClaims && pending.length === 0 && myClaims.length === 0 && (
+        <EmptyPanel icon={MessageCircle} title="No requests waiting right now" unframed />
+      )}
+
+      {pending.length > 0 && (
+        <div className="grid gap-3">
+          {pending.map((request) => (
+            <div
+              className={`${cardClass} flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between`}
+              key={request.id}
             >
-              Verify
-            </ActionButton>
-            <ActionButton
-              className="min-h-11 rounded-lg border border-line px-3 font-extrabold hover:bg-surface-muted"
-              onClick={handleReject}
-              pending={rejecting}
-              pendingLabel="Releasing"
-              type="button"
-            >
-              <XCircle className="size-4" aria-hidden="true" /> Skip
-            </ActionButton>
-          </div>
-        </form>
-      ) : (
-        <>
-          {!loadingPending && !loadingClaim && pending.length === 0 && (
-            <EmptyPanel icon={MessageCircle} title="No requests waiting right now" unframed />
-          )}
-          <div className="grid gap-3">
-            {pending.map((request) => (
-              <div
-                className={`${cardClass} flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between`}
-                key={request.id}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
-                    <MessageCircle className="size-5" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate font-black">
-                      {formatContact(request.requesterFirstName, request.requesterLastName, request.phoneNumber)}
-                    </p>
-                    <p className="text-xs font-bold text-muted">
-                      Earn {request.feeTokenAmount} DL &middot; requested{' '}
-                      {formatDateTime(request.createdAt)}
-                    </p>
-                  </div>
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+                  <MessageCircle className="size-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-black">
+                    {formatContact(request.requesterFirstName, request.requesterLastName, request.phoneNumber)}
+                  </p>
+                  <p className="text-xs font-bold text-muted">
+                    Earn {request.feeTokenAmount} DL &middot; requested{' '}
+                    {formatDateTime(request.createdAt)}
+                  </p>
                 </div>
-                <ActionButton
-                  className="min-h-10 shrink-0 rounded-lg bg-accent px-4 font-extrabold text-white"
-                  onClick={() => handleClaim(request.id)}
-                  pending={claiming && claimingId === request.id}
-                  pendingLabel="Claiming"
-                  type="button"
-                >
-                  Claim
-                </ActionButton>
               </div>
-            ))}
-          </div>
-        </>
+              <ActionButton
+                className="min-h-10 shrink-0 rounded-lg bg-accent px-4 font-extrabold text-white"
+                onClick={() => handleClaim(request.id)}
+                pending={claiming && claimingId === request.id}
+                pendingLabel="Claiming"
+                type="button"
+              >
+                Claim
+              </ActionButton>
+            </div>
+          ))}
+        </div>
       )}
     </div>
+  );
+}
+
+/** One card per held claim -- a validator may hold several at once (admin-configurable via Integration.maxConcurrentClaims), each with its own independent code-entry form. */
+function ClaimedRequestCard({ claim }: { claim: WhatsAppValidationClaim }) {
+  const [verify, { isLoading: verifying }] = useVerifyWhatsAppValidationRequestMutation();
+  const [reject, { isLoading: rejecting }] = useRejectWhatsAppValidationRequestMutation();
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [verified, setVerified] = useState(false);
+
+  async function handleVerify(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    try {
+      await verify({ id: claim.id, code: code.trim() }).unwrap();
+      setVerified(true);
+      setCode('');
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Invalid verification code.'));
+    }
+  }
+
+  async function handleReject() {
+    setError('');
+    try {
+      await reject(claim.id).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to release this request.'));
+    }
+  }
+
+  if (verified) {
+    return (
+      <div className={`${cardClass} flex items-center gap-3 p-4`}>
+        <CheckCircle2 className="size-6 shrink-0 text-success" aria-hidden="true" />
+        <p className="font-bold">Verified. Your payout has been credited.</p>
+      </div>
+    );
+  }
+
+  return (
+    <form className={`${cardClass} grid gap-3 p-5`} onSubmit={handleVerify}>
+      <div className="flex items-center gap-2">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+          <MessageCircle className="size-5" aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate font-black">
+            {formatContact(claim.requesterFirstName, claim.requesterLastName, claim.phoneNumber)}
+          </p>
+          <p className="text-xs font-bold text-muted">
+            Message this member on WhatsApp and ask for their code, then enter it below. Confirm
+            their name matches before you verify.
+          </p>
+        </div>
+      </div>
+      {error && (
+        <p className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm font-bold text-danger">
+          {error}
+        </p>
+      )}
+      <p className="text-sm font-extrabold">You'll earn {claim.feeTokenAmount} DL on success</p>
+      <label className="grid gap-1.5 text-sm font-bold" htmlFor={`whatsapp-validate-code-${claim.id}`}>
+        Code from the member
+        <input
+          className="min-h-11 rounded-lg border border-line bg-white px-3 text-center text-lg font-black tracking-[0.3em] dark:bg-surface-muted"
+          id={`whatsapp-validate-code-${claim.id}`}
+          inputMode="numeric"
+          maxLength={6}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+          placeholder="123456"
+          value={code}
+        />
+      </label>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <ActionButton
+          className="min-h-11 flex-1 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50"
+          disabled={code.trim().length !== 6}
+          pending={verifying}
+          pendingLabel="Verifying"
+          type="submit"
+        >
+          Verify
+        </ActionButton>
+        <ActionButton
+          className="min-h-11 rounded-lg border border-line px-3 font-extrabold hover:bg-surface-muted"
+          onClick={handleReject}
+          pending={rejecting}
+          pendingLabel="Releasing"
+          type="button"
+        >
+          <XCircle className="size-4" aria-hidden="true" /> Skip
+        </ActionButton>
+      </div>
+    </form>
   );
 }
 
