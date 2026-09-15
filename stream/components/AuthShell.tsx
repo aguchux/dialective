@@ -54,20 +54,21 @@ export function AuthShell({ children }: { children: ReactNode }) {
 function HeroAtmosphere() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_16%,rgba(168,102,224,0.30),transparent_38%),radial-gradient(circle_at_78%_42%,rgba(192,139,239,0.16),transparent_36%),linear-gradient(145deg,#1f1929_0%,#15111c_72%)]" />
-      <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(168,102,224,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(168,102,224,0.18)_1px,transparent_1px)] [background-size:54px_54px] [mask-image:linear-gradient(to_bottom,black,transparent_72%)]" />
-      <div className="absolute right-[-9%] top-[16%] h-[50%] w-[62%] overflow-hidden rounded-[34px] opacity-60 mix-blend-screen">
-        <Image
-          alt="A group of people recording audio in a studio; photo by cottonbro studio on Pexels."
-          className="object-cover object-center grayscale-[15%]"
-          fill
-          priority
-          sizes="(max-width: 1023px) 0px, 40vw"
-          src="https://images.pexels.com/photos/6878694/pexels-photo-6878694.jpeg"
-        />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,#15111c_0%,rgba(21,17,28,0.08)_42%,rgba(21,17,28,0.42)_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(21,17,28,0.12),#15111c_100%)]" />
-      </div>
+      <Image
+        alt="A group of people recording audio in a studio; photo by cottonbro studio on Pexels."
+        className="object-cover object-center grayscale-[15%]"
+        fill
+        priority
+        sizes="(max-width: 1023px) 0px, 62vw"
+        src="https://images.pexels.com/photos/6878694/pexels-photo-6878694.jpeg"
+      />
+      {/* Scrim over the full-bleed photo so the logo/heading/copy stay
+          legible -- darkest at the edges (where text sits), lighter toward
+          center so the photo itself still reads through. */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_16%,rgba(168,102,224,0.30),transparent_38%),radial-gradient(circle_at_78%_42%,rgba(192,139,239,0.14),transparent_36%)] mix-blend-screen" />
+      <div className="absolute inset-0 bg-[linear-gradient(100deg,#15111c_0%,rgba(21,17,28,0.62)_28%,rgba(21,17,28,0.34)_55%,rgba(21,17,28,0.58)_78%,#15111c_100%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(21,17,28,0.55)_0%,rgba(21,17,28,0.15)_30%,rgba(21,17,28,0.25)_60%,#15111c_100%)]" />
+      <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(168,102,224,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(168,102,224,0.18)_1px,transparent_1px)] [background-size:54px_54px] [mask-image:linear-gradient(to_bottom,black,transparent_72%)]" />
       <div className="absolute inset-x-0 bottom-[25%] h-48 opacity-70">
         <svg className="h-full w-full" preserveAspectRatio="none" viewBox="0 0 600 120">
           <defs>
