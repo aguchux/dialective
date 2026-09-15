@@ -116,8 +116,56 @@ SPEECH_EXPRESSION_ENABLED_CACHE_TTL_S = (
 )
 
 
+class ResilientConnection:
+    """
+    Wraps a psycopg2 connection that is opened once at process startup
+    (main()) and reused for the pod's entire lifetime across every job --
+    unlike api's PrismaService, there is no framework-level pool/reconnect
+    here. Without this, a connection Postgres closes out from under the
+    pod (idle timeout, a brief network blip, managed-Postgres maintenance)
+    poisons every subsequent job on that pod with
+    "psycopg2.InterfaceError: connection already closed" forever: the
+    stream handler catches the exception per-job (see streams.py) so the
+    pod never crashes/restarts, and nothing else would ever reconnect it.
+    See whisper-worker/db.py's identical wrapper -- same bug, same fix,
+    same production incident (observed hitting whisper-worker's pods; this
+    file has the identical shape so it's fixed here too rather than only
+    where it happened to be caught first).
+
+    `cursor()` and `commit()` are the only two psycopg2 connection methods
+    every db.py call site actually uses (`with conn.cursor() as cur: ...`
+    then `conn.commit()`) -- both retry once against a freshly rebuilt
+    connection on OperationalError/InterfaceError, so a call site never
+    needs to know reconnection happened.
+    """
+
+    def __init__(self):
+        self._conn = psycopg2.connect(os.environ["DATABASE_URL"])
+
+    def _reconnect(self):
+        logger.warning("Postgres connection lost; reconnecting")
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+        self._conn = psycopg2.connect(os.environ["DATABASE_URL"])
+
+    def cursor(self, *args, **kwargs):
+        try:
+            return self._conn.cursor(*args, **kwargs)
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            self._reconnect()
+            return self._conn.cursor(*args, **kwargs)
+
+    def commit(self):
+        try:
+            self._conn.commit()
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            self._reconnect()
+
+
 def build_db_connection():
-    return psycopg2.connect(os.environ["DATABASE_URL"])
+    return ResilientConnection()
 
 
 def write_scores(

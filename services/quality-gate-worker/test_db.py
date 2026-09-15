@@ -8,12 +8,16 @@ so a column rename on either side surfaces here instead of only as a runtime
 Postgres error.
 """
 
-from unittest.mock import MagicMock
+import os
+from unittest.mock import MagicMock, patch
+
+import psycopg2
 
 from db import (
     UPDATE_DOMAIN_CONVERSATION_RECORDING_SCORES_SQL,
     UPDATE_SUBMISSION_EXPRESSION_SQL,
     UPDATE_WORD_RECORDING_EXPRESSION_SQL,
+    ResilientConnection,
     reject_domain_conversation_recording,
     write_scores,
 )
@@ -38,6 +42,48 @@ def test_submission_expression_sql_references_expected_columns():
 def test_word_recording_expression_sql_references_expected_columns():
     for column in EXPECTED_EXPRESSION_COLUMNS:
         assert column in UPDATE_WORD_RECORDING_EXPRESSION_SQL
+
+
+@patch.dict(os.environ, {"DATABASE_URL": "postgresql://test/test"})
+def test_resilient_connection_reconnects_on_cursor_interface_error():
+    first_conn = MagicMock(name="first_conn")
+    second_conn = MagicMock(name="second_conn")
+    with patch("db.psycopg2.connect", side_effect=[first_conn, second_conn]):
+        conn = ResilientConnection()
+        first_conn.cursor.side_effect = psycopg2.InterfaceError("connection already closed")
+
+        result = conn.cursor()
+
+    first_conn.close.assert_called_once()
+    second_conn.cursor.assert_called_once()
+    assert result is second_conn.cursor.return_value
+
+
+@patch.dict(os.environ, {"DATABASE_URL": "postgresql://test/test"})
+def test_resilient_connection_reconnects_on_commit_operational_error():
+    first_conn = MagicMock(name="first_conn")
+    second_conn = MagicMock(name="second_conn")
+    with patch("db.psycopg2.connect", side_effect=[first_conn, second_conn]):
+        conn = ResilientConnection()
+        first_conn.commit.side_effect = psycopg2.OperationalError("server closed the connection")
+
+        conn.commit()
+
+    first_conn.close.assert_called_once()
+    assert conn._conn is second_conn
+
+
+@patch.dict(os.environ, {"DATABASE_URL": "postgresql://test/test"})
+def test_resilient_connection_does_not_reconnect_when_healthy():
+    first_conn = MagicMock(name="first_conn")
+    with patch("db.psycopg2.connect", side_effect=[first_conn]) as mock_connect:
+        conn = ResilientConnection()
+
+        conn.cursor()
+        conn.commit()
+
+    first_conn.close.assert_not_called()
+    assert mock_connect.call_count == 1
 
 
 def _mock_conn(rowcount: int = 1):
