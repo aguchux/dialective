@@ -10,7 +10,7 @@ import { AuthPrimaryButton } from '@/components/AuthPrimaryButton';
 import { Card, ErrorText, FieldLabel, TextInput } from '@/components/ui';
 
 const authInputClassName =
-  'min-h-[46px] rounded-[7px] border-auth-line bg-auth-card px-3.5 text-[15px] text-auth-ink placeholder:text-auth-muted/70 focus:border-auth-accent focus:ring-2 focus:ring-auth-accent/15 focus-visible:outline-none';
+  'min-h-[46px] rounded-[7px] border-catalogue-line bg-catalogue-bg px-3.5 text-[15px] text-catalogue-ink placeholder:text-catalogue-dim focus:border-catalogue-blue focus:ring-2 focus:ring-catalogue-blue/25 focus-visible:outline-none';
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -58,7 +58,7 @@ function ResetPasswordForm() {
     <form className="grid min-w-0 gap-4" onSubmit={submit}>
       <div>
         <FieldLabel
-          className="!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-auth-ink"
+          className="!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-catalogue-ink"
           htmlFor="new-password"
         >
           New password
@@ -66,7 +66,7 @@ function ResetPasswordForm() {
         <div className="relative">
           <LockKeyhole
             aria-hidden="true"
-            className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+            className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
           />
           <TextInput
             autoComplete="new-password"
@@ -81,7 +81,7 @@ function ResetPasswordForm() {
           />
           <button
             aria-label={passwordVisible ? 'Hide password' : 'Show password'}
-            className="absolute right-0 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-r-[7px] text-auth-muted transition-colors hover:text-auth-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-auth-accent/35"
+            className="absolute right-0 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-r-[7px] text-catalogue-muted transition-colors hover:text-catalogue-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/35"
             onClick={() => setPasswordVisible((visible) => !visible)}
             type="button"
           >
@@ -104,29 +104,29 @@ function ResetPasswordForm() {
 export default function ResetPasswordPage() {
   return (
     <AuthShell>
-      <Card className="w-full min-w-0 border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+      <Card className="w-full min-w-0 border-catalogue-line bg-catalogue-surface p-6 shadow-catalogue sm:p-7">
         <div className="mb-6 text-center">
-          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-auth-ink sm:text-[32px]">
+          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-catalogue-ink sm:text-[32px]">
             Set a new password
           </h1>
-          <p className="mt-2 text-[15px] text-auth-muted">
+          <p className="mt-2 text-[15px] text-catalogue-muted">
             Choose a new password for your account
           </p>
         </div>
         <Suspense
           fallback={
             <div aria-hidden="true" className="grid min-w-0 animate-pulse gap-4">
-              <div className="h-[46px] rounded-[7px] bg-auth-panel" />
-              <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+              <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />
+              <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />
             </div>
           }
         >
           <ResetPasswordForm />
         </Suspense>
       </Card>
-      <p className="mt-6 text-center text-sm text-auth-muted">
+      <p className="mt-6 text-center text-sm text-catalogue-muted">
         <Link
-          className="font-semibold text-auth-accent hover:text-auth-accent-dark hover:underline"
+          className="font-semibold text-catalogue-blue-bright hover:text-catalogue-ink hover:underline"
           href="/login"
         >
           Back to sign in

@@ -12,10 +12,10 @@ import { AuthPrimaryButton } from '@/components/AuthPrimaryButton';
 import { Card, ErrorText, FieldLabel, TextInput } from '@/components/ui';
 
 const authInputClassName =
-  'min-h-[46px] rounded-[7px] border-auth-line bg-auth-card px-3.5 text-[15px] text-auth-ink placeholder:text-auth-muted/70 focus:border-auth-accent focus:ring-2 focus:ring-auth-accent/15 focus-visible:outline-none';
+  'min-h-[46px] rounded-[7px] border-catalogue-line bg-catalogue-bg px-3.5 text-[15px] text-catalogue-ink placeholder:text-catalogue-dim focus:border-catalogue-blue focus:ring-2 focus:ring-catalogue-blue/25 focus-visible:outline-none';
 
 const fieldLabelClassName =
-  '!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-auth-ink';
+  '!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-catalogue-ink';
 
 /**
  * Branches on PlatformSettings.streamSelfServeSignupEnabled
@@ -47,12 +47,12 @@ export default function RegisterPage() {
   if (selfServeEnabled === null) {
     return (
       <AuthShell>
-        <Card className="w-full min-w-0 border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+        <Card className="w-full min-w-0 border-catalogue-line bg-catalogue-surface p-6 shadow-catalogue sm:p-7">
           <div aria-hidden="true" className="grid min-w-0 animate-pulse gap-4">
-            <div className="h-[46px] rounded-[7px] bg-auth-panel" />
-            <div className="h-[46px] rounded-[7px] bg-auth-panel" />
-            <div className="h-[46px] rounded-[7px] bg-auth-panel" />
-            <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+            <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />
+            <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />
+            <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />
+            <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />
           </div>
         </Card>
       </AuthShell>
@@ -123,12 +123,12 @@ function SignupForm() {
 
   return (
     <AuthShell>
-      <Card className="w-full min-w-0 border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+      <Card className="w-full min-w-0 border-catalogue-line bg-catalogue-surface p-6 shadow-catalogue sm:p-7">
         <div className="mb-6 text-center">
-          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-auth-ink sm:text-[32px]">
+          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-catalogue-ink sm:text-[32px]">
             Create your account
           </h1>
-          <p className="mt-2 text-[15px] text-auth-muted">
+          <p className="mt-2 text-[15px] text-catalogue-muted">
             {step === 'details'
               ? 'Set up your organization on Dialect Library Voice Stream'
               : `Enter the code we sent to ${email}`}
@@ -171,7 +171,7 @@ function SignupForm() {
               <div className="relative">
                 <Mail
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
                 />
                 <TextInput
                   autoComplete="email"
@@ -192,7 +192,7 @@ function SignupForm() {
               <div className="relative">
                 <Building2
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
                 />
                 <TextInput
                   autoComplete="organization"
@@ -212,7 +212,7 @@ function SignupForm() {
               <div className="relative">
                 <Globe
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
                 />
                 <TextInput
                   autoComplete="url"
@@ -232,7 +232,7 @@ function SignupForm() {
               <div className="relative">
                 <LockKeyhole
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
                 />
                 <TextInput
                   autoComplete="new-password"
@@ -247,7 +247,7 @@ function SignupForm() {
                 />
                 <button
                   aria-label={passwordVisible ? 'Hide password' : 'Show password'}
-                  className="absolute right-0 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-r-[7px] text-auth-muted transition-colors hover:text-auth-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-auth-accent/35"
+                  className="absolute right-0 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-r-[7px] text-catalogue-muted transition-colors hover:text-catalogue-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/35"
                   onClick={() => setPasswordVisible((visible) => !visible)}
                   type="button"
                 >
@@ -273,7 +273,7 @@ function SignupForm() {
               <div className="relative">
                 <KeyRound
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
                 />
                 <TextInput
                   autoComplete="one-time-code"
@@ -294,10 +294,10 @@ function SignupForm() {
           </form>
         )}
       </Card>
-      <p className="mt-6 text-center text-sm text-auth-muted">
+      <p className="mt-6 text-center text-sm text-catalogue-muted">
         Already have an account?{' '}
         <Link
-          className="font-semibold text-auth-accent hover:text-auth-accent-dark hover:underline"
+          className="font-semibold text-catalogue-blue-bright hover:text-catalogue-ink hover:underline"
           href="/login"
         >
           Sign in
@@ -339,12 +339,12 @@ function RequestAccessForm() {
 
   return (
     <AuthShell>
-      <Card className="w-full min-w-0 border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+      <Card className="w-full min-w-0 border-catalogue-line bg-catalogue-surface p-6 shadow-catalogue sm:p-7">
         <div className="mb-6 text-center">
-          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-auth-ink sm:text-[32px]">
+          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-catalogue-ink sm:text-[32px]">
             Request access
           </h1>
-          <p className="mt-2 text-[15px] text-auth-muted">
+          <p className="mt-2 text-[15px] text-catalogue-muted">
             {submitted
               ? "We've received your request"
               : "Tell us about your organization and we'll follow up about coverage and licensing"}
@@ -394,7 +394,7 @@ function RequestAccessForm() {
               <div className="relative">
                 <Mail
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
                 />
                 <TextInput
                   autoComplete="email"
@@ -415,7 +415,7 @@ function RequestAccessForm() {
               <div className="relative">
                 <Building2
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
                 />
                 <TextInput
                   autoComplete="organization"
@@ -435,7 +435,7 @@ function RequestAccessForm() {
               <div className="relative">
                 <Globe
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
                 />
                 <TextInput
                   autoComplete="url"
@@ -456,10 +456,10 @@ function RequestAccessForm() {
           </form>
         )}
       </Card>
-      <p className="mt-6 text-center text-sm text-auth-muted">
+      <p className="mt-6 text-center text-sm text-catalogue-muted">
         Already have an account?{' '}
         <Link
-          className="font-semibold text-auth-accent hover:text-auth-accent-dark hover:underline"
+          className="font-semibold text-catalogue-blue-bright hover:text-catalogue-ink hover:underline"
           href="/login"
         >
           Sign in

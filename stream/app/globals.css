@@ -1,6 +1,18 @@
 @import 'tailwindcss';
 
-@theme {
+/* `inline` is load-bearing, not stylistic -- without it, Tailwind v4
+   freezes each --color-* alias to whatever its var() reference resolves
+   to on :root at parse time (e.g. --color-surface permanently becomes
+   :root's light --surface), so a scoped override like .stream-catalogue
+   or .stream-console re-pointing --surface never reaches any component
+   using the generic bg-surface/text-ink/etc. utility classes -- they
+   silently keep rendering the :root palette regardless of scope. `inline`
+   makes Tailwind emit utilities that reference --surface/--bg/etc.
+   directly (background-color: var(--surface)) instead of through that
+   frozen alias, so scoped re-points actually take effect. Found via
+   AuthShell rendering a white Card inside a supposedly-dark
+   .stream-catalogue scope -- see git history for the debugging trail. */
+@theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
@@ -180,37 +192,15 @@
     animation: stream-catalogue-wave 2.8s ease-in-out infinite alternate;
   }
 
-  /* --auth-* values come from :root's fallback block above (identical
-     here, so not redeclared) -- this scope re-points the generic tokens. */
-  .stream-auth {
-    color-scheme: light;
-    width: 100%;
-    max-width: 100vw;
-    overflow-x: hidden;
-    --bg: var(--auth-panel);
-    --surface: var(--auth-card);
-    --surface-muted: #eef3fa;
-    --ink: var(--auth-ink);
-    --muted: var(--auth-muted);
-    --line: var(--auth-line);
-    --accent: var(--auth-accent);
-    --accent-dark: var(--auth-accent-dark);
-    --accent-soft: var(--auth-accent-soft);
-  }
-
-  .stream-auth .stream-card {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-    border-color: var(--auth-line);
-    background: var(--auth-card);
-    box-shadow: var(--auth-shadow-card);
-  }
-
-  .stream-auth-panel {
+  /* Full-page auth routes (login/register/forgot-password/reset-password/
+     accept-invite) now share the .stream-catalogue scope directly -- see
+     AuthShell.tsx -- so there's no separate .stream-auth token remap
+     anymore. This is just the form panel's background wash, recolored
+     from the old white/--auth-panel glow to a faint catalogue-purple one. */
+  .stream-catalogue-auth-panel {
     background:
-      radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.8), transparent 34%),
-      var(--auth-panel);
+      radial-gradient(circle at 50% 18%, rgba(168, 102, 224, 0.08), transparent 34%),
+      var(--catalogue-bg);
   }
 }
 

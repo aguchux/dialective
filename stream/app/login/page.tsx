@@ -12,7 +12,7 @@ import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { Card, ErrorText, FieldLabel, TextInput } from '@/components/ui';
 
 const authInputClassName =
-  'min-h-[46px] rounded-[7px] border-auth-line bg-auth-card px-3.5 text-[15px] text-auth-ink placeholder:text-auth-muted/70 focus:border-auth-accent focus:ring-2 focus:ring-auth-accent/15 focus-visible:outline-none';
+  'min-h-[46px] rounded-[7px] border-catalogue-line bg-catalogue-bg px-3.5 text-[15px] text-catalogue-ink placeholder:text-catalogue-dim focus:border-catalogue-blue focus:ring-2 focus:ring-catalogue-blue/25 focus-visible:outline-none';
 
 function LoginForm() {
   const router = useRouter();
@@ -72,12 +72,12 @@ function LoginForm() {
 
   return (
     <AuthShell>
-      <Card className="w-full min-w-0 border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+      <Card className="w-full min-w-0 border-catalogue-line bg-catalogue-surface p-6 shadow-catalogue sm:p-7">
         <div className="mb-6 text-center">
-          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-auth-ink sm:text-[32px]">
+          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-catalogue-ink sm:text-[32px]">
             Welcome back
           </h1>
-          <p className="mt-2 text-[15px] text-auth-muted">
+          <p className="mt-2 text-[15px] text-catalogue-muted">
             {step === 'credentials'
               ? 'Sign in to access Dialect Library Stream'
               : `Enter the code we sent to ${email}`}
@@ -103,7 +103,7 @@ function LoginForm() {
           <form className="grid min-w-0 gap-4" onSubmit={submitCredentials}>
             <div>
               <FieldLabel
-                className="!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-auth-ink"
+                className="!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-catalogue-ink"
                 htmlFor="work-email"
               >
                 Work email
@@ -111,7 +111,7 @@ function LoginForm() {
               <div className="relative">
                 <Mail
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
                 />
                 <TextInput
                   aria-label="Work email"
@@ -130,13 +130,13 @@ function LoginForm() {
             <div>
               <div className="mb-2 flex items-center justify-between gap-3">
                 <FieldLabel
-                  className="!mb-0 !text-[13px] !font-medium !normal-case !tracking-normal !text-auth-ink"
+                  className="!mb-0 !text-[13px] !font-medium !normal-case !tracking-normal !text-catalogue-ink"
                   htmlFor="work-password"
                 >
                   Password
                 </FieldLabel>
                 <Link
-                  className="shrink-0 text-xs font-semibold text-auth-accent transition-colors hover:text-auth-accent-dark hover:underline"
+                  className="shrink-0 text-xs font-semibold text-catalogue-blue-bright transition-colors hover:text-catalogue-ink hover:underline"
                   href="/forgot-password"
                 >
                   Forgot password?
@@ -145,7 +145,7 @@ function LoginForm() {
               <div className="relative">
                 <LockKeyhole
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
                 />
                 <TextInput
                   aria-label="Password"
@@ -161,7 +161,7 @@ function LoginForm() {
                 />
                 <button
                   aria-label={passwordVisible ? 'Hide password' : 'Show password'}
-                  className="absolute right-0 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-r-[7px] text-auth-muted transition-colors hover:text-auth-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-auth-accent/35"
+                  className="absolute right-0 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-r-[7px] text-catalogue-muted transition-colors hover:text-catalogue-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/35"
                   onClick={() => setPasswordVisible((visible) => !visible)}
                   type="button"
                 >
@@ -173,10 +173,10 @@ function LoginForm() {
                 </button>
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-auth-muted">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-catalogue-muted">
               <label className="inline-flex min-h-11 items-center gap-2">
                 <input
-                  className="size-4 rounded border-auth-line accent-auth-accent"
+                  className="size-4 rounded border-catalogue-line accent-catalogue-blue"
                   defaultChecked
                   type="checkbox"
                 />
@@ -193,9 +193,9 @@ function LoginForm() {
               className="flex items-center gap-3 text-center"
               role="separator"
             >
-              <span aria-hidden="true" className="h-px flex-1 bg-auth-line" />
-              <span className="shrink-0 text-xs font-medium lowercase text-auth-muted">or</span>
-              <span aria-hidden="true" className="h-px flex-1 bg-auth-line" />
+              <span aria-hidden="true" className="h-px flex-1 bg-catalogue-line" />
+              <span className="shrink-0 text-xs font-medium lowercase text-catalogue-muted">or</span>
+              <span aria-hidden="true" className="h-px flex-1 bg-catalogue-line" />
             </div>
 
             <SocialAuthButtons />
@@ -204,7 +204,7 @@ function LoginForm() {
           <form className="grid min-w-0 gap-4" onSubmit={submitOtp}>
             <div>
               <FieldLabel
-                className="!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-auth-ink"
+                className="!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-catalogue-ink"
                 htmlFor="verification-code"
               >
                 Verification code
@@ -212,7 +212,7 @@ function LoginForm() {
               <div className="relative">
                 <KeyRound
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-auth-muted"
+                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
                 />
                 <TextInput
                   aria-label="Verification code"
@@ -234,22 +234,22 @@ function LoginForm() {
           </form>
         )}
       </Card>
-      <p className="mt-6 text-center text-sm text-auth-muted">
+      <p className="mt-6 text-center text-sm text-catalogue-muted">
         Don&apos;t have an account?{' '}
         <Link
-          className="font-semibold text-auth-accent hover:text-auth-accent-dark hover:underline"
+          className="font-semibold text-catalogue-blue-bright hover:text-catalogue-ink hover:underline"
           href="/register"
         >
           Request access
         </Link>
       </p>
-      <p className="mt-4 text-center text-xs leading-relaxed text-auth-muted">
+      <p className="mt-4 text-center text-xs leading-relaxed text-catalogue-muted">
         By signing in, you agree to our{' '}
-        <a className="text-auth-accent hover:text-auth-accent-dark hover:underline" href="/terms">
+        <a className="text-catalogue-blue-bright hover:text-catalogue-ink hover:underline" href="/terms">
           Terms of Service
         </a>{' '}
         and{' '}
-        <a className="text-auth-accent hover:text-auth-accent-dark hover:underline" href="/privacy">
+        <a className="text-catalogue-blue-bright hover:text-catalogue-ink hover:underline" href="/privacy">
           Privacy Policy
         </a>
         .
@@ -261,25 +261,25 @@ function LoginForm() {
 function LoginFormSkeleton() {
   return (
     <AuthShell>
-      <Card className="w-full min-w-0 border-auth-line bg-auth-card p-6 shadow-auth-card sm:p-7">
+      <Card className="w-full min-w-0 border-catalogue-line bg-catalogue-surface p-6 shadow-catalogue sm:p-7">
         <div className="mb-6 text-center">
-          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-auth-ink sm:text-[32px]">
+          <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-catalogue-ink sm:text-[32px]">
             Welcome back
           </h1>
-          <p className="mt-2 text-[15px] text-auth-muted">Sign in to access Dialect Library Stream</p>
+          <p className="mt-2 text-[15px] text-catalogue-muted">Sign in to access Dialect Library Stream</p>
         </div>
         <div aria-hidden="true" className="grid min-w-0 animate-pulse gap-4">
-          <div className="h-[46px] rounded-[7px] bg-auth-panel" />
-          <div className="h-[46px] rounded-[7px] bg-auth-panel" />
-          <div className="h-4 w-24 rounded bg-auth-panel" />
-          <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+          <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />
+          <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />
+          <div className="h-4 w-24 rounded bg-catalogue-surface-raised" />
+          <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />
           <div className="flex items-center gap-3">
-            <span className="h-px flex-1 bg-auth-line" />
-            <span className="shrink-0 text-xs font-medium lowercase text-auth-muted">or</span>
-            <span className="h-px flex-1 bg-auth-line" />
+            <span className="h-px flex-1 bg-catalogue-line" />
+            <span className="shrink-0 text-xs font-medium lowercase text-catalogue-muted">or</span>
+            <span className="h-px flex-1 bg-catalogue-line" />
           </div>
-          <div className="h-[46px] rounded-[7px] bg-auth-panel" />
-          <div className="h-[46px] rounded-[7px] bg-auth-panel" />
+          <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />
+          <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />
         </div>
       </Card>
     </AuthShell>
