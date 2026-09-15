@@ -105,6 +105,73 @@ describe('WhatsAppValidatorService', () => {
     });
   });
 
+  describe('regenerateCode', () => {
+    it('rejects when the requester has no live request', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue(null);
+      await expect(service.regenerateCode(requesterId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('issues a fresh code and resets attempts for a PENDING request', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
+        ...baseRequest,
+        status: 'PENDING',
+        attempts: 3,
+        claimedByValidatorId: null,
+      });
+      const result = await service.regenerateCode(requesterId);
+      expect(result.requestId).toBe(requestId);
+      expect(result.code).toMatch(/^\d{6}$/);
+      expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: requestId, status: 'PENDING' },
+          data: expect.objectContaining({ attempts: 0, status: 'PENDING' }),
+        }),
+      );
+    });
+
+    it('releases a CLAIMED request back to the pool when regenerating', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, status: 'CLAIMED' });
+      await service.regenerateCode(requesterId);
+      expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: requestId, status: 'CLAIMED' },
+          data: expect.objectContaining({
+            status: 'PENDING',
+            claimedByValidatorId: null,
+            claimedAt: null,
+            claimExpiresAt: null,
+          }),
+        }),
+      );
+    });
+
+    it('generates a different code each time (new hash, not reusing the old one)', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
+        ...baseRequest,
+        status: 'PENDING',
+        claimedByValidatorId: null,
+      });
+      const result = await service.regenerateCode(requesterId);
+      const call = prisma.whatsAppValidationRequest.updateMany.mock.calls[0][0];
+      expect(call.data.otpHash).not.toBe(baseRequest.otpHash);
+      expect(result.code).toBeDefined();
+    });
+
+    it('throws if the status changed underneath (e.g. just got verified)', async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
+        ...baseRequest,
+        status: 'PENDING',
+        claimedByValidatorId: null,
+      });
+      // First updateMany call is expireStale housekeeping; the second is
+      // the actual regenerate attempt, which loses the race (count: 0).
+      prisma.whatsAppValidationRequest.updateMany
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 0 });
+      await expect(service.regenerateCode(requesterId)).rejects.toThrow(ConflictException);
+    });
+  });
+
   describe('myRequest', () => {
     it('returns null when the requester has no request', async () => {
       prisma.whatsAppValidationRequest.findFirst.mockResolvedValue(null);

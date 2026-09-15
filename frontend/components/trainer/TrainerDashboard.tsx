@@ -102,6 +102,7 @@ import {
   useVerifyPhoneMutation,
   useSavePhoneUnverifiedMutation,
   useRequestWhatsAppValidationMutation,
+  useRegenerateWhatsAppValidationCodeMutation,
   useGetMyWhatsAppValidationRequestQuery,
   useListIntegrationsQuery,
   useGetPublicClientSettingsQuery,
@@ -3029,6 +3030,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [savePhoneUnverified, { isLoading: phoneSaving }] = useSavePhoneUnverifiedMutation();
   const [requestWhatsAppValidation, { isLoading: whatsAppValidationRequesting }] =
     useRequestWhatsAppValidationMutation();
+  const [regenerateWhatsAppValidationCode, { isLoading: whatsAppValidationRegenerating }] =
+    useRegenerateWhatsAppValidationCodeMutation();
   // Polls while the dialog's WhatsApp mode is open so the requester sees the
   // status flip to CLAIMED (and the claiming validator's phone number
   // appear) live, without needing to close and reopen the dialog.
@@ -3212,6 +3215,18 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
       setPhoneMessage('Your request is now in the peer-verification queue.');
     } catch (err) {
       setPhoneError(normalizeErrorMessage(err, 'Could not start WhatsApp verification.'));
+    }
+  }
+
+  /** The code is only ever shown once (never persisted in plaintext) -- lets the trainer recover from a lost code (closed tab, page reload) instead of being stuck waiting out the 24h expiry. Releases a CLAIMED request back to the pool server-side, since the claiming validator has nothing to verify against once the code changes underneath them. */
+  async function regenerateWhatsAppCode() {
+    setPhoneMessage(null);
+    setPhoneError(null);
+    try {
+      const result = await regenerateWhatsAppValidationCode().unwrap();
+      setWhatsAppValidationIssuedCode(result.code);
+    } catch (err) {
+      setPhoneError(normalizeErrorMessage(err, 'Could not generate a new code.'));
     }
   }
 
@@ -3530,11 +3545,22 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                               )}
                             </div>
                             {!whatsAppValidationIssuedCode && (
-                              <p className="text-xs font-bold text-muted">
-                                You already have a request in progress from an earlier visit -- the
-                                code was only shown once, when it was created. If you no longer have
-                                it, wait for this request to expire before starting a new one.
-                              </p>
+                              <div className="grid gap-2 rounded-lg border border-line bg-white p-3 dark:bg-surface">
+                                <p className="text-xs font-bold text-muted">
+                                  You already have a request in progress from an earlier visit --
+                                  the code was only shown once, when it was created, and can&apos;t
+                                  be recovered. Generate a new one to continue.
+                                </p>
+                                <ActionButton
+                                  className="min-h-10 justify-self-start rounded-lg bg-accent px-4 font-extrabold text-white"
+                                  onClick={() => void regenerateWhatsAppCode()}
+                                  pending={whatsAppValidationRegenerating}
+                                  pendingLabel="Generating"
+                                  type="button"
+                                >
+                                  Generate new code
+                                </ActionButton>
+                              </div>
                             )}
                             {activeWhatsAppValidationRequest.status === 'PENDING' && (
                               <p className="text-sm leading-relaxed text-ink">
@@ -3566,6 +3592,17 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                                   </p>
                                 )}
                               </div>
+                            )}
+                            {whatsAppValidationIssuedCode && (
+                              <ActionButton
+                                className="min-h-9 justify-self-start rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+                                onClick={() => void regenerateWhatsAppCode()}
+                                pending={whatsAppValidationRegenerating}
+                                pendingLabel="Generating"
+                                type="button"
+                              >
+                                Generate a different code
+                              </ActionButton>
                             )}
                           </div>
                         )}

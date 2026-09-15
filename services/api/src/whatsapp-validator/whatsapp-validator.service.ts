@@ -93,6 +93,53 @@ export class WhatsAppValidatorService {
   }
 
   /**
+   * Requester-only. The plaintext code is never stored server-side (only
+   * its hash), so it's shown exactly once at issue time -- if the
+   * requester loses it (closed the tab, reloaded the page) there is no way
+   * to recover it, only to replace it. Generates a fresh code/hash for the
+   * requester's existing live request and resets attempts, rather than
+   * requiring them to wait out expiry and start over. If the request was
+   * already CLAIMED, releases it back to PENDING first: a validator
+   * holding a claim on the OLD code has nothing to verify against once the
+   * code changes underneath them, so the fairer outcome is returning it to
+   * the pool for fresh pickup rather than leaving that validator stuck.
+   */
+  async regenerateCode(userId: string) {
+    const now = new Date();
+    await this.expireStale(now);
+    const request = await this.prisma.whatsAppValidationRequest.findFirst({
+      where: {
+        requesterId: userId,
+        status: { in: [WhatsAppValidationRequestStatus.PENDING, WhatsAppValidationRequestStatus.CLAIMED] },
+        expiresAt: { gt: now },
+      },
+    });
+    if (!request) {
+      throw new NotFoundException('No pending WhatsApp validation request to regenerate');
+    }
+
+    const { code, hash } = generateOtpCode();
+    const claim = await this.prisma.whatsAppValidationRequest.updateMany({
+      where: { id: request.id, status: request.status },
+      data: {
+        otpHash: hash,
+        attempts: 0,
+        status: WhatsAppValidationRequestStatus.PENDING,
+        claimedByValidatorId: null,
+        claimedAt: null,
+        claimExpiresAt: null,
+      },
+    });
+    if (claim.count === 0) {
+      // Status moved under us (e.g. a validator just verified the old code
+      // a moment ago) -- nothing to regenerate anymore.
+      throw new ConflictException('This request is no longer pending');
+    }
+
+    return { requestId: request.id, code };
+  }
+
+  /**
    * The requester's own single verification request (there's at most one
    * live one at a time, see the pending/claimed check in
    * requestVerification) -- not a history list. Includes the claiming

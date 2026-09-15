@@ -2931,6 +2931,16 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/whatsapp-validator/requests', method: 'POST', body }),
       invalidatesTags: ['WhatsAppValidator', 'Profile'],
     }),
+    // The code is only ever shown once (never persisted in plaintext) --
+    // this replaces the requester's live request with a fresh code/hash
+    // when they've lost the one they were shown (closed the tab, reloaded
+    // the page). Releases a CLAIMED request back to PENDING, since the
+    // claiming validator has nothing to verify against once the code
+    // changes underneath them.
+    regenerateWhatsAppValidationCode: builder.mutation<{ requestId: string; code: string }, void>({
+      query: () => ({ url: '/whatsapp-validator/requests/mine/regenerate', method: 'POST' }),
+      invalidatesTags: ['WhatsAppValidator'],
+    }),
     // The requester's own single request (there's at most one live one at a
     // time), not a history list -- null when they have none.
     getMyWhatsAppValidationRequest: builder.query<WhatsAppValidationMyRequest | null, void>({
@@ -5554,6 +5564,7 @@ export const {
   useSubscribeToIntegrationMutation,
   useUnsubscribeFromIntegrationMutation,
   useRequestWhatsAppValidationMutation,
+  useRegenerateWhatsAppValidationCodeMutation,
   useGetMyWhatsAppValidationRequestQuery,
   useListPendingWhatsAppValidationsQuery,
   useGetMyWhatsAppValidationClaimQuery,

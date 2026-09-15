@@ -18,6 +18,11 @@ export class WhatsAppValidatorController {
     return this.whatsappValidator.myRequest(req.user.sub);
   }
 
+  @Post('requests/mine/regenerate')
+  regenerateCode(@Req() req: AuthenticatedRequest) {
+    return this.whatsappValidator.regenerateCode(req.user.sub);
+  }
+
   @Get('pending')
   listPending(@Req() req: AuthenticatedRequest) {
     return this.whatsappValidator.listPending(req.user.sub);

@@ -10,6 +10,7 @@ import {
   useGetMyWhatsAppValidationClaimQuery,
   useGetMyWhatsAppValidationRequestQuery,
   useListPendingWhatsAppValidationsQuery,
+  useRegenerateWhatsAppValidationCodeMutation,
   useRejectWhatsAppValidationRequestMutation,
   useRequestWhatsAppValidationMutation,
   useVerifyWhatsAppValidationRequestMutation,
@@ -232,6 +233,7 @@ function ValidateTab() {
 function GetVerifiedTab() {
   const { data: myRequest, isLoading } = useGetMyWhatsAppValidationRequestQuery();
   const [requestVerification, { isLoading: requesting }] = useRequestWhatsAppValidationMutation();
+  const [regenerateCode, { isLoading: regenerating }] = useRegenerateWhatsAppValidationCodeMutation();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
@@ -244,6 +246,16 @@ function GetVerifiedTab() {
       setIssuedCode(result.code);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to request verification.'));
+    }
+  }
+
+  async function handleRegenerate() {
+    setError('');
+    try {
+      const result = await regenerateCode().unwrap();
+      setIssuedCode(result.code);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to generate a new code.'));
     }
   }
 
@@ -263,6 +275,11 @@ function GetVerifiedTab() {
   if (activeRequest) {
     return (
       <div className="grid gap-4">
+        {error && (
+          <p className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm font-bold text-danger">
+            {error}
+          </p>
+        )}
         <div className={`${cardClass} grid gap-3 p-5`}>
           <div className="flex items-center justify-between gap-3">
             <p className="font-black">{activeRequest.phoneNumber}</p>
@@ -270,12 +287,28 @@ function GetVerifiedTab() {
               {STATUS_LABELS[activeRequest.status]}
             </p>
           </div>
-          {issuedCode && (
+          {issuedCode ? (
             <div className="grid gap-1.5">
               <p className="text-sm text-muted">Use this code for peer verification:</p>
               <p className="justify-self-start rounded-lg bg-accent-soft px-4 py-3 text-center text-3xl font-black tracking-[0.3em] text-accent">
                 {issuedCode}
               </p>
+            </div>
+          ) : (
+            <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-3">
+              <p className="text-sm text-muted">
+                Your code was only shown once and can&apos;t be recovered. Generate a new one to
+                continue.
+              </p>
+              <ActionButton
+                className="min-h-10 justify-self-start rounded-lg bg-accent px-4 font-extrabold text-white"
+                onClick={handleRegenerate}
+                pending={regenerating}
+                pendingLabel="Generating"
+                type="button"
+              >
+                Generate new code
+              </ActionButton>
             </div>
           )}
           {activeRequest.status === 'PENDING' && (
@@ -309,6 +342,17 @@ function GetVerifiedTab() {
           <p className="text-sm font-extrabold">
             {activeRequest.feeTokenAmount} DL will be deducted from your balance once verified.
           </p>
+          {issuedCode && (
+            <ActionButton
+              className="min-h-9 justify-self-start rounded-lg border border-line px-3 text-sm font-bold hover:bg-surface-muted"
+              onClick={handleRegenerate}
+              pending={regenerating}
+              pendingLabel="Generating"
+              type="button"
+            >
+              Generate a different code
+            </ActionButton>
+          )}
         </div>
       </div>
     );
