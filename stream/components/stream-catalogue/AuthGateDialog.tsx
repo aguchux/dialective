@@ -4,8 +4,9 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
-import { Eye, EyeOff, KeyRound, Lock, LockKeyhole, Mail, X } from 'lucide-react';
+import { Eye, EyeOff, Lock, LockKeyhole, Mail, X } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
+import { OtpInput } from '@/components/OtpInput';
 
 const inputClassName =
   'min-h-9 w-full border border-catalogue-line bg-catalogue-bg px-3 text-[13px] text-catalogue-ink placeholder:text-catalogue-dim focus:border-catalogue-blue focus:ring-2 focus:ring-catalogue-blue/25 focus-visible:outline-none';
@@ -270,23 +271,13 @@ export function AuthGateDialog({
               >
                 Verification code
               </label>
-              <div className="relative">
-                <KeyRound
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-3 top-1/2 size-[15px] -translate-y-1/2 text-catalogue-dim"
-                />
-                <input
-                  autoComplete="one-time-code"
-                  className={`${inputClassName} pl-9 tracking-[0.24em]`}
-                  id="auth-gate-code"
-                  inputMode="numeric"
-                  maxLength={6}
-                  onChange={(e) => setCode(e.target.value)}
-                  ref={firstFieldRef}
-                  required
-                  value={code}
-                />
-              </div>
+              <OtpInput
+                autoFocus={step === 'otp'}
+                className={`${inputClassName} min-h-9 text-center text-base font-bold`}
+                id="auth-gate-code"
+                onChange={setCode}
+                value={code}
+              />
             </div>
             {error && (
               <p className="text-xs font-semibold text-danger" role="alert">
@@ -295,7 +286,7 @@ export function AuthGateDialog({
             )}
             <button
               className="mt-0.5 inline-flex min-h-9 w-full items-center justify-center bg-catalogue-blue text-[13px] font-semibold text-white shadow-[0_1px_2px_rgba(13,99,243,0.3)] transition-colors hover:bg-catalogue-blue-bright disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={pending}
+              disabled={pending || code.length < 6}
               type="submit"
             >
               {pending ? 'Verifying...' : 'Verify and continue'}

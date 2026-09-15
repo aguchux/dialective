@@ -4,15 +4,19 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
-import { Building2, Eye, EyeOff, Globe, KeyRound, LockKeyhole, Mail } from 'lucide-react';
+import { Building2, Eye, EyeOff, Globe, LockKeyhole, Mail } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { leadsApi, LeadsApiError } from '@/lib/leads-api';
 import { AuthShell } from '@/components/AuthShell';
 import { AuthPrimaryButton } from '@/components/AuthPrimaryButton';
+import { OtpInput } from '@/components/OtpInput';
 import { Card, ErrorText, FieldLabel, TextInput } from '@/components/ui';
 
 const authInputClassName =
   'min-h-[46px] rounded-[7px] border-catalogue-line bg-catalogue-bg px-3.5 text-[15px] text-catalogue-ink placeholder:text-catalogue-dim focus:border-catalogue-blue focus:ring-2 focus:ring-catalogue-blue/25 focus-visible:outline-none';
+
+const otpDigitClassName =
+  'min-h-[52px] w-full min-w-0 rounded-[7px] border border-catalogue-line bg-catalogue-bg text-center text-xl font-bold text-catalogue-ink focus:border-catalogue-blue focus:ring-2 focus:ring-catalogue-blue/25 focus-visible:outline-none';
 
 const fieldLabelClassName =
   '!mb-2 !text-[13px] !font-medium !normal-case !tracking-normal !text-catalogue-ink';
@@ -270,25 +274,15 @@ function SignupForm() {
               <FieldLabel className={fieldLabelClassName} htmlFor="signup-otp">
                 Verification code
               </FieldLabel>
-              <div className="relative">
-                <KeyRound
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-catalogue-muted"
-                />
-                <TextInput
-                  autoComplete="one-time-code"
-                  className={`${authInputClassName} pl-11 tracking-[0.24em]`}
-                  id="signup-otp"
-                  inputMode="numeric"
-                  maxLength={6}
-                  onChange={(e) => setCode(e.target.value)}
-                  required
-                  value={code}
-                />
-              </div>
+              <OtpInput
+                className={otpDigitClassName}
+                id="signup-otp"
+                onChange={setCode}
+                value={code}
+              />
             </div>
             {error && <ErrorText>{error}</ErrorText>}
-            <AuthPrimaryButton disabled={pending} type="submit">
+            <AuthPrimaryButton disabled={pending || code.length < 6} type="submit">
               {pending ? 'Verifying...' : 'Verify and continue'}
             </AuthPrimaryButton>
           </form>
