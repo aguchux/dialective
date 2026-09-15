@@ -29,6 +29,7 @@ import {
   MessageSquareQuote,
   MessagesSquare,
   Mic2,
+  Phone,
   Plus,
   Play,
   RefreshCw,
@@ -100,14 +101,14 @@ import {
   useRequestPhoneOtpMutation,
   useVerifyPhoneMutation,
   useSavePhoneUnverifiedMutation,
-  useRequestManualPhoneVerificationMutation,
-  useMarkManualPhoneVerificationSentMutation,
+  useRequestWhatsAppValidationMutation,
+  useGetMyWhatsAppValidationRequestQuery,
+  useListIntegrationsQuery,
   useGetPublicClientSettingsQuery,
   useListMyTestimoniesQuery,
   useGetKycStatusQuery,
   useCreateKycSessionMutation,
   useCancelMyKycMutation,
-  ManualPhoneVerificationRequestResult,
   useRequestDepositOtpMutation,
   useCreateTokenDepositMutation,
   useRequestFlutterwaveDepositOtpMutation,
@@ -2948,7 +2949,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updateProfile, { isLoading }] = useUpdateProfileMutation();
-  const { data: me } = useGetMeQuery();
+  const { data: me, refetch: refetchMe } = useGetMeQuery();
   const { data: kycStatusData } = useGetKycStatusQuery();
   const [createKycSession, { isLoading: isStartingKyc }] = useCreateKycSessionMutation();
   const [cancelMyKyc, { isLoading: isCancellingKyc }] = useCancelMyKycMutation();
@@ -3005,12 +3006,6 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   }
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
   const phoneVerificationRequired = publicSettings?.phoneVerificationRequired ?? true;
-  const manualPhoneVerificationEnabled = publicSettings?.manualPhoneVerificationEnabled ?? false;
-  const manualPhoneVerificationFeeTokens = publicSettings?.manualPhoneVerificationFeeTokens ?? '1';
-  const manualPhoneVerificationWhatsappNumber =
-    publicSettings?.manualPhoneVerificationWhatsappNumber ?? '';
-  const manualPhoneVerificationExpiryMinutes =
-    publicSettings?.manualPhoneVerificationExpiryMinutes ?? 30;
   const phoneVerified = me?.phoneVerified ?? false;
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneOtpRequestId, setPhoneOtpRequestId] = useState('');
@@ -3019,19 +3014,45 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const [phoneVerificationMode, setPhoneVerificationMode] = useState<'SMS' | 'WHATSAPP' | null>(
     null,
   );
-  const [manualPhoneRequest, setManualPhoneRequest] =
-    useState<ManualPhoneVerificationRequestResult | null>(null);
-  const [manualPhoneCancelConfirm, setManualPhoneCancelConfirm] = useState(false);
   const [manualPhoneCodeCopied, setManualPhoneCodeCopied] = useState(false);
+  // The code is only ever returned once, from the request-verification
+  // response -- it's never persisted/re-fetchable server-side (only its
+  // hash is stored), so it must be held locally here across the dialog's
+  // lifetime, same pattern as WhatsAppValidator.tsx's GetVerifiedTab.
+  const [whatsAppValidationIssuedCode, setWhatsAppValidationIssuedCode] = useState<string | null>(
+    null,
+  );
   const [phoneMessage, setPhoneMessage] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [requestPhoneOtp, { isLoading: phoneOtpSending }] = useRequestPhoneOtpMutation();
   const [verifyPhone, { isLoading: phoneVerifying }] = useVerifyPhoneMutation();
   const [savePhoneUnverified, { isLoading: phoneSaving }] = useSavePhoneUnverifiedMutation();
-  const [requestManualPhoneVerification, { isLoading: manualPhoneRequesting }] =
-    useRequestManualPhoneVerificationMutation();
-  const [markManualPhoneVerificationSent, { isLoading: manualPhoneMarkingSent }] =
-    useMarkManualPhoneVerificationSentMutation();
+  const [requestWhatsAppValidation, { isLoading: whatsAppValidationRequesting }] =
+    useRequestWhatsAppValidationMutation();
+  // Polls while the dialog's WhatsApp mode is open so the requester sees the
+  // status flip to CLAIMED (and the claiming validator's phone number
+  // appear) live, without needing to close and reopen the dialog.
+  const { data: myWhatsAppValidationRequest } = useGetMyWhatsAppValidationRequestQuery(undefined, {
+    pollingInterval: phoneVerificationMode === 'WHATSAPP' ? 5000 : 0,
+  });
+  const { data: integrations } = useListIntegrationsQuery();
+  const whatsAppValidatorIntegration = integrations?.find((i) => i.slug === 'whatsapp-validator');
+  const whatsAppValidationEnabled = !!whatsAppValidatorIntegration;
+  const whatsAppValidationFeeTokens = whatsAppValidatorIntegration?.feeTokenAmount ?? '0';
+  const activeWhatsAppValidationRequest =
+    myWhatsAppValidationRequest && myWhatsAppValidationRequest.status !== 'VERIFIED'
+      ? myWhatsAppValidationRequest
+      : null;
+  // A peer (not this session) is the one who calls verify(), so this
+  // session's own useGetMeQuery cache never gets invalidated by that --
+  // the poll above is what catches the status flip; refetch `me` the
+  // moment it does so phoneVerified (and the whole dialog) updates
+  // without the trainer needing to manually reload the page.
+  useEffect(() => {
+    if (myWhatsAppValidationRequest?.status === 'VERIFIED') {
+      void refetchMe();
+    }
+  }, [myWhatsAppValidationRequest?.status, refetchMe]);
   const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
   const phoneValid = isValidPhoneNumber(normalizedPhoneNumber);
   const [notificationPrefs, setNotificationPrefs] = useState({
@@ -3141,7 +3162,6 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     setPhoneNumber(normalizePhoneNumber(value));
     setPhoneOtpRequestId('');
     setPhoneOtpCode('');
-    setManualPhoneRequest(null);
     setPhoneVerificationMode(null);
   }
 
@@ -3180,44 +3200,19 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
     }
   }
 
-  async function startManualPhoneVerification() {
+  /** Publishes a peer-claimable WhatsApp Validator request -- any subscribed member can pick it up from the queue, not just an admin. See WhatsAppValidator's GetVerifiedTab for the same flow on the Integrations page. */
+  async function startWhatsAppValidation() {
     setPhoneMessage(null);
     setPhoneError(null);
     try {
-      const result = await requestManualPhoneVerification({
+      const result = await requestWhatsAppValidation({
         phoneNumber: normalizedPhoneNumber,
       }).unwrap();
-      setManualPhoneRequest(result);
-      setPhoneVerificationMode('WHATSAPP');
-      setPhoneMessage(
-        `Manual verification started. ${result.feeTokenAmount} DL will be charged once verified.`,
-      );
+      setWhatsAppValidationIssuedCode(result.code);
+      setPhoneMessage('Your request is now in the peer-verification queue.');
     } catch (err) {
-      setPhoneError(normalizeErrorMessage(err, 'Could not start manual verification.'));
+      setPhoneError(normalizeErrorMessage(err, 'Could not start WhatsApp verification.'));
     }
-  }
-
-  async function confirmManualPhoneSent() {
-    if (!manualPhoneRequest) return;
-    setPhoneMessage(null);
-    setPhoneError(null);
-    try {
-      await markManualPhoneVerificationSent(manualPhoneRequest.requestId).unwrap();
-      setPhoneMessage('Manual verification is pending admin review.');
-      setPhoneVerificationDialogOpen(false);
-      setManualPhoneRequest(null);
-      setManualPhoneCancelConfirm(false);
-    } catch (err) {
-      setPhoneError(normalizeErrorMessage(err, 'Could not mark this request as sent.'));
-    }
-  }
-
-  /** Abandons a generated-but-unsent code -- the only way out of the dialog besides marking it sent, since the dialog itself can no longer be dismissed once a code exists. */
-  function cancelManualPhoneVerification() {
-    setManualPhoneRequest(null);
-    setManualPhoneCancelConfirm(false);
-    setPhoneVerificationMode(null);
-    setPhoneVerificationDialogOpen(false);
   }
 
   /** Only reachable while phoneVerificationRequired is off -- see GeneralSettingsPanel's toggle. */
@@ -3404,22 +3399,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
               <Dialog
                 open={phoneVerificationDialogOpen}
                 onOpenChange={(open) => {
-                  // Once a WhatsApp code has been generated, this dialog can
-                  // only close via "I have sent the WhatsApp message" or the
-                  // explicit cancel-confirmation below -- otherwise a code
-                  // gets generated and silently abandoned unsent, which is
-                  // exactly the gap that let requests pile up with nothing
-                  // ever showing up for admin review.
-                  if (!open && manualPhoneRequest) {
-                    setManualPhoneCancelConfirm(true);
-                    return;
-                  }
                   setPhoneVerificationDialogOpen(open);
-                  if (!open) {
-                    setPhoneVerificationMode(null);
-                    setManualPhoneRequest(null);
-                    setManualPhoneCancelConfirm(false);
-                  }
+                  if (!open) setPhoneVerificationMode(null);
                 }}
               >
                 <DialogTrigger asChild>
@@ -3431,11 +3412,7 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                     Verify mobile
                   </ActionButton>
                 </DialogTrigger>
-                <DialogContent
-                  title="Verify mobile"
-                  description="Choose how you want to verify this number."
-                  preventClose={Boolean(manualPhoneRequest)}
-                >
+                <DialogContent title="Verify mobile" description="Choose how you want to verify this number.">
                   <div className="grid gap-4">
                     <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold text-muted">
                       {normalizedPhoneNumber}
@@ -3454,14 +3431,14 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                         </button>
                         <button
                           className="grid min-h-28 gap-2 rounded-lg border border-line bg-surface p-4 text-left transition-colors hover:border-accent hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={!manualPhoneVerificationEnabled}
+                          disabled={!whatsAppValidationEnabled}
                           onClick={() => setPhoneVerificationMode('WHATSAPP')}
                           type="button"
                         >
-                          <span className="font-black">WhatsApp Method</span>
+                          <span className="font-black">WhatsApp Peer Verification</span>
                           <span className="text-sm leading-relaxed text-muted">
-                            Get a code to send to WhatsApp for admin review --{' '}
-                            {manualPhoneVerificationFeeTokens} DL is charged once verified.
+                            A subscribed member claims your request and confirms your code --{' '}
+                            {whatsAppValidationFeeTokens} DL is charged once verified.
                           </span>
                         </button>
                       </div>
@@ -3504,66 +3481,41 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                     )}
                     {phoneVerificationMode === 'WHATSAPP' && (
                       <div className="grid gap-3">
-                        {!manualPhoneRequest ? (
+                        {!activeWhatsAppValidationRequest ? (
                           <>
                             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
-                              {manualPhoneVerificationFeeTokens} DL will be charged from your
-                              balance once an admin verifies your code -- make sure you have enough
-                              DL before sending your WhatsApp message.
+                              {whatsAppValidationFeeTokens} DL will be charged from your balance
+                              once a peer verifies your code.
                             </div>
                             <ActionButton
                               className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-                              disabled={!phoneValid || !manualPhoneVerificationEnabled}
-                              onClick={() => void startManualPhoneVerification()}
-                              pending={manualPhoneRequesting}
+                              disabled={!phoneValid || !whatsAppValidationEnabled}
+                              onClick={() => void startWhatsAppValidation()}
+                              pending={whatsAppValidationRequesting}
                               pendingLabel="Starting"
                               type="button"
                             >
                               Confirm and show code
                             </ActionButton>
                           </>
-                        ) : manualPhoneCancelConfirm ? (
-                          <div className="grid gap-3 rounded-lg border-2 border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950">
-                            <p className="font-black text-amber-900 dark:text-amber-200">
-                              Leave without sending?
-                            </p>
-                            <p className="text-sm leading-relaxed text-amber-800 dark:text-amber-300">
-                              Your code hasn&apos;t been sent to WhatsApp yet, so this request can
-                              never be reviewed. If you close now, you&apos;ll need to start over.
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                className="min-h-10 rounded-lg border border-line bg-white px-4 font-extrabold text-ink hover:bg-surface-muted dark:bg-surface"
-                                onClick={() => setManualPhoneCancelConfirm(false)}
-                                type="button"
-                              >
-                                Go back, I&apos;ll send it
-                              </button>
-                              <button
-                                className="min-h-10 rounded-lg border border-red-200 bg-white px-4 font-extrabold text-danger hover:bg-red-50 dark:bg-surface"
-                                onClick={cancelManualPhoneVerification}
-                                type="button"
-                              >
-                                Discard code and close
-                              </button>
-                            </div>
-                          </div>
                         ) : (
-                          <>
-                            <div className="grid gap-3 rounded-lg border-2 border-accent bg-accent/5 p-4">
-                              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-accent">
-                                <MessageSquareQuote className="size-4" />
-                                Step required: send this code to WhatsApp
-                              </div>
-                              <div className="flex items-center justify-center gap-3 rounded-lg bg-white p-4 dark:bg-surface">
-                                <span className="text-4xl font-black tracking-[0.2em] text-ink">
-                                  {manualPhoneRequest.code}
-                                </span>
+                          <div className="grid gap-3 rounded-lg border-2 border-accent bg-accent/5 p-4">
+                            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-accent">
+                              <MessageSquareQuote className="size-4" />
+                              {activeWhatsAppValidationRequest.status === 'CLAIMED'
+                                ? 'Claimed -- send this code to the member below'
+                                : 'Step required: send this code once claimed'}
+                            </div>
+                            <div className="flex items-center justify-center gap-3 rounded-lg bg-white p-4 dark:bg-surface">
+                              <span className="text-4xl font-black tracking-[0.2em] text-ink">
+                                {whatsAppValidationIssuedCode ?? '------'}
+                              </span>
+                              {whatsAppValidationIssuedCode && (
                                 <button
                                   className="grid size-10 shrink-0 place-items-center rounded-lg border border-line text-muted transition-colors hover:bg-surface-muted hover:text-ink"
                                   aria-label="Copy code"
                                   onClick={() => {
-                                    void navigator.clipboard.writeText(manualPhoneRequest.code);
+                                    void navigator.clipboard.writeText(whatsAppValidationIssuedCode);
                                     setManualPhoneCodeCopied(true);
                                     setTimeout(() => setManualPhoneCodeCopied(false), 1500);
                                   }}
@@ -3575,40 +3527,47 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                                     <Copy className="size-4" />
                                   )}
                                 </button>
-                              </div>
-                              <p className="text-sm leading-relaxed text-ink">
-                                Open WhatsApp and text{' '}
-                                <span className="font-black">{manualPhoneRequest.code}</span> to{' '}
-                                <span className="font-black">
-                                  {manualPhoneRequest.whatsappNumber ||
-                                    manualPhoneVerificationWhatsappNumber}
-                                </span>
-                                . This code expires in {manualPhoneVerificationExpiryMinutes}{' '}
-                                minutes.
-                              </p>
-                              <p className="text-xs font-bold text-muted">
-                                An admin can only review your request after you confirm below that
-                                the message was actually sent -- this dialog stays open until then.
-                              </p>
+                              )}
                             </div>
-                            <ActionButton
-                              className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-                              onClick={() => void confirmManualPhoneSent()}
-                              pending={manualPhoneMarkingSent}
-                              pendingLabel="Submitting"
-                              type="button"
-                            >
-                              <Check className="mr-1.5 inline size-4" />I have sent the WhatsApp
-                              message
-                            </ActionButton>
-                            <button
-                              className="text-sm font-bold text-muted underline-offset-2 hover:text-danger hover:underline"
-                              onClick={() => setManualPhoneCancelConfirm(true)}
-                              type="button"
-                            >
-                              Cancel verification
-                            </button>
-                          </>
+                            {!whatsAppValidationIssuedCode && (
+                              <p className="text-xs font-bold text-muted">
+                                You already have a request in progress from an earlier visit -- the
+                                code was only shown once, when it was created. If you no longer have
+                                it, wait for this request to expire before starting a new one.
+                              </p>
+                            )}
+                            {activeWhatsAppValidationRequest.status === 'PENDING' && (
+                              <p className="text-sm leading-relaxed text-ink">
+                                Your request is in the queue. A subscribed member will claim it and
+                                message you on WhatsApp asking for this code.
+                              </p>
+                            )}
+                            {activeWhatsAppValidationRequest.status === 'CLAIMED' && (
+                              <div className="grid gap-2">
+                                <p className="text-sm leading-relaxed text-ink">
+                                  A member has claimed your request. Send them this code over
+                                  WhatsApp -- if they haven&apos;t messaged you yet, you can reach
+                                  out first:
+                                </p>
+                                {activeWhatsAppValidationRequest.validatorPhoneNumber ? (
+                                  <a
+                                    className="inline-flex w-fit items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 font-extrabold text-ink hover:bg-surface-muted dark:bg-surface-muted"
+                                    href={`https://wa.me/${activeWhatsAppValidationRequest.validatorPhoneNumber.replace(/\D/g, '')}`}
+                                    rel="noreferrer"
+                                    target="_blank"
+                                  >
+                                    <Phone className="size-4" aria-hidden="true" />{' '}
+                                    {activeWhatsAppValidationRequest.validatorPhoneNumber}
+                                  </a>
+                                ) : (
+                                  <p className="text-sm font-bold text-muted">
+                                    The member hasn&apos;t added a phone number yet -- wait for
+                                    them to message you.
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
