@@ -34,7 +34,7 @@ export default function IntegrationsPage() {
           image={session.user.image}
         />
 
-        <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
+        <main className="mx-auto w-full max-w-4xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
           <IntegrationsMarketplace />
         </main>
 

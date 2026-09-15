@@ -117,7 +117,7 @@ export function IntegrationsMarketplace() {
         <EmptyPanel icon={Plug} title="No integrations match your search" unframed />
       )}
 
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2">
         {integrations.map((integration) => {
           const Icon = (integration.iconKey && ICONS[integration.iconKey]) || Plug;
           return (
