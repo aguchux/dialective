@@ -124,7 +124,7 @@ export function MarketOfferList({
   const paymentMethodOptions = parseCsv(settings?.allowedPaymentMethods);
 
   return (
-    <section className="mx-[calc(50%-50vw)] w-screen px-4 md:px-6">
+    <section className="mx-[calc(50%-50vw)] w-screen overflow-x-hidden px-4 md:px-6">
       <div className="mx-auto max-w-[1600px]">
         <SectionTitle title="Market" subtitle="Active marketplace posts." />
         <div className="mb-4 flex flex-wrap items-center gap-2">
