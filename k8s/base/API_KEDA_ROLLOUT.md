@@ -30,11 +30,14 @@ kubectl get httpscaledobject api-http-scaler --namespace dai
 kubectl rollout status deployment/api --namespace dai
 ```
 
-The `api` Ingress now points at
-`keda-add-ons-http-interceptor-proxy:8080` instead of `api` directly (see
-`api-ingress.yaml`'s comment) — confirm that Service exists in the `keda`
-namespace before applying, or the Ingress will point at nothing and `api`
-becomes unreachable.
+The `api` Ingress now points at an `api-http-interceptor` ExternalName
+Service (bridging to `keda-add-ons-http-interceptor-proxy.keda.svc.cluster.local`
+in the `keda` namespace, since an Ingress backend can't reference a
+Service in a different namespace directly — see `api-ingress.yaml`'s
+comment) instead of `api` directly. Confirm the real interceptor Service
+exists in `keda` (`kubectl get svc keda-add-ons-http-interceptor-proxy
+--namespace keda`) before applying, or the ExternalName bridge resolves to
+nothing and `api` becomes unreachable.
 
 ## Verification
 

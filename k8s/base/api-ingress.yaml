@@ -1,11 +1,26 @@
-# Routed through keda-http-add-on's interceptor Service (installed in the
-# keda namespace -- see k8s/gcp-cloud/README.md for the core KEDA install
-# command this follows the same pattern as) instead of the `api` Service
-# directly.
-# The interceptor is what actually implements the HTTPScaledObject contract
-# -- it buffers/holds requests and reports in-flight count while `api`
-# scales, so pointing the Ingress straight at `api` would bypass scaling
-# entirely and defeat api-http-scaledobject.yaml.
+# An Ingress backend can only reference a Service in its OWN namespace
+# (this Ingress applies in `dai`; the interceptor lives in `keda`, where
+# `helm install http-add-on kedacore/keda-add-ons-http --namespace keda`
+# puts it -- see k8s/base/API_KEDA_ROLLOUT.md). ExternalName is the
+# standard way to bridge that: a Service in `dai` that's just a CNAME to
+# the interceptor's real in-cluster DNS name in `keda`, so the Ingress
+# below can reference it like any local Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-http-interceptor
+spec:
+  type: ExternalName
+  externalName: keda-add-ons-http-interceptor-proxy.keda.svc.cluster.local
+  ports:
+    - port: 8080
+---
+# Routed through keda-http-add-on's interceptor (via the ExternalName
+# bridge above) instead of the `api` Service directly. The interceptor is
+# what actually implements the HTTPScaledObject contract -- it buffers/
+# holds requests and reports in-flight count while `api` scales, so
+# pointing the Ingress straight at `api` would bypass scaling entirely and
+# defeat api-http-scaledobject.yaml.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -27,6 +42,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: keda-add-ons-http-interceptor-proxy
+                name: api-http-interceptor
                 port:
                   number: 8080
