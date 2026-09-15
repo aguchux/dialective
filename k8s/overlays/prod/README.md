@@ -152,7 +152,9 @@ accepts requests from it.
 project. The API config must include:
 
 - `kyc_app_url=https://kyc.dialectlibrary.com`
-- `spaces_kyc_evidence_bucket=dialectiva-kyc-evidence`
+- `spaces_kyc_evidence_bucket` — see the shared-bucket incident note below;
+  this currently points at the same physical Space as blog/course/dyk/ads
+  media, not a dedicated bucket
 - `https://kyc.dialectlibrary.com` in `cors_allowed_origins`
 
 The evidence bucket must remain private. Configure its browser CORS policy to
@@ -160,6 +162,53 @@ allow `PUT` from `https://kyc.dialectlibrary.com` with the `Content-Type`
 header; do not allow public reads. DLKYC currently issues JPEG-only uploads,
 scoped to a server-generated user/session/stage key, with an 8 MB server-side
 limit and JPEG signature validation after upload.
+
+### 2026-09-15 incident: KYC evidence was publicly downloadable
+
+Production's `spaces_kyc_evidence_bucket` (`golojan-do-s3-bucket`) is a
+**shared bucket** also used for blog media, course media, DYK images,
+marketing ads, community attachments, testimonial videos, word-training
+submissions, and domain-conversation audio — not the dedicated
+`dialectiva-kyc-evidence` bucket this doc originally assumed. A bucket-level
+ACL (`AllUsers: READ`) plus a wildcard bucket policy
+(`Principal: "*"` on `s3:GetObject` for every key) meant every object in
+the bucket — including real users' KYC ID photos and selfies — was
+downloadable by anyone with no authentication, and the bucket was
+anonymously listable. Confirmed and fixed live in production:
+
+1. Removed the bucket-level `AllUsers: READ` ACL grant (blocks anonymous
+   listing).
+2. Replaced the wildcard bucket policy with one scoped to `s3:GetObject`
+   on `blog/*`, `courses/*`, `dyk/*`, and `ads/*` only — the prefixes that
+   are genuinely meant to be public and don't collide with anything
+   private.
+3. Confirmed live: `self/*` (KYC evidence) now 403s anonymously; blog/ads
+   media still serves publicly at 200; bucket listing 403s.
+
+**Still open, deliberately not touched during the incident response**
+(each object's own upload-time `ACL: 'public-read'` turned out to not
+actually be honored the way `storage.service.ts`'s `createPresignedUploadUrl`
+assumes — the wildcard bucket policy was doing all the real work, silently
+masking this):
+
+- Community attachments (`community-attachments.service.ts`, bare
+  `{userId}/...` keys, intentionally public per its own doc comment) are
+  currently private (403) as a result of this fix, since their key shape
+  can't be safely distinguished by prefix from private word-recording/
+  domain-conversation audio sharing the same bucket. Needs either a
+  dedicated bucket/prefix for community attachments, or switching them to
+  presigned download URLs (same posture the genuinely-private content
+  types already use) instead of relying on a public bucket policy.
+- CORS on this bucket still allows `AllowedOrigins: ["*", ...]` and
+  `GET/PUT/DELETE/HEAD/POST` from any origin — not yet narrowed to the
+  documented "PUT-only from kyc.dialectlibrary.com" policy above. Public
+  GET is now correctly gated by the bucket policy regardless of CORS, but
+  CORS should still be tightened as defense in depth (a wildcard CORS
+  policy on a bucket also used for private uploads is unnecessary
+  exposure of the upload surface itself).
+- Longer-term: splitting KYC evidence into its own dedicated private
+  bucket (as this doc originally specified) removes the need for
+  prefix-based policy reasoning entirely and is the more robust fix.
 
 ## Apply
 
