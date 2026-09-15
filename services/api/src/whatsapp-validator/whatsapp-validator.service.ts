@@ -12,7 +12,8 @@ import { isValidPhoneNumber } from 'libphonenumber-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { IntegrationsService } from '../integrations/integrations.service';
-import { generateOtpCode, hashOtpCode } from '../otp/otp.util';
+import { hashOtpCode } from '../otp/otp.util';
+import { generateWhatsAppCode } from './whatsapp-code.util';
 
 const INTEGRATION_SLUG = 'whatsapp-validator';
 
@@ -63,7 +64,7 @@ export class WhatsAppValidatorService {
     }
 
     const requestId = randomUUID();
-    const { code, hash } = generateOtpCode();
+    const { code, hash } = generateWhatsAppCode();
     const expiresAt = new Date(now.getTime() + integration.codeValidityMinutes * 60 * 1000);
 
     // No charge here -- the fee is only ever collected when a validator
@@ -115,7 +116,7 @@ export class WhatsAppValidatorService {
       throw new NotFoundException('No pending WhatsApp validation request to regenerate');
     }
 
-    const { code, hash } = generateOtpCode();
+    const { code, hash } = generateWhatsAppCode();
     const claim = await this.prisma.whatsAppValidationRequest.updateMany({
       where: { id: request.id, status: request.status },
       data: {
@@ -310,7 +311,11 @@ export class WhatsAppValidatorService {
     return this.toValidatorPublic(claimed);
   }
 
-  async verify(validatorUserId: string, requestId: string, code: string) {
+  async verify(validatorUserId: string, requestId: string, rawCode: string) {
+    // Codes are generated uppercase (see whatsapp-code.util.ts); normalize
+    // whatever case the validator typed so a lowercase relay over
+    // WhatsApp doesn't spuriously fail the hash comparison.
+    const code = rawCode.trim().toUpperCase();
     await this.expireStale();
     const request = await this.prisma.whatsAppValidationRequest.findUnique({ where: { id: requestId } });
     if (!request) throw new NotFoundException('WhatsApp validation request not found');

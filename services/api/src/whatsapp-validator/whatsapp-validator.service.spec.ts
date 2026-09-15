@@ -13,7 +13,7 @@ describe('WhatsAppValidatorService', () => {
   const requesterId = 'requester-1';
   const validatorId = 'validator-1';
   const requestId = 'request-1';
-  const code = '123456';
+  const code = 'A3F9K2';
 
   const baseRequest = {
     id: requestId,
@@ -81,7 +81,7 @@ describe('WhatsAppValidatorService', () => {
     it('creates a request and returns the plaintext code', async () => {
       const result = await service.requestVerification(requesterId, '+2348012345678');
       expect(result.requestId).toBeDefined();
-      expect(result.code).toMatch(/^\d{6}$/);
+      expect(result.code).toMatch(/^[A-Z0-9]{6}$/);
       expect(prisma.whatsAppValidationRequest.create).toHaveBeenCalled();
     });
 
@@ -128,7 +128,7 @@ describe('WhatsAppValidatorService', () => {
       });
       const result = await service.regenerateCode(requesterId);
       expect(result.requestId).toBe(requestId);
-      expect(result.code).toMatch(/^\d{6}$/);
+      expect(result.code).toMatch(/^[A-Z0-9]{6}$/);
       expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: requestId, status: 'PENDING' },
@@ -417,6 +417,12 @@ describe('WhatsAppValidatorService', () => {
         claimedAt: new Date(Date.now() - 60 * 60_000),
       });
       await expect(service.verify(validatorId, requestId, code)).resolves.toBeDefined();
+    });
+
+    it('accepts a lowercase-typed code -- alphanumeric codes are normalized before hashing', async () => {
+      await expect(
+        service.verify(validatorId, requestId, code.toLowerCase()),
+      ).resolves.toBeDefined();
     });
 
     it('rejects when the request is not CLAIMED', async () => {

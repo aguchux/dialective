@@ -9,6 +9,8 @@ export class RequestWhatsAppValidationDto {
 export class VerifyWhatsAppValidationDto {
   @IsString()
   @Length(6, 6)
-  @Matches(/^\d{6}$/)
+  // Case-insensitive at the transport layer -- WhatsAppValidatorService.verify
+  // normalizes to uppercase before hashing (see whatsapp-code.util.ts).
+  @Matches(/^[A-Za-z0-9]{6}$/)
   code!: string;
 }

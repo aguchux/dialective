@@ -294,12 +294,12 @@ function ClaimedRequestCard({ claim }: { claim: WhatsAppValidationClaim }) {
       <label className="grid gap-1.5 text-sm font-bold" htmlFor={`whatsapp-validate-code-${claim.id}`}>
         Code from the member
         <input
-          className="min-h-11 rounded-lg border border-line bg-white px-3 text-center text-lg font-black tracking-[0.3em] dark:bg-surface-muted"
+          className="min-h-11 rounded-lg border border-line bg-white px-3 text-center text-lg font-black uppercase tracking-[0.3em] dark:bg-surface-muted"
           id={`whatsapp-validate-code-${claim.id}`}
-          inputMode="numeric"
+          inputMode="text"
           maxLength={6}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-          placeholder="123456"
+          onChange={(e) => setCode(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+          placeholder="A3F9K2"
           value={code}
         />
       </label>
