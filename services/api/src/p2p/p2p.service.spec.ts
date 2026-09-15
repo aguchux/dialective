@@ -88,6 +88,188 @@ describe('P2PService trade-notification SMS', () => {
   });
 });
 
+describe('P2PService.listOffers', () => {
+  const makeOffer = (overrides: Record<string, unknown> = {}) => ({
+    id: 'offer-1',
+    type: 'SELL',
+    userId: 'trader-1',
+    user: { id: 'trader-1', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com' },
+    tokenAmount: { toString: () => '100' },
+    remainingTokens: { toString: () => '100' },
+    fiatAmount: { toString: () => '5000' },
+    fiatCurrency: 'NGN',
+    paymentMethod: 'BANK_TRANSFER',
+    status: 'ACTIVE',
+    expiresAt: new Date(),
+    completedAt: null,
+    cancelledAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  });
+
+  let prisma: any;
+  let service: P2PService;
+
+  beforeEach(() => {
+    prisma = {
+      p2PTokenOffer: {
+        findMany: jest.fn().mockResolvedValue([makeOffer()]),
+        count: jest.fn().mockResolvedValue(1),
+        updateMany: jest.fn(),
+      },
+      $queryRaw: jest.fn(),
+    };
+    service = new P2PService(prisma, {} as any, {} as any, {} as any);
+    jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
+  });
+
+  it('defaults to ACTIVE status, createdAt desc, page 1 of size 20', async () => {
+    const result = await service.listOffers('viewer-1', {
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+      page: 1,
+      pageSize: 20,
+    } as any);
+
+    expect(prisma.p2PTokenOffer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'ACTIVE' }),
+        orderBy: { createdAt: 'desc' },
+        skip: 0,
+        take: 20,
+      }),
+    );
+    expect(result).toEqual({
+      items: expect.any(Array),
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+  });
+
+  it('filters by search across firstName/lastName/email, case-insensitive', async () => {
+    await service.listOffers('viewer-1', {
+      search: 'ada',
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+      page: 1,
+      pageSize: 20,
+    } as any);
+
+    expect(prisma.p2PTokenOffer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          user: {
+            OR: [
+              { firstName: { contains: 'ada', mode: 'insensitive' } },
+              { lastName: { contains: 'ada', mode: 'insensitive' } },
+              { email: { contains: 'ada', mode: 'insensitive' } },
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('filters by fiatCurrency and paymentMethod exact match', async () => {
+    await service.listOffers('viewer-1', {
+      fiatCurrency: 'NGN',
+      paymentMethod: 'BANK_TRANSFER',
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+      page: 1,
+      pageSize: 20,
+    } as any);
+
+    expect(prisma.p2PTokenOffer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ fiatCurrency: 'NGN', paymentMethod: 'BANK_TRANSFER' }),
+      }),
+    );
+  });
+
+  it('filters by token/fiat amount range', async () => {
+    await service.listOffers('viewer-1', {
+      minTokenAmount: 10,
+      maxTokenAmount: 500,
+      minFiatAmount: 100,
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+      page: 1,
+      pageSize: 20,
+    } as any);
+
+    expect(prisma.p2PTokenOffer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tokenAmount: { gte: 10, lte: 500 },
+          fiatAmount: { gte: 100 },
+        }),
+      }),
+    );
+  });
+
+  it('sorts by tokenAmount ascending', async () => {
+    await service.listOffers('viewer-1', {
+      sortBy: 'tokenAmount',
+      sortDir: 'asc',
+      page: 1,
+      pageSize: 20,
+    } as any);
+
+    expect(prisma.p2PTokenOffer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { tokenAmount: 'asc' } }),
+    );
+  });
+
+  it('paginates using page/pageSize to compute skip/take', async () => {
+    await service.listOffers('viewer-1', {
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+      page: 3,
+      pageSize: 10,
+    } as any);
+
+    expect(prisma.p2PTokenOffer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 20, take: 10 }),
+    );
+  });
+
+  it('reports totalPages correctly at a non-exact boundary', async () => {
+    prisma.p2PTokenOffer.count.mockResolvedValue(41);
+
+    const result = await service.listOffers('viewer-1', {
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+      page: 1,
+      pageSize: 20,
+    } as any);
+
+    expect(result.totalPages).toBe(3);
+  });
+
+  it('sorts by price via a raw query, bypassing findMany/count', async () => {
+    prisma.$queryRaw
+      .mockResolvedValueOnce([{ id: 'offer-1' }])
+      .mockResolvedValueOnce([{ count: 1n }]);
+    prisma.p2PTokenOffer.findMany.mockResolvedValue([makeOffer()]);
+
+    const result = await service.listOffers('viewer-1', {
+      sortBy: 'price',
+      sortDir: 'asc',
+      page: 1,
+      pageSize: 20,
+    } as any);
+
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(prisma.p2PTokenOffer.count).not.toHaveBeenCalled();
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBe(1);
+  });
+});
+
 describe('P2PService.requestTradeOtp', () => {
   let prisma: any;
   let otp: any;

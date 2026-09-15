@@ -364,14 +364,149 @@ export class P2PService {
     const where: Prisma.P2PTokenOfferWhereInput = {
       status: query.status ?? P2POfferStatus.ACTIVE,
       ...(query.type ? { type: query.type } : {}),
+      ...(query.fiatCurrency ? { fiatCurrency: query.fiatCurrency } : {}),
+      ...(query.paymentMethod ? { paymentMethod: query.paymentMethod } : {}),
+      ...(query.minTokenAmount !== undefined || query.maxTokenAmount !== undefined
+        ? {
+            tokenAmount: {
+              ...(query.minTokenAmount !== undefined ? { gte: query.minTokenAmount } : {}),
+              ...(query.maxTokenAmount !== undefined ? { lte: query.maxTokenAmount } : {}),
+            },
+          }
+        : {}),
+      ...(query.minFiatAmount !== undefined || query.maxFiatAmount !== undefined
+        ? {
+            fiatAmount: {
+              ...(query.minFiatAmount !== undefined ? { gte: query.minFiatAmount } : {}),
+              ...(query.maxFiatAmount !== undefined ? { lte: query.maxFiatAmount } : {}),
+            },
+          }
+        : {}),
+      ...(query.search
+        ? {
+            user: {
+              OR: [
+                { firstName: { contains: query.search, mode: 'insensitive' } },
+                { lastName: { contains: query.search, mode: 'insensitive' } },
+                { email: { contains: query.search, mode: 'insensitive' } },
+              ],
+            },
+          }
+        : {}),
     };
-    const offers = await this.prisma.p2PTokenOffer.findMany({
-      where,
-      include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-    return offers.map((offer) => serializeOffer(offer, offer.userId === userId));
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    const sortDir = query.sortDir ?? 'desc';
+
+    if (query.sortBy === 'price') {
+      const whereSql = this.buildOfferWhereSql(query);
+      const [rows, totalRows] = await Promise.all([
+        this.prisma.$queryRaw<Array<{ id: string }>>(
+          Prisma.sql`
+            SELECT o.id
+            FROM p2p_token_offers o
+            JOIN users u ON u.id = o."userId"
+            WHERE ${whereSql}
+            ORDER BY (o."fiatAmount" / o."tokenAmount") ${sortDir === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`}
+            OFFSET ${(page - 1) * pageSize}
+            LIMIT ${pageSize}
+          `,
+        ),
+        this.prisma.$queryRaw<Array<{ count: bigint }>>(
+          Prisma.sql`
+            SELECT COUNT(*) AS count
+            FROM p2p_token_offers o
+            JOIN users u ON u.id = o."userId"
+            WHERE ${whereSql}
+          `,
+        ),
+      ]);
+      const ids = rows.map((row) => row.id);
+      const offersById = new Map(
+        (
+          await this.prisma.p2PTokenOffer.findMany({
+            where: { id: { in: ids } },
+            include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+          })
+        ).map((offer) => [offer.id, offer]),
+      );
+      const total = Number(totalRows[0]?.count ?? 0);
+      return {
+        // Raw query's ORDER BY determines position; re-derive it here since
+        // findMany({ where: { id: { in } } }) does not preserve `ids`' order.
+        items: ids
+          .map((id) => offersById.get(id))
+          .filter((offer): offer is NonNullable<typeof offer> => Boolean(offer))
+          .map((offer) => serializeOffer(offer, offer.userId === userId)),
+        total,
+        page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      };
+    }
+
+    const sortColumn: 'createdAt' | 'tokenAmount' | 'fiatAmount' =
+      query.sortBy === 'tokenAmount' || query.sortBy === 'fiatAmount' ? query.sortBy : 'createdAt';
+    const [offers, total] = await Promise.all([
+      this.prisma.p2PTokenOffer.findMany({
+        where,
+        include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+        orderBy: { [sortColumn]: sortDir },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.p2PTokenOffer.count({ where }),
+    ]);
+    return {
+      items: offers.map((offer) => serializeOffer(offer, offer.userId === userId)),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
+  // Builds the same filter semantics as listOffers' Prisma `where` object,
+  // directly from the query DTO, as a parameterized raw-SQL fragment for
+  // the price-sort path's $queryRaw calls (Prisma can't ORDER BY a computed
+  // fiatAmount/tokenAmount expression, so that path bypasses the query
+  // builder entirely). Every value is bound via Prisma.sql's tagged-
+  // template parameterization, never string-interpolated, so this is not
+  // SQL-injectable despite building the clause from user-supplied filters.
+  // Keep in sync with listOffers' `where` construction above if filters
+  // change.
+  private buildOfferWhereSql(query: ListOffersDto): Prisma.Sql {
+    const clauses: Prisma.Sql[] = [
+      Prisma.sql`o.status = ${(query.status ?? P2POfferStatus.ACTIVE)}::"P2POfferStatus"`,
+    ];
+    if (query.type) {
+      clauses.push(Prisma.sql`o.type = ${query.type}::"P2POfferType"`);
+    }
+    if (query.fiatCurrency) {
+      clauses.push(Prisma.sql`o."fiatCurrency" = ${query.fiatCurrency}`);
+    }
+    if (query.paymentMethod) {
+      clauses.push(Prisma.sql`o."paymentMethod" = ${query.paymentMethod}`);
+    }
+    if (query.minTokenAmount !== undefined) {
+      clauses.push(Prisma.sql`o."tokenAmount" >= ${query.minTokenAmount}`);
+    }
+    if (query.maxTokenAmount !== undefined) {
+      clauses.push(Prisma.sql`o."tokenAmount" <= ${query.maxTokenAmount}`);
+    }
+    if (query.minFiatAmount !== undefined) {
+      clauses.push(Prisma.sql`o."fiatAmount" >= ${query.minFiatAmount}`);
+    }
+    if (query.maxFiatAmount !== undefined) {
+      clauses.push(Prisma.sql`o."fiatAmount" <= ${query.maxFiatAmount}`);
+    }
+    if (query.search) {
+      const like = `%${query.search}%`;
+      clauses.push(
+        Prisma.sql`(u."firstName" ILIKE ${like} OR u."lastName" ILIKE ${like} OR u."email" ILIKE ${like})`,
+      );
+    }
+    return Prisma.join(clauses, ' AND ');
   }
 
   async listMyOffers(userId: string) {

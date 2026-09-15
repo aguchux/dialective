@@ -2433,6 +2433,13 @@ model P2PTokenOffer {
 
   @@index([type, status, expiresAt])
   @@index([userId, status])
+  // Market list's default view: status(+type) filter, createdAt sort --
+  // covers the common case as one index scan. Not indexing every
+  // filterable column (fiatCurrency, paymentMethod, tokenAmount) --
+  // Postgres falls back to scanning the post-status/type-filtered rows
+  // for those, which is fine at this table's expected size; revisit with
+  // EXPLAIN ANALYZE on production data if that stops being true.
+  @@index([status, type, createdAt])
   @@map("p2p_token_offers")
 }
 

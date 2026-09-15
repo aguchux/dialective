@@ -12,6 +12,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { P2PDisputeStatus, P2POfferStatus, P2POfferType, P2PTradeStatus } from '@dialectiva/db';
 
 export class UpdateP2pPaymentInstructionsDto {
@@ -79,6 +80,67 @@ export class ListOffersDto {
     P2POfferStatus.DISPUTED,
   ])
   status?: P2POfferStatus;
+
+  // Matched against the offer's trader firstName/lastName/email,
+  // case-insensitive substring.
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  fiatCurrency?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minTokenAmount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  maxTokenAmount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minFiatAmount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  maxFiatAmount?: number;
+
+  // 'price' is the derived fiatAmount/tokenAmount unit rate -- computed via
+  // raw SQL in listOffers (no stored column to order by directly).
+  @IsOptional()
+  @IsIn(['createdAt', 'tokenAmount', 'fiatAmount', 'price'])
+  sortBy: 'createdAt' | 'tokenAmount' | 'fiatAmount' | 'price' = 'createdAt';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortDir: 'asc' | 'desc' = 'desc';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  pageSize = 20;
 }
 
 export class AcceptOfferDto {
