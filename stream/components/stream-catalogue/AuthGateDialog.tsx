@@ -100,6 +100,21 @@ export function AuthGateDialog({
     }
   }
 
+  // Clears the credentials/ticket from the completed login attempt, not
+  // just the visible step -- otherwise "Use a different account" reopens
+  // the credentials form pre-filled with the same email/password (and an
+  // orphaned ticket), so submitting again requests a fresh OTP for the
+  // *same* account instead of actually letting someone switch accounts.
+  function useDifferentAccount() {
+    setStep('credentials');
+    setEmail('');
+    setPassword('');
+    setTicket('');
+    setCode('');
+    setError(null);
+    setPasswordVisible(false);
+  }
+
   return createPortal(
     <div
       aria-labelledby="auth-gate-title"
@@ -293,7 +308,7 @@ export function AuthGateDialog({
             </button>
             <button
               className="text-center text-[11px] font-medium text-catalogue-muted transition-colors hover:text-catalogue-ink"
-              onClick={() => setStep('credentials')}
+              onClick={useDifferentAccount}
               type="button"
             >
               Use a different account
