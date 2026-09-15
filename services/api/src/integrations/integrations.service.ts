@@ -47,6 +47,7 @@ export class IntegrationsService implements OnModuleInit {
           feeTokenAmount: definition.defaultFeeTokenAmount,
           sortOrder: definition.defaultSortOrder,
           maxConcurrentClaims: definition.defaultMaxConcurrentClaims,
+          codeValidityMinutes: definition.defaultCodeValidityMinutes,
         },
         update: {
           name: definition.name,
@@ -161,6 +162,7 @@ export class IntegrationsService implements OnModuleInit {
         enabled: dto.enabled,
         feeTokenAmount: dto.feeTokenAmount,
         maxConcurrentClaims: dto.maxConcurrentClaims,
+        codeValidityMinutes: dto.codeValidityMinutes,
         sortOrder: dto.sortOrder,
       },
     });
@@ -201,6 +203,7 @@ export class IntegrationsService implements OnModuleInit {
     enabled: boolean;
     feeTokenAmount: Prisma.Decimal;
     maxConcurrentClaims: number;
+    codeValidityMinutes: number;
     sortOrder: number;
     createdAt: Date;
     updatedAt: Date;
@@ -215,6 +218,7 @@ export class IntegrationsService implements OnModuleInit {
       enabled: row.enabled,
       feeTokenAmount: row.feeTokenAmount.toString(),
       maxConcurrentClaims: row.maxConcurrentClaims,
+      codeValidityMinutes: row.codeValidityMinutes,
       sortOrder: row.sortOrder,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

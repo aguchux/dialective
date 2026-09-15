@@ -323,6 +323,21 @@ export class MailService {
     );
   }
 
+  /** Fired from WhatsAppValidatorService.claim once a peer validator picks up the requester's pending verification, so the requester knows to watch for a WhatsApp message instead of only finding out by opening the app again. */
+  async sendWhatsAppValidationClaimedEmail(
+    email: string,
+    validatorName: string | null,
+    validatorPhoneNumber: string | null,
+  ): Promise<void> {
+    const dashboardUrl = `${frontendUrl()}/dashboard`;
+    await this.send(
+      email,
+      'A member is verifying your WhatsApp number',
+      whatsAppValidationClaimedHtml(validatorName, validatorPhoneNumber, dashboardUrl),
+      whatsAppValidationClaimedText(validatorName, validatorPhoneNumber, dashboardUrl),
+    );
+  }
+
   /** Fired from KycService.adminDeclineSelfHosted/adminRevokeVerification once an admin declines or revokes an identity verification. */
   async sendKycDeclinedEmail(payload: KycDeclinedNotification): Promise<void> {
     const dashboardUrl = `${frontendUrl()}/dashboard`;
@@ -712,6 +727,32 @@ function phoneVerifiedHtml(phoneNumber: string, dashboardUrl: string): string {
 function phoneVerifiedText(phoneNumber: string, dashboardUrl: string): string {
   return `Your phone number ${phoneNumber} has been verified.
 You can now request withdrawals and trade on the P2P market.
+Go to your dashboard: ${dashboardUrl}`;
+}
+
+function whatsAppValidationClaimedHtml(
+  validatorName: string | null,
+  validatorPhoneNumber: string | null,
+  dashboardUrl: string,
+): string {
+  const who = validatorName ? escapeHtml(validatorName) : 'A member';
+  const contact = validatorPhoneNumber
+    ? ` at <strong>${escapeHtml(validatorPhoneNumber)}</strong>`
+    : '';
+  return `<p>${who}${contact} has picked up your WhatsApp verification request and will contact you shortly to ask for your code.</p>
+<p>Only share your code with this exact name and number.</p>
+<p><a href="${dashboardUrl}">Go to your dashboard</a></p>`;
+}
+
+function whatsAppValidationClaimedText(
+  validatorName: string | null,
+  validatorPhoneNumber: string | null,
+  dashboardUrl: string,
+): string {
+  const who = validatorName ?? 'A member';
+  const contact = validatorPhoneNumber ? ` at ${validatorPhoneNumber}` : '';
+  return `${who}${contact} has picked up your WhatsApp verification request and will contact you shortly to ask for your code.
+Only share your code with this exact name and number.
 Go to your dashboard: ${dashboardUrl}`;
 }
 

@@ -44,6 +44,12 @@ export class UpdateIntegrationDto {
 
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  codeValidityMinutes?: number;
+
+  @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   sortOrder?: number;
 }

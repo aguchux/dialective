@@ -15,8 +15,6 @@ import { IntegrationsService } from '../integrations/integrations.service';
 import { generateOtpCode, hashOtpCode } from '../otp/otp.util';
 
 const INTEGRATION_SLUG = 'whatsapp-validator';
-const REQUEST_EXPIRY_MINUTES = 60 * 24; // 24h -- same order of magnitude as ManualPhoneVerificationRequest's admin-configurable expiry, fixed here since this integration's params live on the Integration row, not a bespoke settings table
-const CLAIM_TTL_MINUTES = 10; // an inactive validator's claim falls back into the pool after this
 
 /**
  * Peer-driven counterpart to AuthService's manual (admin-reviewed) phone
@@ -66,7 +64,7 @@ export class WhatsAppValidatorService {
 
     const requestId = randomUUID();
     const { code, hash } = generateOtpCode();
-    const expiresAt = new Date(now.getTime() + REQUEST_EXPIRY_MINUTES * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + integration.codeValidityMinutes * 60 * 1000);
 
     // No charge here -- the fee is only ever collected when a validator
     // actually confirms the code (see verify), same reasoning as
@@ -97,12 +95,11 @@ export class WhatsAppValidatorService {
    * its hash), so it's shown exactly once at issue time -- if the
    * requester loses it (closed the tab, reloaded the page) there is no way
    * to recover it, only to replace it. Generates a fresh code/hash for the
-   * requester's existing live request and resets attempts, rather than
-   * requiring them to wait out expiry and start over. If the request was
-   * already CLAIMED, releases it back to PENDING first: a validator
-   * holding a claim on the OLD code has nothing to verify against once the
-   * code changes underneath them, so the fairer outcome is returning it to
-   * the pool for fresh pickup rather than leaving that validator stuck.
+   * requester's existing live request and resets attempts. Does NOT touch
+   * an existing claim -- a claim is permanent until the validator
+   * explicitly releases/skips it or verification succeeds, so a code
+   * reset must not silently knock a validator off a request they're
+   * already working; they simply need the new code relayed to them.
    */
   async regenerateCode(userId: string) {
     const now = new Date();
@@ -124,10 +121,6 @@ export class WhatsAppValidatorService {
       data: {
         otpHash: hash,
         attempts: 0,
-        status: WhatsAppValidationRequestStatus.PENDING,
-        claimedByValidatorId: null,
-        claimedAt: null,
-        claimExpiresAt: null,
       },
     });
     if (claim.count === 0) {
@@ -162,28 +155,42 @@ export class WhatsAppValidatorService {
    * Data-list view for the "Validate" tab -- every unclaimed PENDING
    * request (excluding the caller's own), oldest first, so a subscribed
    * validator picks which one to work rather than being handed a random
-   * one. Requires an active subscription, same gate as claim().
+   * one. Requires an active subscription, same gate as claim(). Paginated
+   * so the full backlog stays browsable instead of being cut off at a
+   * fixed row cap; who may actually claim from this list is governed
+   * entirely by claim()'s admin-configurable maxConcurrentClaims check,
+   * not by anything here.
    */
-  async listPending(validatorUserId: string) {
+  async listPending(validatorUserId: string, page = 1, pageSize = 20) {
     const isSubscribed = await this.integrations.isSubscribed(validatorUserId, INTEGRATION_SLUG);
     if (!isSubscribed) {
       throw new ForbiddenException('Subscribe to WhatsApp Validator before viewing requests');
     }
     const now = new Date();
     await this.expireStale(now);
-    await this.releaseStaleClaims(now);
 
-    const rows = await this.prisma.whatsAppValidationRequest.findMany({
-      where: {
-        status: WhatsAppValidationRequestStatus.PENDING,
-        requesterId: { not: validatorUserId },
-        expiresAt: { gt: now },
-      },
-      orderBy: { createdAt: 'asc' },
-      take: 50,
-      include: { requester: { select: { firstName: true, lastName: true } } },
-    });
-    return rows.map((row) => this.toValidatorPublic(row));
+    const where = {
+      status: WhatsAppValidationRequestStatus.PENDING,
+      requesterId: { not: validatorUserId },
+      expiresAt: { gt: now },
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.whatsAppValidationRequest.count({ where }),
+      this.prisma.whatsAppValidationRequest.findMany({
+        where,
+        orderBy: { createdAt: 'asc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { requester: { select: { firstName: true, lastName: true } } },
+      }),
+    ]);
+    return {
+      items: rows.map((row) => this.toValidatorPublic(row)),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
   }
 
   /**
@@ -191,16 +198,17 @@ export class WhatsAppValidatorService {
    * list view show a code-entry panel for each one this validator has
    * locked, alongside the rest of the (now-filtered-out) pending list. Can
    * be more than one now that Integration.maxConcurrentClaims allows
-   * holding several claims at once (see claim()).
+   * holding several claims at once (see claim()). A claim never expires on
+   * its own -- it stays here until the validator verifies, rejects, or the
+   * request itself expires (see expireStale); it is never silently
+   * dropped mid-flow just because entering/relaying the code took a while.
    */
   async myClaims(validatorUserId: string) {
-    const now = new Date();
-    await this.releaseStaleClaims(now);
+    await this.expireStale();
     const rows = await this.prisma.whatsAppValidationRequest.findMany({
       where: {
         claimedByValidatorId: validatorUserId,
         status: WhatsAppValidationRequestStatus.CLAIMED,
-        claimExpiresAt: { gt: now },
       },
       orderBy: { claimedAt: 'asc' },
       include: { requester: { select: { firstName: true, lastName: true } } },
@@ -223,7 +231,10 @@ export class WhatsAppValidatorService {
    * once (admin-configurable per integration, default set in
    * INTEGRATION_REGISTRY -- see requireEnabled's returned row), not just
    * one -- lets an active validator work through several requests in
-   * parallel instead of serializing on finish-or-skip.
+   * parallel instead of serializing on finish-or-skip. A claim is
+   * permanent once taken -- it is never auto-released on a timer; only
+   * verify() succeeding, reject(), or the underlying request itself
+   * expiring (see expireStale) ever frees it.
    */
   async claim(validatorUserId: string, requestId: string) {
     const isSubscribed = await this.integrations.isSubscribed(validatorUserId, INTEGRATION_SLUG);
@@ -234,13 +245,11 @@ export class WhatsAppValidatorService {
 
     const now = new Date();
     await this.expireStale(now);
-    await this.releaseStaleClaims(now);
 
     const openClaimCount = await this.prisma.whatsAppValidationRequest.count({
       where: {
         claimedByValidatorId: validatorUserId,
         status: WhatsAppValidationRequestStatus.CLAIMED,
-        claimExpiresAt: { gt: now },
         id: { not: requestId },
       },
     });
@@ -250,7 +259,6 @@ export class WhatsAppValidatorService {
       );
     }
 
-    const claimExpiresAt = new Date(now.getTime() + CLAIM_TTL_MINUTES * 60 * 1000);
     const claim = await this.prisma.whatsAppValidationRequest.updateMany({
       where: {
         id: requestId,
@@ -262,7 +270,6 @@ export class WhatsAppValidatorService {
         status: WhatsAppValidationRequestStatus.CLAIMED,
         claimedByValidatorId: validatorUserId,
         claimedAt: now,
-        claimExpiresAt,
       },
     });
     if (claim.count === 0) {
@@ -275,12 +282,36 @@ export class WhatsAppValidatorService {
       where: { id: requestId },
       include: { requester: { select: { firstName: true, lastName: true } } },
     });
+
+    // Best-effort -- the claim itself already landed above; a mail
+    // failure must not unwind it. Lets the requester know to watch for a
+    // WhatsApp message instead of only finding out by reopening the app.
+    const validator = await this.prisma.user.findUnique({
+      where: { id: validatorUserId },
+      select: { firstName: true, lastName: true, phoneNumber: true },
+    });
+    const requesterContact = await this.prisma.user.findUnique({
+      where: { id: claimed.requesterId },
+      select: { email: true },
+    });
+    if (requesterContact) {
+      const validatorName = [validator?.firstName, validator?.lastName].filter(Boolean).join(' ') || null;
+      try {
+        await this.mail.sendWhatsAppValidationClaimedEmail(
+          requesterContact.email,
+          validatorName,
+          validator?.phoneNumber ?? null,
+        );
+      } catch {
+        // swallow -- see doc comment above
+      }
+    }
+
     return this.toValidatorPublic(claimed);
   }
 
   async verify(validatorUserId: string, requestId: string, code: string) {
     await this.expireStale();
-    await this.releaseStaleClaims();
     const request = await this.prisma.whatsAppValidationRequest.findUnique({ where: { id: requestId } });
     if (!request) throw new NotFoundException('WhatsApp validation request not found');
     if (request.status !== WhatsAppValidationRequestStatus.CLAIMED) {
@@ -433,17 +464,6 @@ export class WhatsAppValidatorService {
         expiresAt: { lt: now },
       },
       data: { status: WhatsAppValidationRequestStatus.EXPIRED },
-    });
-  }
-
-  private async releaseStaleClaims(now = new Date()): Promise<void> {
-    await this.prisma.whatsAppValidationRequest.updateMany({
-      where: {
-        status: WhatsAppValidationRequestStatus.CLAIMED,
-        claimExpiresAt: { lt: now },
-        expiresAt: { gt: now },
-      },
-      data: { status: WhatsAppValidationRequestStatus.PENDING, claimedByValidatorId: null, claimedAt: null, claimExpiresAt: null },
     });
   }
 

@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { WhatsAppValidatorService } from './whatsapp-validator.service';
 import { RequestWhatsAppValidationDto, VerifyWhatsAppValidationDto } from './dto/whatsapp-validator.dto';
+import { ListPendingWhatsAppValidationDto } from './dto/list-pending-whatsapp-validation.dto';
 
 @Controller('whatsapp-validator')
 @UseGuards(JwtAuthGuard)
@@ -24,8 +25,8 @@ export class WhatsAppValidatorController {
   }
 
   @Get('pending')
-  listPending(@Req() req: AuthenticatedRequest) {
-    return this.whatsappValidator.listPending(req.user.sub);
+  listPending(@Req() req: AuthenticatedRequest, @Query() query: ListPendingWhatsAppValidationDto) {
+    return this.whatsappValidator.listPending(req.user.sub, query.page, query.pageSize);
   }
 
   @Get('my-claims')

@@ -87,13 +87,18 @@ export function WhatsAppValidator() {
   );
 }
 
+const PENDING_PAGE_SIZE = 20;
+
 function ValidateTab() {
   const { data: myClaims = [], isFetching: loadingClaims } = useListMyWhatsAppValidationClaimsQuery();
+  const [page, setPage] = useState(1);
   const {
-    data: pending = [],
+    data: pendingPage,
     isFetching: loadingPending,
     refetch: refetchPending,
-  } = useListPendingWhatsAppValidationsQuery();
+  } = useListPendingWhatsAppValidationsQuery({ page, pageSize: PENDING_PAGE_SIZE });
+  const pending = pendingPage?.items ?? [];
+  const totalPages = pendingPage?.totalPages ?? 1;
   const [claimRequest, { isLoading: claiming }] = useClaimWhatsAppValidationMutation();
   const [error, setError] = useState('');
   const [claimingId, setClaimingId] = useState<string | null>(null);
@@ -127,7 +132,7 @@ function ValidateTab() {
         </div>
       )}
 
-      {!loadingPending && !loadingClaims && pending.length === 0 && myClaims.length === 0 && (
+      {!loadingPending && !loadingClaims && pending.length === 0 && myClaims.length === 0 && page === 1 && (
         <EmptyPanel icon={MessageCircle} title="No requests waiting right now" unframed />
       )}
 
@@ -163,6 +168,30 @@ function ValidateTab() {
               </ActionButton>
             </div>
           ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 text-sm font-bold">
+          <button
+            className="min-h-9 rounded-lg border border-line px-3 disabled:opacity-40"
+            disabled={page <= 1 || loadingPending}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            type="button"
+          >
+            Previous
+          </button>
+          <span className="text-muted">
+            Page {pendingPage?.page ?? page} of {totalPages}
+          </span>
+          <button
+            className="min-h-9 rounded-lg border border-line px-3 disabled:opacity-40"
+            disabled={page >= totalPages || loadingPending}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            type="button"
+          >
+            Next
+          </button>
         </div>
       )}
     </div>

@@ -20,6 +20,8 @@ export interface IntegrationDefinition {
   defaultSortOrder: number;
   /** Default concurrent-claim cap per subscribed member, until an admin changes it via the gate. */
   defaultMaxConcurrentClaims: number;
+  /** Default minutes an issued code/request stays valid before expiring, until an admin changes it via the gate. */
+  defaultCodeValidityMinutes: number;
 }
 
 export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
@@ -32,5 +34,6 @@ export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
     defaultFeeTokenAmount: 2,
     defaultSortOrder: 0,
     defaultMaxConcurrentClaims: 5,
+    defaultCodeValidityMinutes: 60 * 24,
   },
 ];

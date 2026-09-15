@@ -742,6 +742,7 @@ model Integration {
   enabled             Boolean  @default(false) // admin gate -- disabled hides it from the marketplace entirely and blocks its own request/claim endpoints
   feeTokenAmount      Decimal  @default(0) @db.Decimal(20, 8) // requester pays this, the fulfilling peer receives it; shared column so future integrations don't each need a bespoke settings row
   maxConcurrentClaims Int      @default(1) // how many open claims a single subscribed member may hold on this integration at once -- e.g. WhatsAppValidatorService.claim enforces this against a member's own CLAIMED-status count; shared column so future claim-based integrations reuse the same admin gate
+  codeValidityMinutes Int      @default(1440) // how long an issued verification code/request stays live before expiring -- e.g. WhatsAppValidatorService.requestVerification's expiresAt; shared column so future code-based integrations reuse the same admin gate
   sortOrder           Int      @default(0)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

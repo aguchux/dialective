@@ -921,6 +921,9 @@ export interface AdminIntegration {
   // How many open claims a single subscribed member may hold on this
   // integration at once (e.g. concurrent WhatsApp Validator requests).
   maxConcurrentClaims: number;
+  // How long an issued verification code/request stays valid before
+  // expiring, in minutes.
+  codeValidityMinutes: number;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -971,6 +974,14 @@ export interface WhatsAppValidationClaim {
   // belonging to the request.
   requesterFirstName: string | null;
   requesterLastName: string | null;
+}
+
+export interface WhatsAppValidationPendingPage {
+  items: WhatsAppValidationClaim[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface P2PMarketSettings {
@@ -2960,8 +2971,14 @@ export const dialectivaApi = createApi({
       query: () => '/whatsapp-validator/requests/mine',
       providesTags: ['WhatsAppValidator'],
     }),
-    listPendingWhatsAppValidations: builder.query<WhatsAppValidationClaim[], void>({
-      query: () => '/whatsapp-validator/pending',
+    listPendingWhatsAppValidations: builder.query<
+      WhatsAppValidationPendingPage,
+      { page?: number; pageSize?: number } | void
+    >({
+      query: (params) => ({
+        url: '/whatsapp-validator/pending',
+        params: { page: params?.page, pageSize: params?.pageSize },
+      }),
       providesTags: ['WhatsAppValidator'],
     }),
     // A validator may hold several concurrent claims (admin-configurable
@@ -4428,6 +4445,7 @@ export const dialectivaApi = createApi({
         enabled?: boolean;
         feeTokenAmount?: number;
         maxConcurrentClaims?: number;
+        codeValidityMinutes?: number;
         sortOrder?: number;
       }
     >({
