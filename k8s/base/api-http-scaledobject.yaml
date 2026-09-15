@@ -1,0 +1,36 @@
+# Replaces the old api-hpa.yaml (plain CPU-based HorizontalPodAutoscaler).
+# The `api` Deployment is a synchronous HTTP service, not a queue consumer,
+# so it can't use the redis-streams trigger the worker ScaledObjects use --
+# KEDA's core scaler has no signal to react to for request/response traffic.
+# The keda-http-add-on (installed separately, not tracked as a manifest
+# here -- same pattern as core KEDA itself, see k8s/gcp-cloud/README.md
+# step 7) adds an `interceptor` proxy Service that sits in front of `api`,
+# buffers/holds incoming requests while pods scale up, and reports
+# in-flight request count as the scaling metric via this HTTPScaledObject
+# CRD.
+#
+# minReplicaCount is 1, not 0: `api` serves live user/frontend traffic and
+# its readinessProbe depends on Postgres/RabbitMQ/etc being reachable --
+# a true scale-to-zero means the first request after any idle period pays
+# full cold-start latency (image pull + all those reconnects) while queued
+# behind the interceptor. Keeping one warm pod avoids that; this still gets
+# load-based scale-out to 10 the CPU-only HPA couldn't react to as quickly.
+apiVersion: http.keda.sh/v1alpha1
+kind: HTTPScaledObject
+metadata:
+  name: api-http-scaler
+spec:
+  hosts:
+    - api.dialectlibrary.com
+  scaleTargetRef:
+    name: api
+    kind: Deployment
+    service: api
+    port: 80
+  replicas:
+    min: 1
+    max: 10
+  scalingMetric:
+    requestRate:
+      targetValue: 100
+      window: 1m

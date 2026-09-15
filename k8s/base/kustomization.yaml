@@ -18,7 +18,7 @@ resources:
   - tts-model-pvc.yaml
   - chatdialect-model-pvc.yaml
   - api-deployment.yaml
-  - api-hpa.yaml
+  - api-http-scaledobject.yaml
   - api-ingress.yaml
   - livekit-configmap.yaml
   - livekit-deployment.yaml

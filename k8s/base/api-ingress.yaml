@@ -1,3 +1,11 @@
+# Routed through keda-http-add-on's interceptor Service (installed in the
+# keda namespace -- see k8s/gcp-cloud/README.md for the core KEDA install
+# command this follows the same pattern as) instead of the `api` Service
+# directly.
+# The interceptor is what actually implements the HTTPScaledObject contract
+# -- it buffers/holds requests and reports in-flight count while `api`
+# scales, so pointing the Ingress straight at `api` would bypass scaling
+# entirely and defeat api-http-scaledobject.yaml.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -19,6 +27,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: api
+                name: keda-add-ons-http-interceptor-proxy
                 port:
-                  number: 80
+                  number: 8080
