@@ -1,0 +1,37 @@
+# Same shape as ../../base/api-http-scaledobject.yaml -- GCP's own
+# interceptor (its own keda-add-ons-http install, see
+# k8s/base/API_KEDA_ROLLOUT.md) scales THIS cluster's `api` Deployment
+# independently, 1-10, off its own share of request traffic. Not the same
+# ScaledObject instance as DO's -- each cluster scales the replicas it
+# actually receives traffic for, same as how DO and GCP each run their own
+# whisper-worker StatefulSet against the one shared Redis stream.
+#
+# Deliberately no api-ingress.yaml on GCP: api.dialectlibrary.com still
+# resolves only to DO. This is a cold standby -- reachable inside the GKE
+# cluster (Service `api`, ClusterIP) and scaling itself correctly, but not
+# yet wired into any public traffic path. Deciding HOW GCP starts actually
+# receiving user traffic (GCP global HTTPS LB + NEG, weighted/failover DNS,
+# etc.) is separate, explicit follow-up work -- don't add an Ingress here
+# or repoint DNS without that decision being made first, or DO and GCP end
+# up as two independent, unsynchronized origins for the same hostname.
+# `hosts` below is only the Host header the interceptor matches on
+# requests actually sent to it -- it does not by itself claim any DNS.
+apiVersion: http.keda.sh/v1alpha1
+kind: HTTPScaledObject
+metadata:
+  name: api-http-scaler
+spec:
+  hosts:
+    - api.dialectlibrary.com
+  scaleTargetRef:
+    name: api
+    kind: Deployment
+    service: api
+    port: 80
+  replicas:
+    min: 1
+    max: 10
+  scalingMetric:
+    requestRate:
+      targetValue: 100
+      window: 1m

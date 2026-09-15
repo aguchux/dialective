@@ -9,6 +9,7 @@ resources:
   - redis-external.yaml
   - redis-trigger-auth.yaml
   - rabbitmq.yaml
+  - rabbitmq-external.yaml
   - rabbitmq-ingress.yaml
   - postgres.yaml
   - postgres-external.yaml

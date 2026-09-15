@@ -6,14 +6,25 @@ metadata:
     app: rabbitmq
 data:
   rabbitmq.conf: |
-    # AMQP remains private to the cluster. The management UI is exposed only
-    # through the TLS ingress in rabbitmq-ingress.yaml.
+    # Plain AMQP (5672) remains cluster-internal only, exactly as before --
+    # every in-cluster client (api, workers) keeps connecting the same way.
+    # The TLS listener (5671) is additive, for rabbitmq-external.yaml's
+    # LoadBalancer only (GCP's api pod, same posture as redis-external.yaml/
+    # postgres-external.yaml: password+TLS+allowlist for anything that
+    # leaves the cluster). The management UI is exposed only through the
+    # TLS ingress in rabbitmq-ingress.yaml.
     loopback_users.guest = false
     management.tcp.port = 15672
     vm_memory_high_watermark.relative = 0.6
     disk_free_limit.absolute = 1GB
     log.console = true
     log.console.level = info
+    listeners.tcp.default = 5672
+    listeners.ssl.default = 5671
+    ssl_options.certfile = /rabbitmq-tls-runtime/tls.crt
+    ssl_options.keyfile = /rabbitmq-tls-runtime/tls.key
+    ssl_options.verify = verify_none
+    ssl_options.fail_if_no_peer_cert = false
 ---
 apiVersion: v1
 kind: Service
@@ -30,6 +41,9 @@ spec:
     - name: amqp
       port: 5672
       targetPort: amqp
+    - name: amqp-tls
+      port: 5671
+      targetPort: amqp-tls
     - name: management
       port: 15672
       targetPort: management
@@ -100,6 +114,8 @@ spec:
           ports:
             - name: amqp
               containerPort: 5672
+            - name: amqp-tls
+              containerPort: 5671
             - name: management
               containerPort: 15672
           env:
@@ -134,6 +150,9 @@ spec:
               mountPath: /etc/rabbitmq/rabbitmq.conf
               subPath: rabbitmq.conf
               readOnly: true
+            - name: rabbitmq-tls-runtime
+              mountPath: /rabbitmq-tls-runtime
+              readOnly: true
           startupProbe:
             exec:
               command: ["rabbitmq-diagnostics", "-q", "ping"]
@@ -152,10 +171,37 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
+      initContainers:
+        # Same fix-perms pattern as postgres.yaml's fix-tls-perms -- a
+        # Secret volume's file mode can't be forced to the 0600 RabbitMQ's
+        # embedded erlang TLS stack expects, so copy into an emptyDir and
+        # chmod there instead of mounting the Secret directly.
+        - name: fix-tls-perms
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              cp /rabbitmq-tls/tls.crt /rabbitmq-tls-runtime/tls.crt
+              cp /rabbitmq-tls/tls.key /rabbitmq-tls-runtime/tls.key
+              chmod 600 /rabbitmq-tls-runtime/tls.key
+              chown 999:999 /rabbitmq-tls-runtime/tls.key /rabbitmq-tls-runtime/tls.crt
+          volumeMounts:
+            - name: rabbitmq-tls
+              mountPath: /rabbitmq-tls
+              readOnly: true
+            - name: rabbitmq-tls-runtime
+              mountPath: /rabbitmq-tls-runtime
       volumes:
         - name: rabbitmq-config
           configMap:
             name: rabbitmq-config
+        - name: rabbitmq-tls
+          secret:
+            secretName: rabbitmq-tls
+        - name: rabbitmq-tls-runtime
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: rabbitmq-data

@@ -10,3 +10,5 @@ resources:
   - whisper-worker-statefulset.yaml
   - whisper-worker-keda.yaml
   - redis-trigger-auth.yaml
+  - api-deployment.yaml
+  - api-http-scaledobject.yaml

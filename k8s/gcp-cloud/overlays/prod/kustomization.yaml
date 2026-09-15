@@ -41,6 +41,47 @@ secretGenerator:
   - name: hf-creds
     envs:
       - secrets/hf.env
+  # Added alongside api on 2026-09-15 for the GCP cold-standby rollout (see
+  # ../../base/api-http-scaledobject.yaml) -- SAME values as DO's
+  # ../../../overlays/prod/secrets/*.env for each of these (one shared set
+  # of third-party credentials, not per-cluster ones), copied over the same
+  # way spaces-creds/postgres-creds already are.
+  - name: nowpayments-creds
+    envs:
+      - secrets/nowpayments.env
+  - name: flutterwave-creds
+    envs:
+      - secrets/flutterwave.env
+  - name: flutterwave-v4-creds
+    envs:
+      - secrets/flutterwave-v4.env
+  - name: payout-crypto-creds
+    envs:
+      - secrets/payout-crypto.env
+  - name: didit-creds
+    envs:
+      - secrets/didit.env
+  - name: kyc-crypto-creds
+    envs:
+      - secrets/kyc-crypto.env
+  - name: whatsapp-crypto-creds
+    envs:
+      - secrets/whatsapp-crypto.env
+  - name: llm-creds
+    envs:
+      - secrets/llm.env
+  - name: sms-creds
+    envs:
+      - secrets/sms.env
+  - name: livekit-creds
+    envs:
+      - secrets/livekit.env
+  - name: stream-creds
+    envs:
+      - secrets/stream.env
+  - name: rabbitmq-creds
+    envs:
+      - secrets/rabbitmq.env
 
 configMapGenerator:
   - name: vosk-worker-config
@@ -52,3 +93,6 @@ configMapGenerator:
   - name: whisper-worker-config
     envs:
       - configs/whisper-worker.env
+  - name: api-config
+    envs:
+      - configs/api.env

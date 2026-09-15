@@ -1,0 +1,465 @@
+# GCP-hosted twin of ../../base/api-deployment.yaml -- same image, same
+# env var set, reaching DO's Postgres/Redis/RabbitMQ over their external
+# LoadBalancers (see k8s/base/postgres-external.yaml, redis-external.yaml,
+# rabbitmq-external.yaml) the same way GCP's ASR workers already do.
+# LiveKit needs no external-LB treatment -- livekit_url is already the
+# public wss://livekit.dialectlibrary.com host both clusters use as-is.
+#
+# KEDA's HTTP add-on (api-http-scaledobject.yaml) drives replica count
+# 1-10 off request rate; this is just the floor when nothing has scaled it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  selector:
+    app: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: golojan/dialect-api:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: port
+            - name: CORS_ALLOWED_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: cors_allowed_origins
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: redis_host
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: redis_port
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+            - name: REDIS_TLS
+              value: "true"
+            - name: REDIS_TLS_CA
+              value: /redis-tls/ca.crt
+            - name: RABBITMQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: rabbitmq_host
+            - name: RABBITMQ_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: rabbitmq_port
+            - name: RABBITMQ_VHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: rabbitmq_vhost
+            - name: RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-creds
+                  key: username
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-creds
+                  key: password
+            - name: RABBITMQ_TLS
+              value: "true"
+            - name: RABBITMQ_TLS_CA
+              value: /rabbitmq-tls/ca.crt
+            - name: SPACES_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_region
+            - name: SPACES_SUBMISSIONS_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_submissions_bucket
+            - name: SPACES_WORD_RECORDINGS_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_word_recordings_bucket
+            - name: SPACES_BLOG_MEDIA_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_blog_media_bucket
+            - name: SPACES_COURSE_MEDIA_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_course_media_bucket
+            - name: SPACES_MARKETING_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_marketing_bucket
+            - name: SPACES_KYC_EVIDENCE_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_kyc_evidence_bucket
+            - name: SPACES_COMMUNITY_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_community_bucket
+            - name: SPACES_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: endpoint
+            - name: SPACES_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: access_key
+            - name: SPACES_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: spaces-creds
+                  key: secret_key
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: connection_string
+            - name: ACCESS_TOKEN_TTL
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: access_token_ttl
+            - name: JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: auth-creds
+                  key: jwt_access_secret
+            - name: OAUTH_CALLBACK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: auth-creds
+                  key: oauth_callback_secret
+            - name: API_TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auth-creds
+                  key: api_token_encryption_key
+            - name: FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: frontend_url
+            - name: STREAM_FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: stream_frontend_url
+            - name: KYC_APP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: kyc_app_url
+            - name: STREAM_JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stream-creds
+                  key: stream_jwt_access_secret
+            - name: RESEND_FROM_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: resend_from_address
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auth-creds
+                  key: resend_api_key
+            - name: GITHUB_ISSUES_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: auth-creds
+                  key: github_issues_token
+                  optional: true
+            - name: GITHUB_REPOSITORY
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: github_repository
+                  optional: true
+            - name: TOKEN_USD_RATE
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: token_usd_rate
+            - name: MIN_WITHDRAWAL_TOKENS
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: min_withdrawal_tokens
+            - name: API_PUBLIC_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: api_public_base_url
+            - name: NOWPAYMENTS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nowpayments-creds
+                  key: nowpayments_api_key
+            - name: NOWPAYMENTS_IPN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: nowpayments-creds
+                  key: nowpayments_ipn_secret
+            - name: NOWPAYMENTS_PAYOUT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: nowpayments-creds
+                  key: nowpayments_payout_email
+            - name: NOWPAYMENTS_PAYOUT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nowpayments-creds
+                  key: nowpayments_payout_password
+            - name: FLUTTERWAVE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-creds
+                  key: flutterwave_secret_key
+            - name: FLUTTERWAVE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-creds
+                  key: flutterwave_public_key
+            - name: FLUTTERWAVE_WEBHOOK_SECRET_HASH
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-creds
+                  key: flutterwave_webhook_secret_hash
+            - name: FLUTTERWAVE_ENVIRONMENT
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-creds
+                  key: flutterwave_environment
+            - name: FLUTTERWAVE_V4_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-v4-creds
+                  key: flutterwave_v4_client_id
+            - name: FLUTTERWAVE_V4_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-v4-creds
+                  key: flutterwave_v4_client_secret
+            - name: FLUTTERWAVE_V4_WEBHOOK_SECRET_HASH
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-v4-creds
+                  key: flutterwave_v4_webhook_secret_hash
+            - name: FLUTTERWAVE_V4_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: flutterwave-v4-creds
+                  key: flutterwave_v4_base_url
+            - name: PAYOUT_ACCOUNT_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: payout-crypto-creds
+                  key: payout_account_encryption_key
+            - name: DIDIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: didit-creds
+                  key: didit_api_key
+            - name: DIDIT_WORKFLOW_ID
+              valueFrom:
+                secretKeyRef:
+                  name: didit-creds
+                  key: didit_workflow_id
+            - name: DIDIT_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: didit-creds
+                  key: didit_webhook_secret
+            - name: KYC_DOCUMENT_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kyc-crypto-creds
+                  key: kyc_document_encryption_key
+            - name: WHATSAPP_SETTINGS_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: whatsapp-crypto-creds
+                  key: whatsapp_settings_encryption_key
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-creds
+                  key: openai_api_key
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-creds
+                  key: deepseek_api_key
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-creds
+                  key: anthropic_api_key
+            - name: TWILIO_ACCOUNT_SID
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: twilio_account_sid
+            - name: TWILIO_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: twilio_auth_token
+            - name: TWILIO_FROM_NUMBER
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: twilio_from_number
+            - name: TERMII_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: termii_api_key
+            - name: TERMII_SENDER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: termii_sender_id
+            - name: TERMII_CHANNEL
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: termii_channel
+                  optional: true
+            - name: AFRICASTALKING_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: africastalking_api_key
+            - name: AFRICASTALKING_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: africastalking_username
+            - name: AFRICASTALKING_SENDER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: africastalking_sender_id
+            - name: SMSLIVE247_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: smslive247_api_key
+            - name: SMSLIVE247_SENDER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: smslive247_sender_id
+            - name: SMSLIVE247_ROUTE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sms-creds
+                  key: smslive247_route_id
+                  optional: true
+            - name: LIVEKIT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: livekit_url
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-creds
+                  key: api_key
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-creds
+                  key: api_secret
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: redis-tls-ca
+              mountPath: /redis-tls
+              readOnly: true
+            - name: postgres-tls-ca
+              mountPath: /postgres-tls
+              readOnly: true
+            - name: rabbitmq-tls-ca
+              mountPath: /rabbitmq-tls
+              readOnly: true
+      volumes:
+        - name: redis-tls-ca
+          secret:
+            secretName: redis-tls-ca
+        - name: postgres-tls-ca
+          secret:
+            secretName: postgres-tls-ca
+        - name: rabbitmq-tls-ca
+          secret:
+            secretName: rabbitmq-tls-ca

@@ -1,0 +1,33 @@
+# External access to RabbitMQ for the GCP-hosted `api` deployment -- same
+# allowlist-restricted LoadBalancer pattern as redis-external.yaml/
+# postgres-external.yaml: DO's cluster network has no VPN/interconnect to
+# GCP, so a GCP `api` pod reaches this exact RabbitMQ instance over the
+# public internet instead. Only the TLS port (5671) is exposed here, never
+# plain 5672 -- an external client MUST use AUTH+TLS, there is no
+# unauthenticated/unencrypted external path (see rabbitmq.yaml's
+# rabbitmq.conf listeners.ssl.default).
+#
+# do-loadbalancer-allowlist restricts inbound connections to GCP's static
+# egress IP only (reserved via `gcloud compute addresses create`, see
+# k8s/gcp-cloud/README.md) -- update the placeholder below with that real
+# IP before applying. Without this annotation the LB would accept
+# connections from anywhere on the internet, which is not the agreed
+# posture.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-external
+  labels:
+    app: rabbitmq
+  annotations:
+    service.beta.kubernetes.io/do-loadbalancer-name: "rabbitmq-external"
+    service.beta.kubernetes.io/do-loadbalancer-allowlist: "REPLACE_WITH_GCP_STATIC_EGRESS_IP/32"
+spec:
+  type: LoadBalancer
+  selector:
+    app: rabbitmq
+  ports:
+    - name: amqp-tls
+      port: 5671
+      targetPort: 5671
+      protocol: TCP

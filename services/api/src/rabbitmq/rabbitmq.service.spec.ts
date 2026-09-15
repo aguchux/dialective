@@ -62,6 +62,22 @@ describe('RabbitMqService', () => {
     expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 
+  it('connects over amqps on the TLS port when RABBITMQ_TLS is set', async () => {
+    process.env.RABBITMQ_TLS = 'true';
+    process.env.RABBITMQ_HOST = 'rabbitmq-external.example.com';
+    try {
+      await service.publish('q', { a: 1 });
+    } finally {
+      delete process.env.RABBITMQ_TLS;
+      delete process.env.RABBITMQ_HOST;
+    }
+
+    expect(mockConnect).toHaveBeenCalledWith(
+      'amqps://test-user:test-pass@rabbitmq-external.example.com:5671/%2Fdialectiva',
+      undefined,
+    );
+  });
+
   it('consume acks the message when the handler succeeds', async () => {
     const handler = jest.fn().mockResolvedValue(undefined);
     await service.consume('my-queue', handler);

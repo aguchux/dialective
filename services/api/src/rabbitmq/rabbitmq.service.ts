@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { readFileSync } from 'fs';
 import * as amqp from 'amqplib';
 
 const SMOKE_TEST_QUEUE = 'smoke-test';
@@ -35,21 +36,40 @@ export class RabbitMqService implements OnModuleDestroy {
   private connectionPromise: Promise<amqp.ChannelModel> | null = null;
   private channelPromise: Promise<amqp.Channel> | null = null;
 
+  // Mirrors buildRedisConnectionOptions' REDIS_TLS pattern: RABBITMQ_TLS is
+  // optional and independently toggleable, used only for the external
+  // LoadBalancer path a GCP-hosted `api` pod connects through (see
+  // k8s/base/rabbitmq-external.yaml) -- in-cluster traffic stays plain AMQP
+  // to the cluster-internal `rabbitmq` hostname, same private network, no
+  // cert needed. RABBITMQ_TLS_CA points at the self-signed cert's mounted
+  // path (same self-signed-cert posture as REDIS_TLS_CA) since the server
+  // isn't presenting a publicly-trusted certificate.
   private get url(): string {
     const host = process.env.RABBITMQ_HOST ?? 'rabbitmq';
-    const port = process.env.RABBITMQ_PORT ?? '5672';
+    const port = process.env.RABBITMQ_PORT ?? (process.env.RABBITMQ_TLS === 'true' ? '5671' : '5672');
     const username = process.env.RABBITMQ_USERNAME;
     const password = process.env.RABBITMQ_PASSWORD;
     const vhost = encodeURIComponent(process.env.RABBITMQ_VHOST ?? '/dialectiva');
     if (!username || !password) {
       throw new Error('RABBITMQ_USERNAME/RABBITMQ_PASSWORD are not set');
     }
-    return `amqp://${username}:${password}@${host}:${port}/${vhost}`;
+    const scheme = process.env.RABBITMQ_TLS === 'true' ? 'amqps' : 'amqp';
+    return `${scheme}://${username}:${password}@${host}:${port}/${vhost}`;
+  }
+
+  // socketOptions, not connection options -- amqplib forwards this object
+  // straight to Node's tls.connect() for an amqps:// URL.
+  private get socketOptions(): { ca: Buffer[] } | undefined {
+    if (process.env.RABBITMQ_TLS !== 'true') {
+      return undefined;
+    }
+    const caPath = process.env.RABBITMQ_TLS_CA;
+    return caPath ? { ca: [readFileSync(caPath)] } : undefined;
   }
 
   private async getChannel(): Promise<amqp.Channel> {
     if (!this.channelPromise) {
-      this.connectionPromise = amqp.connect(this.url);
+      this.connectionPromise = amqp.connect(this.url, this.socketOptions);
       this.channelPromise = this.connectionPromise.then(async (connection) => {
         connection.on('error', (err) => {
           this.logger.error(`RabbitMQ connection error: ${err.message}`);
