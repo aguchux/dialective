@@ -12,9 +12,7 @@ export default function DistributorMarketPage() {
           <p className="text-muted">Buy and sell DL tokens directly with other members.</p>
         </div>
 
-        <section className="rounded-lg border border-line bg-surface p-3 text-ink">
-          <MarketView />
-        </section>
+        <MarketView />
       </div>
     </DistributorShell>
   );

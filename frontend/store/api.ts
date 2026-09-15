@@ -2820,8 +2820,22 @@ export const dialectivaApi = createApi({
       invalidatesTags: ['P2P'],
     }),
     listP2POffers: builder.query<
-      P2POffer[],
-      { type?: P2POfferType; status?: P2POfferStatus } | void
+      { items: P2POffer[]; total: number; page: number; pageSize: number; totalPages: number },
+      {
+        type?: P2POfferType;
+        status?: P2POfferStatus;
+        search?: string;
+        fiatCurrency?: string;
+        paymentMethod?: string;
+        minTokenAmount?: number;
+        maxTokenAmount?: number;
+        minFiatAmount?: number;
+        maxFiatAmount?: number;
+        sortBy?: 'createdAt' | 'tokenAmount' | 'fiatAmount' | 'price';
+        sortDir?: 'asc' | 'desc';
+        page?: number;
+        pageSize?: number;
+      } | void
     >({
       query: (params) => ({ url: '/p2p/offers', params: params ?? undefined }),
       providesTags: ['P2P'],

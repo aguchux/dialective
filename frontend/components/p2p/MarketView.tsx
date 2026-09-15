@@ -13,6 +13,7 @@ import {
   formatDateTime,
   SectionTitle,
 } from '@/components/dashboard/shared';
+import { MarketOfferList } from '@/components/p2p/MarketOfferList';
 import {
   P2POffer,
   P2PTrade,
@@ -27,7 +28,6 @@ import {
   useGetPlatformSettingsQuery,
   useListMyP2PTradesQuery,
   useListMyP2POffersQuery,
-  useListP2POffersQuery,
   useListPayoutAccountsQuery,
   useMarkP2PTradePaidMutation,
   useRaiseP2PDisputeMutation,
@@ -55,8 +55,6 @@ export function MarketView() {
   const { data: settings } = useGetP2PSettingsQuery();
   const { data: referenceRate } = useGetP2PReferenceRateQuery();
   const { data: payoutAccounts = [] } = useListPayoutAccountsQuery();
-  const { data: sellOffers = [] } = useListP2POffersQuery({ type: 'SELL' });
-  const { data: buyOffers = [] } = useListP2POffersQuery({ type: 'BUY' });
   const { data: myOffers = [] } = useListMyP2POffersQuery();
   // Reads trigger the server-side expiry sweep, so a pending cancellation is
   // finalized shortly after its grace window ends without user intervention.
@@ -95,6 +93,7 @@ export function MarketView() {
   const [offerOtpRequestId, setOfferOtpRequestId] = useState<string | null>(null);
   const [offerOtpCode, setOfferOtpCode] = useState('');
   const [pendingAcceptOffer, setPendingAcceptOffer] = useState<P2POffer | null>(null);
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
 
   // Pre-fills the offer form's currency with the trainer's own country currency once known; the field stays editable.
   useEffect(() => {
@@ -395,8 +394,8 @@ export function MarketView() {
       <section>
         <div className="mb-5 flex w-fit max-w-full overflow-x-auto rounded-lg border border-line bg-surface p-1">
           {[
-            { id: 'SELL', label: 'Sell offers', count: sellOffers.length },
-            { id: 'BUY', label: 'Buy requests', count: buyOffers.length },
+            { id: 'SELL', label: 'Sell offers' },
+            { id: 'BUY', label: 'Buy requests' },
             { id: 'POSTS', label: 'My posts', count: myOffers.length },
             { id: 'TRADES', label: 'My trades', count: trades.length },
           ].map((tab) => (
@@ -406,7 +405,7 @@ export function MarketView() {
               onClick={() => setActiveTab(tab.id as 'SELL' | 'BUY' | 'POSTS' | 'TRADES')}
               type="button"
             >
-              {tab.label} <span className="ml-1 opacity-80">{tab.count}</span>
+              {tab.label} {'count' in tab && <span className="ml-1 opacity-80">{tab.count}</span>}
             </button>
           ))}
         </div>
@@ -416,9 +415,11 @@ export function MarketView() {
             <MarketOfferList
               accepting={accepting}
               disabled={marketDisabled}
-              offers={sellOffers}
+              type="SELL"
+              settings={settings}
               onAccept={accept}
               onCancel={cancelPost}
+              onOpenProfile={setProfileUserId}
               cancellingOfferId={cancellingOfferId}
               cancellingOffer={cancellingOffer}
               viewerId={me?.id}
@@ -429,9 +430,11 @@ export function MarketView() {
             <MarketOfferList
               accepting={accepting}
               disabled={marketDisabled}
-              offers={buyOffers}
+              type="BUY"
+              settings={settings}
               onAccept={accept}
               onCancel={cancelPost}
+              onOpenProfile={setProfileUserId}
               cancellingOfferId={cancellingOfferId}
               cancellingOffer={cancellingOffer}
               viewerId={me?.id}
@@ -480,6 +483,11 @@ export function MarketView() {
         </div>
       </section>
 
+      <TraderProfileDialog
+        onOpenChange={(open) => !open && setProfileUserId(null)}
+        userId={profileUserId}
+      />
+
       {pendingAcceptOffer && (
         <Dialog
           open
@@ -523,99 +531,6 @@ export function MarketView() {
         </Dialog>
       )}
     </div>
-  );
-}
-
-function MarketOfferList({
-  title,
-  offers,
-  onAccept,
-  onCancel,
-  accepting,
-  cancellingOffer,
-  cancellingOfferId,
-  disabled,
-  viewerId,
-}: {
-  title: string;
-  offers: P2POffer[];
-  onAccept: (offer: P2POffer) => void;
-  onCancel: (offer: P2POffer) => void;
-  accepting: boolean;
-  cancellingOffer: boolean;
-  cancellingOfferId: string | undefined;
-  disabled: boolean;
-  viewerId: string | undefined;
-}) {
-  const [profileUserId, setProfileUserId] = useState<string | null>(null);
-  return (
-    <section>
-      <SectionTitle title={title} subtitle="Active marketplace posts." />
-      <div className="grid gap-3 md:grid-cols-2">
-        {offers.length === 0 && <EmptyPanel icon={Landmark} title="No active posts" unframed />}
-        {offers.map((offer) => (
-          <div className={`${cardClass} grid gap-3 p-4`} key={offer.id}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-bold text-muted">
-                  {offer.type === 'SELL' ? 'Selling' : 'Buying'}
-                </p>
-                <p className="text-2xl font-black">{formatCompactNumber(offer.tokenAmount)}</p>
-              </div>
-              <p className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-black text-accent">
-                {offer.status}
-              </p>
-            </div>
-            {offer.user && (
-              <button
-                className="flex items-center gap-2 justify-self-start rounded-lg text-left hover:opacity-80"
-                onClick={() => setProfileUserId(offer.userId)}
-                type="button"
-              >
-                <Avatar email={offer.user.email} />
-                <span className="text-sm font-bold">{traderDisplayName(offer.user)}</span>
-              </button>
-            )}
-            <p className="font-extrabold">
-              {Number(offer.fiatAmount).toLocaleString()} {offer.fiatCurrency}
-            </p>
-            <p className="text-sm text-muted">Expires {formatDateTime(offer.expiresAt)}</p>
-            {offer.userId === viewerId ? (
-              <div className="grid gap-2">
-                {offer.status === 'ACTIVE' ? (
-                  <ActionButton
-                    className="min-h-10 rounded-lg border border-line px-3 font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={() => onCancel(offer)}
-                    pending={cancellingOffer && cancellingOfferId === offer.id}
-                    pendingLabel="Cancelling"
-                    type="button"
-                  >
-                    Cancel post
-                  </ActionButton>
-                ) : (
-                  <p className="text-sm font-bold text-muted">
-                    This post has been accepted. Manage its protected cancellation in My trades.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <button
-                className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50"
-                disabled={accepting || disabled}
-                onClick={() => onAccept(offer)}
-                type="button"
-              >
-                {offer.type === 'SELL' ? 'Buy DL' : 'Sell to buyer'}
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-      <TraderProfileDialog
-        onOpenChange={(open) => !open && setProfileUserId(null)}
-        userId={profileUserId}
-      />
-    </section>
   );
 }
 
@@ -712,15 +627,6 @@ function offerStatusBadgeClass(status: P2POffer['status']): string {
     default:
       return 'bg-accent-soft text-accent';
   }
-}
-
-function traderDisplayName(user: {
-  firstName: string | null;
-  lastName: string | null;
-  email: string;
-}) {
-  const name = [user.firstName, user.lastName].filter(Boolean).join(' ');
-  return name || user.email;
 }
 
 function TraderProfileDialog({
