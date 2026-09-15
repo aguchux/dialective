@@ -193,58 +193,61 @@ model User {
   createdAt                       DateTime                     @default(now())
   updatedAt                       DateTime                     @updatedAt
 
-  accounts                         LinkedAccount[]
-  refreshTokens                    RefreshToken[]
-  passwordResets                   PasswordResetToken[]
-  emailVerifications               EmailVerificationToken[]
-  otpCodes                         OtpCode[]
-  manualPhoneVerificationRequests  ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationUser")
-  manualPhoneVerificationsReviewed ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationAdmin")
-  wallet                           Wallet?
-  trainingPayoutClaims             TrainingPayoutClaim[]
-  blogPosts                        BlogPost[]
-  authoredCourses                  Course[]
-  courseProgress                   CourseProgress[]
-  trainingSessions                 TrainingSession[]
-  wordRecordings                   WordRecording[]
-  domainConversationRecordings     DomainConversationRecording[]
-  qracAffirmations                 QracAffirmationSubmission[]
-  testimonies                      Testimony[]
-  testimoniesEdited                Testimony[]                      @relation("TestimonyEditedBy")
-  proofReportShare                 ProofReportShare?
-  communityProfile                 CommunityProfile?
-  communityPosts                   CommunityPost[]
-  communityReplies                 CommunityReply[]
-  communityReactions               CommunityReaction[]
-  communityBookmarks               CommunityBookmark[]
-  communityNotifications           CommunityNotification[]          @relation("CommunityNotificationRecipient")
-  communityNotificationsActedOn    CommunityNotification[]          @relation("CommunityNotificationActor")
-  communityReports                 CommunityReport[]                @relation("CommunityReportReporter")
-  communityReportsAssigned         CommunityReport[]                @relation("CommunityReportAssignedModerator")
-  communityModeratorActions        CommunityModeratorAction[]       @relation("CommunityModeratorActionModerator")
-  marketingCampaignShares          MarketingCampaignShare[]
-  marketingCampaignRegistration    MarketingCampaignRegistration?
-  wordSkips                        WordSkip[]
-  dataAccessLeadsContacted         DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
-  supportRequestsResolved          SupportRequest[]                 @relation("SupportRequestResolvedBy")
-  p2pOffers                        P2PTokenOffer[]
-  p2pBuyerTrades                   P2PTokenTrade[]                  @relation("P2PBuyerTrades")
-  p2pSellerTrades                  P2PTokenTrade[]                  @relation("P2PSellerTrades")
-  p2pDisputesRaised                P2PDispute[]                     @relation("P2PDisputesRaised")
-  p2pDisputesResolved              P2PDispute[]                     @relation("P2PDisputesResolved")
-  referralInvitesSent              ReferralInvite[]                 @relation("ReferralInvitesSent")
-  referralInviteJoined             ReferralInvite[]                 @relation("ReferralInviteJoined")
-  distributorAllocations           DistributorAllocation[]          @relation("DistributorAllocations")
-  distributorAllocationsGranted    DistributorAllocation[]          @relation("DistributorAllocationsGranted")
-  notifications                    UserNotification[]
-  authoredSystemUpdates            SystemUpdate[]                   @relation("SystemUpdateAuthor")
-  adminSmsSent                     AdminSmsMessage[]                @relation("AdminSmsSender")
-  adminSmsReceived                 AdminSmsMessage[]                @relation("AdminSmsRecipient")
-  apiAccessTokensUpdated           ApiAccessToken[]                 @relation("ApiAccessTokenUpdatedBy")
-  payoutAccounts                   PayoutAccount[]
-  kycVerifications                 KycVerification[]
-  assistantConversation            AssistantConversation?
-  faqsCreated                      Faq[]                            @relation("FaqCreatedBy")
+  accounts                          LinkedAccount[]
+  refreshTokens                     RefreshToken[]
+  passwordResets                    PasswordResetToken[]
+  emailVerifications                EmailVerificationToken[]
+  otpCodes                          OtpCode[]
+  manualPhoneVerificationRequests   ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationUser")
+  manualPhoneVerificationsReviewed  ManualPhoneVerificationRequest[] @relation("ManualPhoneVerificationAdmin")
+  wallet                            Wallet?
+  trainingPayoutClaims              TrainingPayoutClaim[]
+  blogPosts                         BlogPost[]
+  authoredCourses                   Course[]
+  courseProgress                    CourseProgress[]
+  trainingSessions                  TrainingSession[]
+  wordRecordings                    WordRecording[]
+  domainConversationRecordings      DomainConversationRecording[]
+  qracAffirmations                  QracAffirmationSubmission[]
+  testimonies                       Testimony[]
+  testimoniesEdited                 Testimony[]                      @relation("TestimonyEditedBy")
+  proofReportShare                  ProofReportShare?
+  communityProfile                  CommunityProfile?
+  communityPosts                    CommunityPost[]
+  communityReplies                  CommunityReply[]
+  communityReactions                CommunityReaction[]
+  communityBookmarks                CommunityBookmark[]
+  communityNotifications            CommunityNotification[]          @relation("CommunityNotificationRecipient")
+  communityNotificationsActedOn     CommunityNotification[]          @relation("CommunityNotificationActor")
+  communityReports                  CommunityReport[]                @relation("CommunityReportReporter")
+  communityReportsAssigned          CommunityReport[]                @relation("CommunityReportAssignedModerator")
+  communityModeratorActions         CommunityModeratorAction[]       @relation("CommunityModeratorActionModerator")
+  marketingCampaignShares           MarketingCampaignShare[]
+  marketingCampaignRegistration     MarketingCampaignRegistration?
+  wordSkips                         WordSkip[]
+  dataAccessLeadsContacted          DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
+  supportRequestsResolved           SupportRequest[]                 @relation("SupportRequestResolvedBy")
+  p2pOffers                         P2PTokenOffer[]
+  p2pBuyerTrades                    P2PTokenTrade[]                  @relation("P2PBuyerTrades")
+  p2pSellerTrades                   P2PTokenTrade[]                  @relation("P2PSellerTrades")
+  p2pDisputesRaised                 P2PDispute[]                     @relation("P2PDisputesRaised")
+  p2pDisputesResolved               P2PDispute[]                     @relation("P2PDisputesResolved")
+  referralInvitesSent               ReferralInvite[]                 @relation("ReferralInvitesSent")
+  referralInviteJoined              ReferralInvite[]                 @relation("ReferralInviteJoined")
+  distributorAllocations            DistributorAllocation[]          @relation("DistributorAllocations")
+  distributorAllocationsGranted     DistributorAllocation[]          @relation("DistributorAllocationsGranted")
+  notifications                     UserNotification[]
+  authoredSystemUpdates             SystemUpdate[]                   @relation("SystemUpdateAuthor")
+  adminSmsSent                      AdminSmsMessage[]                @relation("AdminSmsSender")
+  adminSmsReceived                  AdminSmsMessage[]                @relation("AdminSmsRecipient")
+  apiAccessTokensUpdated            ApiAccessToken[]                 @relation("ApiAccessTokenUpdatedBy")
+  payoutAccounts                    PayoutAccount[]
+  kycVerifications                  KycVerification[]
+  assistantConversation             AssistantConversation?
+  faqsCreated                       Faq[]                            @relation("FaqCreatedBy")
+  integrationSubscriptions          IntegrationSubscription[]
+  whatsappValidationRequestsMade    WhatsAppValidationRequest[]      @relation("WhatsAppValidationRequester")
+  whatsappValidationRequestsClaimed WhatsAppValidationRequest[]      @relation("WhatsAppValidationValidator")
 
   @@index([promotedById])
   @@index([originCountryId])
@@ -716,6 +719,89 @@ model ManualPhoneVerificationRequest {
   @@index([phoneNumber, status])
   @@index([verifiedByAdminId])
   @@map("manual_phone_verification_requests")
+}
+
+/// Catalog of peer-fulfilled "P2P & Integrations" products (Integrations
+/// page) -- e.g. WhatsApp Validator. Admin-managed rows so new integrations
+/// can be added/gated/repriced without a schema change; `slug` is the
+/// stable key application code switches on (e.g. WhatsAppValidatorService
+/// reads the "whatsapp-validator" row for its enabled/feeTokenAmount gate).
+model Integration {
+  id             String   @id @default(uuid())
+  slug           String   @unique
+  name           String
+  description    String
+  category       String // freeform grouping/search facet, e.g. "Verification"
+  iconKey        String? // maps to a fixed lucide-react icon allow-list on the frontend
+  enabled        Boolean  @default(false) // admin master switch -- disabled hides it from the marketplace entirely and blocks its own request/claim endpoints
+  feeTokenAmount Decimal  @default(0) @db.Decimal(20, 8) // requester pays this, the fulfilling peer receives it; shared column so future integrations don't each need a bespoke settings row
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subscriptions IntegrationSubscription[]
+
+  @@index([enabled, sortOrder])
+  @@map("integrations")
+}
+
+/// One row per member who has opted into an Integration -- simple opt-in,
+/// no approval workflow (mirrors CourseProgress's per-user-per-thing
+/// shape). Required before a member can claim/fulfill requests for that
+/// integration; browsing the catalog itself never requires a subscription.
+model IntegrationSubscription {
+  id            String      @id @default(uuid())
+  integrationId String
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscribedAt  DateTime    @default(now())
+
+  @@unique([integrationId, userId])
+  @@index([userId])
+  @@map("integration_subscriptions")
+}
+
+enum WhatsAppValidationRequestStatus {
+  PENDING // unclaimed, sitting in the pool
+  CLAIMED // a subscribed validator is currently working it
+  VERIFIED
+  REJECTED // sent back to the pool by the claimant -- terminal only via EXPIRED/VERIFIED, see WhatsAppValidatorService.reject
+  EXPIRED
+}
+
+/// Peer-driven counterpart to ManualPhoneVerificationRequest -- same
+/// platform-generated/hashed-code mechanics (see otp.util.ts's
+/// generateOtpCode/hashOtpCode, reused directly here, not through
+/// OtpService), but reviewed by a subscribed peer validator claimed from a
+/// pool instead of an admin queue, and the fee is actually paid out to
+/// that validator instead of just being debited. Does not replace/migrate
+/// ManualPhoneVerificationRequest -- the two are independent paths to the
+/// same user.phoneVerifiedAt outcome.
+model WhatsAppValidationRequest {
+  id                   String                          @id @default(uuid())
+  requesterId          String
+  requester            User                            @relation("WhatsAppValidationRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  phoneNumber          String
+  otpHash              String
+  status               WhatsAppValidationRequestStatus @default(PENDING)
+  feeTokenAmount       Decimal                         @default(0) @db.Decimal(20, 8) // snapshot of Integration.feeTokenAmount at request time -- stays stable even if the admin reprices later, same reasoning as ManualPhoneVerificationRequest.feeTokenAmount
+  attempts             Int                             @default(0) // wrong-code guesses by the claiming validator; mirrors OtpCode's lockout pattern
+  maxAttempts          Int                             @default(5)
+  claimedByValidatorId String?
+  claimedByValidator   User?                           @relation("WhatsAppValidationValidator", fields: [claimedByValidatorId], references: [id], onDelete: SetNull)
+  claimedAt            DateTime?
+  claimExpiresAt       DateTime? // claim lock TTL -- an abandoned claim falls back into the pool once this passes, checked lazily on read (see expireStaleClaims)
+  verifiedAt           DateTime?
+  rejectedAt           DateTime?
+  expiresAt            DateTime
+  createdAt            DateTime                        @default(now())
+  updatedAt            DateTime                        @updatedAt
+
+  @@index([status, createdAt])
+  @@index([requesterId, status])
+  @@index([claimedByValidatorId])
+  @@map("whatsapp_validation_requests")
 }
 
 /// Mirrors Didit's own status vocabulary directly so the webhook handler
@@ -1671,6 +1757,8 @@ enum LedgerEntryType {
   TESTIMONY_APPROVED_REWARD // one-time per (wallet, testimonyId reference); credited on admin approval, see creditTestimonyReward
   PHONE_VERIFICATION_FEE
   PHONE_VERIFICATION_FEE_REFUND // reverses PHONE_VERIFICATION_FEE when a manual verification request is rejected or expires unused -- see AuthService.refundManualPhoneVerificationFee
+  WHATSAPP_VALIDATION_FEE // debit on the requester when a peer validator confirms their WhatsApp code -- see WhatsAppValidatorService.verify
+  WHATSAPP_VALIDATION_PAYOUT // credit on the validator, same transaction as WHATSAPP_VALIDATION_FEE
   P2P_ESCROW_LOCK
   P2P_ESCROW_REFUND
   P2P_ESCROW_RELEASE

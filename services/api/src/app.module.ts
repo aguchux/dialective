@@ -39,6 +39,8 @@ import { VoiceStreamModule } from './voice-stream/voice-stream.module';
 import { FaqsModule } from './faqs/faqs.module';
 import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.module';
 import { CommunityModule } from './community/community.module';
+import { IntegrationsModule } from './integrations/integrations.module';
+import { WhatsAppValidatorModule } from './whatsapp-validator/whatsapp-validator.module';
 
 @Module({
   imports: [
@@ -78,6 +80,8 @@ import { CommunityModule } from './community/community.module';
     FaqsModule,
     TrainerProfilesModule,
     CommunityModule,
+    IntegrationsModule,
+    WhatsAppValidatorModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: AppThrottlerGuard }],

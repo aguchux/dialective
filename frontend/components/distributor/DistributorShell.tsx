@@ -16,6 +16,7 @@ import {
   LogOut,
   ChevronDown,
   Download,
+  Plug,
   UserCircle,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -113,6 +114,10 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
                 <DropdownMenuItem onSelect={() => router.push('/distributor/profile')}>
                   <UserCircle className="size-4" />
                   Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => router.push('/distributor/integrations')}>
+                  <Plug className="size-4" />
+                  P2P &amp; Integrations
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => router.push('/')}>
                   <Home className="size-4" />

@@ -17,6 +17,7 @@ import {
   Megaphone,
   MessageSquareQuote,
   Mic2,
+  Plug,
   Shield as ShieldIcon,
   Star,
   User as UserIcon,
@@ -141,6 +142,9 @@ export function DashboardHeader({
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=campaigns')}>
                 <Megaphone className="size-4" aria-hidden="true" /> Campaigns
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/dashboard/integrations')}>
+                <Plug className="size-4" aria-hidden="true" /> P2P &amp; Integrations
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=testimonials')}>
                 <MessageSquareQuote className="size-4" aria-hidden="true" /> Testimonials

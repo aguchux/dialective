@@ -898,6 +898,64 @@ export type P2PTradeStatus =
   | 'EXPIRED';
 export type P2PDisputeStatus = 'OPEN' | 'RESOLVED_BUYER' | 'RESOLVED_SELLER';
 
+export interface Integration {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  iconKey: string | null;
+  feeTokenAmount: string;
+  subscribed: boolean;
+}
+
+export interface AdminIntegration {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  iconKey: string | null;
+  enabled: boolean;
+  feeTokenAmount: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WhatsAppValidationRequestStatus = 'PENDING' | 'CLAIMED' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
+
+export interface WhatsAppValidationRequestResult {
+  requestId: string;
+  code: string;
+  feeTokenAmount: string;
+  expiresAt: string;
+}
+
+export interface WhatsAppValidationMyRequest {
+  id: string;
+  phoneNumber: string;
+  status: WhatsAppValidationRequestStatus;
+  feeTokenAmount: string;
+  verifiedAt: string | null;
+  rejectedAt: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface WhatsAppValidationClaim {
+  id: string;
+  phoneNumber: string;
+  status: WhatsAppValidationRequestStatus;
+  feeTokenAmount: string;
+  attempts: number;
+  maxAttempts: number;
+  claimedAt: string | null;
+  claimExpiresAt: string | null;
+  verifiedAt: string | null;
+  createdAt: string;
+}
+
 export interface P2PMarketSettings {
   enabled: boolean;
   sellOffersEnabled: boolean;
@@ -2749,6 +2807,8 @@ export const dialectivaApi = createApi({
     'ValidatorRecordings',
     'AdminValidatorDecks',
     'ValidatorDialectAssignments',
+    'Integrations',
+    'WhatsAppValidator',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -2843,6 +2903,52 @@ export const dialectivaApi = createApi({
     listMyP2POffers: builder.query<P2POffer[], void>({
       query: () => '/p2p/offers/mine',
       providesTags: ['P2P'],
+    }),
+    listIntegrations: builder.query<
+      Integration[],
+      { search?: string; sortBy?: 'name' | 'category' | 'createdAt' | 'sortOrder'; sortDir?: 'asc' | 'desc' } | void
+    >({
+      query: (params) => ({ url: '/integrations', params: params ?? undefined }),
+      providesTags: ['Integrations'],
+    }),
+    listMyIntegrations: builder.query<Integration[], void>({
+      query: () => '/integrations/mine',
+      providesTags: ['Integrations'],
+    }),
+    subscribeToIntegration: builder.mutation<Integration, string>({
+      query: (id) => ({ url: `/integrations/${id}/subscribe`, method: 'POST' }),
+      invalidatesTags: ['Integrations'],
+    }),
+    unsubscribeFromIntegration: builder.mutation<{ unsubscribed: boolean }, string>({
+      query: (id) => ({ url: `/integrations/${id}/subscribe`, method: 'DELETE' }),
+      invalidatesTags: ['Integrations'],
+    }),
+    requestWhatsAppValidation: builder.mutation<WhatsAppValidationRequestResult, { phoneNumber: string }>({
+      query: (body) => ({ url: '/whatsapp-validator/requests', method: 'POST', body }),
+      invalidatesTags: ['WhatsAppValidator', 'Profile'],
+    }),
+    listMyWhatsAppValidationRequests: builder.query<WhatsAppValidationMyRequest[], void>({
+      query: () => '/whatsapp-validator/requests/mine',
+      providesTags: ['WhatsAppValidator'],
+    }),
+    claimNextWhatsAppValidation: builder.mutation<WhatsAppValidationClaim, void>({
+      query: () => ({ url: '/whatsapp-validator/next', method: 'POST' }),
+      invalidatesTags: ['WhatsAppValidator'],
+    }),
+    verifyWhatsAppValidationRequest: builder.mutation<
+      WhatsAppValidationClaim,
+      { id: string; code: string }
+    >({
+      query: ({ id, code }) => ({
+        url: `/whatsapp-validator/requests/${id}/verify`,
+        method: 'POST',
+        body: { code },
+      }),
+      invalidatesTags: ['WhatsAppValidator', 'Wallet'],
+    }),
+    rejectWhatsAppValidationRequest: builder.mutation<{ released: boolean }, string>({
+      query: (id) => ({ url: `/whatsapp-validator/requests/${id}/reject`, method: 'POST' }),
+      invalidatesTags: ['WhatsAppValidator'],
     }),
     getP2PTraderProfile: builder.query<P2PTraderProfile, string>({
       query: (userId) => `/p2p/traders/${userId}`,
@@ -4267,6 +4373,42 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/p2p/admin/settings', method: 'PATCH', body }),
       invalidatesTags: ['P2P'],
     }),
+    listAdminIntegrations: builder.query<AdminIntegration[], void>({
+      query: () => '/integrations/admin',
+      providesTags: ['Integrations'],
+    }),
+    createAdminIntegration: builder.mutation<
+      AdminIntegration,
+      {
+        slug: string;
+        name: string;
+        description: string;
+        category: string;
+        iconKey?: string;
+        enabled?: boolean;
+        feeTokenAmount?: number;
+        sortOrder?: number;
+      }
+    >({
+      query: (body) => ({ url: '/integrations/admin', method: 'POST', body }),
+      invalidatesTags: ['Integrations'],
+    }),
+    updateAdminIntegration: builder.mutation<
+      AdminIntegration,
+      {
+        id: string;
+        name?: string;
+        description?: string;
+        category?: string;
+        iconKey?: string;
+        enabled?: boolean;
+        feeTokenAmount?: number;
+        sortOrder?: number;
+      }
+    >({
+      query: ({ id, ...body }) => ({ url: `/integrations/admin/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Integrations'],
+    }),
     listAdminP2PTrades: builder.query<P2PTrade[], { status?: P2PTradeStatus } | void>({
       query: (params) => ({ url: '/p2p/admin/trades', params: params ?? undefined }),
       providesTags: ['P2P'],
@@ -5409,6 +5551,18 @@ export const {
   useLazyGetMyProofAccountReportPdfUrlQuery,
   useGetAdminP2PSettingsQuery,
   useUpdateAdminP2PSettingsMutation,
+  useListIntegrationsQuery,
+  useListMyIntegrationsQuery,
+  useSubscribeToIntegrationMutation,
+  useUnsubscribeFromIntegrationMutation,
+  useRequestWhatsAppValidationMutation,
+  useListMyWhatsAppValidationRequestsQuery,
+  useClaimNextWhatsAppValidationMutation,
+  useVerifyWhatsAppValidationRequestMutation,
+  useRejectWhatsAppValidationRequestMutation,
+  useListAdminIntegrationsQuery,
+  useCreateAdminIntegrationMutation,
+  useUpdateAdminIntegrationMutation,
   useListAdminP2PTradesQuery,
   useListAdminP2PDisputesQuery,
   useResolveP2PDisputeMutation,
