@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ListIntegrationsDto {
@@ -16,63 +16,16 @@ export class ListIntegrationsDto {
   sortDir?: 'asc' | 'desc' = 'asc';
 }
 
-export class CreateIntegrationDto {
-  @IsString()
-  @IsNotEmpty()
-  slug!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  name!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  description!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  category!: string;
-
-  @IsOptional()
-  @IsString()
-  iconKey?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  enabled?: boolean;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  feeTokenAmount?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  sortOrder?: number;
-}
-
+/**
+ * Admin's only write path onto an Integration row -- deliberately has no
+ * name/description/category/iconKey/slug fields. Those are owned by
+ * INTEGRATION_REGISTRY (see integration-registry.ts) and refreshed on
+ * every boot; an integration is created by implementing it in code, not
+ * by an admin typing metadata into a form. This DTO only gates an
+ * already-registered row: whether it's live, what it costs, and where it
+ * sorts in the marketplace.
+ */
 export class UpdateIntegrationDto {
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  name?: string;
-
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  description?: string;
-
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  category?: string;
-
-  @IsOptional()
-  @IsString()
-  iconKey?: string;
-
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;

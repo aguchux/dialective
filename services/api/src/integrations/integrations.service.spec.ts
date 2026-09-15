@@ -1,6 +1,7 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@dialectiva/db';
 import { IntegrationsService } from './integrations.service';
+import { INTEGRATION_REGISTRY } from './integration-registry';
 
 describe('IntegrationsService', () => {
   const userId = 'user-1';
@@ -26,7 +27,7 @@ describe('IntegrationsService', () => {
       integration: {
         findMany: jest.fn().mockResolvedValue([integration]),
         findUnique: jest.fn().mockResolvedValue(integration),
-        create: jest.fn().mockResolvedValue(integration),
+        upsert: jest.fn().mockResolvedValue(integration),
         update: jest.fn().mockResolvedValue(integration),
       },
       integrationSubscription: {
@@ -101,16 +102,44 @@ describe('IntegrationsService', () => {
     });
   });
 
-  describe('admin create', () => {
-    it('rejects a duplicate slug', async () => {
-      prisma.integration.create.mockRejectedValue(
-        Object.assign(new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x' }), {
-          code: 'P2002',
-        }),
-      );
-      await expect(
-        service.create({ slug: 'whatsapp-validator', name: 'x', description: 'x', category: 'x' }),
-      ).rejects.toThrow(ConflictException);
+  describe('syncRegistry', () => {
+    it('upserts every registry entry by slug, never touching enabled/feeTokenAmount/sortOrder on update', async () => {
+      await service.syncRegistry();
+      expect(prisma.integration.upsert).toHaveBeenCalledTimes(INTEGRATION_REGISTRY.length);
+      for (const definition of INTEGRATION_REGISTRY) {
+        expect(prisma.integration.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { slug: definition.slug },
+            create: expect.objectContaining({
+              slug: definition.slug,
+              name: definition.name,
+              feeTokenAmount: definition.defaultFeeTokenAmount,
+              sortOrder: definition.defaultSortOrder,
+            }),
+            update: {
+              name: definition.name,
+              description: definition.description,
+              category: definition.category,
+              iconKey: definition.iconKey,
+            },
+          }),
+        );
+      }
+    });
+  });
+
+  describe('update (admin gate)', () => {
+    it('only writes enabled/feeTokenAmount/sortOrder, never name/description/category/slug', async () => {
+      await service.update(integration.id, { enabled: false, feeTokenAmount: 5, sortOrder: 2 });
+      expect(prisma.integration.update).toHaveBeenCalledWith({
+        where: { id: integration.id },
+        data: { enabled: false, feeTokenAmount: 5, sortOrder: 2 },
+      });
+    });
+
+    it('rejects updating a non-existent integration', async () => {
+      prisma.integration.findUnique.mockResolvedValue(null);
+      await expect(service.update('missing', { enabled: true })).rejects.toThrow(NotFoundException);
     });
   });
 });

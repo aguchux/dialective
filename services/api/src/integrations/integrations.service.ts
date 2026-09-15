@@ -1,18 +1,62 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateIntegrationDto, ListIntegrationsDto, UpdateIntegrationDto } from './dto/integrations.dto';
+import { INTEGRATION_REGISTRY } from './integration-registry';
+import { ListIntegrationsDto, UpdateIntegrationDto } from './dto/integrations.dto';
 
 /**
- * "P2P & Integrations" marketplace catalog -- admin-managed rows so new
- * peer-fulfilled products (WhatsApp Validator today, others later) can be
- * added/gated/repriced without a schema change. Subscribing is a simple
+ * "P2P & Integrations" marketplace catalog -- rows are synced from the
+ * code-defined INTEGRATION_REGISTRY on boot (syncRegistry), never
+ * admin-created. Admin's only write access is the gate on an existing row
+ * (enabled/feeTokenAmount/sortOrder); name/description/category/iconKey
+ * always come from the registry, refreshed on every boot so a copy edit in
+ * code reaches the DB without a manual admin step. Subscribing is a simple
  * opt-in (no approval workflow); it's a prerequisite for claiming/fulfilling
  * requests on a given integration, not for browsing the catalog itself.
  */
 @Injectable()
-export class IntegrationsService {
+export class IntegrationsService implements OnModuleInit {
+  private readonly logger = new Logger(IntegrationsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  async onModuleInit() {
+    await this.syncRegistry();
+  }
+
+  /**
+   * Upserts every INTEGRATION_REGISTRY entry's display metadata into the
+   * `integrations` table, creating a row (disabled by default, at its
+   * registry default fee) the first time a slug appears in code. Never
+   * touches enabled/feeTokenAmount/sortOrder on an existing row -- those
+   * are the admin's gate, not something a deploy should silently reset.
+   * Never deletes a row for a slug removed from the registry (a live row
+   * may still have subscriptions/history; removing the feature from code
+   * without a data-migration decision is out of scope here).
+   */
+  async syncRegistry(): Promise<void> {
+    for (const definition of INTEGRATION_REGISTRY) {
+      await this.prisma.integration.upsert({
+        where: { slug: definition.slug },
+        create: {
+          slug: definition.slug,
+          name: definition.name,
+          description: definition.description,
+          category: definition.category,
+          iconKey: definition.iconKey,
+          feeTokenAmount: definition.defaultFeeTokenAmount,
+          sortOrder: definition.defaultSortOrder,
+        },
+        update: {
+          name: definition.name,
+          description: definition.description,
+          category: definition.category,
+          iconKey: definition.iconKey,
+        },
+      });
+    }
+    this.logger.log(`Synced ${INTEGRATION_REGISTRY.length} integration(s) from the registry`);
+  }
 
   /** Public-facing list -- disabled integrations are excluded here (see listAllForAdmin for the unfiltered admin view). */
   async list(userId: string, query: ListIntegrationsDto) {
@@ -101,39 +145,18 @@ export class IntegrationsService {
     return rows.map((row) => this.toAdminPublic(row));
   }
 
-  async create(dto: CreateIntegrationDto) {
-    try {
-      const row = await this.prisma.integration.create({
-        data: {
-          slug: dto.slug,
-          name: dto.name,
-          description: dto.description,
-          category: dto.category,
-          iconKey: dto.iconKey,
-          enabled: dto.enabled ?? false,
-          feeTokenAmount: dto.feeTokenAmount ?? 0,
-          sortOrder: dto.sortOrder ?? 0,
-        },
-      });
-      return this.toAdminPublic(row);
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException('An integration with this slug already exists');
-      }
-      throw err;
-    }
-  }
-
+  /**
+   * Admin's only write path -- gates an existing (registry-created) row.
+   * enabled/feeTokenAmount/sortOrder only; name/description/category/
+   * iconKey are never admin-editable, they come from the registry (see
+   * UpdateIntegrationDto).
+   */
   async update(id: string, dto: UpdateIntegrationDto) {
     const existing = await this.prisma.integration.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Integration not found');
     const row = await this.prisma.integration.update({
       where: { id },
       data: {
-        name: dto.name,
-        description: dto.description,
-        category: dto.category,
-        iconKey: dto.iconKey,
         enabled: dto.enabled,
         feeTokenAmount: dto.feeTokenAmount,
         sortOrder: dto.sortOrder,

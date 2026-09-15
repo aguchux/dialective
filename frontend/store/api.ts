@@ -4377,30 +4377,14 @@ export const dialectivaApi = createApi({
       query: () => '/integrations/admin',
       providesTags: ['Integrations'],
     }),
-    createAdminIntegration: builder.mutation<
-      AdminIntegration,
-      {
-        slug: string;
-        name: string;
-        description: string;
-        category: string;
-        iconKey?: string;
-        enabled?: boolean;
-        feeTokenAmount?: number;
-        sortOrder?: number;
-      }
-    >({
-      query: (body) => ({ url: '/integrations/admin', method: 'POST', body }),
-      invalidatesTags: ['Integrations'],
-    }),
+    // No create endpoint -- an integration is created by implementing it in
+    // code (see services/api/src/integrations/integration-registry.ts),
+    // which syncs into this list automatically. Admin only gates an
+    // existing row via updateAdminIntegration below.
     updateAdminIntegration: builder.mutation<
       AdminIntegration,
       {
         id: string;
-        name?: string;
-        description?: string;
-        category?: string;
-        iconKey?: string;
         enabled?: boolean;
         feeTokenAmount?: number;
         sortOrder?: number;
@@ -5561,7 +5545,6 @@ export const {
   useVerifyWhatsAppValidationRequestMutation,
   useRejectWhatsAppValidationRequestMutation,
   useListAdminIntegrationsQuery,
-  useCreateAdminIntegrationMutation,
   useUpdateAdminIntegrationMutation,
   useListAdminP2PTradesQuery,
   useListAdminP2PDisputesQuery,

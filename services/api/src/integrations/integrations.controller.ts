@@ -4,7 +4,7 @@ import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { IntegrationsService } from './integrations.service';
-import { CreateIntegrationDto, ListIntegrationsDto, UpdateIntegrationDto } from './dto/integrations.dto';
+import { ListIntegrationsDto, UpdateIntegrationDto } from './dto/integrations.dto';
 
 @Controller('integrations')
 @UseGuards(JwtAuthGuard)
@@ -38,13 +38,14 @@ export class IntegrationsController {
     return this.integrations.listAllForAdmin();
   }
 
-  @Post('admin')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN)
-  adminCreate(@Body() body: CreateIntegrationDto) {
-    return this.integrations.create(body);
-  }
-
+  /**
+   * Gates an integration that already exists (created via
+   * INTEGRATION_REGISTRY + IntegrationsService.syncRegistry, not this
+   * endpoint) -- enabled/feeTokenAmount/sortOrder only, see
+   * UpdateIntegrationDto. There is deliberately no create endpoint: an
+   * integration is a real implemented feature, not an admin-typed catalog
+   * row.
+   */
   @Patch('admin/:id')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)

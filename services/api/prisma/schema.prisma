@@ -722,18 +722,24 @@ model ManualPhoneVerificationRequest {
 }
 
 /// Catalog of peer-fulfilled "P2P & Integrations" products (Integrations
-/// page) -- e.g. WhatsApp Validator. Admin-managed rows so new integrations
-/// can be added/gated/repriced without a schema change; `slug` is the
-/// stable key application code switches on (e.g. WhatsAppValidatorService
-/// reads the "whatsapp-validator" row for its enabled/feeTokenAmount gate).
+/// page) -- e.g. WhatsApp Validator. Rows are NOT admin-created: each
+/// integration is a real implemented feature registered in code (see
+/// integrations/integration-registry.ts's INTEGRATION_REGISTRY), and
+/// IntegrationsService syncs that list into this table on boot (creating
+/// any row missing for a registry slug, never admin-typed into existence).
+/// name/description/category/iconKey are copied from the registry at sync
+/// time, purely for display/search convenience -- admin's only write
+/// access to a row is the gate: enabled/feeTokenAmount/sortOrder (see
+/// UpdateIntegrationDto, which deliberately has no name/description/
+/// category/iconKey/slug fields).
 model Integration {
   id             String   @id @default(uuid())
-  slug           String   @unique
+  slug           String   @unique // matches an INTEGRATION_REGISTRY entry's slug -- the key application code (e.g. WhatsAppValidatorService) reads for its enabled/feeTokenAmount gate
   name           String
   description    String
   category       String // freeform grouping/search facet, e.g. "Verification"
   iconKey        String? // maps to a fixed lucide-react icon allow-list on the frontend
-  enabled        Boolean  @default(false) // admin master switch -- disabled hides it from the marketplace entirely and blocks its own request/claim endpoints
+  enabled        Boolean  @default(false) // admin gate -- disabled hides it from the marketplace entirely and blocks its own request/claim endpoints
   feeTokenAmount Decimal  @default(0) @db.Decimal(20, 8) // requester pays this, the fulfilling peer receives it; shared column so future integrations don't each need a bespoke settings row
   sortOrder      Int      @default(0)
   createdAt      DateTime @default(now())
