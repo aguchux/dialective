@@ -14,13 +14,23 @@ export class WhatsAppValidatorController {
   }
 
   @Get('requests/mine')
-  myRequests(@Req() req: AuthenticatedRequest) {
-    return this.whatsappValidator.myRequests(req.user.sub);
+  myRequest(@Req() req: AuthenticatedRequest) {
+    return this.whatsappValidator.myRequest(req.user.sub);
   }
 
-  @Post('next')
-  claimNext(@Req() req: AuthenticatedRequest) {
-    return this.whatsappValidator.claimNext(req.user.sub);
+  @Get('pending')
+  listPending(@Req() req: AuthenticatedRequest) {
+    return this.whatsappValidator.listPending(req.user.sub);
+  }
+
+  @Get('my-claim')
+  myClaim(@Req() req: AuthenticatedRequest) {
+    return this.whatsappValidator.myClaim(req.user.sub);
+  }
+
+  @Post('requests/:id/claim')
+  claim(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.whatsappValidator.claim(req.user.sub, id);
   }
 
   @Post('requests/:id/verify')

@@ -48,6 +48,28 @@ function setup() {
   };
 }
 describe('DLKYC backlog rechecks', () => {
+  it('does not update an account if another worker already claimed the verification', async () => {
+    const { service, tx } = setup();
+    tx.kycVerification.updateMany.mockResolvedValue({ count: 0 });
+    expect((await service.recheckSelfHosted(false)).approved).toBe(0);
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+  it('does not override changed evidence or a manual decision', async () => {
+    const { service, tx, row } = setup();
+    tx.kycVerification.findFirst.mockResolvedValue({
+      ...row,
+      decisionEncryptedJson: encryptKycField(
+        JSON.stringify({ provider: 'self', adminOverride: 'decline' }),
+      ),
+    });
+    expect((await service.recheckSelfHosted(false)).approved).toBe(0);
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+  it('defers transaction conflicts for the next scheduled pass', async () => {
+    const { service, prisma } = setup();
+    prisma.$transaction.mockRejectedValue(new Error('serialization conflict'));
+    expect(await service.recheckSelfHosted(false)).toMatchObject({ approved: 0, errors: 1 });
+  });
   it('honours the admin gate', async () => {
     const { service, settings, prisma } = setup();
     settings.isSelfHostedKycAutoApproveEnabled.mockResolvedValue(false);

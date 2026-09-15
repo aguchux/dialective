@@ -114,16 +114,21 @@ export class KycController {
   @Post('kyc/self/verifications/:verificationId/document-upload-url')
   createSelfHostedDocumentUploadUrl(
     @Param('verificationId') verificationId: string,
-    @Body() body: CreateKycEvidenceUploadUrlDto & ResumeSelfHostedKycDto,
+    @Body() body: CreateKycEvidenceUploadUrlDto,
   ) {
     const claims = this.verifyHandoffOwnership(body.token, verificationId);
-    return this.selfHosted.createEvidenceUploadUrl(verificationId, claims.sub, body.contentType);
+    return this.selfHosted.createEvidenceUploadUrl(
+      verificationId,
+      claims.sub,
+      body.contentType,
+      'document',
+    );
   }
 
   @Post('kyc/self/verifications/:verificationId/document')
   submitSelfHostedDocument(
     @Param('verificationId') verificationId: string,
-    @Body() body: SubmitKycDocumentDto & ResumeSelfHostedKycDto,
+    @Body() body: SubmitKycDocumentDto,
   ) {
     const claims = this.verifyHandoffOwnership(body.token, verificationId);
     return this.selfHosted.submitDocument(verificationId, claims.sub, body);
@@ -132,16 +137,21 @@ export class KycController {
   @Post('kyc/self/verifications/:verificationId/selfie-upload-url')
   createSelfHostedSelfieUploadUrl(
     @Param('verificationId') verificationId: string,
-    @Body() body: CreateKycEvidenceUploadUrlDto & ResumeSelfHostedKycDto,
+    @Body() body: CreateKycEvidenceUploadUrlDto,
   ) {
     const claims = this.verifyHandoffOwnership(body.token, verificationId);
-    return this.selfHosted.createEvidenceUploadUrl(verificationId, claims.sub, body.contentType);
+    return this.selfHosted.createEvidenceUploadUrl(
+      verificationId,
+      claims.sub,
+      body.contentType,
+      'selfie',
+    );
   }
 
   @Post('kyc/self/verifications/:verificationId/selfie')
   submitSelfHostedSelfie(
     @Param('verificationId') verificationId: string,
-    @Body() body: SubmitKycSelfieDto & ResumeSelfHostedKycDto,
+    @Body() body: SubmitKycSelfieDto,
   ) {
     const claims = this.verifyHandoffOwnership(body.token, verificationId);
     return this.selfHosted.submitSelfie(verificationId, claims.sub, body);

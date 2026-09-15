@@ -31,6 +31,22 @@ function setup(settingsOverrides: { enabled?: boolean; minutes?: number } = {}) 
 }
 
 describe('KycService.autoCancelStaleVerifications', () => {
+  it('does not overwrite an approval that arrived after the stale scan', async () => {
+    const { service, prisma } = setup();
+    prisma.kycVerification.findMany.mockResolvedValue([{ id: 'v1', userId: 'u1' }]);
+    prisma.kycVerification.updateMany.mockResolvedValue({ count: 0 });
+    await service.autoCancelStaleVerifications();
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+  it('excludes completed DLKYC reviews from stale cancellation', async () => {
+    const { service, prisma } = setup();
+    await service.autoCancelStaleVerifications();
+    expect(prisma.kycVerification.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ NOT: { provider: 'self', status: 'IN_REVIEW' } }),
+      }),
+    );
+  });
   it('does nothing when kycAutoCancelStaleEnabled is off', async () => {
     const { service, prisma } = setup({ enabled: false });
 
@@ -41,9 +57,7 @@ describe('KycService.autoCancelStaleVerifications', () => {
 
   it('abandons a stale verification and the user status when no other active attempt exists', async () => {
     const { service, prisma } = setup({ minutes: 60 });
-    prisma.kycVerification.findMany.mockResolvedValue([
-      { id: 'kyc-1', userId: 'user-1' },
-    ]);
+    prisma.kycVerification.findMany.mockResolvedValue([{ id: 'kyc-1', userId: 'user-1' }]);
     prisma.kycVerification.findFirst.mockResolvedValue(null); // no fresher active attempt
 
     await service.autoCancelStaleVerifications();
@@ -62,9 +76,7 @@ describe('KycService.autoCancelStaleVerifications', () => {
 
   it('marks the stale row ABANDONED but leaves User.kycStatus alone when a fresher attempt is still active', async () => {
     const { service, prisma } = setup({ minutes: 60 });
-    prisma.kycVerification.findMany.mockResolvedValue([
-      { id: 'kyc-old', userId: 'user-1' },
-    ]);
+    prisma.kycVerification.findMany.mockResolvedValue([{ id: 'kyc-old', userId: 'user-1' }]);
     prisma.kycVerification.findFirst.mockResolvedValue({ id: 'kyc-new' }); // fresher attempt in flight
 
     await service.autoCancelStaleVerifications();

@@ -153,7 +153,7 @@ describe('CommunityPostsService', () => {
         space: { id: 'space-1', name: 'General', slug: 'general' },
         tags: [],
         attachments: [],
-        reactions: [{ id: 'r1' }],
+        reactions: [{ id: 'r1', type: 'LIKE' }],
         bookmarks: [],
       });
       prisma.communityPost.update.mockResolvedValue({});
@@ -167,6 +167,20 @@ describe('CommunityPostsService', () => {
       );
       expect(result.likedByMe).toBe(true);
       expect(result.bookmarkedByMe).toBe(false);
+    });
+
+    it('keeps emoji reactions distinct from a like and returns bookmark state', async () => {
+      prisma.communityPost.findFirst.mockResolvedValue({
+        id: 'post-1', status: 'PUBLISHED', author: fakeAuthor(),
+        space: { id: 'space-1', name: 'General', slug: 'general' },
+        tags: [], attachments: [], reactions: [{ id: 'r1', type: 'HAPPY' }],
+        bookmarks: [{ id: 'b1' }],
+      });
+      prisma.communityPost.update.mockResolvedValue({});
+      const result = await service.getById('post-1', 'viewer-1');
+      expect(result.likedByMe).toBe(false);
+      expect(result.reactionTypeByMe).toBe('HAPPY');
+      expect(result.bookmarkedByMe).toBe(true);
     });
 
     it('throws NotFoundException for a deleted or hidden post', async () => {

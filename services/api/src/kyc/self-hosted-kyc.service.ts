@@ -24,13 +24,14 @@ import {
 } from './self-hosted-kyc-decision';
 
 const EVIDENCE_BUCKET = process.env.SPACES_KYC_EVIDENCE_BUCKET ?? 'dialectiva-kyc-evidence';
+const EVIDENCE_CONTENT_TYPE = 'image/jpeg';
+const MAX_EVIDENCE_BYTES = 8 * 1024 * 1024;
 
-// The DLKYC app (dlkyc/components/VerificationFlow.tsx) always captures via
-// canvas.toBlob(..., 'image/jpeg', 0.9) -- CreateKycEvidenceUploadUrlDto
-// accepts png/webp too for future flexibility (e.g. a raw file-upload
-// fallback), but KycCaptureEvidence doesn't persist which content type was
-// actually used, so face-match/OCR both assume this until a real
-// non-JPEG capture path exists and that gap gets closed properly.
+type EvidenceStage = 'document' | 'selfie';
+
+// The DLKYC app captures via canvas.toBlob(..., 'image/jpeg', 0.9). Keep the
+// upload contract JPEG-only until KycCaptureEvidence persists a verified MIME
+// type and the evaluator has safe conversion support for additional formats.
 const CAPTURED_IMAGE_CONTENT_TYPE = 'image/jpeg';
 
 // Only TURN_RIGHT is offered -- TURN_LEFT was dropped after liveness scores
@@ -131,6 +132,11 @@ export class SelfHostedKycService {
 
   async getChallenge(verificationId: string, userId: string): Promise<{ challenge: string }> {
     const verification = await this.getOwnedOpenVerification(verificationId, userId);
+    const existing = CHALLENGES.find(
+      (challenge) => challenge.type === verification.selfieChallengeType,
+    );
+    if (existing) return { challenge: existing.text };
+
     const chosen = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
     await this.prisma.kycVerification.update({
       where: { id: verification.id },
@@ -139,9 +145,17 @@ export class SelfHostedKycService {
     return { challenge: chosen.text };
   }
 
-  async createEvidenceUploadUrl(verificationId: string, userId: string, contentType: string) {
+  async createEvidenceUploadUrl(
+    verificationId: string,
+    userId: string,
+    contentType: string,
+    stage: EvidenceStage,
+  ) {
     await this.getOwnedOpenVerification(verificationId, userId);
-    const key = `self/${userId}/${verificationId}/${randomUUID()}`;
+    if (contentType !== EVIDENCE_CONTENT_TYPE) {
+      throw new BadRequestException('Only JPEG identity evidence is supported');
+    }
+    const key = `${this.evidenceKeyPrefix(userId, verificationId, stage)}${randomUUID()}.jpg`;
     const { url, expiresInSeconds } = await this.storage.createPresignedUploadUrl(
       EVIDENCE_BUCKET,
       key,
@@ -160,33 +174,58 @@ export class SelfHostedKycService {
     if (!allowedTypes.includes(body.documentType)) {
       throw new BadRequestException('Unsupported document type');
     }
+    const keys = [body.frontKey, ...(body.backKey ? [body.backKey] : [])];
+    if (new Set(keys).size !== keys.length) {
+      throw new BadRequestException('Document sides must be distinct uploads');
+    }
+    await this.validateEvidenceKeys(keys, userId, verificationId, 'document');
+    const previous = await this.prisma.kycCaptureEvidence.findMany({
+      where: {
+        kycVerificationId: verification.id,
+        kind: { in: [KycEvidenceKind.DOCUMENT_FRONT, KycEvidenceKind.DOCUMENT_BACK] },
+      },
+      select: { bucket: true, key: true },
+    });
 
-    await this.prisma.$transaction([
-      this.prisma.kycVerification.update({
-        where: { id: verification.id },
+    await this.prisma.$transaction(async (tx) => {
+      const active = await tx.kycVerification.updateMany({
+        where: {
+          id: verification.id,
+          userId,
+          provider: 'self',
+          status: KycStatus.IN_PROGRESS,
+        },
         data: { documentType: body.documentType },
-      }),
-      this.prisma.kycCaptureEvidence.create({
+      });
+      if (!active.count) {
+        throw new ConflictException('This verification session is no longer active');
+      }
+      await tx.kycCaptureEvidence.deleteMany({
+        where: {
+          kycVerificationId: verification.id,
+          kind: { in: [KycEvidenceKind.DOCUMENT_FRONT, KycEvidenceKind.DOCUMENT_BACK] },
+        },
+      });
+      await tx.kycCaptureEvidence.create({
         data: {
           kycVerificationId: verification.id,
           kind: KycEvidenceKind.DOCUMENT_FRONT,
           bucket: EVIDENCE_BUCKET,
           key: body.frontKey,
         },
-      }),
-      ...(body.backKey
-        ? [
-            this.prisma.kycCaptureEvidence.create({
-              data: {
-                kycVerificationId: verification.id,
-                kind: KycEvidenceKind.DOCUMENT_BACK,
-                bucket: EVIDENCE_BUCKET,
-                key: body.backKey,
-              },
-            }),
-          ]
-        : []),
-    ]);
+      });
+      if (body.backKey) {
+        await tx.kycCaptureEvidence.create({
+          data: {
+            kycVerificationId: verification.id,
+            kind: KycEvidenceKind.DOCUMENT_BACK,
+            bucket: EVIDENCE_BUCKET,
+            key: body.backKey,
+          },
+        });
+      }
+    });
+    await this.deleteReplacedEvidence(previous, new Set(keys));
     return { ok: true };
   }
 
@@ -196,15 +235,48 @@ export class SelfHostedKycService {
     body: { frameKeys: string[]; challenge: string },
   ) {
     const verification = await this.getOwnedOpenVerification(verificationId, userId);
-
-    await this.prisma.kycCaptureEvidence.createMany({
-      data: body.frameKeys.map((key) => ({
-        kycVerificationId: verification.id,
-        kind: KycEvidenceKind.SELFIE_FRAME,
-        bucket: EVIDENCE_BUCKET,
-        key,
-      })),
+    const assignedChallenge = CHALLENGES.find(
+      (challenge) => challenge.type === verification.selfieChallengeType,
+    );
+    if (!assignedChallenge || assignedChallenge.text !== body.challenge) {
+      throw new BadRequestException('Selfie challenge does not match this verification session');
+    }
+    if (new Set(body.frameKeys).size !== body.frameKeys.length) {
+      throw new BadRequestException('Selfie frames must be distinct uploads');
+    }
+    await this.validateEvidenceKeys(body.frameKeys, userId, verificationId, 'selfie');
+    const previous = await this.prisma.kycCaptureEvidence.findMany({
+      where: { kycVerificationId: verification.id, kind: KycEvidenceKind.SELFIE_FRAME },
+      select: { bucket: true, key: true },
     });
+
+    await this.prisma.$transaction(async (tx) => {
+      const active = await tx.kycVerification.updateMany({
+        where: {
+          id: verification.id,
+          userId,
+          provider: 'self',
+          status: KycStatus.IN_PROGRESS,
+          selfieChallengeType: verification.selfieChallengeType,
+        },
+        data: { updatedAt: new Date() },
+      });
+      if (!active.count) {
+        throw new ConflictException('This verification session is no longer active');
+      }
+      await tx.kycCaptureEvidence.deleteMany({
+        where: { kycVerificationId: verification.id, kind: KycEvidenceKind.SELFIE_FRAME },
+      });
+      await tx.kycCaptureEvidence.createMany({
+        data: body.frameKeys.map((key) => ({
+          kycVerificationId: verification.id,
+          kind: KycEvidenceKind.SELFIE_FRAME,
+          bucket: EVIDENCE_BUCKET,
+          key,
+        })),
+      });
+    });
+    await this.deleteReplacedEvidence(previous, new Set(body.frameKeys));
     return { ok: true };
   }
 
@@ -312,6 +384,68 @@ export class SelfHostedKycService {
 
   private async downloadEvidence(evidence: { bucket: string; key: string }): Promise<Buffer> {
     return this.storage.getObjectBuffer(evidence.bucket, evidence.key);
+  }
+
+  private evidenceKeyPrefix(userId: string, verificationId: string, stage: EvidenceStage): string {
+    return `self/${userId}/${verificationId}/${stage}/`;
+  }
+
+  private async validateEvidenceKeys(
+    keys: string[],
+    userId: string,
+    verificationId: string,
+    stage: EvidenceStage,
+  ): Promise<void> {
+    const prefix = this.evidenceKeyPrefix(userId, verificationId, stage);
+    for (const key of keys) {
+      if (!key.startsWith(prefix) || key.includes('..')) {
+        throw new BadRequestException(
+          'Evidence upload does not belong to this verification session',
+        );
+      }
+      let metadata: { contentLength: number; contentType: string | null };
+      try {
+        metadata = await this.storage.getObjectMetadata(EVIDENCE_BUCKET, key);
+      } catch {
+        throw new BadRequestException('Evidence upload was not found. Please capture it again.');
+      }
+      if (
+        metadata.contentType !== EVIDENCE_CONTENT_TYPE ||
+        metadata.contentLength < 4 ||
+        metadata.contentLength > MAX_EVIDENCE_BYTES
+      ) {
+        throw new BadRequestException('Evidence must be a JPEG image no larger than 8 MB');
+      }
+      const buffer = await this.storage.getObjectBuffer(EVIDENCE_BUCKET, key);
+      if (
+        buffer.length !== metadata.contentLength ||
+        buffer[0] !== 0xff ||
+        buffer[1] !== 0xd8 ||
+        buffer[buffer.length - 2] !== 0xff ||
+        buffer[buffer.length - 1] !== 0xd9
+      ) {
+        throw new BadRequestException('Evidence is not a valid JPEG image');
+      }
+    }
+  }
+
+  private async deleteReplacedEvidence(
+    previous: { bucket: string; key: string }[],
+    retainedKeys: Set<string>,
+  ): Promise<void> {
+    await Promise.all(
+      previous
+        .filter((evidence) => !retainedKeys.has(evidence.key))
+        .map(async (evidence) => {
+          try {
+            await this.storage.deleteObject(evidence.bucket, evidence.key);
+          } catch (error) {
+            this.logger.warn(
+              `DLKYC could not delete replaced evidence key=${evidence.key}: ${String(error)}`,
+            );
+          }
+        }),
+    );
   }
 
   private async runBotChecks(

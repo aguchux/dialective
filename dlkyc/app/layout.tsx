@@ -4,6 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'DLKYC Identity Verification',
   description: 'Dialect Library identity verification',
+  robots: { index: false, follow: false, noarchive: true },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

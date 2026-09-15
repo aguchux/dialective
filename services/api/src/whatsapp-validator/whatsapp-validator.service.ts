@@ -92,25 +92,77 @@ export class WhatsAppValidatorService {
     };
   }
 
-  async myRequests(userId: string) {
+  /**
+   * The requester's own single verification request (there's at most one
+   * live one at a time, see the pending/claimed check in
+   * requestVerification) -- not a history list. Includes the claiming
+   * validator's phone number once claimed, so the requester can reach out
+   * first instead of only ever waiting to be contacted.
+   */
+  async myRequest(userId: string) {
     await this.expireStale();
-    const rows = await this.prisma.whatsAppValidationRequest.findMany({
+    const row = await this.prisma.whatsAppValidationRequest.findFirst({
       where: { requesterId: userId },
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      include: { claimedByValidator: { select: { phoneNumber: true } } },
     });
-    return rows.map((row) => this.toRequesterPublic(row));
+    return row ? this.toRequesterPublic(row) : null;
   }
 
   /**
-   * Called when a validator opens the integration page. Requires an active
-   * subscription. Idempotently returns an already-held unexpired claim, or
-   * atomically claims the oldest unclaimed PENDING request from the pool --
-   * the updateMany-with-status-guard idiom used throughout p2p.service.ts
-   * and AuthService's manual-verification flow, so two validators racing
-   * to open the page at the same moment never both claim the same request.
+   * Data-list view for the "Validate" tab -- every unclaimed PENDING
+   * request (excluding the caller's own), oldest first, so a subscribed
+   * validator picks which one to work rather than being handed a random
+   * one. Requires an active subscription, same gate as claim().
    */
-  async claimNext(validatorUserId: string) {
+  async listPending(validatorUserId: string) {
+    const isSubscribed = await this.integrations.isSubscribed(validatorUserId, INTEGRATION_SLUG);
+    if (!isSubscribed) {
+      throw new ForbiddenException('Subscribe to WhatsApp Validator before viewing requests');
+    }
+    const now = new Date();
+    await this.expireStale(now);
+    await this.releaseStaleClaims(now);
+
+    const rows = await this.prisma.whatsAppValidationRequest.findMany({
+      where: {
+        status: WhatsAppValidationRequestStatus.PENDING,
+        requesterId: { not: validatorUserId },
+        expiresAt: { gt: now },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+    });
+    return rows.map((row) => this.toValidatorPublic(row));
+  }
+
+  /**
+   * The validator's own currently-claimed request, if any -- lets the
+   * "Validate" list view show the code-entry panel for whatever this
+   * validator has locked, alongside the rest of the (now-filtered-out)
+   * pending list.
+   */
+  async myClaim(validatorUserId: string) {
+    const now = new Date();
+    await this.releaseStaleClaims(now);
+    const row = await this.prisma.whatsAppValidationRequest.findFirst({
+      where: {
+        claimedByValidatorId: validatorUserId,
+        status: WhatsAppValidationRequestStatus.CLAIMED,
+        claimExpiresAt: { gt: now },
+      },
+    });
+    return row ? this.toValidatorPublic(row) : null;
+  }
+
+  /**
+   * Claims a specific request picked from listPending's list (not a random
+   * pull) -- atomic updateMany-with-status-guard, same idiom used
+   * throughout p2p.service.ts and AuthService's manual-verification flow,
+   * so two validators clicking the same row at the same moment don't both
+   * win it.
+   */
+  async claim(validatorUserId: string, requestId: string) {
     const isSubscribed = await this.integrations.isSubscribed(validatorUserId, INTEGRATION_SLUG);
     if (!isSubscribed) {
       throw new ForbiddenException('Subscribe to WhatsApp Validator before claiming requests');
@@ -127,26 +179,18 @@ export class WhatsAppValidatorService {
         claimExpiresAt: { gt: now },
       },
     });
-    if (existingClaim) {
-      return this.toValidatorPublic(existingClaim);
+    if (existingClaim && existingClaim.id !== requestId) {
+      throw new ConflictException('Finish or skip your current request before claiming another');
     }
 
     const claimExpiresAt = new Date(now.getTime() + CLAIM_TTL_MINUTES * 60 * 1000);
-    // Oldest-first, excludes the validator's own requests (can't verify your own number).
-    const candidate = await this.prisma.whatsAppValidationRequest.findFirst({
+    const claim = await this.prisma.whatsAppValidationRequest.updateMany({
       where: {
+        id: requestId,
         status: WhatsAppValidationRequestStatus.PENDING,
         requesterId: { not: validatorUserId },
         expiresAt: { gt: now },
       },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (!candidate) {
-      throw new NotFoundException('NO_REQUESTS_AVAILABLE');
-    }
-
-    const claim = await this.prisma.whatsAppValidationRequest.updateMany({
-      where: { id: candidate.id, status: WhatsAppValidationRequestStatus.PENDING },
       data: {
         status: WhatsAppValidationRequestStatus.CLAIMED,
         claimedByValidatorId: validatorUserId,
@@ -155,12 +199,13 @@ export class WhatsAppValidatorService {
       },
     });
     if (claim.count === 0) {
-      // Lost the race to another validator -- caller can simply retry.
-      throw new NotFoundException('NO_REQUESTS_AVAILABLE');
+      // Either someone else claimed it first, or it expired/vanished --
+      // either way, this exact one is no longer available.
+      throw new NotFoundException('This request is no longer available');
     }
 
     const claimed = await this.prisma.whatsAppValidationRequest.findUniqueOrThrow({
-      where: { id: candidate.id },
+      where: { id: requestId },
     });
     return this.toValidatorPublic(claimed);
   }
@@ -342,6 +387,7 @@ export class WhatsAppValidatorService {
     rejectedAt: Date | null;
     expiresAt: Date;
     createdAt: Date;
+    claimedByValidator?: { phoneNumber: string | null } | null;
   }) {
     return {
       id: row.id,
@@ -352,6 +398,11 @@ export class WhatsAppValidatorService {
       rejectedAt: row.rejectedAt,
       expiresAt: row.expiresAt,
       createdAt: row.createdAt,
+      // Only meaningful once CLAIMED/VERIFIED -- lets the requester reach
+      // out to the validator first instead of only ever waiting to be
+      // contacted. Null while PENDING (nothing to show) or if the
+      // validator has no phone number on file.
+      validatorPhoneNumber: row.claimedByValidator?.phoneNumber ?? null,
     };
   }
 

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -65,6 +66,17 @@ export class StorageService {
     });
     const url = await getSignedUrl(this.client, command, { expiresIn: PRESIGN_EXPIRY_SECONDS });
     return { url, expiresInSeconds: PRESIGN_EXPIRY_SECONDS };
+  }
+
+  async getObjectMetadata(
+    bucket: string,
+    key: string,
+  ): Promise<{ contentLength: number; contentType: string | null }> {
+    const result = await this.client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return {
+      contentLength: result.ContentLength ?? 0,
+      contentType: result.ContentType ?? null,
+    };
   }
 
   /**

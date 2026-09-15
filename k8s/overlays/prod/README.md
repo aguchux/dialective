@@ -145,6 +145,22 @@ its own and only decodes the session cookie `frontend` already set at
 `CORS_ALLOWED_ORIGINS` (`k8s/overlays/prod/configs/api.env`) so `api`
 accepts requests from it.
 
+## DLKYC (Vercel and private evidence storage)
+
+`/dlkyc` is the standalone capture app at `kyc.dialectlibrary.com`. Set
+`NEXT_PUBLIC_API_BASE_URL=https://api.dialectlibrary.com` in that Vercel
+project. The API config must include:
+
+- `kyc_app_url=https://kyc.dialectlibrary.com`
+- `spaces_kyc_evidence_bucket=dialectiva-kyc-evidence`
+- `https://kyc.dialectlibrary.com` in `cors_allowed_origins`
+
+The evidence bucket must remain private. Configure its browser CORS policy to
+allow `PUT` from `https://kyc.dialectlibrary.com` with the `Content-Type`
+header; do not allow public reads. DLKYC currently issues JPEG-only uploads,
+scoped to a server-generated user/session/stage key, with an 8 MB server-side
+limit and JPEG signature validation after upload.
+
 ## Apply
 
 ```bash

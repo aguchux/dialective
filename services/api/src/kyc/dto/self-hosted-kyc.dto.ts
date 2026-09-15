@@ -1,7 +1,7 @@
 import { ArrayMaxSize, ArrayMinSize, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
-export const DOCUMENT_UPLOAD_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
-export type DocumentUploadContentType = (typeof DOCUMENT_UPLOAD_CONTENT_TYPES)[number];
+export const KYC_EVIDENCE_CONTENT_TYPE = 'image/jpeg' as const;
+export type KycEvidenceContentType = typeof KYC_EVIDENCE_CONTENT_TYPE;
 
 export class ResumeSelfHostedKycDto {
   @IsString()
@@ -9,12 +9,12 @@ export class ResumeSelfHostedKycDto {
   token!: string;
 }
 
-export class CreateKycEvidenceUploadUrlDto {
-  @IsIn(DOCUMENT_UPLOAD_CONTENT_TYPES)
-  contentType!: DocumentUploadContentType;
+export class CreateKycEvidenceUploadUrlDto extends ResumeSelfHostedKycDto {
+  @IsIn([KYC_EVIDENCE_CONTENT_TYPE])
+  contentType!: KycEvidenceContentType;
 }
 
-export class SubmitKycDocumentDto {
+export class SubmitKycDocumentDto extends ResumeSelfHostedKycDto {
   @IsString()
   @MaxLength(100)
   documentType!: string;
@@ -29,7 +29,7 @@ export class SubmitKycDocumentDto {
   backKey?: string;
 }
 
-export class SubmitKycSelfieDto {
+export class SubmitKycSelfieDto extends ResumeSelfHostedKycDto {
   @ArrayMinSize(2)
   @ArrayMaxSize(3)
   @IsString({ each: true })
