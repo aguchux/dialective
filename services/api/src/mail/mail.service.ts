@@ -513,8 +513,11 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
         intro: 'Enter this code to confirm and save this wallet address.',
       };
     case 'PHONE_VERIFICATION':
-      // Always SMS-delivered in practice (see OtpService.deliver) -- this
-      // case exists only so the switch stays exhaustive if ever called by mistake.
+      // Only ever SMS/WhatsApp-delivered -- OtpService.deliver deliberately
+      // excludes this purpose from its email dual-send (proving phone
+      // ownership requires the code to actually reach the phone), so this
+      // case exists purely so the switch stays exhaustive; sendOtpEmail is
+      // never actually called with this purpose in normal operation.
       return {
         subject: 'Verify your phone number',
         intro: 'Enter this code to verify your phone number.',

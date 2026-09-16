@@ -57,12 +57,17 @@ export class OtpService {
    * resolveOtpDestination) still decides the PRIMARY channel and is used as
    * the sole channel when there's no phone to dual-send to (e.g. unverified
    * phone -- channel is EMAIL and destination is the email); once SMS or
-   * WHATSAPP is the channel, email always goes out too, in parallel, using
+   * WHATSAPP is the channel, email also goes out too, in parallel, using
    * the user's own email address looked up here (rather than threading an
    * extra parameter through every call site, since every caller already has
-   * the row). A failed provider no longer needs to be caught specially -- it
-   * simply means only the email side landed, which already happened
-   * unconditionally.
+   * the row) -- EXCEPT for PHONE_VERIFICATION, which is deliberately
+   * SMS/WhatsApp-only (mirrors resend()'s existing behavior): the whole
+   * point of that purpose is proving ownership of the phone number being
+   * verified, so an emailed code proves nothing and must never be sent
+   * regardless of primary-channel deliverability. Every other purpose keeps
+   * the dual-send safety net. A failed provider no longer needs to be
+   * caught specially -- it simply means only the email side landed (when
+   * email was even in play), which already happened unconditionally.
    */
   private async deliver(
     channel: OtpChannel,
@@ -75,14 +80,26 @@ export class OtpService {
       await this.mail.sendOtpEmail(destination, code, purpose);
       return;
     }
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true },
-    });
     const primarySend =
       channel === 'WHATSAPP' ? this.whatsapp.sendOtp(destination, code) : this.sms.sendOtp(destination, code);
     const expectedException = channel === 'WHATSAPP' ? WhatsappDeliveryException : SmsDeliveryException;
     const channelLabel = channel === 'WHATSAPP' ? 'WhatsApp' : 'SMS';
+
+    if (purpose === 'PHONE_VERIFICATION') {
+      try {
+        await primarySend;
+      } catch (err) {
+        if (!(err instanceof expectedException)) throw err;
+        this.logger.warn(`${channelLabel} delivery failed for user=${userId} purpose=${purpose}`);
+        throw err;
+      }
+      return;
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
     const results = await Promise.allSettled([
       primarySend,
       ...(user ? [this.mail.sendOtpEmail(user.email, code, purpose)] : []),

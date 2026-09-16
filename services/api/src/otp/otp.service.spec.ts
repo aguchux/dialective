@@ -124,6 +124,37 @@ describe('OtpService.issueForUser dual-channel delivery', () => {
       service.issueForUser('user-1', 'WITHDRAWAL', '+15551234567', null, 'WHATSAPP'),
     ).rejects.toBeInstanceOf(WhatsappDeliveryException);
   });
+
+  it('never dual-sends email for PHONE_VERIFICATION over SMS -- an emailed code cannot prove phone ownership', async () => {
+    const { service, prisma, mail, sms } = setup();
+    sms.sendOtp.mockResolvedValue(undefined);
+
+    await service.issueForUser('user-1', 'PHONE_VERIFICATION', '+15551234567', null, 'SMS');
+
+    expect(sms.sendOtp).toHaveBeenCalledWith('+15551234567', expect.any(String));
+    expect(mail.sendOtpEmail).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('never dual-sends email for PHONE_VERIFICATION over WhatsApp either', async () => {
+    const { service, mail, whatsapp } = setup();
+    whatsapp.sendOtp.mockResolvedValue(undefined);
+
+    await service.issueForUser('user-1', 'PHONE_VERIFICATION', '+15551234567', null, 'WHATSAPP');
+
+    expect(whatsapp.sendOtp).toHaveBeenCalledWith('+15551234567', expect.any(String));
+    expect(mail.sendOtpEmail).not.toHaveBeenCalled();
+  });
+
+  it('throws (does not fall back to email) when SMS fails for PHONE_VERIFICATION', async () => {
+    const { service, mail, sms } = setup();
+    sms.sendOtp.mockRejectedValue(new SmsDeliveryException());
+
+    await expect(
+      service.issueForUser('user-1', 'PHONE_VERIFICATION', '+15551234567', null, 'SMS'),
+    ).rejects.toBeInstanceOf(SmsDeliveryException);
+    expect(mail.sendOtpEmail).not.toHaveBeenCalled();
+  });
 });
 
 describe('OtpService.resend', () => {
