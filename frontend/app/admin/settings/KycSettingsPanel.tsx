@@ -32,6 +32,12 @@ export function KycSettingsPanel() {
   );
   const [selfHostedMinFaceMatchScore, setSelfHostedMinFaceMatchScore] = useState('85');
   const [selfHostedMinLivenessScore, setSelfHostedMinLivenessScore] = useState('80');
+  const [selfHostedMaxFaceMatchScoreForDecline, setSelfHostedMaxFaceMatchScoreForDecline] =
+    useState('40');
+  const [selfHostedMaxLivenessScoreForDecline, setSelfHostedMaxLivenessScoreForDecline] =
+    useState('40');
+  const [selfHostedRequireDocumentFaceDetected, setSelfHostedRequireDocumentFaceDetected] =
+    useState(true);
   const [selfHostedDoNotAutoDecline, setSelfHostedDoNotAutoDecline] = useState(false);
   const [manualPhoneVerificationEnabled, setManualPhoneVerificationEnabled] = useState(true);
   const [manualPhoneVerificationFeeTokens, setManualPhoneVerificationFeeTokens] = useState('1');
@@ -56,6 +62,13 @@ export function KycSettingsPanel() {
     setSelfHostedDocumentTypes(settings.selfHostedKycDocumentTypes);
     setSelfHostedMinFaceMatchScore(String(settings.selfHostedKycMinFaceMatchScore));
     setSelfHostedMinLivenessScore(String(settings.selfHostedKycMinLivenessScore));
+    setSelfHostedMaxFaceMatchScoreForDecline(
+      String(settings.selfHostedKycMaxFaceMatchScoreForDecline),
+    );
+    setSelfHostedMaxLivenessScoreForDecline(
+      String(settings.selfHostedKycMaxLivenessScoreForDecline),
+    );
+    setSelfHostedRequireDocumentFaceDetected(settings.selfHostedKycRequireDocumentFaceDetected);
     setSelfHostedDoNotAutoDecline(settings.selfHostedKycDoNotAutoDeclineEnabled);
     setManualPhoneVerificationEnabled(settings.manualPhoneVerificationEnabled);
     setManualPhoneVerificationFeeTokens(settings.manualPhoneVerificationFeeTokens);
@@ -87,6 +100,36 @@ export function KycSettingsPanel() {
       setError('DLKYC auto-approve liveness threshold must be a whole number between 0 and 100.');
       return;
     }
+    const maxFaceMatchScoreForDecline = Number(selfHostedMaxFaceMatchScoreForDecline);
+    if (
+      !Number.isInteger(maxFaceMatchScoreForDecline) ||
+      maxFaceMatchScoreForDecline < 0 ||
+      maxFaceMatchScoreForDecline > 100
+    ) {
+      setError('DLKYC decline ceiling: face match must be a whole number between 0 and 100.');
+      return;
+    }
+    if (maxFaceMatchScoreForDecline > minFaceMatchScore) {
+      setError(
+        'DLKYC decline ceiling: face match must be less than or equal to the auto-approve floor.',
+      );
+      return;
+    }
+    const maxLivenessScoreForDecline = Number(selfHostedMaxLivenessScoreForDecline);
+    if (
+      !Number.isInteger(maxLivenessScoreForDecline) ||
+      maxLivenessScoreForDecline < 0 ||
+      maxLivenessScoreForDecline > 100
+    ) {
+      setError('DLKYC decline ceiling: liveness must be a whole number between 0 and 100.');
+      return;
+    }
+    if (maxLivenessScoreForDecline > minLivenessScore) {
+      setError(
+        'DLKYC decline ceiling: liveness must be less than or equal to the auto-approve floor.',
+      );
+      return;
+    }
     try {
       await updateSettings({
         isKycRequiredForWithdrawals: requiredForWithdrawals,
@@ -101,6 +144,9 @@ export function KycSettingsPanel() {
         selfHostedKycDocumentTypes: selfHostedDocumentTypes,
         selfHostedKycMinFaceMatchScore: minFaceMatchScore,
         selfHostedKycMinLivenessScore: minLivenessScore,
+        selfHostedKycMaxFaceMatchScoreForDecline: maxFaceMatchScoreForDecline,
+        selfHostedKycMaxLivenessScoreForDecline: maxLivenessScoreForDecline,
+        selfHostedKycRequireDocumentFaceDetected: selfHostedRequireDocumentFaceDetected,
         selfHostedKycDoNotAutoDeclineEnabled: selfHostedDoNotAutoDecline,
         manualPhoneVerificationEnabled,
         manualPhoneVerificationFeeTokens: Number(manualPhoneVerificationFeeTokens) || 0,
@@ -331,6 +377,64 @@ export function KycSettingsPanel() {
                 face match, 80% liveness.
               </p>
             </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm font-bold" htmlFor="dlkyc-max-face-match-decline">
+                Decline ceiling: face match (%)
+                <input
+                  className={inputClass}
+                  id="dlkyc-max-face-match-decline"
+                  inputMode="numeric"
+                  max="100"
+                  min="0"
+                  onChange={(event) => setSelfHostedMaxFaceMatchScoreForDecline(event.target.value)}
+                  type="number"
+                  value={selfHostedMaxFaceMatchScoreForDecline}
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-bold" htmlFor="dlkyc-max-liveness-decline">
+                Decline ceiling: liveness (%)
+                <input
+                  className={inputClass}
+                  id="dlkyc-max-liveness-decline"
+                  inputMode="numeric"
+                  max="100"
+                  min="0"
+                  onChange={(event) => setSelfHostedMaxLivenessScoreForDecline(event.target.value)}
+                  type="number"
+                  value={selfHostedMaxLivenessScoreForDecline}
+                />
+              </label>
+              <p className="text-sm leading-relaxed text-muted sm:col-span-2">
+                Strictly below either ceiling, a submission auto-declines outright (or goes to
+                review instead, when &quot;Do not auto-decline&quot; below is on) rather than being
+                compared against the auto-approve floors above. Must be less than or equal to the
+                matching floor above. Defaults: 40% face match, 40% liveness.
+              </p>
+            </div>
+
+            <label
+              className="flex cursor-pointer items-start gap-3"
+              htmlFor="dlkyc-require-document-face"
+            >
+              <input
+                checked={selfHostedRequireDocumentFaceDetected}
+                className="mt-0.5 size-5 accent-accent"
+                id="dlkyc-require-document-face"
+                onChange={(event) => setSelfHostedRequireDocumentFaceDetected(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Require a face on the ID (&quot;ID found&quot;)</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  On by default -- if no face can be detected on the submitted document photo at
+                  all, the submission fails outright (auto-decline, or review when &quot;Do not
+                  auto-decline&quot; below is on). Turn off to instead fall through to the normal
+                  face-match scoring (a missing document face scores 0% and is judged by the
+                  ceiling/floor above like any other face-match result).
+                </span>
+              </span>
+            </label>
 
             <label
               className="flex cursor-pointer items-start gap-3"

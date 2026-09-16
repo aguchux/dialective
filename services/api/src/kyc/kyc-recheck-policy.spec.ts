@@ -1,5 +1,11 @@
 import { recheckEligibility } from './kyc-recheck-policy';
-const thresholds = { minFaceMatchScore: 85, minLivenessScore: 80 };
+const thresholds = {
+  minFaceMatchScore: 85,
+  minLivenessScore: 80,
+  maxFaceMatchScoreForDecline: 40,
+  maxLivenessScoreForDecline: 40,
+  requireDocumentFaceDetected: true,
+};
 const evidence = { provider: 'self', band: 'REVIEW', botFindings: null, poseCompliant: true };
 describe('DLKYC recheck eligibility', () => {
   it('accepts exact threshold values', () => {

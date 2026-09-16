@@ -33,12 +33,20 @@ export interface KycEvaluationInput {
   faceMatchScore: number;
   /** 0-100 liveness signal from cross-frame landmark motion + challenge compliance. */
   livenessScore: number;
+  /** True when a face was detected in the submitted document photo ("ID found"). Admin-gated via selfHostedKycRequireDocumentFaceDetected -- see requireDocumentFaceDetected below. */
+  documentFaceDetected: boolean;
   botFindings: BotFindings | null;
   autoApproveEnabled: boolean;
-  /** Admin-configurable auto-approve floor for faceMatchScore, 0-100. Defaults to FACE_MATCH_APPROVE_AT_OR_ABOVE_DEFAULT. */
-  minFaceMatchScore?: number;
-  /** Admin-configurable auto-approve floor for livenessScore, 0-100. Defaults to LIVENESS_APPROVE_AT_OR_ABOVE_DEFAULT. */
-  minLivenessScore?: number;
+  /** Admin-configurable auto-approve floor for faceMatchScore, 0-100 (PlatformSettings.selfHostedKycMinFaceMatchScore). */
+  minFaceMatchScore: number;
+  /** Admin-configurable auto-approve floor for livenessScore, 0-100 (PlatformSettings.selfHostedKycMinLivenessScore). */
+  minLivenessScore: number;
+  /** Admin-configurable decline ceiling for faceMatchScore, 0-100 (PlatformSettings.selfHostedKycMaxFaceMatchScoreForDecline). Strictly below this, the submission fails outright regardless of minFaceMatchScore. */
+  maxFaceMatchScoreForDecline: number;
+  /** Admin-configurable decline ceiling for livenessScore, 0-100 (PlatformSettings.selfHostedKycMaxLivenessScoreForDecline). Strictly below this, the submission fails outright regardless of minLivenessScore. */
+  maxLivenessScoreForDecline: number;
+  /** Admin-configurable "ID found" gate (PlatformSettings.selfHostedKycRequireDocumentFaceDetected). When true, documentFaceDetected=false is treated as a decisive fail; when false, it's ignored here (the caller already folds a missing document face into faceMatchScore=0). */
+  requireDocumentFaceDetected: boolean;
   /**
    * When true, a decisively-bad score routes to REVIEW instead of
    * auto-DECLINE, so an admin can manually check a submission that failed
@@ -56,44 +64,62 @@ export interface KycEvaluationResult {
   declineReason: string | null;
 }
 
-// Provisional thresholds -- deliberately conservative (biased toward REVIEW,
-// never toward auto-APPROVE) until a real evaluation dataset exists. The
-// decline floors are fixed (a submission this bad is never worth auto-
-// approving regardless of admin settings); the approve floors are the
-// admin-configurable ones, exposed via PlatformSettings
-// selfHostedKycMinFaceMatchScore/selfHostedKycMinLivenessScore.
-const FACE_MATCH_DECLINE_BELOW = 40;
-export const FACE_MATCH_APPROVE_AT_OR_ABOVE_DEFAULT = 85;
-const LIVENESS_DECLINE_BELOW = 40;
-export const LIVENESS_APPROVE_AT_OR_ABOVE_DEFAULT = 80;
+// No score thresholds are hardcoded here -- every floor/ceiling below is a
+// required KycEvaluationInput field sourced from PlatformSettings, set by
+// an admin (see schema.prisma's selfHostedKyc* doc comments). Only the
+// bot-flag-forces-review policy stays fixed: per DLKYC_PLAN.md section
+// 11.3, the bot's findings are only ever an input signal, never a lever an
+// admin can use to let a flagged submission auto-approve.
 const BOT_FLAG_FORCES_REVIEW = true;
 
 export function evaluateSelfHostedKyc(input: KycEvaluationInput): KycEvaluationResult {
   const {
     faceMatchScore,
     livenessScore,
+    documentFaceDetected,
     botFindings,
     autoApproveEnabled,
-    minFaceMatchScore = FACE_MATCH_APPROVE_AT_OR_ABOVE_DEFAULT,
-    minLivenessScore = LIVENESS_APPROVE_AT_OR_ABOVE_DEFAULT,
+    minFaceMatchScore,
+    minLivenessScore,
+    maxFaceMatchScoreForDecline,
+    maxLivenessScoreForDecline,
+    requireDocumentFaceDetected,
     doNotAutoDeclineEnabled = false,
   } = input;
 
   if (
-    ![faceMatchScore, livenessScore, minFaceMatchScore, minLivenessScore].every(
-      (value) => Number.isFinite(value) && value >= 0 && value <= 100,
-    )
+    ![
+      faceMatchScore,
+      livenessScore,
+      minFaceMatchScore,
+      minLivenessScore,
+      maxFaceMatchScoreForDecline,
+      maxLivenessScoreForDecline,
+    ].every((value) => Number.isFinite(value) && value >= 0 && value <= 100)
   ) {
     return { band: 'REVIEW', faceMatchScore, livenessScore, declineReason: null };
   }
 
-  // Clear fail: either signal is decisively bad. Normally declines
-  // outright, regardless of autoApproveEnabled (declining is never an
-  // "approval", so the auto-approve kill switch doesn't gate this branch)
-  // -- but when doNotAutoDeclineEnabled is on, route to REVIEW instead so
-  // an admin can manually check a submission that failed the deterministic
-  // checks rather than auto-rejecting the trainer outright.
-  if (faceMatchScore < FACE_MATCH_DECLINE_BELOW) {
+  // Clear fail: either signal is decisively bad, or ("ID found" gate) the
+  // document photo had no detectable face at all when the admin requires
+  // one. Normally declines outright, regardless of autoApproveEnabled
+  // (declining is never an "approval", so the auto-approve kill switch
+  // doesn't gate this branch) -- but when doNotAutoDeclineEnabled is on,
+  // route to REVIEW instead so an admin can manually check a submission
+  // that failed the deterministic checks rather than auto-rejecting the
+  // trainer outright.
+  if (requireDocumentFaceDetected && !documentFaceDetected) {
+    if (doNotAutoDeclineEnabled) {
+      return { band: 'REVIEW', faceMatchScore, livenessScore, declineReason: null };
+    }
+    return {
+      band: 'DECLINE',
+      faceMatchScore,
+      livenessScore,
+      declineReason: 'No face could be detected on the submitted document photo.',
+    };
+  }
+  if (faceMatchScore < maxFaceMatchScoreForDecline) {
     if (doNotAutoDeclineEnabled) {
       return { band: 'REVIEW', faceMatchScore, livenessScore, declineReason: null };
     }
@@ -104,7 +130,7 @@ export function evaluateSelfHostedKyc(input: KycEvaluationInput): KycEvaluationR
       declineReason: 'The face in the selfie did not match the document photo.',
     };
   }
-  if (livenessScore < LIVENESS_DECLINE_BELOW) {
+  if (livenessScore < maxLivenessScoreForDecline) {
     if (doNotAutoDeclineEnabled) {
       return { band: 'REVIEW', faceMatchScore, livenessScore, declineReason: null };
     }

@@ -417,6 +417,92 @@ describe('PlatformSettingsService.update WhatsApp API key handling', () => {
   });
 });
 
+describe('PlatformSettingsService.update DLKYC decline-ceiling validation', () => {
+  it('rejects a face-match decline ceiling above 100', async () => {
+    const { service } = setup({});
+    await expect(
+      service.update({ selfHostedKycMaxFaceMatchScoreForDecline: 101 }),
+    ).rejects.toThrow('selfHostedKycMaxFaceMatchScoreForDecline must be between 0 and 100');
+  });
+
+  it('rejects a liveness decline ceiling below 0', async () => {
+    const { service } = setup({});
+    await expect(
+      service.update({ selfHostedKycMaxLivenessScoreForDecline: -1 }),
+    ).rejects.toThrow('selfHostedKycMaxLivenessScoreForDecline must be between 0 and 100');
+  });
+
+  it('rejects a face-match decline ceiling set above the existing approve floor', async () => {
+    const { service } = setup({ selfHostedKycMinFaceMatchScore: 85 });
+    await expect(
+      service.update({ selfHostedKycMaxFaceMatchScoreForDecline: 90 }),
+    ).rejects.toThrow(
+      'selfHostedKycMaxFaceMatchScoreForDecline must be less than or equal to selfHostedKycMinFaceMatchScore',
+    );
+  });
+
+  it('rejects lowering the approve floor below the existing decline ceiling', async () => {
+    const { service } = setup({ selfHostedKycMaxFaceMatchScoreForDecline: 40 });
+    await expect(service.update({ selfHostedKycMinFaceMatchScore: 30 })).rejects.toThrow(
+      'selfHostedKycMaxFaceMatchScoreForDecline must be less than or equal to selfHostedKycMinFaceMatchScore',
+    );
+  });
+
+  it('rejects a liveness decline ceiling set above the existing approve floor', async () => {
+    const { service } = setup({ selfHostedKycMinLivenessScore: 80 });
+    await expect(
+      service.update({ selfHostedKycMaxLivenessScoreForDecline: 85 }),
+    ).rejects.toThrow(
+      'selfHostedKycMaxLivenessScoreForDecline must be less than or equal to selfHostedKycMinLivenessScore',
+    );
+  });
+
+  it('accepts a face-match decline ceiling equal to the approve floor', async () => {
+    // getRow() (the cross-field check's lookup) and the final write both go
+    // through prisma.platformSettings.upsert -- resolve the first call with
+    // the existing row, then reject the second to short-circuit before
+    // update()'s Decimal-heavy return construction runs (same pattern as
+    // the WhatsApp key-handling tests above).
+    const prisma = {
+      platformSettings: {
+        upsert: jest
+          .fn()
+          .mockResolvedValueOnce({ id: 'default', selfHostedKycMinFaceMatchScore: 85 })
+          .mockRejectedValueOnce(new Error('stop before return construction')),
+      },
+    };
+    const service = new PlatformSettingsService(prisma as never, {} as never);
+
+    await service.update({ selfHostedKycMaxFaceMatchScoreForDecline: 85 }).catch(() => {});
+
+    const writeCall = prisma.platformSettings.upsert.mock.calls[1][0];
+    expect(writeCall.update.selfHostedKycMaxFaceMatchScoreForDecline).toBe(85);
+  });
+
+  it('accepts setting both the floor and ceiling together even when the new ceiling would violate the old floor', async () => {
+    const prisma = {
+      platformSettings: {
+        upsert: jest
+          .fn()
+          .mockResolvedValueOnce({ id: 'default', selfHostedKycMinFaceMatchScore: 40 })
+          .mockRejectedValueOnce(new Error('stop before return construction')),
+      },
+    };
+    const service = new PlatformSettingsService(prisma as never, {} as never);
+
+    await service
+      .update({
+        selfHostedKycMinFaceMatchScore: 90,
+        selfHostedKycMaxFaceMatchScoreForDecline: 50,
+      })
+      .catch(() => {});
+
+    const writeCall = prisma.platformSettings.upsert.mock.calls[1][0];
+    expect(writeCall.update.selfHostedKycMinFaceMatchScore).toBe(90);
+    expect(writeCall.update.selfHostedKycMaxFaceMatchScoreForDecline).toBe(50);
+  });
+});
+
 describe('PlatformSettingsService validator settings', () => {
   it('returns the flat per-recording validation reward as a number', async () => {
     const { service } = setup({

@@ -127,7 +127,7 @@ export class KycService {
    */
   async recheckSelfHosted(preview = true, after?: string) {
     const enabled = await this.settings.isSelfHostedKycAutoApproveEnabled();
-    const thresholds = await this.settings.getSelfHostedKycApproveThresholds();
+    const thresholds = await this.settings.getSelfHostedKycThresholds();
     const result = {
       enabled,
       scanned: 0,

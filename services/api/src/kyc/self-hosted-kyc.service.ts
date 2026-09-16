@@ -298,11 +298,12 @@ export class SelfHostedKycService {
       throw new BadRequestException('Document and selfie capture must be completed first');
     }
 
-    const { faceMatchScore, livenessScore, poseCompliant } = await this.runDeterministicChecks(
-      documentFront,
-      selfieFrames,
-      verification.selfieChallengeType as 'TURN_LEFT' | 'TURN_RIGHT' | null,
-    );
+    const { faceMatchScore, livenessScore, documentFaceDetected, poseCompliant } =
+      await this.runDeterministicChecks(
+        documentFront,
+        selfieFrames,
+        verification.selfieChallengeType as 'TURN_LEFT' | 'TURN_RIGHT' | null,
+      );
 
     const botEnabled = await this.settings.isSelfHostedKycBotEnabled();
     const botFindings = botEnabled
@@ -310,23 +311,39 @@ export class SelfHostedKycService {
       : null;
 
     const autoApproveEnabled = await this.settings.isSelfHostedKycAutoApproveEnabled();
-    const { minFaceMatchScore, minLivenessScore } =
-      await this.settings.getSelfHostedKycApproveThresholds();
+    const {
+      minFaceMatchScore,
+      minLivenessScore,
+      maxFaceMatchScoreForDecline,
+      maxLivenessScoreForDecline,
+      requireDocumentFaceDetected,
+    } = await this.settings.getSelfHostedKycThresholds();
     const doNotAutoDeclineEnabled = await this.settings.isSelfHostedKycDoNotAutoDeclineEnabled();
     const result = evaluateSelfHostedKyc({
       faceMatchScore,
       livenessScore,
+      documentFaceDetected,
       botFindings,
       autoApproveEnabled,
       minFaceMatchScore,
       minLivenessScore,
+      maxFaceMatchScoreForDecline,
+      maxLivenessScoreForDecline,
+      requireDocumentFaceDetected,
       doNotAutoDeclineEnabled,
     });
 
     const decision = this.toDiditDecision(result, botFindings, poseCompliant);
     decision.raw = {
       ...(decision.raw as Record<string, unknown>),
-      thresholds: { minFaceMatchScore, minLivenessScore },
+      thresholds: {
+        minFaceMatchScore,
+        minLivenessScore,
+        maxFaceMatchScoreForDecline,
+        maxLivenessScoreForDecline,
+        requireDocumentFaceDetected,
+      },
+      documentFaceDetected,
       autoApproveEnabled,
       approvalSource: 'submission',
       evaluatedAt: new Date().toISOString(),
@@ -344,7 +361,12 @@ export class SelfHostedKycService {
     selfieFrames: { bucket: string; key: string }[],
     challengeType: 'TURN_LEFT' | 'TURN_RIGHT' | null,
     attempt = 0,
-  ): Promise<{ faceMatchScore: number; livenessScore: number; poseCompliant: boolean | null }> {
+  ): Promise<{
+    faceMatchScore: number;
+    livenessScore: number;
+    documentFaceDetected: boolean;
+    poseCompliant: boolean | null;
+  }> {
     try {
       const [documentBuffer, selfieBuffers] = await Promise.all([
         this.downloadEvidence(documentFront),
@@ -359,19 +381,19 @@ export class SelfHostedKycService {
 
       if (!documentFace) {
         this.logger.warn(`DLKYC evaluate: no face detected in document portrait`);
-        return { faceMatchScore: 0, livenessScore, poseCompliant };
+        return { faceMatchScore: 0, livenessScore, documentFaceDetected: false, poseCompliant };
       }
       const bestSelfieFace = await this.faceMatch.detectSingleFace(selfieBuffers[bestFrameIndex]);
       if (!bestSelfieFace) {
         this.logger.warn(`DLKYC evaluate: no face detected in any selfie frame`);
-        return { faceMatchScore: 0, livenessScore, poseCompliant };
+        return { faceMatchScore: 0, livenessScore, documentFaceDetected: true, poseCompliant };
       }
 
       const faceMatchScore = await this.faceMatch.compareDescriptors(
         documentFace.descriptor,
         bestSelfieFace.descriptor,
       );
-      return { faceMatchScore, livenessScore, poseCompliant };
+      return { faceMatchScore, livenessScore, documentFaceDetected: true, poseCompliant };
     } catch (err) {
       this.logger.error(`DLKYC face-match evaluation failed: ${String(err)}`);
       if (attempt < 2)

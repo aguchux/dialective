@@ -4,20 +4,26 @@ function base(overrides: Partial<Parameters<typeof evaluateSelfHostedKyc>[0]> = 
   return {
     faceMatchScore: 90,
     livenessScore: 90,
+    documentFaceDetected: true,
     botFindings: null,
     autoApproveEnabled: true,
+    minFaceMatchScore: 85,
+    minLivenessScore: 80,
+    maxFaceMatchScoreForDecline: 40,
+    maxLivenessScoreForDecline: 40,
+    requireDocumentFaceDetected: true,
     ...overrides,
   };
 }
 
 describe('evaluateSelfHostedKyc', () => {
-  it('declines outright when the face match score is decisively bad, regardless of autoApprove', () => {
+  it('declines outright when the face match score is below the admin decline ceiling, regardless of autoApprove', () => {
     const result = evaluateSelfHostedKyc(base({ faceMatchScore: 10, autoApproveEnabled: false }));
     expect(result.band).toBe('DECLINE');
     expect(result.declineReason).toMatch(/face/i);
   });
 
-  it('declines outright when the liveness score is decisively bad', () => {
+  it('declines outright when the liveness score is below the admin decline ceiling', () => {
     const result = evaluateSelfHostedKyc(base({ livenessScore: 10 }));
     expect(result.band).toBe('DECLINE');
     expect(result.declineReason).toMatch(/liveness/i);
@@ -72,16 +78,23 @@ describe('evaluateSelfHostedKyc', () => {
     expect(result.band).toBe('REVIEW');
   });
 
-  it('uses the default 85/80 approve floors when minFaceMatchScore/minLivenessScore are omitted', () => {
-    const belowDefault = evaluateSelfHostedKyc(base({ faceMatchScore: 84, livenessScore: 90 }));
-    expect(belowDefault.band).toBe('REVIEW');
-    const atDefault = evaluateSelfHostedKyc(base({ faceMatchScore: 85, livenessScore: 80 }));
-    expect(atDefault.band).toBe('APPROVE');
+  it('uses the admin-configured approve floors', () => {
+    const belowFloor = evaluateSelfHostedKyc(base({ faceMatchScore: 84, livenessScore: 90 }));
+    expect(belowFloor.band).toBe('REVIEW');
+    const atFloor = evaluateSelfHostedKyc(base({ faceMatchScore: 85, livenessScore: 80 }));
+    expect(atFloor.band).toBe('APPROVE');
   });
 
   it('honors an admin-lowered minFaceMatchScore/minLivenessScore', () => {
     const result = evaluateSelfHostedKyc(
-      base({ faceMatchScore: 60, livenessScore: 70, minFaceMatchScore: 50, minLivenessScore: 65 }),
+      base({
+        faceMatchScore: 60,
+        livenessScore: 70,
+        minFaceMatchScore: 50,
+        minLivenessScore: 65,
+        maxFaceMatchScoreForDecline: 30,
+        maxLivenessScoreForDecline: 30,
+      }),
     );
     expect(result.band).toBe('APPROVE');
   });
@@ -93,9 +106,25 @@ describe('evaluateSelfHostedKyc', () => {
     expect(result.band).toBe('REVIEW');
   });
 
-  it('still declines outright below the fixed decline floor even if an admin-lowered approve floor would otherwise pass', () => {
+  it('honors an admin-lowered decline ceiling, letting a score that used to auto-decline reach REVIEW instead', () => {
     const result = evaluateSelfHostedKyc(
-      base({ faceMatchScore: 30, livenessScore: 90, minFaceMatchScore: 20 }),
+      base({
+        faceMatchScore: 30,
+        livenessScore: 90,
+        minFaceMatchScore: 85,
+        maxFaceMatchScoreForDecline: 20,
+      }),
+    );
+    expect(result.band).toBe('REVIEW');
+  });
+
+  it('honors an admin-raised decline ceiling, declining a score that used to reach REVIEW', () => {
+    const result = evaluateSelfHostedKyc(
+      base({
+        faceMatchScore: 60,
+        livenessScore: 90,
+        maxFaceMatchScoreForDecline: 65,
+      }),
     );
     expect(result.band).toBe('DECLINE');
   });
@@ -124,6 +153,27 @@ describe('evaluateSelfHostedKyc', () => {
   it('doNotAutoDeclineEnabled does not affect a clear pass -- auto-approval still applies normally', () => {
     const result = evaluateSelfHostedKyc(
       base({ faceMatchScore: 95, livenessScore: 95, doNotAutoDeclineEnabled: true }),
+    );
+    expect(result.band).toBe('APPROVE');
+  });
+
+  it('declines outright ("ID found" gate) when no document face was detected and requireDocumentFaceDetected is on', () => {
+    const result = evaluateSelfHostedKyc(base({ documentFaceDetected: false }));
+    expect(result.band).toBe('DECLINE');
+    expect(result.declineReason).toMatch(/document/i);
+  });
+
+  it('routes the "ID found" failure to REVIEW instead of DECLINE when doNotAutoDeclineEnabled is on', () => {
+    const result = evaluateSelfHostedKyc(
+      base({ documentFaceDetected: false, doNotAutoDeclineEnabled: true }),
+    );
+    expect(result.band).toBe('REVIEW');
+    expect(result.declineReason).toBeNull();
+  });
+
+  it('ignores documentFaceDetected=false when requireDocumentFaceDetected is off, falling through to the normal face-match banding', () => {
+    const result = evaluateSelfHostedKyc(
+      base({ documentFaceDetected: false, requireDocumentFaceDetected: false }),
     );
     expect(result.band).toBe('APPROVE');
   });

@@ -847,6 +847,22 @@ export class UpdatePlatformSettingsDto {
   selfHostedKycMinLivenessScore?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  selfHostedKycMaxFaceMatchScoreForDecline?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  selfHostedKycMaxLivenessScoreForDecline?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  selfHostedKycRequireDocumentFaceDetected?: boolean;
+
+  @IsOptional()
   @IsBoolean()
   selfHostedKycDoNotAutoDeclineEnabled?: boolean;
 

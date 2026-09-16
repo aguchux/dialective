@@ -741,14 +741,20 @@ export class PlatformSettingsService {
       .filter(Boolean);
   }
 
-  async getSelfHostedKycApproveThresholds(): Promise<{
+  async getSelfHostedKycThresholds(): Promise<{
     minFaceMatchScore: number;
     minLivenessScore: number;
+    maxFaceMatchScoreForDecline: number;
+    maxLivenessScoreForDecline: number;
+    requireDocumentFaceDetected: boolean;
   }> {
     const row = await this.getRow();
     return {
       minFaceMatchScore: row.selfHostedKycMinFaceMatchScore,
       minLivenessScore: row.selfHostedKycMinLivenessScore,
+      maxFaceMatchScoreForDecline: row.selfHostedKycMaxFaceMatchScoreForDecline,
+      maxLivenessScoreForDecline: row.selfHostedKycMaxLivenessScoreForDecline,
+      requireDocumentFaceDetected: row.selfHostedKycRequireDocumentFaceDetected,
     };
   }
 
@@ -1240,6 +1246,9 @@ export class PlatformSettingsService {
       selfHostedKycDocumentTypes: row.selfHostedKycDocumentTypes,
       selfHostedKycMinFaceMatchScore: row.selfHostedKycMinFaceMatchScore,
       selfHostedKycMinLivenessScore: row.selfHostedKycMinLivenessScore,
+      selfHostedKycMaxFaceMatchScoreForDecline: row.selfHostedKycMaxFaceMatchScoreForDecline,
+      selfHostedKycMaxLivenessScoreForDecline: row.selfHostedKycMaxLivenessScoreForDecline,
+      selfHostedKycRequireDocumentFaceDetected: row.selfHostedKycRequireDocumentFaceDetected,
       selfHostedKycDoNotAutoDeclineEnabled: row.selfHostedKycDoNotAutoDeclineEnabled,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,
@@ -1457,6 +1466,9 @@ export class PlatformSettingsService {
     selfHostedKycDocumentTypes?: string;
     selfHostedKycMinFaceMatchScore?: number;
     selfHostedKycMinLivenessScore?: number;
+    selfHostedKycMaxFaceMatchScoreForDecline?: number;
+    selfHostedKycMaxLivenessScoreForDecline?: number;
+    selfHostedKycRequireDocumentFaceDetected?: boolean;
     selfHostedKycDoNotAutoDeclineEnabled?: boolean;
     authMaintenanceEnabled?: boolean;
     authMaintenanceUntil?: Date | null;
@@ -1537,6 +1549,55 @@ export class PlatformSettingsService {
       (data.selfHostedKycMinLivenessScore < 0 || data.selfHostedKycMinLivenessScore > 100)
     ) {
       throw new BadRequestException('selfHostedKycMinLivenessScore must be between 0 and 100');
+    }
+    if (
+      data.selfHostedKycMaxFaceMatchScoreForDecline !== undefined &&
+      (data.selfHostedKycMaxFaceMatchScoreForDecline < 0 ||
+        data.selfHostedKycMaxFaceMatchScoreForDecline > 100)
+    ) {
+      throw new BadRequestException(
+        'selfHostedKycMaxFaceMatchScoreForDecline must be between 0 and 100',
+      );
+    }
+    if (
+      data.selfHostedKycMaxLivenessScoreForDecline !== undefined &&
+      (data.selfHostedKycMaxLivenessScoreForDecline < 0 ||
+        data.selfHostedKycMaxLivenessScoreForDecline > 100)
+    ) {
+      throw new BadRequestException(
+        'selfHostedKycMaxLivenessScoreForDecline must be between 0 and 100',
+      );
+    }
+    if (
+      data.selfHostedKycMinFaceMatchScore !== undefined ||
+      data.selfHostedKycMaxFaceMatchScoreForDecline !== undefined
+    ) {
+      const existing = await this.getRow();
+      const min =
+        data.selfHostedKycMinFaceMatchScore ?? existing.selfHostedKycMinFaceMatchScore;
+      const max =
+        data.selfHostedKycMaxFaceMatchScoreForDecline ??
+        existing.selfHostedKycMaxFaceMatchScoreForDecline;
+      if (max > min) {
+        throw new BadRequestException(
+          'selfHostedKycMaxFaceMatchScoreForDecline must be less than or equal to selfHostedKycMinFaceMatchScore',
+        );
+      }
+    }
+    if (
+      data.selfHostedKycMinLivenessScore !== undefined ||
+      data.selfHostedKycMaxLivenessScoreForDecline !== undefined
+    ) {
+      const existing = await this.getRow();
+      const min = data.selfHostedKycMinLivenessScore ?? existing.selfHostedKycMinLivenessScore;
+      const max =
+        data.selfHostedKycMaxLivenessScoreForDecline ??
+        existing.selfHostedKycMaxLivenessScoreForDecline;
+      if (max > min) {
+        throw new BadRequestException(
+          'selfHostedKycMaxLivenessScoreForDecline must be less than or equal to selfHostedKycMinLivenessScore',
+        );
+      }
     }
 
     if (data.selfHostedKycBotProviderOrder) {
@@ -2139,6 +2200,9 @@ export class PlatformSettingsService {
       selfHostedKycDocumentTypes: row.selfHostedKycDocumentTypes,
       selfHostedKycMinFaceMatchScore: row.selfHostedKycMinFaceMatchScore,
       selfHostedKycMinLivenessScore: row.selfHostedKycMinLivenessScore,
+      selfHostedKycMaxFaceMatchScoreForDecline: row.selfHostedKycMaxFaceMatchScoreForDecline,
+      selfHostedKycMaxLivenessScoreForDecline: row.selfHostedKycMaxLivenessScoreForDecline,
+      selfHostedKycRequireDocumentFaceDetected: row.selfHostedKycRequireDocumentFaceDetected,
       selfHostedKycDoNotAutoDeclineEnabled: row.selfHostedKycDoNotAutoDeclineEnabled,
       authMaintenanceEnabled: row.authMaintenanceEnabled,
       authMaintenanceUntil: row.authMaintenanceUntil,

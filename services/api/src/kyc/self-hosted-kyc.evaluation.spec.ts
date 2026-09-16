@@ -31,9 +31,13 @@ function setup() {
   const settings = {
     isSelfHostedKycBotEnabled: jest.fn().mockResolvedValue(false),
     isSelfHostedKycAutoApproveEnabled: jest.fn().mockResolvedValue(true),
-    getSelfHostedKycApproveThresholds: jest
-      .fn()
-      .mockResolvedValue({ minFaceMatchScore: 85, minLivenessScore: 80 }),
+    getSelfHostedKycThresholds: jest.fn().mockResolvedValue({
+      minFaceMatchScore: 85,
+      minLivenessScore: 80,
+      maxFaceMatchScoreForDecline: 40,
+      maxLivenessScoreForDecline: 40,
+      requireDocumentFaceDetected: true,
+    }),
     isSelfHostedKycDoNotAutoDeclineEnabled: jest.fn().mockResolvedValue(false),
     getSelfHostedKycBotProviderOrder: jest.fn().mockResolvedValue(['openai']),
   };
@@ -59,7 +63,13 @@ describe('DLKYC submission evaluation', () => {
     expect(decision.status).toBe('Approved');
     expect(decision.raw).toMatchObject({
       approvalSource: 'submission',
-      thresholds: { minFaceMatchScore: 85, minLivenessScore: 80 },
+      thresholds: {
+        minFaceMatchScore: 85,
+        minLivenessScore: 80,
+        maxFaceMatchScoreForDecline: 40,
+        maxLivenessScoreForDecline: 40,
+        requireDocumentFaceDetected: true,
+      },
       autoApproveEnabled: true,
     });
   });

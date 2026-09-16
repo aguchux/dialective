@@ -28,9 +28,13 @@ function setup() {
   };
   const settings = {
     isSelfHostedKycAutoApproveEnabled: jest.fn().mockResolvedValue(false),
-    getSelfHostedKycApproveThresholds: jest
-      .fn()
-      .mockResolvedValue({ minFaceMatchScore: 99, minLivenessScore: 99 }),
+    getSelfHostedKycThresholds: jest.fn().mockResolvedValue({
+      minFaceMatchScore: 99,
+      minLivenessScore: 99,
+      maxFaceMatchScoreForDecline: 40,
+      maxLivenessScoreForDecline: 40,
+      requireDocumentFaceDetected: true,
+    }),
   };
   const mail = { sendKycDeclinedEmail: jest.fn().mockResolvedValue(undefined) };
   const service = new KycService(

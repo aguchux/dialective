@@ -33,9 +33,13 @@ function setup() {
   };
   const settings = {
     isSelfHostedKycAutoApproveEnabled: jest.fn().mockResolvedValue(true),
-    getSelfHostedKycApproveThresholds: jest
-      .fn()
-      .mockResolvedValue({ minFaceMatchScore: 85, minLivenessScore: 80 }),
+    getSelfHostedKycThresholds: jest.fn().mockResolvedValue({
+      minFaceMatchScore: 85,
+      minLivenessScore: 80,
+      maxFaceMatchScoreForDecline: 40,
+      maxLivenessScoreForDecline: 40,
+      requireDocumentFaceDetected: true,
+    }),
   };
   return {
     row,

@@ -1948,6 +1948,9 @@ export interface PlatformSettings {
   selfHostedKycDocumentTypes: string;
   selfHostedKycMinFaceMatchScore: number;
   selfHostedKycMinLivenessScore: number;
+  selfHostedKycMaxFaceMatchScoreForDecline: number;
+  selfHostedKycMaxLivenessScoreForDecline: number;
+  selfHostedKycRequireDocumentFaceDetected: boolean;
   selfHostedKycDoNotAutoDeclineEnabled: boolean;
   authMaintenanceEnabled: boolean;
   authMaintenanceUntil: string | null;
@@ -2128,6 +2131,9 @@ export interface PlatformSettingsInput {
   selfHostedKycDocumentTypes?: string;
   selfHostedKycMinFaceMatchScore?: number;
   selfHostedKycMinLivenessScore?: number;
+  selfHostedKycMaxFaceMatchScoreForDecline?: number;
+  selfHostedKycMaxLivenessScoreForDecline?: number;
+  selfHostedKycRequireDocumentFaceDetected?: boolean;
   selfHostedKycDoNotAutoDeclineEnabled?: boolean;
   authMaintenanceEnabled?: boolean;
   authMaintenanceUntil?: string | null;
