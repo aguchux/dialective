@@ -4103,7 +4103,7 @@ function ScoresView() {
   return (
     <div>
       <ViewHeading
-        title="My Scores"
+        title="Scores"
         subtitle="Consensus results from eligible voice training submissions."
       />
       <section className={`${cardClass} overflow-hidden`}>
