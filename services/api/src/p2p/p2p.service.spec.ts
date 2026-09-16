@@ -1,4 +1,140 @@
 import { P2PService } from './p2p.service';
+import { encryptPayoutField } from '../common/payout-crypto.util';
+
+describe('P2PService.listMyTrades -- seller payment method reveal', () => {
+  beforeEach(() => {
+    process.env.PAYOUT_ACCOUNT_ENCRYPTION_KEY = 'test-payout-encryption-key';
+  });
+  afterEach(() => {
+    delete process.env.PAYOUT_ACCOUNT_ENCRYPTION_KEY;
+  });
+
+  const decimal = (value: number) => ({ toString: () => String(value) });
+
+  function makeTrade(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'trade-1',
+      offerId: 'offer-1',
+      offer: { type: 'SELL' },
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      buyer: { id: 'buyer-1', email: 'buyer@example.com', firstName: null, lastName: null },
+      seller: {
+        id: 'seller-1',
+        email: 'seller@example.com',
+        firstName: null,
+        lastName: null,
+        p2pPaymentInstructions: null,
+      },
+      tokenAmount: decimal(100),
+      fiatAmount: decimal(5000),
+      fiatCurrency: 'NGN',
+      paymentMethod: 'BANK_TRANSFER',
+      sellerPaymentMethod: {
+        type: 'BANK',
+        bankCode: '044',
+        bankName: 'Access Bank',
+        accountName: 'Ada Lovelace',
+        accountNumberMasked: '****1234',
+        accountNumberEncryptedJson: encryptPayoutField('0691234567'),
+        mobileMoneyNetwork: null,
+        mobileMoneyNumberMasked: null,
+        mobileMoneyNumberEncryptedJson: null,
+      },
+      status: 'AWAITING_PAYMENT',
+      paymentDeadlineAt: new Date(),
+      cancelRequestedByUserId: null,
+      cancelAvailableAt: null,
+      paidAt: null,
+      releasedAt: null,
+      cancelledAt: null,
+      disputedAt: null,
+      dispute: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...overrides,
+    };
+  }
+
+  function setup(trade: unknown) {
+    const prisma = {
+      p2PTokenTrade: { findMany: jest.fn().mockResolvedValue([trade]) },
+    };
+    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+    jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
+    return { service, prisma };
+  }
+
+  it('reveals the real, decrypted account number to a trade participant, alongside the masked fallback', async () => {
+    const { service } = setup(makeTrade());
+    const [result] = await service.listMyTrades('buyer-1', {} as any);
+
+    expect(result.sellerPaymentMethod).toMatchObject({
+      accountNumber: '0691234567',
+      accountNumberMasked: '****1234',
+    });
+    // Raw encrypted blob must never leave the backend.
+    expect(result.sellerPaymentMethod).not.toHaveProperty('accountNumberEncryptedJson');
+  });
+
+  it('reveals it to the seller too, not just the buyer', async () => {
+    const { service } = setup(makeTrade());
+    const [result] = await service.listMyTrades('seller-1', {} as any);
+    expect(result.sellerPaymentMethod?.accountNumber).toBe('0691234567');
+  });
+
+  it('never reveals it to a non-participant', async () => {
+    const { service } = setup(makeTrade());
+    const [result] = await service.listMyTrades('some-other-user', {} as any);
+    expect(result.sellerPaymentMethod).toBeNull();
+  });
+
+  it('falls back to null (never throws) when decryption fails, leaving the masked field intact', async () => {
+    const trade = makeTrade({
+      sellerPaymentMethod: {
+        type: 'BANK',
+        bankCode: '044',
+        bankName: 'Access Bank',
+        accountName: 'Ada Lovelace',
+        accountNumberMasked: '****1234',
+        accountNumberEncryptedJson: { encryptedValue: 'corrupt', iv: 'bad', authTag: 'bad' },
+        mobileMoneyNetwork: null,
+        mobileMoneyNumberMasked: null,
+        mobileMoneyNumberEncryptedJson: null,
+      },
+    });
+    const { service } = setup(trade);
+    const [result] = await service.listMyTrades('buyer-1', {} as any);
+
+    expect(result.sellerPaymentMethod).toMatchObject({
+      accountNumber: null,
+      accountNumberMasked: '****1234',
+    });
+  });
+
+  it('reveals the mobile money number the same way for a MOBILE_MONEY seller account', async () => {
+    const trade = makeTrade({
+      sellerPaymentMethod: {
+        type: 'MOBILE_MONEY',
+        bankCode: null,
+        bankName: null,
+        accountName: 'Ada Lovelace',
+        accountNumberMasked: null,
+        accountNumberEncryptedJson: null,
+        mobileMoneyNetwork: 'MTN',
+        mobileMoneyNumberMasked: '****5678',
+        mobileMoneyNumberEncryptedJson: encryptPayoutField('08012345678'),
+      },
+    });
+    const { service } = setup(trade);
+    const [result] = await service.listMyTrades('buyer-1', {} as any);
+
+    expect(result.sellerPaymentMethod).toMatchObject({
+      mobileMoneyNumber: '08012345678',
+      mobileMoneyNumberMasked: '****5678',
+    });
+  });
+});
 
 describe('P2PService trade-notification SMS', () => {
   const seller = {

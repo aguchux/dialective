@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -21,6 +22,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { SmsService } from '../sms/sms.service';
 import { tokensToLocalCurrency } from '../wallet/currency-rate.util';
+import { decryptPayoutField, EncryptedPayoutField } from '../common/payout-crypto.util';
 import {
   AcceptOfferDto,
   CreateOfferDto,
@@ -1274,11 +1276,58 @@ function serializeOffer(offer: any, includePayment: boolean, completedSaleCount?
   };
 }
 
+const p2pTradeLogger = new Logger('P2PService');
+
+/**
+ * A P2P trade's whole point is the buyer paying the seller directly, so
+ * once a trade exists, its participants need the REAL account number, not
+ * just the accountNumberMasked column PayoutAccount stores for the owner's
+ * own "my saved accounts" list (see PayoutAccount's schema doc comment --
+ * that masked form is the only thing ordinarily read back for display,
+ * since a trainer viewing their own saved account already knows the
+ * number; a P2P counterparty does not). Decrypts accountNumberEncryptedJson/
+ * mobileMoneyNumberEncryptedJson (AES-256-GCM, same decrypt path admin
+ * payout submission uses) on the fly for isParticipant readers only --
+ * never persisted anywhere plaintext, never returned to a non-participant.
+ * Exposed under new accountNumber/mobileMoneyNumber fields (kept separate
+ * from accountNumberMasked/mobileMoneyNumberMasked, not overwritten in
+ * place) so nothing downstream can mistake "the field named *Masked" for
+ * actually being masked. A decrypt failure (e.g. key rotated, corrupt row)
+ * falls back to null rather than 500ing the whole trade view -- the masked
+ * field is still present for the UI to fall back to.
+ */
+function decryptForParticipant(encrypted: unknown): string | null {
+  if (!encrypted) return null;
+  try {
+    return decryptPayoutField(encrypted as EncryptedPayoutField);
+  } catch (err) {
+    p2pTradeLogger.warn(`Could not decrypt P2P seller account number: ${String(err)}`);
+    return null;
+  }
+}
+
 function serializeTrade(
   trade: Prisma.P2PTokenTradeGetPayload<{ include: typeof tradeInclude }>,
   viewerId?: string,
 ) {
   const isParticipant = viewerId ? trade.buyerId === viewerId || trade.sellerId === viewerId : true;
+  const sellerPaymentMethod =
+    isParticipant && trade.sellerPaymentMethod
+      ? (() => {
+          // Never let the raw encrypted blobs leave the backend -- destructure
+          // them out rather than spreading the whole row through.
+          const {
+            accountNumberEncryptedJson,
+            mobileMoneyNumberEncryptedJson,
+            ...rest
+          } = trade.sellerPaymentMethod;
+          return {
+            ...rest,
+            accountNumber: decryptForParticipant(accountNumberEncryptedJson),
+            mobileMoneyNumber: decryptForParticipant(mobileMoneyNumberEncryptedJson),
+          };
+        })()
+      : null;
   return {
     id: trade.id,
     offerId: trade.offerId,
@@ -1291,7 +1340,7 @@ function serializeTrade(
     fiatAmount: trade.fiatAmount.toString(),
     fiatCurrency: trade.fiatCurrency,
     paymentMethod: trade.paymentMethod,
-    sellerPaymentMethod: isParticipant ? trade.sellerPaymentMethod : null,
+    sellerPaymentMethod,
     sellerPaymentInstructions: isParticipant ? trade.seller.p2pPaymentInstructions : null,
     status: trade.status,
     paymentDeadlineAt: trade.paymentDeadlineAt,

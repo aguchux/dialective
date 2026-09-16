@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock3, Landmark } from 'lucide-react';
+import { Check, Clock3, Copy, Landmark } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, EmptyPanel, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
 import { formatCompactNumber } from '@/lib/format';
@@ -261,6 +261,7 @@ function TradeCard({
   onDispute: (id: string) => Promise<unknown>;
 }) {
   const [actionError, setActionError] = useState('');
+  const [copied, setCopied] = useState(false);
   const isBuyer = trade.buyerId === viewerId;
   const isSeller = trade.sellerId === viewerId;
   const isOpen = OPEN_TRADE_STATUSES.has(trade.status);
@@ -299,23 +300,58 @@ function TradeCard({
           {STATUS_LABELS[trade.status]}
         </span>
       </div>
-      {trade.sellerPaymentMethod && (
-        <div className="rounded-lg border border-line bg-bg p-3 text-sm">
-          <p className="font-black">Seller payment details</p>
-          <p>
-            {trade.sellerPaymentMethod.type === 'BANK'
-              ? (trade.sellerPaymentMethod.bankName ?? trade.sellerPaymentMethod.bankCode)
-              : trade.sellerPaymentMethod.mobileMoneyNetwork}{' '}
-            · {trade.sellerPaymentMethod.accountName ?? ''}{' '}
-            {trade.sellerPaymentMethod.type === 'BANK'
-              ? trade.sellerPaymentMethod.accountNumberMasked
-              : trade.sellerPaymentMethod.mobileMoneyNumberMasked}
-          </p>
-          {trade.sellerPaymentInstructions && (
-            <p className="mt-1 text-muted">{trade.sellerPaymentInstructions}</p>
-          )}
-        </div>
-      )}
+      {trade.sellerPaymentMethod &&
+        (() => {
+          const method = trade.sellerPaymentMethod;
+          const isBank = method.type === 'BANK';
+          // Real number when decryption succeeded (the normal case); falls
+          // back to the masked column only if it didn't -- see
+          // P2PSellerPaymentMethod's doc comment.
+          const number = isBank
+            ? (method.accountNumber ?? method.accountNumberMasked)
+            : (method.mobileMoneyNumber ?? method.mobileMoneyNumberMasked);
+
+          function handleCopy() {
+            if (!number) return;
+            void navigator.clipboard.writeText(number).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            });
+          }
+
+          return (
+            <div className="rounded-lg border border-line bg-bg p-3 text-sm">
+              <p className="font-black">Seller payment details -- pay this account</p>
+              <p className="mt-1">
+                {isBank ? (method.bankName ?? method.bankCode) : method.mobileMoneyNetwork}
+                {method.accountName && <> · {method.accountName}</>}
+              </p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="font-mono text-base font-black tracking-wide">{number}</span>
+                {number && (
+                  <button
+                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-xs font-bold text-ink hover:bg-surface-muted"
+                    onClick={handleCopy}
+                    type="button"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="size-3.5 text-emerald-600" aria-hidden="true" /> Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="size-3.5" aria-hidden="true" /> Copy
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+              {trade.sellerPaymentInstructions && (
+                <p className="mt-1 text-muted">{trade.sellerPaymentInstructions}</p>
+              )}
+            </div>
+          );
+        })()}
       {trade.status === 'AWAITING_PAYMENT' && (
         <p className="text-sm text-muted">
           Payment deadline: {formatDateTime(trade.paymentDeadlineAt)}

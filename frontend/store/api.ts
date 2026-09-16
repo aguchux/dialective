@@ -1057,6 +1057,19 @@ export interface P2PTraderProfile {
   avgReleaseSeconds: number | null;
 }
 
+/**
+ * P2PTrade-only: unlike PayoutAccount elsewhere (e.g. the trainer's own "my
+ * payout accounts" list, where only the masked form is ever returned), a
+ * trade's buyer needs the REAL account number to actually pay the seller --
+ * see P2PService.serializeTrade's decryptForParticipant. accountNumber/
+ * mobileMoneyNumber are null only if decryption failed server-side; the
+ * *Masked fields are always still present as a fallback for display.
+ */
+export interface P2PSellerPaymentMethod extends PayoutAccount {
+  accountNumber: string | null;
+  mobileMoneyNumber: string | null;
+}
+
 export interface P2PTrade {
   id: string;
   offerId: string;
@@ -1069,7 +1082,7 @@ export interface P2PTrade {
   fiatAmount: string;
   fiatCurrency: string;
   paymentMethod: string;
-  sellerPaymentMethod: PayoutAccount | null;
+  sellerPaymentMethod: P2PSellerPaymentMethod | null;
   sellerPaymentInstructions: string | null;
   status: P2PTradeStatus;
   paymentDeadlineAt: string;
