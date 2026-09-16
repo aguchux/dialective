@@ -694,6 +694,15 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  withdrawalsEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(280)
+  withdrawalsDisabledMessage?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
   cryptoWithdrawalsEnabled?: boolean;
 
   @IsOptional()
