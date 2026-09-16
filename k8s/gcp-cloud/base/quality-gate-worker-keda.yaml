@@ -6,11 +6,12 @@
 # recognizes -- see the fix on vosk-worker-keda.yaml, same bug would apply
 # here since this is the same trigger type against the same TLS port).
 #
-# maxReplicaCount is 30 here (vs. 15 on DO) now that
-# quality-gate-worker-deployment.yaml sets real CPU/memory requests --
-# GKE's cluster autoscaler can add nodes (node pool's max-nodes=3,
-# e2-standard-2 each) as replicas climb instead of overpacking the single
-# existing node the way DO did before requests existed.
+# maxReplicaCount was originally 30 on the (mistaken) assumption that GKE's
+# cluster autoscaler would add nodes as replicas climbed -- it never did,
+# because the node pool's own max-nodes=3 cap was already reached, so 30
+# replicas x 256Mi requests (7.68Gi) just overpacked the existing 3 nodes
+# instead, pushing 2 of them to ~100% memory. Capped at 10 (2.5Gi peak
+# requests) so this stays comfortably within the fixed 3-node pool.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -19,7 +20,7 @@ spec:
   scaleTargetRef:
     name: quality-gate-worker
   minReplicaCount: 0
-  maxReplicaCount: 30
+  maxReplicaCount: 10
   cooldownPeriod: 120
   pollingInterval: 15
   triggers:
