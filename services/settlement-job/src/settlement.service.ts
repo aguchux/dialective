@@ -878,9 +878,18 @@ export class SettlementService {
         );
 
         if (compositeScore < minQualityScoreForPayout) {
+          // Must move off status='SCORED' here, not just stamp refundedAt --
+          // this sweep's own driving query above selects on
+          // {status: 'SCORED', settledAt: null}, so leaving status
+          // unchanged would re-select this row on every future run forever
+          // (the ledger's unique constraint blocks a double-refund, but the
+          // resulting P2002 would log an error on every single pass). Also
+          // guard the claim on refundedAt: null, matching every other
+          // refund sweep in this file, so two overlapping runs can't both
+          // win the claim before either commits its refund.
           const claim = await this.prisma.domainConversationRecording.updateMany({
-            where: { id: recording.id, settledAt: null },
-            data: { compositeScore, refundedAt: new Date() },
+            where: { id: recording.id, settledAt: null, refundedAt: null },
+            data: { status: 'EXPIRED', compositeScore, refundedAt: new Date() },
           });
           if (claim.count === 0) continue;
           if (await this.wasLocked(recording.id)) {

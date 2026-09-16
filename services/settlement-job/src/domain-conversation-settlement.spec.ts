@@ -149,10 +149,68 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
 
     expect(result.settledCount).toBe(0);
     expect(prisma.domainConversationRecording.updateMany).toHaveBeenCalledWith({
-      where: { id: 'dc-rec-2', settledAt: null },
-      data: expect.objectContaining({ refundedAt: expect.any(Date) }),
+      where: { id: 'dc-rec-2', settledAt: null, refundedAt: null },
+      data: expect.objectContaining({ status: 'EXPIRED', refundedAt: expect.any(Date) }),
     });
     // No wasLocked ledger entry exists in this mock, so no wallet refund fires.
+    expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('moves a below-floor row off status=SCORED so it is not re-selected by the driving query on the next run', async () => {
+    // The driving query (findMany above) filters on {status: 'SCORED',
+    // settledAt: null} -- if the refund path left status unchanged, this
+    // same row would be re-selected and re-processed forever. Assert the
+    // updateMany's `data` actually flips status to a terminal value.
+    const prisma = buildPrismaMock({
+      domainConversationRecording: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'dc-rec-3',
+            userId: 'user-1',
+            tokensSpent: { toNumber: () => 3 },
+            noiseScore: { toNumber: () => 10 },
+            qualityScore: { toNumber: () => 10 },
+            livenessScore: { toNumber: () => 10 },
+          },
+        ]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    });
+    const service = buildService(prisma);
+
+    // @ts-expect-error -- private method under test
+    await service.settleDomainConversationRecordings(1, { noise: 40, quality: 30, liveness: 30 }, 50, 0, false);
+
+    const [[{ data }]] = prisma.domainConversationRecording.updateMany.mock.calls;
+    expect(data.status).toBe('EXPIRED');
+  });
+
+  it('a second overlapping claim on the same below-floor row is a no-op (guarded on refundedAt: null)', async () => {
+    const prisma = buildPrismaMock({
+      domainConversationRecording: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'dc-rec-4',
+            userId: 'user-1',
+            tokensSpent: { toNumber: () => 3 },
+            noiseScore: { toNumber: () => 10 },
+            qualityScore: { toNumber: () => 10 },
+            livenessScore: { toNumber: () => 10 },
+          },
+        ]),
+        // Simulates a second concurrent run losing the race: refundedAt was
+        // already claimed by the first run, so this updateMany matches 0 rows.
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    });
+    const service = buildService(prisma);
+
+    // @ts-expect-error -- private method under test
+    const result = await service.settleDomainConversationRecordings(1, { noise: 40, quality: 30, liveness: 30 }, 50, 0, false);
+
+    expect(result.settledCount).toBe(0);
     expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
   });
 });
