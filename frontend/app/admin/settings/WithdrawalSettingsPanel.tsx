@@ -20,6 +20,8 @@ export function WithdrawalSettingsPanel() {
   const { data: settings, isLoading } = useGetPlatformSettingsQuery();
   const [updateSettings, { isLoading: isSaving }] = useUpdatePlatformSettingsMutation();
 
+  const [withdrawalsEnabled, setWithdrawalsEnabled] = useState(true);
+  const [withdrawalsDisabledMessage, setWithdrawalsDisabledMessage] = useState('');
   const [cryptoWithdrawalsEnabled, setCryptoWithdrawalsEnabled] = useState(true);
   const [nowPaymentsPayoutsEnabled, setNowPaymentsPayoutsEnabled] = useState(false);
   const [autoSubmitAfterApproval, setAutoSubmitAfterApproval] = useState(false);
@@ -33,6 +35,8 @@ export function WithdrawalSettingsPanel() {
 
   useEffect(() => {
     if (!settings) return;
+    setWithdrawalsEnabled(settings.withdrawalsEnabled);
+    setWithdrawalsDisabledMessage(settings.withdrawalsDisabledMessage ?? '');
     setCryptoWithdrawalsEnabled(settings.cryptoWithdrawalsEnabled);
     setNowPaymentsPayoutsEnabled(settings.nowPaymentsPayoutsEnabled);
     setAutoSubmitAfterApproval(settings.autoSubmitAfterApproval);
@@ -73,6 +77,10 @@ export function WithdrawalSettingsPanel() {
 
     try {
       await updateSettings({
+        withdrawalsEnabled,
+        withdrawalsDisabledMessage: withdrawalsEnabled
+          ? null
+          : withdrawalsDisabledMessage.trim() || null,
         cryptoWithdrawalsEnabled,
         nowPaymentsPayoutsEnabled,
         autoSubmitAfterApproval,
@@ -106,6 +114,47 @@ export function WithdrawalSettingsPanel() {
       {isLoading && <p className="text-muted">Loading...</p>}
       {!isLoading && (
         <form className="grid gap-4 md:max-w-lg" onSubmit={handleSave}>
+          <div
+            className={`grid gap-3 rounded-lg border p-4 ${
+              withdrawalsEnabled ? 'border-line bg-surface-muted' : 'border-danger bg-danger/10'
+            }`}
+          >
+            <label className="flex cursor-pointer items-start gap-3" htmlFor="withdrawals-enabled">
+              <input
+                checked={withdrawalsEnabled}
+                className="mt-0.5 size-5 accent-danger"
+                id="withdrawals-enabled"
+                onChange={(event) => setWithdrawalsEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Withdrawals enabled (all rails)</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Global stop switch -- uncheck to immediately block every new withdrawal request
+                  (crypto, Stripe, and fiat/Flutterwave alike), regardless of the per-rail settings
+                  below. Existing PENDING/APPROVED requests are unaffected; admins can still resolve
+                  them manually.
+                </span>
+              </span>
+            </label>
+            {!withdrawalsEnabled && (
+              <div className="grid gap-1">
+                <label className="font-bold" htmlFor="withdrawals-disabled-message">
+                  Message shown to trainers (optional)
+                </label>
+                <input
+                  className={inputClass}
+                  id="withdrawals-disabled-message"
+                  maxLength={280}
+                  onChange={(e) => setWithdrawalsDisabledMessage(e.target.value)}
+                  placeholder="Withdrawals are temporarily paused for scheduled maintenance."
+                  type="text"
+                  value={withdrawalsDisabledMessage}
+                />
+              </div>
+            )}
+          </div>
+
           <div>
             <label
               className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"

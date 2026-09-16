@@ -29,6 +29,7 @@ describe('WalletController crypto withdrawal eligibility', () => {
     walletBalance?: number;
     minWalletBalanceTokens?: number;
     kycMinTokens?: number;
+    withdrawalsEnabled?: boolean;
   }) {
     const prisma = {
       wordRecording: { count: jest.fn().mockResolvedValue(overrides?.settledWordRecordings ?? 100) },
@@ -57,6 +58,9 @@ describe('WalletController crypto withdrawal eligibility', () => {
       },
     };
     const platformSettings = {
+      getWithdrawalsEnabledStatus: jest
+        .fn()
+        .mockResolvedValue({ enabled: overrides?.withdrawalsEnabled ?? true, message: null }),
       isCryptoWithdrawalsEnabled: jest.fn().mockResolvedValue(true),
       getMinWithdrawalTokens: jest.fn().mockResolvedValue(50),
       getMinWalletBalanceTokens: jest.fn().mockResolvedValue(overrides?.minWalletBalanceTokens ?? 0),
@@ -83,6 +87,15 @@ describe('WalletController crypto withdrawal eligibility', () => {
     );
     return { controller, prisma, otp, nowPayments };
   }
+
+  it('rejects every withdrawal request while the global withdrawalsEnabled switch is off, regardless of rail', async () => {
+    const { controller, otp } = setup({ withdrawalsEnabled: false });
+
+    await expect(controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody)).rejects.toThrow(
+      'Withdrawals are currently disabled',
+    );
+    expect(otp.issueForUser).not.toHaveBeenCalled();
+  });
 
   it('requires the configured settled-task count before issuing a crypto withdrawal OTP', async () => {
     const { controller, prisma, otp } = setup({ settledWordRecordings: 99 });

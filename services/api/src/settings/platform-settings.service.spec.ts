@@ -73,6 +73,27 @@ describe('PlatformSettingsService.getTopBanner', () => {
   });
 });
 
+describe('PlatformSettingsService.getWithdrawalsEnabledStatus', () => {
+  it('reflects the row -- enabled true, no message, by default', async () => {
+    const { service } = setup({ withdrawalsEnabled: true, withdrawalsDisabledMessage: null });
+    await expect(service.getWithdrawalsEnabledStatus()).resolves.toEqual({
+      enabled: true,
+      message: null,
+    });
+  });
+
+  it('surfaces the admin-authored message once disabled', async () => {
+    const { service } = setup({
+      withdrawalsEnabled: false,
+      withdrawalsDisabledMessage: 'Paused for scheduled maintenance',
+    });
+    await expect(service.getWithdrawalsEnabledStatus()).resolves.toEqual({
+      enabled: false,
+      message: 'Paused for scheduled maintenance',
+    });
+  });
+});
+
 describe('PlatformSettingsService.uploadTopBannerImage', () => {
   it('rejects an unsupported content type', async () => {
     const { service } = setup({});

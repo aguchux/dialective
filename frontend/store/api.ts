@@ -1270,6 +1270,9 @@ export interface PublicClientSettings {
   isFlutterwavePayoutsEnabled: boolean;
   isStripePayoutsEnabled: boolean;
   isCryptoWithdrawalsEnabled: boolean;
+  /** Global master switch checked ahead of the three per-rail flags above -- false means every payout rail is blocked, regardless of the others. */
+  withdrawalsEnabled: boolean;
+  withdrawalsDisabledMessage: string | null;
   allowedWithdrawalCurrencies: string;
   allowedWithdrawalNetworks: string;
   testimonyEnabled: boolean;
@@ -1839,6 +1842,8 @@ export interface PlatformSettings {
   whatsappMetaTemplateLanguage: string;
   /** Whether a Meta access token is currently saved -- the token itself is never returned to the client. */
   whatsappMetaAccessTokenSet: boolean;
+  withdrawalsEnabled: boolean;
+  withdrawalsDisabledMessage: string | null;
   cryptoWithdrawalsEnabled: boolean;
   nowPaymentsPayoutsEnabled: boolean;
   allowedWithdrawalCurrencies: string;
@@ -2014,6 +2019,8 @@ export interface PlatformSettingsInput {
   whatsappMetaTemplateLanguage?: string;
   /** Plaintext -- encrypted server-side before persisting, never echoed back. Omit to leave unchanged; pass '' to clear. */
   whatsappMetaAccessToken?: string;
+  withdrawalsEnabled?: boolean;
+  withdrawalsDisabledMessage?: string | null;
   cryptoWithdrawalsEnabled?: boolean;
   nowPaymentsPayoutsEnabled?: boolean;
   allowedWithdrawalCurrencies?: string;

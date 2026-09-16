@@ -587,6 +587,17 @@ export class PlatformSettingsService {
     return { mode: mode === 'AI' || mode === 'NONE' ? mode : 'TAWK' };
   }
 
+  /**
+   * Global master switch checked before every per-rail flag (crypto/Stripe/
+   * Flutterwave) -- see WalletController.validateCommonWithdrawalRequirements.
+   * Returns the admin-authored message too so the caller doesn't need a
+   * second round-trip to explain why withdrawals are paused.
+   */
+  async getWithdrawalsEnabledStatus(): Promise<{ enabled: boolean; message: string | null }> {
+    const row = await this.getRow();
+    return { enabled: row.withdrawalsEnabled, message: row.withdrawalsDisabledMessage };
+  }
+
   async isCryptoWithdrawalsEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.cryptoWithdrawalsEnabled;
@@ -1179,6 +1190,8 @@ export class PlatformSettingsService {
       validatorL2ApprovalBonusPercent: row.validatorL2ApprovalBonusPercent.toString(),
       validatorL3ApprovalBonusPercent: row.validatorL3ApprovalBonusPercent.toString(),
       validatorReassignmentPenaltyPercent: row.validatorReassignmentPenaltyPercent.toString(),
+      withdrawalsEnabled: row.withdrawalsEnabled,
+      withdrawalsDisabledMessage: row.withdrawalsDisabledMessage,
       cryptoWithdrawalsEnabled: row.cryptoWithdrawalsEnabled,
       nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
@@ -1391,6 +1404,8 @@ export class PlatformSettingsService {
     validatorL2ApprovalBonusPercent?: number;
     validatorL3ApprovalBonusPercent?: number;
     validatorReassignmentPenaltyPercent?: number;
+    withdrawalsEnabled?: boolean;
+    withdrawalsDisabledMessage?: string | null;
     cryptoWithdrawalsEnabled?: boolean;
     nowPaymentsPayoutsEnabled?: boolean;
     allowedWithdrawalCurrencies?: string;
@@ -2068,6 +2083,8 @@ export class PlatformSettingsService {
       validatorL2ApprovalBonusPercent: row.validatorL2ApprovalBonusPercent.toString(),
       validatorL3ApprovalBonusPercent: row.validatorL3ApprovalBonusPercent.toString(),
       validatorReassignmentPenaltyPercent: row.validatorReassignmentPenaltyPercent.toString(),
+      withdrawalsEnabled: row.withdrawalsEnabled,
+      withdrawalsDisabledMessage: row.withdrawalsDisabledMessage,
       cryptoWithdrawalsEnabled: row.cryptoWithdrawalsEnabled,
       nowPaymentsPayoutsEnabled: row.nowPaymentsPayoutsEnabled,
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
@@ -2148,6 +2165,7 @@ export class PlatformSettingsService {
       isStripePayoutsEnabled,
       isCryptoWithdrawalsEnabled,
       topBanner,
+      withdrawalsStatus,
     ] = await Promise.all([
       this.getReferralCookiePersistSeconds(),
       this.getReferralInviteExpirySeconds(),
@@ -2167,6 +2185,7 @@ export class PlatformSettingsService {
       this.isStripePayoutsEnabled(),
       this.isCryptoWithdrawalsEnabled(),
       this.getTopBanner(),
+      this.getWithdrawalsEnabledStatus(),
     ]);
     return {
       referralCookiePersistSeconds,
@@ -2229,6 +2248,12 @@ export class PlatformSettingsService {
       isFlutterwavePayoutsEnabled,
       isStripePayoutsEnabled,
       isCryptoWithdrawalsEnabled,
+      // Global master switch, checked ahead of the three per-rail flags
+      // above -- withdrawalsEnabled=false means the trainer's withdraw
+      // button/flow should be disabled regardless of which rail is
+      // otherwise configured on.
+      withdrawalsEnabled: withdrawalsStatus.enabled,
+      withdrawalsDisabledMessage: withdrawalsStatus.message,
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
       allowedWithdrawalNetworks: row.allowedWithdrawalNetworks,
       testimonyEnabled: row.testimonyEnabled,

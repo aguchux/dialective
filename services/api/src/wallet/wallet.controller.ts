@@ -1997,6 +1997,16 @@ export class WalletController {
     userId: string,
     tokenAmount: number,
   ): Promise<void> {
+    // Global kill switch, checked before any per-rail flag (crypto/Stripe/
+    // Flutterwave) or any other requirement below -- when off, every
+    // payout rail is blocked outright, not just one.
+    const withdrawalsStatus = await this.platformSettings.getWithdrawalsEnabledStatus();
+    if (!withdrawalsStatus.enabled) {
+      throw new UnprocessableEntityException(
+        withdrawalsStatus.message ?? 'Withdrawals are currently disabled',
+      );
+    }
+
     const minTokens = await this.platformSettings.getMinWithdrawalTokens();
     if (tokenAmount < minTokens) {
       throw new UnprocessableEntityException(`Minimum withdrawal is ${minTokens} tokens`);

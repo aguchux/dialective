@@ -4793,6 +4793,7 @@ function WithdrawTokensDialog({
   const kycBlocked = kycRequired && kycStatus !== 'APPROVED';
   const tasksRemaining = Math.max(0, minCompletedTasksForWithdrawal - completedTasksForWithdrawal);
   const tasksBlocked = tasksRemaining > 0;
+  const withdrawalsGloballyDisabled = publicSettings?.withdrawalsEnabled === false;
   const withdrawableBalanceNumber = Number(withdrawableBalanceTokens);
   const minWalletBalanceNumber = Number(minWalletBalanceTokens);
   const exceedsWithdrawableBalance = amountNumber > withdrawableBalanceNumber;
@@ -4978,7 +4979,19 @@ function WithdrawTokensDialog({
           <span className="sm:hidden">Withdraw</span>
         </button>
       </DialogTrigger>
-      {tasksBlocked ? (
+      {withdrawalsGloballyDisabled ? (
+        <DialogContent title="Withdrawals are paused">
+          <div className="grid gap-4">
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-line bg-surface p-6 text-center">
+              <ArrowUpRight className="size-12 text-muted" aria-hidden="true" />
+              <p className="text-sm leading-relaxed text-muted">
+                {publicSettings?.withdrawalsDisabledMessage ??
+                  'Withdrawals are temporarily paused. Please check back later.'}
+              </p>
+            </div>
+          </div>
+        </DialogContent>
+      ) : tasksBlocked ? (
         <DialogContent
           title="Keep training to unlock withdrawals"
           description={`Withdrawals open up once you've completed ${minCompletedTasksForWithdrawal} tasks.`}
