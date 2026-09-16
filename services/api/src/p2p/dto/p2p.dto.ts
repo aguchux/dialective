@@ -33,10 +33,6 @@ export class CreateOfferDto {
   @Min(0.00000001)
   tokenAmount!: number;
 
-  @IsNumber()
-  @Min(0.01)
-  fiatAmount!: number;
-
   @IsString()
   @IsNotEmpty()
   fiatCurrency!: string;
@@ -188,13 +184,15 @@ export class RequestP2pTradeOtpDto {
   tokenAmount?: number;
 
   @IsOptional()
-  @IsNumber()
-  @Min(0.01)
-  fiatAmount?: number;
-
-  @IsOptional()
   @IsString()
   fiatCurrency?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  paymentMethodIds?: string[];
 
   // accept-offer context
   @IsOptional()

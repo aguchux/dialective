@@ -23,9 +23,12 @@ export function hashOtpCode(code: string): string {
  * {otpRequestId, code} pair from being replayed against a modified
  * amount/destination/recipient. Key order must stay fixed (JSON.stringify on
  * an object literal preserves insertion order for string keys), so callers
- * must build the input object with the same key order every time.
+ * must build the input object with the same key order every time. Any
+ * string[] value (e.g. a set of selected payout account ids) must also be
+ * built in the same element order at both request and verify time --
+ * JSON.stringify does not sort array elements.
  */
-export function hashContext(context: Record<string, string | number>): string {
+export function hashContext(context: Record<string, string | number | string[]>): string {
   return createHash('sha256').update(JSON.stringify(context)).digest('hex');
 }
 

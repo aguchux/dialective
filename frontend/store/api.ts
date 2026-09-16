@@ -1028,7 +1028,13 @@ export interface P2PMarketSettings {
 export interface P2PReferenceRate {
   currencyCode: string | null;
   tokenReferencePrice: string | null;
+  tokenUsdPrice: string;
   updatedAt: string | null;
+  availableCurrencies: Array<{
+    currencyCode: string;
+    tokenReferencePrice: string;
+    updatedAt: string | null;
+  }>;
 }
 
 export interface P2POffer {
@@ -1050,6 +1056,7 @@ export interface P2POffer {
   completedSaleCount?: number;
   tokenAmount: string;
   remainingTokens: string;
+  usdAmount: string;
   fiatAmount: string;
   fiatCurrency: string;
   paymentMethod: string;
@@ -1104,6 +1111,7 @@ export interface P2PTrade {
   buyer: P2PTradeCounterparty;
   seller: P2PTradeCounterparty;
   tokenAmount: string;
+  usdAmount: string;
   fiatAmount: string;
   fiatCurrency: string;
   paymentMethod: string;
@@ -3163,8 +3171,8 @@ export const dialectivaApi = createApi({
           action: 'create-offer';
           type: P2POfferType;
           tokenAmount: number;
-          fiatAmount: number;
           fiatCurrency: string;
+          paymentMethodIds?: string[];
         }
       | { action: 'accept-offer'; offerId: string }
     >({
@@ -3175,7 +3183,6 @@ export const dialectivaApi = createApi({
       {
         type: P2POfferType;
         tokenAmount: number;
-        fiatAmount: number;
         fiatCurrency: string;
         paymentMethod: string;
         paymentMethodIds?: string[];

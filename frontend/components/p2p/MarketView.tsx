@@ -43,7 +43,6 @@ export function MarketView() {
     : '/dashboard/market-activity';
   const [offerType, setOfferType] = useState<'SELL' | 'BUY'>('SELL');
   const [tokenAmount, setTokenAmount] = useState('10');
-  const [fiatAmount, setFiatAmount] = useState('10000');
   const [fiatCurrency, setFiatCurrency] = useState('NGN');
   const [createOpen, setCreateOpen] = useState(false);
   const [error, setError] = useState('');
@@ -62,10 +61,19 @@ export function MarketView() {
   // hiding unverified accounts from P2P entirely (see
   // P2PService.getEnabledPaymentMethod's updated doc comment).
   const [selectedPayoutAccountIds, setSelectedPayoutAccountIds] = useState<string[]>([]);
+  const currencyPayoutAccounts = payoutAccounts.filter(
+    (account) => account.currency.toUpperCase() === fiatCurrency,
+  );
   const primaryMethod =
-    payoutAccounts.find((account) => selectedPayoutAccountIds.includes(account.id)) ??
-    payoutAccounts.find((account) => account.isDefault) ??
-    payoutAccounts[0];
+    currencyPayoutAccounts.find((account) => selectedPayoutAccountIds.includes(account.id)) ??
+    currencyPayoutAccounts.find((account) => account.isDefault) ??
+    currencyPayoutAccounts[0];
+  const offerPaymentMethodIds =
+    selectedPayoutAccountIds.length > 0
+      ? selectedPayoutAccountIds
+      : primaryMethod
+        ? [primaryMethod.id]
+        : undefined;
   const phoneVerificationRequired = platformSettings?.phoneVerificationRequired ?? true;
   const phoneVerified = me?.phoneVerified ?? false;
   // Trading is blocked on phone verification only while that requirement
@@ -84,33 +92,33 @@ export function MarketView() {
     null,
   );
 
-  // Pre-fills the offer form's currency with the trainer's own country currency once known; the field stays editable.
+  const availableCurrencies = referenceRate?.availableCurrencies ?? [];
+  const activeQuote = availableCurrencies.find((quote) => quote.currencyCode === fiatCurrency);
+  const fiatAmount = activeQuote
+    ? (Number(tokenAmount) * Number(activeQuote.tokenReferencePrice)).toFixed(2)
+    : '';
+  const usdAmount = referenceRate?.tokenUsdPrice
+    ? (Number(tokenAmount) * Number(referenceRate.tokenUsdPrice)).toFixed(2)
+    : '';
+
+  // Country currency is the default whenever it has an enabled conversion quote.
   useEffect(() => {
     if (referenceRate?.currencyCode) setFiatCurrency(referenceRate.currencyCode);
   }, [referenceRate?.currencyCode]);
 
-  function deriveFiatAmount(tokens: number): string | null {
-    const rate = referenceRate?.tokenReferencePrice
-      ? Number(referenceRate.tokenReferencePrice)
-      : null;
-    if (!rate || !Number.isFinite(tokens) || tokens <= 0) return null;
-    return (tokens * rate).toFixed(2).replace(/\.00$/, '');
-  }
-
   function updateTokenAmount(value: string) {
     setTokenAmount(value);
-    const derived = deriveFiatAmount(Number(value));
-    if (derived) setFiatAmount(derived);
   }
 
-  // Re-derive the fiat amount from the current token amount whenever the dialog opens, so a stale
-  // manual edit from a previous session doesn't linger once the reference rate is known.
   useEffect(() => {
-    if (!createOpen) return;
-    const derived = deriveFiatAmount(Number(tokenAmount));
-    if (derived) setFiatAmount(derived);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createOpen, referenceRate?.tokenReferencePrice]);
+    if (!createOpen || offerType !== 'SELL' || currencyPayoutAccounts.length > 0) return;
+    const firstSupportedAccount = payoutAccounts.find((account) =>
+      availableCurrencies.some(
+        (quote) => quote.currencyCode === account.currency.toUpperCase(),
+      ),
+    );
+    if (firstSupportedAccount) setFiatCurrency(firstSupportedAccount.currency.toUpperCase());
+  }, [availableCurrencies, createOpen, currencyPayoutAccounts.length, offerType, payoutAccounts]);
 
   async function submitOffer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -121,8 +129,8 @@ export function MarketView() {
           action: 'create-offer',
           type: offerType,
           tokenAmount: Number(tokenAmount),
-          fiatAmount: Number(fiatAmount),
           fiatCurrency,
+          paymentMethodIds: offerType === 'SELL' ? offerPaymentMethodIds : undefined,
         }).unwrap();
         setOfferOtpRequestId(otp.otpRequestId);
         return;
@@ -130,16 +138,11 @@ export function MarketView() {
       await createOffer({
         type: offerType,
         tokenAmount: Number(tokenAmount),
-        fiatAmount: Number(fiatAmount),
         fiatCurrency,
         paymentMethod: 'BANK_TRANSFER',
         paymentMethodIds:
           offerType === 'SELL'
-            ? selectedPayoutAccountIds.length > 0
-              ? selectedPayoutAccountIds
-              : primaryMethod
-                ? [primaryMethod.id]
-                : undefined
+            ? offerPaymentMethodIds
             : undefined,
         ...(offerOtpRequestId
           ? { otpRequestId: offerOtpRequestId, code: offerOtpCode.trim() }
@@ -286,46 +289,64 @@ export function MarketView() {
                     value={tokenAmount}
                   />
                 </label>
-                {referenceRate?.tokenReferencePrice && referenceRate.currencyCode && (
+                {activeQuote && (
                   <p className="text-xs text-muted">
-                    Reference: 1 DL ≈ {Number(referenceRate.tokenReferencePrice).toLocaleString()}{' '}
-                    {referenceRate.currencyCode} — you can price above or below this.
+                    System rate: 1 DL ≈{' '}
+                    {Number(activeQuote.tokenReferencePrice).toLocaleString()} {fiatCurrency}. The
+                    final amount is calculated automatically.
                   </p>
                 )}
                 <div className="grid grid-cols-[1fr_auto] gap-2">
                   <label className="grid gap-1.5 text-sm font-bold">
-                    Fiat amount
+                    Payment amount
                     <input
-                      className="min-h-11 rounded-lg border border-line bg-bg px-3"
-                      min="0"
-                      onChange={(e) => setFiatAmount(e.target.value)}
-                      step="0.01"
-                      type="number"
+                      className="min-h-11 rounded-lg border border-line bg-surface-muted px-3 text-muted"
+                      readOnly
                       value={fiatAmount}
                     />
                   </label>
                   <label className="grid gap-1.5 text-sm font-bold">
                     Currency
-                    <input
-                      className="min-h-11 w-20 rounded-lg border border-line bg-bg px-2 text-center uppercase"
-                      maxLength={3}
-                      onChange={(e) => setFiatCurrency(e.target.value.toUpperCase())}
+                    <select
+                      className="min-h-11 w-24 rounded-lg border border-line bg-bg px-2 text-center uppercase"
+                      onChange={(e) => {
+                        setFiatCurrency(e.target.value);
+                        setSelectedPayoutAccountIds([]);
+                      }}
                       value={fiatCurrency}
-                    />
+                    >
+                      {availableCurrencies
+                        .filter(
+                          (quote) =>
+                            offerType === 'BUY' ||
+                            payoutAccounts.some(
+                              (account) =>
+                                account.currency.toUpperCase() === quote.currencyCode,
+                            ),
+                        )
+                        .map((quote) => (
+                          <option key={quote.currencyCode} value={quote.currencyCode}>
+                            {quote.currencyCode}
+                          </option>
+                        ))}
+                    </select>
                   </label>
                 </div>
+                {usdAmount && (
+                  <p className="text-xs font-bold text-muted">USD value: ${usdAmount}</p>
+                )}
                 {offerType === 'SELL' && payoutAccounts.length === 0 && (
                   <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
                     Add a payout account in Profile before posting a sell offer.
                   </p>
                 )}
-                {offerType === 'SELL' && payoutAccounts.length > 0 && (
+                {offerType === 'SELL' && currencyPayoutAccounts.length > 0 && (
                   <fieldset className="grid gap-1.5">
                     <legend className="text-sm font-bold">
                       Receive payment to -- select one or more
                     </legend>
                     <div className="grid gap-1.5">
-                      {payoutAccounts.map((account) => {
+                      {currencyPayoutAccounts.map((account) => {
                         const label =
                           account.type === 'BANK'
                             ? `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`
@@ -383,6 +404,8 @@ export function MarketView() {
                   disabled={
                     marketDisabled ||
                     (offerType === 'SELL' && payoutAccounts.length === 0) ||
+                    !activeQuote ||
+                    !fiatAmount ||
                     (Boolean(offerOtpRequestId) && !offerOtpCode.trim())
                   }
                   pending={offerSaving || tradeOtpSending}

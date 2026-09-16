@@ -22,6 +22,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { SmsService } from '../sms/sms.service';
 import { tokensToLocalCurrency } from '../wallet/currency-rate.util';
+import { tokensToUsdt } from '../wallet/token-rate.util';
 import { decryptPayoutField, EncryptedPayoutField } from '../common/payout-crypto.util';
 import {
   AcceptOfferDto,
@@ -65,27 +66,63 @@ export class P2PService {
    * offer above or below it. Never enforced -- fiatAmount stays free-text.
    */
   async getReferenceRate(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        country: {
-          select: { currencyCode: true, usdExchangeRate: true, exchangeRateUpdatedAt: true },
+    const [user, settings, tokenUsdRate] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          country: {
+            select: { currencyCode: true, usdExchangeRate: true, exchangeRateUpdatedAt: true },
+          },
         },
-      },
-    });
-    if (!user?.country || user.country.usdExchangeRate === null) {
-      return { currencyCode: null, tokenReferencePrice: null, updatedAt: null };
+      }),
+      this.settingsRow(),
+      this.platformSettings.getTokenUsdRate(),
+    ]);
+    const allowedCurrencies = parseCsv(settings.allowedFiatCurrencies);
+    const fiatCurrencies = allowedCurrencies.filter((currency) => !isUsdEquivalent(currency));
+    const countries = fiatCurrencies.length
+      ? await this.prisma.country.findMany({
+          where: { currencyCode: { in: fiatCurrencies }, usdExchangeRate: { not: null } },
+          select: { currencyCode: true, usdExchangeRate: true, exchangeRateUpdatedAt: true },
+          orderBy: { exchangeRateUpdatedAt: 'desc' },
+        })
+      : [];
+    const quotes = new Map<string, { tokenReferencePrice: string; updatedAt: Date | null }>();
+    for (const currency of allowedCurrencies) {
+      if (isUsdEquivalent(currency)) {
+        quotes.set(currency, {
+          tokenReferencePrice: roundMoney(tokensToUsdt(1, tokenUsdRate)).toString(),
+          updatedAt: null,
+        });
+        continue;
+      }
+      const country =
+        user?.country?.currencyCode.toUpperCase() === currency &&
+        user.country.usdExchangeRate !== null
+          ? user.country
+          : countries.find((candidate) => candidate.currencyCode.toUpperCase() === currency);
+      if (!country?.usdExchangeRate) continue;
+      quotes.set(currency, {
+        tokenReferencePrice: roundMoney(
+          tokensToLocalCurrency(1, tokenUsdRate, country.usdExchangeRate.toNumber()),
+        ).toString(),
+        updatedAt: country.exchangeRateUpdatedAt,
+      });
     }
-    const tokenUsdRate = await this.platformSettings.getTokenUsdRate();
-    const tokenReferencePrice = tokensToLocalCurrency(
-      1,
-      tokenUsdRate,
-      user.country.usdExchangeRate.toNumber(),
-    );
+    const availableCurrencies = allowedCurrencies.flatMap((currency) => {
+      const quote = quotes.get(currency);
+      return quote ? [{ currencyCode: currency, ...quote }] : [];
+    });
+    const preferredCurrency = user?.country?.currencyCode.toUpperCase();
+    const preferred =
+      availableCurrencies.find((quote) => quote.currencyCode === preferredCurrency) ??
+      availableCurrencies[0];
     return {
-      currencyCode: user.country.currencyCode,
-      tokenReferencePrice: tokenReferencePrice.toString(),
-      updatedAt: user.country.exchangeRateUpdatedAt,
+      currencyCode: preferred?.currencyCode ?? null,
+      tokenReferencePrice: preferred?.tokenReferencePrice ?? null,
+      tokenUsdPrice: roundMoney(tokenUsdRate).toString(),
+      updatedAt: preferred?.updatedAt ?? null,
+      availableCurrencies,
     };
   }
 
@@ -173,14 +210,19 @@ export class P2PService {
       where: { id: userId },
       select: { email: true, phoneNumber: true, phoneVerifiedAt: true },
     });
+    if (dto.action === 'create-offer') {
+      const settings = await this.requireMarketEnabled(dto.type!);
+      this.validateTradeInput(settings, dto.tokenAmount!, dto.fiatCurrency!, 'BANK_TRANSFER');
+      await this.resolveOfferQuote(userId, dto.tokenAmount!, dto.fiatCurrency!);
+    }
     const contextHash =
       dto.action === 'create-offer'
         ? p2pTradeOtpContextHash({
             action: 'create-offer',
             type: dto.type!,
             tokenAmount: dto.tokenAmount!,
-            fiatAmount: dto.fiatAmount!,
             fiatCurrency: dto.fiatCurrency!,
+            paymentMethodIds: dto.paymentMethodIds,
           })
         : p2pTradeOtpContextHash({ action: 'accept-offer', offerId: dto.offerId! });
     const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
@@ -263,20 +305,20 @@ export class P2PService {
   }
 
   async createOffer(userId: string, dto: CreateOfferDto) {
+    const settings = await this.requireMarketEnabled(dto.type);
+    this.validateTradeInput(settings, dto.tokenAmount, dto.fiatCurrency, dto.paymentMethod);
     await this.requireVerifiedForTrading(
       userId,
       p2pTradeOtpContextHash({
         action: 'create-offer',
         type: dto.type,
         tokenAmount: dto.tokenAmount,
-        fiatAmount: dto.fiatAmount,
         fiatCurrency: dto.fiatCurrency,
+        paymentMethodIds: dto.paymentMethodIds,
       }),
       dto.otpRequestId,
       dto.code,
     );
-    const settings = await this.requireMarketEnabled(dto.type);
-    this.validateTradeInput(settings, dto.tokenAmount, dto.fiatCurrency, dto.paymentMethod);
 
     const openOffers = await this.prisma.p2PTokenOffer.count({
       where: { userId, status: { in: OPEN_OFFER_STATUSES } },
@@ -294,8 +336,15 @@ export class P2PService {
       }
       const methods = await this.getEnabledPaymentMethods(userId, dto.paymentMethodIds);
       paymentMethodIds = methods.map((method) => method.id);
+      const accountCurrencies = new Set(methods.map((method) => method.currency.toUpperCase()));
+      if (accountCurrencies.size !== 1 || !accountCurrencies.has(dto.fiatCurrency.toUpperCase())) {
+        throw new UnprocessableEntityException(
+          'Selected payout accounts must all use the offer currency',
+        );
+      }
     }
     const primaryPaymentMethodId = paymentMethodIds[0];
+    const quote = await this.resolveOfferQuote(userId, dto.tokenAmount, dto.fiatCurrency);
 
     const offerId = randomUUID();
     const expiresInMinutes = Math.min(
@@ -312,8 +361,9 @@ export class P2PService {
           userId,
           tokenAmount: dto.tokenAmount,
           remainingTokens: dto.tokenAmount,
-          fiatAmount: dto.fiatAmount,
-          fiatCurrency: dto.fiatCurrency,
+          usdAmount: quote.usdAmount,
+          fiatAmount: quote.fiatAmount,
+          fiatCurrency: quote.currency,
           paymentMethod: dto.paymentMethod,
           expiresAt,
         },
@@ -344,8 +394,9 @@ export class P2PService {
           userId,
           tokenAmount: dto.tokenAmount,
           remainingTokens: dto.tokenAmount,
-          fiatAmount: dto.fiatAmount,
-          fiatCurrency: dto.fiatCurrency,
+          usdAmount: quote.usdAmount,
+          fiatAmount: quote.fiatAmount,
+          fiatCurrency: quote.currency,
           paymentMethod: dto.paymentMethod,
           paymentMethodId: primaryPaymentMethodId,
           expiresAt,
@@ -683,6 +734,7 @@ export class P2PService {
             sellerId: offer.userId,
             sellerPaymentMethodId: chosenId,
             tokenAmount: offer.tokenAmount,
+            usdAmount: offer.usdAmount,
             fiatAmount: offer.fiatAmount,
             fiatCurrency: offer.fiatCurrency,
             paymentMethod: offer.paymentMethod,
@@ -702,6 +754,11 @@ export class P2PService {
     if (!dto.sellerPaymentMethodId)
       throw new BadRequestException('Seller payment method is required');
     const paymentMethod = await this.getEnabledPaymentMethod(userId, dto.sellerPaymentMethodId);
+    if (paymentMethod.currency.toUpperCase() !== offer.fiatCurrency.toUpperCase()) {
+      throw new UnprocessableEntityException(
+        `Select a payout account that receives ${offer.fiatCurrency}`,
+      );
+    }
     const wallet = await this.prisma.wallet.upsert({
       where: { userId },
       update: {},
@@ -730,6 +787,7 @@ export class P2PService {
           sellerId: userId,
           sellerPaymentMethodId: paymentMethod.id,
           tokenAmount: offer.tokenAmount,
+          usdAmount: offer.usdAmount,
           fiatAmount: offer.fiatAmount,
           fiatCurrency: offer.fiatCurrency,
           paymentMethod: offer.paymentMethod,
@@ -981,6 +1039,41 @@ export class P2PService {
       throw new UnprocessableEntityException('Fiat currency is not allowed');
     if (!csvIncludes(settings.allowedPaymentMethods, paymentMethod))
       throw new UnprocessableEntityException('Payment method is not allowed');
+  }
+
+  private async resolveOfferQuote(userId: string, tokenAmount: number, currencyInput: string) {
+    const currency = currencyInput.trim().toUpperCase();
+    const tokenUsdRate = await this.platformSettings.getTokenUsdRate();
+    const usdAmount = roundMoney(tokensToUsdt(tokenAmount, tokenUsdRate));
+    if (isUsdEquivalent(currency)) {
+      return { currency, usdAmount, fiatAmount: usdAmount };
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        country: { select: { currencyCode: true, usdExchangeRate: true } },
+      },
+    });
+    const country =
+      user?.country?.currencyCode.toUpperCase() === currency &&
+      user.country.usdExchangeRate !== null
+        ? user.country
+        : await this.prisma.country.findFirst({
+            where: { currencyCode: currency, usdExchangeRate: { not: null } },
+            select: { currencyCode: true, usdExchangeRate: true },
+            orderBy: { exchangeRateUpdatedAt: 'desc' },
+          });
+    if (!country?.usdExchangeRate) {
+      throw new UnprocessableEntityException(
+        `No current USD conversion rate is available for ${currency}`,
+      );
+    }
+    return {
+      currency,
+      usdAmount,
+      fiatAmount: roundMoney(usdAmount * country.usdExchangeRate.toNumber()),
+    };
   }
 
   /**
@@ -1266,10 +1359,22 @@ function addMinutes(date: Date, minutes: number) {
 }
 
 function csvIncludes(csv: string, value: string) {
+  return parseCsv(csv).includes(value.trim().toUpperCase());
+}
+
+function parseCsv(csv: string) {
   return csv
     .split(',')
     .map((item) => item.trim().toUpperCase())
-    .includes(value.trim().toUpperCase());
+    .filter(Boolean);
+}
+
+function isUsdEquivalent(currency: string) {
+  return ['USD', 'USDT', 'USDC'].includes(currency.toUpperCase());
+}
+
+function roundMoney(value: number) {
+  return Number(value.toFixed(8));
 }
 
 function serializeSettings(row: Awaited<ReturnType<P2PService['settingsRow']>>) {
@@ -1331,6 +1436,7 @@ function serializeOffer(offer: any, includePayment: boolean, completedSaleCount?
     completedSaleCount,
     tokenAmount: offer.tokenAmount.toString(),
     remainingTokens: offer.remainingTokens.toString(),
+    usdAmount: offer.usdAmount.toString(),
     fiatAmount: offer.fiatAmount.toString(),
     fiatCurrency: offer.fiatCurrency,
     paymentMethod: offer.paymentMethod,
@@ -1448,6 +1554,7 @@ function serializeTrade(
     buyer,
     seller,
     tokenAmount: trade.tokenAmount.toString(),
+    usdAmount: trade.usdAmount.toString(),
     fiatAmount: trade.fiatAmount.toString(),
     fiatCurrency: trade.fiatCurrency,
     paymentMethod: trade.paymentMethod,

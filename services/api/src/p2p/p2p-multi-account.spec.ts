@@ -25,7 +25,14 @@ function makeSettings(overrides: Record<string, unknown> = {}) {
 }
 
 function makeAccount(id: string, overrides: Record<string, unknown> = {}) {
-  return { id, userId: 'seller-1', type: 'BANK', verificationStatus: 'VERIFIED', ...overrides };
+  return {
+    id,
+    userId: 'seller-1',
+    type: 'BANK',
+    currency: 'NGN',
+    verificationStatus: 'VERIFIED',
+    ...overrides,
+  };
 }
 
 function setup() {
@@ -52,6 +59,14 @@ function setup() {
     },
     user: {
       findUniqueOrThrow: jest.fn().mockResolvedValue({ phoneVerifiedAt: new Date() }),
+      findUnique: jest.fn().mockResolvedValue({
+        country: { currencyCode: 'NGN', usdExchangeRate: decimal(1500) },
+      }),
+    },
+    country: {
+      findFirst: jest
+        .fn()
+        .mockResolvedValue({ currencyCode: 'NGN', usdExchangeRate: decimal(1500) }),
     },
     wallet: {
       upsert: jest.fn().mockResolvedValue({ id: 'wallet-1', balance: decimal(1000) }),
@@ -66,6 +81,7 @@ function setup() {
   const otp = { verify: jest.fn().mockResolvedValue({ id: 'otp-1' }) };
   const platformSettings = {
     isPhoneVerificationRequired: jest.fn().mockResolvedValue(true),
+    getTokenUsdRate: jest.fn().mockResolvedValue(0.1),
   };
   const service = new P2PService(prisma, otp as any, platformSettings as any, {} as any);
   jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
