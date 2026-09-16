@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: google-analytics-job
+spec:
+  # Staggered off fx-rate-job ("30 3 * * *") -- runs a few times a day
+  # rather than once, since GA4's own data-processing latency means a
+  # given day's figures keep firming up through the day; each run
+  # upserts by date so re-ingesting the same day just corrects it in
+  # place (see AnalyticsDailySnapshot's schema doc comment).
+  schedule: "15 */6 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: google-analytics-job
+              image: golojan/dialect-google-analytics-job:latest
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-creds
+                      key: connection_string
+                # Both set once an admin has created the GCP service
+                # account -- the job logs and exits 0 (not an error) while
+                # either is unset, so this CronJob can be applied ahead of
+                # that setup without showing failed runs.
+                - name: GOOGLE_ANALYTICS_PROPERTY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: google-analytics-creds
+                      key: property_id
+                      optional: true
+                - name: GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON
+                  valueFrom:
+                    secretKeyRef:
+                      name: google-analytics-creds
+                      key: service_account_json
+                      optional: true

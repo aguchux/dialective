@@ -41,6 +41,7 @@ import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.modul
 import { CommunityModule } from './community/community.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { WhatsAppValidatorModule } from './whatsapp-validator/whatsapp-validator.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { WhatsAppValidatorModule } from './whatsapp-validator/whatsapp-validator
     LeadsModule,
     AuthModule,
     SettingsModule,
+    AnalyticsModule,
     BlogModule,
     CoursesModule,
     P2PModule,

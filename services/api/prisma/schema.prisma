@@ -895,6 +895,51 @@ enum KycRecheckRunTrigger {
   MANUAL
 }
 
+/// Site-wide daily totals ingested from the GA4 Data API (Google Analytics
+/// -- see PlatformSettings.googleAnalyticsEnabled for the client-side
+/// tracking toggle, this is the separate server-side reporting pull) by a
+/// scheduled job (services/google-analytics-job). One row per calendar
+/// date, upserted so a re-run (e.g. the job retried after a transient
+/// failure) corrects that day's figures in place rather than duplicating
+/// or summing on top of a partial write -- GA4 itself may also revise a
+/// recent day's numbers for a day or two after data processing catches up,
+/// which this upsert-on-date design absorbs automatically on the next run.
+model AnalyticsDailySnapshot {
+  id                  String   @id @default(uuid())
+  date                DateTime @db.Date
+  activeUsers         Int      @default(0)
+  newUsers            Int      @default(0)
+  sessions            Int      @default(0)
+  screenPageViews     Int      @default(0)
+  averageSessionSeconds Decimal @default(0) @db.Decimal(10, 2)
+  engagementRate      Decimal  @default(0) @db.Decimal(5, 4) // 0-1 fraction, as GA4 reports it
+  conversions         Int      @default(0)
+  fetchedAt           DateTime @default(now())
+
+  @@unique([date])
+  @@map("analytics_daily_snapshots")
+}
+
+/// One row per (date, dimension, dimensionValue) -- the "top N" breakdowns
+/// (pages, countries, device categories, traffic sources) that accompany
+/// AnalyticsDailySnapshot's site-wide totals for the same date. Kept as a
+/// generic dimension/dimensionValue pair rather than one table per
+/// dimension so adding a new breakdown (e.g. traffic source) later is a
+/// job-code change only, no new migration.
+model AnalyticsDailyBreakdown {
+  id             String   @id @default(uuid())
+  date           DateTime @db.Date
+  dimension      String // "page" | "country" | "deviceCategory" | "source"
+  dimensionValue String
+  activeUsers    Int      @default(0)
+  screenPageViews Int     @default(0)
+  fetchedAt      DateTime @default(now())
+
+  @@unique([date, dimension, dimensionValue])
+  @@index([dimension, date])
+  @@map("analytics_daily_breakdowns")
+}
+
 enum KycEvidenceKind {
   DOCUMENT_FRONT
   DOCUMENT_BACK

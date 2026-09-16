@@ -12,6 +12,7 @@ on:
       - "services/word-generator-job/**"
       - "services/domain-conversation-prompt-job/**"
       - "services/fx-rate-job/**"
+      - "services/google-analytics-job/**"
       - "services/vosk-worker/**"
       - "services/whisper-worker/**"
       - "services/quality-gate-worker/**"
@@ -65,6 +66,9 @@ jobs:
           - service: fx-rate-job
             context: .
             image: fx-rate-job
+          - service: google-analytics-job
+            context: .
+            image: google-analytics-job
           - service: prompt-audio-service
             context: .
             image: prompt-audio-service

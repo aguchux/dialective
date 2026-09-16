@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
+  dialectivaApi,
   normalizeErrorMessage,
   useGetPlatformSettingsQuery,
   useUpdatePlatformSettingsMutation,
@@ -141,6 +142,187 @@ export function AnalyticsSettingsPanel() {
           {error}
         </p>
       )}
+
+      <AnalyticsReportPanel />
     </section>
+  );
+}
+
+interface AnalyticsSummary {
+  configured: boolean;
+  lastFetchedAt: string | null;
+  days: number;
+  totals: {
+    activeUsers: number;
+    newUsers: number;
+    sessions: number;
+    screenPageViews: number;
+    conversions: number;
+  };
+  daily: {
+    date: string;
+    activeUsers: number;
+    newUsers: number;
+    sessions: number;
+    screenPageViews: number;
+    averageSessionSeconds: string;
+    engagementRate: string;
+    conversions: number;
+  }[];
+}
+
+interface AnalyticsBreakdownRow {
+  value: string;
+  activeUsers: number;
+  screenPageViews: number;
+}
+
+const analyticsReportApi = dialectivaApi.injectEndpoints({
+  endpoints: (builder) => ({
+    getAnalyticsSummary: builder.query<AnalyticsSummary, { days: number }>({
+      query: ({ days }) => `/admin/analytics/summary?days=${days}`,
+    }),
+    getAnalyticsBreakdown: builder.query<AnalyticsBreakdownRow[], { dimension: string; days: number }>({
+      query: ({ dimension, days }) => `/admin/analytics/breakdown?dimension=${dimension}&days=${days}`,
+    }),
+  }),
+});
+
+const DAY_RANGE_OPTIONS = [7, 30, 90] as const;
+const BREAKDOWN_TABS = [
+  { key: 'page', label: 'Top pages' },
+  { key: 'country', label: 'Top countries' },
+  { key: 'deviceCategory', label: 'Devices' },
+] as const;
+
+function formatNumber(value: number): string {
+  return value.toLocaleString();
+}
+
+/**
+ * Read-only report over AnalyticsDailySnapshot/AnalyticsDailyBreakdown --
+ * data ingested by the google-analytics-job CronJob on its own schedule
+ * (see k8s/base/google-analytics-cronjob.yaml), not a live GA Data API
+ * call. Shows "not configured yet" (rather than an empty chart) until
+ * that job has run at least once with real GCP credentials, since a page
+ * with all-zero numbers looks broken, not merely unconfigured.
+ */
+function AnalyticsReportPanel() {
+  const [days, setDays] = useState<(typeof DAY_RANGE_OPTIONS)[number]>(30);
+  const [breakdownDimension, setBreakdownDimension] =
+    useState<(typeof BREAKDOWN_TABS)[number]['key']>('page');
+  const { data: summary, isLoading: summaryLoading } =
+    analyticsReportApi.useGetAnalyticsSummaryQuery({ days });
+  const { data: breakdown, isLoading: breakdownLoading } =
+    analyticsReportApi.useGetAnalyticsBreakdownQuery({ dimension: breakdownDimension, days });
+
+  return (
+    <div className="grid gap-4 border-t border-line pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-bold">Traffic report</h3>
+        <div className="flex gap-1">
+          {DAY_RANGE_OPTIONS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setDays(option)}
+              className={`rounded-lg border px-2.5 py-1 text-xs font-bold ${
+                days === option
+                  ? 'border-accent bg-accent-soft text-accent'
+                  : 'border-line bg-surface text-muted hover:bg-surface-muted'
+              }`}
+            >
+              {option}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {summaryLoading && <p className="text-sm text-muted">Loading report...</p>}
+
+      {!summaryLoading && summary && !summary.configured && (
+        <p className="rounded-lg border border-line bg-surface-muted px-3 py-3 text-sm leading-relaxed text-muted">
+          No data ingested yet. The scheduled ingestion job
+          (google-analytics-job) needs a GCP service account and GA4
+          Property ID configured before it can pull traffic data -- this
+          report will populate automatically once that job has run.
+        </p>
+      )}
+
+      {!summaryLoading && summary && summary.configured && (
+        <>
+          <p className="text-xs text-muted">
+            Last ingested {new Date(summary.lastFetchedAt!).toLocaleString()}
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {(
+              [
+                ['Active users', summary.totals.activeUsers],
+                ['New users', summary.totals.newUsers],
+                ['Sessions', summary.totals.sessions],
+                ['Page views', summary.totals.screenPageViews],
+                ['Conversions', summary.totals.conversions],
+              ] as const
+            ).map(([label, value]) => (
+              <div className="rounded-lg border border-line bg-surface-muted p-3" key={label}>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted">{label}</p>
+                <p className="text-xl font-black">{formatNumber(value)}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-2">
+            <div className="flex gap-1">
+              {BREAKDOWN_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setBreakdownDimension(tab.key)}
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-bold ${
+                    breakdownDimension === tab.key
+                      ? 'border-accent bg-accent-soft text-accent'
+                      : 'border-line bg-surface text-muted hover:bg-surface-muted'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            {breakdownLoading && <p className="text-sm text-muted">Loading...</p>}
+            {!breakdownLoading && (!breakdown || breakdown.length === 0) && (
+              <p className="text-sm text-muted">No data for this range yet.</p>
+            )}
+            {!breakdownLoading && breakdown && breakdown.length > 0 && (
+              <div className="overflow-x-auto rounded-lg border border-line">
+                <table className="w-full min-w-100 border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-line text-xs font-bold uppercase tracking-wide text-muted">
+                      <th className="px-3 py-2">
+                        {BREAKDOWN_TABS.find((t) => t.key === breakdownDimension)?.label}
+                      </th>
+                      <th className="px-3 py-2 text-right">Active users</th>
+                      <th className="px-3 py-2 text-right">Page views</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {breakdown.map((row) => (
+                      <tr className="border-b border-line last:border-0" key={row.value}>
+                        <td className="px-3 py-2">{row.value}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {formatNumber(row.activeUsers)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {formatNumber(row.screenPageViews)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

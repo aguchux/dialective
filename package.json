@@ -9,7 +9,8 @@
     "services/fx-rate-job",
     "services/settlement-job",
     "services/word-generator-job",
-    "services/domain-conversation-prompt-job"
+    "services/domain-conversation-prompt-job",
+    "services/google-analytics-job"
   ],
   "scripts": {
     "format": "npm run format:node && npm run format:python",
