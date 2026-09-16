@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Cookie } from 'lucide-react';
+import { notifyCookieConsentGiven } from '@/lib/cookie-consent-signal';
 
 const CONSENT_STORAGE_KEY = 'dialectiva_cookie_consent';
 
@@ -25,6 +26,10 @@ export function CookieConsentBanner() {
     } catch {
       /* nothing to persist to if storage is unavailable */
     }
+    // Lets GoogleAnalytics.tsx (mounted globally, no reference to this
+    // banner) start loading the analytics script the moment consent is
+    // given, rather than only on the visitor's next page load.
+    notifyCookieConsentGiven();
   };
 
   if (!visible) return null;
@@ -39,8 +44,9 @@ export function CookieConsentBanner() {
         <div className="flex items-start gap-3">
           <Cookie className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden="true" />
           <p className="text-sm leading-relaxed text-[rgba(5,5,5,0.78)]">
-            We use a strictly necessary session cookie to keep you signed in. We don&apos;t use
-            advertising or tracking cookies. See our{' '}
+            We use a strictly necessary session cookie to keep you signed in, and, where enabled,
+            Google Analytics cookies to understand how the site is used. We don&apos;t use
+            advertising cookies. See our{' '}
             <Link href="/cookies" className="font-semibold text-accent underline underline-offset-2">
               Cookie Policy
             </Link>{' '}

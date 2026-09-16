@@ -8,7 +8,7 @@ export const metadata = {
   description: 'What cookies and local storage Dialect Library uses, and why.',
 };
 
-const LAST_UPDATED = 'August 9, 2026';
+const LAST_UPDATED = 'September 16, 2026';
 
 export default function CookiesPage() {
   return (
@@ -28,8 +28,8 @@ export default function CookiesPage() {
             <h2 className="text-xl font-black text-[#050505]">1. Our approach to cookies</h2>
             <p>
               Dialect Library keeps cookie use to the minimum needed to run the platform. We do not
-              use advertising cookies, and we do not run third-party analytics or tracking scripts
-              on this site.
+              use advertising cookies. Where enabled, we use Google Analytics to understand how the
+              site is used in aggregate — see section 2 for when this applies and how to avoid it.
             </p>
           </section>
 
@@ -44,10 +44,18 @@ export default function CookiesPage() {
                 logged in and to identify your account role on subsequent requests. Without this
                 cookie, you cannot stay signed in.
               </li>
+              <li>
+                <span className="font-bold text-[#050505]">Google Analytics (optional)</span> —
+                where enabled, Google Analytics sets cookies to measure site usage (e.g. which pages
+                are visited and how often). It is never loaded until you acknowledge the cookie
+                notice shown on your first visit, and does not load at all if this feature is
+                switched off.
+              </li>
             </ul>
             <p>
-              This cookie is essential to the operation of the platform and cannot be disabled
-              without disabling the ability to log in.
+              The session cookie is essential to the operation of the platform and cannot be
+              disabled without disabling the ability to log in. Google Analytics is optional and
+              only ever loads after you&apos;ve acknowledged the cookie notice.
             </p>
           </section>
 
@@ -62,10 +70,20 @@ export default function CookiesPage() {
           <section className="grid gap-2">
             <h2 className="text-xl font-black text-[#050505]">4. Third-party cookies</h2>
             <p>
-              We do not embed third-party advertising, analytics, or social-media tracking pixels on
-              Dialect Library. Our payment processor, NOWPayments, may set its own cookies on its
-              own hosted checkout page during a deposit — that page is operated by NOWPayments, not
-              Dialect Library, and is covered by NOWPayments&apos; own privacy and cookie practices.
+              We do not embed third-party advertising or social-media tracking pixels on Dialect
+              Library. Where Google Analytics is enabled (see section 2), it is a third-party
+              analytics service operated by Google and covered by{' '}
+              <a
+                className="font-semibold text-accent underline underline-offset-2"
+                href="https://policies.google.com/privacy"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                Google&apos;s own privacy policy
+              </a>
+              . Our payment processor, NOWPayments, may also set its own cookies on its own hosted
+              checkout page during a deposit — that page is operated by NOWPayments, not Dialect
+              Library, and is covered by NOWPayments&apos; own privacy and cookie practices.
             </p>
           </section>
 
@@ -81,8 +99,8 @@ export default function CookiesPage() {
           <section className="grid gap-2">
             <h2 className="text-xl font-black text-[#050505]">6. Changes to this policy</h2>
             <p>
-              If Dialect Library adds analytics or other non-essential cookies in the future, we
-              will update this page to reflect that before doing so.
+              If Dialect Library adds any further non-essential cookies in the future, we will
+              update this page to reflect that before doing so.
             </p>
           </section>
 

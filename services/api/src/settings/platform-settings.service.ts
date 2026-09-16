@@ -562,6 +562,19 @@ export class PlatformSettingsService {
     };
   }
 
+  /** Same withholding pattern as getTawkToWidget -- enabled only when both the master switch and the measurement ID are set, and the measurement ID is only ever returned when enabled is true. */
+  async getGoogleAnalyticsSettings(): Promise<{
+    enabled: boolean;
+    measurementId: string | null;
+  }> {
+    const row = await this.getRow();
+    const enabled = row.googleAnalyticsEnabled && Boolean(row.googleAnalyticsMeasurementId);
+    return {
+      enabled,
+      measurementId: enabled ? row.googleAnalyticsMeasurementId : null,
+    };
+  }
+
   async getTopBanner(): Promise<{
     enabled: boolean;
     imageUrl: string | null;
@@ -1102,6 +1115,8 @@ export class PlatformSettingsService {
       tawkToEnabled: row.tawkToEnabled,
       tawkToPropertyId: row.tawkToPropertyId,
       tawkToWidgetId: row.tawkToWidgetId,
+      googleAnalyticsEnabled: row.googleAnalyticsEnabled,
+      googleAnalyticsMeasurementId: row.googleAnalyticsMeasurementId,
       supportChatMode: row.supportChatMode,
       trainerAdsterra728Enabled: row.trainerAdsterra728Enabled,
       trainerAdsterra728ScriptUrl: row.trainerAdsterra728ScriptUrl,
@@ -1318,6 +1333,8 @@ export class PlatformSettingsService {
     tawkToEnabled?: boolean;
     tawkToPropertyId?: string | null;
     tawkToWidgetId?: string | null;
+    googleAnalyticsEnabled?: boolean;
+    googleAnalyticsMeasurementId?: string | null;
     supportChatMode?: string;
     trainerAdsterra728Enabled?: boolean;
     trainerAdsterra728ScriptUrl?: string | null;
@@ -1998,6 +2015,8 @@ export class PlatformSettingsService {
       tawkToEnabled: row.tawkToEnabled,
       tawkToPropertyId: row.tawkToPropertyId,
       tawkToWidgetId: row.tawkToWidgetId,
+      googleAnalyticsEnabled: row.googleAnalyticsEnabled,
+      googleAnalyticsMeasurementId: row.googleAnalyticsMeasurementId,
       supportChatMode: row.supportChatMode,
       trainerAdsterra728Enabled: row.trainerAdsterra728Enabled,
       trainerAdsterra728ScriptUrl: row.trainerAdsterra728ScriptUrl,
@@ -2153,6 +2172,7 @@ export class PlatformSettingsService {
       wordTrainingRecordingMaxTimeoutSeconds,
       authMaintenance,
       tawkTo,
+      googleAnalytics,
       supportChat,
       manualPhone,
       phoneVerificationRequired,
@@ -2173,6 +2193,7 @@ export class PlatformSettingsService {
       this.getWordTrainingRecordingMaxTimeoutSeconds(),
       this.getAuthMaintenanceStatus(),
       this.getTawkToWidget(),
+      this.getGoogleAnalyticsSettings(),
       this.getSupportChatSettings(),
       this.getManualPhoneVerificationSettings(),
       this.isPhoneVerificationRequired(),
@@ -2216,6 +2237,8 @@ export class PlatformSettingsService {
       tawkToEnabled: tawkTo.enabled,
       tawkToPropertyId: tawkTo.propertyId,
       tawkToWidgetId: tawkTo.widgetId,
+      googleAnalyticsEnabled: googleAnalytics.enabled,
+      googleAnalyticsMeasurementId: googleAnalytics.measurementId,
       supportChatMode: supportChat.mode,
       topBannerEnabled: topBanner.enabled,
       topBannerImageUrl: topBanner.imageUrl,

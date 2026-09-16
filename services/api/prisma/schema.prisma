@@ -2656,6 +2656,8 @@ model PlatformSettings {
   tawkToEnabled                              Boolean   @default(false) // master switch for the Tawk.to live-chat widget; the frontend only loads the widget script when this is true AND both IDs below are set
   tawkToPropertyId                           String? // Tawk.to "Property ID" from the widget's embed snippet -- the first path segment of https://embed.tawk.to/<propertyId>/<widgetId>
   tawkToWidgetId                             String? // Tawk.to "Widget ID" from the same embed snippet -- the second path segment
+  googleAnalyticsEnabled                     Boolean   @default(false) // master switch for Google Analytics (gtag.js); the frontend only loads the script when this is true AND googleAnalyticsMeasurementId is set, AND (like every analytics/tracking script) only after the visitor has acknowledged the cookie consent banner -- see CookieConsentBanner/GoogleAnalytics.tsx
+  googleAnalyticsMeasurementId               String? // GA4 "Measurement ID", e.g. "G-XXXXXXXXXX", from the GA4 property's Data Streams page
   supportChatMode                            String    @default("TAWK") // NONE | TAWK | AI; TAWK remains the compatibility default for existing deployments
   trainerAdsterra728Enabled                  Boolean   @default(false) // admin gate for the trainer dashboard's 728x90 Adsterra unit
   trainerAdsterra728ScriptUrl                String? // Adsterra 728x90 script src managed in admin settings

@@ -6,6 +6,7 @@ import { ThemeProvider } from 'next-themes';
 import { StoreProvider } from '@/store/Providers';
 import { onAuthMaintenance } from '@/lib/auth-maintenance-signal';
 import { TawkToWidget } from '@/components/TawkToWidget';
+import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 import { AiAssistantWidget } from '@/components/AiAssistantWidget';
 import { RequireNameDialog } from '@/components/RequireNameDialog';
 import { PwaServiceWorker } from '@/components/PwaServiceWorker';
@@ -34,6 +35,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <PwaInstallPrompt />
           <DykPrompt />
           <TawkToWidget />
+          <GoogleAnalytics />
           <AiAssistantWidget />
           <RequireNameDialog />
           <GlobalMessageBanner />

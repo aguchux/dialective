@@ -1283,6 +1283,8 @@ export interface PublicClientSettings {
   tawkToEnabled: boolean;
   tawkToPropertyId: string | null;
   tawkToWidgetId: string | null;
+  googleAnalyticsEnabled: boolean;
+  googleAnalyticsMeasurementId: string | null;
   supportChatMode: 'NONE' | 'TAWK' | 'AI';
   trainerAdsterra728: { scriptUrl: string; key: string } | null;
   pwaInstallPromptEnabled: boolean;
@@ -1787,6 +1789,8 @@ export interface PlatformSettings {
   tawkToEnabled: boolean;
   tawkToPropertyId: string | null;
   tawkToWidgetId: string | null;
+  googleAnalyticsEnabled: boolean;
+  googleAnalyticsMeasurementId: string | null;
   supportChatMode: 'NONE' | 'TAWK' | 'AI';
   trainerAdsterra728Enabled: boolean;
   trainerAdsterra728ScriptUrl: string | null;
@@ -1964,6 +1968,8 @@ export interface PlatformSettingsInput {
   tawkToEnabled?: boolean;
   tawkToPropertyId?: string;
   tawkToWidgetId?: string;
+  googleAnalyticsEnabled?: boolean;
+  googleAnalyticsMeasurementId?: string | null;
   supportChatMode?: 'NONE' | 'TAWK' | 'AI';
   trainerAdsterra728Enabled?: boolean;
   trainerAdsterra728ScriptUrl?: string | null;

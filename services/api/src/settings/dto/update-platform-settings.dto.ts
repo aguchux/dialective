@@ -266,6 +266,20 @@ export class UpdatePlatformSettingsDto {
   tawkToWidgetId?: string;
 
   @IsOptional()
+  @IsBoolean()
+  googleAnalyticsEnabled?: boolean;
+
+  // GA4 Measurement ID format, e.g. "G-ABC1234567" -- always starts with
+  // "G-" (Universal Analytics' older "UA-" property format is not supported
+  // here, gtag.js is GA4-only going forward).
+  @IsOptional()
+  @IsString()
+  @Matches(/^G-[A-Z0-9]{6,12}$/, {
+    message: 'googleAnalyticsMeasurementId must look like a GA4 Measurement ID, e.g. G-ABC1234567',
+  })
+  googleAnalyticsMeasurementId?: string | null;
+
+  @IsOptional()
   @IsString()
   @Matches(/^(NONE|TAWK|AI)$/)
   supportChatMode?: string;

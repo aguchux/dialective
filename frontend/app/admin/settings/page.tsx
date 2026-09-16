@@ -32,9 +32,11 @@ import { StreamSettingsPanel } from './StreamSettingsPanel';
 import { DomainConversationSettingsPanel } from './DomainConversationSettingsPanel';
 import { DialectValidationSettingsPanel } from './DialectValidationSettingsPanel';
 import { AdsMonetisationSettingsPanel } from './AdsMonetisationSettingsPanel';
+import { AnalyticsSettingsPanel } from './AnalyticsSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
+  { key: 'analytics', label: 'Analytics & Metrics' },
   { key: 'stream', label: 'Stream Settings' },
   { key: 'adsMonetisation', label: 'Ads & Monetisation' },
   { key: 'landingPage', label: 'Landing Page' },
@@ -69,6 +71,7 @@ type GroupKey = (typeof groups)[number]['key'];
 
 const panelComponents: Record<GroupKey, () => JSX.Element> = {
   general: GeneralSettingsPanel,
+  analytics: AnalyticsSettingsPanel,
   stream: StreamSettingsPanel,
   adsMonetisation: AdsMonetisationSettingsPanel,
   landingPage: LandingPageSettingsPanel,

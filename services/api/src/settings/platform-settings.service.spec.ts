@@ -172,6 +172,41 @@ describe('PlatformSettingsService.getTawkToWidget', () => {
   });
 });
 
+describe('PlatformSettingsService.getGoogleAnalyticsSettings', () => {
+  it('returns disabled with no measurement ID when the master switch is off, even if an ID is set', async () => {
+    const { service } = setup({
+      googleAnalyticsEnabled: false,
+      googleAnalyticsMeasurementId: 'G-ABC1234567',
+    });
+
+    await expect(service.getGoogleAnalyticsSettings()).resolves.toEqual({
+      enabled: false,
+      measurementId: null,
+    });
+  });
+
+  it('returns disabled with no measurement ID when enabled but no ID is set', async () => {
+    const { service } = setup({ googleAnalyticsEnabled: true, googleAnalyticsMeasurementId: null });
+
+    await expect(service.getGoogleAnalyticsSettings()).resolves.toEqual({
+      enabled: false,
+      measurementId: null,
+    });
+  });
+
+  it('returns enabled with the measurement ID only when the switch is on and an ID is set', async () => {
+    const { service } = setup({
+      googleAnalyticsEnabled: true,
+      googleAnalyticsMeasurementId: 'G-ABC1234567',
+    });
+
+    await expect(service.getGoogleAnalyticsSettings()).resolves.toEqual({
+      enabled: true,
+      measurementId: 'G-ABC1234567',
+    });
+  });
+});
+
 describe('PlatformSettingsService.getWhatsappConfig', () => {
   it('returns null when whatsappOtpEnabled is false, even if every other field is set', async () => {
     const encrypted = encryptWhatsappField('test-api-key');
