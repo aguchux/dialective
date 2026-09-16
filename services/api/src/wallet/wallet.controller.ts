@@ -491,17 +491,22 @@ export class WalletController {
     ]);
 
     // Same SETTLED-task count validateWithdrawalRequest enforces server-side
-    // (requireMinCompletedTasksForWithdrawal, which sums both pipelines) --
-    // surfaced here too so the dashboard can show trainers where they stand
-    // *before* they attempt a withdrawal, instead of only finding out from
-    // a rejected request.
-    const [settledWordRecordings, settledDomainConversationRecordings] = await Promise.all([
-      this.prisma.wordRecording.count({ where: { userId: req.user.sub, status: 'SETTLED' } }),
-      this.prisma.domainConversationRecording.count({
-        where: { userId: req.user.sub, status: 'SETTLED' },
-      }),
-    ]);
-    const completedTasksForWithdrawal = settledWordRecordings + settledDomainConversationRecordings;
+    // (requireMinCompletedTasksForWithdrawal, which sums all three pipelines)
+    // -- surfaced here too so the dashboard can show trainers where they
+    // stand *before* they attempt a withdrawal, instead of only finding out
+    // from a rejected request.
+    const [settledWordRecordings, settledDomainConversationRecordings, settledWordValidations] =
+      await Promise.all([
+        this.prisma.wordRecording.count({ where: { userId: req.user.sub, status: 'SETTLED' } }),
+        this.prisma.domainConversationRecording.count({
+          where: { userId: req.user.sub, status: 'SETTLED' },
+        }),
+        this.prisma.wordValidation.count({
+          where: { validatorId: req.user.sub, status: 'SETTLED' },
+        }),
+      ]);
+    const completedTasksForWithdrawal =
+      settledWordRecordings + settledDomainConversationRecordings + settledWordValidations;
 
     const ledgerAmount = (types: string[]) =>
       ledgerTotals
@@ -2086,21 +2091,25 @@ export class WalletController {
 
   /**
    * Shared by validateWithdrawalRequest and validateFiatWithdrawalRequest --
-   * a trainer must have this many SETTLED (actually scored + paid) word
-   * recordings before any withdrawal, fiat or crypto, is allowed.
+   * a trainer must have this many SETTLED (actually scored + paid) tasks
+   * before any withdrawal, fiat or crypto, is allowed.
    */
   private async requireMinCompletedTasksForWithdrawal(userId: string): Promise<void> {
     const minTasks = await this.platformSettings.getMinCompletedTasksForWithdrawal();
     if (minTasks <= 0) return;
-    // Counts both task pipelines -- a trainer who only does Domain
-    // Conversation work has settled recordings in a different table
-    // (DomainConversationRecording, not WordRecording) and must not be
-    // permanently blocked from ever clearing this gate.
-    const [settledWordRecordings, settledDomainConversationRecordings] = await Promise.all([
-      this.prisma.wordRecording.count({ where: { userId, status: 'SETTLED' } }),
-      this.prisma.domainConversationRecording.count({ where: { userId, status: 'SETTLED' } }),
-    ]);
-    const completedTasks = settledWordRecordings + settledDomainConversationRecordings;
+    // Counts all three task pipelines -- a trainer who only does Domain
+    // Conversation or Dialect Validation work has settled rows in a
+    // different table (DomainConversationRecording/WordValidation, not
+    // WordRecording) and must not be permanently blocked from ever
+    // clearing this gate.
+    const [settledWordRecordings, settledDomainConversationRecordings, settledWordValidations] =
+      await Promise.all([
+        this.prisma.wordRecording.count({ where: { userId, status: 'SETTLED' } }),
+        this.prisma.domainConversationRecording.count({ where: { userId, status: 'SETTLED' } }),
+        this.prisma.wordValidation.count({ where: { validatorId: userId, status: 'SETTLED' } }),
+      ]);
+    const completedTasks =
+      settledWordRecordings + settledDomainConversationRecordings + settledWordValidations;
     if (completedTasks < minTasks) {
       throw new UnprocessableEntityException(
         `Complete at least ${minTasks} tasks before requesting a withdrawal (${completedTasks}/${minTasks} so far)`,

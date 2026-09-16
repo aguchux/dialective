@@ -64,6 +64,12 @@ const TYPE_INFO: Record<string, { label: string; bucket: Bucket; note?: string }
   },
   PHONE_VERIFICATION_FEE: { label: 'Phone verification fee', bucket: 'spent' },
   PHONE_VERIFICATION_FEE_REFUND: { label: 'Verification fee refunded', bucket: 'held' },
+  WHATSAPP_VALIDATION_FEE: { label: 'WhatsApp verification fee', bucket: 'spent' },
+  WHATSAPP_VALIDATION_PAYOUT: {
+    label: 'WhatsApp verification reward',
+    bucket: 'earned',
+    note: 'Paid for confirming another member’s WhatsApp code',
+  },
   ADMIN_ADJUSTMENT: {
     label: 'Admin correction',
     bucket: 'spent',

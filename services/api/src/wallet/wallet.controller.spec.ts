@@ -24,6 +24,7 @@ describe('WalletController crypto withdrawal eligibility', () => {
   function setup(overrides?: {
     settledWordRecordings?: number;
     settledDomainConversationRecordings?: number;
+    settledWordValidations?: number;
     user?: { emailVerified: boolean; phoneVerifiedAt: Date | null; kycStatus: string };
     walletBalance?: number;
     minWalletBalanceTokens?: number;
@@ -33,6 +34,9 @@ describe('WalletController crypto withdrawal eligibility', () => {
       wordRecording: { count: jest.fn().mockResolvedValue(overrides?.settledWordRecordings ?? 100) },
       domainConversationRecording: {
         count: jest.fn().mockResolvedValue(overrides?.settledDomainConversationRecordings ?? 0),
+      },
+      wordValidation: {
+        count: jest.fn().mockResolvedValue(overrides?.settledWordValidations ?? 0),
       },
       user: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({
@@ -105,6 +109,26 @@ describe('WalletController crypto withdrawal eligibility', () => {
     await expect(
       controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody),
     ).resolves.toBeDefined();
+    expect(otp.issueForUser).toHaveBeenCalled();
+  });
+
+  // Regression: a trainer who only ever does Dialect Validation work has
+  // their settled tasks in WordValidation, a third table distinct from both
+  // WordRecording and DomainConversationRecording -- the gate must sum all
+  // three or such a trainer could never clear it either.
+  it('counts settled Dialect Validation submissions toward the same withdrawal-eligibility gate', async () => {
+    const { controller, prisma, otp } = setup({
+      settledWordRecordings: 40,
+      settledDomainConversationRecordings: 0,
+      settledWordValidations: 60,
+    });
+
+    await expect(
+      controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody),
+    ).resolves.toBeDefined();
+    expect(prisma.wordValidation.count).toHaveBeenCalledWith({
+      where: { validatorId: 'trainer-1', status: 'SETTLED' },
+    });
     expect(otp.issueForUser).toHaveBeenCalled();
   });
 
@@ -2668,6 +2692,7 @@ describe('WalletController.getTrainerDashboard', () => {
       withdrawalRequest: { groupBy: jest.fn().mockResolvedValue([]) },
       wordRecording: { count: jest.fn().mockResolvedValue(0) },
       domainConversationRecording: { count: jest.fn().mockResolvedValue(0) },
+      wordValidation: { count: jest.fn().mockResolvedValue(0) },
       referralInvite: {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         findMany: jest.fn().mockResolvedValue([]),

@@ -883,7 +883,9 @@ export type LedgerEntryType =
   | 'P2P_ESCROW_REFUND'
   | 'P2P_ESCROW_RELEASE'
   | 'P2P_ESCROW_CREDIT'
-  | 'VALIDATION_REWARD';
+  | 'VALIDATION_REWARD'
+  | 'WHATSAPP_VALIDATION_FEE'
+  | 'WHATSAPP_VALIDATION_PAYOUT';
 
 export type P2POfferType = 'SELL' | 'BUY';
 export type P2POfferStatus =

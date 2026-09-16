@@ -189,6 +189,8 @@ export const activityLabels: Record<LedgerEntryType, string> = {
   P2P_ESCROW_RELEASE: 'P2P escrow released',
   P2P_ESCROW_CREDIT: 'P2P DL purchase',
   VALIDATION_REWARD: 'Validation reward',
+  WHATSAPP_VALIDATION_FEE: 'WhatsApp verification fee',
+  WHATSAPP_VALIDATION_PAYOUT: 'WhatsApp verification reward',
 };
 
 export function TrainerDashboard() {

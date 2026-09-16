@@ -26,6 +26,7 @@ export const LIFETIME_CREDIT_ENTRY_TYPES: LedgerEntryType[] = [
   LedgerEntryType.STARTUP_BONUS,
   LedgerEntryType.TESTIMONY_APPROVED_REWARD,
   LedgerEntryType.VALIDATION_REWARD,
+  LedgerEntryType.WHATSAPP_VALIDATION_PAYOUT,
 ];
 
 // Real value added to a trainer's balance by someone other than the trainer's

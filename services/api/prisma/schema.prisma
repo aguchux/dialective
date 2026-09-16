@@ -1404,12 +1404,25 @@ model WordValidation {
   transcript String? // optional free-text transcription of what the validator heard
   flags      WordValidationFlag[]
 
+  // Unlike WordRecording/DomainConversationRecording, this task has no async
+  // scoring/settlement pipeline -- submit() pays out (when enabled) in the
+  // same transaction that creates the row, so there is no PENDING phase to
+  // represent. Always SETTLED today; exists so WalletController's completed-
+  // tasks count (see requireMinCompletedTasksForWithdrawal) can filter this
+  // model the same way it filters the other two, and so a future review
+  // step could add PENDING/REJECTED without a breaking rename.
+  status WordValidationStatus @default(SETTLED)
+
   createdAt DateTime @default(now())
 
   @@unique([recordingId, validatorId])
   @@index([recordingId])
   @@index([validatorId])
   @@map("word_validations")
+}
+
+enum WordValidationStatus {
+  SETTLED
 }
 
 enum DomainPromptGenderVariant {
