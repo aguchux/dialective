@@ -1070,14 +1070,23 @@ export interface P2PSellerPaymentMethod extends PayoutAccount {
   mobileMoneyNumber: string | null;
 }
 
+export interface P2PTradeCounterparty {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  /** Only ever populated for the OTHER party in a trade -- see P2PService.serializeTrade's withPhoneIfViewerIsCounterparty. Null for your own side, and whenever this trade hasn't matched you with this person. */
+  phoneNumber: string | null;
+}
+
 export interface P2PTrade {
   id: string;
   offerId: string;
   offerType: P2POfferType;
   buyerId: string;
   sellerId: string;
-  buyer: { id: string; email: string; firstName: string | null; lastName: string | null };
-  seller: { id: string; email: string; firstName: string | null; lastName: string | null };
+  buyer: P2PTradeCounterparty;
+  seller: P2PTradeCounterparty;
   tokenAmount: string;
   fiatAmount: string;
   fiatCurrency: string;

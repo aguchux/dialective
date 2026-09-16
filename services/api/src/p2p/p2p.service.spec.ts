@@ -18,12 +18,19 @@ describe('P2PService.listMyTrades -- seller payment method reveal', () => {
       offer: { type: 'SELL' },
       buyerId: 'buyer-1',
       sellerId: 'seller-1',
-      buyer: { id: 'buyer-1', email: 'buyer@example.com', firstName: null, lastName: null },
+      buyer: {
+        id: 'buyer-1',
+        email: 'buyer@example.com',
+        firstName: null,
+        lastName: null,
+        phoneNumber: '+15550001111',
+      },
       seller: {
         id: 'seller-1',
         email: 'seller@example.com',
         firstName: null,
         lastName: null,
+        phoneNumber: '+15550002222',
         p2pPaymentInstructions: null,
       },
       tokenAmount: decimal(100),
@@ -133,6 +140,136 @@ describe('P2PService.listMyTrades -- seller payment method reveal', () => {
       mobileMoneyNumber: '08012345678',
       mobileMoneyNumberMasked: '****5678',
     });
+  });
+});
+
+describe('P2PService.listMyTrades -- counterparty phone number reveal (WhatsApp click-to-chat)', () => {
+  function makeTrade(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'trade-1',
+      offerId: 'offer-1',
+      offer: { type: 'SELL' },
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      buyer: {
+        id: 'buyer-1',
+        email: 'buyer@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        phoneNumber: '+15550001111',
+      },
+      seller: {
+        id: 'seller-1',
+        email: 'seller@example.com',
+        firstName: 'Grace',
+        lastName: 'Hopper',
+        phoneNumber: '+15550002222',
+        p2pPaymentInstructions: null,
+      },
+      tokenAmount: { toString: () => '100' },
+      fiatAmount: { toString: () => '5000' },
+      fiatCurrency: 'NGN',
+      paymentMethod: 'BANK_TRANSFER',
+      sellerPaymentMethod: null,
+      status: 'AWAITING_PAYMENT',
+      paymentDeadlineAt: new Date(),
+      cancelRequestedByUserId: null,
+      cancelAvailableAt: null,
+      paidAt: null,
+      releasedAt: null,
+      cancelledAt: null,
+      disputedAt: null,
+      dispute: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...overrides,
+    };
+  }
+
+  function setup(trade: unknown) {
+    const prisma = { p2PTokenTrade: { findMany: jest.fn().mockResolvedValue([trade]) } };
+    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+    jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
+    return { service, prisma };
+  }
+
+  it('reveals only the SELLER phone number to the buyer, never the buyer their own number back', async () => {
+    const { service } = setup(makeTrade());
+    const [result] = await service.listMyTrades('buyer-1', {} as any);
+
+    expect(result.seller.phoneNumber).toBe('+15550002222');
+    expect(result.buyer.phoneNumber).toBeNull();
+  });
+
+  it('reveals only the BUYER phone number to the seller, never the seller their own number back', async () => {
+    const { service } = setup(makeTrade());
+    const [result] = await service.listMyTrades('seller-1', {} as any);
+
+    expect(result.buyer.phoneNumber).toBe('+15550001111');
+    expect(result.seller.phoneNumber).toBeNull();
+  });
+
+  it('withholds the phone number entirely when a side never added one', async () => {
+    const trade = makeTrade({ seller: { ...makeTrade().seller, phoneNumber: null } });
+    const { service } = setup(trade);
+    const [result] = await service.listMyTrades('buyer-1', {} as any);
+
+    expect(result.seller.phoneNumber).toBeNull();
+  });
+});
+
+describe('P2PService.adminListTrades -- counterparty phone number reveal', () => {
+  function makeTrade(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'trade-1',
+      offerId: 'offer-1',
+      offer: { type: 'SELL' },
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      buyer: {
+        id: 'buyer-1',
+        email: 'buyer@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        phoneNumber: '+15550001111',
+      },
+      seller: {
+        id: 'seller-1',
+        email: 'seller@example.com',
+        firstName: 'Grace',
+        lastName: 'Hopper',
+        phoneNumber: '+15550002222',
+        p2pPaymentInstructions: null,
+      },
+      tokenAmount: { toString: () => '100' },
+      fiatAmount: { toString: () => '5000' },
+      fiatCurrency: 'NGN',
+      paymentMethod: 'BANK_TRANSFER',
+      sellerPaymentMethod: null,
+      status: 'AWAITING_PAYMENT',
+      paymentDeadlineAt: new Date(),
+      cancelRequestedByUserId: null,
+      cancelAvailableAt: null,
+      paidAt: null,
+      releasedAt: null,
+      cancelledAt: null,
+      disputedAt: null,
+      dispute: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...overrides,
+    };
+  }
+
+  it('shows both parties phone numbers to an admin (no viewerId is the admin-facing convention)', async () => {
+    const prisma = { p2PTokenTrade: { findMany: jest.fn().mockResolvedValue([makeTrade()]) } };
+    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+    jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
+
+    const [result] = await service.adminListTrades({} as any);
+
+    expect(result.buyer.phoneNumber).toBe('+15550001111');
+    expect(result.seller.phoneNumber).toBe('+15550002222');
   });
 });
 

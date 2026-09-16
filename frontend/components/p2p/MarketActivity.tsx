@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Check, Clock3, Copy, Landmark } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, EmptyPanel, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
+import { WhatsAppContactLink } from '@/components/WhatsAppContactLink';
 import { formatCompactNumber } from '@/lib/format';
 import {
   P2POffer,
@@ -300,6 +301,21 @@ function TradeCard({
           {STATUS_LABELS[trade.status]}
         </span>
       </div>
+      {(() => {
+        const otherParty = isBuyer ? trade.seller : trade.buyer;
+        return otherParty.phoneNumber ? (
+          <WhatsAppContactLink
+            className="text-sm font-bold"
+            firstName={otherParty.firstName}
+            lastName={otherParty.lastName}
+            phoneNumber={otherParty.phoneNumber}
+          />
+        ) : (
+          <p className="text-sm text-muted">
+            {isBuyer ? 'Seller' : 'Buyer'} hasn&rsquo;t added a phone number yet.
+          </p>
+        );
+      })()}
       {trade.sellerPaymentMethod &&
         (() => {
           const method = trade.sellerPaymentMethod;

@@ -1198,7 +1198,9 @@ export class P2PService {
   }
 }
 
-const userSelect = { select: { id: true, firstName: true, lastName: true, email: true } };
+const userSelect = {
+  select: { id: true, firstName: true, lastName: true, email: true, phoneNumber: true },
+};
 const tradeInclude = {
   offer: true,
   buyer: userSelect,
@@ -1208,6 +1210,7 @@ const tradeInclude = {
       firstName: true,
       lastName: true,
       email: true,
+      phoneNumber: true,
       p2pPaymentInstructions: true,
     },
   },
@@ -1306,11 +1309,39 @@ function decryptForParticipant(encrypted: unknown): string | null {
   }
 }
 
+/**
+ * Only the OTHER party's phone number is exposed, and only once a trade
+ * exists (a P2P trade's whole point is the two sides coordinating payment,
+ * which for most trainers means WhatsApp -- see WhatsAppContactLink's
+ * precedent in the WhatsApp Validator integration). A viewer never needs
+ * their own number revealed back to them, and a non-participant must
+ * never see either side's number at all.
+ */
+function withPhoneIfViewerIsCounterparty<T extends { phoneNumber: string | null }>(
+  user: T,
+  isViewer: boolean,
+): Omit<T, 'phoneNumber'> & { phoneNumber: string | null } {
+  const { phoneNumber, ...rest } = user;
+  return { ...rest, phoneNumber: isViewer ? null : phoneNumber };
+}
+
 function serializeTrade(
   trade: Prisma.P2PTokenTradeGetPayload<{ include: typeof tradeInclude }>,
   viewerId?: string,
 ) {
   const isParticipant = viewerId ? trade.buyerId === viewerId || trade.sellerId === viewerId : true;
+  // No viewerId at all means an admin-facing call (adminListTrades/
+  // adminListDisputes below) -- same "show everything" convention
+  // sellerPaymentMethod/sellerPaymentInstructions already use via
+  // isParticipant, so both numbers stay visible there. Once a real
+  // viewerId is given, only the OTHER party's number is ever revealed --
+  // never a viewer's own number back to them, and never either number to
+  // a non-participant.
+  const buyer = withPhoneIfViewerIsCounterparty(trade.buyer, !!viewerId && trade.buyerId === viewerId);
+  const seller = withPhoneIfViewerIsCounterparty(
+    trade.seller,
+    !!viewerId && trade.sellerId === viewerId,
+  );
   const sellerPaymentMethod =
     isParticipant && trade.sellerPaymentMethod
       ? (() => {
@@ -1334,8 +1365,8 @@ function serializeTrade(
     offerType: trade.offer.type,
     buyerId: trade.buyerId,
     sellerId: trade.sellerId,
-    buyer: trade.buyer,
-    seller: trade.seller,
+    buyer,
+    seller,
     tokenAmount: trade.tokenAmount.toString(),
     fiatAmount: trade.fiatAmount.toString(),
     fiatCurrency: trade.fiatCurrency,

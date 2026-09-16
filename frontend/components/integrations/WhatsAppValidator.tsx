@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import { CheckCircle2, MessageCircle, Phone, XCircle } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, EmptyPanel, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
+import { formatContact, waLink, WhatsAppContactLink } from '@/components/WhatsAppContactLink';
 import {
   normalizeErrorMessage,
   useCancelWhatsAppValidationRequestMutation,
@@ -33,45 +34,6 @@ function statusBadgeClass(status: WhatsAppValidationRequestStatus): string {
   if (status === 'VERIFIED') return 'bg-success/10 text-success';
   if (status === 'EXPIRED' || status === 'REJECTED' || status === 'CANCELLED') return 'bg-danger/10 text-danger';
   return 'bg-accent-soft text-accent';
-}
-
-/** Name is always shown paired with a phone number, never alone -- together they let either side confirm they're talking to the right person instead of trusting a bare phone number a scammer could also produce. */
-function formatContact(
-  firstName: string | null,
-  lastName: string | null,
-  phoneNumber: string,
-): string {
-  const name = [firstName, lastName].filter(Boolean).join(' ');
-  return name ? `${name} · ${phoneNumber}` : phoneNumber;
-}
-
-function waLink(phoneNumber: string): string {
-  return `https://wa.me/${phoneNumber.replace(/\D/g, '')}`;
-}
-
-/** Tap-to-chat link, styled like an inline text link rather than a button -- used wherever a phone number/name appears so either side can jump straight into WhatsApp with the peer instead of copying the number by hand. */
-function WhatsAppContactLink({
-  firstName,
-  lastName,
-  phoneNumber,
-  className = '',
-}: {
-  firstName: string | null;
-  lastName: string | null;
-  phoneNumber: string;
-  className?: string;
-}) {
-  return (
-    <a
-      className={`inline-flex items-center gap-1.5 underline decoration-dotted underline-offset-2 hover:text-accent ${className}`}
-      href={waLink(phoneNumber)}
-      rel="noreferrer"
-      target="_blank"
-    >
-      <Phone className="size-3.5 shrink-0" aria-hidden="true" />
-      <span className="truncate">{formatContact(firstName, lastName, phoneNumber)}</span>
-    </a>
-  );
 }
 
 /**
