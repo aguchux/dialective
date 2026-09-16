@@ -23,6 +23,7 @@ export function WithdrawalSettingsPanel() {
   const [withdrawalsEnabled, setWithdrawalsEnabled] = useState(true);
   const [withdrawalsDisabledMessage, setWithdrawalsDisabledMessage] = useState('');
   const [cryptoWithdrawalsEnabled, setCryptoWithdrawalsEnabled] = useState(true);
+  const [platformPayoutEnabled, setPlatformPayoutEnabled] = useState(false);
   const [nowPaymentsPayoutsEnabled, setNowPaymentsPayoutsEnabled] = useState(false);
   const [autoSubmitAfterApproval, setAutoSubmitAfterApproval] = useState(false);
   const [allowedCurrencies, setAllowedCurrencies] = useState<string[]>(['USDT']);
@@ -38,6 +39,7 @@ export function WithdrawalSettingsPanel() {
     setWithdrawalsEnabled(settings.withdrawalsEnabled);
     setWithdrawalsDisabledMessage(settings.withdrawalsDisabledMessage ?? '');
     setCryptoWithdrawalsEnabled(settings.cryptoWithdrawalsEnabled);
+    setPlatformPayoutEnabled(settings.isPlatformPayoutEnabled);
     setNowPaymentsPayoutsEnabled(settings.nowPaymentsPayoutsEnabled);
     setAutoSubmitAfterApproval(settings.autoSubmitAfterApproval);
     setAllowedCurrencies(
@@ -82,6 +84,7 @@ export function WithdrawalSettingsPanel() {
           ? null
           : withdrawalsDisabledMessage.trim() || null,
         cryptoWithdrawalsEnabled,
+        isPlatformPayoutEnabled: platformPayoutEnabled,
         nowPaymentsPayoutsEnabled,
         autoSubmitAfterApproval,
         allowedWithdrawalCurrencies: allowedCurrencies.join(','),
@@ -176,6 +179,31 @@ export function WithdrawalSettingsPanel() {
                 <span className="block font-bold">Crypto withdrawals enabled</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   Master kill switch -- when off, trainers can't request new withdrawals at all.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="platform-payout-enabled"
+            >
+              <input
+                checked={platformPayoutEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="platform-payout-enabled"
+                onChange={(event) => setPlatformPayoutEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Bank Transfer (free-entry payout) enabled</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Off by default. When on, trainers can add a payout account by typing their own
+                  bank name and account number directly, without Flutterwave verifying it -- there
+                  is no automated check that the account is real or belongs to the trainer, only an
+                  OTP confirming they intended to save it. Trainers are shown a note that the
+                  account name must match the name on the account.
                 </span>
               </span>
             </label>

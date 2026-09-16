@@ -1342,8 +1342,9 @@ export interface PublicClientSettings {
   isFlutterwaveV4Enabled: boolean;
   isFlutterwavePayoutsEnabled: boolean;
   isStripePayoutsEnabled: boolean;
+  isPlatformPayoutEnabled: boolean;
   isCryptoWithdrawalsEnabled: boolean;
-  /** Global master switch checked ahead of the three per-rail flags above -- false means every payout rail is blocked, regardless of the others. */
+  /** Global master switch checked ahead of the four per-rail flags above -- false means every payout rail is blocked, regardless of the others. */
   withdrawalsEnabled: boolean;
   withdrawalsDisabledMessage: string | null;
   allowedWithdrawalCurrencies: string;
@@ -1929,6 +1930,7 @@ export interface PlatformSettings {
   allowedFlutterwaveCurrencies: string;
   allowedFlutterwaveCountries: string;
   isStripePayoutsEnabled: boolean;
+  isPlatformPayoutEnabled: boolean;
   withdrawalFeeMode: string;
   withdrawalFeeTokenAmount: string;
   withdrawalFeePercent: string;
@@ -2108,6 +2110,7 @@ export interface PlatformSettingsInput {
   allowedFlutterwaveCurrencies?: string;
   allowedFlutterwaveCountries?: string;
   isStripePayoutsEnabled?: boolean;
+  isPlatformPayoutEnabled?: boolean;
   withdrawalFeeMode?: string;
   withdrawalFeeTokenAmount?: number;
   withdrawalFeePercent?: number;
@@ -3172,6 +3175,7 @@ export const dialectivaApi = createApi({
           type: P2POfferType;
           tokenAmount: number;
           fiatCurrency: string;
+          paymentMethod: string;
           paymentMethodIds?: string[];
         }
       | { action: 'accept-offer'; offerId: string }
@@ -3847,6 +3851,7 @@ export const dialectivaApi = createApi({
         country?: string;
         currency?: string;
         bankCode?: string;
+        bankName?: string;
         accountNumber?: string;
         mobileMoneyNetwork?: string;
         mobileMoneyNumber?: string;
@@ -3867,6 +3872,7 @@ export const dialectivaApi = createApi({
       {
         type: 'BANK' | 'MOBILE_MONEY' | 'STABLECOIN_WALLET';
         bankCode?: string;
+        bankName?: string;
         accountNumber?: string;
         mobileMoneyNetwork?: string;
         mobileMoneyNumber?: string;

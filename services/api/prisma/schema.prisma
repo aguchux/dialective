@@ -874,17 +874,17 @@ model KycVerification {
 /// holds a single row) since this needs history, not just a "last run"
 /// snapshot -- see KycRecheckPanel's run-history list.
 model KycRecheckRun {
-  id          String               @id @default(uuid())
-  trigger     KycRecheckRunTrigger @default(SCHEDULED)
-  startedAt   DateTime             @default(now())
-  finishedAt  DateTime?
-  enabled     Boolean // snapshot of isSelfHostedKycAutoApproveEnabled at run time -- a run where this is false always has scanned=0 (recheckSelfHosted short-circuits), but the row still records that the job executed
-  scanned     Int                  @default(0)
-  eligible    Int                  @default(0)
-  approved    Int                  @default(0)
-  skipped     Int                  @default(0)
-  errors      Int                  @default(0)
-  nextCursor  String? // non-null means more than 100 IN_REVIEW rows remained -- the next scheduled tick resumes from here (see KycService.recheckCursor)
+  id           String               @id @default(uuid())
+  trigger      KycRecheckRunTrigger @default(SCHEDULED)
+  startedAt    DateTime             @default(now())
+  finishedAt   DateTime?
+  enabled      Boolean // snapshot of isSelfHostedKycAutoApproveEnabled at run time -- a run where this is false always has scanned=0 (recheckSelfHosted short-circuits), but the row still records that the job executed
+  scanned      Int                  @default(0)
+  eligible     Int                  @default(0)
+  approved     Int                  @default(0)
+  skipped      Int                  @default(0)
+  errors       Int                  @default(0)
+  nextCursor   String? // non-null means more than 100 IN_REVIEW rows remained -- the next scheduled tick resumes from here (see KycService.recheckCursor)
   errorMessage String? // set only if the run itself threw (distinct from per-row `errors`, which are caught individually and don't abort the batch)
 
   @@index([trigger, startedAt])
@@ -906,16 +906,16 @@ enum KycRecheckRunTrigger {
 /// recent day's numbers for a day or two after data processing catches up,
 /// which this upsert-on-date design absorbs automatically on the next run.
 model AnalyticsDailySnapshot {
-  id                  String   @id @default(uuid())
-  date                DateTime @db.Date
-  activeUsers         Int      @default(0)
-  newUsers            Int      @default(0)
-  sessions            Int      @default(0)
-  screenPageViews     Int      @default(0)
-  averageSessionSeconds Decimal @default(0) @db.Decimal(10, 2)
-  engagementRate      Decimal  @default(0) @db.Decimal(5, 4) // 0-1 fraction, as GA4 reports it
-  conversions         Int      @default(0)
-  fetchedAt           DateTime @default(now())
+  id                    String   @id @default(uuid())
+  date                  DateTime @db.Date
+  activeUsers           Int      @default(0)
+  newUsers              Int      @default(0)
+  sessions              Int      @default(0)
+  screenPageViews       Int      @default(0)
+  averageSessionSeconds Decimal  @default(0) @db.Decimal(10, 2)
+  engagementRate        Decimal  @default(0) @db.Decimal(5, 4) // 0-1 fraction, as GA4 reports it
+  conversions           Int      @default(0)
+  fetchedAt             DateTime @default(now())
 
   @@unique([date])
   @@map("analytics_daily_snapshots")
@@ -928,13 +928,13 @@ model AnalyticsDailySnapshot {
 /// dimension so adding a new breakdown (e.g. traffic source) later is a
 /// job-code change only, no new migration.
 model AnalyticsDailyBreakdown {
-  id             String   @id @default(uuid())
-  date           DateTime @db.Date
-  dimension      String // "page" | "country" | "deviceCategory" | "source"
-  dimensionValue String
-  activeUsers    Int      @default(0)
-  screenPageViews Int     @default(0)
-  fetchedAt      DateTime @default(now())
+  id              String   @id @default(uuid())
+  date            DateTime @db.Date
+  dimension       String // "page" | "country" | "deviceCategory" | "source"
+  dimensionValue  String
+  activeUsers     Int      @default(0)
+  screenPageViews Int      @default(0)
+  fetchedAt       DateTime @default(now())
 
   @@unique([date, dimension, dimensionValue])
   @@index([dimension, date])
@@ -2417,9 +2417,9 @@ model PayoutAccount {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  withdrawals     WithdrawalRequest[]
-  p2pOffers             P2PTokenOffer[]          @relation("P2POfferPayoutAccount")
-  p2pSellerTrades       P2PTokenTrade[]          @relation("P2PTradeSellerPaymentMethod")
+  withdrawals            WithdrawalRequest[]
+  p2pOffers              P2PTokenOffer[]         @relation("P2POfferPayoutAccount")
+  p2pSellerTrades        P2PTokenTrade[]         @relation("P2PTradeSellerPaymentMethod")
   p2pOfferPaymentMethods P2POfferPaymentMethod[]
 
   @@index([userId])
@@ -2439,17 +2439,17 @@ model PayoutAccount {
 /// fully admin-editable afterward via /admin/payment-methods, unlike
 /// Country/Dialect which are seed-only today.
 model PaymentMethodCatalog {
-  id           String            @id @default(uuid())
-  countryCode  String // ISO 3166-1 alpha-2, e.g. "NG" -- not a Country FK, matches PayoutAccount.country's own loose string convention
-  type         PayoutAccountType // BANK or MOBILE_MONEY in practice; not DB-constrained to exclude the others
-  name         String // e.g. "GTBank", "M-Pesa"
-  description  String?
-  logoKey      String? // Spaces object key (presigned upload, see PaymentMethodCatalogService) -- null until an admin uploads one
-  bankCode     String? // only meaningful for type=BANK free-entry accounts (see model doc)
-  enabled      Boolean           @default(true)
-  sortOrder    Int               @default(0)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id          String            @id @default(uuid())
+  countryCode String // ISO 3166-1 alpha-2, e.g. "NG" -- not a Country FK, matches PayoutAccount.country's own loose string convention
+  type        PayoutAccountType // BANK or MOBILE_MONEY in practice; not DB-constrained to exclude the others
+  name        String // e.g. "GTBank", "M-Pesa"
+  description String?
+  logoKey     String? // Spaces object key (presigned upload, see PaymentMethodCatalogService) -- null until an admin uploads one
+  bankCode    String? // only meaningful for type=BANK free-entry accounts (see model doc)
+  enabled     Boolean           @default(true)
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@index([countryCode, type, enabled, sortOrder])
   @@map("payment_method_catalog")
@@ -2619,7 +2619,7 @@ model P2PMarketSettings {
   maxOpenOffersPerUser        Int      @default(5)
   maxOpenTradesPerUser        Int      @default(3)
   allowedFiatCurrencies       String   @default("NGN,USD,USDT,USDC")
-  allowedPaymentMethods       String   @default("BANK_TRANSFER")
+  allowedPaymentMethods       String   @default("BANK_TRANSFER,MOBILE_MONEY,STABLECOIN")
   disputeWindowMinutes        Int      @default(1440)
   adminOtpRequiredForDisputes Boolean  @default(true)
   updatedAt                   DateTime @updatedAt
@@ -2673,12 +2673,12 @@ model P2PTokenOffer {
 /// choice is made directly on P2PTokenTrade at accept time instead, since
 /// there's no pre-existing offer-side selection to join against.
 model P2POfferPaymentMethod {
-  id              String         @id @default(uuid())
+  id              String        @id @default(uuid())
   offerId         String
-  offer           P2PTokenOffer  @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offer           P2PTokenOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
   payoutAccountId String
-  payoutAccount   PayoutAccount  @relation(fields: [payoutAccountId], references: [id], onDelete: Cascade)
-  createdAt       DateTime       @default(now())
+  payoutAccount   PayoutAccount @relation(fields: [payoutAccountId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
 
   @@unique([offerId, payoutAccountId])
   @@index([offerId])
@@ -2727,16 +2727,16 @@ model P2PTokenTrade {
 /// the sender's Role, not re-derived later, so a message's badge doesn't
 /// silently change if an admin's role is later revoked).
 model P2PTradeMessage {
-  id            String   @id @default(uuid())
-  tradeId       String
-  trade         P2PTokenTrade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
-  senderId      String
-  sender        User     @relation("P2PTradeMessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
-  isFromAdmin   Boolean  @default(false)
-  body          String?
-  attachmentKey String?
+  id                    String        @id @default(uuid())
+  tradeId               String
+  trade                 P2PTokenTrade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  senderId              String
+  sender                User          @relation("P2PTradeMessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  isFromAdmin           Boolean       @default(false)
+  body                  String?
+  attachmentKey         String?
   attachmentContentType String?
-  createdAt     DateTime @default(now())
+  createdAt             DateTime      @default(now())
 
   @@index([tradeId, createdAt])
   @@map("p2p_trade_messages")
@@ -2921,7 +2921,7 @@ model PlatformSettings {
   validatorL3ApprovalBonusPercent            Decimal   @default(15) @db.Decimal(5, 2) // additive bonus (% of base) paid to the L3 validator who approved a PENDING_L3 deck
   validatorReassignmentPenaltyPercent        Decimal   @default(0) @db.Decimal(5, 2) // global default for reassign()'s admin-settable per-reassignment penalty (0-100); the effective percent actually used is frozen per-deck on ValidatorDeck.effectiveReassignmentPenaltyPercent at reassignment time, so changing this later never alters an already-decided reassignment's payout
   withdrawalsEnabled                         Boolean   @default(true) // global master kill switch across every payout rail (crypto, Stripe, Flutterwave, stablecoin wallet) -- checked first in WalletController.validateCommonWithdrawalRequirements, before any per-rail flag, so turning this off blocks wallet/withdrawals/otp and wallet/withdrawals outright regardless of which rail a trainer picks. Distinct from the per-rail flags below (cryptoWithdrawalsEnabled etc), which stay independently toggleable for when only one rail needs pausing
-  withdrawalsDisabledMessage                 String?   // optional admin-authored reason shown to trainers when withdrawalsEnabled is false, e.g. "Withdrawals are paused for scheduled maintenance"
+  withdrawalsDisabledMessage                 String? // optional admin-authored reason shown to trainers when withdrawalsEnabled is false, e.g. "Withdrawals are paused for scheduled maintenance"
   cryptoWithdrawalsEnabled                   Boolean   @default(true) // master kill switch -- when false, both wallet/withdrawals/otp and wallet/withdrawals reject new withdrawal requests outright
   nowPaymentsPayoutsEnabled                  Boolean   @default(false) // when false, admin/withdrawals/:id/submit-nowpayments is disabled -- admins can still resolve withdrawals manually (outcome=paid) while this is off, which is the safe default until payout credentials/allow-lists are configured
   allowedWithdrawalCurrencies                String    @default("USDT") // CSV of currencies a withdrawal's destinationCurrency may be, validated app-side against NowPaymentsService's supported set (USDT, USDC)
@@ -2951,6 +2951,7 @@ model PlatformSettings {
   isFlutterwaveV4Enabled                     Boolean   @default(false) // routes fiat deposit/payout/payout-account creation through FlutterwaveV4Service (OAuth2, Customer + PaymentMethod + Charge, Recipient + Sender + Transfer) instead of the v3 hosted-checkout-link flow. Off by default -- v3 stays the active rail; a withdrawal/deposit created under v4 always continues being serviced by v4 regardless of later toggling, via its own stored provider tag ("flutterwave-v4" vs "flutterwave")
   flutterwaveV4SenderId                      String? // Flutterwave v4 Sender id (POST /transfers/senders, type=generic_sender) -- one platform-level identity, not per-trainer, created lazily the first v4 payout is submitted and reused on every later one
   isStripePayoutsEnabled                     Boolean   @default(false) // master kill switch -- when false, POST /payout-accounts rejects STRIPE_CONNECT creation and admin/withdrawals/:id/submit-stripe is disabled; admins can still resolve fiat withdrawals manually (outcome=paid) while this is off, same posture as isFlutterwavePayoutsEnabled. Off by default until STRIPE_SECRET_KEY/STRIPE_CONNECT_WEBHOOK_SECRET are configured
+  isPlatformPayoutEnabled                    Boolean   @default(false) // gates the "Bank Transfer" free-entry payout option (POST /payout-accounts with type=BANK, freeEntry=true) -- no provider verification, trainer types their own bank name + account number, OTP-confirmed instead. Off by default -- an admin opts in explicitly, since there's no automated safeguard against a mistyped/fraudulent account on this rail
   authMaintenanceEnabled                     Boolean   @default(false) // master switch for the maintenance window; the five scope flags below decide what it actually blocks while on. PlatformSettingsService auto-clears this the first time any check runs after authMaintenanceUntil passes, so the admin toggle self-resets rather than staying on indefinitely
   authMaintenanceUntil                       DateTime? // scheduled end of the maintenance window
   authMaintenanceMessage                     String? // optional admin-authored note shown alongside the countdown on the login/signup pages and the logged-out notice
@@ -3157,16 +3158,16 @@ model Course {
 /// slide, and only via that sequential advancement -- never derived from
 /// lastSlideIndex alone.
 model CourseProgress {
-  id                  String    @id @default(uuid())
-  userId              String
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  courseId            String
-  course              Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lastSlideIndex      Int       @default(0)
-  maxSlideIndexReached Int      @default(0)
-  completedAt         DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                   String    @id @default(uuid())
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId             String
+  course               Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lastSlideIndex       Int       @default(0)
+  maxSlideIndexReached Int       @default(0)
+  completedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@unique([userId, courseId])
   @@index([userId])

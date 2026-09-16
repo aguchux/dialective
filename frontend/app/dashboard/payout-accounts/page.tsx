@@ -15,7 +15,6 @@ import {
   useGetCountriesQuery,
   useGetPublicClientSettingsQuery,
   useListBanksQuery,
-  useListPaymentMethodsQuery,
   useListPayoutAccountsQuery,
   useRefreshStripePayoutAccountStatusMutation,
   useRequestPayoutAccountSetupOtpMutation,
@@ -289,7 +288,9 @@ export default function PayoutAccountsPage() {
       </div>
 
       <AddPayoutAccountDialog
+        flutterwaveEnabled={publicSettings?.isFlutterwavePayoutsEnabled ?? false}
         stripeEnabled={publicSettings?.isStripePayoutsEnabled ?? false}
+        platformPayoutEnabled={publicSettings?.isPlatformPayoutEnabled ?? false}
         cryptoEnabled={publicSettings?.isCryptoWithdrawalsEnabled ?? false}
         allowedAssets={parseCsvUpper(publicSettings?.allowedWithdrawalCurrencies) ?? STABLECOIN_ASSETS}
         allowedNetworks={
@@ -307,36 +308,42 @@ export default function PayoutAccountsPage() {
   );
 }
 
-// CRYPTO_WALLET has no country -- it's offered on the provider step for
-// EVERY country (including one Flutterwave and Stripe both reject, like
-// Ethiopia), closing the dead-end a trainer would otherwise hit when no
-// fiat rail covers their country. See stripe-connect.service.ts's
-// StripeInvalidRequestError handling for the error this now gives a real
-// alternative to.
-type Provider = 'FLUTTERWAVE' | 'STRIPE_CONNECT' | 'CRYPTO_WALLET';
+// CRYPTO_WALLET and PLATFORM_PAYOUT have no country restriction -- both are
+// offered on the provider step for EVERY country (including one Flutterwave
+// and Stripe both reject, like Ethiopia), closing the dead-end a trainer
+// would otherwise hit when no fiat rail covers their country. See
+// stripe-connect.service.ts's StripeInvalidRequestError handling for the
+// error CRYPTO_WALLET gives a real alternative to.
+type Provider = 'FLUTTERWAVE' | 'STRIPE_CONNECT' | 'CRYPTO_WALLET' | 'PLATFORM_PAYOUT';
 type WizardStep = 'country' | 'provider' | 'details' | 'setup-otp' | 'wallet-otp';
 
 /**
  * Add-payout-method flow: pick a country, see which rails are actually
  * usable there (Flutterwave only for its 6 supported markets, Stripe as the
  * broad fallback everywhere else -- see FLUTTERWAVE_COUNTRIES' doc comment),
- * plus a USDT/USDC TRC20 wallet offered regardless of country, then the
- * provider-specific detail form. Every account type except Stripe (which
- * has its own hosted onboarding) requires confirming an OTP before it's
- * saved -- wallet-otp for STABLECOIN_WALLET, setup-otp for BANK/
- * MOBILE_MONEY -- see PayoutAccountsController.requestSetupOtp/create. A
- * BANK account can optionally skip Flutterwave's resolveAccount
- * verification (the "Enter details myself" checkbox), picking its bank
- * from the admin-curated PaymentMethodCatalog instead of Flutterwave's live
- * list; it's saved UNVERIFIED either way.
+ * plus a USDT/USDC TRC20 wallet and a free-entry Bank Transfer option
+ * offered regardless of country, then the provider-specific detail form.
+ * Every account type except Stripe (which has its own hosted onboarding)
+ * requires confirming an OTP before it's saved -- wallet-otp for
+ * STABLECOIN_WALLET, setup-otp for FLUTTERWAVE (BANK/MOBILE_MONEY) and
+ * PLATFORM_PAYOUT -- see PayoutAccountsController.requestSetupOtp/create.
+ * PLATFORM_PAYOUT is a true free-text bank name + account number with no
+ * provider verification at all (the OTP is the only check); it's saved
+ * UNVERIFIED. Flutterwave stays provider-verified only -- the free-entry
+ * checkbox that used to live inside its BANK form is gone now that
+ * PLATFORM_PAYOUT is its own top-level option, reachable from any country.
  */
 function AddPayoutAccountDialog({
+  flutterwaveEnabled,
   stripeEnabled,
+  platformPayoutEnabled,
   cryptoEnabled,
   allowedAssets,
   allowedNetworks,
 }: {
+  flutterwaveEnabled: boolean;
   stripeEnabled: boolean;
+  platformPayoutEnabled: boolean;
   cryptoEnabled: boolean;
   allowedAssets: readonly string[];
   allowedNetworks: readonly StablecoinNetwork[];
@@ -345,10 +352,11 @@ function AddPayoutAccountDialog({
   const [step, setStep] = useState<WizardStep>('country');
   const [countryCode, setCountryCode] = useState('');
   const [countryName, setCountryName] = useState('');
+  const [countryCurrency, setCountryCurrency] = useState('');
   const [provider, setProvider] = useState<Provider | null>(null);
   const [flutterwaveType, setFlutterwaveType] = useState<'BANK' | 'MOBILE_MONEY'>('BANK');
-  const [freeEntry, setFreeEntry] = useState(false);
   const [bankCode, setBankCode] = useState('');
+  const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [mobileMoneyNetwork, setMobileMoneyNetwork] = useState(MOBILE_MONEY_NETWORKS[0]);
   const [mobileMoneyNumber, setMobileMoneyNumber] = useState('');
@@ -365,26 +373,17 @@ function AddPayoutAccountDialog({
     skip: !open,
   });
   const flutterwaveCurrency = FLUTTERWAVE_COUNTRIES[countryCode];
-  const flutterwaveAvailable = Boolean(flutterwaveCurrency);
+  const flutterwaveAvailable = flutterwaveEnabled && Boolean(flutterwaveCurrency);
   const { data: banks, isLoading: isLoadingBanks } = useListBanksQuery(countryCode, {
-    skip: provider !== 'FLUTTERWAVE' || flutterwaveType !== 'BANK' || freeEntry || !open,
+    skip: provider !== 'FLUTTERWAVE' || flutterwaveType !== 'BANK' || !open,
   });
-  // Free-entry BANK/MOBILE_MONEY skips Flutterwave's live bank list --
-  // instead offers the admin-curated PaymentMethodCatalog for this country
-  // (see PaymentMethodsController), with no provider-side resolve call.
-  const { data: catalogMethods, isLoading: isLoadingCatalog } = useListPaymentMethodsQuery(
-    { countryCode, type: flutterwaveType },
-    { skip: provider !== 'FLUTTERWAVE' || !freeEntry || !open },
-  );
   const [createAccount, { isLoading: isSubmitting }] = useCreatePayoutAccountMutation();
   const [requestWalletOtp, { isLoading: isRequestingWalletOtp }] =
     useRequestPayoutAccountSetupOtpMutation();
   const [requestSetupOtp, { isLoading: isRequestingSetupOtp }] =
     useRequestPayoutAccountSetupOtpMutation();
 
-  const selectedBankName = freeEntry
-    ? catalogMethods?.find((method) => method.bankCode === bankCode)?.name
-    : banks?.find((bank) => bank.code === bankCode)?.name;
+  const selectedBankName = banks?.find((bank) => bank.code === bankCode)?.name;
 
   const selectableNetworks = STABLECOIN_NETWORKS.filter(
     (network) =>
@@ -395,10 +394,11 @@ function AddPayoutAccountDialog({
     setStep('country');
     setCountryCode('');
     setCountryName('');
+    setCountryCurrency('');
     setProvider(null);
     setFlutterwaveType('BANK');
-    setFreeEntry(false);
     setBankCode('');
+    setBankName('');
     setAccountNumber('');
     setMobileMoneyNumber('');
     setStablecoinAsset('USDT');
@@ -429,9 +429,10 @@ function AddPayoutAccountDialog({
     if (!next) reset();
   }
 
-  function goToProviderStep(code: string, name: string) {
+  function goToProviderStep(code: string, name: string, currencyCode: string) {
     setCountryCode(code);
     setCountryName(name);
+    setCountryCurrency(currencyCode);
     setProvider(null);
     setStep('provider');
   }
@@ -504,6 +505,30 @@ function AddPayoutAccountDialog({
       return;
     }
 
+    if (provider === 'PLATFORM_PAYOUT') {
+      if (!bankName.trim()) {
+        setError('Enter your bank name.');
+        return;
+      }
+      if (!accountNumber.trim()) {
+        setError('Enter your account number.');
+        return;
+      }
+      try {
+        const result = await requestSetupOtp({
+          type: 'BANK',
+          bankName: bankName.trim(),
+          accountNumber,
+          freeEntry: true,
+        }).unwrap();
+        setSetupOtpRequestId(result.otpRequestId);
+        setStep('setup-otp');
+      } catch (err) {
+        setError(normalizeErrorMessage(err, 'Unable to send a confirmation code.'));
+      }
+      return;
+    }
+
     if (flutterwaveType === 'BANK' && !bankCode) {
       setError('Select a bank.');
       return;
@@ -519,8 +544,8 @@ function AddPayoutAccountDialog({
       const result = await requestSetupOtp({
         type: flutterwaveType,
         ...(flutterwaveType === 'BANK'
-          ? { bankCode, accountNumber, freeEntry }
-          : { mobileMoneyNetwork, mobileMoneyNumber, freeEntry }),
+          ? { bankCode, accountNumber, freeEntry: false }
+          : { mobileMoneyNetwork, mobileMoneyNumber, freeEntry: false }),
       }).unwrap();
       setSetupOtpRequestId(result.otpRequestId);
       setStep('setup-otp');
@@ -534,15 +559,30 @@ function AddPayoutAccountDialog({
     if (!setupOtpRequestId) return;
     setError(null);
     try {
-      await createAccount({
-        type: flutterwaveType,
-        country: countryCode,
-        currency: flutterwaveCurrency,
-        freeEntry,
-        otpRequestId: setupOtpRequestId,
-        code: setupCode,
-        ...(flutterwaveType === 'BANK' ? { bankCode, accountNumber } : { mobileMoneyNetwork, mobileMoneyNumber }),
-      }).unwrap();
+      if (provider === 'PLATFORM_PAYOUT') {
+        await createAccount({
+          type: 'BANK',
+          country: countryCode,
+          currency: countryCurrency || 'USD',
+          freeEntry: true,
+          bankName: bankName.trim(),
+          accountNumber,
+          otpRequestId: setupOtpRequestId,
+          code: setupCode,
+        }).unwrap();
+      } else {
+        await createAccount({
+          type: flutterwaveType,
+          country: countryCode,
+          currency: flutterwaveCurrency,
+          freeEntry: false,
+          otpRequestId: setupOtpRequestId,
+          code: setupCode,
+          ...(flutterwaveType === 'BANK'
+            ? { bankCode, accountNumber }
+            : { mobileMoneyNetwork, mobileMoneyNumber }),
+        }).unwrap();
+      }
       handleOpenChange(false);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to verify this code.'));
@@ -556,8 +596,10 @@ function AddPayoutAccountDialog({
       provider === 'STRIPE_CONNECT'
         ? 'Connect with Stripe'
         : provider === 'CRYPTO_WALLET'
-          ? 'USDT / USDC wallet'
-          : 'Bank or mobile money details',
+          ? 'Crypto payment details'
+          : provider === 'PLATFORM_PAYOUT'
+            ? 'Bank Transfer details'
+            : 'Bank or mobile money details',
     'setup-otp': 'Confirm this account',
     'wallet-otp': 'Confirm your wallet',
   };
@@ -613,7 +655,7 @@ function AddPayoutAccountDialog({
                 loadingLabel="Loading countries..."
                 onChange={(value) => {
                   const match = countries?.find((c) => c.code === value);
-                  if (match) goToProviderStep(match.code, match.name);
+                  if (match) goToProviderStep(match.code, match.name, match.currencyCode);
                 }}
                 options={(countries ?? []).map((c) => ({ value: c.code, label: c.name }))}
                 placeholder="Search for your country"
@@ -646,10 +688,18 @@ function AddPayoutAccountDialog({
                 description="Withdraw to your own USDT or USDC wallet -- choose from TRC20, ERC20, BEP20, Solana, or Polygon, works from any country."
                 icon={<Wallet className="size-7" aria-hidden="true" />}
                 onClick={() => goToDetailsStep('CRYPTO_WALLET')}
-                title="USDT / USDC wallet"
+                title="Crypto Payment"
               />
             )}
-            {!flutterwaveAvailable && !stripeEnabled && !cryptoEnabled && (
+            {platformPayoutEnabled && (
+              <ProviderCard
+                description="Enter your own bank name and account number directly -- not verified with your bank, works from any country. A confirmation code is required before it's saved."
+                icon={<Banknote className="size-7" aria-hidden="true" />}
+                onClick={() => goToDetailsStep('PLATFORM_PAYOUT')}
+                title="Bank Transfer"
+              />
+            )}
+            {!flutterwaveAvailable && !stripeEnabled && !cryptoEnabled && !platformPayoutEnabled && (
               <p className="rounded-lg border border-line bg-surface-muted p-4 text-sm text-muted">
                 No payout provider is available for {countryName} yet. Contact support for help.
               </p>
@@ -789,9 +839,11 @@ function AddPayoutAccountDialog({
             <p className="text-sm text-muted">
               Confirming{' '}
               <span className="font-bold text-ink">
-                {flutterwaveType === 'BANK'
-                  ? `${selectedBankName ?? bankCode} account`
-                  : `${mobileMoneyNetwork} account`}
+                {provider === 'PLATFORM_PAYOUT'
+                  ? `${bankName || 'bank'} account`
+                  : flutterwaveType === 'BANK'
+                    ? `${selectedBankName ?? bankCode} account`
+                    : `${mobileMoneyNetwork} account`}
               </span>
             </p>
             <input
@@ -863,39 +915,16 @@ function AddPayoutAccountDialog({
                 </fieldset>
 
                 {flutterwaveType === 'BANK' && (
-                  <label className="flex items-center gap-2 text-sm font-bold">
-                    <input
-                      checked={freeEntry}
-                      onChange={(event) => {
-                        setFreeEntry(event.target.checked);
-                        setBankCode('');
-                      }}
-                      type="checkbox"
-                    />
-                    Enter details myself (skip bank verification)
-                  </label>
-                )}
-
-                {flutterwaveType === 'BANK' && (
                   <>
                     <label className="grid gap-1.5 text-sm font-bold">
                       Bank
                       <SearchableSelect
                         className={inputClass}
                         emptyLabel="No banks match your search"
-                        loading={freeEntry ? isLoadingCatalog : isLoadingBanks}
+                        loading={isLoadingBanks}
                         loadingLabel="Loading banks..."
                         onChange={setBankCode}
-                        options={
-                          freeEntry
-                            ? (catalogMethods ?? [])
-                                .filter((method) => method.bankCode)
-                                .map((method) => ({
-                                  value: method.bankCode!,
-                                  label: method.name,
-                                }))
-                            : (banks ?? []).map((bank) => ({ value: bank.code, label: bank.name }))
-                        }
+                        options={(banks ?? []).map((bank) => ({ value: bank.code, label: bank.name }))}
                         placeholder="Search for a bank"
                         value={bankCode}
                       />
@@ -910,17 +939,10 @@ function AddPayoutAccountDialog({
                         value={accountNumber}
                       />
                     </label>
-                    {freeEntry ? (
-                      <p className="text-xs font-bold text-danger">
-                        This account is not verified with your bank -- double-check the number is
-                        correct. A confirmation code is still required before it&apos;s saved.
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted">
-                        We&apos;ll verify this account with your bank and show you the account
-                        holder&apos;s name before saving.
-                      </p>
-                    )}
+                    <p className="text-xs text-muted">
+                      We&apos;ll verify this account with your bank and show you the account
+                      holder&apos;s name before saving.
+                    </p>
                   </>
                 )}
 
@@ -957,6 +979,37 @@ function AddPayoutAccountDialog({
                     </p>
                   </>
                 )}
+              </>
+            )}
+
+            {provider === 'PLATFORM_PAYOUT' && (
+              <>
+                <label className="grid gap-1.5 text-sm font-bold">
+                  Bank name
+                  <input
+                    className={inputClass}
+                    onChange={(event) => setBankName(event.target.value)}
+                    placeholder="e.g. GTBank"
+                    required
+                    type="text"
+                    value={bankName}
+                  />
+                </label>
+                <label className="grid gap-1.5 text-sm font-bold">
+                  Account number
+                  <input
+                    className={inputClass}
+                    onChange={(event) => setAccountNumber(event.target.value.trim())}
+                    required
+                    type="text"
+                    value={accountNumber}
+                  />
+                </label>
+                <p className="text-xs font-bold text-danger">
+                  This account is not verified with your bank -- account name must be the name on
+                  the account. Double-check both fields; funds sent to a wrong or mismatched account
+                  cannot be recovered. A confirmation code is required before it&apos;s saved.
+                </p>
               </>
             )}
 

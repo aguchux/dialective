@@ -662,6 +662,11 @@ export class PlatformSettingsService {
     return row.isStripePayoutsEnabled;
   }
 
+  async isPlatformPayoutEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.isPlatformPayoutEnabled;
+  }
+
   async getAllowedFlutterwaveCurrencies(): Promise<string[]> {
     const row = await this.getRow();
     return row.allowedFlutterwaveCurrencies
@@ -1217,6 +1222,7 @@ export class PlatformSettingsService {
       allowedFlutterwaveCurrencies: row.allowedFlutterwaveCurrencies,
       allowedFlutterwaveCountries: row.allowedFlutterwaveCountries,
       isStripePayoutsEnabled: row.isStripePayoutsEnabled,
+      isPlatformPayoutEnabled: row.isPlatformPayoutEnabled,
       withdrawalFeeMode: row.withdrawalFeeMode,
       withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
       withdrawalFeePercent: row.withdrawalFeePercent.toString(),
@@ -1433,6 +1439,7 @@ export class PlatformSettingsService {
     allowedFlutterwaveCurrencies?: string;
     allowedFlutterwaveCountries?: string;
     isStripePayoutsEnabled?: boolean;
+    isPlatformPayoutEnabled?: boolean;
     withdrawalFeeMode?: string;
     withdrawalFeeTokenAmount?: number;
     withdrawalFeePercent?: number;
@@ -2114,6 +2121,7 @@ export class PlatformSettingsService {
       allowedFlutterwaveCurrencies: row.allowedFlutterwaveCurrencies,
       allowedFlutterwaveCountries: row.allowedFlutterwaveCountries,
       isStripePayoutsEnabled: row.isStripePayoutsEnabled,
+      isPlatformPayoutEnabled: row.isPlatformPayoutEnabled,
       withdrawalFeeMode: row.withdrawalFeeMode,
       withdrawalFeeTokenAmount: row.withdrawalFeeTokenAmount.toString(),
       withdrawalFeePercent: row.withdrawalFeePercent.toString(),
@@ -2183,6 +2191,7 @@ export class PlatformSettingsService {
       isFlutterwaveV4Enabled,
       isFlutterwavePayoutsEnabled,
       isStripePayoutsEnabled,
+      isPlatformPayoutEnabled,
       isCryptoWithdrawalsEnabled,
       topBanner,
       withdrawalsStatus,
@@ -2204,6 +2213,7 @@ export class PlatformSettingsService {
       this.isFlutterwaveV4Enabled(),
       this.isFlutterwavePayoutsEnabled(),
       this.isStripePayoutsEnabled(),
+      this.isPlatformPayoutEnabled(),
       this.isCryptoWithdrawalsEnabled(),
       this.getTopBanner(),
       this.getWithdrawalsEnabledStatus(),
@@ -2270,8 +2280,9 @@ export class PlatformSettingsService {
       // trainer-facing bug, not just a missing admin-UI nicety.
       isFlutterwavePayoutsEnabled,
       isStripePayoutsEnabled,
+      isPlatformPayoutEnabled,
       isCryptoWithdrawalsEnabled,
-      // Global master switch, checked ahead of the three per-rail flags
+      // Global master switch, checked ahead of the four per-rail flags
       // above -- withdrawalsEnabled=false means the trainer's withdraw
       // button/flow should be disabled regardless of which rail is
       // otherwise configured on.

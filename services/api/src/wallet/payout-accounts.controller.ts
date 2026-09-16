@@ -79,32 +79,34 @@ export class PayoutAccountsController {
     }
 
     if (dto.type === 'BANK') {
-      if (!dto.bankCode || !dto.accountNumber) {
-        throw new BadRequestException('bankCode and accountNumber are required for a bank account');
+      if (!dto.accountNumber) {
+        throw new BadRequestException('accountNumber is required for a bank account');
       }
       const freeEntry = dto.freeEntry ?? false;
-      await this.otp.verify({
-        otpRequestId: dto.otpRequestId!,
-        userId: req.user.sub,
-        purpose: OtpPurpose.PAYOUT_ACCOUNT_SETUP,
-        code: dto.code!,
-        contextHash: payoutAccountSetupContextHash({
-          type: 'BANK',
-          bankCode: dto.bankCode,
-          accountNumber: dto.accountNumber,
-          freeEntry,
-        }),
-      });
 
       if (freeEntry) {
+        if (!(await this.platformSettings.isPlatformPayoutEnabled())) {
+          throw new UnprocessableEntityException('Bank Transfer payouts are currently disabled');
+        }
+        if (!dto.bankName) {
+          throw new BadRequestException('bankName is required for a free-entry bank account');
+        }
+        await this.otp.verify({
+          otpRequestId: dto.otpRequestId!,
+          userId: req.user.sub,
+          purpose: OtpPurpose.PAYOUT_ACCOUNT_SETUP,
+          code: dto.code!,
+          contextHash: payoutAccountSetupContextHash({
+            type: 'BANK',
+            bankName: dto.bankName,
+            accountNumber: dto.accountNumber,
+            freeEntry: true,
+          }),
+        });
         // No provider call at all -- the OTP the trainer just confirmed IS
         // this rail's verification step, same posture as STABLECOIN_WALLET.
-        // bankName is looked up from the curated PaymentMethodCatalog (the
-        // frontend's free-entry picker), not resolved live -- there's no
-        // Flutterwave call here to resolve it from.
-        const catalogEntry = await this.prisma.paymentMethodCatalog.findFirst({
-          where: { countryCode: dto.country!.toUpperCase(), type: 'BANK', bankCode: dto.bankCode },
-        });
+        // bankName is exactly what the trainer typed, never resolved
+        // against any catalog or live provider list.
         const account = await this.prisma.payoutAccount.create({
           data: {
             userId: req.user.sub,
@@ -114,14 +116,29 @@ export class PayoutAccountsController {
             provider: 'manual',
             isDefault: dto.isDefault ?? false,
             verificationStatus: PayoutAccountVerificationStatus.UNVERIFIED,
-            bankCode: dto.bankCode,
-            bankName: catalogEntry?.name ?? null,
+            bankName: dto.bankName,
             accountNumberEncryptedJson: { ...encryptPayoutField(dto.accountNumber) },
             accountNumberMasked: maskAccountNumber(dto.accountNumber),
           },
         });
         return toPublicPayoutAccount(account);
       }
+
+      if (!dto.bankCode) {
+        throw new BadRequestException('bankCode is required for a bank account');
+      }
+      await this.otp.verify({
+        otpRequestId: dto.otpRequestId!,
+        userId: req.user.sub,
+        purpose: OtpPurpose.PAYOUT_ACCOUNT_SETUP,
+        code: dto.code!,
+        contextHash: payoutAccountSetupContextHash({
+          type: 'BANK',
+          bankCode: dto.bankCode,
+          accountNumber: dto.accountNumber,
+          freeEntry: false,
+        }),
+      });
 
       // v3's resolveAccount remains the account-name verification source of
       // truth even under the v4 toggle -- v4 recipient creation doesn't
@@ -349,15 +366,29 @@ export class PayoutAccountsController {
     ) {
       throw new UnprocessableEntityException('Crypto withdrawals are currently disabled');
     }
+    if (
+      body.type === 'BANK' &&
+      body.freeEntry &&
+      !(await this.platformSettings.isPlatformPayoutEnabled())
+    ) {
+      throw new UnprocessableEntityException('Bank Transfer payouts are currently disabled');
+    }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
     const contextHash =
       body.type === 'BANK'
-        ? payoutAccountSetupContextHash({
-            type: 'BANK',
-            bankCode: body.bankCode!,
-            accountNumber: body.accountNumber!,
-            freeEntry: body.freeEntry ?? false,
-          })
+        ? body.freeEntry
+          ? payoutAccountSetupContextHash({
+              type: 'BANK',
+              bankName: body.bankName!,
+              accountNumber: body.accountNumber!,
+              freeEntry: true,
+            })
+          : payoutAccountSetupContextHash({
+              type: 'BANK',
+              bankCode: body.bankCode!,
+              accountNumber: body.accountNumber!,
+              freeEntry: false,
+            })
         : body.type === 'MOBILE_MONEY'
           ? payoutAccountSetupContextHash({
               type: 'MOBILE_MONEY',

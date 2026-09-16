@@ -1,4 +1,9 @@
-import { ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { OtpPurpose } from '@dialectiva/db';
 import { PayoutAccountsController } from './payout-accounts.controller';
 import { payoutAccountDeleteContextHash, payoutAccountSetupContextHash } from './otp-context.util';
@@ -11,6 +16,7 @@ function setup(
   overrides: {
     account?: Record<string, unknown> | null;
     cryptoWithdrawalsEnabled?: boolean;
+    platformPayoutEnabled?: boolean;
     allowedCurrencies?: string[];
     allowedNetworks?: string[];
     phoneNumber?: string | null;
@@ -62,6 +68,9 @@ function setup(
     getOtpChannel: jest.fn().mockResolvedValue('sms'),
     isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),
     isFlutterwaveV4Enabled: jest.fn().mockResolvedValue(false),
+    isPlatformPayoutEnabled: jest
+      .fn()
+      .mockResolvedValue(overrides.platformPayoutEnabled ?? true),
   };
   const flutterwave = {
     resolveAccount: jest.fn().mockResolvedValue({ accountName: 'Ada Lovelace' }),
@@ -235,12 +244,12 @@ describe('PayoutAccountsController.requestSetupOtp', () => {
     );
   });
 
-  it('issues a different hash for a free-entry BANK request than a provider-verified one with the same details', async () => {
+  it('issues a different hash for a free-entry BANK request (bound to bankName) than a provider-verified one (bound to bankCode)', async () => {
     const { controller, otp } = setup();
 
     await controller.requestSetupOtp(req, {
       type: 'BANK',
-      bankCode: '044',
+      bankName: 'GTBank',
       accountNumber: '0691234567',
       freeEntry: true,
     });
@@ -254,6 +263,20 @@ describe('PayoutAccountsController.requestSetupOtp', () => {
         freeEntry: false,
       }),
     );
+  });
+
+  it('rejects a free-entry BANK OTP request when Bank Transfer payouts are disabled platform-wide', async () => {
+    const { controller, otp } = setup({ platformPayoutEnabled: false });
+
+    await expect(
+      controller.requestSetupOtp(req, {
+        type: 'BANK',
+        bankName: 'GTBank',
+        accountNumber: '0691234567',
+        freeEntry: true,
+      }),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(otp.issueForUser).not.toHaveBeenCalled();
   });
 });
 
@@ -339,7 +362,12 @@ describe('PayoutAccountsController.create (BANK)', () => {
   it('skips Flutterwave resolveAccount/listBanks entirely for a free-entry account, saving it UNVERIFIED with provider=manual', async () => {
     const { controller, prisma, flutterwave } = setup();
 
-    const result = await controller.create(req, { ...bankPayload, freeEntry: true });
+    const result = await controller.create(req, {
+      ...bankPayload,
+      bankCode: undefined,
+      bankName: 'GTBank',
+      freeEntry: true,
+    });
 
     expect(flutterwave.resolveAccount).not.toHaveBeenCalled();
     expect(flutterwave.listBanks).not.toHaveBeenCalled();
@@ -354,18 +382,42 @@ describe('PayoutAccountsController.create (BANK)', () => {
     expect((result as { verificationStatus: string }).verificationStatus).toBe('UNVERIFIED');
   });
 
-  it('resolves bankName for a free-entry account from the payment method catalog, not from a provider call', async () => {
+  it('stores the exact typed bankName for a free-entry account, never a catalog or provider lookup', async () => {
     const { controller, prisma } = setup();
-    prisma.paymentMethodCatalog.findFirst.mockResolvedValue({ name: 'GTBank' });
 
-    await controller.create(req, { ...bankPayload, freeEntry: true });
-
-    expect(prisma.paymentMethodCatalog.findFirst).toHaveBeenCalledWith({
-      where: { countryCode: 'NG', type: 'BANK', bankCode: '044' },
+    await controller.create(req, {
+      ...bankPayload,
+      bankCode: undefined,
+      bankName: 'GTBank',
+      freeEntry: true,
     });
-    expect(prisma.payoutAccount.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ bankName: 'GTBank' }) }),
-    );
+
+    expect(prisma.paymentMethodCatalog.findFirst).not.toHaveBeenCalled();
+    const [[{ data }]] = prisma.payoutAccount.create.mock.calls;
+    expect(data.bankName).toBe('GTBank');
+    expect(data.bankCode).toBeUndefined();
+  });
+
+  it('rejects a free-entry account when bankName is missing', async () => {
+    const { controller } = setup();
+
+    await expect(
+      controller.create(req, { ...bankPayload, bankCode: undefined, freeEntry: true }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects a free-entry account when Bank Transfer payouts are disabled platform-wide', async () => {
+    const { controller, prisma } = setup({ platformPayoutEnabled: false });
+
+    await expect(
+      controller.create(req, {
+        ...bankPayload,
+        bankCode: undefined,
+        bankName: 'GTBank',
+        freeEntry: true,
+      }),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(prisma.payoutAccount.create).not.toHaveBeenCalled();
   });
 });
 

@@ -62,18 +62,29 @@ export function payoutAccountDeleteContextHash(input: { payoutAccountId: string 
  */
 export function payoutAccountSetupContextHash(
   input:
-    | { type: 'BANK'; bankCode: string; accountNumber: string; freeEntry: boolean }
+    | { type: 'BANK'; bankCode: string; accountNumber: string; freeEntry: false }
+    | { type: 'BANK'; bankName: string; accountNumber: string; freeEntry: true }
     | { type: 'MOBILE_MONEY'; mobileMoneyNetwork: string; mobileMoneyNumber: string; freeEntry: boolean }
     | { type: 'STABLECOIN_WALLET'; walletAddress: string; stablecoinAsset: string; stablecoinNetwork: string },
 ): string {
   const { type } = input;
   if (type === 'BANK') {
-    return hashContext({
-      type,
-      bankCode: input.bankCode,
-      accountNumber: input.accountNumber,
-      freeEntry: String(input.freeEntry),
-    });
+    // Free-entry has no bankCode (it's a typed name, not a catalog pick) --
+    // binds bankName instead, so a code issued for one typed name/account
+    // number can't be replayed against a different one.
+    return input.freeEntry
+      ? hashContext({
+          type,
+          bankName: input.bankName,
+          accountNumber: input.accountNumber,
+          freeEntry: 'true',
+        })
+      : hashContext({
+          type,
+          bankCode: input.bankCode,
+          accountNumber: input.accountNumber,
+          freeEntry: 'false',
+        });
   }
   if (type === 'MOBILE_MONEY') {
     return hashContext({

@@ -25,9 +25,21 @@ export class CreatePayoutAccountDto {
   @Length(3, 3)
   currency?: string; // ISO 4217 -- STABLECOIN_WALLET uses stablecoinAsset instead
 
-  @ValidateIf((dto: CreatePayoutAccountDto) => dto.type === 'BANK')
+  // Required for a provider-verified (Flutterwave) BANK account, where it's
+  // the code the trainer picked from the live bank list -- NOT required for
+  // a free-entry BANK account, which instead takes a plain-text bankName
+  // below (see PayoutAccountsController.create's free-entry branch).
+  @ValidateIf((dto: CreatePayoutAccountDto) => dto.type === 'BANK' && !dto.freeEntry)
   @IsString()
   bankCode?: string;
+
+  // Free-entry BANK only -- the trainer types their bank's name directly,
+  // no admin-curated catalog or live Flutterwave list involved. Stored
+  // as-is on PayoutAccount.bankName.
+  @ValidateIf((dto: CreatePayoutAccountDto) => dto.type === 'BANK' && !!dto.freeEntry)
+  @IsString()
+  @Length(1, 120)
+  bankName?: string;
 
   @ValidateIf((dto: CreatePayoutAccountDto) => dto.type === 'BANK')
   @IsString()

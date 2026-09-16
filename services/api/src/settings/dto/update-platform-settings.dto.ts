@@ -749,6 +749,10 @@ export class UpdatePlatformSettingsDto {
   @IsBoolean()
   isStripePayoutsEnabled?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  isPlatformPayoutEnabled?: boolean;
+
   // CSV of ISO 4217 currency codes; validated in PlatformSettingsService.update.
   @IsOptional()
   @IsString()

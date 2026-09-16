@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsOptional, IsString, ValidateIf } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, Length, ValidateIf } from 'class-validator';
 import { IsCryptoAddress } from '../../common/crypto-address.util';
 import { IsValidStablecoinPair } from '../../common/stablecoin-pair.util';
 import { STABLECOIN_ASSETS, STABLECOIN_NETWORKS } from '../stablecoin-networks';
@@ -16,9 +16,14 @@ export class RequestPayoutAccountSetupOtpDto {
   @IsIn(SETUP_OTP_TYPES)
   type!: (typeof SETUP_OTP_TYPES)[number];
 
-  @ValidateIf((dto: RequestPayoutAccountSetupOtpDto) => dto.type === 'BANK')
+  @ValidateIf((dto: RequestPayoutAccountSetupOtpDto) => dto.type === 'BANK' && !dto.freeEntry)
   @IsString()
   bankCode?: string;
+
+  @ValidateIf((dto: RequestPayoutAccountSetupOtpDto) => dto.type === 'BANK' && !!dto.freeEntry)
+  @IsString()
+  @Length(1, 120)
+  bankName?: string;
 
   @ValidateIf((dto: RequestPayoutAccountSetupOtpDto) => dto.type === 'BANK')
   @IsString()
