@@ -4,7 +4,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
-import { DashboardHeader, emailName, MobileNavigation } from '@/components/dashboard/DashboardShell';
+import {
+  DashboardHeader,
+  emailName,
+  MobileNavigation,
+} from '@/components/dashboard/DashboardShell';
 import { IntegrationsMarketplace } from '@/components/integrations/IntegrationsMarketplace';
 
 export default function IntegrationsPage() {
@@ -28,7 +32,7 @@ export default function IntegrationsPage() {
     <div className="dashboard-theme min-h-screen bg-bg text-ink" ref={setThemeRoot}>
       <PortalContainerProvider container={themeRoot}>
         <DashboardHeader
-          activeView={null}
+          activeView="p2p"
           displayName={displayName}
           email={session.user.email ?? 'Trainer'}
           image={session.user.image}
@@ -38,7 +42,7 @@ export default function IntegrationsPage() {
           <IntegrationsMarketplace />
         </main>
 
-        <MobileNavigation activeView={null} />
+        <MobileNavigation activeView="p2p" />
       </PortalContainerProvider>
     </div>
   );

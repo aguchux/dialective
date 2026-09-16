@@ -59,12 +59,20 @@ export type DashboardView =
   | 'security'
   | 'notifications';
 
-export const dashboardViews: { id: DashboardView; label: string; icon: typeof WalletCards }[] = [
-  { id: 'tokens', label: 'Tokens', icon: WalletCards },
-  { id: 'earnings', label: 'Earnings', icon: CircleDollarSign },
-  { id: 'training', label: 'Training', icon: Mic2 },
-  { id: 'market', label: 'Market', icon: Landmark },
-  { id: 'scores', label: 'My Scores', icon: Star },
+type DashboardNavigationId = DashboardView | 'p2p';
+
+export const dashboardViews: {
+  id: DashboardNavigationId;
+  label: string;
+  icon: typeof WalletCards;
+  href: string;
+}[] = [
+  { id: 'tokens', label: 'Tokens', icon: WalletCards, href: '/dashboard?view=tokens' },
+  { id: 'earnings', label: 'Earnings', icon: CircleDollarSign, href: '/dashboard?view=earnings' },
+  { id: 'training', label: 'Training', icon: Mic2, href: '/dashboard?view=training' },
+  { id: 'market', label: 'Markets', icon: Landmark, href: '/dashboard?view=market' },
+  { id: 'scores', label: 'Scores', icon: Star, href: '/dashboard?view=scores' },
+  { id: 'p2p', label: 'P2P', icon: Plug, href: '/dashboard/integrations' },
 ];
 
 export function DashboardHeader({
@@ -74,7 +82,7 @@ export function DashboardHeader({
   image,
   publicProfileHref,
 }: {
-  activeView: DashboardView | null;
+  activeView: DashboardNavigationId | null;
   displayName: string;
   email: string;
   image?: string | null;
@@ -190,7 +198,7 @@ function DashboardNavLink({
       className={`relative flex min-w-24 items-center justify-center gap-2 px-3 text-sm font-bold transition-colors ${
         active ? 'text-accent' : 'text-muted hover:text-ink'
       }`}
-      href={`/dashboard?view=${view.id}`}
+      href={view.href}
     >
       <Icon className="size-4" aria-hidden="true" />
       {view.label}
@@ -207,10 +215,10 @@ export function emailName(email?: string | null) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export function MobileNavigation({ activeView }: { activeView: DashboardView | null }) {
+export function MobileNavigation({ activeView }: { activeView: DashboardNavigationId | null }) {
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
       aria-label="Trainer dashboard"
     >
       {dashboardViews.map((view) => {
@@ -220,7 +228,7 @@ export function MobileNavigation({ activeView }: { activeView: DashboardView | n
           <Link
             aria-current={active ? 'page' : undefined}
             className={`flex h-16 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[11px] font-bold ${active ? 'text-accent' : 'text-muted'}`}
-            href={`/dashboard?view=${view.id}`}
+            href={view.href}
             key={view.id}
           >
             <Icon className="size-5" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />

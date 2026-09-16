@@ -149,7 +149,7 @@ type SessionUpdateFn = (data?: Record<string, unknown>) => Promise<Session | nul
 
 // Reachable only from the account dropdown/bell, not the main tab bar/mobile nav.
 const allViewIds: DashboardView[] = [
-  ...views.map((view) => view.id),
+  ...views.flatMap((view): DashboardView[] => (view.id === 'p2p' ? [] : [view.id])),
   'home',
   'referrals',
   'campaigns',
