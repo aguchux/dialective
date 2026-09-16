@@ -37,11 +37,12 @@ export function AiAssistantWidget() {
   });
   const transcriptRef = useRef<HTMLDivElement>(null);
   const enabled = settings?.supportChatMode === 'AI' && !AUTH_PATHS.has(pathname);
-  // TrainerDashboard's MobileNavigation (fixed bottom tab bar, h-16 == 4rem)
-  // only renders on /dashboard itself -- everywhere else the widget should
-  // sit flush at the true viewport bottom, not leave a phantom gap for a
-  // nav bar that isn't there.
-  const clearsBottomNav = pathname === '/dashboard';
+  // MobileNavigation/ValidatorMobileNavigation (fixed bottom tab bar, h-16 ==
+  // 4rem) render on every /dashboard/* route and on /validator -- everywhere
+  // else the widget should sit flush at the true viewport bottom, not leave
+  // a phantom gap for a nav bar that isn't there.
+  const clearsBottomNav =
+    pathname === '/dashboard' || pathname.startsWith('/dashboard/') || pathname === '/validator';
   const prompt = useMemo(() => input.trim(), [input]);
 
   useEffect(() => {
