@@ -1054,6 +1054,8 @@ export interface P2POffer {
   fiatCurrency: string;
   paymentMethod: string;
   paymentMethodDetails: PayoutAccount | null;
+  /** The seller's full set of acceptable receive-accounts, visible to any viewer -- lets a buyer pick one when accepting a SELL offer with more than one option. See P2PService.summarizePaymentMethod. */
+  paymentMethods: { id: string; type: PayoutAccountType; label: string; verified: boolean }[];
   status: P2POfferStatus;
   expiresAt: string;
   completedAt: string | null;
@@ -3176,7 +3178,7 @@ export const dialectivaApi = createApi({
         fiatAmount: number;
         fiatCurrency: string;
         paymentMethod: string;
-        paymentMethodId?: string;
+        paymentMethodIds?: string[];
         expiresInMinutes?: number;
         otpRequestId?: string;
         code?: string;

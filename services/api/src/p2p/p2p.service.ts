@@ -287,13 +287,15 @@ export class P2PService {
       );
     }
 
-    let paymentMethodId: string | undefined;
+    let paymentMethodIds: string[] = [];
     if (dto.type === P2POfferType.SELL) {
-      if (!dto.paymentMethodId)
-        throw new BadRequestException('A seller payment method is required for sell offers');
-      const method = await this.getEnabledPaymentMethod(userId, dto.paymentMethodId);
-      paymentMethodId = method.id;
+      if (!dto.paymentMethodIds || dto.paymentMethodIds.length === 0) {
+        throw new BadRequestException('At least one seller payment method is required for sell offers');
+      }
+      const methods = await this.getEnabledPaymentMethods(userId, dto.paymentMethodIds);
+      paymentMethodIds = methods.map((method) => method.id);
     }
+    const primaryPaymentMethodId = paymentMethodIds[0];
 
     const offerId = randomUUID();
     const expiresInMinutes = Math.min(
@@ -345,10 +347,15 @@ export class P2PService {
           fiatAmount: dto.fiatAmount,
           fiatCurrency: dto.fiatCurrency,
           paymentMethod: dto.paymentMethod,
-          paymentMethodId,
+          paymentMethodId: primaryPaymentMethodId,
           expiresAt,
         },
       });
+      if (paymentMethodIds.length > 0) {
+        await tx.p2POfferPaymentMethod.createMany({
+          data: paymentMethodIds.map((payoutAccountId) => ({ offerId, payoutAccountId })),
+        });
+      }
       await tx.ledgerEntry.create({
         data: {
           walletId: wallet.id,
@@ -428,7 +435,10 @@ export class P2PService {
         (
           await this.prisma.p2PTokenOffer.findMany({
             where: { id: { in: ids } },
-            include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phoneVerifiedAt: true, kycStatus: true, country: { select: { code: true, name: true } } } } },
+            include: {
+              user: { select: { id: true, firstName: true, lastName: true, email: true, phoneVerifiedAt: true, kycStatus: true, country: { select: { code: true, name: true } } } },
+              paymentMethods: { include: { payoutAccount: true } },
+            },
           })
         ).map((offer) => [offer.id, offer]),
       );
@@ -461,7 +471,10 @@ export class P2PService {
     const [offers, total] = await Promise.all([
       this.prisma.p2PTokenOffer.findMany({
         where,
-        include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phoneVerifiedAt: true, kycStatus: true, country: { select: { code: true, name: true } } } } },
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true, email: true, phoneVerifiedAt: true, kycStatus: true, country: { select: { code: true, name: true } } } },
+          paymentMethods: { include: { payoutAccount: true } },
+        },
         orderBy: { [sortColumn]: sortDir },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -557,7 +570,7 @@ export class P2PService {
     await this.expireStaleRecords();
     const offers = await this.prisma.p2PTokenOffer.findMany({
       where: { userId },
-      include: { paymentMethodRef: true },
+      include: { paymentMethodRef: true, paymentMethods: { include: { payoutAccount: true } } },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
@@ -633,7 +646,7 @@ export class P2PService {
     await this.expireStaleRecords();
     const offer = await this.prisma.p2PTokenOffer.findUnique({
       where: { id: offerId },
-      include: { paymentMethodRef: true },
+      include: { paymentMethodRef: true, paymentMethods: true },
     });
     if (!offer || offer.status !== P2POfferStatus.ACTIVE || offer.expiresAt <= new Date()) {
       throw new NotFoundException('Active offer not found');
@@ -647,6 +660,16 @@ export class P2PService {
     const paymentDeadlineAt = addMinutes(new Date(), settings.paymentWindowMinutes);
 
     if (offer.type === P2POfferType.SELL) {
+      // Buyer picks which of the seller's selected accounts to pay into --
+      // falls back to the offer's primary paymentMethodId when the offer
+      // only ever had one (or the buyer didn't specify), so older
+      // single-account offers keep working unchanged.
+      const offerAccountIds = offer.paymentMethods.map((row) => row.payoutAccountId);
+      const chosenId = dto.sellerPaymentMethodId ?? offer.paymentMethodId;
+      if (!chosenId) throw new BadRequestException('This offer has no payment method to pay into');
+      if (offerAccountIds.length > 0 && !offerAccountIds.includes(chosenId)) {
+        throw new BadRequestException('That payment method is not offered by this seller');
+      }
       await this.prisma.$transaction([
         this.prisma.p2PTokenOffer.update({
           where: { id: offer.id },
@@ -658,7 +681,7 @@ export class P2PService {
             offerId: offer.id,
             buyerId: userId,
             sellerId: offer.userId,
-            sellerPaymentMethodId: offer.paymentMethodId,
+            sellerPaymentMethodId: chosenId,
             tokenAmount: offer.tokenAmount,
             fiatAmount: offer.fiatAmount,
             fiatCurrency: offer.fiatCurrency,
@@ -960,13 +983,33 @@ export class P2PService {
       throw new UnprocessableEntityException('Payment method is not allowed');
   }
 
-  /** P2P sell offers require a verified payout account -- same account list withdrawals use (see PayoutAccount's schema doc), but gated to VERIFIED since a P2P counterparty is trusting this destination sight-unseen. */
+  /**
+   * P2P sell offers use the same account list withdrawals do (see
+   * PayoutAccount's schema doc) -- ownership is the only requirement now,
+   * NOT verificationStatus === VERIFIED. A free-entry (UNVERIFIED) account
+   * is a valid receive option; the UI surfaces its unverified status to the
+   * buyer via serializeOffer/serializeTrade rather than hiding it from P2P
+   * entirely.
+   */
   private async getEnabledPaymentMethod(userId: string, id: string) {
     const method = await this.prisma.payoutAccount.findFirst({
-      where: { id, userId, verificationStatus: 'VERIFIED' },
+      where: { id, userId },
     });
-    if (!method) throw new NotFoundException('Verified payout account not found');
+    if (!method) throw new NotFoundException('Payout account not found');
     return method;
+  }
+
+  /** Multi-account variant of getEnabledPaymentMethod -- validates every id in ids is owned by userId, in one query, returning them in ids' order (not DB order) so paymentMethodIds[0] reliably stays the "primary" account. */
+  private async getEnabledPaymentMethods(userId: string, ids: string[]) {
+    const unique = Array.from(new Set(ids));
+    const methods = await this.prisma.payoutAccount.findMany({
+      where: { id: { in: unique }, userId },
+    });
+    if (methods.length !== unique.length) {
+      throw new NotFoundException('One or more payout accounts were not found');
+    }
+    const byId = new Map(methods.map((method) => [method.id, method]));
+    return unique.map((id) => byId.get(id)!);
   }
 
   private async enforceOpenTradeLimit(userId: string, max: number) {
@@ -983,7 +1026,7 @@ export class P2PService {
   private async getOfferForUser(userId: string, id: string) {
     const offer = await this.prisma.p2PTokenOffer.findUnique({
       where: { id },
-      include: { paymentMethodRef: true },
+      include: { paymentMethodRef: true, paymentMethods: { include: { payoutAccount: true } } },
     });
     if (!offer) throw new NotFoundException('Offer not found');
     return serializeOffer(offer, offer.userId === userId);
@@ -1237,6 +1280,29 @@ function serializeSettings(row: Awaited<ReturnType<P2PService['settingsRow']>>) 
   };
 }
 
+interface PaymentMethodSummarySource {
+  id: string;
+  type: string;
+  bankName: string | null;
+  bankCode: string | null;
+  accountNumberMasked: string | null;
+  mobileMoneyNetwork: string | null;
+  mobileMoneyNumberMasked: string | null;
+  verificationStatus: string;
+}
+
+function summarizePaymentMethod(account: PaymentMethodSummarySource) {
+  return {
+    id: account.id,
+    type: account.type,
+    label:
+      account.type === 'BANK'
+        ? `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`
+        : `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`,
+    verified: account.verificationStatus === 'VERIFIED',
+  };
+}
+
 function serializeOffer(offer: any, includePayment: boolean, completedSaleCount?: number) {
   return {
     id: offer.id,
@@ -1270,6 +1336,20 @@ function serializeOffer(offer: any, includePayment: boolean, completedSaleCount?
     paymentMethod: offer.paymentMethod,
     paymentMethodDetails:
       includePayment && 'paymentMethodRef' in offer ? offer.paymentMethodRef : null,
+    // The seller's full set of acceptable receive-accounts, visible to
+    // ANY viewer (unlike paymentMethodDetails' owner-only full detail
+    // above) -- a buyer needs this summary to pick one when accepting.
+    // Deliberately minimal: no encrypted/raw account number, just enough
+    // to distinguish options (type/label/verification badge).
+    paymentMethods:
+      'paymentMethods' in offer && Array.isArray(offer.paymentMethods)
+        ? offer.paymentMethods
+            .map((row: { payoutAccount?: PaymentMethodSummarySource }) => row.payoutAccount)
+            .filter((account: PaymentMethodSummarySource | undefined): account is PaymentMethodSummarySource =>
+              Boolean(account),
+            )
+            .map(summarizePaymentMethod)
+        : [],
     status: offer.status,
     expiresAt: offer.expiresAt,
     completedAt: offer.completedAt,

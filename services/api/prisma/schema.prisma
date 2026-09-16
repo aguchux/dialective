@@ -2418,8 +2418,9 @@ model PayoutAccount {
   updatedAt  DateTime  @updatedAt
 
   withdrawals     WithdrawalRequest[]
-  p2pOffers       P2PTokenOffer[]     @relation("P2POfferPayoutAccount")
-  p2pSellerTrades P2PTokenTrade[]     @relation("P2PTradeSellerPaymentMethod")
+  p2pOffers             P2PTokenOffer[]          @relation("P2POfferPayoutAccount")
+  p2pSellerTrades       P2PTokenTrade[]          @relation("P2PTradeSellerPaymentMethod")
+  p2pOfferPaymentMethods P2POfferPaymentMethod[]
 
   @@index([userId])
   @@index([userId, isDefault])
@@ -2646,7 +2647,8 @@ model P2PTokenOffer {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
-  trades P2PTokenTrade[]
+  trades         P2PTokenTrade[]
+  paymentMethods P2POfferPaymentMethod[]
 
   @@index([type, status, expiresAt])
   @@index([userId, status])
@@ -2658,6 +2660,28 @@ model P2PTokenOffer {
   // EXPLAIN ANALYZE on production data if that stops being true.
   @@index([status, type, createdAt])
   @@map("p2p_token_offers")
+}
+
+/// The full set of payout accounts a SELL offer's poster is willing to
+/// receive payment into -- P2PTokenOffer.paymentMethodId/paymentMethodRef
+/// stays as the "primary" account (first selected, kept for backward
+/// compatibility with existing reads that only care about one), while this
+/// join table is the source of truth for the complete set a buyer can
+/// choose from at accept time (see P2PService.acceptOffer). A BUY offer
+/// (the accepting user becomes the seller) has no rows here -- their
+/// choice is made directly on P2PTokenTrade at accept time instead, since
+/// there's no pre-existing offer-side selection to join against.
+model P2POfferPaymentMethod {
+  id              String         @id @default(uuid())
+  offerId         String
+  offer           P2PTokenOffer  @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  payoutAccountId String
+  payoutAccount   PayoutAccount  @relation(fields: [payoutAccountId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+
+  @@unique([offerId, payoutAccountId])
+  @@index([offerId])
+  @@map("p2p_offer_payment_methods")
 }
 
 model P2PTokenTrade {

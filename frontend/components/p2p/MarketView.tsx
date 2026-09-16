@@ -57,14 +57,15 @@ export function MarketView() {
   const [cancelOffer, { isLoading: cancellingOffer, originalArgs: cancellingOfferId }] =
     useCancelP2POfferMutation();
   const [requestTradeOtp, { isLoading: tradeOtpSending }] = useRequestP2PTradeOtpMutation();
-  const verifiedPayoutAccounts = payoutAccounts.filter(
-    (account) => account.verificationStatus === 'VERIFIED',
-  );
-  const [selectedPayoutAccountId, setSelectedPayoutAccountId] = useState('');
+  // Any owned payout account can receive P2P payment now, verified or
+  // free-entry -- an UNVERIFIED badge is shown per-option instead of
+  // hiding unverified accounts from P2P entirely (see
+  // P2PService.getEnabledPaymentMethod's updated doc comment).
+  const [selectedPayoutAccountIds, setSelectedPayoutAccountIds] = useState<string[]>([]);
   const primaryMethod =
-    verifiedPayoutAccounts.find((account) => account.id === selectedPayoutAccountId) ??
-    verifiedPayoutAccounts.find((account) => account.isDefault) ??
-    verifiedPayoutAccounts[0];
+    payoutAccounts.find((account) => selectedPayoutAccountIds.includes(account.id)) ??
+    payoutAccounts.find((account) => account.isDefault) ??
+    payoutAccounts[0];
   const phoneVerificationRequired = platformSettings?.phoneVerificationRequired ?? true;
   const phoneVerified = me?.phoneVerified ?? false;
   // Trading is blocked on phone verification only while that requirement
@@ -75,6 +76,13 @@ export function MarketView() {
   const [offerOtpCode, setOfferOtpCode] = useState('');
   const [pendingAcceptOffer, setPendingAcceptOffer] = useState<P2POffer | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  // Set when a SELL offer lists more than one receive-account -- the buyer
+  // must pick which one they'll pay into before accepting proceeds (see
+  // P2PService.acceptOffer's offer-listed-accounts validation).
+  const [accountPickerOffer, setAccountPickerOffer] = useState<P2POffer | null>(null);
+  const [chosenSellerPaymentMethodId, setChosenSellerPaymentMethodId] = useState<string | null>(
+    null,
+  );
 
   // Pre-fills the offer form's currency with the trainer's own country currency once known; the field stays editable.
   useEffect(() => {
@@ -125,7 +133,14 @@ export function MarketView() {
         fiatAmount: Number(fiatAmount),
         fiatCurrency,
         paymentMethod: 'BANK_TRANSFER',
-        paymentMethodId: offerType === 'SELL' ? primaryMethod?.id : undefined,
+        paymentMethodIds:
+          offerType === 'SELL'
+            ? selectedPayoutAccountIds.length > 0
+              ? selectedPayoutAccountIds
+              : primaryMethod
+                ? [primaryMethod.id]
+                : undefined
+            : undefined,
         ...(offerOtpRequestId
           ? { otpRequestId: offerOtpRequestId, code: offerOtpCode.trim() }
           : {}),
@@ -145,6 +160,15 @@ export function MarketView() {
 
   async function accept(offer: P2POffer) {
     setError('');
+    // A SELL offer with more than one receive-account needs the buyer to
+    // pick one before anything else happens -- show the picker and let its
+    // confirm button re-invoke accept() with the choice already made.
+    if (offer.type === 'SELL' && offer.paymentMethods.length > 1 && !chosenSellerPaymentMethodId) {
+      setAccountPickerOffer(offer);
+      return;
+    }
+    const sellerPaymentMethodId =
+      offer.type === 'SELL' ? (chosenSellerPaymentMethodId ?? undefined) : primaryMethod?.id;
     if (!phoneVerificationRequired) {
       try {
         const otp = await requestTradeOtp({ action: 'accept-offer', offerId: offer.id }).unwrap();
@@ -157,10 +181,8 @@ export function MarketView() {
       return;
     }
     try {
-      await acceptOffer({
-        id: offer.id,
-        sellerPaymentMethodId: offer.type === 'BUY' ? primaryMethod?.id : undefined,
-      }).unwrap();
+      await acceptOffer({ id: offer.id, sellerPaymentMethodId }).unwrap();
+      setChosenSellerPaymentMethodId(null);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not accept offer'));
     }
@@ -169,16 +191,21 @@ export function MarketView() {
   async function confirmAcceptOffer() {
     if (!pendingAcceptOffer || !offerOtpRequestId) return;
     setError('');
+    const sellerPaymentMethodId =
+      pendingAcceptOffer.type === 'SELL'
+        ? (chosenSellerPaymentMethodId ?? undefined)
+        : primaryMethod?.id;
     try {
       await acceptOffer({
         id: pendingAcceptOffer.id,
-        sellerPaymentMethodId: pendingAcceptOffer.type === 'BUY' ? primaryMethod?.id : undefined,
+        sellerPaymentMethodId,
         otpRequestId: offerOtpRequestId,
         code: offerOtpCode.trim(),
       }).unwrap();
       setPendingAcceptOffer(null);
       setOfferOtpRequestId(null);
       setOfferOtpCode('');
+      setChosenSellerPaymentMethodId(null);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not verify this code'));
     }
@@ -218,6 +245,7 @@ export function MarketView() {
               if (!open) {
                 setOfferOtpRequestId(null);
                 setOfferOtpCode('');
+                setSelectedPayoutAccountIds([]);
               }
             }}
           >
@@ -286,28 +314,57 @@ export function MarketView() {
                     />
                   </label>
                 </div>
-                {offerType === 'SELL' && !primaryMethod && (
+                {offerType === 'SELL' && payoutAccounts.length === 0 && (
                   <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                    Add a verified payout account in Profile before posting a sell offer.
+                    Add a payout account in Profile before posting a sell offer.
                   </p>
                 )}
-                {offerType === 'SELL' && verifiedPayoutAccounts.length > 1 && (
-                  <label className="grid gap-1.5 text-sm font-bold">
-                    Receive payment to
-                    <select
-                      className="min-h-11 rounded-lg border border-line bg-bg px-3"
-                      onChange={(e) => setSelectedPayoutAccountId(e.target.value)}
-                      value={primaryMethod?.id ?? ''}
-                    >
-                      {verifiedPayoutAccounts.map((account) => (
-                        <option key={account.id} value={account.id}>
-                          {account.type === 'BANK'
+                {offerType === 'SELL' && payoutAccounts.length > 0 && (
+                  <fieldset className="grid gap-1.5">
+                    <legend className="text-sm font-bold">
+                      Receive payment to -- select one or more
+                    </legend>
+                    <div className="grid gap-1.5">
+                      {payoutAccounts.map((account) => {
+                        const label =
+                          account.type === 'BANK'
                             ? `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`
-                            : `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                            : `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`;
+                        const checked = selectedPayoutAccountIds.length
+                          ? selectedPayoutAccountIds.includes(account.id)
+                          : account.id === primaryMethod?.id;
+                        return (
+                          <label
+                            className="flex items-center gap-2 rounded-lg border border-line bg-bg px-3 py-2 text-sm font-bold"
+                            key={account.id}
+                          >
+                            <input
+                              checked={checked}
+                              onChange={(e) => {
+                                setSelectedPayoutAccountIds((current) => {
+                                  const base = current.length
+                                    ? current
+                                    : primaryMethod
+                                      ? [primaryMethod.id]
+                                      : [];
+                                  return e.target.checked
+                                    ? [...base, account.id]
+                                    : base.filter((id) => id !== account.id);
+                                });
+                              }}
+                              type="checkbox"
+                            />
+                            {label}
+                            {account.verificationStatus !== 'VERIFIED' && (
+                              <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                                Unverified
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
                 )}
                 {!phoneVerificationRequired && offerOtpRequestId && (
                   <label className="grid gap-1.5 text-sm font-bold">
@@ -325,7 +382,7 @@ export function MarketView() {
                   className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={
                     marketDisabled ||
-                    (offerType === 'SELL' && !primaryMethod) ||
+                    (offerType === 'SELL' && payoutAccounts.length === 0) ||
                     (Boolean(offerOtpRequestId) && !offerOtpCode.trim())
                   }
                   pending={offerSaving || tradeOtpSending}
@@ -382,6 +439,62 @@ export function MarketView() {
         userId={profileUserId}
       />
 
+      {accountPickerOffer && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setAccountPickerOffer(null);
+              setChosenSellerPaymentMethodId(null);
+            }
+          }}
+        >
+          <DialogContent
+            title="Choose payment account"
+            description="This seller accepts payment to more than one account -- pick which one you'll pay."
+          >
+            <div className="grid gap-3">
+              <div className="grid gap-1.5">
+                {accountPickerOffer.paymentMethods.map((method) => (
+                  <label
+                    className="flex items-center gap-2 rounded-lg border border-line bg-bg px-3 py-2 text-sm font-bold"
+                    key={method.id}
+                  >
+                    <input
+                      checked={chosenSellerPaymentMethodId === method.id}
+                      name="seller-payment-method"
+                      onChange={() => setChosenSellerPaymentMethodId(method.id)}
+                      type="radio"
+                    />
+                    {method.label}
+                    {!method.verified && (
+                      <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                        Unverified
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+              {error && <p className="text-sm font-bold text-danger">{error}</p>}
+              <ActionButton
+                className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!chosenSellerPaymentMethodId}
+                onClick={() => {
+                  const offer = accountPickerOffer;
+                  setAccountPickerOffer(null);
+                  if (offer) void accept(offer);
+                }}
+                pending={accepting}
+                pendingLabel="Continuing"
+                type="button"
+              >
+                Continue
+              </ActionButton>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {pendingAcceptOffer && (
         <Dialog
           open
@@ -390,6 +503,7 @@ export function MarketView() {
               setPendingAcceptOffer(null);
               setOfferOtpRequestId(null);
               setOfferOtpCode('');
+              setChosenSellerPaymentMethodId(null);
             }
           }}
         >

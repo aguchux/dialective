@@ -1,4 +1,8 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -41,9 +45,17 @@ export class CreateOfferDto {
   @IsNotEmpty()
   paymentMethod!: string;
 
+  // The full set of the seller's own payout accounts they're willing to
+  // receive payment into for this offer -- see P2POfferPaymentMethod.
+  // First entry becomes the offer's "primary" paymentMethodId (backward
+  // compat with anything still reading that single field).
   @IsOptional()
-  @IsUUID()
-  paymentMethodId?: string;
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  paymentMethodIds?: string[];
 
   @IsOptional()
   @IsInt()
