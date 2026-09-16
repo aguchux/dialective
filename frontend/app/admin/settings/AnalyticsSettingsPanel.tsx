@@ -143,8 +143,114 @@ export function AnalyticsSettingsPanel() {
         </p>
       )}
 
+      <LiveActivityPanel />
       <AnalyticsReportPanel />
     </section>
+  );
+}
+
+interface AnalyticsRealtimeSnapshot {
+  configured: boolean;
+  fetchedAt?: string;
+  activeUsers?: number;
+  topPages?: { value: string; activeUsers: number }[];
+  topCountries?: { value: string; activeUsers: number }[];
+  error?: string;
+}
+
+const analyticsRealtimeApi = dialectivaApi.injectEndpoints({
+  endpoints: (builder) => ({
+    getAnalyticsRealtime: builder.query<AnalyticsRealtimeSnapshot, void>({
+      query: () => '/admin/analytics/realtime',
+    }),
+  }),
+});
+
+const REALTIME_POLL_MS = 30_000;
+
+/**
+ * Calls GA4's Data API runRealtimeReport live, on every poll -- unlike
+ * AnalyticsReportPanel below, which only ever reads yesterday's ingested
+ * snapshot from our own DB. "configured: false" (no GOOGLE_ANALYTICS_*
+ * env vars set on `api`) is distinct from "configured: true, error: ..."
+ * (credentials set but the GA4 call itself failed) so an admin can tell
+ * "not set up yet" from "something's actually broken."
+ */
+function LiveActivityPanel() {
+  const { data, isLoading } = analyticsRealtimeApi.useGetAnalyticsRealtimeQuery(undefined, {
+    pollingInterval: REALTIME_POLL_MS,
+  });
+
+  return (
+    <div className="grid gap-4 border-t border-line pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-bold">Live activity</h3>
+        {data?.fetchedAt && (
+          <p className="text-xs text-muted">
+            Updated {new Date(data.fetchedAt).toLocaleTimeString()}
+          </p>
+        )}
+      </div>
+
+      {isLoading && <p className="text-sm text-muted">Loading...</p>}
+
+      {!isLoading && data && !data.configured && (
+        <p className="rounded-lg border border-line bg-surface-muted px-3 py-3 text-sm leading-relaxed text-muted">
+          Live activity needs the same GA4 credentials as the traffic report below (GA4 Property
+          ID + service account JSON) -- neither is set on the API yet.
+        </p>
+      )}
+
+      {!isLoading && data?.configured && data.error && (
+        <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-bold text-danger">
+          {data.error}
+        </p>
+      )}
+
+      {!isLoading && data?.configured && !data.error && (
+        <>
+          <div className="rounded-lg border border-line bg-surface-muted p-4">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted">
+              Active users right now
+            </p>
+            <p className="text-3xl font-black">{formatNumber(data.activeUsers ?? 0)}</p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <LiveBreakdownList label="Active pages" rows={data.topPages ?? []} />
+            <LiveBreakdownList label="Active countries" rows={data.topCountries ?? []} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function LiveBreakdownList({
+  label,
+  rows,
+}: {
+  label: string;
+  rows: { value: string; activeUsers: number }[];
+}) {
+  return (
+    <div className="rounded-lg border border-line">
+      <p className="border-b border-line px-3 py-2 text-xs font-bold uppercase tracking-wide text-muted">
+        {label}
+      </p>
+      {rows.length === 0 ? (
+        <p className="px-3 py-3 text-sm text-muted">No active visitors right now.</p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {rows.map((row) => (
+            <li className="flex items-center justify-between px-3 py-2 text-sm" key={row.value}>
+              <span className="truncate">{row.value}</span>
+              <span className="tabular-nums font-bold">{formatNumber(row.activeUsers)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

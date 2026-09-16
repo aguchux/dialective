@@ -138,6 +138,22 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: spaces_payment_method_logo_bucket
+            # Same secret google-analytics-cronjob.yaml reads -- both unset
+            # is treated as "not configured yet" by AnalyticsRealtimeService
+            # (logs nothing, just returns configured:false), so this can be
+            # applied ahead of GCP service-account setup like the CronJob.
+            - name: GOOGLE_ANALYTICS_PROPERTY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: google-analytics-creds
+                  key: property_id
+                  optional: true
+            - name: GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON
+              valueFrom:
+                secretKeyRef:
+                  name: google-analytics-creds
+                  key: service_account_json
+                  optional: true
             - name: SPACES_ENDPOINT
               valueFrom:
                 secretKeyRef:
