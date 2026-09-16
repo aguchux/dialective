@@ -39,6 +39,11 @@ export class WhatsAppValidatorController {
     return this.whatsappValidator.listPending(req.user.sub, query.page, query.pageSize);
   }
 
+  @Get('pending/count')
+  async pendingCount(@Req() req: AuthenticatedRequest) {
+    return { count: await this.whatsappValidator.pendingCount(req.user.sub) };
+  }
+
   @Get('my-claims')
   myClaims(@Req() req: AuthenticatedRequest) {
     return this.whatsappValidator.myClaims(req.user.sub);

@@ -36,6 +36,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu';
+import { useGetWhatsAppValidationPendingCountQuery } from '@/store/api';
+
+/** Small red count badge, same styling as NotificationBell's unread badge. */
+function CountBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-black leading-5 text-white">
+      {count > 9 ? '9+' : count}
+    </span>
+  );
+}
 
 /**
  * The trainer dashboard's tab views, rendered inline by TrainerDashboard.tsx
@@ -89,6 +100,10 @@ export function DashboardHeader({
   publicProfileHref?: string | null;
 }) {
   const router = useRouter();
+  const { data: pendingData } = useGetWhatsAppValidationPendingCountQuery(undefined, {
+    pollingInterval: 60000,
+  });
+  const p2pPendingCount = pendingData?.count ?? 0;
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
@@ -100,7 +115,12 @@ export function DashboardHeader({
         />
         <nav className="hidden h-full items-stretch lg:flex" aria-label="Trainer dashboard">
           {dashboardViews.map((view) => (
-            <DashboardNavLink active={activeView === view.id} key={view.id} view={view} />
+            <DashboardNavLink
+              active={activeView === view.id}
+              badgeCount={view.id === 'p2p' ? p2pPendingCount : 0}
+              key={view.id}
+              view={view}
+            />
           ))}
         </nav>
         <div className="flex items-center gap-2">
@@ -153,6 +173,11 @@ export function DashboardHeader({
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/dashboard/integrations')}>
                 <Plug className="size-4" aria-hidden="true" /> P2P &amp; Integrations
+                {p2pPendingCount > 0 && (
+                  <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-black leading-5 text-white">
+                    {p2pPendingCount > 9 ? '9+' : p2pPendingCount}
+                  </span>
+                )}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=testimonials')}>
                 <MessageSquareQuote className="size-4" aria-hidden="true" /> Testimonials
@@ -186,9 +211,11 @@ export function DashboardHeader({
 
 function DashboardNavLink({
   active,
+  badgeCount = 0,
   view,
 }: {
   active: boolean;
+  badgeCount?: number;
   view: (typeof dashboardViews)[number];
 }) {
   const Icon = view.icon;
@@ -200,7 +227,14 @@ function DashboardNavLink({
       }`}
       href={view.href}
     >
-      <Icon className="size-4" aria-hidden="true" />
+      <span className="relative">
+        <Icon className="size-4" aria-hidden="true" />
+        {badgeCount > 0 && (
+          <span className="absolute -right-2 -top-2 grid min-w-4 place-items-center rounded-full bg-danger px-1 text-[10px] font-black leading-4 text-white">
+            {badgeCount > 9 ? '9+' : badgeCount}
+          </span>
+        )}
+      </span>
       {view.label}
       {active && <span className="absolute inset-x-3 bottom-0 h-0.5 bg-accent" />}
     </Link>
@@ -216,6 +250,10 @@ export function emailName(email?: string | null) {
 }
 
 export function MobileNavigation({ activeView }: { activeView: DashboardNavigationId | null }) {
+  const { data: pendingData } = useGetWhatsAppValidationPendingCountQuery(undefined, {
+    pollingInterval: 60000,
+  });
+  const p2pPendingCount = pendingData?.count ?? 0;
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
@@ -224,6 +262,7 @@ export function MobileNavigation({ activeView }: { activeView: DashboardNavigati
       {dashboardViews.map((view) => {
         const Icon = view.icon;
         const active = view.id === activeView;
+        const badgeCount = view.id === 'p2p' ? p2pPendingCount : 0;
         return (
           <Link
             aria-current={active ? 'page' : undefined}
@@ -231,7 +270,10 @@ export function MobileNavigation({ activeView }: { activeView: DashboardNavigati
             href={view.href}
             key={view.id}
           >
-            <Icon className="size-5" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+            <span className="relative">
+              <Icon className="size-5" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+              <CountBadge count={badgeCount} />
+            </span>
             <span className="max-w-full truncate">{view.label}</span>
           </Link>
         );

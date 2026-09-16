@@ -22,6 +22,7 @@ import {
 import { BrandLogo } from '@/components/BrandLogo';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { requestPwaInstall } from '@/components/PwaInstallPrompt';
+import { useGetWhatsAppValidationPendingCountQuery } from '@/store/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +46,10 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { data: pendingData } = useGetWhatsAppValidationPendingCountQuery(undefined, {
+    pollingInterval: 60000,
+  });
+  const p2pPendingCount = pendingData?.count ?? 0;
   const email = session?.user?.email ?? '';
   const displayName =
     [session?.user?.firstName, session?.user?.lastName].filter(Boolean).join(' ') || email;
@@ -118,6 +123,11 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
                 <DropdownMenuItem onSelect={() => router.push('/distributor/integrations')}>
                   <Plug className="size-4" />
                   P2P &amp; Integrations
+                  {p2pPendingCount > 0 && (
+                    <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-black leading-5 text-white">
+                      {p2pPendingCount > 9 ? '9+' : p2pPendingCount}
+                    </span>
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => router.push('/')}>
                   <Home className="size-4" />

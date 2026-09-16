@@ -3145,6 +3145,12 @@ export const dialectivaApi = createApi({
       }),
       providesTags: ['WhatsAppValidator'],
     }),
+    // Lightweight badge count for the P2P nav -- returns 0 (never an error)
+    // when the caller isn't subscribed, unlike listPendingWhatsAppValidations.
+    getWhatsAppValidationPendingCount: builder.query<{ count: number }, void>({
+      query: () => '/whatsapp-validator/pending/count',
+      providesTags: ['WhatsAppValidator'],
+    }),
     // A validator may hold several concurrent claims (admin-configurable
     // via Integration.maxConcurrentClaims) -- this is now a list, not a
     // single request.
@@ -5929,6 +5935,7 @@ export const {
   useCancelWhatsAppValidationRequestMutation,
   useGetMyWhatsAppValidationRequestQuery,
   useListPendingWhatsAppValidationsQuery,
+  useGetWhatsAppValidationPendingCountQuery,
   useListMyWhatsAppValidationClaimsQuery,
   useClaimWhatsAppValidationMutation,
   useVerifyWhatsAppValidationRequestMutation,

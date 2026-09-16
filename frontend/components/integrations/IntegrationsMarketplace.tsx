@@ -9,6 +9,7 @@ import { cardClass, EmptyPanel, SectionTitle } from '@/components/dashboard/shar
 import {
   Integration,
   normalizeErrorMessage,
+  useGetWhatsAppValidationPendingCountQuery,
   useListIntegrationsQuery,
   useSubscribeToIntegrationMutation,
 } from '@/store/api';
@@ -58,6 +59,10 @@ export function IntegrationsMarketplace() {
   const [subscribe, { isLoading: subscribing }] = useSubscribeToIntegrationMutation();
   const [error, setError] = useState('');
   const [subscribingId, setSubscribingId] = useState<string | null>(null);
+  // Unclaimed-request count for the WhatsApp Validator card specifically --
+  // 0 (never an error) when the current member isn't subscribed to it.
+  const { data: whatsAppPendingData } = useGetWhatsAppValidationPendingCountQuery();
+  const whatsAppPendingCount = whatsAppPendingData?.count ?? 0;
 
   async function handleSubscribe(integration: Integration) {
     setError('');
@@ -117,21 +122,33 @@ export function IntegrationsMarketplace() {
         <EmptyPanel icon={Plug} title="No integrations match your search" unframed />
       )}
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {integrations.map((integration) => {
           const Icon = (integration.iconKey && ICONS[integration.iconKey]) || Plug;
+          const pendingCount =
+            integration.slug === 'whatsapp-validator' ? whatsAppPendingCount : 0;
           return (
             <div className={`${cardClass} grid gap-3 p-4`} key={integration.id}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="grid size-9 place-items-center rounded-lg bg-accent-soft text-accent">
+                  <span className="relative grid size-9 place-items-center rounded-lg bg-accent-soft text-accent">
                     <Icon className="size-5" aria-hidden="true" />
+                    {pendingCount > 0 && (
+                      <span className="absolute -right-1.5 -top-1.5 grid min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-black leading-5 text-white">
+                        {pendingCount > 9 ? '9+' : pendingCount}
+                      </span>
+                    )}
                   </span>
                   <div>
                     <p className="font-black">{integration.name}</p>
                     <p className="text-xs font-bold text-muted">{integration.category}</p>
                   </div>
                 </div>
+                {pendingCount > 0 && (
+                  <span className="rounded-full bg-danger/10 px-2 py-1 text-xs font-extrabold text-danger">
+                    {pendingCount} unclaimed
+                  </span>
+                )}
               </div>
               <p className="text-sm text-muted">{integration.description}</p>
               {Number(integration.feeTokenAmount) > 0 && (

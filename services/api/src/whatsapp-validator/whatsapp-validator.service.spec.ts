@@ -255,6 +255,25 @@ describe('WhatsAppValidatorService', () => {
     });
   });
 
+  describe('pendingCount', () => {
+    it('returns 0 without throwing when the caller is not subscribed', async () => {
+      integrations.isSubscribed.mockResolvedValue(false);
+      await expect(service.pendingCount(validatorId)).resolves.toBe(0);
+      expect(prisma.whatsAppValidationRequest.count).not.toHaveBeenCalled();
+    });
+
+    it('counts PENDING requests excluding the caller\'s own, for a subscribed validator', async () => {
+      prisma.whatsAppValidationRequest.count.mockResolvedValue(4);
+      const result = await service.pendingCount(validatorId);
+      expect(prisma.whatsAppValidationRequest.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'PENDING', requesterId: { not: validatorId } }),
+        }),
+      );
+      expect(result).toBe(4);
+    });
+  });
+
   describe('myClaims', () => {
     it('returns every currently-claimed request, including each requester\'s name', async () => {
       prisma.whatsAppValidationRequest.findMany.mockResolvedValue([

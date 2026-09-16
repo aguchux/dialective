@@ -195,6 +195,30 @@ export class WhatsAppValidatorService {
   }
 
   /**
+   * Lightweight count for the "P2P" nav badge -- unlike listPending, this
+   * never throws when the caller isn't subscribed; it just answers 0, since
+   * a passive badge shouldn't surface a ForbiddenException to a member who
+   * has simply never opted in. Excludes the caller's own requests, same as
+   * listPending, so a member never sees their own submission counted as
+   * something for THEM to claim.
+   */
+  async pendingCount(validatorUserId: string): Promise<number> {
+    const isSubscribed = await this.integrations.isSubscribed(validatorUserId, INTEGRATION_SLUG);
+    if (!isSubscribed) return 0;
+
+    const now = new Date();
+    await this.expireStale(now);
+
+    return this.prisma.whatsAppValidationRequest.count({
+      where: {
+        status: WhatsAppValidationRequestStatus.PENDING,
+        requesterId: { not: validatorUserId },
+        expiresAt: { gt: now },
+      },
+    });
+  }
+
+  /**
    * The validator's own currently-claimed requests -- lets the "Validate"
    * list view show a code-entry panel for each one this validator has
    * locked, alongside the rest of the (now-filtered-out) pending list. Can
