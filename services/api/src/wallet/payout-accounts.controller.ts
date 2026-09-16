@@ -90,6 +90,17 @@ export class PayoutAccountsController {
         accountBank: dto.bankCode,
         accountNumber: dto.accountNumber,
       });
+      // resolveAccount only verifies the account HOLDER's name, not the
+      // bank's own display name -- without this, bankName stays null
+      // forever and every UI that shows this account (payout-accounts
+      // list, P2P trade payment details) falls back to the raw numeric
+      // bankCode, which means nothing to a human paying into it. A lookup
+      // failure here must never block account creation -- worst case is
+      // the same bankCode fallback that already existed before this fix.
+      const bankName = await this.flutterwave
+        .listBanks(dto.country!)
+        .then((banks) => banks.find((bank) => bank.code === dto.bankCode)?.name ?? null)
+        .catch(() => null);
       const providerRecipientId = (await this.platformSettings.isFlutterwaveV4Enabled())
         ? (
             await this.flutterwaveV4.createRecipient({
@@ -110,6 +121,7 @@ export class PayoutAccountsController {
           isDefault: dto.isDefault ?? false,
           verificationStatus: PayoutAccountVerificationStatus.VERIFIED,
           bankCode: dto.bankCode,
+          bankName,
           accountNumberEncryptedJson: { ...encryptPayoutField(dto.accountNumber) },
           accountNumberMasked: maskAccountNumber(dto.accountNumber),
           accountName: resolved.accountName,

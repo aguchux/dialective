@@ -61,16 +61,24 @@ function setup(
       .mockResolvedValue(overrides.allowedNetworks ?? ['TRC20']),
     getOtpChannel: jest.fn().mockResolvedValue('sms'),
     isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),
+    isFlutterwaveV4Enabled: jest.fn().mockResolvedValue(false),
   };
+  const flutterwave = {
+    resolveAccount: jest.fn().mockResolvedValue({ accountName: 'Ada Lovelace' }),
+    listBanks: jest
+      .fn()
+      .mockResolvedValue([{ code: '044', name: 'Access Bank' }, { code: '057', name: 'Zenith Bank' }]),
+  };
+  const flutterwaveV4 = { createRecipient: jest.fn() };
   const controller = new PayoutAccountsController(
     prisma as never,
-    {} as never,
-    {} as never,
+    flutterwave as never,
+    flutterwaveV4 as never,
     {} as never,
     platformSettings as never,
     otp as never,
   );
-  return { controller, prisma, otp, platformSettings };
+  return { controller, prisma, otp, platformSettings, flutterwave };
 }
 
 const req = { user: { sub: OWNER_ID } } as never;
@@ -198,6 +206,57 @@ describe('PayoutAccountsController.requestStablecoinWalletSetupOtp', () => {
       }),
     ).rejects.toThrow(UnprocessableEntityException);
     expect(otp.issueForUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('PayoutAccountsController.create (BANK)', () => {
+  beforeEach(() => {
+    process.env.PAYOUT_ACCOUNT_ENCRYPTION_KEY = 'test-payout-encryption-key';
+  });
+  afterEach(() => {
+    delete process.env.PAYOUT_ACCOUNT_ENCRYPTION_KEY;
+  });
+
+  const bankPayload = {
+    type: 'BANK' as const,
+    country: 'NG',
+    currency: 'NGN',
+    bankCode: '044',
+    accountNumber: '0691234567',
+  };
+
+  it('looks up and stores the bank display name, not just the raw bank code', async () => {
+    const { controller, prisma, flutterwave } = setup();
+
+    const result = await controller.create(req, bankPayload);
+
+    expect(flutterwave.listBanks).toHaveBeenCalledWith('NG');
+    expect(prisma.payoutAccount.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ bankCode: '044', bankName: 'Access Bank' }),
+      }),
+    );
+    expect((result as { bankName: string | null }).bankName).toBe('Access Bank');
+  });
+
+  it('falls back to a null bankName (never throws) when the bank code has no match in listBanks', async () => {
+    const { controller, prisma } = setup();
+
+    await controller.create(req, { ...bankPayload, bankCode: '999' });
+
+    expect(prisma.payoutAccount.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ bankName: null }) }),
+    );
+  });
+
+  it('still creates the account (bankName null) when the bank-list lookup itself fails', async () => {
+    const { controller, prisma, flutterwave } = setup();
+    flutterwave.listBanks.mockRejectedValue(new Error('provider unavailable'));
+
+    await expect(controller.create(req, bankPayload)).resolves.toBeDefined();
+    expect(prisma.payoutAccount.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ bankName: null }) }),
+    );
   });
 });
 
