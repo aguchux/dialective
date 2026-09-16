@@ -30,7 +30,7 @@ import { resolveOtpDestination } from '../otp/otp.util';
 import { encryptPayoutField, maskAccountNumber } from '../common/payout-crypto.util';
 import {
   payoutAccountDeleteContextHash,
-  stablecoinWalletSetupContextHash,
+  payoutAccountSetupContextHash,
 } from './otp-context.util';
 import { FlutterwaveService } from './flutterwave.service';
 import { FlutterwaveV4Service, RecipientCountry } from './flutterwave-v4.service';
@@ -82,6 +82,47 @@ export class PayoutAccountsController {
       if (!dto.bankCode || !dto.accountNumber) {
         throw new BadRequestException('bankCode and accountNumber are required for a bank account');
       }
+      const freeEntry = dto.freeEntry ?? false;
+      await this.otp.verify({
+        otpRequestId: dto.otpRequestId!,
+        userId: req.user.sub,
+        purpose: OtpPurpose.PAYOUT_ACCOUNT_SETUP,
+        code: dto.code!,
+        contextHash: payoutAccountSetupContextHash({
+          type: 'BANK',
+          bankCode: dto.bankCode,
+          accountNumber: dto.accountNumber,
+          freeEntry,
+        }),
+      });
+
+      if (freeEntry) {
+        // No provider call at all -- the OTP the trainer just confirmed IS
+        // this rail's verification step, same posture as STABLECOIN_WALLET.
+        // bankName is looked up from the curated PaymentMethodCatalog (the
+        // frontend's free-entry picker), not resolved live -- there's no
+        // Flutterwave call here to resolve it from.
+        const catalogEntry = await this.prisma.paymentMethodCatalog.findFirst({
+          where: { countryCode: dto.country!.toUpperCase(), type: 'BANK', bankCode: dto.bankCode },
+        });
+        const account = await this.prisma.payoutAccount.create({
+          data: {
+            userId: req.user.sub,
+            type: PayoutAccountType.BANK,
+            country: dto.country!,
+            currency: dto.currency!,
+            provider: 'manual',
+            isDefault: dto.isDefault ?? false,
+            verificationStatus: PayoutAccountVerificationStatus.UNVERIFIED,
+            bankCode: dto.bankCode,
+            bankName: catalogEntry?.name ?? null,
+            accountNumberEncryptedJson: { ...encryptPayoutField(dto.accountNumber) },
+            accountNumberMasked: maskAccountNumber(dto.accountNumber),
+          },
+        });
+        return toPublicPayoutAccount(account);
+      }
+
       // v3's resolveAccount remains the account-name verification source of
       // truth even under the v4 toggle -- v4 recipient creation doesn't
       // verify the account holder's name the same way (see
@@ -137,11 +178,26 @@ export class PayoutAccountsController {
           'mobileMoneyNetwork and mobileMoneyNumber are required for a mobile money account',
         );
       }
+      await this.otp.verify({
+        otpRequestId: dto.otpRequestId!,
+        userId: req.user.sub,
+        purpose: OtpPurpose.PAYOUT_ACCOUNT_SETUP,
+        code: dto.code!,
+        contextHash: payoutAccountSetupContextHash({
+          type: 'MOBILE_MONEY',
+          mobileMoneyNetwork: dto.mobileMoneyNetwork,
+          mobileMoneyNumber: dto.mobileMoneyNumber,
+          freeEntry: dto.freeEntry ?? false,
+        }),
+      });
       // No account-resolve endpoint is confirmed for Flutterwave v3 mobile
-      // money -- stored UNVERIFIED, the frontend warns the trainer to
-      // double-check the number before saving.
+      // money -- stored UNVERIFIED either way (freeEntry or not), the
+      // frontend warns the trainer to double-check the number before
+      // saving. freeEntry only changes provider ('manual' vs 'flutterwave')
+      // and skips the v4 recipient creation call below.
+      const freeEntry = dto.freeEntry ?? false;
       let providerRecipientId: string | null = null;
-      if (await this.platformSettings.isFlutterwaveV4Enabled()) {
+      if (!freeEntry && (await this.platformSettings.isFlutterwaveV4Enabled())) {
         const user = await this.prisma.user.findUniqueOrThrow({
           where: { id: req.user.sub },
           select: { firstName: true, lastName: true },
@@ -163,6 +219,7 @@ export class PayoutAccountsController {
           type: PayoutAccountType.MOBILE_MONEY,
           country: dto.country!,
           currency: dto.currency!,
+          provider: freeEntry ? 'manual' : 'flutterwave',
           isDefault: dto.isDefault ?? false,
           verificationStatus: PayoutAccountVerificationStatus.UNVERIFIED,
           mobileMoneyNetwork: dto.mobileMoneyNetwork,
@@ -236,7 +293,8 @@ export class PayoutAccountsController {
         userId: req.user.sub,
         purpose: OtpPurpose.PAYOUT_ACCOUNT_SETUP,
         code: dto.code!,
-        contextHash: stablecoinWalletSetupContextHash({
+        contextHash: payoutAccountSetupContextHash({
+          type: 'STABLECOIN_WALLET',
           walletAddress: dto.walletAddress!,
           stablecoinAsset: dto.stablecoinAsset!,
           stablecoinNetwork: dto.stablecoinNetwork!,
@@ -270,29 +328,49 @@ export class PayoutAccountsController {
   }
 
   /**
-   * Issues the OTP that confirms and locks a STABLECOIN_WALLET address
-   * before it's saved -- the one payout-account type with no provider-side
-   * verification step, so this OTP (shown the exact address/asset/network
-   * being saved, via stablecoinWalletSetupContextHash) is the trainer's only
-   * confirmation checkpoint. Unlike PAYOUT_ACCOUNT_DELETE's OTP route, this
-   * runs before the account exists, so it isn't scoped by an :id param.
+   * Issues the OTP that confirms and locks a payout account's exact details
+   * before it's saved -- every account type requires this now (previously
+   * only STABLECOIN_WALLET did, since it alone had no provider-side
+   * verification step). The context hash binds to whichever fields identify
+   * this exact destination (see payoutAccountSetupContextHash), so a code
+   * shown for one account can't be replayed to confirm a different one.
+   * Runs before the account exists, so it isn't scoped by an :id param.
    */
-  @Post('stablecoin-wallet/setup/otp')
+  @Post('setup/otp')
   @UseGuards(JwtAuthGuard, UserThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
-  async requestStablecoinWalletSetupOtp(
+  async requestSetupOtp(
     @Req() req: AuthenticatedRequest,
     @Body() body: RequestPayoutAccountSetupOtpDto,
   ) {
-    if (!(await this.platformSettings.isCryptoWithdrawalsEnabled())) {
+    if (
+      body.type === 'STABLECOIN_WALLET' &&
+      !(await this.platformSettings.isCryptoWithdrawalsEnabled())
+    ) {
       throw new UnprocessableEntityException('Crypto withdrawals are currently disabled');
     }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
-    const contextHash = stablecoinWalletSetupContextHash({
-      walletAddress: body.walletAddress,
-      stablecoinAsset: body.stablecoinAsset,
-      stablecoinNetwork: body.stablecoinNetwork,
-    });
+    const contextHash =
+      body.type === 'BANK'
+        ? payoutAccountSetupContextHash({
+            type: 'BANK',
+            bankCode: body.bankCode!,
+            accountNumber: body.accountNumber!,
+            freeEntry: body.freeEntry ?? false,
+          })
+        : body.type === 'MOBILE_MONEY'
+          ? payoutAccountSetupContextHash({
+              type: 'MOBILE_MONEY',
+              mobileMoneyNetwork: body.mobileMoneyNetwork!,
+              mobileMoneyNumber: body.mobileMoneyNumber!,
+              freeEntry: body.freeEntry ?? false,
+            })
+          : payoutAccountSetupContextHash({
+              type: 'STABLECOIN_WALLET',
+              walletAddress: body.walletAddress!,
+              stablecoinAsset: body.stablecoinAsset!,
+              stablecoinNetwork: body.stablecoinNetwork!,
+            });
     const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
     return this.otp.issueForUser(
       req.user.sub,

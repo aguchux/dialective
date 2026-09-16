@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, Length, ValidateIf } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, Length, ValidateIf } from 'class-validator';
 import { IsCryptoAddress } from '../../common/crypto-address.util';
 import { IsValidStablecoinPair } from '../../common/stablecoin-pair.util';
 import { STABLECOIN_ASSETS, STABLECOIN_NETWORKS } from '../stablecoin-networks';
@@ -41,6 +41,16 @@ export class CreatePayoutAccountDto {
   @IsString()
   mobileMoneyNumber?: string;
 
+  // Skips Flutterwave's resolveAccount/createRecipient calls for BANK, and
+  // is always true in effect for MOBILE_MONEY (no v3 resolve endpoint
+  // exists for it either way) -- see PayoutAccountsController.create's
+  // free-entry branch. Saved as provider='manual', verificationStatus
+  // UNVERIFIED, never blocks creation on a provider call failing/matching.
+  @ValidateIf((dto: CreatePayoutAccountDto) => dto.type === 'BANK' || dto.type === 'MOBILE_MONEY')
+  @IsOptional()
+  @IsBoolean()
+  freeEntry?: boolean;
+
   // STRIPE_CONNECT only needs country/currency (already required above) --
   // no bankCode/accountNumber/mobileMoneyNetwork/mobileMoneyNumber, since
   // Stripe collects the bank account itself on its own onboarding pages.
@@ -58,14 +68,14 @@ export class CreatePayoutAccountDto {
   @IsCryptoAddress('stablecoinNetwork')
   walletAddress?: string;
 
-  // Required only for STABLECOIN_WALLET -- see
-  // PayoutAccountsController.create and stablecoinWalletSetupContextHash.
-  // Not needed for the other types, which have no OTP-confirmed-setup step.
-  @ValidateIf((dto: CreatePayoutAccountDto) => dto.type === 'STABLECOIN_WALLET')
+  // Required for every type except STRIPE_CONNECT (Stripe's own hosted
+  // onboarding is that rail's confirmation step) -- see
+  // PayoutAccountsController.create and payoutAccountSetupContextHash.
+  @ValidateIf((dto: CreatePayoutAccountDto) => dto.type !== 'STRIPE_CONNECT')
   @IsString()
   otpRequestId?: string;
 
-  @ValidateIf((dto: CreatePayoutAccountDto) => dto.type === 'STABLECOIN_WALLET')
+  @ValidateIf((dto: CreatePayoutAccountDto) => dto.type !== 'STRIPE_CONNECT')
   @IsString()
   @Length(6, 6)
   code?: string;

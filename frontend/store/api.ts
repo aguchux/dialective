@@ -3841,6 +3841,7 @@ export const dialectivaApi = createApi({
         accountNumber?: string;
         mobileMoneyNetwork?: string;
         mobileMoneyNumber?: string;
+        freeEntry?: boolean;
         stablecoinAsset?: 'USDT' | 'USDC';
         stablecoinNetwork?: 'TRC20' | 'ERC20' | 'BEP20' | 'SOL' | 'POLYGON';
         walletAddress?: string;
@@ -3852,16 +3853,22 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/payout-accounts', method: 'POST', body }),
       invalidatesTags: ['PayoutAccounts'],
     }),
-    requestStablecoinWalletSetupOtp: builder.mutation<
+    requestPayoutAccountSetupOtp: builder.mutation<
       { otpRequestId: string; expiresInSeconds: number },
       {
-        stablecoinAsset: 'USDT' | 'USDC';
-        stablecoinNetwork: 'TRC20' | 'ERC20' | 'BEP20' | 'SOL' | 'POLYGON';
-        walletAddress: string;
+        type: 'BANK' | 'MOBILE_MONEY' | 'STABLECOIN_WALLET';
+        bankCode?: string;
+        accountNumber?: string;
+        mobileMoneyNetwork?: string;
+        mobileMoneyNumber?: string;
+        freeEntry?: boolean;
+        stablecoinAsset?: 'USDT' | 'USDC';
+        stablecoinNetwork?: 'TRC20' | 'ERC20' | 'BEP20' | 'SOL' | 'POLYGON';
+        walletAddress?: string;
       }
     >({
       query: (body) => ({
-        url: '/payout-accounts/stablecoin-wallet/setup/otp',
+        url: '/payout-accounts/setup/otp',
         method: 'POST',
         body,
       }),
@@ -5788,7 +5795,7 @@ export const {
   useListAdminWithdrawalsQuery,
   useListPayoutAccountsQuery,
   useCreatePayoutAccountMutation,
-  useRequestStablecoinWalletSetupOtpMutation,
+  useRequestPayoutAccountSetupOtpMutation,
   useCreateStripePayoutOnboardingLinkMutation,
   useRefreshStripePayoutAccountStatusMutation,
   useUpdatePayoutAccountMutation,

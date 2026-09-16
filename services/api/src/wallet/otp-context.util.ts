@@ -49,20 +49,42 @@ export function payoutAccountDeleteContextHash(input: { payoutAccountId: string 
 }
 
 /**
- * Binds a STABLECOIN_WALLET setup OTP to the exact address/asset/network
- * being saved -- unlike BANK/MOBILE_MONEY (provider-verified or
- * unverified-by-design) or STRIPE_CONNECT (Stripe's own hosted onboarding
- * confirms it), a trainer-typed wallet address has no external verification
- * step, so this OTP is the only confirmation that the trainer actually
- * intended to save and lock this exact address before it becomes their
- * permanent payout destination.
+ * Generalized payout-account-setup OTP binding, covering every account type
+ * -- previously only STABLECOIN_WALLET required this OTP (a trainer-typed
+ * wallet address has no external verification step, unlike BANK/
+ * MOBILE_MONEY's Flutterwave resolve or STRIPE_CONNECT's hosted
+ * onboarding); now every type requires it, confirming the trainer actually
+ * intended to save exactly this destination. Binds to whichever fields
+ * identify the destination being saved, so a code shown for one exact
+ * account can't be replayed to confirm a different one. `type`
+ * disambiguates the variant the same way adminActionContextHash's `action`
+ * does.
  */
-export function stablecoinWalletSetupContextHash(input: {
-  walletAddress: string;
-  stablecoinAsset: string;
-  stablecoinNetwork: string;
-}): string {
+export function payoutAccountSetupContextHash(
+  input:
+    | { type: 'BANK'; bankCode: string; accountNumber: string; freeEntry: boolean }
+    | { type: 'MOBILE_MONEY'; mobileMoneyNetwork: string; mobileMoneyNumber: string; freeEntry: boolean }
+    | { type: 'STABLECOIN_WALLET'; walletAddress: string; stablecoinAsset: string; stablecoinNetwork: string },
+): string {
+  const { type } = input;
+  if (type === 'BANK') {
+    return hashContext({
+      type,
+      bankCode: input.bankCode,
+      accountNumber: input.accountNumber,
+      freeEntry: String(input.freeEntry),
+    });
+  }
+  if (type === 'MOBILE_MONEY') {
+    return hashContext({
+      type,
+      mobileMoneyNetwork: input.mobileMoneyNetwork,
+      mobileMoneyNumber: input.mobileMoneyNumber,
+      freeEntry: String(input.freeEntry),
+    });
+  }
   return hashContext({
+    type,
     walletAddress: input.walletAddress,
     stablecoinAsset: input.stablecoinAsset,
     stablecoinNetwork: input.stablecoinNetwork,

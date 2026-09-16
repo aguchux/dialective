@@ -1,10 +1,7 @@
 import { ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { OtpPurpose } from '@dialectiva/db';
 import { PayoutAccountsController } from './payout-accounts.controller';
-import {
-  payoutAccountDeleteContextHash,
-  stablecoinWalletSetupContextHash,
-} from './otp-context.util';
+import { payoutAccountDeleteContextHash, payoutAccountSetupContextHash } from './otp-context.util';
 
 const OWNER_ID = 'trainer-1';
 const ACCOUNT_ID = 'account-1';
@@ -34,6 +31,9 @@ function setup(
       findFirst: jest.fn().mockResolvedValue(null),
     },
     p2PTokenOffer: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    paymentMethodCatalog: {
       findFirst: jest.fn().mockResolvedValue(null),
     },
     user: {
@@ -171,11 +171,12 @@ describe('PayoutAccountsController.remove', () => {
   });
 });
 
-describe('PayoutAccountsController.requestStablecoinWalletSetupOtp', () => {
-  it('issues an OTP bound to the exact address/asset/network being saved', async () => {
+describe('PayoutAccountsController.requestSetupOtp', () => {
+  it('issues an OTP bound to the exact address/asset/network being saved (STABLECOIN_WALLET)', async () => {
     const { controller, otp } = setup();
 
-    const result = await controller.requestStablecoinWalletSetupOtp(req, {
+    const result = await controller.requestSetupOtp(req, {
+      type: 'STABLECOIN_WALLET',
       stablecoinAsset: 'USDT',
       stablecoinNetwork: 'TRC20',
       walletAddress: WALLET_ADDRESS,
@@ -186,7 +187,8 @@ describe('PayoutAccountsController.requestStablecoinWalletSetupOtp', () => {
       OWNER_ID,
       OtpPurpose.PAYOUT_ACCOUNT_SETUP,
       'trainer@example.com',
-      stablecoinWalletSetupContextHash({
+      payoutAccountSetupContextHash({
+        type: 'STABLECOIN_WALLET',
         walletAddress: WALLET_ADDRESS,
         stablecoinAsset: 'USDT',
         stablecoinNetwork: 'TRC20',
@@ -195,17 +197,63 @@ describe('PayoutAccountsController.requestStablecoinWalletSetupOtp', () => {
     );
   });
 
-  it('rejects when crypto withdrawals are disabled platform-wide', async () => {
+  it('rejects a STABLECOIN_WALLET OTP request when crypto withdrawals are disabled platform-wide', async () => {
     const { controller, otp } = setup({ cryptoWithdrawalsEnabled: false });
 
     await expect(
-      controller.requestStablecoinWalletSetupOtp(req, {
+      controller.requestSetupOtp(req, {
+        type: 'STABLECOIN_WALLET',
         stablecoinAsset: 'USDT',
         stablecoinNetwork: 'TRC20',
         walletAddress: WALLET_ADDRESS,
       }),
     ).rejects.toThrow(UnprocessableEntityException);
     expect(otp.issueForUser).not.toHaveBeenCalled();
+  });
+
+  it('issues an OTP bound to the exact bankCode/accountNumber/freeEntry being saved (BANK)', async () => {
+    const { controller, otp } = setup();
+
+    await controller.requestSetupOtp(req, {
+      type: 'BANK',
+      bankCode: '044',
+      accountNumber: '0691234567',
+      freeEntry: false,
+    });
+
+    expect(otp.issueForUser).toHaveBeenCalledWith(
+      OWNER_ID,
+      OtpPurpose.PAYOUT_ACCOUNT_SETUP,
+      'trainer@example.com',
+      payoutAccountSetupContextHash({
+        type: 'BANK',
+        bankCode: '044',
+        accountNumber: '0691234567',
+        freeEntry: false,
+      }),
+      'EMAIL',
+    );
+  });
+
+  it('issues a different hash for a free-entry BANK request than a provider-verified one with the same details', async () => {
+    const { controller, otp } = setup();
+
+    await controller.requestSetupOtp(req, {
+      type: 'BANK',
+      bankCode: '044',
+      accountNumber: '0691234567',
+      freeEntry: true,
+    });
+
+    const [, , , freeEntryHash] = otp.issueForUser.mock.calls[0];
+    expect(freeEntryHash).not.toBe(
+      payoutAccountSetupContextHash({
+        type: 'BANK',
+        bankCode: '044',
+        accountNumber: '0691234567',
+        freeEntry: false,
+      }),
+    );
   });
 });
 
@@ -223,6 +271,8 @@ describe('PayoutAccountsController.create (BANK)', () => {
     currency: 'NGN',
     bankCode: '044',
     accountNumber: '0691234567',
+    otpRequestId: 'otp-1',
+    code: '123456',
   };
 
   it('looks up and stores the bank display name, not just the raw bank code', async () => {
@@ -258,6 +308,129 @@ describe('PayoutAccountsController.create (BANK)', () => {
       expect.objectContaining({ data: expect.objectContaining({ bankName: null }) }),
     );
   });
+
+  it('verifies the setup OTP bound to the exact bankCode/accountNumber before creating', async () => {
+    const { controller, otp } = setup();
+
+    await controller.create(req, bankPayload);
+
+    expect(otp.verify).toHaveBeenCalledWith({
+      otpRequestId: 'otp-1',
+      userId: OWNER_ID,
+      purpose: OtpPurpose.PAYOUT_ACCOUNT_SETUP,
+      code: '123456',
+      contextHash: payoutAccountSetupContextHash({
+        type: 'BANK',
+        bankCode: '044',
+        accountNumber: '0691234567',
+        freeEntry: false,
+      }),
+    });
+  });
+
+  it('never creates the account when OTP verification fails', async () => {
+    const { controller, prisma, otp } = setup();
+    otp.verify.mockRejectedValue(new Error('Invalid or expired code'));
+
+    await expect(controller.create(req, bankPayload)).rejects.toThrow('Invalid or expired code');
+    expect(prisma.payoutAccount.create).not.toHaveBeenCalled();
+  });
+
+  it('skips Flutterwave resolveAccount/listBanks entirely for a free-entry account, saving it UNVERIFIED with provider=manual', async () => {
+    const { controller, prisma, flutterwave } = setup();
+
+    const result = await controller.create(req, { ...bankPayload, freeEntry: true });
+
+    expect(flutterwave.resolveAccount).not.toHaveBeenCalled();
+    expect(flutterwave.listBanks).not.toHaveBeenCalled();
+    expect(prisma.payoutAccount.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'manual',
+          verificationStatus: 'UNVERIFIED',
+        }),
+      }),
+    );
+    expect((result as { verificationStatus: string }).verificationStatus).toBe('UNVERIFIED');
+  });
+
+  it('resolves bankName for a free-entry account from the payment method catalog, not from a provider call', async () => {
+    const { controller, prisma } = setup();
+    prisma.paymentMethodCatalog.findFirst.mockResolvedValue({ name: 'GTBank' });
+
+    await controller.create(req, { ...bankPayload, freeEntry: true });
+
+    expect(prisma.paymentMethodCatalog.findFirst).toHaveBeenCalledWith({
+      where: { countryCode: 'NG', type: 'BANK', bankCode: '044' },
+    });
+    expect(prisma.payoutAccount.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ bankName: 'GTBank' }) }),
+    );
+  });
+});
+
+describe('PayoutAccountsController.create (MOBILE_MONEY)', () => {
+  beforeEach(() => {
+    process.env.PAYOUT_ACCOUNT_ENCRYPTION_KEY = 'test-payout-encryption-key';
+  });
+  afterEach(() => {
+    delete process.env.PAYOUT_ACCOUNT_ENCRYPTION_KEY;
+  });
+
+  const mobileMoneyPayload = {
+    type: 'MOBILE_MONEY' as const,
+    country: 'GH',
+    currency: 'GHS',
+    mobileMoneyNetwork: 'MTN',
+    mobileMoneyNumber: '0551234567',
+    otpRequestId: 'otp-1',
+    code: '123456',
+  };
+
+  it('verifies the setup OTP before creating, saved UNVERIFIED with provider=flutterwave by default', async () => {
+    const { controller, prisma, otp } = setup();
+
+    const result = await controller.create(req, mobileMoneyPayload);
+
+    expect(otp.verify).toHaveBeenCalledWith({
+      otpRequestId: 'otp-1',
+      userId: OWNER_ID,
+      purpose: OtpPurpose.PAYOUT_ACCOUNT_SETUP,
+      code: '123456',
+      contextHash: payoutAccountSetupContextHash({
+        type: 'MOBILE_MONEY',
+        mobileMoneyNetwork: 'MTN',
+        mobileMoneyNumber: '0551234567',
+        freeEntry: false,
+      }),
+    });
+    expect(prisma.payoutAccount.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ provider: 'flutterwave', verificationStatus: 'UNVERIFIED' }),
+      }),
+    );
+    expect((result as { verificationStatus: string }).verificationStatus).toBe('UNVERIFIED');
+  });
+
+  it('never creates the account when OTP verification fails', async () => {
+    const { controller, prisma, otp } = setup();
+    otp.verify.mockRejectedValue(new Error('Invalid or expired code'));
+
+    await expect(controller.create(req, mobileMoneyPayload)).rejects.toThrow(
+      'Invalid or expired code',
+    );
+    expect(prisma.payoutAccount.create).not.toHaveBeenCalled();
+  });
+
+  it('saves a free-entry mobile money account with provider=manual', async () => {
+    const { controller, prisma } = setup();
+
+    await controller.create(req, { ...mobileMoneyPayload, freeEntry: true });
+
+    expect(prisma.payoutAccount.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ provider: 'manual' }) }),
+    );
+  });
 });
 
 describe('PayoutAccountsController.create (STABLECOIN_WALLET)', () => {
@@ -278,7 +451,8 @@ describe('PayoutAccountsController.create (STABLECOIN_WALLET)', () => {
       userId: OWNER_ID,
       purpose: OtpPurpose.PAYOUT_ACCOUNT_SETUP,
       code: '123456',
-      contextHash: stablecoinWalletSetupContextHash({
+      contextHash: payoutAccountSetupContextHash({
+        type: 'STABLECOIN_WALLET',
         walletAddress: WALLET_ADDRESS,
         stablecoinAsset: 'USDT',
         stablecoinNetwork: 'TRC20',
