@@ -153,8 +153,50 @@ describe('AuthService auth maintenance gate', () => {
 
   it('login rejects with AuthMaintenanceException while login is blocked', async () => {
     const { service, prisma } = setup({ enabled: true });
+    const passwordHash = await bcrypt.hash('password123', 4);
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      passwordHash,
+      status: 'ACTIVE',
+      role: 'TRAINER',
+    });
     await expect(service.login('a@b.com', 'password123')).rejects.toThrow(AuthMaintenanceException);
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('login exempts an admin from the maintenance block when excludeAdmin is on', async () => {
+    const { service, prisma } = setup({ enabled: true });
+    const passwordHash = await bcrypt.hash('password123', 4);
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'admin-1',
+      email: 'admin@example.com',
+      passwordHash,
+      status: 'ACTIVE',
+      role: 'ADMIN',
+      twoFactorEmailEnabled: false,
+      twoFactorSmsEnabled: false,
+    });
+    const result = await service.login('admin@example.com', 'password123');
+    expect(result).not.toBeInstanceOf(Error);
+  });
+
+  it('login still rejects a wrong password for an admin during maintenance with the same generic error, not the maintenance exception', async () => {
+    const { service, prisma } = setup({ enabled: true });
+    const passwordHash = await bcrypt.hash('password123', 4);
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'admin-1',
+      email: 'admin@example.com',
+      passwordHash,
+      status: 'ACTIVE',
+      role: 'ADMIN',
+    });
+    let caught: unknown;
+    try {
+      await service.login('admin@example.com', 'wrong-password');
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(UnauthorizedException);
+    expect(caught).not.toBeInstanceOf(AuthMaintenanceException);
   });
 
   it('requestMagicLink rejects with AuthMaintenanceException while signup is blocked', async () => {

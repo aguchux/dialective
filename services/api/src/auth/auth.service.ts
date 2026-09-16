@@ -226,11 +226,28 @@ export class AuthService {
    * for already-authenticated requests. Throws AuthMaintenanceException,
    * whose response body carries the countdown target so the frontend can
    * render it without a second round-trip.
+   *
+   * role is only known for scope="login" (the account already exists, so
+   * login() can pass it after the user lookup) -- signup has no role yet,
+   * an account doesn't exist until registration completes, so that scope is
+   * never exempted. Mirrors JwtAuthGuard's excludeAdmin/excludePartner
+   * check for authMaintenanceBlockSessions, so the same admin/partner stays
+   * able to sign in during maintenance that stays signed in during it.
    */
-  private async assertNotInAuthMaintenance(scope: 'login' | 'signup'): Promise<void> {
+  private async assertNotInAuthMaintenance(
+    scope: 'login' | 'signup',
+    role?: Role,
+  ): Promise<void> {
     const status = await this.platformSettings.getAuthMaintenanceStatus();
     const blocked = scope === 'login' ? status.blockLogin : status.blockSignup;
-    if (status.enabled && blocked) {
+    if (!status.enabled || !blocked) {
+      return;
+    }
+    const exempt =
+      role !== undefined &&
+      ((role === Role.ADMIN && status.excludeAdmin) ||
+        (role === Role.PARTNER && status.excludePartner));
+    if (!exempt) {
       throw new AuthMaintenanceException(status.until!, status.message);
     }
   }
@@ -365,7 +382,6 @@ export class AuthService {
    * SMS isn't the channel that was spamming.
    */
   async login(email: string, password: string): Promise<PendingOtp | AuthResult> {
-    await this.assertNotInAuthMaintenance('login');
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user?.passwordHash) {
       throw new UnauthorizedException('Invalid email or password');
@@ -375,6 +391,12 @@ export class AuthService {
     if (!valid) {
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    // Credentials are verified before this runs, so the maintenance gate
+    // can't be used to probe whether an unknown email belongs to an exempt
+    // admin/partner -- a wrong password still always yields the same
+    // "Invalid email or password" regardless of maintenance state.
+    await this.assertNotInAuthMaintenance('login', user.role);
 
     this.assertActive(user);
 
