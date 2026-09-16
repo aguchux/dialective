@@ -30,6 +30,7 @@ describe('WalletController crypto withdrawal eligibility', () => {
     minWalletBalanceTokens?: number;
     kycMinTokens?: number;
     withdrawalsEnabled?: boolean;
+    withdrawalsDisabledMessage?: string | null;
   }) {
     const prisma = {
       wordRecording: { count: jest.fn().mockResolvedValue(overrides?.settledWordRecordings ?? 100) },
@@ -58,9 +59,10 @@ describe('WalletController crypto withdrawal eligibility', () => {
       },
     };
     const platformSettings = {
-      getWithdrawalsEnabledStatus: jest
-        .fn()
-        .mockResolvedValue({ enabled: overrides?.withdrawalsEnabled ?? true, message: null }),
+      getWithdrawalsEnabledStatus: jest.fn().mockResolvedValue({
+        enabled: overrides?.withdrawalsEnabled ?? true,
+        message: overrides?.withdrawalsDisabledMessage ?? null,
+      }),
       isCryptoWithdrawalsEnabled: jest.fn().mockResolvedValue(true),
       getMinWithdrawalTokens: jest.fn().mockResolvedValue(50),
       getMinWalletBalanceTokens: jest.fn().mockResolvedValue(overrides?.minWalletBalanceTokens ?? 0),
@@ -92,7 +94,19 @@ describe('WalletController crypto withdrawal eligibility', () => {
     const { controller, otp } = setup({ withdrawalsEnabled: false });
 
     await expect(controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody)).rejects.toThrow(
-      'Withdrawals are currently disabled',
+      'Withdrawals are temporarily disabled',
+    );
+    expect(otp.issueForUser).not.toHaveBeenCalled();
+  });
+
+  it('includes the admin-authored reason in the rejection message when one is set', async () => {
+    const { controller, otp } = setup({
+      withdrawalsEnabled: false,
+      withdrawalsDisabledMessage: 'for scheduled maintenance',
+    });
+
+    await expect(controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody)).rejects.toThrow(
+      'Withdrawals are temporarily disabled -- for scheduled maintenance',
     );
     expect(otp.issueForUser).not.toHaveBeenCalled();
   });

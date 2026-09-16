@@ -2003,7 +2003,9 @@ export class WalletController {
     const withdrawalsStatus = await this.platformSettings.getWithdrawalsEnabledStatus();
     if (!withdrawalsStatus.enabled) {
       throw new UnprocessableEntityException(
-        withdrawalsStatus.message ?? 'Withdrawals are currently disabled',
+        withdrawalsStatus.message
+          ? `Withdrawals are temporarily disabled -- ${withdrawalsStatus.message}`
+          : 'Withdrawals are temporarily disabled',
       );
     }
 

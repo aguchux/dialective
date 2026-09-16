@@ -140,14 +140,19 @@ export function WithdrawalSettingsPanel() {
             {!withdrawalsEnabled && (
               <div className="grid gap-1">
                 <label className="font-bold" htmlFor="withdrawals-disabled-message">
-                  Message shown to trainers (optional)
+                  Reason shown to trainers (optional)
                 </label>
+                <p className="text-xs text-muted">
+                  Trainers see this under the heading &ldquo;Withdrawals are temporarily
+                  disabled&rdquo; -- so it reads best as just the reason, e.g. &ldquo;for scheduled
+                  maintenance&rdquo; or &ldquo;while we investigate a balance issue.&rdquo;
+                </p>
                 <input
                   className={inputClass}
                   id="withdrawals-disabled-message"
                   maxLength={280}
                   onChange={(e) => setWithdrawalsDisabledMessage(e.target.value)}
-                  placeholder="Withdrawals are temporarily paused for scheduled maintenance."
+                  placeholder="for scheduled maintenance"
                   type="text"
                   value={withdrawalsDisabledMessage}
                 />

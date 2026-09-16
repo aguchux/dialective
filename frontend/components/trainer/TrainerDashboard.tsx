@@ -4980,14 +4980,15 @@ function WithdrawTokensDialog({
         </button>
       </DialogTrigger>
       {withdrawalsGloballyDisabled ? (
-        <DialogContent title="Withdrawals are paused">
+        <DialogContent title="Withdrawals are temporarily disabled">
           <div className="grid gap-4">
             <div className="flex flex-col items-center gap-3 rounded-lg border border-line bg-surface p-6 text-center">
               <ArrowUpRight className="size-12 text-muted" aria-hidden="true" />
-              <p className="text-sm leading-relaxed text-muted">
-                {publicSettings?.withdrawalsDisabledMessage ??
-                  'Withdrawals are temporarily paused. Please check back later.'}
-              </p>
+              {publicSettings?.withdrawalsDisabledMessage && (
+                <p className="text-sm leading-relaxed text-muted">
+                  {publicSettings.withdrawalsDisabledMessage}
+                </p>
+              )}
             </div>
           </div>
         </DialogContent>
