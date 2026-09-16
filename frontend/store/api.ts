@@ -2730,6 +2730,8 @@ export interface CoursePreview extends CourseCard {
 
 export interface CourseProgress {
   lastSlideIndex: number;
+  /** High-water mark of the furthest slide actually reached, one-at-a-time -- see CoursesService.saveProgress. Use this (not lastSlideIndex) to bound how far "Next" is allowed to resume. */
+  maxSlideIndexReached: number;
   completedAt: string | null;
 }
 

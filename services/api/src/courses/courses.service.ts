@@ -103,7 +103,11 @@ export class CoursesService {
       coverImageAlt: course.coverImageAlt,
       slides: (course.slides as unknown as CourseDocument).slides,
       progress: progress
-        ? { lastSlideIndex: progress.lastSlideIndex, completedAt: progress.completedAt }
+        ? {
+            lastSlideIndex: progress.lastSlideIndex,
+            maxSlideIndexReached: progress.maxSlideIndexReached,
+            completedAt: progress.completedAt,
+          }
         : null,
     };
   }
@@ -132,30 +136,67 @@ export class CoursesService {
     };
   }
 
+  /**
+   * Strict enforcement: totalSlides is derived from the course record
+   * itself, never trusted from the client, so a spoofed totalSlides can't
+   * shrink the finish line. lastSlideIndex is the client's requested resume
+   * point and may move freely backward (the trainer paging back to review
+   * an earlier slide) or forward by exactly one slide past their prior
+   * high-water mark -- any larger forward jump is rejected outright rather
+   * than silently clamped, since silently accepting it would let a client
+   * skip straight to the end. maxSlideIndexReached is the actual completion
+   * signal: it only ever advances one index at a time, so it can only reach
+   * the final slide by the client having reported every index in between,
+   * i.e. by the trainer having actually opened every slide in order.
+   */
   async saveProgress(userId: string, slug: string, lastSlideIndex: number, totalSlides: number) {
     const course = await this.prisma.course.findFirst({
       where: { slug, status: BlogPostStatus.PUBLISHED },
-      select: { id: true, title: true, completionRewardTokens: true },
+      select: { id: true, title: true, completionRewardTokens: true, slides: true },
     });
     if (!course) throw new NotFoundException('Course not found');
 
+    const actualTotalSlides = Math.max(
+      1,
+      (course.slides as unknown as CourseDocument).slides.length,
+    );
+    const lastIndex = actualTotalSlides - 1;
+
     const existingProgress = await this.prisma.courseProgress.findUnique({
       where: { userId_courseId: { userId, courseId: course.id } },
-      select: { completedAt: true },
+      select: { completedAt: true, maxSlideIndexReached: true },
     });
     const wasAlreadyComplete = existingProgress?.completedAt != null;
+    const priorMax = existingProgress?.maxSlideIndexReached ?? 0;
 
-    const clampedIndex = Math.min(Math.max(0, lastSlideIndex), Math.max(0, totalSlides - 1));
-    const completedAt = clampedIndex >= totalSlides - 1 ? new Date() : null;
+    const requestedIndex = Math.min(Math.max(0, lastSlideIndex), lastIndex);
+    if (requestedIndex > priorMax + 1) {
+      throw new BadRequestException(
+        'Slides must be viewed in order -- cannot skip ahead of the next unseen slide',
+      );
+    }
+
+    const newMax = Math.max(priorMax, requestedIndex);
+    const completedAt = wasAlreadyComplete
+      ? existingProgress!.completedAt
+      : newMax >= lastIndex
+        ? new Date()
+        : null;
 
     const progress = await this.prisma.courseProgress.upsert({
       where: { userId_courseId: { userId, courseId: course.id } },
-      create: { userId, courseId: course.id, lastSlideIndex: clampedIndex, completedAt },
-      // Once completed, a later re-save with a smaller index (e.g. the
-      // trainer navigates back to review a slide) shouldn't un-complete the
-      // course -- completedAt only ever gets set, never cleared.
+      create: {
+        userId,
+        courseId: course.id,
+        lastSlideIndex: requestedIndex,
+        maxSlideIndexReached: newMax,
+        completedAt,
+      },
       update: {
-        lastSlideIndex: clampedIndex,
+        lastSlideIndex: requestedIndex,
+        maxSlideIndexReached: newMax,
+        // Once completed, never cleared -- a later re-save (even one that
+        // revisits an earlier slide) must not un-complete the course.
         ...(completedAt && { completedAt }),
       },
     });
@@ -169,7 +210,11 @@ export class CoursesService {
       await this.creditCompletionAndNotify(userId, course);
     }
 
-    return { lastSlideIndex: progress.lastSlideIndex, completedAt: progress.completedAt };
+    return {
+      lastSlideIndex: progress.lastSlideIndex,
+      maxSlideIndexReached: progress.maxSlideIndexReached,
+      completedAt: progress.completedAt,
+    };
   }
 
   /**

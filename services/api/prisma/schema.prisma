@@ -2988,17 +2988,26 @@ model Course {
 
 /// One row per (trainer, course) -- tracks how far a trainer has read into a
 /// course so the slide viewer can resume where they left off.
-/// completedAt is set once lastSlideIndex reaches the course's final slide.
+/// lastSlideIndex is just the resume point (can move backward when the
+/// trainer pages back to review an earlier slide). maxSlideIndexReached is
+/// the strict enforcement field: a monotonic high-water mark that
+/// CoursesService.saveProgress only ever advances one slide at a time (never
+/// lets the client jump straight to a later index), so it can only reach the
+/// course's final slide by the client having reported every index in
+/// between. completedAt is set once maxSlideIndexReached reaches the final
+/// slide, and only via that sequential advancement -- never derived from
+/// lastSlideIndex alone.
 model CourseProgress {
-  id             String    @id @default(uuid())
-  userId         String
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  courseId       String
-  course         Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lastSlideIndex Int       @default(0)
-  completedAt    DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                  String    @id @default(uuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId            String
+  course              Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lastSlideIndex      Int       @default(0)
+  maxSlideIndexReached Int      @default(0)
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@unique([userId, courseId])
   @@index([userId])

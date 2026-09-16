@@ -94,11 +94,19 @@ describe('CoursesService', () => {
         coverImageAlt: null,
         slides: { slides: [{ text: 'a' }, { text: 'b' }] },
       });
-      prisma.courseProgress.findUnique.mockResolvedValue({ lastSlideIndex: 1, completedAt: null });
+      prisma.courseProgress.findUnique.mockResolvedValue({
+        lastSlideIndex: 1,
+        maxSlideIndexReached: 1,
+        completedAt: null,
+      });
 
       const result = await service.getForStudy('user-1', 'intro');
       expect(result.slides).toEqual([{ text: 'a' }, { text: 'b' }]);
-      expect(result.progress).toEqual({ lastSlideIndex: 1, completedAt: null });
+      expect(result.progress).toEqual({
+        lastSlideIndex: 1,
+        maxSlideIndexReached: 1,
+        completedAt: null,
+      });
     });
 
     it('404s on a draft or nonexistent slug -- same as "does not exist" to a non-admin caller', async () => {
@@ -143,55 +151,116 @@ describe('CoursesService', () => {
   });
 
   describe('saveProgress', () => {
-    it('clamps lastSlideIndex into bounds and sets completedAt on the final slide', async () => {
-      prisma.course.findFirst.mockResolvedValue({ id: 'c1' });
-      prisma.courseProgress.upsert.mockImplementation(({ create }: any) => Promise.resolve(create));
+    // 5-slide course (indices 0..4) is the shared fixture below.
+    const fiveSlideCourse = {
+      id: 'c1',
+      title: 'Intro',
+      completionRewardTokens: null as any,
+      slides: { slides: [{ text: 'a' }, { text: 'b' }, { text: 'c' }, { text: 'd' }, { text: 'e' }] },
+    };
 
-      const result = await service.saveProgress('user-1', 'intro', 99, 5);
-      expect(prisma.courseProgress.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          create: expect.objectContaining({ lastSlideIndex: 4, completedAt: expect.any(Date) }),
-        }),
+    it('rejects a lastSlideIndex that jumps ahead of the next unseen slide, instead of silently clamping to the end', async () => {
+      prisma.course.findFirst.mockResolvedValue(fiveSlideCourse);
+      prisma.courseProgress.findUnique.mockResolvedValue(null); // no prior progress -> priorMax 0
+
+      // Client claims index 4 (the last slide) having never reported 1, 2, 3
+      // -- this is exactly the spoof this enforcement exists to block.
+      await expect(service.saveProgress('user-1', 'intro', 4, 5)).rejects.toThrow(
+        BadRequestException,
       );
-      expect(result.lastSlideIndex).toBe(4);
+      expect(prisma.courseProgress.upsert).not.toHaveBeenCalled();
     });
 
-    it('does not set completedAt when not yet on the final slide', async () => {
-      prisma.course.findFirst.mockResolvedValue({ id: 'c1' });
-      prisma.courseProgress.upsert.mockImplementation(({ create }: any) => Promise.resolve(create));
-
-      await service.saveProgress('user-1', 'intro', 1, 5);
-      expect(prisma.courseProgress.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          create: expect.objectContaining({ lastSlideIndex: 1, completedAt: null }),
-        }),
-      );
-    });
-
-    it('never clears an existing completedAt on a later, earlier-index save', async () => {
-      prisma.course.findFirst.mockResolvedValue({ id: 'c1' });
-      prisma.courseProgress.findUnique.mockResolvedValue({ completedAt: new Date('2026-01-01') });
+    it('accepts advancing exactly one slide past the prior high-water mark', async () => {
+      prisma.course.findFirst.mockResolvedValue(fiveSlideCourse);
+      prisma.courseProgress.findUnique.mockResolvedValue({
+        completedAt: null,
+        maxSlideIndexReached: 1,
+      });
       prisma.courseProgress.upsert.mockImplementation(({ update }: any) =>
         Promise.resolve({
           lastSlideIndex: update.lastSlideIndex,
+          maxSlideIndexReached: update.maxSlideIndexReached,
+          completedAt: update.completedAt ?? null,
+        }),
+      );
+
+      const result = await service.saveProgress('user-1', 'intro', 2, 5);
+      expect(result.maxSlideIndexReached).toBe(2);
+      expect(result.completedAt).toBeNull();
+    });
+
+    it('allows moving backward to review an earlier slide without losing the high-water mark', async () => {
+      prisma.course.findFirst.mockResolvedValue(fiveSlideCourse);
+      prisma.courseProgress.findUnique.mockResolvedValue({
+        completedAt: null,
+        maxSlideIndexReached: 3,
+      });
+      prisma.courseProgress.upsert.mockImplementation(({ update }: any) =>
+        Promise.resolve({
+          lastSlideIndex: update.lastSlideIndex,
+          maxSlideIndexReached: update.maxSlideIndexReached,
+          completedAt: update.completedAt ?? null,
+        }),
+      );
+
+      const result = await service.saveProgress('user-1', 'intro', 0, 5);
+      expect(result.lastSlideIndex).toBe(0);
+      // High-water mark stays at 3 -- paging back doesn't erase progress.
+      expect(result.maxSlideIndexReached).toBe(3);
+    });
+
+    it('sets completedAt only once the high-water mark reaches the true final slide (derived from course.slides, not client totalSlides)', async () => {
+      prisma.course.findFirst.mockResolvedValue(fiveSlideCourse);
+      prisma.courseProgress.findUnique.mockResolvedValue({
+        completedAt: null,
+        maxSlideIndexReached: 3,
+      });
+      prisma.courseProgress.upsert.mockImplementation(({ update }: any) =>
+        Promise.resolve({
+          lastSlideIndex: update.lastSlideIndex,
+          maxSlideIndexReached: update.maxSlideIndexReached,
+          completedAt: update.completedAt ?? null,
+        }),
+      );
+
+      // Client lies about totalSlides=2 (trying to make index 4 look
+      // in-bounds/final early) -- server still uses the real 5-slide count.
+      const result = await service.saveProgress('user-1', 'intro', 4, 2);
+      expect(result.completedAt).toBeInstanceOf(Date);
+    });
+
+    it('never clears an existing completedAt on a later, earlier-index save', async () => {
+      prisma.course.findFirst.mockResolvedValue(fiveSlideCourse);
+      prisma.courseProgress.findUnique.mockResolvedValue({
+        completedAt: new Date('2026-01-01'),
+        maxSlideIndexReached: 4,
+      });
+      prisma.courseProgress.upsert.mockImplementation(({ update }: any) =>
+        Promise.resolve({
+          lastSlideIndex: update.lastSlideIndex,
+          maxSlideIndexReached: update.maxSlideIndexReached,
           completedAt: update.completedAt ?? 'unchanged',
         }),
       );
 
       await service.saveProgress('user-1', 'intro', 0, 5);
       const call = prisma.courseProgress.upsert.mock.calls[0][0];
-      expect(call.update).not.toHaveProperty('completedAt');
+      expect(call.update.completedAt).toEqual(new Date('2026-01-01'));
     });
 
     it('does not re-credit or re-email on a save that keeps an already-completed course completed', async () => {
       prisma.course.findFirst.mockResolvedValue({
-        id: 'c1',
-        title: 'Intro',
+        ...fiveSlideCourse,
         completionRewardTokens: new Prisma.Decimal(5),
       });
-      prisma.courseProgress.findUnique.mockResolvedValue({ completedAt: new Date('2026-01-01') });
+      prisma.courseProgress.findUnique.mockResolvedValue({
+        completedAt: new Date('2026-01-01'),
+        maxSlideIndexReached: 4,
+      });
       prisma.courseProgress.upsert.mockResolvedValue({
         lastSlideIndex: 4,
+        maxSlideIndexReached: 4,
         completedAt: new Date('2026-01-01'),
       });
       prisma.ledgerEntry = { create: jest.fn() };
@@ -209,16 +278,19 @@ describe('CoursesService', () => {
 
     it('does not re-credit across repeated retakes -- same course, several completed re-saves in a row', async () => {
       prisma.course.findFirst.mockResolvedValue({
-        id: 'c1',
-        title: 'Intro',
+        ...fiveSlideCourse,
         completionRewardTokens: new Prisma.Decimal(5),
       });
       // Every re-save after the first sees the course already completed --
       // simulates a trainer re-opening and re-finishing the same course
       // multiple times.
-      prisma.courseProgress.findUnique.mockResolvedValue({ completedAt: new Date('2026-01-01') });
+      prisma.courseProgress.findUnique.mockResolvedValue({
+        completedAt: new Date('2026-01-01'),
+        maxSlideIndexReached: 4,
+      });
       prisma.courseProgress.upsert.mockResolvedValue({
         lastSlideIndex: 4,
+        maxSlideIndexReached: 4,
         completedAt: new Date('2026-01-01'),
       });
       prisma.ledgerEntry = { create: jest.fn() };
@@ -232,16 +304,16 @@ describe('CoursesService', () => {
       expect(mail.sendCourseCompletedEmail).not.toHaveBeenCalled();
     });
 
-    it('credits the completion reward and emails once, the first time a course is completed', async () => {
+    it('credits the completion reward and emails once, the first time a course is completed by walking every slide in order', async () => {
       const completionRewardTokens = new Prisma.Decimal(5);
-      prisma.course.findFirst.mockResolvedValue({
-        id: 'c1',
-        title: 'Intro',
-        completionRewardTokens,
+      prisma.course.findFirst.mockResolvedValue({ ...fiveSlideCourse, completionRewardTokens });
+      prisma.courseProgress.findUnique.mockResolvedValue({
+        completedAt: null,
+        maxSlideIndexReached: 3,
       });
-      prisma.courseProgress.findUnique.mockResolvedValue(null);
       prisma.courseProgress.upsert.mockResolvedValue({
         lastSlideIndex: 4,
+        maxSlideIndexReached: 4,
         completedAt: new Date(),
       });
       prisma.ledgerEntry = { create: jest.fn().mockResolvedValue({}) };
@@ -269,14 +341,14 @@ describe('CoursesService', () => {
     });
 
     it('still emails completion with no reward when the course has none', async () => {
-      prisma.course.findFirst.mockResolvedValue({
-        id: 'c1',
-        title: 'Intro',
-        completionRewardTokens: null,
+      prisma.course.findFirst.mockResolvedValue({ ...fiveSlideCourse, completionRewardTokens: null });
+      prisma.courseProgress.findUnique.mockResolvedValue({
+        completedAt: null,
+        maxSlideIndexReached: 3,
       });
-      prisma.courseProgress.findUnique.mockResolvedValue(null);
       prisma.courseProgress.upsert.mockResolvedValue({
         lastSlideIndex: 4,
+        maxSlideIndexReached: 4,
         completedAt: new Date(),
       });
 

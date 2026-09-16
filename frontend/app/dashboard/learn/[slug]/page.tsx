@@ -67,7 +67,13 @@ export default function StudyCoursePage() {
           <CourseSlideViewer
             alreadyCompleted={course.progress?.completedAt != null}
             courseTitle={course.title}
-            initialIndex={course.progress?.lastSlideIndex ?? 0}
+            // Resume from the high-water mark, not the last-saved cursor --
+            // if the trainer had paged backward to review an earlier slide
+            // before closing, resuming at lastSlideIndex would still be
+            // safe to advance from, but maxSlideIndexReached is the value
+            // the backend actually enforces "advance by one" against, so
+            // resuming there keeps the first Next click always valid.
+            initialIndex={course.progress?.maxSlideIndexReached ?? 0}
             onClose={() => router.push('/dashboard?view=home')}
             onSlideChange={handleSlideChange}
             slides={course.slides}
