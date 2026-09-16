@@ -6,7 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { KycStatus, Prisma } from '@dialectiva/db';
+import { KycRecheckRunTrigger, KycStatus, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { MailService } from '../mail/mail.service';
@@ -59,7 +59,7 @@ export class KycService {
     if (this.recheckRunning) return;
     this.recheckRunning = true;
     try {
-      const result = await this.recheckSelfHosted(false, this.recheckCursor);
+      const result = await this.recheckAndRecord('SCHEDULED', this.recheckCursor);
       this.recheckCursor = result.nextCursor ?? undefined;
       if (result.scanned) this.logger.log(`DLKYC recheck: ${JSON.stringify(result)}`);
     } catch (error) {
@@ -69,6 +69,62 @@ export class KycService {
     }
   }
 
+  /**
+   * Wraps recheckSelfHosted(preview=false, ...) with a persisted
+   * KycRecheckRun row, so an admin can see whether the scheduled sweep is
+   * actually running (and what it found) without tailing pod logs -- see
+   * KycRecheckRun's schema doc comment. Shared by both the cron
+   * (recheckScheduled) and the admin-triggered manual run (recheckRun
+   * below); preview calls never go through here (see recheckSelfHosted's
+   * own doc comment for why preview stays unwritten).
+   */
+  private async recheckAndRecord(trigger: KycRecheckRunTrigger, after?: string) {
+    const startedAt = new Date();
+    try {
+      const result = await this.recheckSelfHosted(false, after);
+      await this.prisma.kycRecheckRun.create({
+        data: {
+          trigger,
+          startedAt,
+          finishedAt: new Date(),
+          enabled: result.enabled,
+          scanned: result.scanned,
+          eligible: result.eligible,
+          approved: result.approved,
+          skipped: result.skipped,
+          errors: result.errors,
+          nextCursor: result.nextCursor,
+        },
+      });
+      return result;
+    } catch (error) {
+      await this.prisma.kycRecheckRun
+        .create({
+          data: {
+            trigger,
+            startedAt,
+            finishedAt: new Date(),
+            enabled: false,
+            errorMessage: String(error),
+          },
+        })
+        .catch((persistError) => {
+          // A history-write failure must never mask the original error, or
+          // silently swallow it either -- log both and still rethrow below.
+          this.logger.error(`DLKYC recheck run-history write failed: ${String(persistError)}`);
+        });
+      throw error;
+    }
+  }
+
+  /**
+   * Pure scan-and-maybe-approve logic, called both directly by the
+   * preview endpoint (read-only, no KycRecheckRun row written -- preview
+   * is meant to be cheaply repeatable from the admin UI without spamming
+   * run history) and indirectly via recheckAndRecord (preview=false,
+   * which DOES persist a KycRecheckRun row) from both the cron and the
+   * manual "run" endpoint.
+   */
   async recheckSelfHosted(preview = true, after?: string) {
     const enabled = await this.settings.isSelfHostedKycAutoApproveEnabled();
     const thresholds = await this.settings.getSelfHostedKycApproveThresholds();
@@ -170,6 +226,19 @@ export class KycService {
       }
     }
     return result;
+  }
+
+  /** Manual trigger -- same recheckAndRecord path as the cron, so a manually-forced run shows up in the same history list. */
+  async recheckRun() {
+    return this.recheckAndRecord('MANUAL');
+  }
+
+  /** Most-recent-first history of every persisted recheck run (scheduled or manual) -- lets an admin confirm the cron is actually firing every 5 minutes without tailing logs. */
+  async listRecheckRuns(limit = 20) {
+    return this.prisma.kycRecheckRun.findMany({
+      orderBy: { startedAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 100),
+    });
   }
 
   constructor(

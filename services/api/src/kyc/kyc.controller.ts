@@ -202,7 +202,16 @@ export class KycController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   recheckRun() {
-    return this.kyc.recheckSelfHosted(false);
+    return this.kyc.recheckRun();
+  }
+
+  // Registered before the :id wildcard below so "recheck" is never captured
+  // as an id param.
+  @Get('admin/kyc/recheck/runs')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  listRecheckRuns() {
+    return this.kyc.listRecheckRuns();
   }
 
   @Get('admin/kyc/:id')

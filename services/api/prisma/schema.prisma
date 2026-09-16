@@ -862,6 +862,39 @@ model KycVerification {
   @@map("kyc_verifications")
 }
 
+/// One row per KycService.recheckSelfHosted execution -- both the
+/// scheduled cron (recheckScheduled, every 5 minutes) and the admin-
+/// triggered manual run (POST admin/kyc/recheck/run) write a row here, so
+/// an admin can see whether the background auto-approval sweep is actually
+/// running and what it found, without tailing pod logs. Preview calls (GET
+/// admin/kyc/recheck/preview) do NOT write a row -- preview is read-only
+/// and would otherwise spam this table on every admin page load. Kept as
+/// its own append-only table (not folded into PlatformSettings, which only
+/// holds a single row) since this needs history, not just a "last run"
+/// snapshot -- see KycRecheckPanel's run-history list.
+model KycRecheckRun {
+  id          String               @id @default(uuid())
+  trigger     KycRecheckRunTrigger @default(SCHEDULED)
+  startedAt   DateTime             @default(now())
+  finishedAt  DateTime?
+  enabled     Boolean // snapshot of isSelfHostedKycAutoApproveEnabled at run time -- a run where this is false always has scanned=0 (recheckSelfHosted short-circuits), but the row still records that the job executed
+  scanned     Int                  @default(0)
+  eligible    Int                  @default(0)
+  approved    Int                  @default(0)
+  skipped     Int                  @default(0)
+  errors      Int                  @default(0)
+  nextCursor  String? // non-null means more than 100 IN_REVIEW rows remained -- the next scheduled tick resumes from here (see KycService.recheckCursor)
+  errorMessage String? // set only if the run itself threw (distinct from per-row `errors`, which are caught individually and don't abort the batch)
+
+  @@index([trigger, startedAt])
+  @@map("kyc_recheck_runs")
+}
+
+enum KycRecheckRunTrigger {
+  SCHEDULED
+  MANUAL
+}
+
 enum KycEvidenceKind {
   DOCUMENT_FRONT
   DOCUMENT_BACK
