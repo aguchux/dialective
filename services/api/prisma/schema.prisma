@@ -2426,6 +2426,34 @@ model PayoutAccount {
   @@map("payout_accounts")
 }
 
+/// Admin-curated catalog of payment methods available per country -- shown
+/// to a user picking what kind of BANK/MOBILE_MONEY account to add (e.g.
+/// "GTBank", "M-Pesa"), each with an optional admin-uploaded logo. This is
+/// reference/display data only (name, logo, description) -- it does NOT
+/// replace Flutterwave's own bankCode resolution for the FLUTTERWAVE
+/// provider path; a catalog entry's `bankCode` is only meaningful for a
+/// free-entry (unvalidated) PayoutAccount, where there is no live
+/// Flutterwave bank list to resolve against. Mirrors the Country/Dialect
+/// seed pattern (see prisma/africa-countries-dialects.ts) but is also
+/// fully admin-editable afterward via /admin/payment-methods, unlike
+/// Country/Dialect which are seed-only today.
+model PaymentMethodCatalog {
+  id           String            @id @default(uuid())
+  countryCode  String // ISO 3166-1 alpha-2, e.g. "NG" -- not a Country FK, matches PayoutAccount.country's own loose string convention
+  type         PayoutAccountType // BANK or MOBILE_MONEY in practice; not DB-constrained to exclude the others
+  name         String // e.g. "GTBank", "M-Pesa"
+  description  String?
+  logoKey      String? // Spaces object key (presigned upload, see PaymentMethodCatalogService) -- null until an admin uploads one
+  bankCode     String? // only meaningful for type=BANK free-entry accounts (see model doc)
+  enabled      Boolean           @default(true)
+  sortOrder    Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([countryCode, type, enabled, sortOrder])
+  @@map("payment_method_catalog")
+}
+
 /// Every distinct, signature-verified Flutterwave webhook payload (funding
 /// side) -- mirrors NowPaymentsIpnEvent's role for the crypto rail, kept as
 /// a separate table (not a shared/generalized provider-discriminated table)

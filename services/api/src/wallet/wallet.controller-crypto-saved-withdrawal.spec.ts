@@ -71,6 +71,7 @@ function setup(overrides?: { payoutAccount?: Record<string, unknown> | null }) {
   });
 
   const platformSettings = {
+    getWithdrawalsEnabledStatus: jest.fn().mockResolvedValue({ enabled: true, message: null }),
     isCryptoWithdrawalsEnabled: jest.fn().mockResolvedValue(true),
     getMinWithdrawalTokens: jest.fn().mockResolvedValue(1),
     getMinWalletBalanceTokens: jest.fn().mockResolvedValue(0),

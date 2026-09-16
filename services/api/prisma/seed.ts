@@ -1,6 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@dialectiva/db';
 import { AFRICA_COUNTRIES, CountrySeed } from './africa-countries-dialects';
+import { PAYMENT_METHOD_CATALOG_SEED } from './payment-method-catalog-seed';
 
 // Fixed word bank for the word-library flow (AGENTS.md "Word library").
 // Adding a word means adding it here and re-running `npm run prisma:seed` --
@@ -212,8 +213,28 @@ async function main() {
       }
     }
 
+    let paymentMethodsSeeded = 0;
+    for (const method of PAYMENT_METHOD_CATALOG_SEED) {
+      const existing = await prisma.paymentMethodCatalog.findFirst({
+        where: { countryCode: method.countryCode, type: method.type, name: method.name },
+        select: { id: true },
+      });
+      if (!existing) {
+        await prisma.paymentMethodCatalog.create({
+          data: {
+            countryCode: method.countryCode,
+            type: method.type,
+            name: method.name,
+            bankCode: method.bankCode,
+            sortOrder: method.sortOrder,
+          },
+        });
+        paymentMethodsSeeded += 1;
+      }
+    }
+
     console.log(
-      `Seeded ${COUNTRIES.length} countries, ${dialects.length} dialects, ${variantsSeeded} dialect variants, added ${wordResult.count} new words, and added ${sentencesSeeded} new sentences.`,
+      `Seeded ${COUNTRIES.length} countries, ${dialects.length} dialects, ${variantsSeeded} dialect variants, added ${wordResult.count} new words, added ${sentencesSeeded} new sentences, and added ${paymentMethodsSeeded} new payment methods.`,
     );
   } finally {
     await prisma.$disconnect();

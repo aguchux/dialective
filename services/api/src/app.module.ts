@@ -41,6 +41,7 @@ import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.modul
 import { CommunityModule } from './community/community.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { WhatsAppValidatorModule } from './whatsapp-validator/whatsapp-validator.module';
+import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
@@ -83,6 +84,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     TrainerProfilesModule,
     CommunityModule,
     IntegrationsModule,
+    PaymentMethodsModule,
     WhatsAppValidatorModule,
   ],
   controllers: [HealthController],

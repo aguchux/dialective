@@ -724,6 +724,20 @@ export interface PayoutAccount {
   createdAt: string;
 }
 
+export interface PaymentMethodCatalogEntry {
+  id: string;
+  countryCode: string;
+  type: PayoutAccountType;
+  name: string;
+  description: string | null;
+  logoUrl: string | null;
+  bankCode: string | null;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface KycVerification {
   id: string;
   userId: string;
@@ -2942,6 +2956,7 @@ export const dialectivaApi = createApi({
     'AssistantThread',
     'AdminAssistantConversations',
     'PayoutAccounts',
+    'PaymentMethodCatalog',
     'Kyc',
     'AdminSettlement',
     'ReferralInvites',
@@ -3874,6 +3889,70 @@ export const dialectivaApi = createApi({
     >({
       query: ({ id, ...body }) => ({ url: `/payout-accounts/${id}`, method: 'DELETE', body }),
       invalidatesTags: ['PayoutAccounts'],
+    }),
+    listPaymentMethods: builder.query<
+      PaymentMethodCatalogEntry[],
+      { countryCode: string; type?: 'BANK' | 'MOBILE_MONEY' }
+    >({
+      query: (params) => ({ url: '/payment-methods', params }),
+      providesTags: ['PaymentMethodCatalog'],
+    }),
+    listAdminPaymentMethods: builder.query<PaymentMethodCatalogEntry[], void>({
+      query: () => '/payment-methods/admin',
+      providesTags: ['PaymentMethodCatalog'],
+    }),
+    createAdminPaymentMethod: builder.mutation<
+      PaymentMethodCatalogEntry,
+      {
+        countryCode: string;
+        type: 'BANK' | 'MOBILE_MONEY';
+        name: string;
+        description?: string;
+        bankCode?: string;
+        sortOrder?: number;
+      }
+    >({
+      query: (body) => ({ url: '/payment-methods/admin', method: 'POST', body }),
+      invalidatesTags: ['PaymentMethodCatalog'],
+    }),
+    updateAdminPaymentMethod: builder.mutation<
+      PaymentMethodCatalogEntry,
+      {
+        id: string;
+        name?: string;
+        description?: string;
+        bankCode?: string;
+        enabled?: boolean;
+        sortOrder?: number;
+      }
+    >({
+      query: ({ id, ...body }) => ({ url: `/payment-methods/admin/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['PaymentMethodCatalog'],
+    }),
+    deleteAdminPaymentMethod: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/payment-methods/admin/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['PaymentMethodCatalog'],
+    }),
+    createAdminPaymentMethodLogoUploadUrl: builder.mutation<
+      { uploadUrl: string; key: string; bucket: string; expiresInSeconds: number },
+      { id: string; contentType: string }
+    >({
+      query: ({ id, contentType }) => ({
+        url: `/payment-methods/admin/${id}/logo/upload-url`,
+        method: 'POST',
+        body: { contentType },
+      }),
+    }),
+    confirmAdminPaymentMethodLogoUpload: builder.mutation<
+      PaymentMethodCatalogEntry,
+      { id: string; key: string }
+    >({
+      query: ({ id, key }) => ({
+        url: `/payment-methods/admin/${id}/logo/confirm`,
+        method: 'POST',
+        body: { key },
+      }),
+      invalidatesTags: ['PaymentMethodCatalog'],
     }),
     createKycSession: builder.mutation<
       { sessionId: string; url: string; provider: 'didit' | 'self' },
@@ -5714,6 +5793,13 @@ export const {
   useRefreshStripePayoutAccountStatusMutation,
   useUpdatePayoutAccountMutation,
   useDeletePayoutAccountMutation,
+  useListPaymentMethodsQuery,
+  useListAdminPaymentMethodsQuery,
+  useCreateAdminPaymentMethodMutation,
+  useUpdateAdminPaymentMethodMutation,
+  useDeleteAdminPaymentMethodMutation,
+  useCreateAdminPaymentMethodLogoUploadUrlMutation,
+  useConfirmAdminPaymentMethodLogoUploadMutation,
   useRequestPayoutAccountDeleteOtpMutation,
   useCreateKycSessionMutation,
   useGetKycStatusQuery,

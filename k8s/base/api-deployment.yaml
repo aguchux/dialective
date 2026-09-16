@@ -133,6 +133,11 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: spaces_p2p_chat_bucket
+            - name: SPACES_PAYMENT_METHOD_LOGO_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_payment_method_logo_bucket
             - name: SPACES_ENDPOINT
               valueFrom:
                 secretKeyRef:
