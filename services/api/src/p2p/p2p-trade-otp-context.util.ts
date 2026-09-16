@@ -15,6 +15,7 @@ export function p2pTradeOtpContextHash(
         type: string;
         tokenAmount: number;
         fiatCurrency: string;
+        paymentMethod: string;
         paymentMethodIds?: string[];
       }
     | { action: 'accept-offer'; offerId: string },

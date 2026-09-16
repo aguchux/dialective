@@ -59,12 +59,7 @@ export class P2PService {
     return serializeSettings(row);
   }
 
-  /**
-   * Display-only context for the offer-creation form: the caller's own
-   * country currency and a "1 token ≈ X <currency>" reference figure, so a
-   * seller can see roughly where the market sits before pricing their
-   * offer above or below it. Never enforced -- fiatAmount stays free-text.
-   */
+  /** Display quotes only; createOffer recalculates every amount server-side. */
   async getReferenceRate(userId: string) {
     const [user, settings, tokenUsdRate] = await Promise.all([
       this.prisma.user.findUnique({
@@ -211,8 +206,25 @@ export class P2PService {
       select: { email: true, phoneNumber: true, phoneVerifiedAt: true },
     });
     if (dto.action === 'create-offer') {
+      if (!dto.type || !dto.tokenAmount || !dto.fiatCurrency || !dto.paymentMethod) {
+        throw new BadRequestException('Complete the offer details before requesting an OTP');
+      }
       const settings = await this.requireMarketEnabled(dto.type!);
-      this.validateTradeInput(settings, dto.tokenAmount!, dto.fiatCurrency!, 'BANK_TRANSFER');
+      this.validateTradeInput(settings, dto.tokenAmount!, dto.fiatCurrency!, dto.paymentMethod!);
+      if (dto.type === P2POfferType.SELL) {
+        if (!dto.paymentMethodIds?.length) {
+          throw new BadRequestException(
+            'At least one seller payment method is required for sell offers',
+          );
+        }
+        const methods = await this.getEnabledPaymentMethods(userId, dto.paymentMethodIds);
+        const currencies = new Set(methods.map((method) => method.currency.toUpperCase()));
+        if (currencies.size !== 1 || !currencies.has(dto.fiatCurrency!.toUpperCase())) {
+          throw new UnprocessableEntityException(
+            'Selected payout accounts must all use the offer currency',
+          );
+        }
+      }
       await this.resolveOfferQuote(userId, dto.tokenAmount!, dto.fiatCurrency!);
     }
     const contextHash =
@@ -222,6 +234,7 @@ export class P2PService {
             type: dto.type!,
             tokenAmount: dto.tokenAmount!,
             fiatCurrency: dto.fiatCurrency!,
+            paymentMethod: dto.paymentMethod!,
             paymentMethodIds: dto.paymentMethodIds,
           })
         : p2pTradeOtpContextHash({ action: 'accept-offer', offerId: dto.offerId! });
@@ -314,6 +327,7 @@ export class P2PService {
         type: dto.type,
         tokenAmount: dto.tokenAmount,
         fiatCurrency: dto.fiatCurrency,
+        paymentMethod: dto.paymentMethod,
         paymentMethodIds: dto.paymentMethodIds,
       }),
       dto.otpRequestId,
@@ -332,7 +346,9 @@ export class P2PService {
     let paymentMethodIds: string[] = [];
     if (dto.type === P2POfferType.SELL) {
       if (!dto.paymentMethodIds || dto.paymentMethodIds.length === 0) {
-        throw new BadRequestException('At least one seller payment method is required for sell offers');
+        throw new BadRequestException(
+          'At least one seller payment method is required for sell offers',
+        );
       }
       const methods = await this.getEnabledPaymentMethods(userId, dto.paymentMethodIds);
       paymentMethodIds = methods.map((method) => method.id);
@@ -487,7 +503,17 @@ export class P2PService {
           await this.prisma.p2PTokenOffer.findMany({
             where: { id: { in: ids } },
             include: {
-              user: { select: { id: true, firstName: true, lastName: true, email: true, phoneVerifiedAt: true, kycStatus: true, country: { select: { code: true, name: true } } } },
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  phoneVerifiedAt: true,
+                  kycStatus: true,
+                  country: { select: { code: true, name: true } },
+                },
+              },
               paymentMethods: { include: { payoutAccount: true } },
             },
           })
@@ -523,7 +549,17 @@ export class P2PService {
       this.prisma.p2PTokenOffer.findMany({
         where,
         include: {
-          user: { select: { id: true, firstName: true, lastName: true, email: true, phoneVerifiedAt: true, kycStatus: true, country: { select: { code: true, name: true } } } },
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phoneVerifiedAt: true,
+              kycStatus: true,
+              country: { select: { code: true, name: true } },
+            },
+          },
           paymentMethods: { include: { payoutAccount: true } },
         },
         orderBy: { [sortColumn]: sortDir },
@@ -585,7 +621,7 @@ export class P2PService {
   // change.
   private buildOfferWhereSql(query: ListOffersDto): Prisma.Sql {
     const clauses: Prisma.Sql[] = [
-      Prisma.sql`o.status = ${(query.status ?? P2POfferStatus.ACTIVE)}::"P2POfferStatus"`,
+      Prisma.sql`o.status = ${query.status ?? P2POfferStatus.ACTIVE}::"P2POfferStatus"`,
     ];
     if (query.type) {
       clauses.push(Prisma.sql`o.type = ${query.type}::"P2POfferType"`);
@@ -1393,6 +1429,9 @@ interface PaymentMethodSummarySource {
   accountNumberMasked: string | null;
   mobileMoneyNetwork: string | null;
   mobileMoneyNumberMasked: string | null;
+  stablecoinAsset: string | null;
+  stablecoinNetwork: string | null;
+  walletAddressMasked: string | null;
   verificationStatus: string;
 }
 
@@ -1403,7 +1442,9 @@ function summarizePaymentMethod(account: PaymentMethodSummarySource) {
     label:
       account.type === 'BANK'
         ? `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`
-        : `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`,
+        : account.type === 'STABLECOIN_WALLET'
+          ? `${account.stablecoinAsset} · ${account.stablecoinNetwork} · ${account.walletAddressMasked}`
+          : `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`,
     verified: account.verificationStatus === 'VERIFIED',
   };
 }
@@ -1451,8 +1492,10 @@ function serializeOffer(offer: any, includePayment: boolean, completedSaleCount?
       'paymentMethods' in offer && Array.isArray(offer.paymentMethods)
         ? offer.paymentMethods
             .map((row: { payoutAccount?: PaymentMethodSummarySource }) => row.payoutAccount)
-            .filter((account: PaymentMethodSummarySource | undefined): account is PaymentMethodSummarySource =>
-              Boolean(account),
+            .filter(
+              (
+                account: PaymentMethodSummarySource | undefined,
+              ): account is PaymentMethodSummarySource => Boolean(account),
             )
             .map(summarizePaymentMethod)
         : [],
@@ -1523,7 +1566,10 @@ function serializeTrade(
   // viewerId is given, only the OTHER party's number is ever revealed --
   // never a viewer's own number back to them, and never either number to
   // a non-participant.
-  const buyer = withPhoneIfViewerIsCounterparty(trade.buyer, !!viewerId && trade.buyerId === viewerId);
+  const buyer = withPhoneIfViewerIsCounterparty(
+    trade.buyer,
+    !!viewerId && trade.buyerId === viewerId,
+  );
   const seller = withPhoneIfViewerIsCounterparty(
     trade.seller,
     !!viewerId && trade.sellerId === viewerId,
@@ -1533,11 +1579,8 @@ function serializeTrade(
       ? (() => {
           // Never let the raw encrypted blobs leave the backend -- destructure
           // them out rather than spreading the whole row through.
-          const {
-            accountNumberEncryptedJson,
-            mobileMoneyNumberEncryptedJson,
-            ...rest
-          } = trade.sellerPaymentMethod;
+          const { accountNumberEncryptedJson, mobileMoneyNumberEncryptedJson, ...rest } =
+            trade.sellerPaymentMethod;
           return {
             ...rest,
             accountNumber: decryptForParticipant(accountNumberEncryptedJson),

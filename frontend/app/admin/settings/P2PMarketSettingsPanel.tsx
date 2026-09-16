@@ -21,8 +21,8 @@ export function P2PMarketSettingsPanel() {
     offerExpiryMinutes: 1440,
     maxOpenOffersPerUser: 5,
     maxOpenTradesPerUser: 3,
-    allowedFiatCurrencies: 'NGN',
-    allowedPaymentMethods: 'BANK_TRANSFER',
+    allowedFiatCurrencies: 'NGN,USD,USDT,USDC',
+    allowedPaymentMethods: 'BANK_TRANSFER,MOBILE_MONEY,STABLECOIN',
     disputeWindowMinutes: 1440,
     adminOtpRequiredForDisputes: true,
   });
@@ -158,7 +158,7 @@ export function P2PMarketSettingsPanel() {
           }
         />
         <Field
-          label="Allowed fiat currencies"
+          label="Allowed settlement currencies"
           value={form.allowedFiatCurrencies}
           onChange={(allowedFiatCurrencies) =>
             setForm((current) => ({ ...current, allowedFiatCurrencies }))

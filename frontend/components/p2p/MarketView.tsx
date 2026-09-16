@@ -100,6 +100,12 @@ export function MarketView() {
   const usdAmount = referenceRate?.tokenUsdPrice
     ? (Number(tokenAmount) * Number(referenceRate.tokenUsdPrice)).toFixed(2)
     : '';
+  const offerPaymentMethod =
+    primaryMethod?.type === 'STABLECOIN_WALLET' || ['USDT', 'USDC'].includes(fiatCurrency)
+      ? 'STABLECOIN'
+      : primaryMethod?.type === 'MOBILE_MONEY'
+        ? 'MOBILE_MONEY'
+        : 'BANK_TRANSFER';
 
   // Country currency is the default whenever it has an enabled conversion quote.
   useEffect(() => {
@@ -113,9 +119,7 @@ export function MarketView() {
   useEffect(() => {
     if (!createOpen || offerType !== 'SELL' || currencyPayoutAccounts.length > 0) return;
     const firstSupportedAccount = payoutAccounts.find((account) =>
-      availableCurrencies.some(
-        (quote) => quote.currencyCode === account.currency.toUpperCase(),
-      ),
+      availableCurrencies.some((quote) => quote.currencyCode === account.currency.toUpperCase()),
     );
     if (firstSupportedAccount) setFiatCurrency(firstSupportedAccount.currency.toUpperCase());
   }, [availableCurrencies, createOpen, currencyPayoutAccounts.length, offerType, payoutAccounts]);
@@ -130,6 +134,7 @@ export function MarketView() {
           type: offerType,
           tokenAmount: Number(tokenAmount),
           fiatCurrency,
+          paymentMethod: offerPaymentMethod,
           paymentMethodIds: offerType === 'SELL' ? offerPaymentMethodIds : undefined,
         }).unwrap();
         setOfferOtpRequestId(otp.otpRequestId);
@@ -139,11 +144,8 @@ export function MarketView() {
         type: offerType,
         tokenAmount: Number(tokenAmount),
         fiatCurrency,
-        paymentMethod: 'BANK_TRANSFER',
-        paymentMethodIds:
-          offerType === 'SELL'
-            ? offerPaymentMethodIds
-            : undefined,
+        paymentMethod: offerPaymentMethod,
+        paymentMethodIds: offerType === 'SELL' ? offerPaymentMethodIds : undefined,
         ...(offerOtpRequestId
           ? { otpRequestId: offerOtpRequestId, code: offerOtpCode.trim() }
           : {}),
@@ -291,9 +293,8 @@ export function MarketView() {
                 </label>
                 {activeQuote && (
                   <p className="text-xs text-muted">
-                    System rate: 1 DL ≈{' '}
-                    {Number(activeQuote.tokenReferencePrice).toLocaleString()} {fiatCurrency}. The
-                    final amount is calculated automatically.
+                    System rate: 1 DL ≈ {Number(activeQuote.tokenReferencePrice).toLocaleString()}{' '}
+                    {fiatCurrency}. The final amount is calculated automatically.
                   </p>
                 )}
                 <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -320,8 +321,7 @@ export function MarketView() {
                           (quote) =>
                             offerType === 'BUY' ||
                             payoutAccounts.some(
-                              (account) =>
-                                account.currency.toUpperCase() === quote.currencyCode,
+                              (account) => account.currency.toUpperCase() === quote.currencyCode,
                             ),
                         )
                         .map((quote) => (
@@ -340,6 +340,14 @@ export function MarketView() {
                     Add a payout account in Profile before posting a sell offer.
                   </p>
                 )}
+                {offerType === 'SELL' &&
+                  payoutAccounts.length > 0 &&
+                  currencyPayoutAccounts.length === 0 && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                      None of your payout accounts can receive {fiatCurrency}. Select another
+                      currency or add a matching payout account.
+                    </p>
+                  )}
                 {offerType === 'SELL' && currencyPayoutAccounts.length > 0 && (
                   <fieldset className="grid gap-1.5">
                     <legend className="text-sm font-bold">
@@ -350,7 +358,9 @@ export function MarketView() {
                         const label =
                           account.type === 'BANK'
                             ? `${account.bankName ?? account.bankCode} · ${account.accountNumberMasked}`
-                            : `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`;
+                            : account.type === 'STABLECOIN_WALLET'
+                              ? `${account.stablecoinAsset} · ${account.stablecoinNetwork} · ${account.walletAddressMasked}`
+                              : `${account.mobileMoneyNetwork} · ${account.mobileMoneyNumberMasked}`;
                         const checked = selectedPayoutAccountIds.length
                           ? selectedPayoutAccountIds.includes(account.id)
                           : account.id === primaryMethod?.id;
@@ -403,9 +413,11 @@ export function MarketView() {
                   className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={
                     marketDisabled ||
-                    (offerType === 'SELL' && payoutAccounts.length === 0) ||
+                    (offerType === 'SELL' && !primaryMethod) ||
                     !activeQuote ||
                     !fiatAmount ||
+                    !Number.isFinite(Number(tokenAmount)) ||
+                    Number(tokenAmount) <= 0 ||
                     (Boolean(offerOtpRequestId) && !offerOtpCode.trim())
                   }
                   pending={offerSaving || tradeOtpSending}

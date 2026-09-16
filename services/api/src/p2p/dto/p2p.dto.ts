@@ -15,6 +15,7 @@ import {
   Matches,
   Max,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { P2PDisputeStatus, P2POfferStatus, P2POfferType, P2PTradeStatus } from '@dialectiva/db';
@@ -174,18 +175,24 @@ export class RequestP2pTradeOtpDto {
   action!: 'create-offer' | 'accept-offer';
 
   // create-offer context
-  @IsOptional()
+  @ValidateIf((dto: RequestP2pTradeOtpDto) => dto.action === 'create-offer')
   @IsIn([P2POfferType.SELL, P2POfferType.BUY])
   type?: P2POfferType;
 
-  @IsOptional()
+  @ValidateIf((dto: RequestP2pTradeOtpDto) => dto.action === 'create-offer')
   @IsNumber()
   @Min(0.00000001)
   tokenAmount?: number;
 
-  @IsOptional()
+  @ValidateIf((dto: RequestP2pTradeOtpDto) => dto.action === 'create-offer')
   @IsString()
+  @IsNotEmpty()
   fiatCurrency?: string;
+
+  @ValidateIf((dto: RequestP2pTradeOtpDto) => dto.action === 'create-offer')
+  @IsString()
+  @IsNotEmpty()
+  paymentMethod?: string;
 
   @IsOptional()
   @IsArray()
