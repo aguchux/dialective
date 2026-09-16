@@ -18,6 +18,7 @@ import {
   useGetAdminCountriesQuery,
   useGetAdminDialectsQuery,
   useResetCountryExchangeRateMutation,
+  useRefreshExchangeRatesNowMutation,
   useUpdateCountryMutation,
 } from '@/store/api';
 
@@ -61,11 +62,28 @@ function CountriesSection({
 }) {
   const [deleteCountry] = useDeleteCountryMutation();
   const [updateCountry] = useUpdateCountryMutation();
+  const [refreshExchangeRatesNow, { isLoading: isRefreshingRates }] =
+    useRefreshExchangeRatesNowMutation();
   const [error, setError] = useState<string | null>(null);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
   const [addDialectFor, setAddDialectFor] = useState<AdminCountry | null>(null);
   const [editingRateFor, setEditingRateFor] = useState<AdminCountry | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  async function handleRefreshExchangeRates() {
+    setError(null);
+    setRefreshMessage(null);
+    try {
+      const result = await refreshExchangeRatesNow().unwrap();
+      setRefreshMessage(
+        `Updated ${result.updated} of ${result.total} live-rate countries` +
+          (result.skipped > 0 ? ` (${result.skipped} skipped -- currency not in FX API response)` : ''),
+      );
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to refresh exchange rates.'));
+    }
+  }
 
   async function handleDelete(id: string) {
     setError(null);
@@ -194,8 +212,22 @@ function CountriesSection({
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl leading-snug">Countries</h2>
-        <AddCountryDialog />
+        <div className="flex flex-wrap gap-2">
+          <ActionButton
+            className={secondaryButtonClass}
+            onClick={handleRefreshExchangeRates}
+            pending={isRefreshingRates}
+            pendingLabel="Refreshing"
+            title="Fetch live rates now instead of waiting for the next scheduled fx-rate-job run"
+            type="button"
+          >
+            Refresh exchange rates now
+          </ActionButton>
+          <AddCountryDialog />
+        </div>
       </div>
+
+      {refreshMessage && <p className="leading-relaxed text-muted">{refreshMessage}</p>}
 
       {error && (
         <p className="leading-relaxed text-danger" role="alert">

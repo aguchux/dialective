@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Logger,
   NotFoundException,
   Param,
   Patch,
@@ -25,6 +26,7 @@ import { CreateDialectDto } from './dto/create-dialect.dto';
 import { UpdateDialectDto } from './dto/update-dialect.dto';
 import { CreateDialectVariantDto } from './dto/create-dialect-variant.dto';
 import { UpdateDialectVariantDto } from './dto/update-dialect-variant.dto';
+import { fetchAllFxRatesOrNull, fetchLiveRateOrNull } from './exchange-rate-fetch.util';
 
 const PRISMA_UNIQUE_VIOLATION = 'P2002';
 const PRISMA_FK_RESTRICT = 'P2003';
@@ -39,6 +41,8 @@ const PRISMA_NOT_FOUND = 'P2025';
  */
 @Controller('geo')
 export class GeoController {
+  private readonly logger = new Logger(GeoController.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly platformSettings: PlatformSettingsService,
@@ -214,19 +218,63 @@ export class GeoController {
     }
   }
 
-  /** Flips a MANUAL-override country back to LIVE -- fx-rate-job resumes overwriting its rate on the next run. */
+  /**
+   * Flips a MANUAL-override country back to LIVE and immediately fetches its
+   * current rate, rather than leaving the stale MANUAL-era rate in place
+   * until fx-rate-job's next scheduled run (up to 24h later).
+   */
   @Post('admin/countries/:id/reset-exchange-rate')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async resetExchangeRateToLive(@Param('id') id: string) {
     try {
+      const country = await this.prisma.country.findUniqueOrThrow({
+        where: { id },
+        select: { currencyCode: true },
+      });
+      const liveRate = await fetchLiveRateOrNull(country.currencyCode, this.logger);
       return await this.prisma.country.update({
         where: { id },
-        data: { exchangeRateSource: 'LIVE' },
+        data: {
+          exchangeRateSource: 'LIVE',
+          ...(liveRate !== null && { usdExchangeRate: liveRate, exchangeRateUpdatedAt: new Date() }),
+        },
       });
     } catch (err) {
       throw mapPrismaError(err, undefined, 'Country not found');
     }
+  }
+
+  /** On-demand equivalent of fx-rate-job's daily run, triggerable from the admin UI instead of waiting for the next cron run. */
+  @Post('admin/countries/refresh-exchange-rates')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async refreshExchangeRatesNow() {
+    const countries = await this.prisma.country.findMany({
+      where: { exchangeRateSource: 'LIVE' },
+      select: { id: true, currencyCode: true },
+    });
+    const rates = await fetchAllFxRatesOrNull(this.logger);
+    if (!rates) {
+      throw new UnprocessableEntityException('Live FX rate provider is unavailable right now');
+    }
+
+    const now = new Date();
+    let updated = 0;
+    let skipped = 0;
+    for (const country of countries) {
+      const rate = country.currencyCode === 'USD' ? 1 : rates[country.currencyCode];
+      if (rate === undefined) {
+        skipped += 1;
+        continue;
+      }
+      await this.prisma.country.update({
+        where: { id: country.id },
+        data: { usdExchangeRate: rate, exchangeRateUpdatedAt: now },
+      });
+      updated += 1;
+    }
+    return { updated, skipped, total: countries.length };
   }
 
   @Delete('admin/countries/:id')

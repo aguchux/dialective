@@ -5143,6 +5143,13 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/geo/admin/countries/${id}/reset-exchange-rate`, method: 'POST' }),
       invalidatesTags: ['AdminCountries'],
     }),
+    refreshExchangeRatesNow: builder.mutation<
+      { updated: number; skipped: number; total: number },
+      void
+    >({
+      query: () => ({ url: '/geo/admin/countries/refresh-exchange-rates', method: 'POST' }),
+      invalidatesTags: ['AdminCountries'],
+    }),
     getAdminDialects: builder.query<AdminDialect[], void>({
       query: () => '/geo/admin/dialects',
       providesTags: ['AdminDialects'],
@@ -5997,6 +6004,7 @@ export const {
   useUpdateCountryMutation,
   useDeleteCountryMutation,
   useResetCountryExchangeRateMutation,
+  useRefreshExchangeRatesNowMutation,
   useGetAdminDialectsQuery,
   useGetAdminDialectVariantsQuery,
   useGetAllAdminDialectVariantsQuery,
