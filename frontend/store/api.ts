@@ -1444,6 +1444,40 @@ export interface ManualPhoneVerificationPage {
   totalPages: number;
 }
 
+export interface AdminWhatsAppValidationRow {
+  id: string;
+  phoneNumber: string;
+  status: WhatsAppValidationRequestStatus;
+  feeTokenAmount: string;
+  attempts: number;
+  maxAttempts: number;
+  claimedAt: string | null;
+  verifiedAt: string | null;
+  rejectedAt: string | null;
+  expiresAt: string;
+  createdAt: string;
+  requester: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  };
+  claimedByValidator: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
+}
+
+export interface AdminWhatsAppValidationPage {
+  items: AdminWhatsAppValidationRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface EarningsChart {
   range: EarningsChartRange;
   buckets: { label: string; amount: string }[];
@@ -4549,6 +4583,42 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/auth/admin/phone-verifications/${id}/reject`, method: 'POST' }),
       invalidatesTags: ['Users'],
     }),
+    // Admin oversight of the peer WhatsApp Validator flow -- who requested,
+    // who claimed, and current status platform-wide. Separate from the
+    // requester/validator-facing WhatsAppValidator endpoints above.
+    listAdminWhatsAppValidations: builder.query<
+      AdminWhatsAppValidationPage,
+      {
+        status?: WhatsAppValidationRequestStatus;
+        page?: number;
+        pageSize?: number;
+        search?: string;
+        sortBy?: 'requester' | 'claimant' | 'phone' | 'status' | 'createdAt';
+        sortOrder?: 'asc' | 'desc';
+      } | void
+    >({
+      query: (params) => ({ url: '/admin/whatsapp-validator/requests', params: params ?? undefined }),
+      providesTags: ['WhatsAppValidator'],
+    }),
+    verifyAdminWhatsAppValidation: builder.mutation<
+      AdminWhatsAppValidationRow,
+      { id: string; code: string }
+    >({
+      query: ({ id, code }) => ({
+        url: `/admin/whatsapp-validator/requests/${id}/verify`,
+        method: 'POST',
+        body: { code },
+      }),
+      invalidatesTags: ['WhatsAppValidator'],
+    }),
+    forceVerifyAdminWhatsAppValidation: builder.mutation<AdminWhatsAppValidationRow, string>({
+      query: (id) => ({ url: `/admin/whatsapp-validator/requests/${id}/force-verify`, method: 'POST' }),
+      invalidatesTags: ['WhatsAppValidator'],
+    }),
+    rejectAdminWhatsAppValidation: builder.mutation<AdminWhatsAppValidationRow, string>({
+      query: (id) => ({ url: `/admin/whatsapp-validator/requests/${id}/reject`, method: 'POST' }),
+      invalidatesTags: ['WhatsAppValidator'],
+    }),
     listAdminSmsContacts: builder.query<
       AdminSmsContactsPage,
       { page?: number; pageSize?: number; search?: string } | void
@@ -5660,6 +5730,10 @@ export const {
   useVerifyAdminManualPhoneVerificationMutation,
   useConfirmAdminManualPhoneVerificationMutation,
   useRejectAdminManualPhoneVerificationMutation,
+  useListAdminWhatsAppValidationsQuery,
+  useVerifyAdminWhatsAppValidationMutation,
+  useForceVerifyAdminWhatsAppValidationMutation,
+  useRejectAdminWhatsAppValidationMutation,
   useListAdminSmsContactsQuery,
   useListAdminSmsMessagesQuery,
   useSendAdminSmsMutation,

@@ -60,7 +60,9 @@ describe('WhatsAppValidatorService', () => {
         update: jest.fn().mockResolvedValue({}),
       },
       ledgerEntry: { create: jest.fn() },
-      $transaction: jest.fn(async (fn: (tx: any) => unknown) => fn(prisma)),
+      $transaction: jest.fn(async (arg: unknown) =>
+        Array.isArray(arg) ? Promise.all(arg) : (arg as (tx: any) => unknown)(prisma),
+      ),
     };
     mail = {
       sendPhoneVerifiedEmail: jest.fn().mockResolvedValue(undefined),
@@ -549,6 +551,127 @@ describe('WhatsAppValidatorService', () => {
     it('throws when the requester has no active request', async () => {
       prisma.whatsAppValidationRequest.findFirst.mockResolvedValue(null);
       await expect(service.cancelRequest(requesterId)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('listAdmin', () => {
+    it('returns a paginated, mapped platform-wide list', async () => {
+      prisma.whatsAppValidationRequest.count.mockResolvedValue(1);
+      prisma.whatsAppValidationRequest.findMany.mockResolvedValue([
+        {
+          ...baseRequest,
+          requester: { id: requesterId, email: 'req@example.com', firstName: 'Chidi', lastName: 'Okoro' },
+          claimedByValidator: { id: validatorId, email: 'val@example.com', firstName: 'Ada', lastName: 'Lovelace' },
+        },
+      ]);
+      const result = await service.listAdmin({ page: 1, pageSize: 20 });
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].requester.email).toBe('req@example.com');
+      expect(result.items[0].claimedByValidator?.email).toBe('val@example.com');
+      expect(result.total).toBe(1);
+      expect(result.totalPages).toBe(1);
+    });
+
+    it('filters by status when provided', async () => {
+      prisma.whatsAppValidationRequest.count.mockResolvedValue(0);
+      prisma.whatsAppValidationRequest.findMany.mockResolvedValue([]);
+      await service.listAdmin({ page: 1, pageSize: 20, status: 'VERIFIED' as never });
+      expect(prisma.whatsAppValidationRequest.count).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ status: 'VERIFIED' }) }),
+      );
+    });
+  });
+
+  describe('adminVerify', () => {
+    it('verifies a CLAIMED request and pays the claimant', async () => {
+      const result = await service.adminVerify(requestId, code);
+      expect(result.status).toBe('VERIFIED');
+      expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: requestId, status: 'CLAIMED' },
+          data: expect.objectContaining({ status: 'VERIFIED' }),
+        }),
+      );
+      // Fee still moves to the claimant validator on an admin-assisted verify.
+      expect(prisma.wallet.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: validatorId } }));
+    });
+
+    it('verifies a PENDING (unclaimed) request without any payout', async () => {
+      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'PENDING',
+        claimedByValidatorId: null,
+      });
+      const result = await service.adminVerify(requestId, code);
+      expect(result.status).toBe('VERIFIED');
+      expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: requestId, status: 'PENDING' } }),
+      );
+      expect(prisma.wallet.upsert).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid code and increments attempts', async () => {
+      await expect(service.adminVerify(requestId, '000000')).rejects.toThrow(UnauthorizedException);
+      expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { attempts: { increment: 1 } } }),
+      );
+    });
+
+    it('rejects a request that is not PENDING or CLAIMED', async () => {
+      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({ ...baseRequest, status: 'VERIFIED' });
+      await expect(service.adminVerify(requestId, code)).rejects.toThrow(UnprocessableEntityException);
+    });
+  });
+
+  describe('adminForceVerify', () => {
+    it('force-verifies a CLAIMED request without checking the code, still paying the claimant', async () => {
+      const result = await service.adminForceVerify(requestId);
+      expect(result.status).toBe('VERIFIED');
+      expect(prisma.wallet.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: validatorId } }));
+    });
+
+    it('force-verifies a PENDING request with no payout', async () => {
+      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'PENDING',
+        claimedByValidatorId: null,
+      });
+      await service.adminForceVerify(requestId);
+      expect(prisma.wallet.upsert).not.toHaveBeenCalled();
+    });
+
+    it('throws when the request has expired', async () => {
+      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+      await expect(service.adminForceVerify(requestId)).rejects.toThrow(UnprocessableEntityException);
+    });
+  });
+
+  describe('adminReject', () => {
+    it('rejects a CLAIMED request to a terminal REJECTED state, clearing the claim', async () => {
+      const result = await service.adminReject(requestId);
+      expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: requestId, status: 'CLAIMED' },
+          data: expect.objectContaining({ status: 'REJECTED', claimedByValidatorId: null }),
+        }),
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('rejects a PENDING request too', async () => {
+      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({ ...baseRequest, status: 'PENDING' });
+      await service.adminReject(requestId);
+      expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: requestId, status: 'PENDING' } }),
+      );
+    });
+
+    it('throws when the request is already terminal', async () => {
+      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({ ...baseRequest, status: 'VERIFIED' });
+      await expect(service.adminReject(requestId)).rejects.toThrow(UnprocessableEntityException);
     });
   });
 });

@@ -345,20 +345,46 @@ export class WhatsAppValidatorService {
       throw new UnauthorizedException('Invalid verification code');
     }
 
+    await this.completeVerification(request, WhatsAppValidationRequestStatus.CLAIMED, validatorUserId);
+
+    const updated = await this.prisma.whatsAppValidationRequest.findUniqueOrThrow({
+      where: { id: requestId },
+      include: { requester: { select: { firstName: true, lastName: true } } },
+    });
+    return this.toValidatorPublic(updated);
+  }
+
+  /**
+   * Shared by verify() and the admin overrides below -- atomically flips the
+   * request to VERIFIED (racing a reject/claim-expiry finds zero rows and
+   * surfaces as a conflict, same idiom as completeManualPhoneVerification),
+   * pays the fee out to `payoutToUserId` when set (the peer who actually
+   * fulfilled it -- see adminVerify/adminForceVerify's doc comments for why
+   * an admin override still pays a real claimant), and sets
+   * user.phoneVerifiedAt. `fromStatus` is PENDING for an admin bypassing an
+   * unclaimed request, CLAIMED for every other path.
+   */
+  private async completeVerification(
+    request: {
+      id: string;
+      requesterId: string;
+      phoneNumber: string;
+      feeTokenAmount: Prisma.Decimal;
+    },
+    fromStatus: WhatsAppValidationRequestStatus,
+    payoutToUserId: string | null,
+  ): Promise<void> {
     try {
       await this.prisma.$transaction(async (tx) => {
-        // where: { status: CLAIMED } makes this claim atomic -- if a
-        // reject or claim-expiry races this call, only one update actually
-        // matches, same idiom as completeManualPhoneVerification.
         const claim = await tx.whatsAppValidationRequest.updateMany({
-          where: { id: requestId, status: WhatsAppValidationRequestStatus.CLAIMED },
+          where: { id: request.id, status: fromStatus },
           data: { status: WhatsAppValidationRequestStatus.VERIFIED, verifiedAt: new Date() },
         });
         if (claim.count === 0) {
-          throw new UnprocessableEntityException('This request is no longer claimed');
+          throw new UnprocessableEntityException('This request is no longer in a verifiable state');
         }
 
-        if (request.feeTokenAmount.gt(0)) {
+        if (request.feeTokenAmount.gt(0) && payoutToUserId) {
           const requesterWallet = await tx.wallet.upsert({
             where: { userId: request.requesterId },
             create: { userId: request.requesterId },
@@ -378,13 +404,13 @@ export class WhatsAppValidatorService {
               walletId: requesterWallet.id,
               type: LedgerEntryType.WHATSAPP_VALIDATION_FEE,
               amount: request.feeTokenAmount.mul(-1),
-              reference: requestId,
+              reference: request.id,
             },
           });
 
           const validatorWallet = await tx.wallet.upsert({
-            where: { userId: validatorUserId },
-            create: { userId: validatorUserId },
+            where: { userId: payoutToUserId },
+            create: { userId: payoutToUserId },
             update: {},
           });
           await tx.wallet.update({
@@ -396,7 +422,7 @@ export class WhatsAppValidatorService {
               walletId: validatorWallet.id,
               type: LedgerEntryType.WHATSAPP_VALIDATION_PAYOUT,
               amount: request.feeTokenAmount,
-              reference: requestId,
+              reference: request.id,
             },
           });
         }
@@ -426,12 +452,6 @@ export class WhatsAppValidatorService {
         // swallow -- see doc comment above
       }
     }
-
-    const updated = await this.prisma.whatsAppValidationRequest.findUniqueOrThrow({
-      where: { id: requestId },
-      include: { requester: { select: { firstName: true, lastName: true } } },
-    });
-    return this.toValidatorPublic(updated);
   }
 
   /** Claimant-only. Returns the request to the pool rather than a terminal REJECTED state -- a peer declining isn't necessarily fraud, it might just mean the requester never sent the code, and another validator may still be able to fulfill it before it expires. */
@@ -524,6 +544,206 @@ export class WhatsAppValidatorService {
       throw new ConflictException('This request can no longer be cancelled');
     }
     return { cancelled: true };
+  }
+
+  // --- Admin -----------------------------------------------------------------
+
+  /**
+   * Platform-wide list across every requester and validator -- unlike
+   * listPending (validator-scoped, subscription-gated, PENDING-only), this
+   * is admin's oversight view of who verified whom, following
+   * AuthService.listManualPhoneVerificationRequests's pagination/search/sort
+   * shape so the admin UI can reuse the same table conventions.
+   */
+  async listAdmin(params: {
+    status?: WhatsAppValidationRequestStatus;
+    page: number;
+    pageSize: number;
+    search?: string;
+    sortBy?: 'requester' | 'claimant' | 'phone' | 'status' | 'createdAt';
+    sortOrder?: 'asc' | 'desc';
+  }) {
+    await this.expireStale();
+    const search = params.search?.trim();
+    const where: Prisma.WhatsAppValidationRequestWhereInput = {
+      ...(params.status ? { status: params.status } : {}),
+      ...(search
+        ? {
+            OR: [
+              { phoneNumber: { contains: search, mode: 'insensitive' as const } },
+              { requester: { email: { contains: search, mode: 'insensitive' as const } } },
+              { requester: { firstName: { contains: search, mode: 'insensitive' as const } } },
+              { requester: { lastName: { contains: search, mode: 'insensitive' as const } } },
+              { claimedByValidator: { email: { contains: search, mode: 'insensitive' as const } } },
+              { claimedByValidator: { firstName: { contains: search, mode: 'insensitive' as const } } },
+              { claimedByValidator: { lastName: { contains: search, mode: 'insensitive' as const } } },
+            ],
+          }
+        : {}),
+    };
+    const direction = params.sortOrder ?? 'desc';
+    const orderBy: Prisma.WhatsAppValidationRequestOrderByWithRelationInput =
+      params.sortBy === 'requester'
+        ? { requester: { firstName: direction } }
+        : params.sortBy === 'claimant'
+          ? { claimedByValidator: { firstName: direction } }
+          : params.sortBy === 'phone'
+            ? { phoneNumber: direction }
+            : params.sortBy === 'status'
+              ? { status: direction }
+              : { createdAt: direction };
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.whatsAppValidationRequest.count({ where }),
+      this.prisma.whatsAppValidationRequest.findMany({
+        where,
+        orderBy,
+        skip: (params.page - 1) * params.pageSize,
+        take: params.pageSize,
+        include: {
+          requester: { select: { id: true, email: true, firstName: true, lastName: true } },
+          claimedByValidator: { select: { id: true, email: true, firstName: true, lastName: true } },
+        },
+      }),
+    ]);
+
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        phoneNumber: item.phoneNumber,
+        status: item.status,
+        feeTokenAmount: item.feeTokenAmount.toString(),
+        attempts: item.attempts,
+        maxAttempts: item.maxAttempts,
+        claimedAt: item.claimedAt,
+        verifiedAt: item.verifiedAt,
+        rejectedAt: item.rejectedAt,
+        expiresAt: item.expiresAt,
+        createdAt: item.createdAt,
+        requester: item.requester,
+        claimedByValidator: item.claimedByValidator,
+      })),
+      page: params.page,
+      pageSize: params.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / params.pageSize)),
+    };
+  }
+
+  /**
+   * Admin enters the code the requester/validator relayed to them --
+   * equivalent to verify(), but callable by an admin regardless of who
+   * claimed it, and pays the fee to whichever validator currently holds the
+   * claim (they did the legwork of contacting the requester; the admin is
+   * unblocking/confirming, not replacing them). No payout when the request
+   * is still unclaimed -- there is no peer to pay.
+   */
+  async adminVerify(requestId: string, rawCode: string) {
+    const code = rawCode.trim().toUpperCase();
+    await this.expireStale();
+    const request = await this.prisma.whatsAppValidationRequest.findUnique({ where: { id: requestId } });
+    if (!request) throw new NotFoundException('WhatsApp validation request not found');
+    if (
+      request.status !== WhatsAppValidationRequestStatus.PENDING &&
+      request.status !== WhatsAppValidationRequestStatus.CLAIMED
+    ) {
+      throw new UnprocessableEntityException('This request is not awaiting verification');
+    }
+    if (request.expiresAt < new Date()) {
+      throw new UnprocessableEntityException('This request has expired');
+    }
+    if (hashOtpCode(code) !== request.otpHash) {
+      await this.prisma.whatsAppValidationRequest.updateMany({
+        where: { id: requestId, status: request.status },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new UnauthorizedException('Invalid verification code');
+    }
+
+    await this.completeVerification(request, request.status, request.claimedByValidatorId);
+    return this.getAdminRow(requestId);
+  }
+
+  /**
+   * Force-verifies without checking the code at all -- admin's bypass for a
+   * requester who reached them through another channel (support, WhatsApp
+   * DM to the platform, etc.). Same "still pays the claimant if one exists"
+   * rule as adminVerify. Confirmation friction (typing a literal passphrase)
+   * lives client-side, same pattern as the old ManualPhoneVerificationRequest
+   * "verify without code" dialog.
+   */
+  async adminForceVerify(requestId: string) {
+    await this.expireStale();
+    const request = await this.prisma.whatsAppValidationRequest.findUnique({ where: { id: requestId } });
+    if (!request) throw new NotFoundException('WhatsApp validation request not found');
+    if (
+      request.status !== WhatsAppValidationRequestStatus.PENDING &&
+      request.status !== WhatsAppValidationRequestStatus.CLAIMED
+    ) {
+      throw new UnprocessableEntityException('This request is not awaiting verification');
+    }
+    if (request.expiresAt < new Date()) {
+      throw new UnprocessableEntityException('This request has expired');
+    }
+
+    await this.completeVerification(request, request.status, request.claimedByValidatorId);
+    return this.getAdminRow(requestId);
+  }
+
+  /**
+   * Admin-terminal reject -- unlike the peer reject() (which just releases
+   * a claim back to PENDING so another validator can try), an admin
+   * rejecting ends the request for good. No fee has ever been charged at
+   * this point (see verify()), so there's nothing to refund.
+   */
+  async adminReject(requestId: string) {
+    const request = await this.prisma.whatsAppValidationRequest.findUnique({ where: { id: requestId } });
+    if (!request) throw new NotFoundException('WhatsApp validation request not found');
+    if (
+      request.status !== WhatsAppValidationRequestStatus.PENDING &&
+      request.status !== WhatsAppValidationRequestStatus.CLAIMED
+    ) {
+      throw new UnprocessableEntityException('This request can no longer be rejected');
+    }
+    const rejected = await this.prisma.whatsAppValidationRequest.updateMany({
+      where: { id: requestId, status: request.status },
+      data: {
+        status: WhatsAppValidationRequestStatus.REJECTED,
+        rejectedAt: new Date(),
+        claimedByValidatorId: null,
+        claimedAt: null,
+        claimExpiresAt: null,
+      },
+    });
+    if (rejected.count === 0) {
+      throw new ConflictException('This request can no longer be rejected');
+    }
+    return this.getAdminRow(requestId);
+  }
+
+  private async getAdminRow(requestId: string) {
+    const row = await this.prisma.whatsAppValidationRequest.findUniqueOrThrow({
+      where: { id: requestId },
+      include: {
+        requester: { select: { id: true, email: true, firstName: true, lastName: true } },
+        claimedByValidator: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+    });
+    return {
+      id: row.id,
+      phoneNumber: row.phoneNumber,
+      status: row.status,
+      feeTokenAmount: row.feeTokenAmount.toString(),
+      attempts: row.attempts,
+      maxAttempts: row.maxAttempts,
+      claimedAt: row.claimedAt,
+      verifiedAt: row.verifiedAt,
+      rejectedAt: row.rejectedAt,
+      expiresAt: row.expiresAt,
+      createdAt: row.createdAt,
+      requester: row.requester,
+      claimedByValidator: row.claimedByValidator,
+    };
   }
 
   private async expireStale(now = new Date()): Promise<void> {
