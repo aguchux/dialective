@@ -454,27 +454,50 @@ export class SelfHostedKycService {
   ): Promise<BotFindings> {
     const order = (await this.settings.getSelfHostedKycBotProviderOrder()) as LlmProviderKey[];
 
-    let extractedFields: BotFindings['extractedFields'] = null;
+    let documentBuffer: Buffer | null = null;
     try {
-      const documentBuffer = await this.downloadEvidence(documentFront);
-      const text = await this.llm.describeImage(
-        documentBuffer.toString('base64'),
-        CAPTURED_IMAGE_CONTENT_TYPE,
-        buildOcrPrompt(documentType),
-        order,
-      );
-      extractedFields = parseOcrResponse(text);
+      documentBuffer = await this.downloadEvidence(documentFront);
     } catch (err) {
-      // OCR is reviewer-facing only (see BotFindings.extractedFields doc
-      // comment) -- a failure here must never abort the rest of
-      // evaluate(), just leave the fields null for the admin to read off
-      // the stored image themselves.
-      this.logger.warn(`DLKYC document OCR failed, leaving fields blank: ${String(err)}`);
+      this.logger.warn(`DLKYC could not download document evidence for bot check: ${String(err)}`);
     }
 
+    let extractedFields: BotFindings['extractedFields'] = null;
+    if (documentBuffer) {
+      try {
+        const text = await this.llm.describeImage(
+          documentBuffer.toString('base64'),
+          CAPTURED_IMAGE_CONTENT_TYPE,
+          buildOcrPrompt(documentType),
+          order,
+        );
+        extractedFields = parseOcrResponse(text);
+      } catch (err) {
+        // OCR is reviewer-facing only (see BotFindings.extractedFields doc
+        // comment) -- a failure here must never abort the rest of
+        // evaluate(), just leave the fields null for the admin to read off
+        // the stored image themselves.
+        this.logger.warn(`DLKYC document OCR failed, leaving fields blank: ${String(err)}`);
+      }
+    }
+
+    // Plausibility check now looks at the actual document image (it used to
+    // call normalize() with a text-only prompt describing nothing, so it
+    // was reasoning blind about a document it never saw) -- this is what
+    // lets it flag a selfie/live-person photo submitted as the "document"
+    // photo, which the deterministic face-match score alone cannot catch
+    // (a selfie-as-document spoof tends to score a HIGH faceMatchScore,
+    // since the face trivially matches itself, so this bot flag is
+    // currently the only signal in the pipeline capable of catching it).
     const prompt = buildBotPrompt(documentType);
     try {
-      const text = await this.llm.normalize(prompt, order);
+      const text = documentBuffer
+        ? await this.llm.describeImage(
+            documentBuffer.toString('base64'),
+            CAPTURED_IMAGE_CONTENT_TYPE,
+            prompt,
+            order,
+          )
+        : await this.llm.normalize(prompt, order);
       return { ...parseBotResponse(text), extractedFields };
     } catch (err) {
       this.logger.warn(`DLKYC bot check failed, treating as no findings: ${String(err)}`);
@@ -522,8 +545,18 @@ function buildBotPrompt(documentType: string | null): string {
   return [
     'You are assisting a human reviewer of an identity-verification submission.',
     'You are NOT authorized to approve or reject the submission -- you only',
-    'surface observations for a human to consider.',
+    'surface observations for a human to consider. The attached image is what',
+    'the user submitted as their identity DOCUMENT photo (not their selfie).',
     `Declared document type: ${documentType ?? 'unknown'}.`,
+    'The single most important check: does this image actually show a physical',
+    'ID document (a card, booklet, or printed page with a small portrait photo,',
+    'printed text/fields, and document-like edges/borders), or does it instead',
+    'show a live/close-up photo of a person\'s face or upper body with no',
+    'document visible -- i.e. someone submitted a selfie as their "document"',
+    'photo instead of an actual ID. If the image shows a face filling most of',
+    'the frame with no visible document, you MUST include the flag',
+    '"no_document_detected_appears_to_be_a_selfie" and set plausibilityScore',
+    'no higher than 20, regardless of image quality otherwise.',
     'Respond with strict JSON only, no prose, matching this shape:',
     '{"plausibilityScore": <0-100 integer>, "flags": [<short strings>], "summary": "<one sentence>"}',
     'flags should list any concrete inconsistency you would want a human to check; return an empty array if none.',
