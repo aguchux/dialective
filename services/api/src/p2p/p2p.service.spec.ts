@@ -93,7 +93,15 @@ describe('P2PService.listOffers', () => {
     id: 'offer-1',
     type: 'SELL',
     userId: 'trader-1',
-    user: { id: 'trader-1', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com' },
+    user: {
+      id: 'trader-1',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      email: 'ada@example.com',
+      phoneVerifiedAt: new Date(),
+      kycStatus: 'APPROVED',
+      country: { code: 'NG', name: 'Nigeria' },
+    },
     tokenAmount: { toString: () => '100' },
     remainingTokens: { toString: () => '100' },
     fiatAmount: { toString: () => '5000' },
@@ -117,6 +125,9 @@ describe('P2PService.listOffers', () => {
         findMany: jest.fn().mockResolvedValue([makeOffer()]),
         count: jest.fn().mockResolvedValue(1),
         updateMany: jest.fn(),
+      },
+      p2PTokenTrade: {
+        groupBy: jest.fn().mockResolvedValue([{ sellerId: 'trader-1', _count: { _all: 3 } }]),
       },
       $queryRaw: jest.fn(),
     };
@@ -248,6 +259,65 @@ describe('P2PService.listOffers', () => {
     } as any);
 
     expect(result.totalPages).toBe(3);
+  });
+
+  it('serializes phoneVerified/kycVerified as booleans and never leaks the raw phoneVerifiedAt/kycStatus, plus batches completedSaleCount via a single groupBy', async () => {
+    const result = await service.listOffers('viewer-1', {
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+      page: 1,
+      pageSize: 20,
+    } as any);
+
+    expect(prisma.p2PTokenTrade.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ['sellerId'],
+        where: expect.objectContaining({ sellerId: { in: ['trader-1'] }, status: 'RELEASED' }),
+      }),
+    );
+    expect(result.items[0]).toMatchObject({
+      completedSaleCount: 3,
+      user: {
+        id: 'trader-1',
+        email: 'ada@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        phoneVerified: true,
+        kycVerified: true,
+        country: { code: 'NG', name: 'Nigeria' },
+      },
+    });
+    expect(result.items[0].user).not.toHaveProperty('phoneVerifiedAt');
+    expect(result.items[0].user).not.toHaveProperty('kycStatus');
+  });
+
+  it('reports phoneVerified/kycVerified false and completedSaleCount 0 for a trader with no matching groupBy row', async () => {
+    prisma.p2PTokenTrade.groupBy.mockResolvedValue([]);
+    prisma.p2PTokenOffer.findMany.mockResolvedValue([
+      makeOffer({
+        user: {
+          id: 'trader-1',
+          firstName: null,
+          lastName: null,
+          email: 'new@example.com',
+          phoneVerifiedAt: null,
+          kycStatus: 'NOT_STARTED',
+          country: null,
+        },
+      }),
+    ]);
+
+    const result = await service.listOffers('viewer-1', {
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+      page: 1,
+      pageSize: 20,
+    } as any);
+
+    expect(result.items[0]).toMatchObject({
+      completedSaleCount: 0,
+      user: expect.objectContaining({ phoneVerified: false, kycVerified: false, country: null }),
+    });
   });
 
   it('sorts by price via a raw query, bypassing findMany/count', async () => {

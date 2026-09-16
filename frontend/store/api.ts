@@ -1021,7 +1021,19 @@ export interface P2POffer {
   id: string;
   type: P2POfferType;
   userId: string;
-  user?: { id: string; email: string; firstName: string | null; lastName: string | null };
+  user?: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    /** Derived server-side from phoneVerifiedAt -- the raw timestamp is never exposed to other traders. */
+    phoneVerified: boolean;
+    /** Derived server-side from kycStatus === 'APPROVED' -- the raw status is never exposed to other traders. */
+    kycVerified: boolean;
+    country: { code: string; name: string } | null;
+  };
+  /** RELEASED-trade count for this offer's owner, batched server-side -- only populated on the market list (listOffers), undefined elsewhere (create/accept/cancel a single offer). */
+  completedSaleCount?: number;
   tokenAmount: string;
   remainingTokens: string;
   fiatAmount: string;

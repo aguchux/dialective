@@ -426,18 +426,27 @@ export class P2PService {
         (
           await this.prisma.p2PTokenOffer.findMany({
             where: { id: { in: ids } },
-            include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+            include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phoneVerifiedAt: true, kycStatus: true, country: { select: { code: true, name: true } } } } },
           })
         ).map((offer) => [offer.id, offer]),
       );
       const total = Number(totalRows[0]?.count ?? 0);
+      const priceSortedOffers = ids
+        .map((id) => offersById.get(id))
+        .filter((offer): offer is NonNullable<typeof offer> => Boolean(offer));
+      const completedSaleCountByUserId = await this.getCompletedSaleCounts(
+        priceSortedOffers.map((offer) => offer.userId),
+      );
       return {
         // Raw query's ORDER BY determines position; re-derive it here since
         // findMany({ where: { id: { in } } }) does not preserve `ids`' order.
-        items: ids
-          .map((id) => offersById.get(id))
-          .filter((offer): offer is NonNullable<typeof offer> => Boolean(offer))
-          .map((offer) => serializeOffer(offer, offer.userId === userId)),
+        items: priceSortedOffers.map((offer) =>
+          serializeOffer(
+            offer,
+            offer.userId === userId,
+            completedSaleCountByUserId.get(offer.userId) ?? 0,
+          ),
+        ),
         total,
         page,
         pageSize,
@@ -450,20 +459,53 @@ export class P2PService {
     const [offers, total] = await Promise.all([
       this.prisma.p2PTokenOffer.findMany({
         where,
-        include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+        include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phoneVerifiedAt: true, kycStatus: true, country: { select: { code: true, name: true } } } } },
         orderBy: { [sortColumn]: sortDir },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
       this.prisma.p2PTokenOffer.count({ where }),
     ]);
+    const completedSaleCountByUserId = await this.getCompletedSaleCounts(
+      offers.map((offer) => offer.userId),
+    );
     return {
-      items: offers.map((offer) => serializeOffer(offer, offer.userId === userId)),
+      items: offers.map((offer) =>
+        serializeOffer(
+          offer,
+          offer.userId === userId,
+          completedSaleCountByUserId.get(offer.userId) ?? 0,
+        ),
+      ),
       total,
       page,
       pageSize,
       totalPages: Math.max(1, Math.ceil(total / pageSize)),
     };
+  }
+
+  /**
+   * Batched equivalent of getTraderProfile's completedSaleCount, for a page
+   * of offers at once -- a single groupBy rather than one query per row, so
+   * the market list stays one round trip regardless of page size. Same
+   * RELEASED+paidAt+releasedAt definition of "completed sale" as
+   * getTraderProfile, just without the 20-row cap (that cap exists there to
+   * bound the avgReleaseSeconds sample, which this callsite doesn't need).
+   */
+  private async getCompletedSaleCounts(userIds: string[]): Promise<Map<string, number>> {
+    const uniqueIds = [...new Set(userIds)];
+    if (uniqueIds.length === 0) return new Map();
+    const rows = await this.prisma.p2PTokenTrade.groupBy({
+      by: ['sellerId'],
+      where: {
+        sellerId: { in: uniqueIds },
+        status: P2PTradeStatus.RELEASED,
+        paidAt: { not: null },
+        releasedAt: { not: null },
+      },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((row) => [row.sellerId, row._count._all]));
   }
 
   // Builds the same filter semantics as listOffers' Prisma `where` object,
@@ -1190,12 +1232,32 @@ function serializeSettings(row: Awaited<ReturnType<P2PService['settingsRow']>>) 
   };
 }
 
-function serializeOffer(offer: any, includePayment: boolean) {
+function serializeOffer(offer: any, includePayment: boolean, completedSaleCount?: number) {
   return {
     id: offer.id,
     type: offer.type,
     userId: offer.userId,
-    user: 'user' in offer ? offer.user : undefined,
+    // Reshaped, not passed through raw -- phoneVerifiedAt/kycStatus are
+    // fetched (see listOffers' user select) only to derive the two boolean
+    // trust badges below; the raw timestamp/enum value is never exposed to
+    // other traders browsing the market.
+    user:
+      'user' in offer && offer.user
+        ? {
+            id: offer.user.id,
+            email: offer.user.email,
+            firstName: offer.user.firstName,
+            lastName: offer.user.lastName,
+            phoneVerified: !!offer.user.phoneVerifiedAt,
+            kycVerified: offer.user.kycStatus === 'APPROVED',
+            country: offer.user.country ?? null,
+          }
+        : undefined,
+    // Only populated by listOffers (which batches this via
+    // getCompletedSaleCounts) -- other callers of serializeOffer (create/
+    // accept/cancel a single offer) don't pay for it since it's only
+    // needed for the market list's trader-trust signal.
+    completedSaleCount,
     tokenAmount: offer.tokenAmount.toString(),
     remainingTokens: offer.remainingTokens.toString(),
     fiatAmount: offer.fiatAmount.toString(),

@@ -1,10 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, Landmark, Search } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  CreditCard,
+  IdCard,
+  Landmark,
+  Search,
+  Shield,
+  ShieldCheck,
+  Smartphone,
+} from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
-import { formatCompactNumber } from '@/lib/format';
-import { Avatar, cardClass, EmptyPanel, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
+import { countryFlagEmoji, formatCompactNumber } from '@/lib/format';
+import { Avatar, EmptyPanel, SectionTitle } from '@/components/dashboard/shared';
 import {
   P2POffer,
   P2PMarketSettings,
@@ -215,66 +225,123 @@ export function MarketOfferList({
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {offers.length === 0 && <EmptyPanel icon={Landmark} title="No active posts" unframed />}
-          {offers.map((offer) => (
-            <div className={`${cardClass} grid gap-3 p-4`} key={offer.id}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-bold text-muted">
-                    {offer.type === 'SELL' ? 'Selling' : 'Buying'}
-                  </p>
-                  <p className="text-2xl font-black">{formatCompactNumber(offer.tokenAmount)}</p>
-                </div>
-                <p className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-black text-accent">
-                  {offer.status}
-                </p>
-              </div>
-              {offer.user && (
-                <button
-                  className="flex items-center gap-2 justify-self-start rounded-lg text-left hover:opacity-80"
-                  onClick={() => onOpenProfile(offer.userId)}
-                  type="button"
-                >
-                  <Avatar email={offer.user.email} />
-                  <span className="text-sm font-bold">{traderDisplayName(offer.user)}</span>
-                </button>
-              )}
-              <p className="font-extrabold">
-                {Number(offer.fiatAmount).toLocaleString()} {offer.fiatCurrency}
-              </p>
-              <p className="text-sm text-muted">Expires {formatDateTime(offer.expiresAt)}</p>
-              {offer.userId === viewerId ? (
-                <div className="grid gap-2">
-                  {offer.status === 'ACTIVE' ? (
-                    <ActionButton
-                      className="min-h-10 rounded-lg border border-line px-3 font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={() => onCancel(offer)}
-                      pending={cancellingOffer && cancellingOfferId === offer.id}
-                      pendingLabel="Cancelling"
-                      type="button"
-                    >
-                      Cancel post
-                    </ActionButton>
-                  ) : (
-                    <p className="text-sm font-bold text-muted">
-                      This post has been accepted. Manage its protected cancellation in My trades.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <button
-                  className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-50"
-                  disabled={accepting || disabled}
-                  onClick={() => onAccept(offer)}
-                  type="button"
-                >
-                  {offer.type === 'SELL' ? 'Buy DL' : 'Sell to buyer'}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+        {offers.length === 0 ? (
+          <EmptyPanel icon={Landmark} title="No active posts" unframed />
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-line bg-surface">
+            <table className="w-full min-w-215 border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs font-bold uppercase tracking-wide text-muted">
+                  <th className="px-4 py-3 font-bold" scope="col">
+                    Trader
+                  </th>
+                  <th className="px-4 py-3 font-bold" scope="col">
+                    Amount
+                  </th>
+                  <th className="px-4 py-3 font-bold" scope="col">
+                    Payment method
+                  </th>
+                  <th className="px-4 py-3 font-bold" scope="col">
+                    Country
+                  </th>
+                  <th className="px-4 py-3 text-right font-bold" scope="col">
+                    &nbsp;
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {offers.map((offer) => {
+                  const flag = countryFlagEmoji(offer.user?.country?.code);
+                  const priceEach =
+                    Number(offer.tokenAmount) > 0
+                      ? Number(offer.fiatAmount) / Number(offer.tokenAmount)
+                      : 0;
+                  return (
+                    <tr className="border-b border-line last:border-0 hover:bg-surface-muted" key={offer.id}>
+                      <td className="px-4 py-3 align-top">
+                        {offer.user ? (
+                          <button
+                            className="flex items-start gap-2.5 text-left hover:opacity-80"
+                            onClick={() => onOpenProfile(offer.userId)}
+                            type="button"
+                          >
+                            <Avatar email={offer.user.email} />
+                            <span className="grid gap-0.5">
+                              <span className="flex items-center gap-1.5 font-bold text-ink">
+                                {traderDisplayName(offer.user)}
+                                <TrustBadges
+                                  kycVerified={offer.user.kycVerified}
+                                  phoneVerified={offer.user.phoneVerified}
+                                />
+                              </span>
+                              <span className="text-xs text-muted">
+                                {offer.completedSaleCount ?? 0} trade
+                                {offer.completedSaleCount === 1 ? '' : 's'}
+                              </span>
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="text-muted">Unknown trader</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <p className="font-black text-ink">
+                          {formatCompactNumber(offer.tokenAmount)} DL
+                        </p>
+                        <p className="text-xs text-muted">
+                          {priceEach.toLocaleString(undefined, { maximumFractionDigits: 4 })}{' '}
+                          {offer.fiatCurrency} each
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-muted px-2.5 py-1 text-xs font-bold text-ink">
+                          <CreditCard className="size-3.5 text-muted" aria-hidden="true" />
+                          {offer.paymentMethod.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        {offer.user?.country ? (
+                          <span className="inline-flex items-center gap-1.5 text-sm">
+                            <span aria-hidden="true">{flag ?? '🌐'}</span>
+                            {offer.user.country.name}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right align-top">
+                        {offer.userId === viewerId ? (
+                          offer.status === 'ACTIVE' ? (
+                            <ActionButton
+                              className="min-h-9 rounded-lg border border-line px-3 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
+                              onClick={() => onCancel(offer)}
+                              pending={cancellingOffer && cancellingOfferId === offer.id}
+                              pendingLabel="Cancelling"
+                              type="button"
+                            >
+                              Cancel post
+                            </ActionButton>
+                          ) : (
+                            <span className="text-xs font-bold text-muted">Accepted</span>
+                          )
+                        ) : (
+                          <button
+                            className="min-h-9 rounded-lg bg-accent px-4 text-sm font-extrabold text-white disabled:opacity-50"
+                            disabled={accepting || disabled}
+                            onClick={() => onAccept(offer)}
+                            type="button"
+                          >
+                            {offer.type === 'SELL' ? 'Buy' : 'Sell'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {totalPages > 1 && (
           <div className="mt-4 flex items-center justify-between gap-3">
@@ -313,4 +380,42 @@ function traderDisplayName(user: {
 }) {
   const name = [user.firstName, user.lastName].filter(Boolean).join(' ');
   return name || user.email;
+}
+
+/**
+ * Three independent trust signals next to a trader's name: a phone icon
+ * (phoneVerifiedAt set), a KYC icon (kycStatus=APPROVED), and a combined
+ * shield summarizing both -- orange when exactly one is true, green when
+ * both are, hidden entirely when neither is (an unverified trader gets no
+ * shield rather than a red/negative one, since "unverified" is the default
+ * state for most trainers, not a red flag on its own).
+ */
+function TrustBadges({
+  phoneVerified,
+  kycVerified,
+}: {
+  phoneVerified: boolean;
+  kycVerified: boolean;
+}) {
+  if (!phoneVerified && !kycVerified) return null;
+  const bothVerified = phoneVerified && kycVerified;
+  return (
+    <span className="inline-flex items-center gap-1">
+      {bothVerified ? (
+        <ShieldCheck
+          className="size-4 shrink-0 text-emerald-600"
+          aria-label="Phone and KYC verified"
+        />
+      ) : (
+        <Shield
+          className="size-4 shrink-0 text-amber-500"
+          aria-label={phoneVerified ? 'Phone verified' : 'KYC verified'}
+        />
+      )}
+      {phoneVerified && (
+        <Smartphone className="size-3.5 shrink-0 text-muted" aria-label="Phone verified" />
+      )}
+      {kycVerified && <IdCard className="size-3.5 shrink-0 text-muted" aria-label="KYC verified" />}
+    </span>
+  );
 }

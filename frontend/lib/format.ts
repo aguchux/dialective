@@ -16,6 +16,13 @@ const compactNumberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+/** e.g. "NG" -> "🇳🇬" -- regional indicator symbols are 0x1F1E6 + (letter offset from 'A'), one per ISO 3166-1 alpha-2 letter. Returns null for anything that isn't exactly two A-Z letters, so a missing/malformed code renders nothing instead of a broken glyph. */
+export function countryFlagEmoji(isoAlpha2: string | null | undefined): string | null {
+  if (!isoAlpha2 || !/^[A-Za-z]{2}$/.test(isoAlpha2)) return null;
+  const codePoints = [...isoAlpha2.toUpperCase()].map((letter) => 0x1f1e6 + letter.charCodeAt(0) - 65);
+  return String.fromCodePoint(...codePoints);
+}
+
 /** e.g. 4682 -> "$4.68K" */
 export function formatCompactUsd(value: number | string) {
   return compactUsdFormatter.format(Number(value));
