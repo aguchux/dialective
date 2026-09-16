@@ -128,6 +128,11 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: spaces_community_bucket
+            - name: SPACES_P2P_CHAT_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_p2p_chat_bucket
             - name: SPACES_ENDPOINT
               valueFrom:
                 secretKeyRef:

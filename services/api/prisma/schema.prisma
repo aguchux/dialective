@@ -232,6 +232,7 @@ model User {
   p2pSellerTrades                   P2PTokenTrade[]                  @relation("P2PSellerTrades")
   p2pDisputesRaised                 P2PDispute[]                     @relation("P2PDisputesRaised")
   p2pDisputesResolved               P2PDispute[]                     @relation("P2PDisputesResolved")
+  p2pTradeMessagesSent              P2PTradeMessage[]                @relation("P2PTradeMessagesSent")
   referralInvitesSent               ReferralInvite[]                 @relation("ReferralInvitesSent")
   referralInviteJoined              ReferralInvite[]                 @relation("ReferralInviteJoined")
   distributorAllocations            DistributorAllocation[]          @relation("DistributorAllocations")
@@ -2656,13 +2657,35 @@ model P2PTokenTrade {
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
 
-  dispute P2PDispute?
+  dispute  P2PDispute?
+  messages P2PTradeMessage[]
 
   @@index([buyerId, status, createdAt])
   @@index([sellerId, status, createdAt])
   @@index([offerId])
   @@index([status, paymentDeadlineAt])
   @@map("p2p_token_trades")
+}
+
+/// One shared chat thread per trade, used for both ordinary buyer/seller
+/// trade conversation and -- once a dispute is raised -- the same thread
+/// also carries admin messages (isFromAdmin snapshotted at send time from
+/// the sender's Role, not re-derived later, so a message's badge doesn't
+/// silently change if an admin's role is later revoked).
+model P2PTradeMessage {
+  id            String   @id @default(uuid())
+  tradeId       String
+  trade         P2PTokenTrade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  senderId      String
+  sender        User     @relation("P2PTradeMessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  isFromAdmin   Boolean  @default(false)
+  body          String?
+  attachmentKey String?
+  attachmentContentType String?
+  createdAt     DateTime @default(now())
+
+  @@index([tradeId, createdAt])
+  @@map("p2p_trade_messages")
 }
 
 model P2PDispute {

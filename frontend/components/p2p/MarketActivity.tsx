@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Clock3, Copy, Landmark } from 'lucide-react';
+import { Check, Clock3, Copy, Landmark, MessageSquare } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, EmptyPanel, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
 import { WhatsAppContactLink } from '@/components/WhatsAppContactLink';
+import { TradeChatPanel } from '@/components/p2p/TradeChatPanel';
 import { formatCompactNumber } from '@/lib/format';
 import {
   P2POffer,
@@ -15,7 +16,6 @@ import {
   useListMyP2PTradesQuery,
   useListMyP2POffersQuery,
   useMarkP2PTradePaidMutation,
-  useRaiseP2PDisputeMutation,
   useReleaseP2PTradeMutation,
   useRequestP2PTradeCancelMutation,
 } from '@/store/api';
@@ -46,8 +46,7 @@ export function MarketActivity() {
     useReleaseP2PTradeMutation();
   const [requestCancel, { isLoading: cancelling, originalArgs: cancellingId }] =
     useRequestP2PTradeCancelMutation();
-  const [raiseDispute, { isLoading: disputing, originalArgs: disputingArgs }] =
-    useRaiseP2PDisputeMutation();
+  const [chatTradeId, setChatTradeId] = useState<string | null>(null);
 
   async function cancelPost(offer: P2POffer) {
     if (
@@ -112,21 +111,28 @@ export function MarketActivity() {
                 markingPaid={markingPaid && markingPaidId === trade.id}
                 releasing={releasing && releasingId === trade.id}
                 cancelling={cancelling && cancellingId === trade.id}
-                disputing={disputing && disputingArgs?.id === trade.id}
                 onCancel={(id) => requestCancel(id).unwrap()}
-                onDispute={(id) =>
-                  raiseDispute({
-                    id,
-                    reason: 'Payment/escrow issue requires admin review',
-                  }).unwrap()
-                }
                 onMarkPaid={(id) => markPaid(id).unwrap()}
                 onRelease={(id) => releaseTrade(id).unwrap()}
+                onOpenChat={(id) => setChatTradeId(id)}
               />
             ))}
           </div>
         </section>
       )}
+      {chatTradeId &&
+        (() => {
+          const trade = trades.find((item) => item.id === chatTradeId);
+          if (!trade) return null;
+          return (
+            <TradeChatPanel
+              isViewerAdmin={false}
+              onClose={() => setChatTradeId(null)}
+              trade={trade}
+              viewerId={me?.id}
+            />
+          );
+        })()}
     </div>
   );
 }
@@ -244,22 +250,20 @@ function TradeCard({
   markingPaid,
   releasing,
   cancelling,
-  disputing,
   onMarkPaid,
   onRelease,
   onCancel,
-  onDispute,
+  onOpenChat,
 }: {
   trade: P2PTrade;
   viewerId: string | undefined;
   markingPaid: boolean;
   releasing: boolean;
   cancelling: boolean;
-  disputing: boolean;
   onMarkPaid: (id: string) => Promise<unknown>;
   onRelease: (id: string) => Promise<unknown>;
   onCancel: (id: string) => Promise<unknown>;
-  onDispute: (id: string) => Promise<unknown>;
+  onOpenChat: (id: string) => void;
 }) {
   const [actionError, setActionError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -271,7 +275,6 @@ function TradeCard({
     isBuyer && (trade.status === 'AWAITING_PAYMENT' || trade.status === 'CANCEL_PENDING');
   const canRelease = isSeller && trade.status === 'PAID_MARKED';
   const canRequestCancel = isOpen && trade.status !== 'PAID_MARKED';
-  const canDispute = isOpen;
 
   async function run(action: (id: string) => Promise<unknown>) {
     setActionError('');
@@ -401,6 +404,13 @@ function TradeCard({
       )}
       {actionError && <p className="text-sm font-bold text-danger">{actionError}</p>}
       <div className="flex flex-wrap gap-2">
+        <button
+          className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-line px-3 text-sm font-extrabold hover:bg-surface-muted"
+          onClick={() => onOpenChat(trade.id)}
+          type="button"
+        >
+          <MessageSquare className="size-4" aria-hidden="true" /> Conversation
+        </button>
         {canMarkPaid && (
           <ActionButton
             className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
@@ -433,22 +443,6 @@ function TradeCard({
           >
             Request cancel
           </ActionButton>
-        )}
-        {canDispute && (
-          <ActionButton
-            className="min-h-10 rounded-lg border border-red-200 px-3 font-extrabold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => run(onDispute)}
-            pending={disputing}
-            pendingLabel="Raising"
-            type="button"
-          >
-            Dispute
-          </ActionButton>
-        )}
-        {!canMarkPaid && !canRelease && !canRequestCancel && !canDispute && (
-          <p className="text-sm text-muted">
-            No actions available -- this trade is {STATUS_LABELS[trade.status].toLowerCase()}.
-          </p>
         )}
       </div>
     </div>

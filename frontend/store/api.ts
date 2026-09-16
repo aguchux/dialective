@@ -1106,6 +1106,19 @@ export interface P2PTrade {
   updatedAt: string;
 }
 
+export interface P2PTradeMessage {
+  id: string;
+  tradeId: string;
+  senderId: string;
+  /** True only when the sender is an admin acting in an admin capacity (not a trade participant who happens to hold the admin role) -- see P2PChatService.sendMessage. */
+  isFromAdmin: boolean;
+  body: string | null;
+  hasAttachment: boolean;
+  attachmentContentType: string | null;
+  createdAt: string;
+  sender: { id: string; firstName: string | null; lastName: string | null; email: string };
+}
+
 export interface P2PDispute {
   id: string;
   status: P2PDisputeStatus;
@@ -2920,6 +2933,7 @@ export const dialectivaApi = createApi({
     'DataAccessLeads',
     'SupportRequests',
     'P2P',
+    'P2PChat',
     'Profile',
     'Notifications',
     'ApiAccessTokens',
@@ -3193,6 +3207,37 @@ export const dialectivaApi = createApi({
         body: { reason, evidenceUrl },
       }),
       invalidatesTags: ['P2P'],
+    }),
+    listP2PTradeMessages: builder.query<P2PTradeMessage[], string>({
+      query: (tradeId) => `/p2p/trades/${tradeId}/messages`,
+      providesTags: (_result, _error, tradeId) => [{ type: 'P2PChat', id: tradeId }],
+    }),
+    sendP2PTradeMessage: builder.mutation<
+      P2PTradeMessage,
+      { tradeId: string; body?: string; attachmentKey?: string; attachmentContentType?: string }
+    >({
+      query: ({ tradeId, ...body }) => ({
+        url: `/p2p/trades/${tradeId}/messages`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_result, _error, { tradeId }) => [{ type: 'P2PChat', id: tradeId }],
+    }),
+    createP2PChatUploadUrl: builder.mutation<
+      { uploadUrl: string; key: string; bucket: string; expiresInSeconds: number },
+      { tradeId: string; contentType: string }
+    >({
+      query: ({ tradeId, contentType }) => ({
+        url: `/p2p/trades/${tradeId}/messages/upload-url`,
+        method: 'POST',
+        body: { contentType },
+      }),
+    }),
+    getP2PChatAttachmentUrl: builder.query<
+      { url: string; expiresInSeconds: number },
+      { tradeId: string; messageId: string }
+    >({
+      query: ({ tradeId, messageId }) => `/p2p/trades/${tradeId}/messages/${messageId}/attachment`,
     }),
     getTrainerDashboard: builder.query<TrainerDashboardSummary, void>({
       query: () => '/wallet/dashboard',
@@ -5580,6 +5625,10 @@ export const {
   useRequestP2PTradeCancelMutation,
   useReleaseP2PTradeMutation,
   useRaiseP2PDisputeMutation,
+  useListP2PTradeMessagesQuery,
+  useSendP2PTradeMessageMutation,
+  useCreateP2PChatUploadUrlMutation,
+  useLazyGetP2PChatAttachmentUrlQuery,
   useGetTrainerDashboardQuery,
   useGetCommunityStatsQuery,
   useGetAdminCommunitySpacesQuery,

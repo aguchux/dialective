@@ -4,20 +4,24 @@ import {
   normalizeErrorMessage,
   P2PDispute,
   P2PTrade,
+  useGetMeQuery,
   useListAdminP2PDisputesQuery,
   useListAdminP2PTradesQuery,
   useResolveP2PDisputeMutation,
 } from '@/store/api';
 import { AdminShell } from '@/components/admin/AdminShell';
+import { TradeChatPanel } from '@/components/p2p/TradeChatPanel';
 import { useState } from 'react';
 
 export default function AdminP2PPage() {
+  const { data: me } = useGetMeQuery();
   const { data: trades = [], isLoading: tradesLoading } = useListAdminP2PTradesQuery();
   const { data: disputes = [], isLoading: disputesLoading } = useListAdminP2PDisputesQuery({
     status: 'OPEN',
   });
   const [resolveDispute, { isLoading: resolving }] = useResolveP2PDisputeMutation();
   const [error, setError] = useState('');
+  const [chatTrade, setChatTrade] = useState<P2PTrade | null>(null);
 
   async function resolve(dispute: P2PDispute, winner: 'buyer' | 'seller') {
     setError('');
@@ -64,7 +68,14 @@ export default function AdminP2PPage() {
                     </p>
                     <p className="mt-1 text-sm text-muted">Raised by {dispute.raisedBy.email}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="min-h-10 rounded-lg border border-line px-3 font-extrabold disabled:opacity-60"
+                      onClick={() => setChatTrade(dispute.trade)}
+                      type="button"
+                    >
+                      View conversation
+                    </button>
                     <button
                       className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:opacity-60"
                       disabled={resolving}
@@ -125,6 +136,14 @@ export default function AdminP2PPage() {
           </div>
         </section>
       </div>
+      {chatTrade && (
+        <TradeChatPanel
+          isViewerAdmin
+          onClose={() => setChatTrade(null)}
+          trade={chatTrade}
+          viewerId={me?.id}
+        />
+      )}
     </AdminShell>
   );
 }

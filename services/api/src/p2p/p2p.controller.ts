@@ -15,6 +15,7 @@ import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { P2PService } from './p2p.service';
+import { P2PChatService } from './p2p-chat.service';
 import {
   AcceptOfferDto,
   CreateOfferDto,
@@ -27,11 +28,15 @@ import {
   UpdateP2PMarketSettingsDto,
   UpdateP2pPaymentInstructionsDto,
 } from './dto/p2p.dto';
+import { CreateP2PChatUploadUrlDto, SendP2PTradeMessageDto } from './dto/p2p-chat.dto';
 
 @Controller('p2p')
 @UseGuards(JwtAuthGuard)
 export class P2PController {
-  constructor(private readonly p2p: P2PService) {}
+  constructor(
+    private readonly p2p: P2PService,
+    private readonly chat: P2PChatService,
+  ) {}
 
   @Get('settings')
   getSettings() {
@@ -122,6 +127,38 @@ export class P2PController {
     @Body() body: RaiseDisputeDto,
   ) {
     return this.p2p.raiseDispute(req.user.sub, id, body);
+  }
+
+  @Get('trades/:id/messages')
+  listMessages(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.chat.listMessages(req.user.sub, req.user.role, id);
+  }
+
+  @Post('trades/:id/messages')
+  sendMessage(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: SendP2PTradeMessageDto,
+  ) {
+    return this.chat.sendMessage(req.user.sub, req.user.role, id, body);
+  }
+
+  @Post('trades/:id/messages/upload-url')
+  createChatUploadUrl(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: CreateP2PChatUploadUrlDto,
+  ) {
+    return this.chat.createUploadUrl(req.user.sub, req.user.role, id, body);
+  }
+
+  @Get('trades/:id/messages/:messageId/attachment')
+  getAttachmentDownloadUrl(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+  ) {
+    return this.chat.attachmentDownloadUrl(req.user.sub, req.user.role, id, messageId);
   }
 
   @Get('admin/settings')
