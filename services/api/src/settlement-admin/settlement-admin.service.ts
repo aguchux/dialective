@@ -360,24 +360,35 @@ export class SettlementAdminService {
       });
       if (claimed.count === 0) return;
 
-      const lock = await tx.ledgerEntry.findFirst({
-        where: { reference: recording.id, type: 'TASK_LOCK' },
-        select: { id: true },
-      });
-      if (!lock) return;
+      // "Still held", not "was ever locked" -- returning an already-returned
+      // stake writes a second TASK_REFUND, crediting the trainer twice and
+      // decrementing lockedBalance for tokens that are no longer there. Same
+      // fix as SettlementService.settleDuplicateSourceWithoutReward.
+      const [lock, alreadyRefunded] = await Promise.all([
+        tx.ledgerEntry.findFirst({
+          where: { reference: recording.id, type: 'TASK_LOCK' },
+          select: { id: true },
+        }),
+        tx.ledgerEntry.findFirst({
+          where: { reference: recording.id, type: 'TASK_REFUND' },
+          select: { id: true },
+        }),
+      ]);
+      if (!lock || alreadyRefunded) return;
 
       const wallet = await tx.wallet.upsert({
         where: { userId: recording.userId },
         update: {},
         create: { userId: recording.userId },
       });
-      await tx.wallet.update({
-        where: { id: wallet.id },
+      const released = await tx.wallet.updateMany({
+        where: { id: wallet.id, lockedBalance: { gte: recording.tokensSpent } },
         data: {
           lockedBalance: { decrement: recording.tokensSpent },
           balance: { increment: recording.tokensSpent },
         },
       });
+      if (released.count === 0) return;
       await tx.ledgerEntry.create({
         data: {
           walletId: wallet.id,

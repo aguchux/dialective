@@ -55,7 +55,7 @@ describe('computeDomainConversationCompositeScore', () => {
 
 describe('SettlementService.settleDomainConversationRecordings', () => {
   function buildPrismaMock(overrides: Record<string, unknown> = {}) {
-    return {
+    const mock: any = {
       domainConversationRecording: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -79,9 +79,14 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
         findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
         create: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
       },
-      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+      // Supports both Prisma transaction forms: an array of operations and
+      // an interactive callback (which receives a tx client).
+      $transaction: jest.fn((arg: any) =>
+        typeof arg === 'function' ? arg(mock) : Promise.all(arg),
+      ),
       ...overrides,
     };
+    return mock;
   }
 
   function buildService(prisma: unknown) {
@@ -217,7 +222,7 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
 
 describe('SettlementService.refundRejectedDomainConversationRecordings', () => {
   it('refunds locked tokens for a REJECTED row without deleting its audio', async () => {
-    const prisma = {
+    const prisma: any = {
       domainConversationRecording: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -241,7 +246,11 @@ describe('SettlementService.refundRejectedDomainConversationRecordings', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
       },
-      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+      // Supports both Prisma transaction forms: an array of operations and
+      // an interactive callback (which receives a tx client).
+      $transaction: jest.fn((arg: any) =>
+        typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
+      ),
     };
     const storage = { deleteObject: jest.fn().mockResolvedValue(undefined) };
     const service = new SettlementService(prisma as never, storage as never, {

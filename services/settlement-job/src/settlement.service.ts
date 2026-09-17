@@ -587,22 +587,34 @@ export class SettlementService {
     // anything -- decrementing lockedBalance for them would drive it
     // negative, so only touch it for rows that actually have a lock.
     const locked = await this.isStakeStillLocked(reference);
-    await this.prisma.$transaction([
-      this.prisma.wallet.updateMany({
-        where: { userId },
+    const wallet = await this.getOrCreateWallet(userId);
+    // Interactive rather than an array transaction: the ledger row must only
+    // be written if the wallet update actually matched. An array transaction
+    // runs every operation unconditionally, so a guarded updateMany that
+    // matches nothing would still record a TASK_REFUND for money that never
+    // moved -- breaking the wallet-vs-ledger reconciliation that is the one
+    // check capable of catching balance bugs at all.
+    await this.prisma.$transaction(async (tx) => {
+      const moved = await tx.wallet.updateMany({
+        // When releasing a lock, require the balance to actually hold it --
+        // otherwise a stake released by some other path between the check
+        // above and this write drives lockedBalance negative. The
+        // balance-only branch needs no guard: it's a pure credit.
+        where: locked ? { id: wallet.id, lockedBalance: { gte: tokensSpent } } : { id: wallet.id },
         data: locked
           ? { lockedBalance: { decrement: tokensSpent }, balance: { increment: tokensSpent } }
           : { balance: { increment: tokensSpent } },
-      }),
-      this.prisma.ledgerEntry.create({
-        data: {
-          walletId: (await this.getOrCreateWallet(userId)).id,
-          type: 'TASK_REFUND',
-          amount: tokensSpent,
-          reference,
-        },
-      }),
-    ]);
+      });
+      if (moved.count === 0) {
+        this.logger.warn(
+          `Skipped refund for ${reference}: stake no longer held in lockedBalance`,
+        );
+        return;
+      }
+      await tx.ledgerEntry.create({
+        data: { walletId: wallet.id, type: 'TASK_REFUND', amount: tokensSpent, reference },
+      });
+    });
   }
 
   /** A repeat source is retained as data but cannot earn a second payout. */
@@ -622,24 +634,40 @@ export class SettlementService {
       });
       if (claimed.count === 0) return false;
 
-      const lock = await tx.ledgerEntry.findFirst({
-        where: { reference: recording.id, type: 'TASK_LOCK' },
-        select: { id: true },
-      });
-      if (!lock) return true;
+      // "Is the stake still held", not "was it ever locked" -- same
+      // distinction as isStakeStillLocked. A row refunded by an earlier
+      // sweep can still reach this path later (refundStuckWordRecordings
+      // stamps refundedAt and, under noFailOnTrainEnabled, hands the row on
+      // to be scored), and returning an already-returned stake writes a
+      // SECOND TASK_REFUND: the trainer is credited twice and lockedBalance
+      // is decremented for tokens that are no longer there.
+      const [lock, alreadyRefunded] = await Promise.all([
+        tx.ledgerEntry.findFirst({
+          where: { reference: recording.id, type: 'TASK_LOCK' },
+          select: { id: true },
+        }),
+        tx.ledgerEntry.findFirst({
+          where: { reference: recording.id, type: 'TASK_REFUND' },
+          select: { id: true },
+        }),
+      ]);
+      if (!lock || alreadyRefunded) return true;
 
       const wallet = await tx.wallet.upsert({
         where: { userId: recording.userId },
         update: {},
         create: { userId: recording.userId },
       });
-      await tx.wallet.update({
-        where: { id: wallet.id },
+      // Guarded so the release can't outrun the balance even if something
+      // else released the stake between the check above and this write.
+      const released = await tx.wallet.updateMany({
+        where: { id: wallet.id, lockedBalance: { gte: recording.tokensSpent } },
         data: {
           lockedBalance: { decrement: recording.tokensSpent },
           balance: { increment: recording.tokensSpent },
         },
       });
+      if (released.count === 0) return true;
       await tx.ledgerEntry.create({
         data: {
           walletId: wallet.id,

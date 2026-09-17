@@ -23,7 +23,7 @@ import { mintTrainingPayoutOps } from '@dialectiva/db';
  */
 describe('SettlementService resolveTimedOutScoring', () => {
   function buildPrismaMock() {
-    return {
+    const mock: any = {
       platformSettings: {
         upsert: jest.fn().mockResolvedValue({
           scoringSlaMinutes: 20,
@@ -50,8 +50,13 @@ describe('SettlementService resolveTimedOutScoring', () => {
         findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
         create: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
       },
-      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+      // Supports both Prisma transaction forms: an array of operations and
+      // an interactive callback (which receives a tx client).
+      $transaction: jest.fn((arg: any) =>
+        typeof arg === 'function' ? arg(mock) : Promise.all(arg),
+      ),
     };
+    return mock;
   }
 
   it('moves a timed-out word recording to SCORED without crediting payout or settling it', async () => {
@@ -116,7 +121,7 @@ describe('SettlementService resolveTimedOutScoring', () => {
  */
 describe('SettlementService refundStuckWordRecordings', () => {
   function buildPrismaMock() {
-    return {
+    const mock: any = {
       platformSettings: {
         upsert: jest.fn().mockResolvedValue({
           wordStuckTimeoutMinutes: 60,
@@ -147,8 +152,13 @@ describe('SettlementService refundStuckWordRecordings', () => {
         findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
         create: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
       },
-      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+      // Supports both Prisma transaction forms: an array of operations and
+      // an interactive callback (which receives a tx client).
+      $transaction: jest.fn((arg: any) =>
+        typeof arg === 'function' ? arg(mock) : Promise.all(arg),
+      ),
     };
+    return mock;
   }
 
   it('claims the row as EXPIRED (not just refundedAt) so it reaches a terminal state', async () => {
@@ -165,8 +175,10 @@ describe('SettlementService refundStuckWordRecordings', () => {
       where: { id: 'rec-1', refundedAt: null },
       data: { status: 'EXPIRED', refundedAt: expect.any(Date) },
     });
+    // Guarded on lockedBalance so a stake released elsewhere between the
+    // check and this write can't push the balance negative.
     expect(prisma.wallet.updateMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1' },
+      where: { id: 'wallet-1', lockedBalance: { gte: expect.anything() } },
       data: { lockedBalance: { decrement: expect.anything() }, balance: { increment: expect.anything() } },
     });
   });
@@ -244,7 +256,7 @@ describe('SettlementService refundStuckWordRecordings', () => {
 
 describe('SettlementService settlement state', () => {
   function buildPrismaMock() {
-    return {
+    const mock: any = {
       wordRecording: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -271,8 +283,13 @@ describe('SettlementService settlement state', () => {
       wallet: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
-      $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+      // Supports both Prisma transaction forms: an array of operations and
+      // an interactive callback (which receives a tx client).
+      $transaction: jest.fn((arg: any) =>
+        typeof arg === 'function' ? arg(mock) : Promise.all(arg),
+      ),
     };
+    return mock;
   }
 
   const qualityWeights = { consensus: 100, noise: 0, quality: 0, liveness: 0 };
@@ -418,7 +435,7 @@ describe('SettlementService settlement state', () => {
  */
 describe('SettlementService rejected-record refund + immediate audio delete', () => {
   function buildPrismaMock(overrides: { wordRecordings?: unknown[] }) {
-    return {
+    const mock: any = {
       wordRecording: {
         findMany: jest.fn().mockResolvedValue(overrides.wordRecordings ?? []),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -437,8 +454,13 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
         findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
         create: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
       },
-      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+      // Supports both Prisma transaction forms: an array of operations and
+      // an interactive callback (which receives a tx client).
+      $transaction: jest.fn((arg: any) =>
+        typeof arg === 'function' ? arg(mock) : Promise.all(arg),
+      ),
     };
+    return mock;
   }
 
   it('refunds a rejected word recording without touching its audio object', async () => {
@@ -501,5 +523,86 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
     expect(count).toBe(0);
     expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
     expect(deleteObject).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Regression, caught live in production: settleDuplicateSourceWithoutReward
+ * returns a repeat submission's stake instead of paying a reward, but it
+ * only checked that a TASK_LOCK existed -- never whether that stake had
+ * already been returned. A row refunded by an earlier sweep (yesterday's
+ * stuck-timeout pass) then settled today wrote a SECOND TASK_REFUND: the
+ * trainer was credited twice and lockedBalance was decremented for tokens
+ * that were no longer there, driving wallets negative at ~0.1 DL a time.
+ */
+describe('SettlementService.settleDuplicateSourceWithoutReward', () => {
+  function buildPrismaMock(alreadyRefunded: boolean) {
+    const mock: any = {
+      wordRecording: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      ledgerEntry: {
+        findFirst: jest.fn().mockImplementation(({ where }: any) =>
+          Promise.resolve(
+            where?.type === 'TASK_REFUND'
+              ? alreadyRefunded
+                ? { id: 'refund-1' }
+                : null
+              : { id: 'lock-1' },
+          ),
+        ),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      wallet: {
+        upsert: jest.fn().mockResolvedValue({ id: 'wallet-1', userId: 'user-1' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      $transaction: jest.fn((arg: any) =>
+        typeof arg === 'function' ? arg(mock) : Promise.all(arg),
+      ),
+    };
+    return mock;
+  }
+
+  const recording = { id: 'rec-dup', userId: 'user-1', tokensSpent: { toNumber: () => 0.1 } };
+
+  function makeService(prisma: any) {
+    return new SettlementService(prisma as never, { deleteObject: jest.fn() } as never, {
+      notifyReferralPayoutBonus: jest.fn(),
+    } as never);
+  }
+
+  it('returns the stake once when it is still held', async () => {
+    const prisma = buildPrismaMock(false);
+    // @ts-expect-error -- private method under test
+    await makeService(prisma).settleDuplicateSourceWithoutReward(recording);
+
+    expect(prisma.wallet.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ lockedBalance: { gte: recording.tokensSpent } }),
+      }),
+    );
+    expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'TASK_REFUND' }) }),
+    );
+  });
+
+  it('does NOT refund again when an earlier sweep already returned the stake', async () => {
+    const prisma = buildPrismaMock(true);
+    // @ts-expect-error -- private method under test
+    await makeService(prisma).settleDuplicateSourceWithoutReward(recording);
+
+    expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
+    expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('writes no ledger row when the guarded release matches nothing', async () => {
+    const prisma = buildPrismaMock(false);
+    prisma.wallet.updateMany.mockResolvedValue({ count: 0 });
+
+    // @ts-expect-error -- private method under test
+    await makeService(prisma).settleDuplicateSourceWithoutReward(recording);
+
+    // A TASK_REFUND with no matching wallet movement would break the
+    // wallet-vs-ledger reconciliation outright.
+    expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
   });
 });
