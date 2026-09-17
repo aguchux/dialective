@@ -106,9 +106,9 @@ export async function LandingPage() {
       <div className="px-4 md:px-[3.4rem]">
         <ContributorRail dialectCount={dialectCount} />
         <HowItWorks />
-        <CountryFlagMarquee countries={countries} />
         <LandingBlog />
         <TestimonialsCarousel testimonials={testimonials} />
+        <CountryFlagMarquee countries={countries} />
       </div>
       <LandingFooter />
       {/*
