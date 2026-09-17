@@ -3519,6 +3519,12 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/testimonials', method: 'POST', body }),
       invalidatesTags: ['Testimony'],
     }),
+    // Only permitted while the testimony is still PENDING -- the API rejects
+    // a delete once it has been reviewed.
+    deleteMyTestimony: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/testimonials/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Testimony'],
+    }),
     getAdminTestimonials: builder.query<
       TestimonyAdminPage,
       { page?: number; pageSize?: number; status?: TestimonyStatus } | void
@@ -5825,6 +5831,7 @@ export const {
   useListMyTestimoniesQuery,
   useCreateTestimonyUploadUrlMutation,
   useSubmitTestimonyMutation,
+  useDeleteMyTestimonyMutation,
   useGetAdminTestimonialsQuery,
   useReviewTestimonyMutation,
   useUpdateTestimonyTextMutation,

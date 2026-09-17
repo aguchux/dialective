@@ -43,9 +43,56 @@ export class TestimonialsService {
 
   async listMine(userId: string) {
     return this.prisma.testimony.findMany({
-      where: { userId },
+      where: { userId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /**
+   * A trainer may withdraw a testimony they submitted, but only while it is
+   * still PENDING. Once APPROVED it has been paid out and may already be
+   * embedded on the public homepage, so retracting it is the admin's call
+   * (Testimony.visible) rather than the trainer's. REJECTED is likewise
+   * terminal -- there is nothing to withdraw from, and leaving it visible in
+   * their own list is how they see why it was turned down.
+   *
+   * Soft delete: enforceMonthlySubmissionCap deliberately counts every row
+   * regardless of status, so that a rejected or pending attempt cannot be
+   * retried indefinitely. Hard-deleting here would let someone
+   * delete-and-resubmit in a loop and defeat that guard, so the row stays and
+   * only disappears from the trainer's list and the review queue.
+   */
+  async deleteMine(userId: string, testimonyId: string) {
+    const testimony = await this.prisma.testimony.findUnique({
+      where: { id: testimonyId },
+      select: { id: true, userId: true, status: true, deletedAt: true },
+    });
+
+    // Same 404 for "not yours" as for "does not exist" -- a different error
+    // for someone else's id would confirm that id exists.
+    if (!testimony || testimony.userId !== userId || testimony.deletedAt) {
+      throw new NotFoundException('Testimony not found');
+    }
+    if (testimony.status !== 'PENDING') {
+      throw new ConflictException(
+        testimony.status === 'APPROVED'
+          ? 'This testimony has already been approved and can no longer be deleted'
+          : 'This testimony has already been reviewed and can no longer be deleted',
+      );
+    }
+
+    // Guarded claim rather than a bare update: two concurrent deletes, or a
+    // delete racing an admin's review, must not both succeed. Whoever matches
+    // the still-PENDING/not-deleted row wins.
+    const claimed = await this.prisma.testimony.updateMany({
+      where: { id: testimonyId, userId, status: 'PENDING', deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictException('This testimony has already been reviewed or removed');
+    }
+
+    return { id: testimonyId, deleted: true };
   }
 
   async createUploadUrl(userId: string, dto: CreateTestimonyUploadUrlDto) {
@@ -112,7 +159,14 @@ export class TestimonialsService {
   }
 
   async listForAdmin(query: ListTestimoniesAdminDto) {
-    const where = query.status ? { status: query.status } : {};
+    // Withdrawn submissions leave the review queue -- an admin should not
+    // spend time reviewing something the trainer already retracted. The row
+    // itself is kept (see deleteMine) so it still counts toward the
+    // anti-flooding cap.
+    const where = {
+      deletedAt: null,
+      ...(query.status ? { status: query.status } : {}),
+    };
     const [total, items, totalApproved, approvedThisWeek, approvedThisMonth, lastApproval] =
       await Promise.all([
         this.prisma.testimony.count({ where }),
@@ -194,6 +248,11 @@ export class TestimonialsService {
       async (tx: any) => {
         const testimony = await tx.testimony.findUnique({ where: { id: testimonyId } });
         if (!testimony) throw new NotFoundException('Testimony not found');
+        // Closes the race where a trainer withdraws while an admin has the
+        // review queue open: approving here would pay out a reward for a
+        // submission that has been retracted.
+        if (testimony.deletedAt)
+          throw new ConflictException('This testimony was withdrawn by the trainer');
         if (testimony.status !== 'PENDING')
           throw new ConflictException('This testimony has already been reviewed');
         if (dto.status === 'APPROVED') {

@@ -43,6 +43,7 @@ describe('TestimonialsService', () => {
         })),
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       $transaction: jest.fn(async (callback: any) => callback(prisma)),
     };
@@ -183,7 +184,9 @@ describe('TestimonialsService', () => {
       const result = await service.listMine('user-1');
 
       expect(prisma.testimony.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1' },
+        // deletedAt: null -- a testimony the trainer withdrew leaves their
+        // own list even though the row is kept for the submission cap.
+        where: { userId: 'user-1', deletedAt: null },
         orderBy: { createdAt: 'desc' },
       });
       expect(result).toHaveLength(2);
@@ -437,4 +440,89 @@ describe('TestimonialsService', () => {
       expect(prisma.testimony.findMany).not.toHaveBeenCalled();
     });
   });
+
+  describe('deleteMine', () => {
+    function pending(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'testimony-1',
+        userId: 'user-1',
+        status: 'PENDING',
+        deletedAt: null,
+        ...overrides,
+      };
+    }
+
+    it('withdraws a pending testimony the trainer owns', async () => {
+      prisma.testimony.findUnique.mockResolvedValue(pending());
+
+      await expect(service.deleteMine('user-1', 'testimony-1')).resolves.toEqual({
+        id: 'testimony-1',
+        deleted: true,
+      });
+
+      // Soft delete: the row survives so enforceMonthlySubmissionCap still
+      // counts it. A hard delete would let someone delete-and-resubmit in a
+      // loop to defeat the anti-flooding guard.
+      expect(prisma.testimony.updateMany).toHaveBeenCalledWith({
+        where: { id: 'testimony-1', userId: 'user-1', status: 'PENDING', deletedAt: null },
+        data: { deletedAt: expect.any(Date) },
+      });
+    });
+
+    it('refuses to delete an approved testimony', async () => {
+      prisma.testimony.findUnique.mockResolvedValue(pending({ status: 'APPROVED' }));
+
+      // Approved means it has been paid out and may already be embedded on
+      // the public homepage -- retracting it is the admin's call.
+      await expect(service.deleteMine('user-1', 'testimony-1')).rejects.toThrow(
+        /already been approved/i,
+      );
+      expect(prisma.testimony.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete a rejected testimony', async () => {
+      prisma.testimony.findUnique.mockResolvedValue(pending({ status: 'REJECTED' }));
+
+      await expect(service.deleteMine('user-1', 'testimony-1')).rejects.toThrow(
+        /already been reviewed/i,
+      );
+      expect(prisma.testimony.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("404s on someone else's testimony rather than confirming it exists", async () => {
+      prisma.testimony.findUnique.mockResolvedValue(pending({ userId: 'someone-else' }));
+
+      await expect(service.deleteMine('user-1', 'testimony-1')).rejects.toThrow(
+        /not found/i,
+      );
+      expect(prisma.testimony.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('404s on an already-withdrawn testimony', async () => {
+      prisma.testimony.findUnique.mockResolvedValue(pending({ deletedAt: new Date() }));
+
+      await expect(service.deleteMine('user-1', 'testimony-1')).rejects.toThrow(/not found/i);
+      expect(prisma.testimony.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('loses gracefully when an admin reviews it mid-delete', async () => {
+      prisma.testimony.findUnique.mockResolvedValue(pending());
+      // The guarded updateMany matched nothing -- the row stopped being
+      // PENDING between the read and the write.
+      prisma.testimony.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.deleteMine('user-1', 'testimony-1')).rejects.toThrow(
+        /already been reviewed or removed/i,
+      );
+    });
+
+    it('hides withdrawn testimonies from the trainer own list', async () => {
+      await service.listMine('user-1');
+
+      expect(prisma.testimony.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: 'user-1', deletedAt: null } }),
+      );
+    });
+  });
+
 });

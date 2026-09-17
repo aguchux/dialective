@@ -1231,11 +1231,13 @@ model Testimony {
   rejectionReason   String?
   rewardCredited    Boolean         @default(false) // set true once creditTestimonyReward actually credits -- lets the admin UI show "rewarded" without re-deriving it from the ledger
   visible           Boolean         @default(true) // admin can hide an already-approved testimony from the public homepage without reversing its approval or reward
+  deletedAt         DateTime? // trainer withdrew this submission before review. SOFT delete on purpose: enforceMonthlySubmissionCap counts every row regardless of status precisely so a rejected/pending attempt cannot be retried indefinitely, and a hard delete would let someone delete-and-resubmit in a loop to defeat that guard. Deleting is only permitted while status is PENDING -- an APPROVED testimony has been paid out and may be embedded publicly, so it is the admin's to retract, not the trainer's.
   createdAt         DateTime        @default(now())
 
   @@index([userId])
   @@index([editedByAdminId])
   @@index([status, createdAt])
+  @@index([userId, deletedAt])
   @@map("testimonies")
 }
 

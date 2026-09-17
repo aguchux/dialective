@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { CreateTestimonyDto } from './dto/create-testimony.dto';
 import { CreateTestimonyUploadUrlDto } from './dto/create-testimony-upload-url.dto';
@@ -25,6 +25,15 @@ export class TestimonialsController {
   @UseGuards(JwtAuthGuard)
   submit(@Req() req: AuthenticatedRequest, @Body() dto: CreateTestimonyDto) {
     return this.testimonials.submit(req.user.sub, dto);
+  }
+
+  // Ownership and the PENDING-only rule are both enforced in the service, not
+  // here -- the id comes straight from the URL, so the guard alone would only
+  // prove the caller is logged in, not that the testimony is theirs.
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  deleteMine(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.testimonials.deleteMine(req.user.sub, id);
   }
 
   /**

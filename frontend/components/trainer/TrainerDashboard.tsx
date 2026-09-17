@@ -110,6 +110,7 @@ import {
   useListIntegrationsQuery,
   useGetPublicClientSettingsQuery,
   useListMyTestimoniesQuery,
+  useDeleteMyTestimonyMutation,
   useGetKycStatusQuery,
   useCreateKycSessionMutation,
   useCancelMyKycMutation,
@@ -2769,6 +2770,25 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
   });
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
+  const [deleteTestimony] = useDeleteMyTestimonyMutation();
+  const [deletingTestimonyId, setDeletingTestimonyId] = useState<string | null>(null);
+  const [testimonyError, setTestimonyError] = useState<string | null>(null);
+
+  async function removeTestimony(id: string) {
+    if (deletingTestimonyId) return;
+    setTestimonyError(null);
+    setDeletingTestimonyId(id);
+    try {
+      await deleteTestimony(id).unwrap();
+    } catch (err) {
+      // The most likely failure is a genuine race -- an admin reviewed it
+      // while this page was open -- so surface the server's wording rather
+      // than a generic message.
+      setTestimonyError(normalizeErrorMessage(err, 'Unable to delete this testimonial.'));
+    } finally {
+      setDeletingTestimonyId(null);
+    }
+  }
   const kycStatus = kycStatusData?.kycStatus ?? 'NOT_STARTED';
   const testimonyEligible = kycStatus === 'APPROVED';
 
@@ -2867,6 +2887,11 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
         <div className={`${cardClass} p-5 text-sm font-bold text-muted`}>Loading...</div>
       ) : myTestimonies && myTestimonies.length > 0 ? (
         <div className="grid gap-3">
+          {testimonyError && (
+            <p className="text-sm font-bold text-[#a3242f]" role="alert">
+              {testimonyError}
+            </p>
+          )}
           {myTestimonies.map((testimony) => (
             <div className={`${cardClass} grid gap-3 p-5`} key={testimony.id}>
               <div className="flex items-center justify-between gap-2">
@@ -2889,6 +2914,23 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
                 <p className="text-sm font-bold text-emerald-700">
                   Your DL reward has been credited.
                 </p>
+              )}
+              {/*
+                Only while PENDING. Once approved it has been paid out and may
+                already be on the public homepage, so withdrawing it is the
+                admin's call, not the trainer's -- the API enforces this too.
+              */}
+              {testimony.status === 'PENDING' && (
+                <div className="flex justify-end">
+                  <ActionButton
+                    className="text-sm font-bold text-[#a3242f] hover:underline"
+                    onClick={() => void removeTestimony(testimony.id)}
+                    pending={deletingTestimonyId === testimony.id}
+                    type="button"
+                  >
+                    Delete testimonial
+                  </ActionButton>
+                </div>
               )}
             </div>
           ))}
