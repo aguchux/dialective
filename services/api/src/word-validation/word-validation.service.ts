@@ -14,6 +14,7 @@ import { CoursesService } from '../courses/courses.service';
 import { AUDIT_HOLD_MESSAGE, isOnAuditHold } from '../common/audit-hold.util';
 import { SubmitWordValidationDto } from './dto/submit-word-validation.dto';
 import { ResolveMisplacedDialectDto } from './dto/resolve-misplaced-dialect.dto';
+import { signWordValidationPresentmentToken, verifyWordValidationPresentmentToken } from './word-validation-presentment.util';
 
 const DISTRACTOR_COUNT = 3; // total options shown = 1 correct + this many distractors
 
@@ -90,6 +91,10 @@ export class WordValidationService {
       wordOptions,
       dialectTag: trainer.dialect!.tag,
       dialectName: trainer.dialect!.name,
+      presentmentToken: signWordValidationPresentmentToken({
+        sub: userId,
+        recordingId: recording.id,
+      }),
     };
   }
 
@@ -107,11 +112,30 @@ export class WordValidationService {
     }
 
     const threshold = await this.settings.getMisplacedDialectFlagThreshold();
-    const [payoutEnabled, payoutTokens] = await Promise.all([
+    const [payoutEnabled, payoutTokens, minSeconds] = await Promise.all([
       this.settings.isDialectValidationTaskEnabled(),
       this.settings.getDialectValidationPayoutTokens(),
+      this.settings.getDialectValidationMinSeconds(),
     ]);
     const flaggedWrongDialect = !!body.flags?.includes(WordValidationFlag.WRONG_DIALECT);
+
+    // Anti-farming floor -- NOT a correctness check (isCorrectMatch never
+    // gates payout below, since flagging a bad recording is the validator
+    // doing their job right). A missing/expired/mismatched/replayed token,
+    // or one issued too recently, means no proof of a real listen -- the
+    // validation is still recorded (the data may be genuinely useful), it
+    // just doesn't pay out this time.
+    const presentment = body.presentmentToken
+      ? verifyWordValidationPresentmentToken(body.presentmentToken, {
+          userId,
+          recordingId: recording.id,
+        })
+      : null;
+    const elapsedSeconds = presentment
+      ? (Date.now() - presentment.issuedAt.getTime()) / 1000
+      : null;
+    const metMinTime =
+      minSeconds <= 0 || (elapsedSeconds !== null && elapsedSeconds >= minSeconds);
 
     const result = await this.prisma.$transaction(async (tx) => {
       let validation;
@@ -151,7 +175,7 @@ export class WordValidationService {
 
       let rewarded = false;
       let rewardAmount: string | null = null;
-      if (payoutEnabled && payoutTokens > 0) {
+      if (payoutEnabled && payoutTokens > 0 && metMinTime) {
         const wallet = await tx.wallet.upsert({
           where: { userId },
           update: {},

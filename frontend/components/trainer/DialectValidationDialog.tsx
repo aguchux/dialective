@@ -203,6 +203,7 @@ export function DialectValidationDialog({
     try {
       const result = await submitValidation({
         recordingId: item.recordingId,
+        presentmentToken: item.presentmentToken,
         selectedWordId: selectedWordId ?? undefined,
         transcript: transcript.trim() || undefined,
         flags: flags.length > 0 ? flags : undefined,

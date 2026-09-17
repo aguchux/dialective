@@ -30,6 +30,7 @@ export function DialectValidationSettingsPanel() {
   const [taskEnabled, setTaskEnabled] = useState(false);
   const [payoutTokens, setPayoutTokens] = useState('0');
   const [flagThreshold, setFlagThreshold] = useState('3');
+  const [minSeconds, setMinSeconds] = useState('5');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,9 +39,12 @@ export function DialectValidationSettingsPanel() {
     setTaskEnabled(settings.dialectValidationTaskEnabled);
     setPayoutTokens(settings.dialectValidationPayoutTokens ?? '0');
     setFlagThreshold(String(settings.misplacedDialectFlagThreshold));
+    setMinSeconds(String(settings.dialectValidationMinSeconds));
   }, [settings]);
 
   const flagThresholdValid = Number(flagThreshold) >= 1;
+  const minSecondsValid =
+    Number.isInteger(Number(minSeconds)) && Number(minSeconds) >= 0 && Number(minSeconds) <= 600;
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -51,12 +55,17 @@ export function DialectValidationSettingsPanel() {
       setError('Flag threshold must be at least 1.');
       return;
     }
+    if (!minSecondsValid) {
+      setError('Minimum time on task must be a whole number between 0 and 600 seconds.');
+      return;
+    }
 
     try {
       await updateSettings({
         dialectValidationTaskEnabled: taskEnabled,
         dialectValidationPayoutTokens: Number(payoutTokens),
         misplacedDialectFlagThreshold: Number(flagThreshold),
+        dialectValidationMinSeconds: Number(minSeconds),
       }).unwrap();
       setMessage('Dialect Validation settings saved.');
     } catch (err) {
@@ -145,10 +154,36 @@ export function DialectValidationSettingsPanel() {
             )}
           </div>
 
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="dialect-validation-min-seconds">
+              Minimum time on task (seconds)
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              Anti-farming floor, not a correctness check -- a validator who flags a recording as
+              wrong dialect or a mismatch is doing their job right and is still rewarded. This
+              only withholds the reward when the item was submitted faster than a real listen
+              would take (the validation itself is still recorded either way). Set to 0 to
+              disable.
+            </p>
+            <input
+              className={`${inputClass} max-w-40`}
+              id="dialect-validation-min-seconds"
+              min="0"
+              max="600"
+              onChange={(e) => setMinSeconds(e.target.value)}
+              step="1"
+              type="number"
+              value={minSeconds}
+            />
+            {!minSecondsValid && (
+              <p className="text-sm font-bold text-danger">Must be a whole number, 0-600.</p>
+            )}
+          </div>
+
           <div>
             <ActionButton
               className={primaryButtonClass}
-              disabled={!flagThresholdValid}
+              disabled={!flagThresholdValid || !minSecondsValid}
               pending={isSaving}
               pendingLabel="Saving"
               type="submit"

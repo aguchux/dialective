@@ -1,6 +1,10 @@
+process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? 'test-secret';
+
 import { BadRequestException, ConflictException } from '@nestjs/common';
+import * as jwt from 'jsonwebtoken';
 import { WordValidationFlag } from '@dialectiva/db';
 import { WordValidationService } from './word-validation.service';
+import { signWordValidationPresentmentToken } from './word-validation-presentment.util';
 
 describe('WordValidationService', () => {
   const trainer = {
@@ -70,6 +74,7 @@ describe('WordValidationService', () => {
       isDialectValidationTaskEnabled: jest.fn().mockResolvedValue(true),
       getDialectValidationPayoutTokens: jest.fn().mockResolvedValue(0),
       getMisplacedDialectFlagThreshold: jest.fn().mockResolvedValue(3),
+      getDialectValidationMinSeconds: jest.fn().mockResolvedValue(0),
     };
     courses = { getIncompleteRequiredCourses: jest.fn().mockResolvedValue([]) };
     service = new WordValidationService(prisma, storage as any, settings as any, courses as any);
@@ -241,6 +246,94 @@ describe('WordValidationService', () => {
       } as any);
       expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
       expect(result.rewarded).toBe(false);
+    });
+
+    describe('anti-farming min-seconds gate (not a correctness gate)', () => {
+      beforeEach(() => {
+        settings.getDialectValidationPayoutTokens.mockResolvedValue(0.5);
+        settings.getDialectValidationMinSeconds.mockResolvedValue(5);
+      });
+
+      it('still records the validation but withholds the reward with no presentmentToken', async () => {
+        const result = await service.submit(trainer.id, {
+          recordingId: 'recording-1',
+          selectedWordId: 'word-correct',
+        } as any);
+        expect(prisma.wordValidation.create).toHaveBeenCalled();
+        expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
+        expect(result.rewarded).toBe(false);
+      });
+
+      it('withholds the reward when the token was issued too recently (elapsed < minSeconds)', async () => {
+        const token = signWordValidationPresentmentToken({
+          sub: trainer.id,
+          recordingId: 'recording-1',
+        });
+        const result = await service.submit(trainer.id, {
+          recordingId: 'recording-1',
+          selectedWordId: 'word-correct',
+          presentmentToken: token,
+        } as any);
+        expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
+        expect(result.rewarded).toBe(false);
+      });
+
+      it('pays the reward once enough time has elapsed since the token was issued', async () => {
+        const past = Math.floor(Date.now() / 1000) - 10;
+        const token = jwt.sign(
+          { sub: trainer.id, recordingId: 'recording-1', typ: 'word-validation-presentment', iat: past },
+          process.env.JWT_ACCESS_SECRET as string,
+        );
+        const result = await service.submit(trainer.id, {
+          recordingId: 'recording-1',
+          selectedWordId: 'word-correct',
+          presentmentToken: token,
+        } as any);
+        expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ type: 'VALIDATION_REWARD' }) }),
+        );
+        expect(result.rewarded).toBe(true);
+      });
+
+      it('withholds the reward when the token belongs to a different recording (no replay across items)', async () => {
+        const token = signWordValidationPresentmentToken({
+          sub: trainer.id,
+          recordingId: 'some-other-recording',
+        });
+        const result = await service.submit(trainer.id, {
+          recordingId: 'recording-1',
+          selectedWordId: 'word-correct',
+          presentmentToken: token,
+        } as any);
+        expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
+        expect(result.rewarded).toBe(false);
+      });
+
+      it('does NOT gate on correctness -- a wrong-but-timely answer still gets rewarded (flagging a bad recording is the job, not abuse)', async () => {
+        const past = Math.floor(Date.now() / 1000) - 10;
+        const token = jwt.sign(
+          { sub: trainer.id, recordingId: 'recording-1', typ: 'word-validation-presentment', iat: past },
+          process.env.JWT_ACCESS_SECRET as string,
+        );
+        const result = await service.submit(trainer.id, {
+          recordingId: 'recording-1',
+          selectedWordId: 'word-wrong', // does not match candidateRecording.wordId
+          presentmentToken: token,
+        } as any);
+        expect(prisma.wordValidation.create).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ isCorrectMatch: false }) }),
+        );
+        expect(result.rewarded).toBe(true);
+      });
+
+      it('bypasses the gate entirely (pays immediately, no token needed) when minSeconds is 0', async () => {
+        settings.getDialectValidationMinSeconds.mockResolvedValue(0);
+        const result = await service.submit(trainer.id, {
+          recordingId: 'recording-1',
+          selectedWordId: 'word-correct',
+        } as any);
+        expect(result.rewarded).toBe(true);
+      });
     });
   });
 

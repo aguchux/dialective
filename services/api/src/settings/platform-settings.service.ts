@@ -956,6 +956,11 @@ export class PlatformSettingsService {
     return row.misplacedDialectFlagThreshold;
   }
 
+  async getDialectValidationMinSeconds(): Promise<number> {
+    const row = await this.getRow();
+    return row.dialectValidationMinSeconds;
+  }
+
   async getDomainConversationMinDurationSeconds(): Promise<number> {
     const row = await this.getRow();
     if (row.domainConversationMinDurationSeconds !== null) {
@@ -1100,6 +1105,7 @@ export class PlatformSettingsService {
       dialectValidationTaskEnabled: row.dialectValidationTaskEnabled,
       dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
       misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
+      dialectValidationMinSeconds: row.dialectValidationMinSeconds,
       domainConversationMinDurationSeconds,
       domainConversationMaxDurationSeconds,
       domainConversationTaskTokenCost: row.domainConversationTaskTokenCost?.toString() ?? null,
@@ -1324,6 +1330,7 @@ export class PlatformSettingsService {
     dialectValidationTaskEnabled?: boolean;
     dialectValidationPayoutTokens?: number | null;
     misplacedDialectFlagThreshold?: number;
+    dialectValidationMinSeconds?: number;
     domainConversationMinDurationSeconds?: number;
     domainConversationMaxDurationSeconds?: number;
     domainConversationTaskTokenCost?: number | null;
@@ -2057,6 +2064,7 @@ export class PlatformSettingsService {
       dialectValidationTaskEnabled: row.dialectValidationTaskEnabled,
       dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
       misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
+      dialectValidationMinSeconds: row.dialectValidationMinSeconds,
       domainConversationMinDurationSeconds,
       domainConversationMaxDurationSeconds,
       domainConversationTaskTokenCost: row.domainConversationTaskTokenCost?.toString() ?? null,
@@ -2291,6 +2299,7 @@ export class PlatformSettingsService {
       dialectValidationTaskEnabled: row.dialectValidationTaskEnabled,
       dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
       misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
+      dialectValidationMinSeconds: row.dialectValidationMinSeconds,
       sessionIdleTimeoutMinutes: row.sessionIdleTimeoutMinutes,
       sessionMaxHours: row.sessionMaxHours,
       phoneVerificationRequired,

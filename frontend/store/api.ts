@@ -1812,6 +1812,7 @@ export interface PlatformSettings {
   dialectValidationTaskEnabled: boolean;
   dialectValidationPayoutTokens: string | null;
   misplacedDialectFlagThreshold: number;
+  dialectValidationMinSeconds: number;
   domainConversationMinDurationSeconds: number;
   domainConversationMaxDurationSeconds: number;
   domainConversationTaskTokenCost: string | null;
@@ -1995,6 +1996,7 @@ export interface PlatformSettingsInput {
   dialectValidationTaskEnabled?: boolean;
   dialectValidationPayoutTokens?: number | null;
   misplacedDialectFlagThreshold?: number;
+  dialectValidationMinSeconds?: number;
   domainConversationMinDurationSeconds?: number;
   domainConversationMaxDurationSeconds?: number;
   domainConversationTaskTokenCost?: number;
@@ -2261,6 +2263,9 @@ export interface WordValidationItem {
   wordOptions: { id: string; text: string }[];
   dialectTag: string;
   dialectName: string;
+  // Echo this back verbatim in submitWordValidation -- the server uses it to
+  // prove (via its own clock) how long ago this item was actually served.
+  presentmentToken: string;
 }
 
 export interface MisplacedDialectRecording {
@@ -3663,6 +3668,7 @@ export const dialectivaApi = createApi({
       { validationId: string; rewarded: boolean; rewardAmount: string | null; misplaced: boolean },
       {
         recordingId: string;
+        presentmentToken?: string;
         selectedWordId?: string;
         transcript?: string;
         flags?: WordValidationFlag[];

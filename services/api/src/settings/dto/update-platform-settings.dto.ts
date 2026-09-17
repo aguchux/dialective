@@ -137,6 +137,12 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsInt()
+  @Min(0)
+  @Max(600)
+  dialectValidationMinSeconds?: number;
+
+  @IsOptional()
+  @IsInt()
   @Min(1)
   @Max(300)
   domainConversationMinDurationSeconds?: number;
