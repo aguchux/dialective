@@ -154,6 +154,13 @@ describe('TokenomicsService', () => {
         tokenomicsPolicy: { upsert: jest.fn().mockResolvedValue(policy) },
         reserveBalanceSnapshot: { findMany: jest.fn().mockResolvedValue([]) },
         tokenAccount: { findMany: jest.fn().mockResolvedValue([]) },
+        // User-held supply is read from Wallet (see summarizeSupply) --
+        // TokenAccount only supplies TREASURY/BURN.
+        wallet: {
+          aggregate: jest
+            .fn()
+            .mockResolvedValue({ _sum: { balance: null, lockedBalance: null } }),
+        },
         valuationSnapshot: { findFirst: jest.fn().mockResolvedValue(null) },
       };
       return prisma;
@@ -179,14 +186,64 @@ describe('TokenomicsService', () => {
           fetchedAt: new Date(),
         },
       ]);
-      prisma.tokenAccount.findMany.mockResolvedValue([
-        { kind: 'USER', available: new Prisma.Decimal(1000), locked: new Prisma.Decimal(0) },
-      ]);
+      prisma.wallet.aggregate.mockResolvedValue({
+        _sum: { balance: new Prisma.Decimal(1000), lockedBalance: new Prisma.Decimal(0) },
+      });
       const settings = { getTokenUsdRate: jest.fn().mockResolvedValue(0.1) };
       const service = new TokenomicsService(prisma as never, settings as never);
 
       const status = await service.getStatus();
       expect(status.reserveHealthStatus).toBe(expected);
+    });
+
+    // Regression: user supply used to be read from USER TokenAccount rows,
+    // which only training payouts and startup bonuses ever minted into. The
+    // other 19 ledger-entry types moved real DL the mirror never saw, so in
+    // production it understated user holdings by ~6.9k DL -- and since
+    // redeemable is the denominator of both coverageRatio and the published
+    // DL value, that made reserve coverage look healthier and the token look
+    // more valuable than either really was.
+    it('measures redeemable supply from real wallet balances, not the TokenAccount mirror', async () => {
+      const prisma = makeStatusHarness();
+      prisma.wallet.aggregate.mockResolvedValue({
+        _sum: { balance: new Prisma.Decimal(900), lockedBalance: new Prisma.Decimal(100) },
+      });
+      // A stale/incomplete mirror must not be able to influence the figure.
+      prisma.tokenAccount.findMany.mockResolvedValue([
+        { kind: 'USER', available: new Prisma.Decimal(1), locked: new Prisma.Decimal(0) },
+      ]);
+      const settings = { getTokenUsdRate: jest.fn().mockResolvedValue(0.1) };
+      const service = new TokenomicsService(prisma as never, settings as never);
+
+      const status = await service.getStatus();
+
+      expect(status.supply.circulating).toBe(900);
+      expect(status.supply.locked).toBe(100);
+      // Locked stake is still a redeemable liability -- it's the trainer's
+      // money, merely held pending a task outcome.
+      expect(status.supply.redeemable).toBe(1000);
+    });
+
+    it('still counts TREASURY and BURN from TokenAccount, which have no wallet', async () => {
+      const prisma = makeStatusHarness();
+      prisma.wallet.aggregate.mockResolvedValue({
+        _sum: { balance: new Prisma.Decimal(500), lockedBalance: new Prisma.Decimal(0) },
+      });
+      prisma.tokenAccount.findMany.mockResolvedValue([
+        { kind: 'TREASURY', available: new Prisma.Decimal(200), locked: new Prisma.Decimal(0) },
+        { kind: 'BURN', available: new Prisma.Decimal(50), locked: new Prisma.Decimal(0) },
+      ]);
+      const settings = { getTokenUsdRate: jest.fn().mockResolvedValue(0.1) };
+      const service = new TokenomicsService(prisma as never, settings as never);
+
+      const status = await service.getStatus();
+
+      expect(status.supply.treasury).toBe(200);
+      expect(status.supply.burned).toBe(50);
+      // Burned DL stays in totalMinted but out of redeemable, per
+      // docs/Tokenomics-Reserve-Engine.md.
+      expect(status.supply.redeemable).toBe(500);
+      expect(status.supply.totalMinted).toBe(750);
     });
 
     it('returns HEALTHY when there is no redeemable liability yet', async () => {
@@ -446,10 +503,13 @@ describe('TokenomicsService', () => {
             },
           ]),
         },
-        tokenAccount: {
-          findMany: jest.fn().mockResolvedValue([
-            { kind: 'USER', available: new Prisma.Decimal(1000), locked: new Prisma.Decimal(0) },
-          ]),
+        tokenAccount: { findMany: jest.fn().mockResolvedValue([]) },
+        // Redeemable supply of 1000 comes from real wallet balances, which
+        // is what users can actually redeem -- see summarizeSupply.
+        wallet: {
+          aggregate: jest.fn().mockResolvedValue({
+            _sum: { balance: new Prisma.Decimal(1000), lockedBalance: new Prisma.Decimal(0) },
+          }),
         },
         valuationSnapshot,
       };

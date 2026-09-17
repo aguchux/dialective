@@ -171,15 +171,16 @@ export class TokenomicsService {
   }
 
   async getStatus() {
-    const [policy, balanceSnapshots, accounts, latest] = await Promise.all([
+    const [policy, balanceSnapshots, accounts, walletTotals, latest] = await Promise.all([
       this.ensurePolicy(),
       this.prisma.reserveBalanceSnapshot.findMany({ orderBy: { fetchedAt: 'asc' } }),
       this.prisma.tokenAccount.findMany({
         select: { kind: true, available: true, locked: true },
       }),
+      this.prisma.wallet.aggregate({ _sum: { balance: true, lockedBalance: true } }),
       this.prisma.valuationSnapshot.findFirst({ orderBy: { createdAt: 'desc' } }),
     ]);
-    const supply = summarizeSupply(accounts);
+    const supply = summarizeSupply(accounts, walletTotals);
     // The reserve total is the live Flutterwave + NOWPayments account
     // balance sum (reserve-balance-poll.ts, cached in ReserveBalanceSnapshot
     // -- see its doc comment in schema.prisma), not the ReserveTransaction
@@ -581,25 +582,51 @@ export class TokenomicsService {
   }
 }
 
+/**
+ * User-held supply is read from Wallet, not from USER TokenAccounts.
+ *
+ * Wallet is what trainers actually spend and withdraw, and every movement of
+ * it writes a LedgerEntry -- it reconciles exactly against that ledger for
+ * every wallet. The USER TokenAccount mirror does not: only training payouts
+ * and startup bonuses were ever minted into it, so 19 of the 21 ledger entry
+ * types (deposits, withdrawals, referral and course and validation rewards,
+ * P2P escrow, admin funding...) moved real DL that it never saw. In
+ * production that left it understating user holdings by ~6.9k DL against a
+ * ~57.8k DL wallet total, with no BURN or LOCK operation ever recorded.
+ *
+ * That understatement is not cosmetic: `redeemable` is the denominator of
+ * coverageRatio AND of the published DL value, so a too-small figure made
+ * reserve coverage look healthier than it was and the token look more
+ * valuable than it was -- the two numbers the reserve engine exists to keep
+ * honest (see docs/Tokenomics-Reserve-Engine.md: "The published DL value is
+ * calculated from reserve and redeemable supply").
+ *
+ * Deriving from Wallet rather than backfilling the mirror is deliberate. A
+ * backfill fixes today's number and then drifts again the moment any new
+ * credit path forgets to mint -- which is exactly how this happened. Reading
+ * the authoritative balance makes that class of bug structurally impossible
+ * instead of merely corrected.
+ *
+ * TREASURY/BURN accounts have no Wallet counterpart and keep coming from
+ * TokenAccount, which is the right source for them.
+ */
 function summarizeSupply(
   accounts: Array<{ kind: TokenAccountKind; available: Prisma.Decimal; locked: Prisma.Decimal }>,
+  walletTotals: { _sum: { balance: Prisma.Decimal | null; lockedBalance: Prisma.Decimal | null } },
 ) {
-  let circulating = 0;
   let treasury = 0;
-  let locked = 0;
   let burned = 0;
   for (const account of accounts) {
-    const available = account.available.toNumber();
-    const accountLocked = account.locked.toNumber();
-    if (account.kind === TokenAccountKind.USER) {
-      circulating += available;
-      locked += accountLocked;
-    } else if (account.kind === TokenAccountKind.TREASURY) {
-      treasury += available + accountLocked;
-    } else {
-      burned += available + accountLocked;
+    if (account.kind === TokenAccountKind.TREASURY) {
+      treasury += account.available.toNumber() + account.locked.toNumber();
+    } else if (account.kind === TokenAccountKind.BURN) {
+      burned += account.available.toNumber() + account.locked.toNumber();
     }
   }
+
+  const circulating = walletTotals._sum.balance?.toNumber() ?? 0;
+  const locked = walletTotals._sum.lockedBalance?.toNumber() ?? 0;
+
   return {
     totalMinted: circulating + treasury + locked + burned,
     circulating,
