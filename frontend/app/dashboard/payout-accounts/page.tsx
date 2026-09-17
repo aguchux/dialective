@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { ArrowLeft, ArrowRight, Banknote, Smartphone, Wallet } from 'lucide-react';
@@ -32,6 +33,36 @@ const NETWORK_LABELS: Record<StablecoinNetwork, string> = {
   SOL: 'Solana',
   POLYGON: 'Polygon',
 };
+
+// Every file here is a circular brand badge at its own native resolution
+// (256-600px) -- CryptoIcon below is what enforces one consistent rendered
+// size everywhere they're used, rather than re-exporting raw pixel sizes.
+const ASSET_ICON_SRC: Record<(typeof STABLECOIN_ASSETS)[number], string> = {
+  USDT: '/crypto/usdt.png',
+  USDC: '/crypto/usdc.png',
+};
+
+const NETWORK_ICON_SRC: Record<StablecoinNetwork, string> = {
+  TRC20: '/crypto/tron.png',
+  ERC20: '/crypto/ethereum.png',
+  BEP20: '/crypto/binance.png',
+  SOL: '/crypto/solana.png',
+  POLYGON: '/crypto/polygon.png',
+};
+
+/** Renders any crypto/*.png brand badge at one fixed, consistent size regardless of its native resolution. */
+function CryptoIcon({ src, alt, size = 28 }: { src: string; alt: string; size?: number }) {
+  return (
+    <Image
+      alt={alt}
+      className="shrink-0 rounded-full"
+      height={size}
+      src={src}
+      style={{ width: size, height: size }}
+      width={size}
+    />
+  );
+}
 
 // Mirrors NOWPayments' own wallet_regex per network (see backend
 // common/crypto-address.util.ts) -- client-side only for immediate
@@ -714,7 +745,7 @@ function AddPayoutAccountDialog({
               <div className="grid grid-cols-2 gap-2">
                 {STABLECOIN_ASSETS.filter((asset) => allowedAssets.includes(asset)).map((asset) => (
                   <label
-                    className={`flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 text-center font-extrabold ${stablecoinAsset === asset ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
+                    className={`flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 text-center font-extrabold ${stablecoinAsset === asset ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
                     key={asset}
                   >
                     <input
@@ -724,6 +755,7 @@ function AddPayoutAccountDialog({
                       onChange={() => selectStablecoinAsset(asset)}
                       type="radio"
                     />
+                    <CryptoIcon alt={asset} src={ASSET_ICON_SRC[asset]} />
                     {asset}
                   </label>
                 ))}
@@ -734,7 +766,7 @@ function AddPayoutAccountDialog({
               <div className="grid grid-cols-2 gap-2">
                 {selectableNetworks.map((network) => (
                   <label
-                    className={`flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 text-center text-sm font-extrabold ${stablecoinNetwork === network ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
+                    className={`flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-lg border px-2 text-center text-sm font-extrabold ${stablecoinNetwork === network ? 'border-accent bg-accent-soft text-accent' : 'border-line'}`}
                     key={network}
                   >
                     <input
@@ -744,6 +776,7 @@ function AddPayoutAccountDialog({
                       onChange={() => setStablecoinNetwork(network)}
                       type="radio"
                     />
+                    <CryptoIcon alt={NETWORK_LABELS[network]} size={24} src={NETWORK_ICON_SRC[network]} />
                     {NETWORK_LABELS[network]}
                   </label>
                 ))}
@@ -797,11 +830,12 @@ function AddPayoutAccountDialog({
 
         {step === 'wallet-otp' && (
           <form className="grid gap-3" onSubmit={handleWalletSubmit}>
-            <p className="text-sm text-muted">
-              Confirming{' '}
+            <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted">
+              Confirming
+              <CryptoIcon alt={stablecoinAsset} size={20} src={ASSET_ICON_SRC[stablecoinAsset]} />
               <span className="font-bold text-ink">
                 {stablecoinAsset} ({NETWORK_LABELS[stablecoinNetwork]})
-              </span>{' '}
+              </span>
               to <span className="font-mono font-bold text-ink">{walletAddress}</span>
             </p>
             <input
