@@ -1414,7 +1414,20 @@ model WordRecording {
   payoutTokenAmount         Decimal?                @db.Decimal(20, 8) // computed at settlement, null until SETTLED
   scoredAt                  DateTime?
   settledAt                 DateTime?
-  refundedAt                DateTime? // set once settlement-job releases a stuck-timeout ENGLISH_TO_DIALECT recording's lock back to balance
+  /// OVERLOADED -- "this row is resolved", NOT "tokens were returned". Two
+  /// different sweeps set it: refundStuckWordRecordings/resolveTimedOutScoring
+  /// stamp it as an atomic CLAIM MARKER before deciding what to do, and under
+  /// noFailOnTrainEnabled the row is then scored and PAID rather than
+  /// refunded -- no tokens move at all. Other paths set it when a stake
+  /// genuinely was returned. The two cases are indistinguishable here.
+  ///
+  /// So never infer held/released stake from this column. The ledger is the
+  /// only honest record: a stake is still held iff it has a TASK_LOCK entry
+  /// and no TASK_REFUND entry (see SettlementService.isStakeStillLocked).
+  /// A 2026-09 repair migration inferred it from this column and silently
+  /// dropped ~104 DL of genuinely-held stake across 247 wallets, which then
+  /// went negative as settlement released those stakes correctly.
+  refundedAt                DateTime?
   adminAuditStatus          AdminAuditStatus? // null = not yet reviewed; see AdminAuditStatus doc comment
   adminAuditedAt            DateTime?
   createdAt                 DateTime                @default(now())
@@ -1614,6 +1627,8 @@ model DomainConversationRecording {
   payoutTokenAmount    Decimal?                      @db.Decimal(20, 8)
   scoredAt             DateTime?
   settledAt            DateTime?
+  /// Same overloading as WordRecording.refundedAt -- "resolved", not "tokens
+  /// returned". See that field's comment; never infer held stake from it.
   refundedAt           DateTime?
   adminAuditStatus     AdminAuditStatus?
   adminAuditedAt       DateTime?
