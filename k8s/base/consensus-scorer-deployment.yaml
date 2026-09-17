@@ -1,0 +1,75 @@
+# Recovered from the live cluster on 2026-09-17. This Deployment was running
+# in production with NO manifest anywhere in this repo -- applied out-of-band
+# at some point and never committed, so `kubectl apply -k k8s/overlays/prod`
+# did not manage it and nobody reviewing this repo could see it existed.
+#
+# Reads consensus-jobs (written by whisper-worker/vosk-worker after ASR) and
+# scores agreement across submissions once MIN_QUORUM independent results
+# exist. Resource sizing added in the same pass as every other dai workload
+# -- see api-deployment.yaml for why BestEffort containers were the cause of
+# the OOMKill/eviction incident.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: consensus-scorer
+  name: consensus-scorer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consensus-scorer
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: '2026-08-15T23:23:30+01:00'
+      labels:
+        app: consensus-scorer
+    spec:
+      containers:
+      - env:
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              key: redis_host
+              name: consensus-scorer-config-tbf45h27gg
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              key: redis_port
+              name: consensus-scorer-config-tbf45h27gg
+        - name: CONSENSUS_STREAM
+          valueFrom:
+            configMapKeyRef:
+              key: consensus_stream
+              name: consensus-scorer-config-tbf45h27gg
+        - name: CONSUMER_GROUP
+          valueFrom:
+            configMapKeyRef:
+              key: consumer_group
+              name: consensus-scorer-config-tbf45h27gg
+        - name: MIN_QUORUM
+          valueFrom:
+            configMapKeyRef:
+              key: min_quorum
+              name: consensus-scorer-config-tbf45h27gg
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: connection_string
+              name: postgres-creds-6k64mff929
+        image: golojan/dialect-consensus-scorer:latest
+        imagePullPolicy: Always
+        name: consensus-scorer
+        resources:
+          limits:
+            memory: 384Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+
