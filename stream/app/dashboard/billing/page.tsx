@@ -1,12 +1,18 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useCreateCheckoutSessionMutation, useGetSubscriptionQuery } from '@/store/api';
 import { Card, PageHeading, PrimaryButton } from '@/components/ui';
+import { CHECKOUT_ROLES } from '@/lib/route-access';
 
 const PLAN_KEYS = ['starter', 'professional', 'enterprise'] as const;
 
 export default function BillingPage() {
+  const { data: session } = useSession();
+  const canManageBilling = Boolean(
+    session?.user.orgRole && CHECKOUT_ROLES.includes(session.user.orgRole),
+  );
   const searchParams = useSearchParams();
   const checkoutResult = searchParams.get('checkout');
   const { data: subscription, refetch: refetchSubscription } = useGetSubscriptionQuery();
@@ -50,8 +56,9 @@ export default function BillingPage() {
         )}
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {PLAN_KEYS.map((key) => (
+      {canManageBilling ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {PLAN_KEYS.map((key) => (
           <Card className="p-5" key={key}>
             <p className="text-lg font-black capitalize text-ink">{key}</p>
             <p className="mt-1 text-sm text-muted">Monthly billing.</p>
@@ -64,8 +71,15 @@ export default function BillingPage() {
               {subscription?.plan.key === key ? 'Current plan' : `Choose ${key}`}
             </PrimaryButton>
           </Card>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <Card className="p-5">
+          <p className="text-sm text-muted">
+            Subscription changes are available to organization owners and billing managers.
+          </p>
+        </Card>
+      )}
     </div>
   );
 }

@@ -21,6 +21,13 @@ import { BillingService } from './billing.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { UsageCounterService } from '../stream-api/usage-counter.service';
 
+const CAN_VIEW_BILLING = [
+  SubscriberOrgRole.OWNER,
+  SubscriberOrgRole.ADMIN,
+  SubscriberOrgRole.BILLING_MANAGER,
+  SubscriberOrgRole.AUDITOR,
+];
+
 @Controller('voice-stream/billing')
 export class BillingController {
   constructor(
@@ -43,13 +50,15 @@ export class BillingController {
   }
 
   @Get('subscription')
-  @UseGuards(SubscriberAuthGuard)
+  @UseGuards(SubscriberAuthGuard, SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_VIEW_BILLING)
   getSubscription(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
     return this.billing.getSubscriptionStatus(subscriber.organizationId);
   }
 
   @Get('usage')
-  @UseGuards(SubscriberAuthGuard)
+  @UseGuards(SubscriberAuthGuard, SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_VIEW_BILLING)
   async getUsage(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
     const usage = await this.usageCounter.getCurrentUsage(subscriber.organizationId);
     return {

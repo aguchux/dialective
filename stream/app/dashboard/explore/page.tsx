@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Play, ShieldCheck } from 'lucide-react';
 import {
   useSearchCatalogueQuery,
@@ -13,10 +14,18 @@ import { Card, ErrorText, FieldLabel, PageHeading, SecondaryButton, TextInput } 
 import { IsvcBadge } from '@/components/IsvcBadge';
 import { QualityTierBadge } from '@/components/QualityTierBadge';
 import { ValidationForm } from '@/components/ValidationForm';
+import { DECK_MANAGER_ROLES, VALIDATION_ROLES } from '@/lib/route-access';
 
 const CONFIDENCE_OPTIONS: IsvcConfidence[] = ['EMERGING', 'ESTABLISHED', 'HIGH', 'VERY_HIGH'];
 
 export default function ExplorePage() {
+  const { data: session } = useSession();
+  const canManageDecks = Boolean(
+    session?.user.orgRole && DECK_MANAGER_ROLES.includes(session.user.orgRole),
+  );
+  const canValidate = Boolean(
+    session?.user.orgRole && VALIDATION_ROLES.includes(session.user.orgRole),
+  );
   const [dialectTag, setDialectTag] = useState('');
   const [countryCode, setCountryCode] = useState('');
   const [minScore, setMinScore] = useState('');
@@ -36,7 +45,7 @@ export default function ExplorePage() {
     pageSize: 20,
   });
 
-  const { data: decks } = useListStreamDecksQuery();
+  const { data: decks } = useListStreamDecksQuery(undefined, { skip: !canManageDecks });
   const [preview, { isLoading: previewLoading }] = usePreviewRecordingMutation();
   const [addItem] = useAddStreamDeckItemMutation();
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -176,7 +185,7 @@ export default function ExplorePage() {
                   {playingId === item.recordingId && audioUrl && (
                     <audio className="mt-2" controls src={audioUrl} />
                   )}
-                  {validatingId === item.recordingId && (
+                  {canValidate && validatingId === item.recordingId && (
                     <ValidationForm
                       onClose={() => setValidatingId(null)}
                       recordingId={item.recordingId}
@@ -192,38 +201,44 @@ export default function ExplorePage() {
                     <Play aria-hidden="true" className="size-3.5" />
                     Preview
                   </SecondaryButton>
-                  <SecondaryButton
-                    onClick={() =>
-                      setValidatingId((current) =>
-                        current === item.recordingId ? null : item.recordingId,
-                      )
-                    }
-                    type="button"
-                  >
-                    <ShieldCheck aria-hidden="true" className="size-3.5" />
-                    Validate
-                  </SecondaryButton>
-                  <select
-                    className="min-h-10 rounded-lg border border-line bg-white px-2 text-sm"
-                    onChange={(e) =>
-                      setAddTarget((prev) => ({ ...prev, [item.recordingId]: e.target.value }))
-                    }
-                    value={addTarget[item.recordingId] ?? ''}
-                  >
-                    <option value="">Select a deck...</option>
-                    {(decks ?? []).map((deck) => (
-                      <option key={deck.id} value={deck.id}>
-                        {deck.name}
-                      </option>
-                    ))}
-                  </select>
-                  <SecondaryButton
-                    disabled={!addTarget[item.recordingId]}
-                    onClick={() => void handleAdd(item.recordingId)}
-                    type="button"
-                  >
-                    Add to deck
-                  </SecondaryButton>
+                  {canValidate && (
+                    <SecondaryButton
+                      onClick={() =>
+                        setValidatingId((current) =>
+                          current === item.recordingId ? null : item.recordingId,
+                        )
+                      }
+                      type="button"
+                    >
+                      <ShieldCheck aria-hidden="true" className="size-3.5" />
+                      Validate
+                    </SecondaryButton>
+                  )}
+                  {canManageDecks && (
+                    <>
+                      <select
+                        className="min-h-10 rounded-lg border border-line bg-white px-2 text-sm"
+                        onChange={(e) =>
+                          setAddTarget((prev) => ({ ...prev, [item.recordingId]: e.target.value }))
+                        }
+                        value={addTarget[item.recordingId] ?? ''}
+                      >
+                        <option value="">Select a deck...</option>
+                        {(decks ?? []).map((deck) => (
+                          <option key={deck.id} value={deck.id}>
+                            {deck.name}
+                          </option>
+                        ))}
+                      </select>
+                      <SecondaryButton
+                        disabled={!addTarget[item.recordingId]}
+                        onClick={() => void handleAdd(item.recordingId)}
+                        type="button"
+                      >
+                        Add to deck
+                      </SecondaryButton>
+                    </>
+                  )}
                 </div>
               </div>
             ))}

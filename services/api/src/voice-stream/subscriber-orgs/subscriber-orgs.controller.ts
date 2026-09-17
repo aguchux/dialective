@@ -43,6 +43,8 @@ export class SubscriberOrgsController {
   }
 
   @Get('organization/members')
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(SubscriberOrgRole.OWNER, SubscriberOrgRole.ADMIN)
   listMembers(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
     return this.orgs.listMembers(subscriber.organizationId);
   }

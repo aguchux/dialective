@@ -1,5 +1,7 @@
 import { getToken } from 'next-auth/jwt';
 import { NextResponse, type NextRequest } from 'next/server';
+import type { SubscriberOrgRole } from './lib/api-client';
+import { allowedRolesForPath, canonicalProtectedPath } from './lib/route-access';
 
 /**
  * Defense-in-depth on top of DashboardLayout's client-side session gate
@@ -20,15 +22,41 @@ export async function middleware(request: NextRequest) {
 
   const token = await getToken({ req: request });
 
-  if (token && token.authError !== 'RefreshTokenInvalid') {
-    return NextResponse.next();
+  if (!token || token.authError === 'RefreshTokenInvalid') {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('callbackUrl', `${request.nextUrl.pathname}${request.nextUrl.search}`);
+    return NextResponse.redirect(loginUrl);
   }
 
-  const loginUrl = new URL('/login', request.url);
-  loginUrl.searchParams.set('callbackUrl', `${request.nextUrl.pathname}${request.nextUrl.search}`);
-  return NextResponse.redirect(loginUrl);
+  const canonicalPath = canonicalProtectedPath(request.nextUrl.pathname);
+  const effectivePath = canonicalPath ?? request.nextUrl.pathname;
+  const allowedRoles = allowedRolesForPath(effectivePath);
+  const role = token.orgRole as SubscriberOrgRole | undefined;
+  if (allowedRoles && (!role || !allowedRoles.includes(role))) {
+    const deniedUrl = new URL('/dashboard', request.url);
+    deniedUrl.searchParams.set('access', 'denied');
+    return NextResponse.redirect(deniedUrl);
+  }
+
+  if (canonicalPath) {
+    const target = new URL(canonicalPath, request.url);
+    target.search = request.nextUrl.search;
+    return NextResponse.redirect(target);
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/team/:path*', '/api/:path*', '/usage/:path*', '/settings/:path*'],
+  matcher: [
+    '/dashboard/:path*',
+    '/discover/:path*',
+    '/voice-library/:path*',
+    '/stream-decks/:path*',
+    '/validation/:path*',
+    '/team/:path*',
+    '/api/:path*',
+    '/usage/:path*',
+    '/settings/:path*',
+  ],
 };

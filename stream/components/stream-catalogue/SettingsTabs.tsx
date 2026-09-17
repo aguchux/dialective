@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
+import { canAccessPath } from '@/lib/route-access';
 
 const TABS = [
   { href: '/settings', label: 'General' },
@@ -15,10 +17,11 @@ const TABS = [
 
 export function SettingsTabs() {
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   return (
     <nav aria-label="Settings sections" className="stream-catalogue-scrollbar flex min-w-0 gap-1 overflow-x-auto border-b border-catalogue-line">
-      {TABS.map((tab) => {
+      {TABS.filter((tab) => canAccessPath(session?.user.orgRole, tab.href)).map((tab) => {
         const active = pathname === tab.href;
         return (
           <Link

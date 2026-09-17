@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { useGetOrganizationQuery } from '@/store/api';
+import { canAccessPath } from '@/lib/route-access';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -76,7 +77,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => canAccessPath(session.user.orgRole, item.href)).map((item) => {
             const active =
               item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href);
             const Icon = item.icon;

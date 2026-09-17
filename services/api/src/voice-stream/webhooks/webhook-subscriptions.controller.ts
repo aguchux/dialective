@@ -22,6 +22,8 @@ export class WebhookSubscriptionsController {
   constructor(private readonly webhooks: WebhookSubscriptionsService) {}
 
   @Get()
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_MANAGE_WEBHOOKS)
   list(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
     return this.webhooks.list(subscriber.organizationId);
   }
@@ -45,6 +47,8 @@ export class WebhookSubscriptionsController {
   }
 
   @Get(':id/deliveries')
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_MANAGE_WEBHOOKS)
   listDeliveries(
     @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
     @Param('id') id: string,

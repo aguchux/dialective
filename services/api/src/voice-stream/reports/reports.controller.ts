@@ -1,6 +1,9 @@
 import { Controller, Get, Param, ParseIntPipe, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { SubscriberAuthGuard } from '../subscriber-auth/subscriber-auth.guard';
+import { SubscriberRolesGuard } from '../subscriber-auth/subscriber-roles.guard';
+import { SubscriberRoles } from '../subscriber-auth/subscriber-roles.decorator';
+import { SubscriberOrgRole } from '@dialectiva/db';
 import { CurrentSubscriber } from '../subscriber-auth/current-subscriber.decorator';
 import { SubscriberAccessTokenClaims } from '../subscriber-auth/subscriber-jwt.util';
 import { DatasetQualityReportService } from './dataset-quality-report.service';
@@ -21,8 +24,17 @@ import {
 } from './dto/get-report.dto';
 import { respondJsonOrCsv } from './csv.util';
 
+const CAN_VIEW_REPORTS = [
+  SubscriberOrgRole.OWNER,
+  SubscriberOrgRole.ADMIN,
+  SubscriberOrgRole.DATASET_MANAGER,
+  SubscriberOrgRole.API_DEVELOPER,
+  SubscriberOrgRole.AUDITOR,
+];
+
 @Controller('voice-stream/reports')
-@UseGuards(SubscriberAuthGuard)
+@UseGuards(SubscriberAuthGuard, SubscriberRolesGuard)
+@SubscriberRoles(...CAN_VIEW_REPORTS)
 export class ReportsController {
   constructor(
     private readonly datasetQuality: DatasetQualityReportService,

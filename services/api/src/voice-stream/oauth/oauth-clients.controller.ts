@@ -23,6 +23,8 @@ export class OAuthClientsController {
   constructor(private readonly clients: OAuthClientsService) {}
 
   @Get()
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_MANAGE_CLIENTS)
   list(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
     return this.clients.list(subscriber.organizationId);
   }

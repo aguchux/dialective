@@ -23,9 +23,11 @@ import {
   SectionHeading,
 } from './primitives';
 import { VerifiedVoices } from './VerifiedVoices';
+import { useAuthGate } from './useAuthGate';
 
 export function StreamAppShell() {
   const { status: sessionStatus } = useSession();
+  const { guard, dialog: actionAuthDialog } = useAuthGate();
   const {
     data: showcase,
     isFetching,
@@ -113,20 +115,30 @@ export function StreamAppShell() {
 
   function toggleCollectionAdded() {
     if (!selectedCollection) return;
-    setAddedCollectionIds((current) => {
-      const next = new Set(current);
-      if (next.has(selectedCollection.id)) next.delete(selectedCollection.id);
-      else next.add(selectedCollection.id);
-      return next;
+    guard('/dashboard/decks', () => {
+      setAddedCollectionIds((current) => {
+        const next = new Set(current);
+        if (next.has(selectedCollection.id)) next.delete(selectedCollection.id);
+        else next.add(selectedCollection.id);
+        return next;
+      });
     });
   }
 
   function toggleDeckAdded(id: string) {
-    setAddedDeckIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+    guard('/dashboard/decks', () => {
+      setAddedDeckIds((current) => {
+        const next = new Set(current);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    });
+  }
+
+  function togglePreview(forcePlay = false) {
+    guard('/dashboard/explore', () => {
+      setIsPlaying((current) => (forcePlay ? true : !current));
     });
   }
 
@@ -294,7 +306,7 @@ export function StreamAppShell() {
                         key={collection.id}
                         onPlay={() => {
                           selectCollection(collection.id);
-                          setIsPlaying(true);
+                          togglePreview(true);
                         }}
                         onSelect={() => selectCollection(collection.id)}
                         selected={collection.id === selectedCollectionId}
@@ -333,7 +345,7 @@ export function StreamAppShell() {
             isPlaying={isPlaying}
             onAdd={toggleCollectionAdded}
             onClose={() => setSelectedCollectionId(null)}
-            onTogglePlay={() => setIsPlaying((current) => !current)}
+            onTogglePlay={() => togglePreview()}
             validation={validationBreakdown}
           />
         </aside>
@@ -366,7 +378,7 @@ export function StreamAppShell() {
               isPlaying={isPlaying}
               onAdd={toggleCollectionAdded}
               onClose={() => setMobileInspectorOpen(false)}
-              onTogglePlay={() => setIsPlaying((current) => !current)}
+              onTogglePlay={() => togglePreview()}
               validation={validationBreakdown}
             />
           </div>
@@ -378,8 +390,9 @@ export function StreamAppShell() {
         collection={selectedCollection}
         isPlaying={isPlaying}
         onAdd={toggleCollectionAdded}
-        onToggle={() => setIsPlaying((current) => !current)}
+        onToggle={() => togglePreview()}
       />
+      {actionAuthDialog}
     </div>
   );
 }

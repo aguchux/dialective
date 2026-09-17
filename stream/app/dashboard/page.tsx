@@ -2,6 +2,7 @@
 
 import { ComponentType, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { Activity, CheckCircle2, Clock3, Download, Play, Search as SearchIcon } from 'lucide-react';
@@ -14,6 +15,7 @@ import {
 } from '@/store/api';
 import { Card, PrimaryButton, SecondaryButton, TextInput } from '@/components/ui';
 import { downloadCsvReport } from '@/lib/download-csv-report';
+import { REPORTING_ROLES } from '@/lib/route-access';
 
 const RANGE_DAYS = 30;
 
@@ -41,6 +43,13 @@ function formatCompactNumber(value: number): string {
 
 export default function OverviewPage() {
   const { data: session } = useSession();
+  const canViewReports = Boolean(
+    session?.user.orgRole && REPORTING_ROLES.includes(session.user.orgRole),
+  );
+  // middleware.ts redirects here with ?access=denied when a role lacks access
+  // to the page it asked for -- without this the user is bounced to the
+  // dashboard with no idea why.
+  const accessDenied = useSearchParams().get('access') === 'denied';
   const { data: org } = useGetOrganizationQuery();
   const { data: decks } = useListStreamDecksQuery();
   const [search, setSearch] = useState('');
@@ -49,8 +58,14 @@ export default function OverviewPage() {
   const from = useMemo(() => isoDaysAgo(RANGE_DAYS), []);
   const to = useMemo(() => isoDaysAgo(0), []);
 
-  const { data: analytics } = useGetSubscriberAnalyticsReportQuery({ from, to });
-  const { data: timeSeries } = useGetSubscriberAnalyticsTimeSeriesQuery({ from, to });
+  const { data: analytics } = useGetSubscriberAnalyticsReportQuery(
+    { from, to },
+    { skip: !canViewReports },
+  );
+  const { data: timeSeries } = useGetSubscriberAnalyticsTimeSeriesQuery(
+    { from, to },
+    { skip: !canViewReports },
+  );
   const { data: searchResults, isFetching: searching } = useSearchCatalogueQuery(
     { dialectTag: search || undefined, page: 1, pageSize: 3, sortBy: 'isvs_desc' },
     { skip: search.trim().length === 0 },
@@ -82,6 +97,15 @@ export default function OverviewPage() {
 
   return (
     <div className="grid gap-6">
+      {accessDenied && (
+        <p
+          className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-900"
+          role="alert"
+        >
+          You don&apos;t have access to that page. Ask an organization owner or admin if you need
+          it.
+        </p>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black tracking-tight text-ink">Overview</h1>
@@ -93,10 +117,12 @@ export default function OverviewPage() {
           <span className="inline-flex min-h-10 items-center rounded-lg border border-line bg-surface px-3.5 text-sm font-bold text-ink">
             {formatDateRangeLabel(from, to)}
           </span>
-          <SecondaryButton disabled={downloading} onClick={() => void handleExport()} type="button">
-            <Download aria-hidden="true" className="size-3.5" />
-            {downloading ? 'Exporting...' : 'Download'}
-          </SecondaryButton>
+          {canViewReports && (
+            <SecondaryButton disabled={downloading} onClick={() => void handleExport()} type="button">
+              <Download aria-hidden="true" className="size-3.5" />
+              {downloading ? 'Exporting...' : 'Download'}
+            </SecondaryButton>
+          )}
         </div>
       </div>
 

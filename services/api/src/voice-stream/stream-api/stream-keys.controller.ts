@@ -25,6 +25,8 @@ export class StreamKeysController {
   constructor(private readonly keys: StreamKeysService) {}
 
   @Get()
+  @UseGuards(SubscriberRolesGuard)
+  @SubscriberRoles(...CAN_MANAGE_KEYS)
   list(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
     return this.keys.list(subscriber.organizationId);
   }

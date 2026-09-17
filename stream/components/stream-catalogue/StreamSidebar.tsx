@@ -6,7 +6,6 @@ import {
   Code2,
   Home,
   Layers3,
-  Library,
   Lock,
   Pin,
   Plus,
@@ -24,13 +23,12 @@ import { useAuthGate } from './useAuthGate';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', icon: Home, protected: false },
-  { href: '/discover', label: 'Discover', icon: Search, protected: false },
-  { href: '/voice-library', label: 'Voice Library', icon: Library, protected: false },
-  { href: '/stream-decks', label: 'Stream Decks', icon: Layers3, protected: false },
-  { href: '/validation', label: 'Validation', icon: ShieldCheck, protected: false },
-  { href: '/api', label: 'API', icon: Code2, protected: true },
-  { href: '/usage', label: 'Usage', icon: BarChart3, protected: true },
-  { href: '/team', label: 'Team', icon: UsersRound, protected: true },
+  { href: '/dashboard/explore', label: 'Discover', icon: Search, protected: true },
+  { href: '/dashboard/decks', label: 'Stream Decks', icon: Layers3, protected: true },
+  { href: '/dashboard/validation', label: 'Validation', icon: ShieldCheck, protected: true },
+  { href: '/dashboard/api-keys', label: 'API', icon: Code2, protected: true },
+  { href: '/dashboard/analytics', label: 'Usage', icon: BarChart3, protected: true },
+  { href: '/dashboard/team', label: 'Team', icon: UsersRound, protected: true },
   { href: '/settings', label: 'Settings', icon: Settings, protected: true },
 ];
 
