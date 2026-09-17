@@ -35,7 +35,17 @@ REDIS_TLS_CA = os.environ.get("REDIS_TLS_CA") or None
 ASR_STREAM = os.environ.get("ASR_STREAM", "asr-jobs-whisper")
 CONSENSUS_STREAM = os.environ.get("CONSENSUS_STREAM", "consensus-jobs")
 CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "asr-workers-whisper")
-CONSUMER_NAME = os.environ.get("HOSTNAME", "whisper-worker-1")
+# Redis identifies a consumer by name alone, and GCP's StatefulSet produces
+# the same pod names as DO's (whisper-worker-0, -1, ...) while both consume
+# the SAME group on DO's Redis. Without a per-cluster prefix the two clusters'
+# pod 0 are one consumer to Redis, so StreamConsumer._reclaim_stuck_entries'
+# xautoclaim(min_idle_time=5min) lets one cluster reclaim and reprocess an
+# entry the other is still mid-transcription on -- duplicate work, and
+# times_delivered inflating toward the dead-letter cutoff on jobs that never
+# actually failed. Defaults to empty so DO's existing consumer names are
+# unchanged; the GCP overlay sets CONSUMER_PREFIX=gcp-.
+CONSUMER_PREFIX = os.environ.get("CONSUMER_PREFIX", "")
+CONSUMER_NAME = f"{CONSUMER_PREFIX}{os.environ.get('HOSTNAME', 'whisper-worker-1')}"
 
 # CPU-only inference, matching the rest of this repo's GPU boundary
 # (AGENTS.md "MMS-TTS boundary" applies the same reasoning here) -- plain HF

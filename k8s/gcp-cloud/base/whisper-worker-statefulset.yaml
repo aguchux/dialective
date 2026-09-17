@@ -91,6 +91,15 @@ spec:
                 configMapKeyRef:
                   name: whisper-worker-config
                   key: consumer_group
+            # This StatefulSet produces the same pod names as DO's
+            # (whisper-worker-0, -1, ...) while both consume the SAME group on
+            # DO's Redis, and Redis identifies a consumer by name alone --
+            # so without this the two clusters' pod 0 are one consumer and
+            # each can xautoclaim entries the other is still working on.
+            # Literal rather than configMap: it identifies the cluster, not a
+            # tunable.
+            - name: CONSUMER_PREFIX
+              value: "gcp-"
             - name: SPACES_REGION
               valueFrom:
                 configMapKeyRef:

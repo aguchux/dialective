@@ -29,7 +29,11 @@ REDIS_TLS = os.environ.get("REDIS_TLS", "").lower() == "true"
 REDIS_TLS_CA = os.environ.get("REDIS_TLS_CA") or None
 PROMPT_AUDIO_STREAM = os.environ.get("PROMPT_AUDIO_STREAM", "prompt-audio-jobs")
 CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "prompt-audio-workers")
-CONSUMER_NAME = os.environ.get("HOSTNAME", "prompt-audio-service-1")
+# Per-cluster prefix so GCP and DO pods never share a Redis consumer
+# identity -- see whisper-worker/worker.py for the full reasoning. Empty by
+# default, so DO's names are unchanged; the GCP overlay sets CONSUMER_PREFIX.
+CONSUMER_PREFIX = os.environ.get("CONSUMER_PREFIX", "")
+CONSUMER_NAME = f"{CONSUMER_PREFIX}{os.environ.get('HOSTNAME', 'prompt-audio-service-1')}"
 PROMPT_AUDIO_BUCKET = os.environ.get(
     "SPACES_PROMPT_AUDIO_BUCKET", "dialectiva-prompt-audio"
 )

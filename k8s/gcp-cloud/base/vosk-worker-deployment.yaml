@@ -87,6 +87,10 @@ spec:
                 configMapKeyRef:
                   name: vosk-worker-config
                   key: consumer_group
+            # Marks this cluster's consumers in the shared group on DO's
+            # Redis -- see quality-gate-worker-deployment.yaml.
+            - name: CONSUMER_PREFIX
+              value: "gcp-"
             - name: SPACES_REGION
               valueFrom:
                 configMapKeyRef:

@@ -43,7 +43,11 @@ REDIS_TLS = os.environ.get("REDIS_TLS", "").lower() == "true"
 REDIS_TLS_CA = os.environ.get("REDIS_TLS_CA") or None
 QUALITY_GATE_STREAM = os.environ.get("QUALITY_GATE_STREAM", "quality-gate-jobs")
 CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "quality-gate-workers")
-CONSUMER_NAME = os.environ.get("HOSTNAME", "quality-gate-worker-1")
+# Per-cluster prefix so GCP and DO pods never share a Redis consumer
+# identity -- see whisper-worker/worker.py for the full reasoning. Empty by
+# default, so DO's names are unchanged; the GCP overlay sets CONSUMER_PREFIX.
+CONSUMER_PREFIX = os.environ.get("CONSUMER_PREFIX", "")
+CONSUMER_NAME = f"{CONSUMER_PREFIX}{os.environ.get('HOSTNAME', 'quality-gate-worker-1')}"
 
 # Same duration/silence prefilter as vosk-worker/whisper-worker (design doc
 # §5.1) -- kept as the one hard gate this worker enforces, unchanged. See

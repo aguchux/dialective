@@ -39,7 +39,11 @@ REDIS_TLS_CA = os.environ.get("REDIS_TLS_CA") or None
 ASR_STREAM = os.environ.get("ASR_STREAM", "asr-jobs-vosk")
 CONSENSUS_STREAM = os.environ.get("CONSENSUS_STREAM", "consensus-jobs")
 CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "asr-workers-vosk")
-CONSUMER_NAME = os.environ.get("HOSTNAME", "vosk-worker-1")
+# Per-cluster prefix so GCP and DO pods never share a Redis consumer
+# identity -- see whisper-worker/worker.py for the full reasoning. Empty by
+# default, so DO's names are unchanged; the GCP overlay sets CONSUMER_PREFIX.
+CONSUMER_PREFIX = os.environ.get("CONSUMER_PREFIX", "")
+CONSUMER_NAME = f"{CONSUMER_PREFIX}{os.environ.get('HOSTNAME', 'vosk-worker-1')}"
 
 MIN_DURATION_S = 0.5
 MAX_DURATION_S = 15.0
