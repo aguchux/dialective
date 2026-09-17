@@ -1,6 +1,7 @@
 import { ContributorRail } from './ContributorRail';
 import { CountryFlagMarquee } from './CountryFlagMarquee';
 import { HowItWorks } from './HowItWorks';
+import { TestimonialBubbles } from './TestimonialBubbles';
 import { TestimonialsCarousel } from './TestimonialsCarousel';
 import { LandingBlog } from './LandingBlog';
 import { LandingFooter } from './LandingFooter';
@@ -110,6 +111,17 @@ export async function LandingPage() {
         <TestimonialsCarousel testimonials={testimonials} />
       </div>
       <LandingFooter />
+      {/*
+        Reuses the testimonials already fetched for the carousel -- no extra
+        request. Doubly gated: testimonyEnabled (nothing to show if testimonies
+        are off) AND testimonyBubblesEnabled (the effect's own switch).
+      */}
+      {testimonialSettings?.testimonyBubblesEnabled && testimonials.length > 0 && (
+        <TestimonialBubbles
+          intervalSeconds={testimonialSettings.testimonyBubbleIntervalSeconds}
+          testimonials={testimonials}
+        />
+      )}
     </main>
   );
 }

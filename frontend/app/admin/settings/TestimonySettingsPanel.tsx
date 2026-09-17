@@ -21,6 +21,8 @@ export function TestimonySettingsPanel() {
   const [maxTextLength, setMaxTextLength] = useState('200');
   const [maxVideoSeconds, setMaxVideoSeconds] = useState('30');
   const [landingLimit, setLandingLimit] = useState('12');
+  const [bubblesEnabled, setBubblesEnabled] = useState(false);
+  const [bubbleInterval, setBubbleInterval] = useState('12');
   const [weeklyApprovalLimit, setWeeklyApprovalLimit] = useState('1');
   const [monthlyApprovalLimit, setMonthlyApprovalLimit] = useState('3');
   const [textRewardTokens, setTextRewardTokens] = useState('5');
@@ -34,6 +36,8 @@ export function TestimonySettingsPanel() {
     setMaxTextLength(String(settings.testimonyMaxTextLength));
     setMaxVideoSeconds(String(settings.testimonyMaxVideoSeconds));
     setLandingLimit(String(settings.testimonyLandingLimit));
+    setBubblesEnabled(settings.testimonyBubblesEnabled);
+    setBubbleInterval(String(settings.testimonyBubbleIntervalSeconds));
     setWeeklyApprovalLimit(String(settings.testimonyApprovalWeeklyLimit));
     setMonthlyApprovalLimit(String(settings.testimonyApprovalMonthlyLimit));
     setTextRewardTokens(settings.testimonyTextRewardTokens);
@@ -81,12 +85,20 @@ export function TestimonySettingsPanel() {
       return;
     }
 
+    const bubbleSeconds = Number(bubbleInterval);
+    if (!Number.isInteger(bubbleSeconds) || bubbleSeconds < 3 || bubbleSeconds > 120) {
+      setError('Bubble interval must be a whole number of seconds between 3 and 120.');
+      return;
+    }
+
     try {
       await updateSettings({
         testimonyEnabled: enabled,
         testimonyMaxTextLength: textLength,
         testimonyMaxVideoSeconds: videoSeconds,
         testimonyLandingLimit: landingCount,
+        testimonyBubblesEnabled: bubblesEnabled,
+        testimonyBubbleIntervalSeconds: bubbleSeconds,
         testimonyTextRewardTokens: textReward,
         testimonyVideoRewardTokens: videoReward,
         testimonyApprovalWeeklyLimit: weeklyLimit,
@@ -217,6 +229,51 @@ export function TestimonySettingsPanel() {
             />
             <p className="text-xs leading-relaxed text-muted">
               The public testimonials archive remains available separately.
+            </p>
+          </div>
+
+          <div className="grid gap-1">
+            <label
+              className="flex cursor-pointer items-start gap-3"
+              htmlFor="testimony-bubbles-enabled"
+            >
+              <input
+                checked={bubblesEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="testimony-bubbles-enabled"
+                onChange={(event) => setBubblesEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Float testimonials up the landing page</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Shows one short quote at a time drifting up from the bottom of the landing
+                  page, dissolving near the top. Uses the same approved testimonials as the
+                  carousel, so it needs the setting above to be on as well. Visitors who ask
+                  for reduced motion never see it.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div className="grid gap-1">
+            <label className="text-sm font-bold" htmlFor="testimony-bubble-interval">
+              Seconds between floating testimonials
+            </label>
+            <input
+              className={`${inputClass} max-w-40`}
+              disabled={!bubblesEnabled}
+              id="testimony-bubble-interval"
+              max="120"
+              min="3"
+              onChange={(e) => setBubbleInterval(e.target.value)}
+              step="1"
+              type="number"
+              value={bubbleInterval}
+            />
+            <p className="text-xs leading-relaxed text-muted">
+              Measured from one quote fading out to the next appearing, so a larger number
+              means a calmer page. Between 3 and 120 seconds.
             </p>
           </div>
 

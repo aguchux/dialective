@@ -12,6 +12,8 @@ export interface PublicTestimonialsPage {
 export interface PublicTestimonialSettings {
   testimonyEnabled: boolean;
   testimonyLandingLimit: number;
+  testimonyBubblesEnabled: boolean;
+  testimonyBubbleIntervalSeconds: number;
 }
 
 const EMPTY_PAGE: PublicTestimonialsPage = {

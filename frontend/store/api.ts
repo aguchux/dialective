@@ -1367,6 +1367,8 @@ export interface PublicClientSettings {
   testimonyMaxTextLength: number;
   testimonyMaxVideoSeconds: number;
   testimonyLandingLimit: number;
+  testimonyBubblesEnabled: boolean;
+  testimonyBubbleIntervalSeconds: number;
   testimonyApprovalWeeklyLimit: number;
   testimonyApprovalMonthlyLimit: number;
   testimonyTextRewardTokens: string;
@@ -1890,6 +1892,8 @@ export interface PlatformSettings {
   testimonyMaxTextLength: number;
   testimonyMaxVideoSeconds: number;
   testimonyLandingLimit: number;
+  testimonyBubblesEnabled: boolean;
+  testimonyBubbleIntervalSeconds: number;
   testimonyApprovalWeeklyLimit: number;
   testimonyApprovalMonthlyLimit: number;
   testimonyTextRewardTokens: string;
@@ -2075,6 +2079,8 @@ export interface PlatformSettingsInput {
   testimonyMaxTextLength?: number;
   testimonyMaxVideoSeconds?: number;
   testimonyLandingLimit?: number;
+  testimonyBubblesEnabled?: boolean;
+  testimonyBubbleIntervalSeconds?: number;
   testimonyApprovalWeeklyLimit?: number;
   testimonyApprovalMonthlyLimit?: number;
   testimonyTextRewardTokens?: number;

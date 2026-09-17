@@ -447,6 +447,18 @@ export class UpdatePlatformSettingsDto {
   testimonyEnabled?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  testimonyBubblesEnabled?: boolean;
+
+  // 3s floor so the effect can't be turned into a strobing distraction, 120s
+  // ceiling so "enabled" always means something visibly happens.
+  @IsOptional()
+  @IsInt()
+  @Min(3)
+  @Max(120)
+  testimonyBubbleIntervalSeconds?: number;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   testimonyMaxTextLength?: number;

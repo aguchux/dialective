@@ -2924,6 +2924,8 @@ model PlatformSettings {
   testimonyMaxTextLength                     Int       @default(200) // max characters for a TEXT testimony, enforced both client-side (textarea maxLength) and server-side (TestimonialsService.submit)
   testimonyMaxVideoSeconds                   Int       @default(30) // hard cap on a VIDEO testimony's recording length, enforced client-side same as WordTrainingDialog's maxRecordingMs pattern, and re-validated server-side against the submitted durationMs
   testimonyLandingLimit                      Int       @default(12) // approved, visible testimonials shown on the landing page; the full public archive remains paginated at /testimonials
+  testimonyBubblesEnabled                    Boolean   @default(false) // landing-page ambient testimonial bubbles that drift up from the bottom and dissolve; off by default so the effect is opt-in. Gated by testimonyEnabled too -- if testimonies are off entirely there is nothing to bubble
+  testimonyBubbleIntervalSeconds             Int       @default(12) // seconds between one bubble dissolving and the next appearing; clamped to 3-120 server-side. Deliberately sparse: this is ambient decoration, not a feed
   testimonyApprovalWeeklyLimit               Int       @default(1) // maximum approved testimonials per trainer in a rolling 7-day window; 0 disables this gate
   testimonyApprovalMonthlyLimit              Int       @default(3) // maximum approved testimonials per trainer in a rolling 30-day window; 0 disables this gate
   testimonyRewardTokens                      Decimal   @default(5) @db.Decimal(20, 8) // legacy single reward retained only for migration compatibility; new approvals use the format-specific values below

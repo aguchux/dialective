@@ -523,3 +523,51 @@ input:disabled,
     transition: none;
   }
 }
+
+/*
+ * Landing-page ambient testimonial bubbles (TestimonialBubbles.tsx).
+ *
+ * Only transform and opacity are animated -- both are compositor properties,
+ * so this never triggers layout or paint on the main thread. That matters
+ * here because it runs continuously behind the marketing page.
+ *
+ * The bubble starts just below the fold and travels up ~92vh, fading in
+ * quickly, holding legible through the middle, then dissolving before it
+ * reaches the header.
+ */
+@keyframes testimonial-bubble-rise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 8vh, 0) scale(0.96);
+  }
+  12% {
+    opacity: 1;
+    transform: translate3d(0, -2vh, 0) scale(1);
+  }
+  68% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -92vh, 0) scale(1.02);
+  }
+}
+
+.testimonial-bubble {
+  animation-name: testimonial-bubble-rise;
+  animation-timing-function: cubic-bezier(0.33, 0, 0.2, 1);
+  animation-fill-mode: both;
+  will-change: transform, opacity;
+}
+
+/*
+ * The component already returns null under prefers-reduced-motion, so this is
+ * belt-and-braces for the frame between hydration and the media query being
+ * read.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .testimonial-bubble {
+    animation: none;
+    opacity: 0;
+  }
+}

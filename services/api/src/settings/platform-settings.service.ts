@@ -1173,6 +1173,8 @@ export class PlatformSettingsService {
       qracRequiredAtSessionStart: row.qracRequiredAtSessionStart,
       qracIntervalMinutes: row.qracIntervalMinutes,
       testimonyEnabled: row.testimonyEnabled,
+      testimonyBubblesEnabled: row.testimonyBubblesEnabled,
+      testimonyBubbleIntervalSeconds: row.testimonyBubbleIntervalSeconds,
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
       testimonyLandingLimit: row.testimonyLandingLimit,
@@ -1397,6 +1399,8 @@ export class PlatformSettingsService {
     qracRequiredAtSessionStart?: boolean;
     qracIntervalMinutes?: number;
     testimonyEnabled?: boolean;
+    testimonyBubblesEnabled?: boolean;
+    testimonyBubbleIntervalSeconds?: number;
     testimonyMaxTextLength?: number;
     testimonyMaxVideoSeconds?: number;
     testimonyLandingLimit?: number;
@@ -2131,6 +2135,8 @@ export class PlatformSettingsService {
       qracRequiredAtSessionStart: row.qracRequiredAtSessionStart,
       qracIntervalMinutes: row.qracIntervalMinutes,
       testimonyEnabled: row.testimonyEnabled,
+      testimonyBubblesEnabled: row.testimonyBubblesEnabled,
+      testimonyBubbleIntervalSeconds: row.testimonyBubbleIntervalSeconds,
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
       testimonyLandingLimit: row.testimonyLandingLimit,
@@ -2373,6 +2379,8 @@ export class PlatformSettingsService {
       allowedWithdrawalCurrencies: row.allowedWithdrawalCurrencies,
       allowedWithdrawalNetworks: row.allowedWithdrawalNetworks,
       testimonyEnabled: row.testimonyEnabled,
+      testimonyBubblesEnabled: row.testimonyBubblesEnabled,
+      testimonyBubbleIntervalSeconds: row.testimonyBubbleIntervalSeconds,
       testimonyMaxTextLength: row.testimonyMaxTextLength,
       testimonyMaxVideoSeconds: row.testimonyMaxVideoSeconds,
       testimonyLandingLimit: row.testimonyLandingLimit,
