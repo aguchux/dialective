@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Plus } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
@@ -38,6 +38,8 @@ import {
  */
 export function MarketView() {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const activityHref = pathname?.startsWith('/distributor')
     ? '/distributor/market-activity'
     : '/dashboard/market-activity';
@@ -111,6 +113,25 @@ export function MarketView() {
   useEffect(() => {
     if (referenceRate?.currencyCode) setFiatCurrency(referenceRate.currencyCode);
   }, [referenceRate?.currencyCode]);
+
+  // Deep-link from the dashboard's Withdraw/Fund DL buttons (now that
+  // platform withdrawals/funding are disabled during the P2P transition) --
+  // ?create=sell opens the dialog on the Sell DL tab (mirrors Withdraw:
+  // trainer wants tokens converted to cash), ?create=buy opens it on Buy
+  // request (mirrors Fund DL: trainer wants to add tokens). Strips the
+  // param afterward via router.replace so a refresh/back-nav doesn't keep
+  // reopening the dialog.
+  useEffect(() => {
+    const create = searchParams.get('create');
+    if (create !== 'sell' && create !== 'buy') return;
+    setOfferType(create === 'sell' ? 'SELL' : 'BUY');
+    setCreateOpen(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('create');
+    const query = params.toString();
+    router.replace(`${pathname ?? '/dashboard'}${query ? `?${query}` : ''}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately only re-checking when the raw query string changes, not on every router/pathname identity change
+  }, [searchParams]);
 
   function updateTokenAmount(value: string) {
     setTokenAmount(value);

@@ -4320,6 +4320,7 @@ function FundTokensDialog({
   tokenUsdRate?: number;
   localCurrency?: LocalCurrency | null;
 }) {
+  const router = useRouter();
   const [method, setMethod] = useState<'crypto' | 'fiat'>('crypto');
   const [fiatMethod, setFiatMethod] = useState<'bank_transfer' | 'mobile_money'>('bank_transfer');
   const [amount, setAmount] = useState('100');
@@ -4448,14 +4449,32 @@ function FundTokensDialog({
 
   const isRequestingCode = method === 'crypto' ? isRequestingOtp : isRequestingFlutterwaveOtp;
   const isOpeningCheckout = method === 'crypto' ? isCreating : isCreatingFlutterwave;
+  const fundButtonClassName =
+    'mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-extrabold text-white hover:bg-accent-dark md:px-4';
+  // Same P2P-transition redirect as WithdrawTokensDialog, reusing the same
+  // withdrawalsEnabled flag -- there's no separate "funding disabled" flag,
+  // and this trigger point pairs with Withdraw's (both push a trainer
+  // toward the market instead of the platform's own funding rails).
+  const withdrawalsGloballyDisabled = publicSettings?.withdrawalsEnabled === false;
+
+  if (withdrawalsGloballyDisabled) {
+    return (
+      <button
+        className={fundButtonClassName}
+        onClick={() => router.push('/dashboard?view=market&create=buy')}
+        type="button"
+      >
+        <Plus className="size-4" aria-hidden="true" />{' '}
+        <span className="hidden sm:inline">Fund DL</span>
+        <span className="sm:hidden">Fund</span>
+      </button>
+    );
+  }
 
   return (
     <Dialog onOpenChange={(open) => !open && reset()}>
       <DialogTrigger asChild>
-        <button
-          className="mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-extrabold text-white hover:bg-accent-dark md:px-4"
-          type="button"
-        >
+        <button className={fundButtonClassName} type="button">
           <Plus className="size-4" aria-hidden="true" />{' '}
           <span className="hidden sm:inline">Fund DL</span>
           <span className="sm:hidden">Fund</span>
@@ -4961,6 +4980,26 @@ function WithdrawTokensDialog({
     router.push('/dashboard?view=tokens');
   }
 
+  const withdrawButtonClassName =
+    'mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-3 text-sm font-extrabold text-ink hover:bg-surface-muted md:px-4';
+
+  // While platform withdrawals are disabled (P2P transition), skip the
+  // dialog entirely and send the trainer straight to the market's Sell DL
+  // tab -- the withdrawal flow itself has nothing to offer them right now.
+  if (withdrawalsGloballyDisabled) {
+    return (
+      <button
+        className={withdrawButtonClassName}
+        onClick={() => router.push('/dashboard?view=market&create=sell')}
+        type="button"
+      >
+        <ArrowUpRight className="size-4" aria-hidden="true" />{' '}
+        <span className="hidden sm:inline">Withdraw</span>
+        <span className="sm:hidden">Withdraw</span>
+      </button>
+    );
+  }
+
   return (
     <Dialog
       onOpenChange={(open) => {
@@ -4970,29 +5009,13 @@ function WithdrawTokensDialog({
       open={dialogOpen}
     >
       <DialogTrigger asChild>
-        <button
-          className="mt-0.5 inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-3 text-sm font-extrabold text-ink hover:bg-surface-muted md:px-4"
-          type="button"
-        >
+        <button className={withdrawButtonClassName} type="button">
           <ArrowUpRight className="size-4" aria-hidden="true" />{' '}
           <span className="hidden sm:inline">Withdraw</span>
           <span className="sm:hidden">Withdraw</span>
         </button>
       </DialogTrigger>
-      {withdrawalsGloballyDisabled ? (
-        <DialogContent title="Withdrawals are temporarily disabled">
-          <div className="grid gap-4">
-            <div className="flex flex-col items-center gap-3 rounded-lg border border-line bg-surface p-6 text-center">
-              <ArrowUpRight className="size-12 text-muted" aria-hidden="true" />
-              {publicSettings?.withdrawalsDisabledMessage && (
-                <p className="text-sm leading-relaxed text-muted">
-                  {publicSettings.withdrawalsDisabledMessage}
-                </p>
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      ) : tasksBlocked ? (
+      {tasksBlocked ? (
         <DialogContent
           title="Keep training to unlock withdrawals"
           description={`Withdrawals open up once you've completed ${minCompletedTasksForWithdrawal} tasks.`}
