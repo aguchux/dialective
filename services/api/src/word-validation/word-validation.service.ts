@@ -3,10 +3,11 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { SubmissionStatus, WordValidationFlag } from '@dialectiva/db';
+import { clawBackNoAudioBonus, SubmissionStatus, WordValidationFlag } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { StorageService } from '../storage/storage.service';
@@ -31,6 +32,8 @@ const DISTRACTOR_COUNT = 3; // total options shown = 1 correct + this many distr
  */
 @Injectable()
 export class WordValidationService {
+  private readonly logger = new Logger(WordValidationService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
@@ -112,12 +115,14 @@ export class WordValidationService {
     }
 
     const threshold = await this.settings.getMisplacedDialectFlagThreshold();
-    const [payoutEnabled, payoutTokens, minSeconds] = await Promise.all([
+    const [payoutEnabled, payoutTokens, minSeconds, noAudioThreshold] = await Promise.all([
       this.settings.isDialectValidationTaskEnabled(),
       this.settings.getDialectValidationPayoutTokens(),
       this.settings.getDialectValidationMinSeconds(),
+      this.settings.getNoAudioClawbackFlagThreshold(),
     ]);
     const flaggedWrongDialect = !!body.flags?.includes(WordValidationFlag.WRONG_DIALECT);
+    const flaggedNoAudio = !!body.flags?.includes(WordValidationFlag.NO_AUDIO);
 
     // Anti-farming floor -- NOT a correctness check (isCorrectMatch never
     // gates payout below, since flagging a bad recording is the validator
@@ -173,6 +178,31 @@ export class WordValidationService {
         }
       }
 
+      // NO_AUDIO consensus. The tally is inherently per-distinct-validator
+      // (WordValidation is unique on [recordingId, validatorId], so a
+      // validator can only reach this line once per recording), same as
+      // wrongDialectFlagCount above. We only CLAIM the claw-back here --
+      // the token movement happens after this transaction commits, so a
+      // slow wallet/tokenomics write can never hold the validator's own
+      // submit open or roll their validation back.
+      let clawbackTarget: string | null = null;
+      if (flaggedNoAudio && noAudioThreshold > 0) {
+        const updated = await tx.wordRecording.update({
+          where: { id: recording.id },
+          data: { noAudioFlagCount: { increment: 1 } },
+          select: { noAudioFlagCount: true, noAudioClawedBackAt: true },
+        });
+        if (!updated.noAudioClawedBackAt && updated.noAudioFlagCount >= noAudioThreshold) {
+          // Guarded claim -- whichever concurrent submit wins this
+          // updateMany is the one that performs the debit.
+          const claim = await tx.wordRecording.updateMany({
+            where: { id: recording.id, noAudioClawedBackAt: null },
+            data: { noAudioClawedBackAt: new Date() },
+          });
+          if (claim.count === 1) clawbackTarget = recording.id;
+        }
+      }
+
       let rewarded = false;
       let rewardAmount: string | null = null;
       if (payoutEnabled && payoutTokens > 0 && metMinTime) {
@@ -197,10 +227,51 @@ export class WordValidationService {
         rewardAmount = String(payoutTokens);
       }
 
-      return { validationId: validation.id, rewarded, rewardAmount, misplaced };
+      return { validationId: validation.id, rewarded, rewardAmount, misplaced, clawbackTarget };
     });
 
-    return result;
+    if (result.clawbackTarget) {
+      await this.clawBackNoAudioBonus(result.clawbackTarget);
+    }
+
+    const { clawbackTarget: _clawbackTarget, ...response } = result;
+    return response;
+  }
+
+  /**
+   * Reverses the bonus portion of a recording's payout once enough distinct
+   * validators have flagged it NO_AUDIO. The caller has already claimed
+   * noAudioClawedBackAt, so this runs at most once per recording.
+   *
+   * Failures are swallowed deliberately: the validator who happened to be
+   * the Nth flagger did their job correctly and must still get their own
+   * submit acknowledged and rewarded -- a wallet write failing on someone
+   * else's account is not their problem. The claim stamp means a failure
+   * here leaves the bonus un-reversed rather than retried, which is the
+   * safer direction to fail for an operation that moves tokens.
+   */
+  private async clawBackNoAudioBonus(recordingId: string): Promise<void> {
+    try {
+      const recording = await this.prisma.wordRecording.findUnique({
+        where: { id: recordingId },
+        select: { userId: true, payoutTokenAmount: true, tokensSpent: true },
+      });
+      // Nothing was ever paid out (still unsettled, or the trainer's
+      // account was since deleted) -- there is no bonus to take back.
+      if (!recording?.userId || !recording.payoutTokenAmount) return;
+
+      await clawBackNoAudioBonus(this.prisma, {
+        userId: recording.userId,
+        recordingId,
+        payoutTokenAmount: recording.payoutTokenAmount,
+        tokensSpent: recording.tokensSpent,
+      });
+    } catch (err) {
+      this.logger.error(
+        `NO_AUDIO bonus claw-back failed for recording ${recordingId}`,
+        err instanceof Error ? err.stack : String(err),
+      );
+    }
   }
 
   // --- Admin: misplaced-dialect queue --------------------------------------

@@ -899,7 +899,8 @@ export type LedgerEntryType =
   | 'P2P_ESCROW_CREDIT'
   | 'VALIDATION_REWARD'
   | 'WHATSAPP_VALIDATION_FEE'
-  | 'WHATSAPP_VALIDATION_PAYOUT';
+  | 'WHATSAPP_VALIDATION_PAYOUT'
+  | 'NO_AUDIO_BONUS_CLAWBACK';
 
 export type P2POfferType = 'SELL' | 'BUY';
 export type P2POfferStatus =
@@ -1822,6 +1823,7 @@ export interface PlatformSettings {
   dialectValidationTaskEnabled: boolean;
   dialectValidationPayoutTokens: string | null;
   misplacedDialectFlagThreshold: number;
+  noAudioClawbackFlagThreshold: number;
   dialectValidationMinSeconds: number;
   domainConversationMinDurationSeconds: number;
   domainConversationMaxDurationSeconds: number;
@@ -2006,6 +2008,7 @@ export interface PlatformSettingsInput {
   dialectValidationTaskEnabled?: boolean;
   dialectValidationPayoutTokens?: number | null;
   misplacedDialectFlagThreshold?: number;
+  noAudioClawbackFlagThreshold?: number;
   dialectValidationMinSeconds?: number;
   domainConversationMinDurationSeconds?: number;
   domainConversationMaxDurationSeconds?: number;

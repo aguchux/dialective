@@ -213,6 +213,136 @@ async function buildCreditTrainingPayoutOps(
   return { ops, result };
 }
 
+export interface NoAudioClawbackResult {
+  /** False when there was nothing to reverse (no bonus was ever earned, or
+   * another concurrent run already clawed this recording back). */
+  clawedBack: boolean;
+  /** The bonus actually reversed, "0" when clawedBack is false. */
+  amount: string;
+}
+
+/**
+ * Reverses the BONUS portion of a WordRecording's already-paid training
+ * payout once enough distinct peer validators have independently flagged it
+ * NO_AUDIO (PlatformSettings.noAudioClawbackFlagThreshold).
+ *
+ * Why this is retroactive rather than a score adjustment: settlement pays a
+ * recording out as soon as it is SCORED, but Dialect Validation only ever
+ * offers peers recordings that are ALREADY SCORED/SETTLED -- so by the time
+ * a validator can say "there's no audio here", the payout has almost always
+ * landed. Reversal is the only point at which peer consensus can act.
+ *
+ * Two invariants this must never break:
+ *  - The stake is untouchable. computeTrainingPayout pays stake + bonus and
+ *    guarantees payout >= stake unconditionally; we reverse at most
+ *    (payoutTokenAmount - tokensSpent), so the worst case is that an empty
+ *    recording earned the trainer nothing, never that it cost them.
+ *  - Every token movement is tracked. The wallet debit gets a
+ *    NO_AUDIO_BONUS_CLAWBACK LedgerEntry and the minted supply is burned
+ *    back out of the trainer's TokenAccount, so neither ledger silently
+ *    drifts from the other.
+ *
+ * Idempotent via the caller's noAudioClawedBackAt claim (see
+ * claimNoAudioClawback) plus the unique idempotencyKey on the burn
+ * operation, so a retried run can't double-debit.
+ *
+ * Unlike adjustAdminWallet's debit, an under-funded wallet is NOT an error
+ * here: the trainer may legitimately have already spent the bonus on
+ * further tasks. We take what is there and let the balance floor at zero --
+ * refusing the debit would mean the fastest spender keeps the most.
+ */
+export async function clawBackNoAudioBonus(
+  prisma: PrismaClient,
+  params: {
+    userId: string;
+    recordingId: string;
+    payoutTokenAmount: Decimal | number | string;
+    tokensSpent: Decimal | number | string;
+  },
+): Promise<NoAudioClawbackResult> {
+  const { userId, recordingId } = params;
+  const bonus = new Decimal(params.payoutTokenAmount).sub(new Decimal(params.tokensSpent));
+  if (bonus.lte(0)) {
+    return { clawedBack: false, amount: '0' };
+  }
+
+  const wallet = await getOrCreateWallet(prisma, userId);
+  const reference = `no-audio-clawback:${recordingId}`;
+
+  // Already reversed by an earlier run that crashed after the debit but
+  // before the caller could stamp noAudioClawedBackAt.
+  const existing = await prisma.ledgerEntry.findFirst({
+    where: { walletId: wallet.id, type: 'NO_AUDIO_BONUS_CLAWBACK', reference },
+    select: { id: true },
+  });
+  if (existing) {
+    return { clawedBack: false, amount: '0' };
+  }
+
+  const account = await prisma.tokenAccount.upsert({
+    where: { userId },
+    update: {},
+    create: { code: `user:${userId}`, kind: 'USER', userId },
+  });
+
+  const debited = await prisma.$transaction(async (tx) => {
+    const current = await tx.wallet.findUniqueOrThrow({
+      where: { id: wallet.id },
+      select: { balance: true },
+    });
+    // Floor at the balance on hand rather than failing -- see doc comment.
+    const amount = Decimal.min(bonus, current.balance);
+    if (amount.lte(0)) {
+      // Still write the zero-value entry so the activity feed shows the
+      // claw-back happened and explains why no tokens moved.
+      await tx.ledgerEntry.create({
+        data: { walletId: wallet.id, type: 'NO_AUDIO_BONUS_CLAWBACK', amount: 0, reference },
+      });
+      return new Decimal(0);
+    }
+
+    await tx.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { decrement: amount } },
+    });
+    await tx.ledgerEntry.create({
+      data: {
+        walletId: wallet.id,
+        type: 'NO_AUDIO_BONUS_CLAWBACK',
+        amount: amount.neg(),
+        reference,
+      },
+    });
+
+    // Burn the reversed tokens back out of the supply the settlement mint
+    // created, so the Tokenomics dashboard's issued-supply figure doesn't
+    // keep counting a payout the platform took back.
+    const operation = await tx.tokenOperation.upsert({
+      where: { idempotencyKey: `burn:${reference}` },
+      update: {},
+      create: {
+        type: 'BURN',
+        status: 'SETTLED',
+        idempotencyKey: `burn:${reference}`,
+        reference,
+        reason: 'No-audio bonus claw-back',
+        settledAt: new Date(),
+      },
+    });
+    await tx.tokenLedgerEntry.create({
+      data: { accountId: account.id, operationId: operation.id, availableDelta: amount.neg() },
+    });
+    await tx.tokenAccount.update({
+      where: { id: account.id },
+      data: { available: { decrement: amount } },
+    });
+
+    return amount;
+  });
+
+  return { clawedBack: true, amount: debited.toString() };
+}
+
 export interface CreditAdminFundingResult {
   userId: string;
   reference: string;

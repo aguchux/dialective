@@ -31,6 +31,7 @@ export function DialectValidationSettingsPanel() {
   const [payoutTokens, setPayoutTokens] = useState('0');
   const [flagThreshold, setFlagThreshold] = useState('3');
   const [minSeconds, setMinSeconds] = useState('5');
+  const [noAudioThreshold, setNoAudioThreshold] = useState('2');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,11 +41,15 @@ export function DialectValidationSettingsPanel() {
     setPayoutTokens(settings.dialectValidationPayoutTokens ?? '0');
     setFlagThreshold(String(settings.misplacedDialectFlagThreshold));
     setMinSeconds(String(settings.dialectValidationMinSeconds));
+    setNoAudioThreshold(String(settings.noAudioClawbackFlagThreshold));
   }, [settings]);
 
   const flagThresholdValid = Number(flagThreshold) >= 1;
   const minSecondsValid =
     Number.isInteger(Number(minSeconds)) && Number(minSeconds) >= 0 && Number(minSeconds) <= 600;
+  // 0 is meaningful here (disables the claw-back), unlike the flag threshold above.
+  const noAudioThresholdValid =
+    Number.isInteger(Number(noAudioThreshold)) && Number(noAudioThreshold) >= 0;
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -59,6 +64,10 @@ export function DialectValidationSettingsPanel() {
       setError('Minimum time on task must be a whole number between 0 and 600 seconds.');
       return;
     }
+    if (!noAudioThresholdValid) {
+      setError('No-audio claw-back threshold must be a whole number, 0 or more.');
+      return;
+    }
 
     try {
       await updateSettings({
@@ -66,6 +75,7 @@ export function DialectValidationSettingsPanel() {
         dialectValidationPayoutTokens: Number(payoutTokens),
         misplacedDialectFlagThreshold: Number(flagThreshold),
         dialectValidationMinSeconds: Number(minSeconds),
+        noAudioClawbackFlagThreshold: Number(noAudioThreshold),
       }).unwrap();
       setMessage('Dialect Validation settings saved.');
     } catch (err) {
@@ -180,10 +190,36 @@ export function DialectValidationSettingsPanel() {
             )}
           </div>
 
+          <div className="grid gap-1">
+            <label className="font-bold" htmlFor="dialect-validation-no-audio-threshold">
+              No-audio claw-back threshold
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              Distinct trainers who must tick &quot;no audio&quot; on the same recording before
+              the <strong>bonus</strong> portion of its already-paid reward is automatically
+              reversed. The trainer&apos;s original task stake is never touched, so the worst
+              case is that an empty recording earned them nothing -- it can never cost them
+              tokens. Every reversal is recorded on the trainer&apos;s wallet activity. Set to 0
+              to disable the claw-back entirely.
+            </p>
+            <input
+              className={`${inputClass} max-w-40`}
+              id="dialect-validation-no-audio-threshold"
+              min="0"
+              onChange={(e) => setNoAudioThreshold(e.target.value)}
+              step="1"
+              type="number"
+              value={noAudioThreshold}
+            />
+            {!noAudioThresholdValid && (
+              <p className="text-sm font-bold text-danger">Must be a whole number, 0 or more.</p>
+            )}
+          </div>
+
           <div>
             <ActionButton
               className={primaryButtonClass}
-              disabled={!flagThresholdValid || !minSecondsValid}
+              disabled={!flagThresholdValid || !minSecondsValid || !noAudioThresholdValid}
               pending={isSaving}
               pendingLabel="Saving"
               type="submit"

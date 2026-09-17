@@ -956,6 +956,11 @@ export class PlatformSettingsService {
     return row.misplacedDialectFlagThreshold;
   }
 
+  async getNoAudioClawbackFlagThreshold(): Promise<number> {
+    const row = await this.getRow();
+    return row.noAudioClawbackFlagThreshold;
+  }
+
   async getDialectValidationMinSeconds(): Promise<number> {
     const row = await this.getRow();
     return row.dialectValidationMinSeconds;
@@ -1105,6 +1110,7 @@ export class PlatformSettingsService {
       dialectValidationTaskEnabled: row.dialectValidationTaskEnabled,
       dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
       misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
+      noAudioClawbackFlagThreshold: row.noAudioClawbackFlagThreshold,
       dialectValidationMinSeconds: row.dialectValidationMinSeconds,
       domainConversationMinDurationSeconds,
       domainConversationMaxDurationSeconds,
@@ -1330,6 +1336,7 @@ export class PlatformSettingsService {
     dialectValidationTaskEnabled?: boolean;
     dialectValidationPayoutTokens?: number | null;
     misplacedDialectFlagThreshold?: number;
+    noAudioClawbackFlagThreshold?: number;
     dialectValidationMinSeconds?: number;
     domainConversationMinDurationSeconds?: number;
     domainConversationMaxDurationSeconds?: number;
@@ -2064,6 +2071,7 @@ export class PlatformSettingsService {
       dialectValidationTaskEnabled: row.dialectValidationTaskEnabled,
       dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
       misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
+      noAudioClawbackFlagThreshold: row.noAudioClawbackFlagThreshold,
       dialectValidationMinSeconds: row.dialectValidationMinSeconds,
       domainConversationMinDurationSeconds,
       domainConversationMaxDurationSeconds,
@@ -2299,6 +2307,7 @@ export class PlatformSettingsService {
       dialectValidationTaskEnabled: row.dialectValidationTaskEnabled,
       dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
       misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
+      noAudioClawbackFlagThreshold: row.noAudioClawbackFlagThreshold,
       dialectValidationMinSeconds: row.dialectValidationMinSeconds,
       sessionIdleTimeoutMinutes: row.sessionIdleTimeoutMinutes,
       sessionMaxHours: row.sessionMaxHours,

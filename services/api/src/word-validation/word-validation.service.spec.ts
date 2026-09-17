@@ -2,9 +2,14 @@ process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? 'test-secret';
 
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
-import { WordValidationFlag } from '@dialectiva/db';
+import { clawBackNoAudioBonus, WordValidationFlag } from '@dialectiva/db';
 import { WordValidationService } from './word-validation.service';
 import { signWordValidationPresentmentToken } from './word-validation-presentment.util';
+
+jest.mock('@dialectiva/db', () => ({
+  ...jest.requireActual('@dialectiva/db'),
+  clawBackNoAudioBonus: jest.fn().mockResolvedValue({ clawedBack: true, amount: '1' }),
+}));
 
 describe('WordValidationService', () => {
   const trainer = {
@@ -45,6 +50,7 @@ describe('WordValidationService', () => {
         findMany: jest.fn().mockResolvedValue([candidateRecording]),
         findUnique: jest.fn().mockResolvedValue(candidateRecording),
         update: jest.fn().mockResolvedValue({ wrongDialectFlagCount: 1, misplacedDialectAt: null }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         delete: jest.fn(),
       },
       word: {
@@ -76,6 +82,7 @@ describe('WordValidationService', () => {
       getDialectValidationPayoutTokens: jest.fn().mockResolvedValue(0),
       getMisplacedDialectFlagThreshold: jest.fn().mockResolvedValue(3),
       getDialectValidationMinSeconds: jest.fn().mockResolvedValue(0),
+      getNoAudioClawbackFlagThreshold: jest.fn().mockResolvedValue(2),
     };
     courses = { getIncompleteRequiredCourses: jest.fn().mockResolvedValue([]) };
     service = new WordValidationService(prisma, storage as any, settings as any, courses as any);
@@ -260,6 +267,106 @@ describe('WordValidationService', () => {
       } as any);
       expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
       expect(result.rewarded).toBe(false);
+    });
+
+    describe('NO_AUDIO bonus claw-back', () => {
+      const paidRecording = {
+        userId: 'trainer-2',
+        payoutTokenAmount: 3,
+        tokensSpent: 1,
+      };
+
+      beforeEach(() => {
+        (clawBackNoAudioBonus as jest.Mock).mockClear();
+        // findUnique is called twice in the NO_AUDIO path: once by submit()
+        // for the guard checks, once by the claw-back for the payout figures.
+        prisma.wordRecording.findUnique
+          .mockResolvedValueOnce(candidateRecording)
+          .mockResolvedValue(paidRecording);
+      });
+
+      function submitNoAudio() {
+        return service.submit(trainer.id, {
+          recordingId: 'recording-1',
+          flags: [WordValidationFlag.NO_AUDIO],
+        } as any);
+      }
+
+      it('claws back only the bonus, leaving the trainer stake untouched', async () => {
+        prisma.wordRecording.update.mockResolvedValueOnce({
+          noAudioFlagCount: 2,
+          noAudioClawedBackAt: null,
+        });
+        await submitNoAudio();
+        expect(clawBackNoAudioBonus).toHaveBeenCalledWith(
+          prisma,
+          expect.objectContaining({
+            userId: 'trainer-2',
+            recordingId: 'recording-1',
+            payoutTokenAmount: 3,
+            tokensSpent: 1,
+          }),
+        );
+      });
+
+      it('does not claw back on a single validator flag (below threshold)', async () => {
+        prisma.wordRecording.update.mockResolvedValueOnce({
+          noAudioFlagCount: 1,
+          noAudioClawedBackAt: null,
+        });
+        await submitNoAudio();
+        expect(clawBackNoAudioBonus).not.toHaveBeenCalled();
+      });
+
+      it('does not claw back twice for the same recording', async () => {
+        prisma.wordRecording.update.mockResolvedValueOnce({
+          noAudioFlagCount: 3,
+          noAudioClawedBackAt: new Date(),
+        });
+        await submitNoAudio();
+        expect(clawBackNoAudioBonus).not.toHaveBeenCalled();
+      });
+
+      it('leaves the claw-back to whichever concurrent submit wins the claim', async () => {
+        prisma.wordRecording.update.mockResolvedValueOnce({
+          noAudioFlagCount: 2,
+          noAudioClawedBackAt: null,
+        });
+        prisma.wordRecording.updateMany.mockResolvedValue({ count: 0 });
+        await submitNoAudio();
+        expect(clawBackNoAudioBonus).not.toHaveBeenCalled();
+      });
+
+      it('is disabled entirely when the admin threshold is 0', async () => {
+        settings.getNoAudioClawbackFlagThreshold.mockResolvedValue(0);
+        await submitNoAudio();
+        expect(prisma.wordRecording.update).not.toHaveBeenCalled();
+        expect(clawBackNoAudioBonus).not.toHaveBeenCalled();
+      });
+
+      it('still rewards the flagging validator when the claw-back itself fails', async () => {
+        settings.getDialectValidationPayoutTokens.mockResolvedValue(0.5);
+        prisma.wordRecording.update.mockResolvedValueOnce({
+          noAudioFlagCount: 2,
+          noAudioClawedBackAt: null,
+        });
+        (clawBackNoAudioBonus as jest.Mock).mockRejectedValue(new Error('wallet unavailable'));
+        const result = await submitNoAudio();
+        expect(result.rewarded).toBe(true);
+      });
+
+      it('skips the claw-back when the recording was never paid out', async () => {
+        prisma.wordRecording.findUnique
+          .mockReset()
+          .mockResolvedValueOnce(candidateRecording)
+          .mockResolvedValue({ userId: 'trainer-2', payoutTokenAmount: null, tokensSpent: 1 });
+        prisma.wordRecording.update.mockResolvedValueOnce({
+          noAudioFlagCount: 2,
+          noAudioClawedBackAt: null,
+        });
+        await submitNoAudio();
+        expect(clawBackNoAudioBonus).not.toHaveBeenCalled();
+      });
     });
 
     describe('anti-farming min-seconds gate (not a correctness gate)', () => {

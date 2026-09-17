@@ -135,6 +135,13 @@ export class UpdatePlatformSettingsDto {
   @Min(1)
   misplacedDialectFlagThreshold?: number;
 
+  // 0 disables the claw-back entirely, so unlike the threshold above this
+  // one allows zero.
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  noAudioClawbackFlagThreshold?: number;
+
   @IsOptional()
   @IsInt()
   @Min(0)

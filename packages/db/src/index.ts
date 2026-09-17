@@ -3,6 +3,7 @@ export * from './generated/prisma/client';
 export {
   computeTrainingPayout,
   adjustAdminWallet,
+  clawBackNoAudioBonus,
   creditAdminFunding,
   creditCourseCompletionReward,
   creditFundingReferralBonusesOps,
@@ -15,6 +16,7 @@ export type {
   AdminWalletAdjustmentResult,
   CreditAdminFundingResult,
   CreditTrainingPayoutResult,
+  NoAudioClawbackResult,
 } from './payouts';
 export {
   mintTrainingPayoutOps,

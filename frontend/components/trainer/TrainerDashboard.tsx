@@ -191,6 +191,9 @@ export const activityLabels: Record<LedgerEntryType, string> = {
   VALIDATION_REWARD: 'Validation reward',
   WHATSAPP_VALIDATION_FEE: 'WhatsApp verification fee',
   WHATSAPP_VALIDATION_PAYOUT: 'WhatsApp verification reward',
+  // Names the bonus specifically so the trainer can see their stake wasn't
+  // taken -- the claw-back only ever reverses the reward on top of it.
+  NO_AUDIO_BONUS_CLAWBACK: 'Bonus reversed (no audio)',
 };
 
 export function TrainerDashboard() {
