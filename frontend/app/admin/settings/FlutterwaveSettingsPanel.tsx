@@ -7,6 +7,19 @@ import {
   useUpdatePlatformSettingsMutation,
 } from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { CurrencyPicker, CurrencyPickerOption } from '@/components/admin/CurrencyPicker';
+
+// Flutterwave's own supported market list (not every coverage country --
+// this rail only operates in these markets, see FLUTTERWAVE_COUNTRIES in
+// app/dashboard/payout-accounts/page.tsx for the same list used trainer-side).
+const FLUTTERWAVE_CURRENCY_OPTIONS: CurrencyPickerOption[] = [
+  { code: 'NGN', label: '(Nigeria)' },
+  { code: 'GHS', label: '(Ghana)' },
+  { code: 'KES', label: '(Kenya)' },
+  { code: 'UGX', label: '(Uganda)' },
+  { code: 'ZAR', label: '(South Africa)' },
+  { code: 'TZS', label: '(Tanzania)' },
+];
 
 const inputClass =
   'min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-ink dark:bg-surface-muted';
@@ -138,18 +151,12 @@ export function FlutterwaveSettingsPanel() {
             </label>
           </div>
 
-          <div className="grid gap-1">
-            <label className="font-bold" htmlFor="flutterwave-allowed-currencies">
-              Allowed currencies (CSV)
-            </label>
-            <input
-              className={inputClass}
-              id="flutterwave-allowed-currencies"
-              onChange={(e) => setAllowedCurrencies(e.target.value)}
-              placeholder="NGN,GHS,KES"
-              value={allowedCurrencies}
-            />
-          </div>
+          <CurrencyPicker
+            label="Allowed currencies"
+            onChange={setAllowedCurrencies}
+            options={FLUTTERWAVE_CURRENCY_OPTIONS}
+            value={allowedCurrencies}
+          />
 
           <div className="grid gap-1">
             <label className="font-bold" htmlFor="flutterwave-allowed-countries">

@@ -1,14 +1,24 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { CurrencyPicker, CurrencyPickerOption } from '@/components/admin/CurrencyPicker';
 import {
   normalizeErrorMessage,
   useGetAdminP2PSettingsQuery,
+  useGetCountriesQuery,
   useUpdateAdminP2PSettingsMutation,
 } from '@/store/api';
 
+// Settlement-only assets with no backing country -- always offered
+// alongside whatever currencies the coverage countries themselves use.
+const CRYPTO_SETTLEMENT_ASSETS: CurrencyPickerOption[] = [
+  { code: 'USDT', label: '(stablecoin)' },
+  { code: 'USDC', label: '(stablecoin)' },
+];
+
 export function P2PMarketSettingsPanel() {
   const { data: settings, isLoading } = useGetAdminP2PSettingsQuery();
+  const { data: countries } = useGetCountriesQuery();
   const [updateSettings, { isLoading: isSaving }] = useUpdateAdminP2PSettingsMutation();
   const [form, setForm] = useState({
     enabled: false,
@@ -28,6 +38,33 @@ export function P2PMarketSettingsPanel() {
   });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  // One option per unique currency code across every coverage country
+  // (e.g. NGN, ZAR, KES, ...), labeled with which countries use it so an
+  // unfamiliar code is still recognizable, plus the crypto settlement
+  // assets that have no backing country at all.
+  const currencyOptions = useMemo<CurrencyPickerOption[]>(() => {
+    const countryNamesByCurrency = new Map<string, string[]>();
+    for (const country of countries ?? []) {
+      const code = country.currencyCode.toUpperCase();
+      const names = countryNamesByCurrency.get(code) ?? [];
+      names.push(country.name);
+      countryNamesByCurrency.set(code, names);
+    }
+    const fromCountries: CurrencyPickerOption[] = Array.from(countryNamesByCurrency.entries())
+      .map(([code, names]) => {
+        // A shared currency (e.g. XOF across ~8 West African countries)
+        // would otherwise produce an unreadably long label -- cap the
+        // visible list and note how many more, full list is still in the
+        // hover tooltip via CurrencyPicker's title attribute.
+        const shown = names.slice(0, 2).join(', ');
+        const remaining = names.length - 2;
+        const label = remaining > 0 ? `(${shown} +${remaining} more)` : `(${shown})`;
+        return { code, label, fullLabel: `(${names.join(', ')})` };
+      })
+      .sort((a, b) => a.code.localeCompare(b.code));
+    return [...fromCountries, ...CRYPTO_SETTLEMENT_ASSETS];
+  }, [countries]);
 
   useEffect(() => {
     if (!settings) return;
@@ -157,12 +194,13 @@ export function P2PMarketSettingsPanel() {
             setForm((current) => ({ ...current, maxOpenTradesPerUser }))
           }
         />
-        <Field
+        <CurrencyPicker
           label="Allowed settlement currencies"
-          value={form.allowedFiatCurrencies}
           onChange={(allowedFiatCurrencies) =>
             setForm((current) => ({ ...current, allowedFiatCurrencies }))
           }
+          options={currencyOptions}
+          value={form.allowedFiatCurrencies}
         />
         <Field
           label="Allowed payment methods"
