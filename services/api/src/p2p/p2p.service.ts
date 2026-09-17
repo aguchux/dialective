@@ -1383,8 +1383,14 @@ export class P2PService {
     const buyerWallet =
       trade.buyer.wallet ?? (await this.prisma.wallet.create({ data: { userId: trade.buyerId } }));
     await this.prisma.$transaction([
-      this.prisma.wallet.update({
-        where: { id: trade.seller.wallet.id },
+      this.prisma.wallet.updateMany({
+        // gte guard: releasing to the buyer consumes the seller's escrow
+        // rather than returning it, so the matching P2P_ESCROW_RELEASE
+        // ledger row is written with amount 0 (the seller's spendable total
+        // doesn't change). That makes an over-release invisible to
+        // wallet/ledger reconciliation, exactly like the settlement job's
+        // lock release -- so the write itself must refuse to go negative.
+        where: { id: trade.seller.wallet.id, lockedBalance: { gte: trade.tokenAmount } },
         data: { lockedBalance: { decrement: trade.tokenAmount } },
       }),
       this.prisma.wallet.update({

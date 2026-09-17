@@ -272,10 +272,13 @@ export class SettlementAdminService {
     const mintOps = ctx.mintingPaused
       ? []
       : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
-    const lockOps = (await this.wasLocked(recording.id))
+    const lockOps = (await this.isStakeStillLocked(recording.id))
       ? [
           this.prisma.wallet.updateMany({
-            where: { userId },
+            // gte guard -- this release writes no ledger row (the stake is
+            // consumed by the payout), so an over-release is invisible to
+            // reconciliation. See SettlementService's matching comment.
+            where: { userId, lockedBalance: { gte: recording.tokensSpent } },
             data: { lockedBalance: { decrement: recording.tokensSpent } },
           }),
         ]
@@ -319,12 +322,25 @@ export class SettlementAdminService {
     return { id: recording.id, payoutTokenAmount: payout.toString() };
   }
 
-  private async wasLocked(reference: string): Promise<boolean> {
-    const lock = await this.prisma.ledgerEntry.findFirst({
-      where: { reference, type: 'TASK_LOCK' },
-      select: { id: true },
-    });
-    return lock !== null;
+  /**
+   * Whether this row's stake is STILL SITTING in lockedBalance. Mirrors
+   * SettlementService.isStakeStillLocked -- a TASK_LOCK entry alone only
+   * proves a lock was once taken, not that it is still held, so asking that
+   * question released already-refunded stakes a second time and drove
+   * lockedBalance negative.
+   */
+  private async isStakeStillLocked(reference: string): Promise<boolean> {
+    const [lock, release] = await Promise.all([
+      this.prisma.ledgerEntry.findFirst({
+        where: { reference, type: 'TASK_LOCK' },
+        select: { id: true },
+      }),
+      this.prisma.ledgerEntry.findFirst({
+        where: { reference, type: 'TASK_REFUND' },
+        select: { id: true },
+      }),
+    ]);
+    return lock !== null && release === null;
   }
 
   /** A repeat source remains auditable, but its locked stake is returned without a reward. */

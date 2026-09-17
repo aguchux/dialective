@@ -298,6 +298,33 @@ describe('SettlementService settlement state', () => {
     });
   });
 
+  // Regression: this release consumes the stake rather than returning it, so
+  // it writes no ledger row of its own -- meaning an over-release is
+  // invisible to wallet/ledger reconciliation and silently drives
+  // lockedBalance negative. The gte guard makes the write itself incapable
+  // of that, independent of whatever the isStakeStillLocked read decided.
+  it('guards the lock release so it can never drive lockedBalance negative', async () => {
+    const prisma = buildPrismaMock();
+    // A TASK_LOCK exists and no TASK_REFUND has returned it, so the stake is
+    // still held and the release genuinely runs.
+    prisma.ledgerEntry.findFirst.mockImplementation(({ where }: any) =>
+      Promise.resolve(where?.type === 'TASK_REFUND' ? null : { id: 'lock-1' }),
+    );
+    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+
+    // @ts-expect-error -- private method under test
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
+
+    expect(prisma.wallet.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: 'user-1',
+          lockedBalance: { gte: expect.anything() },
+        }),
+      }),
+    );
+  });
+
   it('mints into the Tokenomics ledger alongside the legacy payout when minting is not paused', async () => {
     const prisma = buildPrismaMock();
     const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);

@@ -286,7 +286,15 @@ export class SettlementService {
         const lockOps = (await this.isStakeStillLocked(recording.id))
           ? [
               this.prisma.wallet.updateMany({
-                where: { userId },
+                // gte guard, not a bare decrement: this release writes no
+                // ledger row of its own (the stake is consumed by the
+                // payout, not returned), so an over-release is invisible to
+                // wallet/ledger reconciliation and silently drives
+                // lockedBalance negative. isStakeStillLocked above is the
+                // primary check; this makes the write itself incapable of
+                // going below zero even when some other path released the
+                // stake between that read and this transaction.
+                where: { userId, lockedBalance: { gte: recording.tokensSpent } },
                 data: { lockedBalance: { decrement: recording.tokensSpent } },
               }),
             ]
@@ -932,7 +940,10 @@ export class SettlementService {
         const lockOps = (await this.isStakeStillLocked(recording.id))
           ? [
               this.prisma.wallet.updateMany({
-                where: { userId },
+                // gte guard for the same reason as settleWordRecordings --
+                // an unguarded release here cannot be caught by ledger
+                // reconciliation.
+                where: { userId, lockedBalance: { gte: recording.tokensSpent } },
                 data: { lockedBalance: { decrement: recording.tokensSpent } },
               }),
             ]
