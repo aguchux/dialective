@@ -270,8 +270,8 @@ describe('creditTrainingPayout no-loss guarantee with a distributor chain', () =
     expect(wallets.get('d5')!.balance.toString()).toBe('0.03'); // 0.03%
   });
 
-  it('never lets the trainer receive less than tokensSpent, unlike the legacy single-level path (documented, not changed)', async () => {
-    const { prisma } = setupChain({
+  it('mints the legacy single-level referral bonus too, instead of deducting it from the trainer', async () => {
+    const { prisma, wallets } = setupChain({
       distributorSettings: DISABLED_DISTRIBUTOR_SETTINGS,
       chain: [
         { id: 'trainer', role: 'TRAINER' },
@@ -287,10 +287,38 @@ describe('creditTrainingPayout no-loss guarantee with a distributor chain', () =
 
     const result = await creditTrainingPayout(prisma, 'trainer', 100, 'submission-1');
 
-    // The pre-existing legacy path still deducts (100 - 10% = 90) -- this
-    // spec documents that this older behavior is intentionally unchanged,
-    // distinct from the new distributor-chain path tested above.
-    expect(result.netAmount).toBe('90');
+    // The legacy path used to net the referrer's cut out of the trainer's
+    // own payout (100 - 10% = 90), which broke the no-loss guarantee at the
+    // bottom of the score range: at score 0 the payout equals the stake, so
+    // deducting handed the trainer back less than they staked. It now
+    // matches the distributor-chain path above -- trainer keeps the full
+    // amount, referrer's bonus is minted on top.
+    expect(result.netAmount).toBe('100');
+    expect(wallets.get('trainer')!.balance.toString()).toBe('100');
+    expect(wallets.get('referrer')!.balance.toString()).toBe('10');
+  });
+
+  it('holds the no-loss guarantee at score 0, where payout == stake and any deduction is a real loss', async () => {
+    const { prisma, wallets } = setupChain({
+      distributorSettings: DISABLED_DISTRIBUTOR_SETTINGS,
+      chain: [
+        { id: 'trainer', role: 'TRAINER' },
+        { id: 'referrer', role: 'TRAINER' },
+      ],
+      referralSettings: {
+        fundingBonusEnabled: false,
+        fundingBonusRate: new Decimal(0),
+        payoutBonusEnabled: true,
+        payoutBonusRate: new Decimal('0.05'), // the rate live in production
+      },
+    });
+
+    // computeTrainingPayout(stake=10, score=0, ...) === 10, so the trainer
+    // must get their whole stake back and not a token less.
+    const result = await creditTrainingPayout(prisma, 'trainer', 10, 'submission-zero-score');
+
+    expect(result.netAmount).toBe('10');
+    expect(wallets.get('trainer')!.balance.toString()).toBe('10');
   });
 
   it('an empty distributor chain (no bonuses) falls through to the legacy path unaffected', async () => {

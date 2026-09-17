@@ -283,7 +283,7 @@ export class SettlementService {
 
         // Same lock-release-alongside-payout pattern as settleSubmissions,
         // same legacy-row guard.
-        const lockOps = (await this.wasLocked(recording.id))
+        const lockOps = (await this.isStakeStillLocked(recording.id))
           ? [
               this.prisma.wallet.updateMany({
                 where: { userId },
@@ -382,7 +382,7 @@ export class SettlementService {
         });
         if (claim.count === 0) continue;
 
-        if (await this.wasLocked(recording.id)) {
+        if (await this.isStakeStillLocked(recording.id)) {
           await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
         }
         refundedCount += 1;
@@ -468,7 +468,7 @@ export class SettlementService {
         } else {
           // Legacy (pre-locking) rows spent balance directly and never locked
           // anything -- nothing to refund, just mark them resolved.
-          if (await this.wasLocked(recording.id)) {
+          if (await this.isStakeStillLocked(recording.id)) {
             await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
           }
         }
@@ -578,7 +578,7 @@ export class SettlementService {
     // Legacy (pre-locking) rows spent balance directly and never locked
     // anything -- decrementing lockedBalance for them would drive it
     // negative, so only touch it for rows that actually have a lock.
-    const locked = await this.wasLocked(reference);
+    const locked = await this.isStakeStillLocked(reference);
     await this.prisma.$transaction([
       this.prisma.wallet.updateMany({
         where: { userId },
@@ -742,19 +742,45 @@ export class SettlementService {
   }
 
   /**
-   * Rows created before the token-locking feature shipped were debited via
-   * the old TASK_SPEND path (balance only, lockedBalance never touched) --
-   * releasing a lock for those would decrement lockedBalance for money that
-   * was never put there, driving it negative. Every release site checks
-   * this first and only moves lockedBalance for rows that actually have a
-   * matching TASK_LOCK ledger entry.
+   * Whether this row's stake is STILL SITTING in lockedBalance, and so has a
+   * lock left to release. Two separate things can make the answer no:
+   *
+   *  - It was never locked. Rows created before the token-locking feature
+   *    shipped were debited via the old TASK_SPEND path (balance only,
+   *    lockedBalance never touched), so releasing a lock for them would
+   *    decrement lockedBalance for money that was never put there.
+   *  - It was locked, but already released. A TASK_REFUND against the same
+   *    reference means an earlier sweep already moved the stake back out.
+   *
+   * The second half is why this asks "is it still held" rather than the
+   * "was it ever locked" this used to ask. A row can legitimately be
+   * refunded by one sweep and then settled by another: refundStuckWord-
+   * Recordings stamps refundedAt as its claim marker and, when
+   * noFailOnTrainEnabled is on, hands the row to scoreWithSyntheticScore ->
+   * settleWordRecordings for a real payout. Under the old check both sweeps
+   * saw "was locked" and both decremented lockedBalance for the same stake,
+   * releasing it twice off one lock. That drove lockedBalance negative --
+   * 300 production wallets and ~4.9k DL of phantom release before this was
+   * caught -- and it was invisible to the wallet/ledger reconciliation
+   * because the second decrement writes no ledger row of its own.
+   *
+   * Deliberately NOT inferred from refundedAt on the recording: that column
+   * is overloaded (it doubles as the claim marker above, and is set on rows
+   * that were never refunded at all), so the ledger is the only honest
+   * record of whether tokens actually moved.
    */
-  private async wasLocked(reference: string): Promise<boolean> {
-    const lock = await this.prisma.ledgerEntry.findFirst({
-      where: { reference, type: 'TASK_LOCK' },
-      select: { id: true },
-    });
-    return lock !== null;
+  private async isStakeStillLocked(reference: string): Promise<boolean> {
+    const [lock, release] = await Promise.all([
+      this.prisma.ledgerEntry.findFirst({
+        where: { reference, type: 'TASK_LOCK' },
+        select: { id: true },
+      }),
+      this.prisma.ledgerEntry.findFirst({
+        where: { reference, type: 'TASK_REFUND' },
+        select: { id: true },
+      }),
+    ]);
+    return lock !== null && release === null;
   }
 
   /**
@@ -892,7 +918,7 @@ export class SettlementService {
             data: { status: 'EXPIRED', compositeScore, refundedAt: new Date() },
           });
           if (claim.count === 0) continue;
-          if (await this.wasLocked(recording.id)) {
+          if (await this.isStakeStillLocked(recording.id)) {
             await this.refundTokens(userId, recording.tokensSpent, recording.id);
           }
           continue;
@@ -903,7 +929,7 @@ export class SettlementService {
         const mintOps = mintingPaused
           ? []
           : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
-        const lockOps = (await this.wasLocked(recording.id))
+        const lockOps = (await this.isStakeStillLocked(recording.id))
           ? [
               this.prisma.wallet.updateMany({
                 where: { userId },
@@ -968,7 +994,7 @@ export class SettlementService {
         });
         if (claim.count === 0) continue;
 
-        if (await this.wasLocked(recording.id)) {
+        if (await this.isStakeStillLocked(recording.id)) {
           await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
         }
         refundedCount += 1;
@@ -1014,7 +1040,7 @@ export class SettlementService {
         });
         if (claim.count === 0) continue;
 
-        if (await this.wasLocked(recording.id)) {
+        if (await this.isStakeStillLocked(recording.id)) {
           await this.refundTokens(recording.userId, recording.tokensSpent, recording.id);
         }
         refundedCount += 1;

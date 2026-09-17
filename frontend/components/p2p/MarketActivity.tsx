@@ -240,6 +240,9 @@ const STATUS_LABELS: Record<P2PTrade['status'], string> = {
   CANCELLED: 'Cancelled',
   DISPUTED: 'Disputed',
   EXPIRED: 'Expired',
+  // Escrow is mid-transfer. Normally too brief for a user to ever see; if it
+  // persists, a release or refund crashed partway and needs admin attention.
+  SETTLING: 'Completing',
 };
 
 const OPEN_TRADE_STATUSES = new Set(['AWAITING_PAYMENT', 'PAID_MARKED', 'CANCEL_PENDING']);

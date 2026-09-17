@@ -444,6 +444,7 @@ describe('WalletController Flutterwave webhook', () => {
           providerChargeId: 'deposit-flw-1',
           currency: 'NGN',
           usdAmount: { toString: () => '10' },
+          expectedChargeAmount: { toNumber: () => 5000 },
           tokenAmount: 100,
           status: 'pending',
           wallet: { user: { id: 'user-1', referredById: null } },
@@ -472,20 +473,58 @@ describe('WalletController Flutterwave webhook', () => {
     const flutterwave = {
       verifyWebhookSignature: jest.fn().mockReturnValue(true),
       getWebhookEventHash: jest.fn().mockReturnValue('fw-event-hash'),
+      // Re-read at confirmation time so an underpaid charge can't mint the
+      // full tokenAmount -- see assertFlutterwaveAmountMatches.
+      verifyPaymentById: jest
+        .fn()
+        .mockResolvedValue({ amount: 5000, currency: 'NGN', status: 'successful' }),
     };
+    const platformSettings = { isFlutterwaveV4Enabled: jest.fn().mockResolvedValue(false) };
     const controller = new WalletController(
       prisma as never,
       {} as never,
       flutterwave as never,
       {} as never,
       {} as never,
-      {} as never,
+      platformSettings as never,
       {} as never,
       {} as never,
       {} as never,
     );
-    return { controller, prisma, tx, flutterwave };
+    return { controller, prisma, tx, flutterwave, platformSettings };
   }
+
+  it('refuses to credit a charge that paid less than the deposit asked for', async () => {
+    const { controller, flutterwave, tx } = setup();
+    // Provider reports a successful charge, but for a fraction of the
+    // amount -- status alone must not be enough to mint the full
+    // tokenAmount, or a large checkout could be settled with a token sum.
+    flutterwave.verifyPaymentById.mockResolvedValue({
+      amount: 100,
+      currency: 'NGN',
+      status: 'successful',
+    });
+
+    await expect(controller.handleFlutterwaveWebhook(chargeCompletedRequest())).rejects.toThrow(
+      'amount paid does not match',
+    );
+    expect(tx.wallet.update).not.toHaveBeenCalled();
+    expect(tx.ledgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to credit a charge paid in a different currency', async () => {
+    const { controller, flutterwave, tx } = setup();
+    flutterwave.verifyPaymentById.mockResolvedValue({
+      amount: 5000,
+      currency: 'GHS',
+      status: 'successful',
+    });
+
+    await expect(controller.handleFlutterwaveWebhook(chargeCompletedRequest())).rejects.toThrow(
+      'currency paid does not match',
+    );
+    expect(tx.wallet.update).not.toHaveBeenCalled();
+  });
 
   it('credits a successful charge in one atomic transaction', async () => {
     const { controller, prisma, tx } = setup();
@@ -931,15 +970,28 @@ describe('WalletController withdrawal payout automation', () => {
 
   it('approve requires PENDING status and records approvedByAdminId/approvedAt', async () => {
     const { controller, prisma, req } = setup(baseWithdrawal({ status: 'PENDING' }));
+    prisma.withdrawalRequest.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await controller.approveWithdrawal(req, 'withdrawal-1', {});
 
-    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+    // Guarded claim on the status read a moment ago, so two concurrent
+    // approvals can't both win -- see approveWithdrawal.
+    expect(prisma.withdrawalRequest.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ id: 'withdrawal-1', status: 'PENDING' }),
         data: expect.objectContaining({ status: 'APPROVED', approvedByAdminId: 'admin-1' }),
       }),
     );
     expect(result.status).toBe('APPROVED');
+  });
+
+  it('approve refuses when another request already moved the withdrawal (lost claim)', async () => {
+    const { controller, prisma, req } = setup(baseWithdrawal({ status: 'PENDING' }));
+    prisma.withdrawalRequest.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(controller.approveWithdrawal(req, 'withdrawal-1', {})).rejects.toThrow(
+      'updated by someone else',
+    );
   });
 
   it('approve refuses a withdrawal that is not PENDING or FAILED', async () => {
@@ -952,11 +1004,13 @@ describe('WalletController withdrawal payout automation', () => {
 
   it('approve allows re-approving a FAILED withdrawal so it can be retried', async () => {
     const { controller, prisma, req } = setup(baseWithdrawal({ status: 'FAILED' }));
+    prisma.withdrawalRequest.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await controller.approveWithdrawal(req, 'withdrawal-1', {});
 
-    expect(prisma.withdrawalRequest.update).toHaveBeenCalledWith(
+    expect(prisma.withdrawalRequest.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ id: 'withdrawal-1', status: 'FAILED' }),
         data: expect.objectContaining({ status: 'APPROVED', approvedByAdminId: 'admin-1' }),
       }),
     );
@@ -970,7 +1024,7 @@ describe('WalletController withdrawal payout automation', () => {
     await expect(controller.approveWithdrawal(req, 'withdrawal-1', {})).rejects.toThrow(
       'already refunded to the trainer',
     );
-    expect(prisma.withdrawalRequest.update).not.toHaveBeenCalled();
+    expect(prisma.withdrawalRequest.updateMany).not.toHaveBeenCalled();
   });
 
   it('resolve(reject) refunds tokens exactly once via a single WITHDRAWAL_REVERSED ledger entry', async () => {
@@ -1107,7 +1161,7 @@ describe('WalletController withdrawal payout automation', () => {
       { id: 'withdrawal-1', ok: true },
       { id: 'withdrawal-2', ok: true },
     ]);
-    expect(prisma.withdrawalRequest.update).toHaveBeenCalledTimes(2);
+    expect(prisma.withdrawalRequest.updateMany).toHaveBeenCalledTimes(2);
   });
 
   it('bulk-resolve rejects every id and refunds each via the ledger', async () => {

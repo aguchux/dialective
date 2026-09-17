@@ -912,7 +912,10 @@ export type P2PTradeStatus =
   | 'CANCEL_PENDING'
   | 'CANCELLED'
   | 'DISPUTED'
-  | 'EXPIRED';
+  | 'EXPIRED'
+  // Transitional, held only while a release/refund moves the escrow. A trade
+  // seen sitting in this state means a resolution crashed mid-flight.
+  | 'SETTLING';
 export type P2PDisputeStatus = 'OPEN' | 'RESOLVED_BUYER' | 'RESOLVED_SELLER';
 
 export interface Integration {

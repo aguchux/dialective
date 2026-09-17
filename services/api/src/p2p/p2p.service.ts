@@ -1254,6 +1254,37 @@ export class P2PService {
     await this.refundTradeToSeller(tradeId);
   }
 
+  /**
+   * Takes a trade out of play by moving it off `expectedStatus`, returning
+   * false if someone else got there first.
+   *
+   * This is the single serialization point for escrow resolution. Exactly
+   * one of releaseTradeToBuyer / refundTradeToSeller may ever pay out a
+   * given trade's locked tokens, and both are reachable concurrently --
+   * a seller releasing while an admin resolves a dispute, or while any of
+   * the many read endpoints that call expireStaleRecords sweeps the same
+   * row. Their own terminal-status checks read the trade before the
+   * transaction opens, so they cannot exclude each other; the ledger's
+   * unique constraint cannot either, since the two paths write different
+   * entry types against the same trade id. Whoever wins this claim owns
+   * the escrow.
+   *
+   * Deliberately a transitional status rather than the final one: the
+   * caller still sets RELEASED/CANCELLED with its own timestamps in the
+   * transaction that moves the money, so a crash after the claim leaves the
+   * trade visibly mid-resolution rather than falsely terminal.
+   */
+  private async claimTradeOutOfPlay(
+    tradeId: string,
+    expectedStatus: P2PTradeStatus,
+  ): Promise<boolean> {
+    const claim = await this.prisma.p2PTokenTrade.updateMany({
+      where: { id: tradeId, status: expectedStatus },
+      data: { status: P2PTradeStatus.SETTLING },
+    });
+    return claim.count === 1;
+  }
+
   private async refundTradeToSeller(
     tradeId: string,
     disputeId?: string,
@@ -1272,6 +1303,16 @@ export class P2PService {
       trade.status === P2PTradeStatus.EXPIRED
     )
       return;
+    // Atomically claim the trade out of its current status before moving any
+    // escrow. The terminal-status check above ran against a row read outside
+    // this transaction, so on its own it cannot stop a release and a refund
+    // from both passing and both paying out the same locked tokens -- and
+    // the ledger's unique constraint does not catch that pair, because
+    // P2P_ESCROW_RELEASE and P2P_ESCROW_REFUND are different types against
+    // the same reference. expireStaleRecords runs on many read endpoints
+    // (including inside release()), so the two really can overlap.
+    const claimed = await this.claimTradeOutOfPlay(trade.id, trade.status);
+    if (!claimed) return;
     await this.prisma.$transaction([
       this.prisma.wallet.update({
         where: { id: trade.seller.wallet.id },
@@ -1335,6 +1376,10 @@ export class P2PService {
       trade.status === P2PTradeStatus.EXPIRED
     )
       return;
+    // See refundTradeToSeller -- same claim, same reason. This is the other
+    // half of the pair that must never both succeed for one escrow.
+    const claimed = await this.claimTradeOutOfPlay(trade.id, trade.status);
+    if (!claimed) return;
     const buyerWallet =
       trade.buyer.wallet ?? (await this.prisma.wallet.create({ data: { userId: trade.buyerId } }));
     await this.prisma.$transaction([

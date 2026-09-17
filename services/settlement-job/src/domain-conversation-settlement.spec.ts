@@ -230,7 +230,11 @@ describe('SettlementService.refundRejectedDomainConversationRecordings', () => {
         update: jest.fn().mockResolvedValue({}),
       },
       ledgerEntry: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'lock-1' }),
+        // Type-aware: a TASK_LOCK exists but no TASK_REFUND, i.e. the stake
+        // is still held -- isStakeStillLocked() -> true.
+        findFirst: jest.fn().mockImplementation(({ where }: any) =>
+          Promise.resolve(where?.type === 'TASK_REFUND' ? null : { id: 'lock-1' }),
+        ),
         create: jest.fn().mockResolvedValue({}),
       },
       wallet: {

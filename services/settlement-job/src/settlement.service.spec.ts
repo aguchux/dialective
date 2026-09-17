@@ -135,7 +135,11 @@ describe('SettlementService refundStuckWordRecordings', () => {
         update: jest.fn().mockResolvedValue({}),
       },
       ledgerEntry: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'lock-1' }), // wasLocked -> true
+        // Type-aware: a TASK_LOCK exists but no TASK_REFUND, i.e. the stake
+        // is still held -- isStakeStillLocked() -> true.
+        findFirst: jest.fn().mockImplementation(({ where }: any) =>
+          Promise.resolve(where?.type === 'TASK_REFUND' ? null : { id: 'lock-1' }),
+        ),
         create: jest.fn().mockResolvedValue({}),
       },
       wallet: {
@@ -165,6 +169,29 @@ describe('SettlementService refundStuckWordRecordings', () => {
       where: { userId: 'user-1' },
       data: { lockedBalance: { decrement: expect.anything() }, balance: { increment: expect.anything() } },
     });
+  });
+
+  // Regression: the lock check used to ask "was a TASK_LOCK ever written"
+  // rather than "is the stake still held", so a row that one sweep had
+  // already refunded could have its lock released a second time by another.
+  // That decrement writes no ledger row of its own, so it was invisible to
+  // the wallet/ledger reconciliation while quietly driving lockedBalance
+  // negative -- 51,132 recordings and ~4.9k DL of phantom release in
+  // production before it was found.
+  it('does not release the lock again once a TASK_REFUND already returned the stake', async () => {
+    const prisma = buildPrismaMock();
+    prisma.ledgerEntry.findFirst.mockImplementation(({ where }: any) =>
+      // Both a lock AND a refund exist: the stake is already back.
+      Promise.resolve({ id: where?.type === 'TASK_REFUND' ? 'refund-1' : 'lock-1' }),
+    );
+    const service = new SettlementService(prisma as never, {
+      deleteObject: jest.fn().mockResolvedValue(undefined),
+    } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+
+    // @ts-expect-error -- private method under test
+    await service.refundStuckWordRecordings();
+
+    expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
   });
 
   it('skips a row another concurrent run already claimed', async () => {
@@ -371,7 +398,11 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
         update: jest.fn().mockResolvedValue({}),
       },
       ledgerEntry: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'ledger-1' }), // wasLocked() -> true
+        // Type-aware: a TASK_LOCK exists but no TASK_REFUND, i.e. the stake
+        // is still held -- isStakeStillLocked() -> true.
+        findFirst: jest.fn().mockImplementation(({ where }: any) =>
+          Promise.resolve(where?.type === 'TASK_REFUND' ? null : { id: 'lock-1' }),
+        ),
         create: jest.fn().mockResolvedValue({}),
       },
       wallet: {

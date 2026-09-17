@@ -171,7 +171,16 @@ async function buildCreditTrainingPayoutOps(
   const hasPayoutBonus =
     user.referredById && settings.payoutBonusEnabled && settings.payoutBonusRate.gt(0);
   const payoutBonus = hasPayoutBonus ? settings.payoutBonusRate.mul(grossAmount) : null;
-  const netAmount = payoutBonus ? grossAmount.sub(payoutBonus) : grossAmount;
+  // Platform-funded, exactly like the distributor commissions above -- NOT
+  // subtracted from the trainer. This used to pay the referrer out of the
+  // referred trainer's own payout, which broke the no-loss guarantee at the
+  // bottom of the score range: a score of 0 makes payout == stake, so
+  // netting 5% off handed the trainer back less than they staked, turning a
+  // guaranteed-break-even task into a loss for referred trainers only. 6205
+  // production recordings had already paid out below stake (~620 DL of
+  // shortfall) before this was caught. The referrer still earns the same
+  // amount; it is minted alongside rather than taken from the trainer.
+  const netAmount = grossAmount;
   const referrerWallet =
     user.referredById && payoutBonus ? await getOrCreateWallet(prisma, user.referredById) : null;
 

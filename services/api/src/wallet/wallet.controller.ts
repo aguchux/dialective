@@ -1176,6 +1176,10 @@ export class WalletController {
         currency: body.currency,
         usdAmount: body.usdAmount,
         tokenAmount,
+        // Snapshotted so confirmation can check what Flutterwave actually
+        // collected against what we asked for -- see the field's schema
+        // comment and assertFlutterwaveAmountMatches.
+        expectedChargeAmount: localAmount,
         status: 'pending',
       },
     });
@@ -1915,6 +1919,76 @@ export class WalletController {
    * status!=='confirmed' atomic claim (same updateMany-guarded pattern
    * NOWPayments' handler uses).
    */
+  /**
+   * Confirms Flutterwave actually collected what the checkout asked for
+   * before any tokens are minted.
+   *
+   * Every caller reaches this through a "status is successful" check, but
+   * status alone says a payment happened -- not that it was for the right
+   * amount. Flutterwave's hosted page and v4 virtual accounts can both
+   * settle for less than requested (a partial transfer, an edited amount),
+   * and one of the callers is an authenticated route the payer themselves
+   * can invoke, so trusting status would let someone open a large checkout,
+   * pay a token sum, and be credited the full tokenAmount.
+   *
+   * Amount/currency are re-read from the provider rather than taken from a
+   * webhook body, since the webhook payload is attacker-shaped input on the
+   * v3 path. Mirrors validateFinishedPayment, which the NOWPayments path
+   * has always applied.
+   *
+   * A mismatch throws rather than returning false: it means a real payment
+   * landed that we cannot safely credit, so it must surface loudly for
+   * manual reconciliation instead of being silently swallowed as "not yet
+   * paid". The deposit is left unconfirmed, so nothing is credited.
+   */
+  private async assertFlutterwaveAmountMatches(
+    deposit: { id: string; currency: string; expectedChargeAmount: Prisma.Decimal | null },
+    reported: { amount: number | null; currency: string | null },
+  ): Promise<void> {
+    // Legacy rows created before expectedChargeAmount was recorded have
+    // nothing to compare against. Confirming them on status alone is the
+    // pre-existing behaviour, not a new hole, and the backfill migration
+    // populates every row it can reconstruct.
+    if (deposit.expectedChargeAmount === null) {
+      this.logger.warn(
+        `Flutterwave deposit=${deposit.id} has no expectedChargeAmount -- crediting on status alone`,
+      );
+      return;
+    }
+
+    if (reported.amount === null) {
+      throw new UnprocessableEntityException(
+        'The payment provider did not report an amount for this charge.',
+      );
+    }
+
+    const expected = deposit.expectedChargeAmount.toNumber();
+    // Providers round local-currency minor units, so compare at 2dp rather
+    // than demanding exact equality on a float.
+    const underpaidBy = expected - reported.amount;
+    if (underpaidBy > 0.01) {
+      this.logger.error(
+        `Flutterwave underpayment deposit=${deposit.id} expected=${expected} ` +
+          `${deposit.currency} reported=${reported.amount} ${reported.currency ?? '?'}`,
+      );
+      throw new UnprocessableEntityException(
+        'The amount paid does not match this deposit. Contact support to resolve it.',
+      );
+    }
+
+    if (
+      reported.currency &&
+      reported.currency.toUpperCase() !== deposit.currency.toUpperCase()
+    ) {
+      this.logger.error(
+        `Flutterwave currency mismatch deposit=${deposit.id} expected=${deposit.currency} reported=${reported.currency}`,
+      );
+      throw new UnprocessableEntityException(
+        'The currency paid does not match this deposit. Contact support to resolve it.',
+      );
+    }
+  }
+
   private async creditFlutterwaveDeposit(
     depositId: string,
     verification: { flutterwaveTxId: string; txRef: string | null; status: string | null },
@@ -1923,6 +1997,14 @@ export class WalletController {
       where: { id: depositId },
       include: { wallet: { include: { user: true } } },
     });
+
+    // Re-read the charge from the provider rather than trusting whatever
+    // the caller was handed -- see assertFlutterwaveAmountMatches. Done
+    // here, not at the four call sites, so no future caller can skip it.
+    const reported = (await this.platformSettings.isFlutterwaveV4Enabled())
+      ? await this.flutterwaveV4.getCharge(verification.txRef ?? verification.flutterwaveTxId)
+      : await this.flutterwave.verifyPaymentById(verification.flutterwaveTxId);
+    await this.assertFlutterwaveAmountMatches(deposit, reported);
 
     const fundingBonuses = await creditFundingReferralBonusesOps(
       this.prisma,
@@ -1940,6 +2022,9 @@ export class WalletController {
           confirmedAt: now,
           providerPaymentId: verification.flutterwaveTxId,
           providerStatus: verification.status,
+          // What the provider says it actually collected, kept alongside
+          // expectedChargeAmount so a support query can see both figures.
+          actuallyPaid: reported.amount ?? undefined,
           lastIpnAt: now,
         },
       });
@@ -2814,8 +2899,16 @@ export class WalletController {
       body.code,
     );
 
-    const approved = await this.prisma.withdrawalRequest.update({
-      where: { id },
+    // Guarded claim, not a bare update -- the status check above ran against
+    // a row read before the OTP round-trip, so re-asserting the status here
+    // is what actually makes approval single-shot. Without it two concurrent
+    // approvals both pass that check, and a re-approve racing a reject can
+    // send a real payout for tokens that were just refunded (the
+    // WITHDRAWAL_REVERSED probe above has the same read-then-act gap). The
+    // provider-submit paths already claim this way; this brings approval in
+    // line with them.
+    const claim = await this.prisma.withdrawalRequest.updateMany({
+      where: { id, status: withdrawal.status },
       data: {
         status: WithdrawalStatus.APPROVED,
         approvedByAdminId: req.user.sub,
@@ -2823,6 +2916,11 @@ export class WalletController {
         adminNote: body.adminNote,
       },
     });
+    if (claim.count === 0) {
+      throw new UnprocessableEntityException(
+        'This withdrawal was updated by someone else -- reload and try again',
+      );
+    }
     this.logger.log(`Withdrawal approved: admin=${req.user.sub} withdrawal=${id}`);
 
     if (await this.platformSettings.isAutoSubmitAfterApprovalEnabled()) {
@@ -2835,7 +2933,7 @@ export class WalletController {
       return this.submitWithdrawalToFlutterwave(req, id, body);
     }
 
-    return { withdrawalId: id, status: approved.status };
+    return { withdrawalId: id, status: WithdrawalStatus.APPROVED };
   }
 
   @Post('admin/withdrawals/:id/submit-nowpayments')
@@ -3899,25 +3997,48 @@ export class WalletController {
     }
 
     if (body.outcome === 'paid') {
-      await this.prisma.withdrawalRequest.update({
-        where: { id },
+      // Guarded claim: marking paid on this rail means an admin sent real
+      // money out of band, so a double-click must not resolve twice and
+      // send a second "you've been paid" notification over what may have
+      // been a second real transfer. The status was read before the OTP
+      // round-trip above, and the OTP itself only serializes this when
+      // adminPayoutOtpEnabled is on -- which is a settings toggle, not a
+      // guarantee -- so the claim is what actually makes this single-shot.
+      const claim = await this.prisma.withdrawalRequest.updateMany({
+        where: { id, status: withdrawal.status },
         data: { status: WithdrawalStatus.PAID, resolvedAt: new Date(), adminNote: body.adminNote },
       });
+      if (claim.count === 0) {
+        throw new UnprocessableEntityException(
+          'This withdrawal was updated by someone else -- reload and try again',
+        );
+      }
       void this.notifyWithdrawalOwnerSmsSafe(
         withdrawal.walletId,
         () => this.platformSettings.isWalletSmsWithdrawalPaidEnabled(),
         `Dialect Library: Your withdrawal of ${withdrawal.tokenAmount.toString()} DL has been paid out.`,
       );
     } else {
+      // The WITHDRAWAL_REVERSED ledger entry's unique constraint already
+      // makes a concurrent double-reject impossible to double-credit (the
+      // second write P2002s and rolls the whole transaction back), but it
+      // surfaces as an opaque 500 on a money endpoint. Claiming the status
+      // first turns that into a clear message and keeps the guard visible
+      // in the code rather than resting on the schema alone.
+      const claim = await this.prisma.withdrawalRequest.updateMany({
+        where: { id, status: withdrawal.status },
+        data: {
+          status: WithdrawalStatus.REJECTED,
+          resolvedAt: new Date(),
+          adminNote: body.adminNote,
+        },
+      });
+      if (claim.count === 0) {
+        throw new UnprocessableEntityException(
+          'This withdrawal was updated by someone else -- reload and try again',
+        );
+      }
       await this.prisma.$transaction([
-        this.prisma.withdrawalRequest.update({
-          where: { id },
-          data: {
-            status: WithdrawalStatus.REJECTED,
-            resolvedAt: new Date(),
-            adminNote: body.adminNote,
-          },
-        }),
         this.prisma.ledgerEntry.create({
           data: {
             walletId: withdrawal.walletId,

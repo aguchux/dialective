@@ -2203,6 +2203,14 @@ model Deposit {
   usdAmount         Decimal   @db.Decimal(20, 8)
   tokenAmount       Decimal   @db.Decimal(20, 8)
   actuallyPaid      Decimal?  @db.Decimal(20, 8)
+  // What the provider is expected to collect, in `currency`, snapshotted at
+  // checkout creation. For Flutterwave this is the local-fiat charge
+  // (usdAmount x the country's rate at the time); null for rails whose
+  // charge is denominated in usdAmount itself. Confirmation compares the
+  // provider's reported amount against this before crediting, so a
+  // partial/underfunded payment can't mint the full tokenAmount -- see
+  // assertFlutterwaveAmountMatches.
+  expectedChargeAmount Decimal? @db.Decimal(20, 8)
   payCurrency       String?
   status            String    @default("pending") // pending | partially_paid | confirmed | expired | failed | refunded
   createdAt         DateTime  @default(now())
@@ -2610,6 +2618,14 @@ enum P2PTradeStatus {
   CANCELLED
   DISPUTED
   EXPIRED
+  /// Transitional: a release or refund has claimed this trade's escrow and
+  /// is moving the tokens right now. Held only for the duration of that
+  /// transaction, then replaced by RELEASED or CANCELLED. Exists so the two
+  /// resolution paths can exclude each other atomically -- see
+  /// P2PService.claimTradeOutOfPlay. A trade found sitting in SETTLING means
+  /// a resolution crashed mid-flight and needs a look, which is exactly why
+  /// the claim doesn't jump straight to the terminal status.
+  SETTLING
 }
 
 enum P2PDisputeStatus {
