@@ -255,8 +255,12 @@ export function StreamAppShell() {
                   options={cascadedFilterOptions}
                 />
                 {sessionStatus === 'unauthenticated' && (
+                  // ml-auto parks the CTA at the far right of the row rather
+                  // than letting it hug the filters -- it's a separate action
+                  // from the filtering controls, so it shouldn't read as the
+                  // last filter in the group.
                   <Link
-                    className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap bg-catalogue-blue px-3 text-xs font-semibold text-white no-underline transition-colors hover:bg-catalogue-blue-bright"
+                    className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap bg-catalogue-blue px-3 text-xs font-semibold text-white no-underline transition-colors hover:bg-catalogue-blue-bright"
                     href="/register"
                   >
                     Start Here

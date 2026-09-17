@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import {
   BarChart3,
+  BookOpen,
   Code2,
   Home,
   Layers3,
@@ -27,6 +28,9 @@ const NAV_ITEMS = [
   { href: '/dashboard/decks', label: 'Stream Decks', icon: Layers3, protected: true },
   { href: '/dashboard/validation', label: 'Validation', icon: ShieldCheck, protected: true },
   { href: '/dashboard/api-keys', label: 'API', icon: Code2, protected: true },
+  // Public, unlike every other entry below Home: the reference is a reason to
+  // sign up, so gating it behind the auth wall would be backwards.
+  { href: '/docs', label: 'API Docs', icon: BookOpen, protected: false },
   { href: '/dashboard/analytics', label: 'Usage', icon: BarChart3, protected: true },
   { href: '/dashboard/team', label: 'Team', icon: UsersRound, protected: true },
   { href: '/settings', label: 'Settings', icon: Settings, protected: true },
