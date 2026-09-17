@@ -145,6 +145,14 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: spaces_community_bucket
+            # Without this the code falls back to a 'dialectiva-testimonials'
+            # default that does not exist in Spaces, so every video-testimony
+            # upload PUT 404s and the browser reports a bare "Failed to fetch".
+            - name: SPACES_TESTIMONY_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_testimony_bucket
             - name: SPACES_ENDPOINT
               valueFrom:
                 secretKeyRef:
