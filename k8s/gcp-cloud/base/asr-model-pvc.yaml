@@ -1,6 +1,5 @@
 # GCP-side counterpart to ../../base/model-pvc.yaml's asr-model-repo-pvc --
-# own disk, GKE's default `standard-rwo` storageClassName (Persistent Disk,
-# RWO like DO's do-block-storage). Same PVC/claim name so
+# own disk, RWO like DO's do-block-storage. Same PVC/claim name so
 # vosk-worker-deployment.yaml's volumes.persistentVolumeClaim.claimName
 # reference is identical between the two clusters -- no cross-cloud sharing,
 # each cluster just has its own copy of the model under the same claim name.
@@ -10,7 +9,13 @@ metadata:
   name: asr-model-repo-pvc
 spec:
   accessModes: ["ReadWriteOnce"]
+#
+# `standard` (pd-standard), NOT the cluster-default `standard-rwo`
+# (pd-balanced) -- see whisper-worker-statefulset.yaml for the full
+# reasoning. Short version: pd-balanced counts against SSD_TOTAL_GB, which
+# in us-central1 is 300GB and fully consumed by the node boot disks, so a
+# pd-balanced PVC of any size fails with QUOTA_EXCEEDED.
   resources:
     requests:
       storage: 5Gi
-  storageClassName: standard-rwo
+  storageClassName: standard

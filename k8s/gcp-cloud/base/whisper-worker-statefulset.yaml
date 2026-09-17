@@ -7,11 +7,22 @@
 # real additional capacity, the same way vosk-worker/quality-gate-worker
 # already do for their own streams.
 #
-# Own per-pod PVC via volumeClaimTemplates (GKE's standard-rwo Persistent
-# Disk, RWO -- same reasoning as DO's do-block-storage: a shared PVC can
-# only attach to one pod's node at a time, so each replica needs its own
-# HuggingFace Hub download cache under /models, cold on first boot and warm
-# afterward).
+# Own per-pod PVC via volumeClaimTemplates (RWO -- same reasoning as DO's
+# do-block-storage: a shared PVC can only attach to one pod's node at a time,
+# so each replica needs its own HuggingFace Hub download cache under /models,
+# cold on first boot and warm afterward).
+#
+# `standard` (pd-standard), NOT the cluster-default `standard-rwo`
+# (pd-balanced). pd-balanced counts against SSD_TOTAL_GB, and in us-central1
+# that quota is 300GB -- exactly consumed by the three 100GB pd-balanced node
+# boot disks, leaving zero headroom. A pd-balanced PVC of ANY size therefore
+# fails with QUOTA_EXCEEDED and the pod sits Pending forever (it did, for
+# 2d8h). pd-standard draws on DISKS_TOTAL_GB instead, which is 2458GB and
+# nearly empty. Don't "upgrade" this back to standard-rwo without first
+# raising SSD_TOTAL_GB or shrinking the node boot disks.
+#
+# 8Gi, not 5Gi: the three NCAIR1 ASR models total ~2.8GB today and 5Gi left
+# little room for a second dialect.
 apiVersion: v1
 kind: Service
 metadata:
@@ -150,5 +161,5 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 5Gi
-        storageClassName: standard-rwo
+            storage: 8Gi
+        storageClassName: standard
