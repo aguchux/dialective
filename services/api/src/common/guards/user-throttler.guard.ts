@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { FriendlyThrottlerGuard } from './friendly-throttler.guard';
 
 /**
  * Keys rate-limit buckets by authenticated user (req.user.sub, set by
@@ -11,7 +11,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
  * JwtAuthGuard always runs first on these routes).
  */
 @Injectable()
-export class UserThrottlerGuard extends ThrottlerGuard {
+export class UserThrottlerGuard extends FriendlyThrottlerGuard {
   protected async getTracker(req: Record<string, any>): Promise<string> {
     return req.user?.sub ?? req.ip;
   }

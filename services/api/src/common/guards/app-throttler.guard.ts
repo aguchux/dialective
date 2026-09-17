@@ -1,10 +1,11 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
-import { ThrottlerGuard } from '@nestjs/throttler';
+
 import { SubmissionRateLimitGuard } from './submission-rate-limit.guard';
 import { RegisterRateLimitGuard } from './register-rate-limit.guard';
 import { UserThrottlerGuard } from './user-throttler.guard';
+import { FriendlyThrottlerGuard } from './friendly-throttler.guard';
 
 // Routes that already carry one of these via their own @UseGuards() run
 // their own (possibly admin-gated) throttling and must not also be counted
@@ -34,7 +35,7 @@ const DEDICATED_THROTTLER_GUARDS = [
  * (see DEDICATED_THROTTLER_GUARDS) so they aren't throttled twice over.
  */
 @Injectable()
-export class AppThrottlerGuard extends ThrottlerGuard {
+export class AppThrottlerGuard extends FriendlyThrottlerGuard {
   protected async shouldSkip(context: ExecutionContext): Promise<boolean> {
     const reflector = new Reflector();
     const handlerGuards =

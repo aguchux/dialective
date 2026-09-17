@@ -1,7 +1,8 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModuleOptions, ThrottlerStorage } from '@nestjs/throttler';
+import { ThrottlerModuleOptions, ThrottlerStorage } from '@nestjs/throttler';
 import { PlatformSettingsService } from '../../settings/platform-settings.service';
+import { FriendlyThrottlerGuard } from './friendly-throttler.guard';
 
 /**
  * Per-trainer submission throttle for POST /submissions/create and
@@ -17,7 +18,7 @@ import { PlatformSettingsService } from '../../settings/platform-settings.servic
  * pattern as RegisterRateLimitGuard.
  */
 @Injectable()
-export class SubmissionRateLimitGuard extends ThrottlerGuard {
+export class SubmissionRateLimitGuard extends FriendlyThrottlerGuard {
   constructor(
     options: ThrottlerModuleOptions,
     storageService: ThrottlerStorage,
@@ -35,9 +36,9 @@ export class SubmissionRateLimitGuard extends ThrottlerGuard {
     context: ExecutionContext,
     limit: number,
     ttl: number,
-    throttler: Parameters<ThrottlerGuard['handleRequest']>[3],
-    getTracker: Parameters<ThrottlerGuard['handleRequest']>[4],
-    generateKey: Parameters<ThrottlerGuard['handleRequest']>[5],
+    throttler: Parameters<FriendlyThrottlerGuard['handleRequest']>[3],
+    getTracker: Parameters<FriendlyThrottlerGuard['handleRequest']>[4],
+    generateKey: Parameters<FriendlyThrottlerGuard['handleRequest']>[5],
   ): Promise<boolean> {
     if (!(await this.platformSettings.isSubmissionRateLimitEnabled())) {
       return true;
