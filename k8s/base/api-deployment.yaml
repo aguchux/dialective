@@ -433,18 +433,44 @@ spec:
                 secretKeyRef:
                   name: livekit-creds
                   key: api_secret
+          # A startupProbe is what makes the liveness settings below safe.
+          # Previously liveness alone guarded boot with initialDelaySeconds 15
+          # + periodSeconds 20 + failureThreshold 3, so the container was
+          # killed at ~75s if /health hadn't answered. This app needs ~90s to
+          # boot, so every start was a race -- pods were killed mid-boot and
+          # restarted into the same race, which is how the API ended up with
+          # zero ready replicas during an eviction storm.
+          #
+          # Liveness is suspended until this succeeds: 5s x 36 = up to 3
+          # minutes to come up, then liveness takes over at its normal cadence
+          # for the rest of the pod's life.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 5
+            failureThreshold: 36
+            timeoutSeconds: 3
           readinessProbe:
             httpGet:
               path: /health
               port: 3000
             initialDelaySeconds: 5
             periodSeconds: 10
+            # 1s (the implicit default) is too tight even for this trivial
+            # handler: /health returns a static object, so a timeout means the
+            # event loop is blocked or the pod is CPU-starved on a busy node,
+            # not that the app is broken. Killing it then makes things worse.
+            timeoutSeconds: 5
           livenessProbe:
             httpGet:
               path: /health
               port: 3000
-            initialDelaySeconds: 15
+            # startupProbe owns the boot window now, so no initial delay here.
+            initialDelaySeconds: 0
             periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
           # Sized from measurement, not guesswork: steady state was ~680Mi
           # with a cgroup peak of 1057Mi (memory.peak inside the pod).
           #
