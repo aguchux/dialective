@@ -1661,3 +1661,83 @@ describe('AuthService.updateProfile subdialect requirement', () => {
     );
   });
 });
+
+describe('AuthService.listUsers search', () => {
+  function searchClause(prisma: ReturnType<typeof setup>['prisma']) {
+    return prisma.user.findMany.mock.calls[0][0].where.OR as Array<Record<string, unknown>>;
+  }
+
+  it('matches country of origin by name, so "Zimbabwe" finds that country\'s users', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+
+    await service.listUsers({ search: 'Zimbabwe' });
+
+    // Has to be a server-side relation filter: the list response only carries
+    // originCountryId and the admin table resolves the display name from a
+    // separate countries lookup, so there is no country text on the client.
+    expect(searchClause(prisma)).toEqual(
+      expect.arrayContaining([
+        {
+          originCountry: {
+            is: {
+              OR: [
+                { name: { contains: 'Zimbabwe', mode: 'insensitive' } },
+                { code: { equals: 'Zimbabwe', mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+      ]),
+    );
+  });
+
+  it('searches originCountry, not the dialect-scoping country', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+
+    await service.listUsers({ search: 'Nigeria' });
+
+    const keys = searchClause(prisma).flatMap((clause) => Object.keys(clause));
+    // `country` scopes which dialect a trainer works on -- a different
+    // question from where they are from, and not what the admin table shows.
+    expect(keys).toContain('originCountry');
+    expect(keys).not.toContain('country');
+  });
+
+  it('matches an ISO code exactly rather than by substring', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+
+    await service.listUsers({ search: 'ZW' });
+
+    const countryClause = searchClause(prisma).find((c) => 'originCountry' in c) as {
+      originCountry: { is: { OR: Array<Record<string, Record<string, string>>> } };
+    };
+    const codeClause = countryClause.originCountry.is.OR.find((c) => 'code' in c);
+    // `contains` on a 2-letter code would make short queries match wildly --
+    // "in" would hit India, Indonesia AND every name containing "in".
+    expect(codeClause).toEqual({ code: { equals: 'ZW', mode: 'insensitive' } });
+  });
+
+  it('still matches name, email and phone alongside country', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+
+    await service.listUsers({ search: 'daisy' });
+
+    const keys = searchClause(prisma).flatMap((clause) => Object.keys(clause));
+    expect(keys).toEqual(
+      expect.arrayContaining(['email', 'firstName', 'lastName', 'phoneNumber', 'originCountry']),
+    );
+  });
+
+  it('applies no OR filter when no search term is given', async () => {
+    const { service, prisma } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+
+    await service.listUsers({});
+
+    expect(prisma.user.findMany.mock.calls[0][0].where.OR).toBeUndefined();
+  });
+});

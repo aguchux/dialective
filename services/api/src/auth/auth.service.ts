@@ -1579,6 +1579,26 @@ export class AuthService {
                 { firstName: { contains: search, mode: 'insensitive' as const } },
                 { lastName: { contains: search, mode: 'insensitive' as const } },
                 { phoneNumber: { contains: search, mode: 'insensitive' as const } },
+                // Country of origin, by name ("Zimbabwe") or ISO code ("ZW").
+                // This has to be matched server-side: the list response only
+                // carries originCountryId, and the admin table resolves the
+                // display name from a separate countries lookup, so there is
+                // no country text on the client to filter against.
+                //
+                // originCountry (account identity), NOT country -- the latter
+                // scopes which dialect a trainer works on and is a different
+                // question. It's the origin column that the admin user table
+                // actually shows.
+                {
+                  originCountry: {
+                    is: {
+                      OR: [
+                        { name: { contains: search, mode: 'insensitive' as const } },
+                        { code: { equals: search, mode: 'insensitive' as const } },
+                      ],
+                    },
+                  },
+                },
               ],
             }
           : {}),

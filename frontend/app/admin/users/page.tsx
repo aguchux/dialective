@@ -255,13 +255,13 @@ export default function AdminUsersPage() {
         <section className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-white p-4 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
           <div className="grid gap-1">
             <label className="text-xs font-bold uppercase text-muted" htmlFor="search">
-              Search name, email or mobile
+              Search name, email, mobile or country
             </label>
             <input
               className={inputClass}
               id="search"
               type="text"
-              placeholder="Jane, jane@example.com or 447..."
+              placeholder="Jane, jane@example.com, 447... or Zimbabwe"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
