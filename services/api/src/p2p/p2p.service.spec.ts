@@ -439,6 +439,57 @@ describe('P2PService trade-notification SMS', () => {
 
     await expect(service.markPaid('buyer-1', trade.id)).resolves.toEqual(trade);
   });
+
+  describe('trade-created payment deadline wording', () => {
+    const buyer = {
+      id: 'buyer-1',
+      phoneNumber: '+2348000000002',
+      phoneVerifiedAt: new Date(),
+      smsNotificationsEnabled: true,
+    };
+
+    async function notify(deadline: Date): Promise<string> {
+      platformSettings.isP2pSmsTradeCreatedEnabled = jest.fn().mockResolvedValue(true);
+      prisma.user.findUnique.mockResolvedValue(buyer);
+      sms.sendTransactional.mockClear();
+
+      // @ts-expect-error -- private method under test
+      await service.notifyTradeCreated(buyer.id, seller.id, '37', deadline);
+
+      const call = sms.sendTransactional.mock.calls.find((c: string[]) =>
+        c[1].includes('has started'),
+      );
+      return call[1];
+    }
+
+    // Regression: this sent a raw toISOString() -- "Pay before
+    // 2026-09-17T10:42:07.237Z" -- which is machine-formatted and, with no
+    // timezone stored for the recipient, renders in UTC. A West African
+    // trader reads that as roughly an hour out and misses a window only
+    // minutes wide. Relative time is correct in every timezone.
+    it('states the time remaining, never a raw UTC timestamp', async () => {
+      const body = await notify(new Date(Date.now() + 15 * 60_000));
+
+      expect(body).toContain('15 minutes');
+      expect(body).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
+      expect(body).not.toContain('Z.');
+    });
+
+    it('rounds up so it never overstates the time available', async () => {
+      // 14m30s left must read as 15, not 14 -- a trader who believes they
+      // have less time is safe; one who believes they have more is not.
+      const body = await notify(new Date(Date.now() + 14.5 * 60_000));
+
+      expect(body).toContain('15 minutes');
+    });
+
+    it('uses the singular at one minute or less', async () => {
+      const body = await notify(new Date(Date.now() + 30_000));
+
+      expect(body).toContain('1 minute');
+      expect(body).not.toContain('1 minutes');
+    });
+  });
 });
 
 describe('P2PService.listOffers', () => {

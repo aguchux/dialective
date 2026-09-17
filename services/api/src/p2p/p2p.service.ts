@@ -38,6 +38,35 @@ import {
 } from './dto/p2p.dto';
 import { p2pTradeOtpContextHash } from './p2p-trade-otp-context.util';
 
+/**
+ * Renders a deadline as the time REMAINING ("15 minutes"), not an absolute
+ * clock time, for the one SMS in the platform that carries a deadline.
+ *
+ * An absolute time can't be stated correctly here: the server has no
+ * timezone for the recipient (neither User nor Country carries one), so any
+ * wall-clock rendering would be in UTC and read as roughly an hour off for a
+ * West African trader -- who then misses a window that is only
+ * paymentWindowMinutes long. This previously sent a raw
+ * `toISOString()` -- "Pay before 2026-09-17T10:42:07.237Z" -- which is both
+ * machine-formatted and in the wrong zone.
+ *
+ * A relative duration is correct in every timezone and is also what the
+ * recipient actually needs to act on, since the window is minutes wide. The
+ * frontend still shows the absolute deadline (MarketActivity), where the
+ * browser supplies the viewer's real timezone.
+ *
+ * Rounds up so the stated figure never overstates the time available: at 14m30s
+ * remaining it says "15 minutes", never "14". Anything at or below a minute
+ * (including an already-past deadline, which this caller can't produce --
+ * the deadline is set moments earlier in the same request) floors at
+ * "1 minute" rather than printing "0" or a negative.
+ */
+function formatMinutesRemaining(deadline: Date, now: Date = new Date()): string {
+  const minutes = Math.ceil((deadline.getTime() - now.getTime()) / 60_000);
+  if (minutes <= 1) return '1 minute';
+  return `${minutes} minutes`;
+}
+
 const OPEN_OFFER_STATUSES = [P2POfferStatus.ACTIVE, P2POfferStatus.RESERVED];
 const OPEN_TRADE_STATUSES = [
   P2PTradeStatus.AWAITING_PAYMENT,
@@ -309,7 +338,7 @@ export class P2PService {
     paymentDeadlineAt: Date,
   ): Promise<void> {
     const enabled = await this.platformSettings.isP2pSmsTradeCreatedEnabled();
-    const buyerBody = `Dialect Library: Your P2P trade for ${tokenAmount} tokens has started. Pay before ${paymentDeadlineAt.toISOString()}.`;
+    const buyerBody = `Dialect Library: Your P2P trade for ${tokenAmount} tokens has started. Pay within ${formatMinutesRemaining(paymentDeadlineAt)} to avoid cancellation.`;
     const sellerBody = `Dialect Library: A buyer accepted your P2P offer for ${tokenAmount} tokens. Waiting for their payment.`;
     await Promise.all([
       this.notify(buyerId, enabled, buyerBody),
