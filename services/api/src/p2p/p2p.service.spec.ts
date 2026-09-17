@@ -383,6 +383,11 @@ describe('P2PService trade-notification SMS', () => {
         update: jest.fn().mockResolvedValue(trade),
       },
       p2PTokenOffer: { findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn() },
+      // expireStaleRecords (called at the top of markPaid) reads the market
+      // settings row to get abandonedTradeHours.
+      p2PMarketSettings: {
+        upsert: jest.fn().mockResolvedValue({ abandonedTradeHours: 48, cancelGraceMinutes: 5 }),
+      },
     };
     otp = {};
     platformSettings = {
@@ -796,5 +801,85 @@ describe('P2PService.requestTradeOtp', () => {
       expect.any(String),
       'SMS',
     );
+  });
+});
+
+/**
+ * Trades no longer die when paymentDeadlineAt elapses -- that timestamp is
+ * now only the countdown both parties see. In production the old behaviour
+ * was cancelling more trades than the users were: of 223 cancelled trades,
+ * 160 were auto-expiries against 63 real user cancellations.
+ */
+describe('P2PService.expireStaleRecords trade handling', () => {
+  function setup(settings: Record<string, unknown> = {}) {
+    const prisma: any = {
+      p2PTokenOffer: {
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      p2PTokenTrade: { findMany: jest.fn().mockResolvedValue([]) },
+      p2PMarketSettings: {
+        upsert: jest.fn().mockResolvedValue({ abandonedTradeHours: 48, ...settings }),
+      },
+    };
+    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+    const cancelTrade = jest
+      .spyOn(service as any, 'cancelTrade')
+      .mockResolvedValue(undefined);
+    return { service, prisma, cancelTrade };
+  }
+
+  function tradeWhere(prisma: any) {
+    return prisma.p2PTokenTrade.findMany.mock.calls[0][0].where.OR as Array<
+      Record<string, unknown>
+    >;
+  }
+
+  it('never selects a trade merely for passing its payment deadline', async () => {
+    const { service, prisma } = setup();
+
+    await (service as any).expireStaleRecords();
+
+    const clauses = tradeWhere(prisma);
+    // The old query had { status: AWAITING_PAYMENT, paymentDeadlineAt: { lt: now } }.
+    expect(JSON.stringify(clauses)).not.toContain('paymentDeadlineAt');
+  });
+
+  it('still finalizes a CANCEL_PENDING trade past its grace period', async () => {
+    const { service, prisma } = setup();
+
+    await (service as any).expireStaleRecords();
+
+    // Somebody explicitly asked to cancel -- completing that honours a
+    // request rather than overriding one.
+    expect(tradeWhere(prisma)).toContainEqual(
+      expect.objectContaining({ status: 'CANCEL_PENDING' }),
+    );
+  });
+
+  it('cancels a trade abandoned unpaid past abandonedTradeHours', async () => {
+    const { service, prisma } = setup({ abandonedTradeHours: 48 });
+
+    await (service as any).expireStaleRecords();
+
+    // Opening a trade locks the seller's tokens, so an absent buyer must not
+    // be able to freeze them forever.
+    const abandoned = tradeWhere(prisma).find(
+      (c) => (c as any).status === 'AWAITING_PAYMENT',
+    ) as any;
+    expect(abandoned).toBeDefined();
+    expect(abandoned.createdAt.lt).toBeInstanceOf(Date);
+    expect(abandoned.createdAt.lt.getTime()).toBeLessThan(Date.now());
+  });
+
+  it('drops the abandoned-trade backstop entirely when abandonedTradeHours is 0', async () => {
+    const { service, prisma } = setup({ abandonedTradeHours: 0 });
+
+    await (service as any).expireStaleRecords();
+
+    const clauses = tradeWhere(prisma);
+    // Literal never-expires: only explicit cancel requests resolve.
+    expect(clauses).toHaveLength(1);
+    expect(clauses[0]).toEqual(expect.objectContaining({ status: 'CANCEL_PENDING' }));
   });
 });

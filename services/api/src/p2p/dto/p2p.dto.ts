@@ -254,6 +254,12 @@ export class UpdateP2PMarketSettingsDto {
   @Min(1)
   paymentWindowMinutes?: number;
 
+  // 0 allowed: disables the backstop for a literal never-expires policy.
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  abandonedTradeHours?: number;
+
   @IsOptional()
   @IsInt()
   @Min(1)

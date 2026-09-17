@@ -2658,7 +2658,8 @@ model P2PMarketSettings {
   buyRequestsEnabled          Boolean  @default(false)
   minTradeTokens              Decimal  @default(1) @db.Decimal(20, 8)
   maxTradeTokens              Decimal  @default(1000) @db.Decimal(20, 8)
-  paymentWindowMinutes        Int      @default(15)
+  paymentWindowMinutes        Int      @default(15) // how long the buyer is given to pay. This drives the countdown both sides see; it NO LONGER kills the trade when it elapses -- an overrunning trade stays AWAITING_PAYMENT and either party can still requestCancel. 160 of 223 cancellations were auto-expiries under the old behaviour, i.e. the timer was killing more trades than the users were.
+  abandonedTradeHours         Int      @default(48) // backstop so an absent buyer cannot lock the seller's escrow forever: a trade still unpaid this long after it opened is auto-cancelled and the tokens returned. 0 disables the backstop entirely (true "never expires"). Deliberately measured in hours, not minutes -- it is a safety net, not a payment deadline.
   cancelGraceMinutes          Int      @default(5)
   offerExpiryMinutes          Int      @default(1440)
   maxOpenOffersPerUser        Int      @default(5)

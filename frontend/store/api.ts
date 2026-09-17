@@ -1012,6 +1012,7 @@ export interface P2PMarketSettings {
   minTradeTokens: string;
   maxTradeTokens: string;
   paymentWindowMinutes: number;
+  abandonedTradeHours: number;
   cancelGraceMinutes: number;
   offerExpiryMinutes: number;
   maxOpenOffersPerUser: number;

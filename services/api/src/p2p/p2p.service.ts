@@ -338,7 +338,10 @@ export class P2PService {
     paymentDeadlineAt: Date,
   ): Promise<void> {
     const enabled = await this.platformSettings.isP2pSmsTradeCreatedEnabled();
-    const buyerBody = `Dialect Library: Your P2P trade for ${tokenAmount} tokens has started. Pay within ${formatMinutesRemaining(paymentDeadlineAt)} to avoid cancellation.`;
+    // "aim to pay within", not "or it is cancelled" -- overrunning the
+    // countdown no longer cancels the trade, so promising otherwise would
+    // panic buyers into abandoning perfectly good trades.
+    const buyerBody = `Dialect Library: Your P2P trade for ${tokenAmount} tokens has started. Aim to pay within ${formatMinutesRemaining(paymentDeadlineAt)} -- the seller can cancel if you take much longer.`;
     const sellerBody = `Dialect Library: A buyer accepted your P2P offer for ${tokenAmount} tokens. Waiting for their payment.`;
     await Promise.all([
       this.notify(buyerId, enabled, buyerBody),
@@ -901,8 +904,12 @@ export class P2PService {
     ) {
       throw new UnprocessableEntityException('This trade can no longer be marked paid');
     }
-    if (trade.paymentDeadlineAt < new Date())
-      throw new UnprocessableEntityException('Payment window has expired');
+    // Intentionally no paymentDeadlineAt check. The deadline is a countdown,
+    // not a cutoff -- a buyer who actually sent the money just after it
+    // elapsed must still be able to mark the trade paid, otherwise they have
+    // paid real fiat for tokens the system will not let them claim. The trade
+    // is still open (nothing auto-cancels on that deadline any more), so the
+    // status check above is the real guard.
     await this.prisma.p2PTokenTrade.update({
       where: { id: tradeId },
       data: {
@@ -1233,17 +1240,43 @@ export class P2PService {
       data: { status: P2POfferStatus.EXPIRED },
     });
 
-    const expiredTrades = await this.prisma.p2PTokenTrade.findMany({
+    // A trade is NO LONGER cancelled just because paymentDeadlineAt passed.
+    // That deadline is now only the countdown both parties see: a buyer who
+    // is mid-bank-transfer when it elapses keeps their trade, and either side
+    // can still requestCancel. Under the old behaviour the timer was killing
+    // more trades than the users were -- 160 of 223 cancellations were
+    // auto-expiries against 63 real user cancellations.
+    //
+    // Two things still resolve automatically:
+    //  - CANCEL_PENDING past its grace period: somebody asked to cancel, so
+    //    finishing that is honouring an explicit request, not overriding one.
+    //  - A trade abandoned unpaid for abandonedTradeHours. Opening a trade
+    //    locks the seller's tokens, so without this backstop an absent buyer
+    //    could freeze a seller's balance indefinitely. 0 disables it.
+    const settings = await this.settingsRow();
+    const abandonedBefore =
+      settings.abandonedTradeHours > 0
+        ? new Date(now.getTime() - settings.abandonedTradeHours * 60 * 60 * 1000)
+        : null;
+
+    const resolvableTrades = await this.prisma.p2PTokenTrade.findMany({
       where: {
         OR: [
-          { status: P2PTradeStatus.AWAITING_PAYMENT, paymentDeadlineAt: { lt: now } },
           { status: P2PTradeStatus.CANCEL_PENDING, cancelAvailableAt: { lt: now } },
+          ...(abandonedBefore
+            ? [
+                {
+                  status: P2PTradeStatus.AWAITING_PAYMENT,
+                  createdAt: { lt: abandonedBefore },
+                },
+              ]
+            : []),
         ],
       },
       select: { id: true },
       take: 25,
     });
-    for (const trade of expiredTrades) await this.cancelTrade(trade.id);
+    for (const trade of resolvableTrades) await this.cancelTrade(trade.id);
   }
 
   private async cancelSellOffer(offerId: string, status: 'EXPIRED' | 'CANCELLED') {

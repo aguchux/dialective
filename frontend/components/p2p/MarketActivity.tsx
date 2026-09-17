@@ -5,6 +5,7 @@ import { Check, Clock3, Copy, Landmark, MessageSquare } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, EmptyPanel, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
 import { WhatsAppContactLink } from '@/components/WhatsAppContactLink';
+import { PaymentCountdown } from '@/components/p2p/PaymentCountdown';
 import { TradeChatPanel } from '@/components/p2p/TradeChatPanel';
 import { formatCompactNumber } from '@/lib/format';
 import {
@@ -304,11 +305,18 @@ function TradeCard({
             {trade.fiatCurrency}
           </p>
         </div>
-        <span
-          className={`rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(trade.status)}`}
-        >
-          {STATUS_LABELS[trade.status]}
-        </span>
+        <div className="flex items-center gap-2">
+          {/* At-a-glance timer next to the status, so urgency reads without
+              opening the trade. */}
+          {trade.status === 'AWAITING_PAYMENT' && (
+            <PaymentCountdown compact deadline={trade.paymentDeadlineAt} isSeller={isSeller} />
+          )}
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(trade.status)}`}
+          >
+            {STATUS_LABELS[trade.status]}
+          </span>
+        </div>
       </div>
       {(() => {
         const otherParty = isBuyer ? trade.seller : trade.buyer;
@@ -378,9 +386,12 @@ function TradeCard({
           );
         })()}
       {trade.status === 'AWAITING_PAYMENT' && (
-        <p className="text-sm text-muted">
-          Payment deadline: {formatDateTime(trade.paymentDeadlineAt)}
-        </p>
+        <div className="grid gap-0.5">
+          <PaymentCountdown deadline={trade.paymentDeadlineAt} isSeller={isSeller} />
+          <p className="text-xs text-muted">
+            Target: {formatDateTime(trade.paymentDeadlineAt)}
+          </p>
+        </div>
       )}
       {trade.status === 'PAID_MARKED' && trade.paidAt && (
         <p className="text-sm text-muted">

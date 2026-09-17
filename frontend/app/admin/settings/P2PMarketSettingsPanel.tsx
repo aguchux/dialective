@@ -27,6 +27,7 @@ export function P2PMarketSettingsPanel() {
     minTradeTokens: '1',
     maxTradeTokens: '1000',
     paymentWindowMinutes: 15,
+    abandonedTradeHours: 48,
     cancelGraceMinutes: 5,
     offerExpiryMinutes: 1440,
     maxOpenOffersPerUser: 5,
@@ -75,6 +76,7 @@ export function P2PMarketSettingsPanel() {
       minTradeTokens: settings.minTradeTokens,
       maxTradeTokens: settings.maxTradeTokens,
       paymentWindowMinutes: settings.paymentWindowMinutes,
+      abandonedTradeHours: settings.abandonedTradeHours,
       cancelGraceMinutes: settings.cancelGraceMinutes,
       offerExpiryMinutes: settings.offerExpiryMinutes,
       maxOpenOffersPerUser: settings.maxOpenOffersPerUser,
@@ -164,6 +166,13 @@ export function P2PMarketSettingsPanel() {
           value={form.paymentWindowMinutes}
           onChange={(paymentWindowMinutes) =>
             setForm((current) => ({ ...current, paymentWindowMinutes }))
+          }
+        />
+        <NumberField
+          label="Abandoned trade hours"
+          value={form.abandonedTradeHours}
+          onChange={(abandonedTradeHours) =>
+            setForm((current) => ({ ...current, abandonedTradeHours }))
           }
         />
         <NumberField
