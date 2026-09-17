@@ -64,19 +64,30 @@ describe('AnalyticsReportService.getSummary', () => {
     expect(result.daily).toHaveLength(2);
   });
 
-  it('clamps days to the 1-90 range', async () => {
+  // Asserts the clamped day count and the exact UTC-midnight boundary it
+  // produces, rather than re-deriving elapsed days from Date.now(). `since` is
+  // (now - days) floored to UTC midnight, so the elapsed span is always the
+  // clamped count PLUS however far into the current day we are -- rounding
+  // that tips to 91 for any run after 12:00 UTC. The clamp was never wrong;
+  // the measurement was.
+  it.each([
+    [500, 90],
+    [0, 1],
+    [-7, 1],
+    [45, 45],
+  ])('clamps a requested %i days to %i', async (requested, expectedDays) => {
     const { service, prisma } = setup();
-    await service.getSummary(500);
-    const call = prisma.analyticsDailySnapshot.findMany.mock.calls[0][0];
-    const sinceUsed = call.where.date.gte as Date;
-    const daysAgo = Math.round((Date.now() - sinceUsed.getTime()) / (24 * 60 * 60 * 1000));
-    expect(daysAgo).toBeLessThanOrEqual(90);
 
-    await service.getSummary(0);
-    const call2 = prisma.analyticsDailySnapshot.findMany.mock.calls[1][0];
-    const sinceUsed2 = call2.where.date.gte as Date;
-    const daysAgo2 = Math.round((Date.now() - sinceUsed2.getTime()) / (24 * 60 * 60 * 1000));
-    expect(daysAgo2).toBeGreaterThanOrEqual(1);
+    const result = await service.getSummary(requested);
+
+    expect(result.days).toBe(expectedDays);
+
+    const expectedSince = new Date();
+    expectedSince.setUTCDate(expectedSince.getUTCDate() - expectedDays);
+    expectedSince.setUTCHours(0, 0, 0, 0);
+
+    const sinceUsed = prisma.analyticsDailySnapshot.findMany.mock.calls[0][0].where.date.gte as Date;
+    expect(sinceUsed.toISOString()).toBe(expectedSince.toISOString());
   });
 });
 
@@ -98,6 +109,21 @@ describe('AnalyticsReportService.getBreakdown', () => {
       }),
     );
     expect(result).toEqual([{ value: '/dashboard', activeUsers: 50, screenPageViews: 90 }]);
+  });
+
+  // getBreakdown carries its own copy of the same clamp, so it can drift from
+  // getSummary's independently.
+  it('clamps its window the same way getSummary does', async () => {
+    const { service, prisma } = setup();
+
+    await service.getBreakdown('page', 500);
+
+    const expectedSince = new Date();
+    expectedSince.setUTCDate(expectedSince.getUTCDate() - 90);
+    expectedSince.setUTCHours(0, 0, 0, 0);
+
+    const sinceUsed = prisma.analyticsDailyBreakdown.groupBy.mock.calls[0][0].where.date.gte as Date;
+    expect(sinceUsed.toISOString()).toBe(expectedSince.toISOString());
   });
 
   it('defaults missing sums to 0 rather than null', async () => {
