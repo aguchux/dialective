@@ -38,16 +38,32 @@ export class GoogleAnalyticsService {
   async run(): Promise<void> {
     const propertyId = process.env.GOOGLE_ANALYTICS_PROPERTY_ID;
     const credentialsJson = process.env.GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON;
-    if (!propertyId || !credentialsJson) {
+    // The k8s secret's provisioning placeholder is the literal string
+    // "changeme" -- treated the same as unset, not a value to attempt
+    // parsing as JSON. Without this, a not-yet-replaced placeholder crashes
+    // every 6-hour run forever (JSON.parse("changeme") throws) instead of
+    // the intended graceful skip below.
+    if (!propertyId || !credentialsJson || propertyId === 'changeme' || credentialsJson === 'changeme') {
       this.logger.log(
         'GOOGLE_ANALYTICS_PROPERTY_ID/GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON not set -- skipping (not yet configured)',
       );
       return;
     }
 
-    const client = new BetaAnalyticsDataClient({
-      credentials: JSON.parse(credentialsJson) as Record<string, unknown>,
-    });
+    let credentials: Record<string, unknown>;
+    try {
+      credentials = JSON.parse(credentialsJson) as Record<string, unknown>;
+    } catch (err) {
+      // Same reasoning as the placeholder check above -- a malformed
+      // credentials value is a configuration problem to log and skip, not
+      // a reason to crash-loop this job every 6 hours.
+      this.logger.error(
+        `GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON is not valid JSON -- skipping: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return;
+    }
+
+    const client = new BetaAnalyticsDataClient({ credentials });
     const property = `properties/${propertyId}`;
 
     await this.ingestDailySnapshot(client, property);

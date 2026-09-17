@@ -46,6 +46,27 @@ describe('GoogleAnalyticsService.run', () => {
     expect(mockRunReport).not.toHaveBeenCalled();
   });
 
+  it('does nothing (no error) when either env var is still the provisioning placeholder "changeme"', async () => {
+    process.env.GOOGLE_ANALYTICS_PROPERTY_ID = 'changeme';
+
+    await expect(service.run()).resolves.toBeUndefined();
+    expect(mockRunReport).not.toHaveBeenCalled();
+  });
+
+  it('does nothing (no error) when the credentials JSON is still the placeholder "changeme"', async () => {
+    process.env.GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON = 'changeme';
+
+    await expect(service.run()).resolves.toBeUndefined();
+    expect(mockRunReport).not.toHaveBeenCalled();
+  });
+
+  it('logs and returns instead of throwing when the credentials JSON is malformed (but not the placeholder)', async () => {
+    process.env.GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON = '{not valid json';
+
+    await expect(service.run()).resolves.toBeUndefined();
+    expect(mockRunReport).not.toHaveBeenCalled();
+  });
+
   it('upserts a daily snapshot row per date returned by the site-wide report', async () => {
     mockRunReport
       .mockResolvedValueOnce([
