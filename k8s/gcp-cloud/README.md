@@ -202,3 +202,28 @@ kubectl apply -k k8s/gcp-cloud/overlays/prod/
 ```bash
 kubectl apply -k k8s/gcp-cloud/overlays/prod/
 ```
+
+### Note: this overlay is applied by hand
+
+No GitHub Actions workflow references `k8s/gcp-cloud/`, unlike DO's
+manifests. The overlay also can't be rendered without the gitignored
+`secrets/*.env` and `configs/*.env` files, so `kubectl diff -k` fails on a
+machine that doesn't have them.
+
+The practical consequence: pushing a manifest change here does NOT deploy
+it. `kubectl set image` alone doesn't either -- it updates the image and
+nothing else, so a change that adds or edits an `env:` entry ships the new
+binary while the pod still runs without the new variable. That is exactly
+how `CONSUMER_PREFIX` (see whisper-worker-statefulset.yaml) was live in the
+image but absent from the pod spec.
+
+Until this is wired into CI, apply env-shaped changes explicitly, e.g.
+
+```bash
+kubectl set env statefulset/whisper-worker -n dai \
+  --containers=whisper-worker CONSUMER_PREFIX=gcp-
+```
+
+and confirm with `kubectl get pod <pod> -n dai -o jsonpath=...` that the
+variable is actually on the running pod, rather than assuming the rollout
+carried it.
