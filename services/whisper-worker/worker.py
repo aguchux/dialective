@@ -26,6 +26,12 @@ REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
 # rollout -- every Redis client across the fleet reads these same env vars.
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD") or None
 REDIS_TLS = os.environ.get("REDIS_TLS", "").lower() == "true"
+# Only set when connecting across the public internet (GCP -> DO's
+# redis-external) against DO's self-signed cert -- see vosk-worker/worker.py.
+# Without it Python falls back to the system trust store, which correctly
+# rejects that cert with CERTIFICATE_VERIFY_FAILED. In-cluster on DO this
+# stays unset and plain `ssl=False` applies.
+REDIS_TLS_CA = os.environ.get("REDIS_TLS_CA") or None
 ASR_STREAM = os.environ.get("ASR_STREAM", "asr-jobs-whisper")
 CONSENSUS_STREAM = os.environ.get("CONSENSUS_STREAM", "consensus-jobs")
 CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "asr-workers-whisper")
@@ -388,6 +394,7 @@ def main() -> None:
         port=REDIS_PORT,
         password=REDIS_PASSWORD,
         ssl=REDIS_TLS,
+        ssl_ca_certs=REDIS_TLS_CA,
         decode_responses=True,
     )
     s3 = build_spaces_client()
